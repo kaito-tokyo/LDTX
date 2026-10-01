@@ -4,12 +4,102 @@
 import AppKit
 import Foundation
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 import LDTXWorkspaceBundleFormat
 import Testing
+
+@MainActor
+private final class WorkspaceInitializingDocumentController: NSDocumentController {
+  override func documentClass(forType typeName: String) -> AnyClass? { WorkspaceDocument.self }
+}
 
 @Suite(.serialized)
 @MainActor
 struct WorkspaceDocumentSystemTestSuite {
+  private static let controller = WorkspaceInitializingDocumentController()
+
+  init() { _ = Self.controller }
+
+  @Test func standardInitializationOwnsLockWithoutControllerConfiguration() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+    let original = WorkspaceDocument()
+    try await save(original, to: url)
+    original.close()
+    let controller = Self.controller
+    let document = try #require(
+      controller.makeDocument(withContentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+        as? WorkspaceDocument)
+    #expect(document.appletData === original.appletData)
+    #expect(document.fileURL == url)
+    #expect(document.uiState.localStateURL == url)
+    #expect(document.persistenceCoordinator.url == url)
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    document.close()
+    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    reopened.close()
+  }
+
+  @Test func restorationLocksFormalURLAndKeepsRecoveryContentsSeparate() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let formalURL = root.appendingPathComponent("Formal.ldtxworkspace")
+    let recoveryURL = root.appendingPathComponent("Recovery.ldtxworkspace")
+    let source = WorkspaceDocument()
+    try await save(source, to: formalURL)
+    source.uiState.definition.displayName = "Recovered edit"
+    try await save(source, to: recoveryURL)
+    source.close()
+    let controller = Self.controller
+    let document = try #require(
+      controller.makeDocument(
+        for: formalURL, withContentsOf: recoveryURL, ofType: "tokyo.kaito.ldtx.workspace")
+        as? WorkspaceDocument)
+    defer { document.close() }
+    #expect(document.fileURL == formalURL)
+    #expect(document.autosavedContentsFileURL == recoveryURL)
+    #expect(document.uiState.localStateURL == formalURL)
+    #expect(document.persistenceCoordinator.url == formalURL)
+    #expect(document.uiState.definition.displayName == "Recovered edit")
+    #expect(document.isDocumentEdited)
+    #expect(throws: (any Error).self) { _ = try WorkspaceLockService().acquire(at: formalURL) }
+    let recoveryLock = try WorkspaceLockService().acquire(at: recoveryURL)
+    WorkspaceLockService().release(recoveryLock)
+    let untitled = try WorkspaceDocument(
+      for: nil, withContentsOf: recoveryURL, ofType: "tokyo.kaito.ldtx.workspace")
+    defer { untitled.close() }
+    #expect(untitled.fileURL == nil)
+    #expect(untitled.persistenceCoordinator.url == nil)
+    #expect(untitled.uiState.localStateURL?.scheme == "ldtx-untitled")
+    #expect(untitled.isDocumentEdited)
+  }
+
+  @Test func failedReadAndRecoveryInitializationReleasePackageLocks() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(contentsOf: root, ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    let lock = try WorkspaceLockService().acquire(at: root)
+    WorkspaceLockService().release(lock)
+    let url = root.appendingPathComponent("Valid.ldtxworkspace")
+    let source = WorkspaceDocument()
+    try await save(source, to: url)
+    source.close()
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(
+        for: root.appendingPathComponent("Missing.ldtxworkspace"), withContentsOf: url,
+        ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    let released = try WorkspaceLockService().acquire(at: url)
+    WorkspaceLockService().release(released)
+
+  }
+
   @Test func dockBadgeFollowsRegisteredDocuments() {
     let dockTile = NSApplication.shared.dockTile
     let originalBadge = dockTile.badgeLabel

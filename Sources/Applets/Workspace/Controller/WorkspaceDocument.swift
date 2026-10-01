@@ -12,7 +12,7 @@ import os
 @objc(WorkspaceDocument)
 public final class WorkspaceDocument: NSDocument {
   public let uiState = WorkspaceUIState(definition: .init(), preferences: .init())
-  public var appletData = WorkspaceAppletData()
+  public let appletData = WorkspaceAppletData.shared
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID().uuidString)")!
   private struct SaveSnapshot: Sendable {
     let workspace: WorkspaceV4Bundle
@@ -68,6 +68,39 @@ public final class WorkspaceDocument: NSDocument {
     }
   }
 
+  /// Restore through AppKit's ordinary contents initializer, then adopt only the
+  /// formal document URL. Recovery contents remain the resource snapshot source.
+  public convenience init(
+    for urlOrNil: URL?, withContentsOf contentsURL: URL, ofType typeName: String
+  ) throws {
+    try self.init(contentsOf: contentsURL, ofType: typeName)
+    do {
+      if urlOrNil?.standardizedFileURL != contentsURL.standardizedFileURL {
+        if let heldLock { lockService.release(heldLock) }
+        heldLock = nil
+        if let urlOrNil { heldLock = try lockService.acquire(at: urlOrNil) }
+      }
+      fileURL = urlOrNil
+      autosavedContentsFileURL = contentsURL
+      uiState.localStateURL = urlOrNil ?? transientURL
+      persistenceCoordinator.setDocumentURL(urlOrNil)
+      if let urlOrNil {
+        fileModificationDate = try urlOrNil.resourceValues(forKeys: [.contentModificationDateKey])
+          .contentModificationDate
+      }
+      if urlOrNil?.standardizedFileURL != contentsURL.standardizedFileURL {
+        updateChangeCount(.changeReadOtherContents)
+      }
+    } catch {
+      finishClose()
+      throw error
+    }
+  }
+
+  isolated deinit {
+    if let heldLock { lockService.release(heldLock) }
+  }
+
   static func updateRecordingDockBadge() {
     let isOutputActive = NSDocumentController.shared.documents.contains {
       ($0 as? WorkspaceDocument)?.uiState.isOutputActive == true
@@ -89,10 +122,21 @@ public final class WorkspaceDocument: NSDocument {
   public override nonisolated func read(from url: URL, ofType typeName: String) throws {
     try MainActor.assumeIsolated {
       guard !uiState.isOutputActive else { throw CocoaError(.userCancelled) }
-      let workspace = try WorkspaceBundleReaderV4(at: url).read()
-      try WorkspaceV4IntegrityValidator.validate(workspace)
-      try replaceContents(workspace)
-      sourceContentsURL = url
+      let acquiredLock = heldLock == nil ? try lockService.acquire(at: url) : nil
+      do {
+        let workspace = try WorkspaceBundleReaderV4(at: url).read()
+        try WorkspaceV4IntegrityValidator.validate(workspace)
+        try replaceContents(workspace)
+        sourceContentsURL = url
+        if let acquiredLock {
+          heldLock = acquiredLock
+          uiState.localStateURL = url
+          persistenceCoordinator.setDocumentURL(url)
+        }
+      } catch {
+        if let acquiredLock { lockService.release(acquiredLock) }
+        throw error
+      }
     }
   }
 
@@ -243,14 +287,6 @@ public final class WorkspaceDocument: NSDocument {
       adoptDocumentURL(url)
       completionHandler?(nil)
     }
-  }
-
-  /// Called by the document controller once AppKit has established the formal URL.
-  public func acquirePackageLock() throws {
-    guard heldLock == nil, let fileURL else { return }
-    heldLock = try lockService.acquire(at: fileURL)
-    uiState.localStateURL = fileURL
-    persistenceCoordinator.setDocumentURL(fileURL)
   }
 
   public func saveBeforeOutput() async throws {

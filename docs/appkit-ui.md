@@ -9,7 +9,7 @@ LDTX enters through a single NSApplication and application delegate. Workspace
 and recording files are NSDocument instances managed by the shared
 LDTXDocumentController.
 The document controller belongs to LDTXApp, where AppDelegate creates it once
-and configures Workspace documents with shared app-local state. AppKit selects
+and sets the default New document type. AppKit initializes each document and selects
 the registered document class for each file type. Launcher buttons call the shared
 document controller's standard New and Open actions directly. AppDelegate
 closes Launcher when a Workspace or Player window becomes the main window, and
@@ -19,6 +19,9 @@ NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
 no independent recording identifiers or activity store are maintained. The badge
 remains active until all output stops.
 WorkspaceDocument owns the V4 model, package lock, and persistence coordinator.
+It uses WorkspaceAppletData.shared from initialization, and acquires its package
+lock during reading. Recovery initialization distinguishes the formal document
+URL from autosaved contents; failed reads and document teardown release locks.
 It creates and registers WorkspaceWindowController with addWindowController;
 AppKit owns document and window-controller lifetime. The controller constructs
 window-scoped runtime resources and injects operations into the pane views.

@@ -12,6 +12,8 @@ import Security
 @MainActor
 @Observable
 public final class WorkspaceAppletData {
+  public static let shared = WorkspaceAppletData()
+
   private static let persistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v2"
   private static let legacyPersistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
   private static let legacyAudioDeviceIdentifierVersionKey =
