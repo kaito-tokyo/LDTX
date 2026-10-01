@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AVFAudio
 import AVFoundation
 import CoreImage
 import Foundation
@@ -17,6 +18,14 @@ import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 import Observation
 import UniformTypeIdentifiers
+
+private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
+  case microphoneAccessDenied
+
+  var errorDescription: String? {
+    "Microphone access was not granted."
+  }
+}
 
 /// Owns recording and streaming for one Version 4 Workspace Output.
 @MainActor
@@ -247,7 +256,8 @@ public final class WorkspaceV4RecordingSession {
     }
     for wrapper in windowRuntime.definition.inputDevices {
       guard case .videoDevice(let input)? = wrapper.definition,
-        let cameraID = localStateProvider().videoInputDevicePhysicalIDs[input.internalID],
+        case .avCaptureDevice(let cameraID)? = localStateProvider()
+          .physicalDeviceIDsByInputDeviceInternalID[input.internalID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
@@ -503,7 +513,8 @@ public final class WorkspaceV4RecordingSession {
       uniqueKeysWithValues: windowRuntime.definition.inputDevices
         .compactMap {
           guard case .audioDevice(let input)? = $0.definition,
-            let physicalID = localStateProvider().audioInputDevicePhysicalIDs[input.internalID]
+            case .coreAudioDevice(let physicalID)? = localStateProvider()
+              .physicalDeviceIDsByInputDeviceInternalID[input.internalID]
           else { return nil }
           return ("v4-\(input.internalID)", physicalID)
         })
@@ -573,25 +584,31 @@ public final class WorkspaceV4RecordingSession {
           return id
         }
       })
-    if requiresVideoAccess, await requestCaptureAccess(for: .video) == false {
+    if requiresVideoAccess, await requestVideoAccess() == false {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
     if audioInputIDs.contains(where: {
-      localStateProvider().audioInputDevicePhysicalIDs[$0] != nil
+      if case .coreAudioDevice? = localStateProvider()
+        .physicalDeviceIDsByInputDeviceInternalID[$0]
+      {
+        true
+      } else {
+        false
+      }
     }),
-      await requestCaptureAccess(for: .audio) == false
+      await AVAudioApplication.requestRecordPermission() == false
     {
-      throw CameraCaptureServiceError.microphoneAccessDenied
+      throw WorkspaceV4RecordingSessionError.microphoneAccessDenied
     }
   }
 
-  private func requestCaptureAccess(for mediaType: AVMediaType) async -> Bool {
-    switch AVCaptureDevice.authorizationStatus(for: mediaType) {
+  private func requestVideoAccess() async -> Bool {
+    switch AVCaptureDevice.authorizationStatus(for: .video) {
     case .authorized:
       true
     case .notDetermined:
       await withCheckedContinuation { continuation in
-        AVCaptureDevice.requestAccess(for: mediaType) { continuation.resume(returning: $0) }
+        AVCaptureDevice.requestAccess(for: .video) { continuation.resume(returning: $0) }
       }
     case .denied, .restricted:
       false

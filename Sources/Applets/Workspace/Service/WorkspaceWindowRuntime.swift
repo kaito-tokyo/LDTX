@@ -159,12 +159,14 @@ public final class WorkspaceWindowRuntime {
     for input in workspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
-        if let id = localStateProvider().videoInputDevicePhysicalIDs[device.internalID], !id.isEmpty
+        if case .avCaptureDevice(let id)? = localStateProvider()
+          .physicalDeviceIDsByInputDeviceInternalID[device.internalID], !id.isEmpty
         {
           videoCameraIDs.insert(id)
         }
       case .audioDevice(let device):
-        if let id = localStateProvider().audioInputDevicePhysicalIDs[device.internalID], !id.isEmpty
+        if case .coreAudioDevice(let id)? = localStateProvider()
+          .physicalDeviceIDsByInputDeviceInternalID[device.internalID], !id.isEmpty
         {
           audioDeviceIDs.insert(id)
         }
@@ -222,11 +224,11 @@ public final class WorkspaceWindowRuntime {
     guard case .inputDeviceInternalID(let inputID)? = vision.source else {
       throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
     }
-    guard localStateProvider().videoInputDevicePhysicalIDs[inputID] != nil else {
-      throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera
-    }
-    guard let physicalDeviceID = localStateProvider().videoInputDevicePhysicalIDs[inputID],
-      let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
+    guard
+      case .avCaptureDevice(let physicalDeviceID)? = localStateProvider()
+        .physicalDeviceIDsByInputDeviceInternalID[inputID]
+    else { throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera }
+    guard let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
     else { throw WorkspaceVisionFeatureError.frameUnavailable }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
     guard vision.hasRegionOfInterest else {

@@ -163,11 +163,14 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     windowRuntime.selectedProgramInternalID = programID
 
     appletData.updateState(for: url) {
-      $0.videoInputDevicePhysicalIDs[videoInputID] = "camera-id"
+      $0.physicalDeviceIDsByInputDeviceInternalID[videoInputID] =
+        .avCaptureDevice(uniqueID: "camera-id")
     }
     windowRuntime.updateRuntimes()
 
-    #expect(appletData.state(for: url).videoInputDevicePhysicalIDs[videoInputID] == "camera-id")
+    #expect(
+      appletData.state(for: url).physicalDeviceIDsByInputDeviceInternalID[videoInputID]
+        == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
       programRuntime.programState.read { $0?.cameraIDsByInputKey }
         == ["v4-\(videoInputID)": "camera-id"])
@@ -196,7 +199,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       localState: { coordinator.url.map { appletData.state(for: $0) } ?? .init() })
     let videoInputID = try runtime.addVideoInputDevice(displayName: "Camera")
     appletData.updateState(for: originalURL) {
-      $0.videoInputDevicePhysicalIDs[videoInputID] = "camera-id"
+      $0.physicalDeviceIDsByInputDeviceInternalID[videoInputID] =
+        .avCaptureDevice(uniqueID: "camera-id")
     }
 
     try runtime.persistenceCoordinator.save(
@@ -204,11 +208,11 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
 
     let saveAsURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     #expect(
-      appletData.state(for: saveAsURL).videoInputDevicePhysicalIDs[videoInputID]
-        == "camera-id")
+      appletData.state(for: saveAsURL).physicalDeviceIDsByInputDeviceInternalID[videoInputID]
+        == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
-      appletData.state(for: runtime.url!).videoInputDevicePhysicalIDs[videoInputID]
-        == "camera-id")
+      appletData.state(for: runtime.url!).physicalDeviceIDsByInputDeviceInternalID[videoInputID]
+        == .avCaptureDevice(uniqueID: "camera-id"))
   }
 
   @Test("rejects V4 recording before a Program is selected")

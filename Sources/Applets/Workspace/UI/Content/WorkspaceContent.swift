@@ -2,25 +2,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
 public struct WorkspaceContent: View {
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
-  let windowRuntime: any WorkspaceWindowRuntimeProtocol
+  let workspaceURL: URL
+  let deviceRegistry: DeviceRegistryService
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
-  @State private var cameras: [CameraCaptureSource] = []
-  @State private var audioDevices: [AudioCaptureSource] = []
 
   public init(
-    windowRuntime: any WorkspaceWindowRuntimeProtocol,
+    workspaceURL: URL,
+    deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.windowRuntime = windowRuntime
+    self.workspaceURL = workspaceURL
+    self.deviceRegistry = deviceRegistry
     self._uiState = Bindable(wrappedValue: uiState)
     self._appletData = Bindable(wrappedValue: appletData)
   }
@@ -88,10 +90,6 @@ public struct WorkspaceContent: View {
       .padding(20)
     }
     .onAppear {
-      refreshCaptureDevices()
-      workspaceDispatcher?.synchronizeAudioMonitor()
-    }
-    .onChange(of: windowRuntime.url) { _, _ in
       refreshCaptureDevices()
       workspaceDispatcher?.synchronizeAudioMonitor()
     }
@@ -583,8 +581,7 @@ public struct WorkspaceContent: View {
     Binding(
       get: { localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID) },
       set: { enabled in
-        guard let url = windowRuntime.url else { return }
-        appletData.updateState(for: url) { state in
+        appletData.updateState(for: workspaceURL) { state in
           if enabled {
             state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
           } else {
@@ -759,17 +756,19 @@ public struct WorkspaceContent: View {
         VStack(alignment: .leading) {
           ForEach(videoInputs, id: \.internalID) { input in
             Picker(input.displayName, selection: videoDeviceBinding(for: input.internalID)) {
-              Text("No camera").tag("")
-              ForEach(cameras) { camera in
-                Text(camera.name).tag(camera.id)
+              Text("No camera").tag(Optional<WorkspacePhysicalDeviceID>.none)
+              ForEach(deviceRegistry.cameras) { camera in
+                Text(camera.name).tag(
+                  Optional(WorkspacePhysicalDeviceID.avCaptureDevice(uniqueID: camera.id)))
               }
             }
           }
           ForEach(audioInputs, id: \.internalID) { input in
             Picker(input.displayName, selection: audioDeviceBinding(for: input.internalID)) {
-              Text("No audio device").tag("")
-              ForEach(audioDevices) { device in
-                Text(device.name).tag(device.id)
+              Text("No audio device").tag(Optional<WorkspacePhysicalDeviceID>.none)
+              ForEach(deviceRegistry.audioInputDevices) { device in
+                Text(device.name).tag(
+                  Optional(WorkspacePhysicalDeviceID.coreAudioDevice(uid: device.id)))
               }
             }
             .disabled(uiState.isOutputActive)
@@ -794,34 +793,38 @@ public struct WorkspaceContent: View {
     }
   }
 
-  private func videoDeviceBinding(for internalID: UInt64) -> Binding<String> {
+  private func videoDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        guard let workspaceURL = windowRuntime.url else { return "" }
-        return appletData.state(for: workspaceURL).videoInputDevicePhysicalIDs[
-          internalID] ?? ""
+        guard
+          case .avCaptureDevice? = appletData.state(for: workspaceURL)
+            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+        else { return nil }
+        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
+          internalID]
       },
       set: { id in
-        guard let url = windowRuntime.url else { return }
-        appletData.updateState(for: url) {
-          $0.videoInputDevicePhysicalIDs[internalID] = id.isEmpty ? nil : id
+        appletData.updateState(for: workspaceURL) {
+          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
         }
         workspaceDispatcher?.updateProgramRuntimes()
         synchronizeCaptureInputs()
       })
   }
 
-  private func audioDeviceBinding(for internalID: UInt64) -> Binding<String> {
+  private func audioDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        guard let workspaceURL = windowRuntime.url else { return "" }
-        return appletData.state(for: workspaceURL).audioInputDevicePhysicalIDs[
-          internalID] ?? ""
+        guard
+          case .coreAudioDevice? = appletData.state(for: workspaceURL)
+            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+        else { return nil }
+        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
+          internalID]
       },
       set: { id in
-        guard let url = windowRuntime.url else { return }
-        appletData.updateState(for: url) {
-          $0.audioInputDevicePhysicalIDs[internalID] = id.isEmpty ? nil : id
+        appletData.updateState(for: workspaceURL) {
+          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
         }
         workspaceDispatcher?.updateProgramRuntimes()
         synchronizeCaptureInputs()
@@ -830,15 +833,14 @@ public struct WorkspaceContent: View {
   }
 
   private func refreshCaptureDevices() {
-    let devices = windowRuntime.availableCaptureDevices()
-    cameras = devices.cameras
-    audioDevices = devices.audioDevices
+    deviceRegistry.refresh()
+    errorMessage = deviceRegistry.errorMessage
     synchronizeCaptureInputs()
   }
 
   private func synchronizeCaptureInputs() {
     workspaceDispatcher?.synchronizeCaptureInputs(
-      availableCameraIDs: Set(cameras.map(\.id))
+      availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
     ) { failedIDs in
       guard !failedIDs.isEmpty else { return }
       Task { @MainActor in
@@ -849,13 +851,11 @@ public struct WorkspaceContent: View {
   }
 
   private var localState: WorkspaceLocalState {
-    guard let url = windowRuntime.url else { return .init() }
-    return appletData.state(for: url)
+    appletData.state(for: workspaceURL)
   }
 
   private func setLocalState(_ state: WorkspaceLocalState) {
-    guard let url = windowRuntime.url else { return }
-    appletData.setState(state, for: url)
+    appletData.setState(state, for: workspaceURL)
     workspaceDispatcher?.updateProgramRuntimes()
   }
 }

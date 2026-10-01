@@ -85,8 +85,10 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let url = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
     let state = WorkspaceLocalState(
       selectedProgramInternalID: 42,
-      videoInputDevicePhysicalIDs: [3: "camera"],
-      audioInputDevicePhysicalIDs: [5: "microphone"],
+      physicalDeviceIDsByInputDeviceInternalID: [
+        3: .avCaptureDevice(uniqueID: "camera"),
+        5: .coreAudioDevice(uid: "microphone"),
+      ],
       monitorAudioInputDeviceInternalIDs: [5],
       synchronizesLandscapeMixToPortraitByProgramInternalID: [42: true],
       landscapeYouTubeLiveStreamID: "landscape",

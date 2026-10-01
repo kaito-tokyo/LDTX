@@ -18,21 +18,10 @@ struct SharedCaptureSessionVideoDemand: Equatable, Sendable {
 
 struct SharedCaptureSessionSubscriptionDemand: Equatable, Sendable {
   var video: SharedCaptureSessionVideoDemand?
-  var audioDeviceID: String?
-
-  init(
-    video: SharedCaptureSessionVideoDemand? = nil,
-    audioDeviceID: String? = nil
-  ) {
-    self.video = video
-    self.audioDeviceID = audioDeviceID
-  }
 }
 
 struct SharedCaptureSessionRouteInterest: Hashable, Sendable {
   var deviceID: String
-  var kind: CameraCaptureSampleKind
-
 }
 
 struct SharedCaptureSessionPlan: Equatable, Sendable {
@@ -48,13 +37,10 @@ struct SharedCaptureSessionPlan: Equatable, Sendable {
 enum SharedCaptureSessionPlanner {
   static func makePlans(
     subscriptions: [UUID: SharedCaptureSessionSubscriptionDemand],
-    cameras: [CameraCaptureSource],
-    audioDevices: [AudioCaptureSource]
+    cameras: [CameraCaptureSource]
   ) -> [SharedCaptureSessionPlan] {
     let cameraLookup = Dictionary(
       uniqueKeysWithValues: cameras.map { ($0.id, Set([$0.id] + $0.linkedDeviceIDs)) })
-    let audioLookup = Dictionary(
-      uniqueKeysWithValues: audioDevices.map { ($0.id, Set([$0.id] + $0.linkedDeviceIDs)) })
 
     let expandedSubscriptions = subscriptions.map { id, demand in
       ExpandedSubscription(
@@ -62,8 +48,7 @@ enum SharedCaptureSessionPlanner {
         demand: demand,
         groupedDeviceIDs: groupedDeviceIDs(
           for: demand,
-          cameraLookup: cameraLookup,
-          audioLookup: audioLookup
+          cameraLookup: cameraLookup
         ),
         routeInterests: routeInterests(for: demand)
       )
@@ -118,7 +103,6 @@ enum SharedCaptureSessionPlanner {
   private static func makePlan(component: [ExpandedSubscription]) -> SharedCaptureSessionPlan {
     var groupedDeviceIDs: Set<String> = []
     var videoDemandsByDeviceID: [String: SharedCaptureSessionVideoDemand] = [:]
-    var audioDeviceIDs: Set<String> = []
     var subscriptionRoutes: [UUID: Set<SharedCaptureSessionRouteInterest>] = [:]
 
     for subscription in component {
@@ -129,9 +113,6 @@ enum SharedCaptureSessionPlanner {
         } else {
           videoDemandsByDeviceID[video.deviceID] = video
         }
-      }
-      if let audioDeviceID = subscription.demand.audioDeviceID {
-        audioDeviceIDs.insert(audioDeviceID)
       }
       subscriptionRoutes[subscription.id] = subscription.routeInterests
     }
@@ -149,43 +130,24 @@ enum SharedCaptureSessionPlanner {
           frameRate: demand.frameRate
         )
       }
-    let audioInputs =
-      audioDeviceIDs
-      .sorted { lhs, rhs in
-        lhs.localizedStandardCompare(rhs) == .orderedAscending
-      }
-      .map { deviceID in
-        CaptureSessionAudioRequest(
-          sourceKey: "audio:\(deviceID)",
-          deviceID: deviceID
-        )
-      }
-
     return SharedCaptureSessionPlan(
       key: SharedCaptureSessionPlan.Key(
         groupedDeviceIDs: groupedDeviceIDs.sorted { lhs, rhs in
           lhs.localizedStandardCompare(rhs) == .orderedAscending
         }
       ),
-      request: CaptureSessionRequest(
-        videoInputs: videoInputs,
-        audioInputs: audioInputs
-      ),
+      request: CaptureSessionRequest(videoInputs: videoInputs),
       subscriptionRoutes: subscriptionRoutes
     )
   }
 
   private static func groupedDeviceIDs(
     for demand: SharedCaptureSessionSubscriptionDemand,
-    cameraLookup: [String: Set<String>],
-    audioLookup: [String: Set<String>]
+    cameraLookup: [String: Set<String>]
   ) -> Set<String> {
     var identifiers: Set<String> = []
     if let video = demand.video {
       identifiers.formUnion(cameraLookup[video.deviceID] ?? [video.deviceID])
-    }
-    if let audioDeviceID = demand.audioDeviceID {
-      identifiers.formUnion(audioLookup[audioDeviceID] ?? [audioDeviceID])
     }
     return identifiers
   }
@@ -197,15 +159,7 @@ enum SharedCaptureSessionPlanner {
     if let video = demand.video {
       interests.insert(
         SharedCaptureSessionRouteInterest(
-          deviceID: video.deviceID,
-          kind: .video
-        ))
-    }
-    if let audioDeviceID = demand.audioDeviceID {
-      interests.insert(
-        SharedCaptureSessionRouteInterest(
-          deviceID: audioDeviceID,
-          kind: .audio
+          deviceID: video.deviceID
         ))
     }
     return interests
@@ -244,8 +198,7 @@ enum SharedCaptureFailureRouter {
     routesBySubscriptionID: [UUID: Set<SharedCaptureSessionRouteInterest>]
   ) -> Set<UUID> {
     switch failure {
-    case .deviceDisconnected(let deviceID),
-      .audioFormatChanged(let deviceID, _, _):
+    case .deviceDisconnected(let deviceID):
       return Set(
         routesBySubscriptionID.compactMap { subscriptionID, routes in
           routes.contains(where: { $0.deviceID == deviceID }) ? subscriptionID : nil
@@ -348,8 +301,7 @@ final class SharedCaptureSessionRegistry: @unchecked Sendable {
     let catalog = CaptureSessionManager()
     let plans = SharedCaptureSessionPlanner.makePlans(
       subscriptions: subscriptions.mapValues(\.demand),
-      cameras: catalog.availableCameras(),
-      audioDevices: catalog.availableAudioDevices()
+      cameras: catalog.availableCameras()
     )
     let plansByKey = Dictionary(uniqueKeysWithValues: plans.map { ($0.key, $0) })
     let subscriptionCount = self.subscriptions.count
@@ -539,8 +491,7 @@ final class SharedCaptureSessionRegistry: @unchecked Sendable {
     let video = request.videoInputs.map {
       "\($0.deviceID)@\($0.targetWidth)x\($0.targetHeight)/\($0.frameRate)"
     }.joined(separator: ",")
-    let audio = request.audioInputs.map(\.deviceID).joined(separator: ",")
-    return "video[\(video)] audio[\(audio)]"
+    return "video[\(video)]"
   }
 
   fileprivate static func describeDemands(_ demands: [SharedCaptureSessionSubscriptionDemand])
@@ -561,7 +512,7 @@ final class SharedCaptureSessionRegistry: @unchecked Sendable {
     } else {
       videoDescription = "-"
     }
-    return "video=\(videoDescription),audio=\(demand.audioDeviceID ?? "-")"
+    return "video=\(videoDescription)"
   }
 }
 
@@ -668,8 +619,7 @@ private final class SharedCaptureSession: @unchecked Sendable {
     let handlers = lock.withLock {
       handlersByInterest[
         SharedCaptureSessionRouteInterest(
-          deviceID: sample.deviceID,
-          kind: sample.kind
+          deviceID: sample.deviceID
         )] ?? []
     }
     for handler in handlers {

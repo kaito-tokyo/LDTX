@@ -37,10 +37,6 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
     CaptureSessionManager().availableCameras()
   }
 
-  public func availableAudioDevices() -> [AudioCaptureSource] {
-    CaptureSessionManager().availableAudioDevices()
-  }
-
   public func startCameraCapture(
     cameraID: String,
     targetWidth: Int,
@@ -110,34 +106,12 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
         }
         completionHandler(.success(()))
       case .failure(let error):
-        completionHandler(.failure(Self.mapError(error, for: demands)))
+        completionHandler(.failure(Self.mapError(error)))
       }
     }
   }
 
-  private static func resolveAudioDeviceID(
-    requestedAudioDeviceID: String?,
-    availableAudioDevices: [AudioCaptureSource]
-  ) throws -> String {
-    if let requestedAudioDeviceID {
-      guard availableAudioDevices.contains(where: { $0.id == requestedAudioDeviceID }) else {
-        throw CameraCaptureServiceError.audioDeviceNotFound(requestedAudioDeviceID)
-      }
-      return requestedAudioDeviceID
-    }
-
-    guard let defaultAudioDeviceID = AVCaptureDevice.default(for: .audio)?.uniqueID,
-      availableAudioDevices.contains(where: { $0.id == defaultAudioDeviceID })
-    else {
-      throw CameraCaptureServiceError.cannotAddAudioInput
-    }
-    return defaultAudioDeviceID
-  }
-
-  private static func mapError(
-    _ error: Error,
-    for demands: [SharedCaptureSessionSubscriptionDemand]
-  ) -> Error {
+  private static func mapError(_ error: Error) -> Error {
     if let error = error as? CameraCaptureServiceError {
       return error
     }
@@ -148,30 +122,15 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
     switch error {
     case .cameraAccessDenied:
       return CameraCaptureServiceError.cameraAccessDenied
-    case .microphoneAccessDenied:
-      return CameraCaptureServiceError.microphoneAccessDenied
     case .videoDeviceNotFound(let cameraID):
       return CameraCaptureServiceError.cameraNotFound(cameraID)
-    case .audioDeviceNotFound(let audioDeviceID):
-      return CameraCaptureServiceError.audioDeviceNotFound(audioDeviceID)
-    case .cannotAddInput(let deviceID):
-      if demands.contains(where: { $0.audioDeviceID == deviceID }) {
-        return CameraCaptureServiceError.cannotAddAudioInput
-      }
+    case .cannotAddInput:
       return CameraCaptureServiceError.cannotAddVideoInput
-    case .cannotAddOutput(let sourceKey),
-      .cannotAddConnection(let sourceKey),
-      .missingInputPort(let sourceKey):
-      if sourceKey.hasPrefix("audio:") {
-        return CameraCaptureServiceError.cannotAddAudioOutput
-      }
+    case .cannotAddOutput, .cannotAddConnection, .missingInputPort:
       return CameraCaptureServiceError.cannotAddVideoOutput
     case .unsupportedVideoPixelFormat(let format):
       return CameraCaptureServiceError.unsupportedVideoPixelFormat(format)
-    case .videoDeviceNotAllowed,
-      .audioDeviceNotAllowed,
-      .audioFormatDidNotStabilize,
-      .invalidRequest:
+    case .videoDeviceNotAllowed, .invalidRequest:
       return error
     }
   }

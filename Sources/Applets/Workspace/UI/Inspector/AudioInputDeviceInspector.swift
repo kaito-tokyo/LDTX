@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
@@ -9,7 +10,8 @@ struct AudioInputDeviceInspector: View {
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
+  let workspaceURL: URL?
+  let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
 
   var body: some View {
@@ -25,14 +27,15 @@ struct AudioInputDeviceInspector: View {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        if let windowRuntime, let workspaceURL = windowRuntime.url {
+        if let workspaceURL {
           Picker(
             "Physical Device",
             selection: physicalDeviceBinding(url: workspaceURL)
           ) {
-            Text("No Audio Device").tag("")
-            ForEach(windowRuntime.availableCaptureDevices().audioDevices, id: \.id) { source in
-              Text(source.name).tag(source.id)
+            Text("No Audio Device").tag(Optional<WorkspacePhysicalDeviceID>.none)
+            ForEach(deviceRegistry.audioInputDevices, id: \.id) { source in
+              Text(source.name).tag(
+                Optional(WorkspacePhysicalDeviceID.coreAudioDevice(uid: source.id)))
             }
           }
           .disabled(uiState.isOutputActive)
@@ -68,21 +71,20 @@ struct AudioInputDeviceInspector: View {
 
   private func physicalDeviceBinding(
     url: URL
-  ) -> Binding<String> {
+  ) -> Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        appletData.state(for: url).audioInputDevicePhysicalIDs[internalID] ?? ""
+        guard
+          case .coreAudioDevice? = appletData.state(for: url)
+            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+        else { return nil }
+        return appletData.state(for: url).physicalDeviceIDsByInputDeviceInternalID[internalID]
       },
       set: { identifier in
-        guard let windowRuntime else { return }
-        guard let url = windowRuntime.url else { return }
         appletData.updateState(for: url) {
-          $0.audioInputDevicePhysicalIDs[internalID] = identifier.isEmpty ? nil : identifier
+          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = identifier
         }
         workspaceDispatcher?.updateProgramRuntimes()
-        workspaceDispatcher?.synchronizeCaptureInputs(
-          availableCameraIDs: Set(windowRuntime.availableCaptureDevices().cameras.map(\.id))
-        ) { _ in }
         workspaceDispatcher?.synchronizeAudioMonitor()
       }
     )

@@ -52,6 +52,8 @@ targets:
         buildPhase: resources
     dependencies:
       - target: LDTXWorkspaceAppletInterface
+      - target: LDTXCapture
+      - target: LDTXDeviceRegistry
       - target: LDTXWorkspaceAppletModel
       - target: LDTXProtos
       - package: SwiftProtobuf
@@ -152,6 +154,8 @@ targets:
       - target: LDTXBackgroundSegmentation
         embed: true
       - target: LDTXCapture
+        embed: true
+      - target: LDTXDeviceRegistry
         embed: true
       - target: LDTXDash
         embed: true

@@ -11,7 +11,7 @@ protocol ProgramAudioCaptureStreaming: AnyObject, Sendable {
   func startAudioCapture(
     audioDeviceID: String?,
     failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
-    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    handler: @escaping @Sendable (CMSampleBuffer) -> Void,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   )
   func stop(completionHandler: @escaping @Sendable () -> Void)
@@ -23,8 +23,7 @@ public final class ProgramAudioInputCaptureController: @unchecked Sendable {
   public typealias SampleHandler =
     @Sendable (
       _ channelKey: String,
-      _ sampleBuffer: CMSampleBuffer,
-      _ kind: CameraCaptureSampleKind
+      _ sampleBuffer: CMSampleBuffer
     ) -> Void
 
   private let lock = NSLock()
@@ -137,7 +136,7 @@ public final class ProgramAudioInputCaptureController: @unchecked Sendable {
       },
       sampleHandler: { [weak self] sampleBuffer in
         guard self?.isCurrent(generation) == true else { return }
-        sampleHandler(channelKey, sampleBuffer, .audio)
+        sampleHandler(channelKey, sampleBuffer)
       },
       completionHandler: { [self] result in
         guard isCurrent(generation) else {

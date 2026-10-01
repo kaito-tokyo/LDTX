@@ -3,18 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXYouTubeRTMPS
 import Observation
 import Security
-import SwiftProtobuf
 
 /// Persists app-local state for Workspace packages.
 @MainActor
 @Observable
 public final class WorkspaceAppletData {
-  private static let persistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
+  private static let persistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v2"
+  private static let legacyPersistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
+  private static let legacyAudioDeviceIdentifierVersionKey =
+    "tokyo.kaito.ldtx.workspace-local-state.audio-device-identifier-version"
 
   private let userDefaults: UserDefaults
   private let keychainClient: WorkspaceAppletKeychainClient
@@ -31,6 +32,8 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
+    userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
   }
 
   init(userDefaults: UserDefaults, keychainClient: WorkspaceAppletKeychainClient) {
@@ -43,6 +46,8 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
+    userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
   }
 
   public func state(for workspaceURL: URL) -> WorkspaceLocalState {
@@ -138,18 +143,15 @@ public final class WorkspaceAppletData {
   private static func encodeLocalStateStore(
     _ statesByWorkspacePath: [String: WorkspaceLocalState]
   ) throws -> Data {
-    var proto = Ldtx_App_V1_WorkspaceLocalStateStore()
-    proto.statesByWorkspacePath = statesByWorkspacePath.mapValues(\.protoMessage)
-    var options = BinaryEncodingOptions()
-    options.useDeterministicOrdering = true
-    return try proto.serializedData(options: options)
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .binary
+    return try encoder.encode(statesByWorkspacePath)
   }
 
   private static func decodeLocalStateStore(from data: Data) throws
     -> [String: WorkspaceLocalState]
   {
-    try Ldtx_App_V1_WorkspaceLocalStateStore(serializedBytes: data)
-      .statesByWorkspacePath.mapValues(\.domainModel)
+    try PropertyListDecoder().decode([String: WorkspaceLocalState].self, from: data)
   }
 }
 
@@ -174,40 +176,5 @@ public enum YouTubeStreamKeyConfigurationError: Error, LocalizedError {
     case .loadFailed: "Stream key configurations could not be loaded from Keychain."
     case .saveFailed: "Stream key configurations could not be saved to Keychain."
     }
-  }
-}
-
-extension WorkspaceLocalState {
-  fileprivate var protoMessage: Ldtx_App_V1_WorkspaceLocalState {
-    var proto = Ldtx_App_V1_WorkspaceLocalState()
-    if let selectedProgramInternalID { proto.selectedProgramInternalID = selectedProgramInternalID }
-    proto.videoInputDevicePhysicalIds = videoInputDevicePhysicalIDs
-    proto.audioInputDevicePhysicalIds = audioInputDevicePhysicalIDs
-    proto.monitorAudioInputDeviceInternalIds = monitorAudioInputDeviceInternalIDs.sorted()
-    proto.synchronizesLandscapeMixToPortraitByProgramInternalID =
-      synchronizesLandscapeMixToPortraitByProgramInternalID
-    if let landscapeYouTubeLiveStreamID {
-      proto.landscapeYoutubeLiveStreamID = landscapeYouTubeLiveStreamID
-    }
-    if let portraitYouTubeLiveStreamID {
-      proto.portraitYoutubeLiveStreamID = portraitYouTubeLiveStreamID
-    }
-    return proto
-  }
-}
-
-extension Ldtx_App_V1_WorkspaceLocalState {
-  fileprivate var domainModel: WorkspaceLocalState {
-    WorkspaceLocalState(
-      selectedProgramInternalID: hasSelectedProgramInternalID ? selectedProgramInternalID : nil,
-      videoInputDevicePhysicalIDs: videoInputDevicePhysicalIds,
-      audioInputDevicePhysicalIDs: audioInputDevicePhysicalIds,
-      monitorAudioInputDeviceInternalIDs: Set(monitorAudioInputDeviceInternalIds),
-      synchronizesLandscapeMixToPortraitByProgramInternalID:
-        synchronizesLandscapeMixToPortraitByProgramInternalID,
-      landscapeYouTubeLiveStreamID: hasLandscapeYoutubeLiveStreamID
-        ? landscapeYoutubeLiveStreamID : nil,
-      portraitYouTubeLiveStreamID: hasPortraitYoutubeLiveStreamID
-        ? portraitYoutubeLiveStreamID : nil)
   }
 }

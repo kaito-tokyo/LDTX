@@ -5,10 +5,14 @@
 import Foundation
 
 /// App-local state for one Workspace package.
-public struct WorkspaceLocalState: Equatable, Sendable {
+public enum WorkspacePhysicalDeviceID: Codable, Equatable, Hashable, Sendable {
+  case avCaptureDevice(uniqueID: String)
+  case coreAudioDevice(uid: String)
+}
+
+public struct WorkspaceLocalState: Codable, Equatable, Sendable {
   public var selectedProgramInternalID: UInt64?
-  public var videoInputDevicePhysicalIDs: [UInt64: String]
-  public var audioInputDevicePhysicalIDs: [UInt64: String]
+  public var physicalDeviceIDsByInputDeviceInternalID: [UInt64: WorkspacePhysicalDeviceID]
   public var monitorAudioInputDeviceInternalIDs: Set<UInt64>
   public var synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool]
   public var landscapeYouTubeLiveStreamID: String?
@@ -16,16 +20,14 @@ public struct WorkspaceLocalState: Equatable, Sendable {
 
   public init(
     selectedProgramInternalID: UInt64? = nil,
-    videoInputDevicePhysicalIDs: [UInt64: String] = [:],
-    audioInputDevicePhysicalIDs: [UInt64: String] = [:],
+    physicalDeviceIDsByInputDeviceInternalID: [UInt64: WorkspacePhysicalDeviceID] = [:],
     monitorAudioInputDeviceInternalIDs: Set<UInt64> = [],
     synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:],
     landscapeYouTubeLiveStreamID: String? = nil,
     portraitYouTubeLiveStreamID: String? = nil
   ) {
     self.selectedProgramInternalID = selectedProgramInternalID
-    self.videoInputDevicePhysicalIDs = videoInputDevicePhysicalIDs
-    self.audioInputDevicePhysicalIDs = audioInputDevicePhysicalIDs
+    self.physicalDeviceIDsByInputDeviceInternalID = physicalDeviceIDsByInputDeviceInternalID
     self.monitorAudioInputDeviceInternalIDs = monitorAudioInputDeviceInternalIDs
     self.synchronizesLandscapeMixToPortraitByProgramInternalID =
       synchronizesLandscapeMixToPortraitByProgramInternalID

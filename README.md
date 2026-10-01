@@ -26,7 +26,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXAppInterface           | Interfaces provided by the app host to applets, including Workspace recording activity reporting. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
-| LDTXCapture                | Camera capture sources, services, and capture-session management.  |
+| LDTXCapture                | AVCapture camera sources, services, and capture-session management. |
+| LDTXDeviceRegistry         | Workspace device discovery using AVCapture cameras and Core Audio input UIDs. |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
 | LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXFontRasterizer         | C-backed TrueType glyph rasterization used by runtime overlays.    |

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
@@ -10,25 +11,31 @@ import SwiftUI
 #endif
 
 public struct WorkspaceInspectorContainer: View {
-  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
+  let workspaceURL: URL?
+  let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var uiState: WorkspaceUIState
 
   public init(
-    windowRuntime: any WorkspaceWindowRuntimeProtocol,
+    workspaceURL: URL,
+    deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.windowRuntime = windowRuntime
+    self.workspaceURL = workspaceURL
+    self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
   init(
+    workspaceURL: URL? = nil,
+    deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData = WorkspaceAppletData()
   ) {
-    self.windowRuntime = nil
+    self.workspaceURL = workspaceURL
+    self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
   }
@@ -49,25 +56,22 @@ public struct WorkspaceInspectorContainer: View {
     case .programVideoLayers:
       ProgramVideoLayersInspector(
         uiState: uiState,
-        windowRuntime: windowRuntime,
+        workspaceURL: workspaceURL,
         appletData: appletData)
     case .workspaceCanvas:
-      if let windowRuntime {
-        WorkspaceCanvasInspector(windowRuntime: windowRuntime, uiState: uiState)
-      } else {
-        unavailablePreviewInspector
-      }
+      WorkspaceCanvasInspector(uiState: uiState)
     case .workspaceOutput:
-      if let windowRuntime {
+      if let workspaceURL {
         WorkspaceOutputInspector(
-          windowRuntime: windowRuntime, uiState: uiState, appletData: appletData)
+          workspaceURL: workspaceURL, uiState: uiState, appletData: appletData)
       } else {
         unavailablePreviewInspector
       }
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
+          uiState: uiState, internalID: internalID, workspaceURL: workspaceURL,
+          deviceRegistry: deviceRegistry,
           appletData: appletData)
       } else {
         emptyInspector
@@ -75,7 +79,8 @@ public struct WorkspaceInspectorContainer: View {
     case .videoInputDevice:
       if let internalID = selector.internalID {
         VideoInputDeviceInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime,
+          uiState: uiState, internalID: internalID, workspaceURL: workspaceURL,
+          deviceRegistry: deviceRegistry,
           appletData: appletData)
       } else {
         emptyInspector
@@ -83,7 +88,7 @@ public struct WorkspaceInspectorContainer: View {
     case .vfxVideoComponent:
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+          uiState: uiState, internalID: internalID)
       } else {
         emptyInspector
       }
@@ -122,21 +127,21 @@ public struct WorkspaceInspectorContainer: View {
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+          uiState: uiState, internalID: internalID)
       } else {
         emptyInspector
       }
     case .testPatternVideoComponent:
       if let internalID = selector.internalID {
         TestPatternInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+          uiState: uiState, internalID: internalID)
       } else {
         emptyInspector
       }
     case .ocrVision:
       if let internalID = selector.internalID {
         OcrVisionInspector(
-          uiState: uiState, internalID: internalID, windowRuntime: windowRuntime)
+          uiState: uiState, internalID: internalID)
       } else {
         emptyInspector
       }
@@ -149,7 +154,7 @@ public struct WorkspaceInspectorContainer: View {
   }
 
   private var unavailablePreviewInspector: some View {
-    Text("This Inspector requires a Workspace windowRuntime.")
+    Text("This Inspector requires a Workspace URL.")
       .foregroundStyle(.secondary)
   }
 
@@ -168,11 +173,13 @@ public struct WorkspaceInspectorContainer: View {
 
       Divider()
 
-      WorkspaceInspectorContainer(uiState: uiState, appletData: WorkspaceAppletData())
-        .padding(16)
-        .frame(width: 260)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+      WorkspaceInspectorContainer(
+        deviceRegistry: DeviceRegistryService(), uiState: uiState, appletData: WorkspaceAppletData()
+      )
+      .padding(16)
+      .frame(width: 260)
+      .frame(maxHeight: .infinity, alignment: .topLeading)
+      .background(Color(nsColor: .windowBackgroundColor))
     }
     .frame(minWidth: 520, minHeight: 640)
   }

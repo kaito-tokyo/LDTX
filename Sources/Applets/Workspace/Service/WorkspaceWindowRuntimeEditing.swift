@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXCapture
 import LDTXProgram
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
@@ -23,13 +22,6 @@ public final class WorkspaceInternalIDGenerator {
 }
 
 extension WorkspaceWindowRuntime {
-  public func availableCaptureDevices() -> (
-    cameras: [CameraCaptureSource], audioDevices: [AudioCaptureSource]
-  ) {
-    let service = DefaultCaptureDeviceService()
-    return (service.availableCameras(), service.availableAudioDevices())
-  }
-
   public func editDefinition(
     _ mutation: (inout Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Void
   ) throws {

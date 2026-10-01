@@ -8,7 +8,6 @@ import SwiftUI
 struct ClockInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
 
   var body: some View {
     Form {

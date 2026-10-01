@@ -6,6 +6,7 @@ import AppKit
 import LDTXAppInterface
 import LDTXBackgroundSegmentation
 import LDTXCapture
+import LDTXDeviceRegistry
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
@@ -126,7 +127,7 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
 
     let window = WorkspaceWindow(
       url: url,
-      windowRuntime: windowRuntime,
+      deviceRegistry: DeviceRegistryService(),
       appletData: appletData,
       dispatcher: dispatcher,
       uiState: uiState)
@@ -317,7 +318,9 @@ extension WorkspaceAppletController {
       uniqueKeysWithValues: windowRuntime.definition.inputDevices.compactMap {
         input -> (String, String)? in
         guard case .audioDevice(let device)? = input.definition,
-          let physicalID = localState.audioInputDevicePhysicalIDs[device.internalID]
+          case .coreAudioDevice(let physicalID)? =
+            localState
+            .physicalDeviceIDsByInputDeviceInternalID[device.internalID]
         else { return nil }
         return ("v4-\(device.internalID)", physicalID)
       })

@@ -7,7 +7,7 @@ import SwiftUI
 
 struct ProgramVideoLayersInspector: View {
   let uiState: WorkspaceUIState
-  let windowRuntime: (any WorkspaceWindowRuntimeProtocol)?
+  let workspaceURL: URL?
   @Bindable var appletData: WorkspaceAppletData
 
   var body: some View {
@@ -37,9 +37,9 @@ struct ProgramVideoLayersInspector: View {
   }
 
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard let url = windowRuntime?.url else { return nil }
+    guard let workspaceURL else { return nil }
     let selectedID =
-      appletData.state(for: url).selectedProgramInternalID
+      appletData.state(for: workspaceURL).selectedProgramInternalID
       ?? uiState.definition.programs.first?.internalID
     guard let selectedID else { return nil }
     return uiState.definition.programs.first { $0.internalID == selectedID }
@@ -58,21 +58,21 @@ struct ProgramVideoLayersInspector: View {
           } label: {
             Image(systemName: "arrow.up")
           }
-          .disabled(index == 0 || windowRuntime == nil || isRecording)
+          .disabled(index == 0 || workspaceURL == nil || isRecording)
           Button {
             moveLayer(role: role, from: index, by: 1)
           } label: {
             Image(systemName: "arrow.down")
           }
-          .disabled(index == internalIDs.count - 1 || windowRuntime == nil || isRecording)
+          .disabled(index == internalIDs.count - 1 || workspaceURL == nil || isRecording)
           Button(role: .destructive) {
             removeLayer(role: role, internalID: internalID)
           } label: {
             Image(systemName: "minus")
           }
-          .disabled(windowRuntime == nil || isRecording)
+          .disabled(workspaceURL == nil || isRecording)
         }
-        if windowRuntime != nil, let selectedProgram {
+        if workspaceURL != nil, let selectedProgram {
           WorkspaceV4LayerTransformEditor(
             uiState: uiState,
             programInternalID: selectedProgram.internalID,
@@ -113,7 +113,7 @@ struct ProgramVideoLayersInspector: View {
         }
       }
     }
-    .disabled(windowRuntime == nil || isRecording)
+    .disabled(workspaceURL == nil || isRecording)
   }
 
   private func layerName(for internalID: UInt64) -> String {

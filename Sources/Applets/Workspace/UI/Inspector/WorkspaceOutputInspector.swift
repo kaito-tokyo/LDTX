@@ -6,7 +6,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceOutputInspector: View {
-  let windowRuntime: any WorkspaceWindowRuntimeProtocol
+  let workspaceURL: URL
   let uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var isShowingStreamKeyManager = false
@@ -138,8 +138,7 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { localState.landscapeYouTubeLiveStreamID ?? "" },
       set: { streamID in
-        guard let url = windowRuntime.url else { return }
-        appletData.updateState(for: url) {
+        appletData.updateState(for: workspaceURL) {
           $0.landscapeYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
         }
       })
@@ -149,16 +148,14 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { localState.portraitYouTubeLiveStreamID ?? "" },
       set: { streamID in
-        guard let url = windowRuntime.url else { return }
-        appletData.updateState(for: url) {
+        appletData.updateState(for: workspaceURL) {
           $0.portraitYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
         }
       })
   }
 
   private var localState: WorkspaceLocalState {
-    guard let url = windowRuntime.url else { return .init() }
-    return appletData.state(for: url)
+    appletData.state(for: workspaceURL)
   }
 
   private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {

@@ -171,6 +171,21 @@ targets:
         PRODUCT_MODULE_NAME: LDTXCapture
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
+  LDTXDeviceRegistry:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXDeviceRegistry
+    dependencies:
+      - target: LDTXCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDeviceRegistry
+        PRODUCT_MODULE_NAME: LDTXDeviceRegistry
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        OTHER_LDFLAGS: "$(inherited) -framework CoreAudio -framework CoreFoundation"
   LDTXDash:
     type: framework
     platform: macOS
@@ -531,6 +546,7 @@ targets:
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
+      - target: LDTXDeviceRegistry
       - target: LDTXDiagnostics
       - target: LDTXInternalProtocols
       - target: LDTXProgram

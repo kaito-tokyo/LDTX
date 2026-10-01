@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletUI
 import SwiftUI
@@ -13,7 +14,7 @@ public final class WorkspaceWindow: NSWindow {
 
   init(
     url: URL,
-    windowRuntime: any WorkspaceWindowRuntimeProtocol,
+    deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
     dispatcher: any WorkspaceDispatcherProtocol,
     uiState: WorkspaceUIState
@@ -34,14 +35,16 @@ public final class WorkspaceWindow: NSWindow {
       .environment(\.workspaceDispatcher, dispatcher)
 
     let contentView = WorkspaceContent(
-      windowRuntime: windowRuntime,
+      workspaceURL: url,
+      deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
     )
     .environment(\.workspaceDispatcher, dispatcher)
 
     let inspectorView = WorkspaceInspectorContainer(
-      windowRuntime: windowRuntime,
+      workspaceURL: url,
+      deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
     )

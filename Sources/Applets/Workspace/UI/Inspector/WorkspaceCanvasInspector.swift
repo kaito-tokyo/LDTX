@@ -6,7 +6,6 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
-  let windowRuntime: any WorkspaceWindowRuntimeProtocol
   let uiState: WorkspaceUIState
 
   var body: some View {
