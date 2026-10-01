@@ -30,17 +30,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-  LDTXLauncherApplet:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXLauncherApplet
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXLauncherApplet
-        PRODUCT_MODULE_NAME: LDTXLauncherApplet
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: "YES"
   LDTXWorkspaceAppletUI:
     type: framework
     platform: macOS
@@ -120,9 +109,6 @@ targets:
             destination: resources
     dependencies:
       - target: LDTXAppletSupport
-        embed: true
-        codeSign: true
-      - target: LDTXLauncherApplet
         embed: true
         codeSign: true
       - target: LDTXRecordPlayerApplet

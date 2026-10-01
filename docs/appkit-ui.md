@@ -10,10 +10,13 @@ and recording files are NSDocument instances managed by the shared
 NSDocumentController.shared. AppKit creates the standard controller and uses
 the first Editor type in Info.plist (Workspace) as the default New document type.
 AppKit initializes each document and selects
-the registered document class for each file type. Launcher buttons call the shared
-document controller's standard New and Open actions directly. AppDelegate
-closes Launcher when a Workspace or Player window becomes the main window, and
-checks existing content windows when launch or restoration completes.
+the registered document class for each file type. File menu New and Open use the
+shared document controller's standard actions. AppDelegate suppresses automatic
+untitled documents and presents the standard Open panel after launch and
+restoration when no documents are open and no file-open request was received.
+Reopening the application without visible windows presents the Open panel again.
+Cancelling the panel leaves the application running; File > New creates an
+untitled Workspace without first requesting a save location.
 WorkspaceDocument projects the registered documents' output state into
 NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
 no independent recording identifiers or activity store are maintained. The badge

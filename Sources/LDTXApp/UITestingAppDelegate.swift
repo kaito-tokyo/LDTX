@@ -4,7 +4,6 @@
 
 import AppKit
 import LDTXAppletSupport
-import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet

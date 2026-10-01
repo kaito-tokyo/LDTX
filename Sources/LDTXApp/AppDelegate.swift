@@ -4,7 +4,6 @@
 
 import AppKit
 import LDTXDiagnostics
-import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
@@ -12,15 +11,14 @@ import LDTXWorkspaceAppletController
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
-  private var launcher: LauncherApplet?
   private var didFinishLaunching = false
   private var didFinishRestoringWindows = false
   private var receivedOpenURL = false
+  private var didPresentStartupOpenPanel = false
   private lazy var applicationMainMenu = AppMainMenu()
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
   private var restorationObserver: NSObjectProtocol?
-  private var mainWindowObserver: NSObjectProtocol?
   private let launchID = UUID()
   private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
   private var diagnosticsService: DiagnosticsSamplingService?
@@ -28,16 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
   override init() {
     super.init()
-    mainWindowObserver = NotificationCenter.default.addObserver(
-      forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
-    ) { [weak self] notification in
-      guard let window = notification.object as? NSWindow else { return }
-      MainActor.assumeIsolated {
-        guard let self, self.isContentWindow(window) else { return }
-        self.launcher?.close()
-      }
-    }
-
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -54,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.didFinishRestoringWindows = true
-        self?.showLauncherIfNeeded()
+        self?.showOpenPanelIfNeeded()
       }
     }
   }
@@ -69,27 +57,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
-  private func showLauncher() {
-    if launcher == nil { launcher = LauncherApplet() }
-    launcher?.showWindow(nil)
-    launcher?.window?.makeKeyAndOrderFront(nil)
-  }
-
-  private func isContentWindow(_ window: NSWindow) -> Bool {
-    window.windowController is WorkspaceWindowController
-      || window.windowController is RecordPlayerWindowController
-  }
-
-  private func showLauncherIfNeeded() {
-    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL
+  private func showOpenPanelIfNeeded() {
+    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL,
+      !didPresentStartupOpenPanel,
+      NSDocumentController.shared.documents.isEmpty
     else { return }
-    guard
-      !NSApp.windows.contains(where: isContentWindow)
-    else {
-      launcher?.close()
-      return
-    }
-    showLauncher()
+    didPresentStartupOpenPanel = true
+    NSDocumentController.shared.openDocument(nil)
   }
 
   @objc func toggleInspector(_ sender: Any?) {
@@ -124,11 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     // The restoration notification is not delivered when there are no restorable
     // windows. Treat launch completion as the fallback in that case so the
-    // launcher is still available on a clean start.
+    // Open panel is still available on a clean start.
     if !didFinishRestoringWindows {
       didFinishRestoringWindows = true
     }
-    showLauncherIfNeeded()
+    showOpenPanelIfNeeded()
   }
 
   func applicationWillTerminate(_ notification: Notification) {
@@ -190,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     _ sender: NSApplication,
     hasVisibleWindows: Bool
   ) -> Bool {
-    if !hasVisibleWindows { showLauncher() }
-    return true
+    if !hasVisibleWindows { NSDocumentController.shared.openDocument(nil) }
+    return false
   }
 }
