@@ -48,25 +48,29 @@ struct SolidColorFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(uiState.isOutputActive || component == nil)
-    .onSubmit {
-      guard
-        var component = self.component,
-        let nsColor = NSColor(color).usingColorSpace(.sRGB)
-      else { return }
+    .onChange(of: name) { commitDraft() }
+    .onChange(of: color) { commitDraft() }
+    .onSubmit { commitDraft() }
+  }
 
-      component.displayName = name
-      component.color.red = Float(nsColor.redComponent)
-      component.color.green = Float(nsColor.greenComponent)
-      component.color.blue = Float(nsColor.blueComponent)
-      component.color.alpha = Float(nsColor.alphaComponent)
+  private func commitDraft() {
+    guard
+      var component,
+      let nsColor = NSColor(color).usingColorSpace(.sRGB)
+    else { return }
 
-      var definition = uiState.definition
-      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
-      else { return }
-      definition.videoComponents[index].definition = .solidColorFill(component)
-      uiState.definition = definition
-      uiState.recordDefinitionChange()
-    }
+    component.displayName = name
+    component.color.red = Float(nsColor.redComponent)
+    component.color.green = Float(nsColor.greenComponent)
+    component.color.blue = Float(nsColor.blueComponent)
+    component.color.alpha = Float(nsColor.alphaComponent)
+
+    var definition = uiState.definition
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    else { return }
+    definition.videoComponents[index].definition = .solidColorFill(component)
+    uiState.definition = definition
+    uiState.recordDefinitionChange()
   }
 }
 

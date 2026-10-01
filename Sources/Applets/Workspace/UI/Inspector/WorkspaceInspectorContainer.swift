@@ -43,6 +43,7 @@ public struct WorkspaceInspectorContainer: View {
   public var body: some View {
     if let selector = uiState.inspectorSelector {
       inspector(for: selector)
+        .id(selector)
     } else {
       emptyInspector
     }

@@ -69,34 +69,43 @@ struct RadialGradientFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(uiState.isOutputActive || component == nil)
-    .onSubmit {
-      guard
-        var component = self.component,
-        let innerNSColor = NSColor(innerColor).usingColorSpace(.sRGB),
-        let outerNSColor = NSColor(outerColor).usingColorSpace(.sRGB)
-      else { return }
+    .onChange(of: name) { commitDraft() }
+    .onChange(of: centerX) { commitDraft() }
+    .onChange(of: centerY) { commitDraft() }
+    .onChange(of: innerRadius) { commitDraft() }
+    .onChange(of: outerRadius) { commitDraft() }
+    .onChange(of: innerColor) { commitDraft() }
+    .onChange(of: outerColor) { commitDraft() }
+    .onSubmit { commitDraft() }
+  }
 
-      component.displayName = name
-      component.centerX = centerX
-      component.centerY = centerY
-      component.innerRadius = innerRadius
-      component.outerRadius = outerRadius
-      component.innerColor.red = Float(innerNSColor.redComponent)
-      component.innerColor.green = Float(innerNSColor.greenComponent)
-      component.innerColor.blue = Float(innerNSColor.blueComponent)
-      component.innerColor.alpha = Float(innerNSColor.alphaComponent)
-      component.outerColor.red = Float(outerNSColor.redComponent)
-      component.outerColor.green = Float(outerNSColor.greenComponent)
-      component.outerColor.blue = Float(outerNSColor.blueComponent)
-      component.outerColor.alpha = Float(outerNSColor.alphaComponent)
+  private func commitDraft() {
+    guard
+      var component,
+      let innerNSColor = NSColor(innerColor).usingColorSpace(.sRGB),
+      let outerNSColor = NSColor(outerColor).usingColorSpace(.sRGB)
+    else { return }
 
-      var definition = uiState.definition
-      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
-      else { return }
-      definition.videoComponents[index].definition = .radialGradientFill(component)
-      uiState.definition = definition
-      uiState.recordDefinitionChange()
-    }
+    component.displayName = name
+    component.centerX = centerX
+    component.centerY = centerY
+    component.innerRadius = innerRadius
+    component.outerRadius = outerRadius
+    component.innerColor.red = Float(innerNSColor.redComponent)
+    component.innerColor.green = Float(innerNSColor.greenComponent)
+    component.innerColor.blue = Float(innerNSColor.blueComponent)
+    component.innerColor.alpha = Float(innerNSColor.alphaComponent)
+    component.outerColor.red = Float(outerNSColor.redComponent)
+    component.outerColor.green = Float(outerNSColor.greenComponent)
+    component.outerColor.blue = Float(outerNSColor.blueComponent)
+    component.outerColor.alpha = Float(outerNSColor.alphaComponent)
+
+    var definition = uiState.definition
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    else { return }
+    definition.videoComponents[index].definition = .radialGradientFill(component)
+    uiState.definition = definition
+    uiState.recordDefinitionChange()
   }
 
   private var gradient: RadialGradient {

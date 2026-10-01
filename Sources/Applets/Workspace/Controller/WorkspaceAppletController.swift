@@ -220,6 +220,11 @@ public final class WorkspaceAppletController: NSWindowController, NSWindowDelega
     uiState.markPreferencesSaved()
   }
 
+  public func saveWorkspace() throws {
+    try saveWorkspaceDefinition()
+    try saveWorkspacePreferences()
+  }
+
   func startOutput() async throws {
     try saveWorkspaceDefinition()
     try saveWorkspacePreferences()

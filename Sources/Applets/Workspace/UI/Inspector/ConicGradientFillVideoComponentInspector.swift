@@ -64,33 +64,41 @@ struct ConicGradientFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(uiState.isOutputActive || component == nil)
-    .onSubmit {
-      guard
-        var component = self.component,
-        let startNSColor = NSColor(startColor).usingColorSpace(.sRGB),
-        let endNSColor = NSColor(endColor).usingColorSpace(.sRGB)
-      else { return }
+    .onChange(of: name) { commitDraft() }
+    .onChange(of: centerX) { commitDraft() }
+    .onChange(of: centerY) { commitDraft() }
+    .onChange(of: startAngleRadians) { commitDraft() }
+    .onChange(of: startColor) { commitDraft() }
+    .onChange(of: endColor) { commitDraft() }
+    .onSubmit { commitDraft() }
+  }
 
-      component.displayName = name
-      component.centerX = centerX
-      component.centerY = centerY
-      component.startAngleRadians = startAngleRadians
-      component.startColor.red = Float(startNSColor.redComponent)
-      component.startColor.green = Float(startNSColor.greenComponent)
-      component.startColor.blue = Float(startNSColor.blueComponent)
-      component.startColor.alpha = Float(startNSColor.alphaComponent)
-      component.endColor.red = Float(endNSColor.redComponent)
-      component.endColor.green = Float(endNSColor.greenComponent)
-      component.endColor.blue = Float(endNSColor.blueComponent)
-      component.endColor.alpha = Float(endNSColor.alphaComponent)
+  private func commitDraft() {
+    guard
+      var component,
+      let startNSColor = NSColor(startColor).usingColorSpace(.sRGB),
+      let endNSColor = NSColor(endColor).usingColorSpace(.sRGB)
+    else { return }
 
-      var definition = uiState.definition
-      guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
-      else { return }
-      definition.videoComponents[index].definition = .conicGradientFill(component)
-      uiState.definition = definition
-      uiState.recordDefinitionChange()
-    }
+    component.displayName = name
+    component.centerX = centerX
+    component.centerY = centerY
+    component.startAngleRadians = startAngleRadians
+    component.startColor.red = Float(startNSColor.redComponent)
+    component.startColor.green = Float(startNSColor.greenComponent)
+    component.startColor.blue = Float(startNSColor.blueComponent)
+    component.startColor.alpha = Float(startNSColor.alphaComponent)
+    component.endColor.red = Float(endNSColor.redComponent)
+    component.endColor.green = Float(endNSColor.greenComponent)
+    component.endColor.blue = Float(endNSColor.blueComponent)
+    component.endColor.alpha = Float(endNSColor.alphaComponent)
+
+    var definition = uiState.definition
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    else { return }
+    definition.videoComponents[index].definition = .conicGradientFill(component)
+    uiState.definition = definition
+    uiState.recordDefinitionChange()
   }
 
   private var gradient: AngularGradient {

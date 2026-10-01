@@ -162,7 +162,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation,
     launcher?.close()
   }
 
-  @objc func save(_ sender: Any?) {}
+  @objc func save(_ sender: Any?) {
+    guard let activeWorkspace else { return }
+    do {
+      try activeWorkspace.saveWorkspace()
+    } catch {
+      NSAlert(error: error).runModal()
+    }
+  }
   @objc func saveAs(_ sender: Any?) {}
   @objc func reload(_ sender: Any?) {}
   @objc func toggleInspector(_ sender: Any?) {
