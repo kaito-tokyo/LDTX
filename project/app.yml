@@ -45,8 +45,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/UI
-        name: LDTXWorkspaceAppletUI
+      - path: Sources/Applets/Workspace
+        includes:
+          - UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal

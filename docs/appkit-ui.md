@@ -61,13 +61,17 @@ Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
 
 ## Source folders
 
-XcodeGen source roots under `Sources` use `syncedFolder`. Intermediate directory
-groups are disabled, so each target's source folder appears directly in the
-project navigator. Workspace folders use module names to distinguish Controller,
-Interface, Model, Service, Store, and UI without introducing directory groups.
-Each synchronized source root belongs to one Xcode target; sharing code between
-modules uses framework dependencies rather than overlapping source membership.
-SwiftPM-only entrypoints remain managed by Package.swift.
+XcodeGen source roots under `Sources` use `syncedFolder`. Intermediate groups
+preserve the Sources and Applets hierarchy. Sources/LDTX* folders and each applet
+folder are synchronized roots; Workspace subdirectories are discovered inside
+one Workspace root rather than registered as separate navigator groups.
+
+Workspace retains its existing module boundaries because lower-level frameworks
+also consume its model. Each Workspace target includes only its own Controller,
+Interface, Model, Service, Store, or UI subdirectory. XcodeGen generates the
+per-target membership exceptions, so a source compiles in one Xcode target.
+Adding or removing Workspace files requires regenerating the project to update
+these exceptions. SwiftPM-only entrypoints remain managed by Package.swift.
 
 XcodeGen 2.46 does not generate synchronized-folder public-header visibility
 exceptions. The AudioEngine and FontRasterizer public headers therefore retain

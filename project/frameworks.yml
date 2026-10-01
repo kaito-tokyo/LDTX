@@ -122,8 +122,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/Interface
-        name: LDTXWorkspaceAppletInterface
+      - path: Sources/Applets/Workspace
+        includes:
+          - Interface
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXAudioEngine
@@ -453,8 +454,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/Model
-        name: LDTXWorkspaceAppletModel
+      - path: Sources/Applets/Workspace
+        includes:
+          - Model
     dependencies:
       - target: LDTXProtos
       - target: LDTXProgram
@@ -472,8 +474,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/Store
-        name: LDTXWorkspaceAppletStore
+      - path: Sources/Applets/Workspace
+        includes:
+          - Store
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -495,8 +498,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/Service
-        name: LDTXWorkspaceAppletService
+      - path: Sources/Applets/Workspace
+        includes:
+          - Service
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -528,8 +532,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/Applets/Workspace/Controller
-        name: LDTXWorkspaceAppletController
+      - path: Sources/Applets/Workspace
+        includes:
+          - Controller
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceBundleFormat
