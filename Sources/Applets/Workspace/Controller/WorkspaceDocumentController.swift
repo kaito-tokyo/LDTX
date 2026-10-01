@@ -4,17 +4,16 @@
 import AppKit
 import LDTXAppInterface
 import LDTXRecording
-import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletUI
 
 @MainActor
-final class WorkspaceDocumentController: NSDocumentController {
+public final class WorkspaceDocumentController: NSDocumentController {
   let appletData = WorkspaceAppletData()
-  weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
-  var openRecording: ((URL) -> Void)?
-  var didShowDocument: (() -> Void)?
+  public weak var recordingActivityReporter: (any WorkspaceRecordingActivityReporting)?
+  public var openRecording: ((URL) -> Void)?
+  public var didShowDocument: (() -> Void)?
 
-  override var defaultType: String? { "tokyo.kaito.ldtx.workspace" }
+  public override var defaultType: String? { "tokyo.kaito.ldtx.workspace" }
 
   private func configure(_ document: NSDocument) throws -> NSDocument {
     guard let workspace = document as? WorkspaceDocument else { return document }
@@ -24,27 +23,28 @@ final class WorkspaceDocumentController: NSDocumentController {
     return workspace
   }
 
-  override func makeUntitledDocument(ofType typeName: String) throws -> NSDocument {
+  public override func makeUntitledDocument(ofType typeName: String) throws -> NSDocument {
     try configure(super.makeUntitledDocument(ofType: typeName))
   }
 
-  override func makeDocument(withContentsOf url: URL, ofType typeName: String) throws -> NSDocument
+  public override func makeDocument(withContentsOf url: URL, ofType typeName: String) throws
+    -> NSDocument
   {
     try configure(super.makeDocument(withContentsOf: url, ofType: typeName))
   }
 
-  override func makeDocument(
+  public override func makeDocument(
     for urlOrNil: URL?, withContentsOf contentsURL: URL, ofType typeName: String
   ) throws -> NSDocument {
     try configure(super.makeDocument(for: urlOrNil, withContentsOf: contentsURL, ofType: typeName))
   }
 
-  override func newDocument(_ sender: Any?) {
+  public override func newDocument(_ sender: Any?) {
     super.newDocument(sender)
     if currentDocument != nil { didShowDocument?() }
   }
 
-  override func openDocument(
+  public override func openDocument(
     withContentsOf url: URL, display displayDocument: Bool,
     completionHandler: @escaping (NSDocument?, Bool, Error?) -> Void
   ) {

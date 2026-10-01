@@ -7,6 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 
 LDTX enters through a single NSApplication and application delegate. Workspace
 files are NSDocument instances managed by the shared WorkspaceDocumentController.
+The document controller belongs to the Workspace applet controller module. LDTXApp
+creates it and injects recording routing, recording activity reporting, and
+Launcher presentation callbacks.
 WorkspaceDocument owns the V4 model, package lock, and persistence coordinator.
 It creates and registers WorkspaceAppletController with addWindowController;
 AppKit owns document and window-controller lifetime. The controller constructs
