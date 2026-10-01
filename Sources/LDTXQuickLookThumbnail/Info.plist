@@ -31,6 +31,7 @@ SPDX-License-Identifier: Apache-2.0
 		<dict>
 			<key>QLSupportedContentTypes</key>
 			<array>
+				<string>tokyo.kaito.ldtx.record</string>
 				<string>tokyo.kaito.ldtx.recording</string>
 			</array>
 			<key>QLThumbnailMinimumDimension</key>

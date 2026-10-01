@@ -20,7 +20,8 @@ public enum RecordingPackageInfo {
   public static let fileName = "Info.plist"
   public static let currentFormatVersion = 3
   public static let supportedFormatVersions = 2...currentFormatVersion
-  public static let typeIdentifier = "tokyo.kaito.ldtx.recording"
+  public static let typeIdentifier = "tokyo.kaito.ldtx.record"
+  public static let legacyTypeIdentifier = "tokyo.kaito.ldtx.recording"
   public static let manifestFileName = "manifest.mpd"
   public static let formatVersionKey = "LDTXRecordingFormatVersion"
   public static let identifierKey = "LDTXRecordingIdentifier"

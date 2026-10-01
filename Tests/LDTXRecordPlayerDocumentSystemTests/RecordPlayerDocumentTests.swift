@@ -53,6 +53,27 @@ struct RecordPlayerDocumentSystemTestSuite {
     }
   }
 
+  @Test func legacyRegisteredTypeStillOpensAndSavesMarkers() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    _ = Self.controller
+    let document = try RecordPlayerDocument(
+      contentsOf: url, ofType: RecordingPackageInfo.legacyTypeIdentifier)
+    defer { document.close() }
+    try document.createMarker(note: "Legacy association", at: .zero)
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      document.save(to: url, ofType: RecordingPackageInfo.legacyTypeIdentifier, for: .saveOperation)
+      { error in
+        if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+      }
+    }
+    #expect(!document.isDocumentEdited)
+    #expect(
+      try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == [
+        "Legacy association"
+      ])
+  }
+
   @Test func standardControllerOwnsAndReusesRecordingAlongsideWorkspace() async throws {
     let url = try package()
     defer { try? FileManager.default.removeItem(at: url) }

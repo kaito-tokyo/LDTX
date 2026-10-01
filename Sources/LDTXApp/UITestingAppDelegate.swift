@@ -156,7 +156,7 @@ import UniformTypeIdentifiers
 //    let panel = NSOpenPanel()
 //    panel.allowedContentTypes = [
 //      UTType(exportedAs: "tokyo.kaito.ldtx.workspace"),
-//      UTType(exportedAs: "tokyo.kaito.ldtx.recording"),
+//      UTType(exportedAs: "tokyo.kaito.ldtx.record"),
 //    ]
 //    panel.allowsMultipleSelection = false
 //    panel.canChooseDirectories = false

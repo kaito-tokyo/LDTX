@@ -22,6 +22,7 @@ targets:
           NSExtensionAttributes:
             QLIsDataBasedPreview: true
             QLSupportedContentTypes:
+              - tokyo.kaito.ldtx.record
               - tokyo.kaito.ldtx.recording
           NSExtensionPointIdentifier: com.apple.quicklook.preview
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewProvider
@@ -60,6 +61,7 @@ targets:
           NSExtensionAttributes:
             QLThumbnailMinimumDimension: 0
             QLSupportedContentTypes:
+              - tokyo.kaito.ldtx.record
               - tokyo.kaito.ldtx.recording
           NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider

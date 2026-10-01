@@ -910,7 +910,7 @@ extension AVAssetWriterLifecycleIntegrationTestSuite {
         PropertyListSerialization.propertyList(from: infoData, options: 0, format: nil)
           as? [String: Any]
       )
-      #expect(info["CFBundleIdentifier"] as? String == "tokyo.kaito.ldtx.recording")
+      #expect(info["CFBundleIdentifier"] as? String == "tokyo.kaito.ldtx.record")
       #expect(info["CFBundleInfoDictionaryVersion"] as? String == "6.0")
       #expect(info["CFBundleName"] as? String == "test")
       #expect(info["CFBundlePackageType"] as? String == "BNDL")

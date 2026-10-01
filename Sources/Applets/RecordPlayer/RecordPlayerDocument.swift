@@ -10,7 +10,7 @@ import OSLog
 @MainActor
 @objc(RecordPlayerDocument)
 public final class RecordPlayerDocument: NSDocument {
-  public nonisolated static let typeName = "tokyo.kaito.ldtx.recording"
+  public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
   public private(set) var markers: [RecordingMarker] = []
   private var savedMarkers: [RecordingMarker] = []
   private var recordingURL: URL?
@@ -24,6 +24,10 @@ public final class RecordPlayerDocument: NSDocument {
     securityScopedURL?.stopAccessingSecurityScopedResource()
   }
 
+  private nonisolated static func accepts(_ typeName: String) -> Bool {
+    typeName == Self.typeName || typeName == RecordingPackageInfo.legacyTypeIdentifier
+  }
+
   public override class var autosavesInPlace: Bool { false }
   public override class var preservesVersions: Bool { false }
   public override var autosavingFileType: String? { nil }
@@ -31,7 +35,7 @@ public final class RecordPlayerDocument: NSDocument {
 
   public override func read(from url: URL, ofType typeName: String) throws {
     try MainActor.assumeIsolated {
-      guard typeName == Self.typeName else { throw CocoaError(.fileReadUnknown) }
+      guard Self.accepts(typeName) else { throw CocoaError(.fileReadUnknown) }
       let accessing = url.startAccessingSecurityScopedResource()
       do {
         _ = try RecordingPackage(contentsOf: url)
@@ -117,7 +121,7 @@ public final class RecordPlayerDocument: NSDocument {
     to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
   ) throws {
     try MainActor.assumeIsolated {
-      guard saveOperation == .saveOperation, typeName == Self.typeName,
+      guard saveOperation == .saveOperation, Self.accepts(typeName),
         url.standardizedFileURL == recordingURL
       else { throw RecordingMarkerError.unsupportedOperation }
       let snapshot = markers

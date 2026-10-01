@@ -8,6 +8,21 @@ import Testing
 
 @Suite
 struct RecordingPackageIntegrationTestSuite {
+  @Test(arguments: ["tokyo.kaito.ldtx.recording", "tokyo.kaito.ldtx.record"])
+  func readsPackagesWithLegacyAndCurrentBundleIdentifiers(_ bundleIdentifier: String) throws {
+    let url = try makePackage()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let infoURL = url.appendingPathComponent(RecordingPackageInfo.fileName)
+    var info = try #require(
+      PropertyListSerialization.propertyList(
+        from: Data(contentsOf: infoURL), options: 0, format: nil)
+        as? [String: Any])
+    info["CFBundleIdentifier"] = bundleIdentifier
+    try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(
+      to: infoURL)
+    #expect(try RecordingPackage(contentsOf: url).formatVersion == 2)
+  }
+
   @Test func loadsInfoAndResolvesMediaFiles() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
