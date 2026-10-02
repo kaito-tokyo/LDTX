@@ -44,7 +44,8 @@ continue to use AppKit's supplied URLs rather than the environment.
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
-RecordPlayerDocument owns the recording URL and marker edits, and registers a
+RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
+in-memory marker edits. It registers a
 RecordPlayerWindowController that composes the panes and owns playback lifetime.
 Marker edits notify NSDocument and remain in memory until Save. A coordinated
 safe save replaces only the Markers directory, retaining unknown files and leaving
@@ -108,3 +109,13 @@ explicit header entries in virtual Public Headers groups, excluded from automati
 folder membership. Internal headers remain filesystem-visible compile dependencies.
 Fonts and licenses live under Resources/LDTX/Fonts/NotoSans, outside source roots,
 with their existing bundle copy destinations preserved.
+
+Record Player panes and the playback model do not cache the document location.
+The model uses the shared weak DocumentReference to read fileURL at the start of
+an asset load. Existing playback resources remain alive across external moves;
+subsequent canvas loads use the current document URL. AppKit manages document
+access, without a separate security-scope lifetime or application move observer.
+Marker identity is a package-relative filename, never an absolute URL. Save
+synchronizes the in-memory snapshot at the URL supplied by AppKit, comparing the
+path-independent baseline and preserving unknown files. Access failures preserve
+pending marker edits and are reported through the existing error paths.

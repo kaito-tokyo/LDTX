@@ -17,7 +17,7 @@ public final class RecordPlayerWindowController: NSWindowController, NSWindowDel
   private let split: PaneSplitViewController
   private var started = false
 
-  init(recordingURL: URL, model: LDTXRecordPlayerModel, documentReference: DocumentReference) {
+  init(model: LDTXRecordPlayerModel, documentReference: DocumentReference) {
     self.model = model
     let presentation = RecordingPresentationState()
     split = PaneSplitViewController(
@@ -38,10 +38,8 @@ public final class RecordPlayerWindowController: NSWindowController, NSWindowDel
         .environment(\.documentReference, documentReference)),
       sidebarCanCollapse: true, inspectorMaximum: 360)
     let window = PaneWindow(contentViewController: split)
-    window.representedURL = recordingURL
     window.restorationKind = "recording"
     window.isRestorable = true
-    window.title = recordingURL.deletingPathExtension().lastPathComponent
     window.identifier = NSUserInterfaceItemIdentifier(
       "Recording.AppKit.v1." + UUID().uuidString)
     window.setContentSize(NSSize(width: 960, height: 600))

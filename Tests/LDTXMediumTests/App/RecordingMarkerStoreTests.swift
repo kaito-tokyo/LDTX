@@ -82,7 +82,11 @@ struct RecordingMarkerStoreIntegrationTestSuite {
 
     try store.deleteMarker(marker)
 
-    #expect(!FileManager.default.fileExists(atPath: marker.fileURL.path))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: recordingURL.appendingPathComponent("Markers").appendingPathComponent(
+          marker.fileName
+        ).path))
     #expect(try store.markers().isEmpty)
   }
 
@@ -122,7 +126,7 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     let time = CMTime(seconds: 5, preferredTimescale: 1000)
     let marker = RecordingMarker(
       time: time, timecode: "00:00:05.000", note: "New",
-      fileURL: url.appendingPathComponent("Markers/00-00-05.000.txt"))
+      fileName: "00-00-05.000.txt")
     try store.save([marker], replacing: baseline)
     #expect(try store.markers().map(\.note) == ["New"])
     #expect(try Data(contentsOf: unknown) == Data([1, 2, 3]))
@@ -140,7 +144,9 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
     _ = try store.createMarker(at: .zero, note: "Original")
     let baseline = try store.markers()
-    try "External\n".write(to: baseline[0].fileURL, atomically: true, encoding: .utf8)
+    try "External\n".write(
+      to: url.appendingPathComponent("Markers").appendingPathComponent(baseline[0].fileName),
+      atomically: true, encoding: .utf8)
     #expect(throws: RecordingMarkerError.externalChanges) {
       try store.save([], replacing: baseline)
     }
@@ -158,10 +164,10 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
     let marker = RecordingMarker(
       time: .zero, timecode: "00:00:00.000", note: "First",
-      fileURL: url.appendingPathComponent("Markers/00-00-00.000.txt"))
+      fileName: "00-00-00.000.txt")
     try store.save([marker], replacing: [])
     let baseline = try store.markers()
-    let invalid = RecordingMarker(time: .zero, timecode: "", note: "", fileURL: marker.fileURL)
+    let invalid = RecordingMarker(time: .zero, timecode: "", note: "", fileName: marker.fileName)
     #expect(throws: RecordingMarkerError.emptyNote) {
       try store.save([invalid], replacing: baseline)
     }
@@ -170,6 +176,41 @@ struct RecordingMarkerStoreIntegrationTestSuite {
       try FileManager.default.contentsOfDirectory(atPath: url.path).allSatisfy {
         !$0.hasPrefix(".markers-save-")
       })
+  }
+
+  @Test func preservesOriginalMarkerNamesAndRejectsTraversal() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let directory = url.appendingPathComponent("Markers")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    let name = "0-00-01.000.TXT"
+    try Data("Original\n".utf8).write(to: directory.appendingPathComponent(name))
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    let baseline = try store.markers()
+    #expect(baseline.first?.fileName == name)
+    try store.save(baseline, replacing: baseline)
+    #expect(try store.markers() == baseline)
+    #expect(try Data(contentsOf: directory.appendingPathComponent(name)) == Data("Original\n".utf8))
+    let invalid = RecordingMarker(
+      time: .zero, timecode: "00:00:00.000", note: "Escape", fileName: "../00-00-00.000.txt")
+    #expect(throws: RecordingMarkerError.invalidMarkerFile) {
+      try store.save([invalid], replacing: baseline)
+    }
+    #expect(try store.markers() == baseline)
+    #expect(
+      !FileManager.default.fileExists(atPath: url.appendingPathComponent("00-00-00.000.txt").path))
+  }
+
+  @Test func snapshotSaveRoundsPlaybackTimeToMarkerPrecision() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let time = CMTime(value: 1, timescale: 600)
+    let marker = RecordingMarker(
+      time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time),
+      note: "Frame", fileName: try RecordingMarkerStore.fileName(for: time))
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    try store.save([marker], replacing: [])
+    #expect(try store.markers().first?.fileName == "00-00-00.002.txt")
   }
 
   private func makeRecordingDirectory() throws -> URL {

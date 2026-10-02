@@ -15,16 +15,11 @@ public final class RecordPlayerDocument: NSDocument {
   public private(set) var markers: [RecordingMarker] = []
   private var savedMarkers: [RecordingMarker] = []
   private var markerReadError: (any Error)?
-  private var recordingURL: URL?
-  private var securityScopedURL: URL?
+  private var hasReadContents = false
   private(set) var model: LDTXRecordPlayerModel?
   var scenarioFixture: RecordingPreviewScenarioFixture?
   var assetLoader: LDTXRecordPlayerAssetLoader = RecordPlayerWindowController.loadAsset
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "RecordPlayerDocument")
-
-  deinit {
-    securityScopedURL?.stopAccessingSecurityScopedResource()
-  }
 
   private nonisolated static func accepts(_ typeName: String) -> Bool {
     typeName == Self.typeName || typeName == RecordingPackageInfo.legacyTypeIdentifier
@@ -38,7 +33,6 @@ public final class RecordPlayerDocument: NSDocument {
   public override func read(from url: URL, ofType typeName: String) throws {
     try MainActor.assumeIsolated {
       guard Self.accepts(typeName) else { throw CocoaError(.fileReadUnknown) }
-      let accessing = url.startAccessingSecurityScopedResource()
       do {
         _ = try RecordingPackage(contentsOf: url)
         let loaded: [RecordingMarker]
@@ -47,21 +41,18 @@ public final class RecordPlayerDocument: NSDocument {
           loaded = try RecordingMarkerStore(recordingDirectoryURL: url).markers()
         } catch {
           // Revert must preserve current edits if the replacement cannot be read.
-          guard recordingURL == nil else { throw error }
+          guard !hasReadContents else { throw error }
           logger.error(
             "Reading optional markers failed: \(error.localizedDescription, privacy: .public)")
           loaded = []
           markerError = error
         }
-        if let securityScopedURL { securityScopedURL.stopAccessingSecurityScopedResource() }
-        securityScopedURL = accessing ? url : nil
-        recordingURL = url.standardizedFileURL
+        hasReadContents = true
         markerReadError = markerError
         markers = loaded
         savedMarkers = loaded
         model?.markers = loaded
       } catch {
-        if accessing { url.stopAccessingSecurityScopedResource() }
         logger.error("Reading recording failed: \(error.localizedDescription, privacy: .public)")
         throw error
       }
@@ -69,9 +60,10 @@ public final class RecordPlayerDocument: NSDocument {
   }
 
   public override func makeWindowControllers() {
-    guard windowControllers.isEmpty, let recordingURL else { return }
+    guard windowControllers.isEmpty, fileURL != nil else { return }
+    let reference = DocumentReference(self)
     let model = LDTXRecordPlayerModel(
-      recordingURL: recordingURL, scenarioFixture: scenarioFixture,
+      documentReference: reference, scenarioFixture: scenarioFixture,
       assetLoader: assetLoader)
     model.markers = markers
     model.createDocumentMarker = { [weak self] note, time in
@@ -85,11 +77,11 @@ public final class RecordPlayerDocument: NSDocument {
     self.model = model
     addWindowController(
       RecordPlayerWindowController(
-        recordingURL: recordingURL, model: model, documentReference: DocumentReference(self)))
+        model: model, documentReference: reference))
   }
 
   public func createMarker(note: String, at time: CMTime) throws {
-    guard let recordingURL else { throw CocoaError(.fileWriteUnknown) }
+    guard let recordingURL = fileURL else { throw CocoaError(.fileWriteUnknown) }
     guard
       !FileManager.default.fileExists(
         atPath: recordingURL.appendingPathComponent(".shield.json").path)
@@ -100,22 +92,20 @@ public final class RecordPlayerDocument: NSDocument {
       throw RecordingMarkerError.emptyNote
     }
     let name = try RecordingMarkerStore.fileName(for: time)
-    let url = recordingURL.appendingPathComponent(RecordingMarkerStore.directoryName)
-      .appendingPathComponent(name)
-    guard !markers.contains(where: { $0.fileURL == url }) else {
+    guard !markers.contains(where: { $0.fileName == name }) else {
       throw RecordingMarkerError.markerAlreadyExists(name)
     }
     markers.append(
       RecordingMarker(
         time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time), note: note,
-        fileURL: url))
+        fileName: name))
     markers.sort { CMTimeCompare($0.time, $1.time) < 0 }
     model?.markers = markers
     updateChangeCount(.changeDone)
   }
 
   public func deleteMarker(_ marker: RecordingMarker) throws {
-    guard let recordingURL,
+    guard let recordingURL = fileURL,
       !FileManager.default.fileExists(
         atPath: recordingURL.appendingPathComponent(".shield.json").path)
     else {
@@ -138,7 +128,7 @@ public final class RecordPlayerDocument: NSDocument {
   ) throws {
     try MainActor.assumeIsolated {
       guard saveOperation == .saveOperation, Self.accepts(typeName),
-        url.standardizedFileURL == recordingURL
+        url.standardizedFileURL == fileURL?.standardizedFileURL
       else { throw RecordingMarkerError.unsupportedOperation }
       if let markerReadError { throw markerReadError }
       let snapshot = markers
@@ -156,8 +146,6 @@ public final class RecordPlayerDocument: NSDocument {
   public override func close() {
     model?.stop()
     super.close()
-    if let securityScopedURL { securityScopedURL.stopAccessingSecurityScopedResource() }
-    securityScopedURL = nil
   }
 
   public override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {

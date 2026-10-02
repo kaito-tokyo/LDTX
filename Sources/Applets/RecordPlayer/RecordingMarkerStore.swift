@@ -9,13 +9,13 @@ public struct RecordingMarker: Equatable, Sendable {
   public let time: CMTime
   public let timecode: String
   public let note: String
-  public let fileURL: URL
+  public let fileName: String
 
-  public init(time: CMTime, timecode: String, note: String, fileURL: URL) {
+  public init(time: CMTime, timecode: String, note: String, fileName: String) {
     self.time = time
     self.timecode = timecode
     self.note = note
-    self.fileURL = fileURL
+    self.fileName = fileName
   }
 }
 
@@ -99,14 +99,14 @@ public struct RecordingMarkerStore: Sendable {
           time: time,
           timecode: timecode,
           note: note,
-          fileURL: fileURL
+          fileName: fileURL.lastPathComponent
         )
       )
     }
     return markers.sorted {
       let comparison = CMTimeCompare($0.time, $1.time)
       return comparison == 0
-        ? $0.fileURL.lastPathComponent < $1.fileURL.lastPathComponent
+        ? $0.fileName < $1.fileName
         : comparison < 0
     }
   }
@@ -116,12 +116,8 @@ public struct RecordingMarkerStore: Sendable {
       Self.directoryName,
       isDirectory: true
     ).standardizedFileURL
-    let markerURL = marker.fileURL.standardizedFileURL
-    guard markerURL.deletingLastPathComponent() == markersDirectoryURL,
-      markerURL.pathExtension.lowercased() == "txt"
-    else {
-      throw RecordingMarkerError.invalidMarkerFile
-    }
+    try Self.validateFileName(marker.fileName)
+    let markerURL = markersDirectoryURL.appendingPathComponent(marker.fileName)
 
     let values = try markerURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
     guard values.isRegularFile == true, values.isSymbolicLink != true else {
@@ -161,15 +157,16 @@ public struct RecordingMarkerStore: Sendable {
           try manager.createDirectory(at: staging, withIntermediateDirectories: false)
         }
         for marker in baseline {
+          try Self.validateFileName(marker.fileName)
           try manager.removeItem(
-            at: staging.appendingPathComponent(marker.fileURL.lastPathComponent))
+            at: staging.appendingPathComponent(marker.fileName))
         }
         var names = Set<String>()
         for marker in snapshot {
-          let name = try Self.fileName(for: marker.time)
-          guard
-            marker.fileURL.standardizedFileURL
-              == directory.appendingPathComponent(name).standardizedFileURL,
+          let name = marker.fileName
+          try Self.validateFileName(name)
+          guard let storedTime = Self.time(fromMarkerFileName: name),
+            try Self.fileName(for: storedTime) == Self.fileName(for: marker.time),
             names.insert(name).inserted
           else { throw RecordingMarkerError.invalidMarkerFile }
           guard !marker.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -188,6 +185,13 @@ public struct RecordingMarkerStore: Sendable {
     }
     if let coordinationError { throw coordinationError }
     if let failure { throw failure }
+  }
+
+  private static func validateFileName(_ name: String) throws {
+    guard !name.isEmpty, !name.contains("/"), !name.contains("\u{0}"),
+      name != ".", name != "..", name.lowercased().hasSuffix(".txt"),
+      time(fromMarkerFileName: name) != nil
+    else { throw RecordingMarkerError.invalidMarkerFile }
   }
 
   public static func fileName(for time: CMTime) throws -> String {

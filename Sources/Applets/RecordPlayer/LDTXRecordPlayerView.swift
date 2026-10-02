@@ -39,7 +39,7 @@ public struct LDTXRecordPlayerView: View {
     get { presentation.selectedFeature }
     nonmutating set { presentation.selectedFeature = newValue }
   }
-  @State private var selectedMarkerURL: URL?
+  @State private var selectedMarkerID: String?
   @FocusState private var focusedMarkerField: MarkerField?
 
   public var body: some View {
@@ -262,9 +262,9 @@ public struct LDTXRecordPlayerView: View {
             description: Text("Saved markers appear here.")
           )
         } else {
-          List(model.markers, id: \.fileURL, selection: $selectedMarkerURL) { marker in
+          List(model.markers, id: \.fileName, selection: $selectedMarkerID) { marker in
             Button {
-              selectedMarkerURL = marker.fileURL
+              selectedMarkerID = marker.fileName
               model.seek(to: marker.time)
             } label: {
               VStack(alignment: .leading, spacing: 4) {
@@ -281,7 +281,7 @@ public struct LDTXRecordPlayerView: View {
             }
             .buttonStyle(.plain)
             .help("Go to \(marker.timecode)")
-            .tag(marker.fileURL)
+            .tag(marker.fileName)
             .contextMenu {
               Button(role: .destructive) {
                 deleteMarker(marker)
@@ -301,8 +301,8 @@ public struct LDTXRecordPlayerView: View {
   private func deleteSelectedMarker() {
     guard
       model.canModifyMarkers,
-      let selectedMarkerURL,
-      let marker = model.markers.first(where: { $0.fileURL == selectedMarkerURL })
+      let selectedMarkerID,
+      let marker = model.markers.first(where: { $0.fileName == selectedMarkerID })
     else { return }
     deleteMarker(marker)
   }
@@ -310,8 +310,8 @@ public struct LDTXRecordPlayerView: View {
   private func deleteMarker(_ marker: RecordingMarker) {
     guard model.canModifyMarkers else { return }
     guard model.deleteMarker(marker) else { return }
-    if selectedMarkerURL == marker.fileURL {
-      selectedMarkerURL = nil
+    if selectedMarkerID == marker.fileName {
+      selectedMarkerID = nil
     }
     markerError = nil
   }
@@ -766,7 +766,7 @@ final class LDTXRecordPlayerModel {
   var availableCanvases: [RecordingCanvas] = []
   var selectedCanvas: RecordingCanvas = .landscape
 
-  private let recordingURL: URL
+  private let documentReference: DocumentReference
   private let scenarioFixture: RecordingPreviewScenarioFixture?
   private let assetLoader: LDTXRecordPlayerAssetLoader
   var createDocumentMarker: ((String, CMTime) throws -> Void)?
@@ -774,11 +774,11 @@ final class LDTXRecordPlayerModel {
   private var loadTask: Task<Void, Never>?
 
   init(
-    recordingURL: URL,
+    documentReference: DocumentReference,
     scenarioFixture: RecordingPreviewScenarioFixture?,
     assetLoader: @escaping LDTXRecordPlayerAssetLoader
   ) {
-    self.recordingURL = recordingURL.standardizedFileURL
+    self.documentReference = documentReference
     self.scenarioFixture = scenarioFixture
     self.assetLoader = assetLoader
   }
@@ -788,7 +788,8 @@ final class LDTXRecordPlayerModel {
   }
 
   var canModifyMarkers: Bool {
-    !FileManager.default.fileExists(
+    guard let recordingURL = documentReference.document?.fileURL else { return false }
+    return !FileManager.default.fileExists(
       atPath: recordingURL.appendingPathComponent(".shield.json").path
     )
   }
@@ -870,8 +871,12 @@ final class LDTXRecordPlayerModel {
   }
 
   private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {
+    guard let recordingURL = documentReference.document?.fileURL else {
+      isLoading = false
+      return
+    }
     recordingPreviewLogger.info(
-      "Loading recording preview for \(self.recordingURL.lastPathComponent, privacy: .public)"
+      "Loading recording preview for \(recordingURL.lastPathComponent, privacy: .public)"
     )
     if await loadScenarioFixtureIfNeeded() { return }
 

@@ -3,6 +3,7 @@
 
 import AVFoundation
 import AppKit
+import LDTXAppletSupport
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXWorkspaceAppletController
@@ -247,6 +248,93 @@ struct RecordPlayerDocumentSystemTestSuite {
     #expect(model.player === player)
     document.close()
     #expect(model.player == nil)
+  }
+
+  @Test func movedRecordingSavesPendingMarkersAndLoadsCurrentURL() async throws {
+    let original = try package()
+    let moved = original.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension("ldtxrecord")
+    defer {
+      try? FileManager.default.removeItem(at: original)
+      try? FileManager.default.removeItem(at: moved)
+    }
+    _ = try RecordingMarkerStore(recordingDirectoryURL: original).createMarker(
+      at: .zero, note: "Saved")
+    let document = try document(original)
+    defer { document.close() }
+    var loadedURLs: [URL] = []
+    document.assetLoader = { url, _ in
+      loadedURLs.append(url)
+      return AVMutableComposition()
+    }
+    document.makeWindowControllers()
+    let model = try #require(document.model)
+    model.start()
+    for _ in 0..<100 where model.isLoading { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(loadedURLs == [original])
+    try document.createMarker(note: "Pending", at: CMTime(seconds: 1, preferredTimescale: 1000))
+    let player = model.player
+    try FileManager.default.moveItem(at: original, to: moved)
+    document.presentedItemDidMove(to: moved)
+    for _ in 0..<100 where document.fileURL != moved {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(document.fileURL == moved)
+    #expect(model.player === player)
+    #expect(model.markers.map(\.note) == ["Saved", "Pending"])
+    model.availableCanvases = [.landscape, .portrait]
+    model.selectCanvas(.portrait)
+    for _ in 0..<100 where loadedURLs.count < 2 || model.isLoading {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(loadedURLs == [original, moved])
+    #expect(model.markers.map(\.note) == ["Saved", "Pending"])
+    try await save(document, to: moved)
+    #expect(!document.isDocumentEdited)
+    #expect(
+      try RecordingMarkerStore(recordingDirectoryURL: moved).markers().map(\.note) == [
+        "Saved", "Pending",
+      ])
+    try document.createMarker(note: "Keep", at: CMTime(seconds: 2, preferredTimescale: 1000))
+    try Data().write(to: moved.appendingPathComponent(".shield.json"))
+    do {
+      try await save(document, to: moved)
+      Issue.record("Expected active recording save failure")
+    } catch {}
+    #expect(document.isDocumentEdited)
+    #expect(document.markers.map(\.note) == ["Saved", "Pending", "Keep"])
+  }
+
+  @Test func retainedModelAndPaneDoNotRetainDocument() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    weak var weakDocument: RecordPlayerDocument?
+    var loadCount = 0
+    let (model, controller, pane) = try autoreleasepool {
+      let document = try document(url)
+      weakDocument = document
+      document.assetLoader = { _, _ in
+        loadCount += 1
+        return AVMutableComposition()
+      }
+      document.makeWindowControllers()
+      let model = try #require(document.model)
+      let controller = try #require(document.windowControllers.first)
+      let pane = try #require(controller.window?.contentViewController)
+      document.close()
+      document.removeWindowController(controller)
+      controller.document = nil
+      return (model, controller, pane)
+    }
+    for _ in 0..<100 where weakDocument != nil { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(weakDocument == nil)
+    #expect(!model.canModifyMarkers)
+    model.start()
+    for _ in 0..<10 where model.isLoading { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(loadCount == 0)
+    #expect(pane.view != nil)
+    model.stop()
+    controller.close()
   }
 
   private func clickSheetButton(_ title: String, in window: NSWindow) async throws {
