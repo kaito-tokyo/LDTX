@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
   @objc func newWorkspace(_ sender: Any?) {
     do {
-      let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
+      let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(false)
       (document as? WorkspaceDocument)?.saveAfterCreation()
     } catch { NSDocumentController.shared.presentError(error) }
   }

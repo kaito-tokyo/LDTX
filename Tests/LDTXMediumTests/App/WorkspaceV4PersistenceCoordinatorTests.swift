@@ -23,19 +23,21 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     var didChange = false
   }
 
-  @Test("saves and reloads the supplied Workspace snapshot")
-  func savesAndReloadsWorkspaceSnapshot() throws {
+  @Test("loads a package without writing or marking the model saved")
+  func loadsWithoutWritingOrMarkingSaved() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
     let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     let coordinator = makeCoordinator(box)
 
-    try coordinator.save(to: packageURL)
+    try WorkspaceDocumentPackage.write(box.workspace, to: packageURL, createsPackage: true)
     let reloaded = try coordinator.load(at: packageURL)
 
     #expect(reloaded.definition.displayName == "Unite")
-    #expect(!coordinator.isDirty)
+    box.workspace.definition.displayName = "Pending"
+    #expect(coordinator.isDirty)
+    #expect(try coordinator.load(at: packageURL).definition.displayName == "Unite")
   }
 
   @Test("keeps app-local state keyed by package path and reloads it")
@@ -157,19 +159,6 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     #expect(addCount == 0)
   }
 
-  @Test("acquires and releases the package lock")
-  func managesPackageLock() throws {
-    let rootURL = try temporaryDirectory()
-    defer { try? FileManager.default.removeItem(at: rootURL) }
-    let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace")
-    let coordinator = makeCoordinator(WorkspaceBox(cleanWorkspace(displayName: "Unite")))
-    let lock = try coordinator.acquireLock(at: packageURL, createsPackageDirectory: true)
-    coordinator.activateLock(lock)
-    #expect(coordinator.workspaceLock == lock)
-    coordinator.releaseActiveLock()
-    #expect(coordinator.workspaceLock == nil)
-  }
-
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
     var saved: WorkspaceV4Bundle
@@ -190,7 +179,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
   {
     return WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
-      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
+      replaceWorkspace: { try box.replace($0) },
       url: url)
   }
 

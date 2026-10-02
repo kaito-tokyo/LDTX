@@ -81,8 +81,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(runtime.visionFeatureContext.vision(42) == vision)
   }
 
-  @Test("saves and opens a V4 package")
-  func savesAndOpensV4Package() throws {
+  @Test("opens a package while model edits remain in memory")
+  func opensV4PackageWithoutSavingRuntimeEdits() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
@@ -90,16 +90,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: capture)
     let programID = try runtime.addProgram(displayName: "Main")
 
-    try runtime.persistenceCoordinator.save(to: packageURL)
+    try WorkspaceDocumentPackage.write(runtime.workspace, to: packageURL, createsPackage: true)
+    runtime.persistenceCoordinator.setDocumentURL(packageURL)
     #expect(runtime.url == packageURL)
-    #expect(!runtime.isDirty)
-    runtime.persistenceCoordinator.releaseActiveLock()
+    #expect(runtime.isDirty)
 
     let reopened = try makeRuntime(capture: capture)
     try reopened.persistenceCoordinator.open(at: packageURL)
     #expect(reopened.definition.programs.map(\.displayName) == ["Main"])
     #expect(reopened.selectedProgramInternalID == programID)
-    reopened.persistenceCoordinator.releaseActiveLock()
   }
 
   @Test("installs the selected V4 Program directly into both runtimes")
@@ -144,7 +143,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let url = URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
-      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() }, url: url)
+      replaceWorkspace: { try box.replace($0) }, url: url)
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: coordinator, captureSessionCoordinator: capture,
       localState: { appletData.state(for: url) },
@@ -176,8 +175,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         == ["v4-\(videoInputID)": "camera-id"])
   }
 
-  @Test("copies physical assignments into Save As local state")
-  func copiesPhysicalAssignmentsIntoSaveAsLocalState() throws {
+  @Test("uses local state at the document-provided URL")
+  func usesLocalStateAtDocumentProvidedURL() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let suiteName = "WorkspaceWindowRuntimeTests.\(UUID().uuidString)"
@@ -190,8 +189,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
-      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
-      didSaveAs: { source, destination in appletData.copyState(from: source, to: destination) },
+      replaceWorkspace: { try box.replace($0) },
       url: originalURL)
     let runtime = WorkspaceWindowRuntime(
       persistence: coordinator,
@@ -203,8 +201,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         .avCaptureDevice(uniqueID: "camera-id")
     }
 
-    try runtime.persistenceCoordinator.save(
-      to: rootURL.appendingPathComponent("Unite.ldtxworkspace"))
+    let destination = rootURL.appendingPathComponent("Unite.ldtxworkspace")
+    appletData.copyState(from: originalURL, to: destination)
+    runtime.persistenceCoordinator.setDocumentURL(destination)
 
     let saveAsURL = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     #expect(
@@ -292,7 +291,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let appletData = WorkspaceAppletData()
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
-      replaceWorkspace: { try box.replace($0) }, markWorkspaceSaved: { box.markSaved() },
+      replaceWorkspace: { try box.replace($0) },
       url: URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace"))
     let url = coordinator.url!
     return WorkspaceWindowRuntime(

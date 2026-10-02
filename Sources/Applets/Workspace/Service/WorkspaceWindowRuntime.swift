@@ -53,21 +53,7 @@ public final class WorkspaceWindowRuntime {
   public var url: URL? { persistenceCoordinator.url }
   public var isDirty: Bool { persistenceCoordinator.isDirty }
 
-  public func save() throws {
-    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
-    try persistenceCoordinator.save(to: url)
-  }
-
-  public func saveWorkspaceDefinition() throws {
-    try persistenceCoordinator.saveWorkspaceDefinition()
-  }
-
-  public func saveWorkspacePreferences() throws {
-    try persistenceCoordinator.saveWorkspacePreferences()
-  }
-
   public func shutdown() {
-    persistenceCoordinator.releaseActiveLock()
     workspaceV4OperationLogger.notice(
       "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
     )

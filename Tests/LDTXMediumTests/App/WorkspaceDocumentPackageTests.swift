@@ -15,7 +15,6 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let original = root.appendingPathComponent("Original.ldtxworkspace")
-    let savedAs = root.appendingPathComponent("Copy.ldtxworkspace")
     let snapshot = WorkspaceV4Bundle(
       definitionExternalID: UUID().uuidString.lowercased(),
       preferencesExternalID: UUID().uuidString.lowercased(),
@@ -36,20 +35,19 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try resource.write(to: resourceURL)
     var changed = snapshot
     changed.definition.displayName = "Edited"
-    try WorkspaceDocumentPackage.write(
-      changed, to: savedAs, preserving: original, createsPackage: true)
-    let reloaded = try WorkspaceBundleReaderV4(at: savedAs).read()
+    try WorkspaceDocumentPackage.write(changed, to: original)
+    let reloaded = try WorkspaceBundleReaderV4(at: original).read()
     let copiedInfo = try #require(
       PropertyListSerialization.propertyList(
-        from: Data(contentsOf: savedAs.appendingPathComponent("Info.plist")), options: 0,
+        from: Data(contentsOf: original.appendingPathComponent("Info.plist")), options: 0,
         format: nil)
         as? [String: Any])
     #expect(copiedInfo["CustomMetadata"] as? String == "Preserved")
     #expect(reloaded.definition.displayName == "Edited")
     #expect(reloaded.definitionExternalID == snapshot.definitionExternalID)
     #expect(reloaded.preferencesExternalID == snapshot.preferencesExternalID)
-    #expect(try Data(contentsOf: savedAs.appendingPathComponent("Resources/image.bin")) == resource)
-    #expect(try WorkspaceBundleReaderV4(at: original).read().definition.displayName == "")
+    #expect(
+      try Data(contentsOf: original.appendingPathComponent("Resources/image.bin")) == resource)
   }
 
   @Test func partialSaveLeavesOtherFilesUntouchedAndRetriesAfterFailure() throws {

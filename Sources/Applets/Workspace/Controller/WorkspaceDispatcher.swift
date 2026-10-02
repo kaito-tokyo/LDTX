@@ -18,20 +18,6 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
 
   init() {}
 
-  func saveWorkspaceDefinition() async throws {
-    guard let workspaceWindowController else {
-      throw WorkspaceDispatcherError.workspaceClosed
-    }
-    try await workspaceWindowController.saveWorkspaceDefinition()
-  }
-
-  func saveWorkspacePreferences() async throws {
-    guard let workspaceWindowController else {
-      throw WorkspaceDispatcherError.workspaceClosed
-    }
-    try await workspaceWindowController.saveWorkspacePreferences()
-  }
-
   func synchronizeVision() {
     workspaceWindowController?.synchronizeVision()
   }

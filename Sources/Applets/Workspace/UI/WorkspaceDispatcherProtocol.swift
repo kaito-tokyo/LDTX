@@ -6,8 +6,6 @@ import Foundation
 import Observation
 
 public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
-  @MainActor func saveWorkspaceDefinition() async throws
-  @MainActor func saveWorkspacePreferences() async throws
   @MainActor func synchronizeVision()
   @MainActor func synchronizeAudioMonitor()
   @MainActor func synchronizeCaptureInputs(

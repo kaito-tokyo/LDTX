@@ -97,50 +97,50 @@ public struct WorkspaceCommand: ParsableCommand {
       guard preferencesJSON == nil || json != nil else {
         throw ValidationError("--preferences-json requires --json")
       }
-      let lockService = WorkspaceLockService()
-      let lock = try lockService.acquire(at: url, createsPackageDirectory: true)
-      defer { lockService.release(lock) }
-      let createdPackageDirectory = lock.createdPackageDirectory
-      guard replace || createdPackageDirectory else {
-        throw ValidationError("Workspace already exists: \(url.path)")
-      }
-      do {
-        var workspace: WorkspaceV4Bundle
-        if let json {
-          var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
-            jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
-          if let name { definition.displayName = name }
-          let preferences =
-            try preferencesJSON.map {
-              try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-                jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
-            } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
-          workspace = WorkspaceV4Bundle(
-            definition: definition,
-            preferences: preferences)
-        } else {
-          workspace = WorkspaceV4Bundle(
-            definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-              $0.displayName = name ?? url.deletingPathExtension().lastPathComponent
-            },
-            preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+      let command = self
+      try coordinateWorkspace(at: url, writing: true) { url in
+        let createdPackageDirectory = !FileManager.default.fileExists(atPath: url.path)
+        guard command.replace || createdPackageDirectory else {
+          throw ValidationError("Workspace already exists: \(url.path)")
         }
-        try WorkspaceV4IntegrityValidator.validate(workspace)
-        guard var writer = WorkspaceBundleWriterV4(at: url) else {
-          throw ValidationError("Could not initialize Workspace writer: \(url.path)")
+        do {
+          var workspace: WorkspaceV4Bundle
+          if let json = command.json {
+            var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
+              jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
+            if let name = command.name { definition.displayName = name }
+            let preferences =
+              try command.preferencesJSON.map {
+                try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+                  jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
+              } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
+            workspace = WorkspaceV4Bundle(
+              definition: definition,
+              preferences: preferences)
+          } else {
+            workspace = WorkspaceV4Bundle(
+              definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+                $0.displayName = command.name ?? url.deletingPathExtension().lastPathComponent
+              },
+              preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+          }
+          try WorkspaceV4IntegrityValidator.validate(workspace)
+          guard var writer = WorkspaceBundleWriterV4(at: url) else {
+            throw ValidationError("Could not initialize Workspace writer: \(url.path)")
+          }
+          let definitionExternalID = writer.makeExternalID()
+          try writer.write(definition: workspace.definition, externalID: definitionExternalID)
+          workspace.definitionExternalID = definitionExternalID.uuidString.lowercased()
+          let preferencesExternalID = writer.makeExternalID()
+          try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
+          workspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
+          print("Created Workspace v4: \(url.path)")
+        } catch {
+          if createdPackageDirectory {
+            try? FileManager.default.removeItem(at: url)
+          }
+          throw error
         }
-        let definitionExternalID = writer.makeExternalID()
-        try writer.write(definition: workspace.definition, externalID: definitionExternalID)
-        workspace.definitionExternalID = definitionExternalID.uuidString.lowercased()
-        let preferencesExternalID = writer.makeExternalID()
-        try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
-        workspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
-        print("Created Workspace v4: \(url.path)")
-      } catch {
-        if createdPackageDirectory {
-          try? FileManager.default.removeItem(at: url)
-        }
-        throw error
       }
     }
   }
@@ -153,14 +153,14 @@ public struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      let lockService = WorkspaceLockService()
-      let lock = try lockService.acquire(at: url)
-      defer { lockService.release(lock) }
-      let dump = try workspaceV4DebugDump(
-        at: url, programName: program)
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      print(String(decoding: try encoder.encode(dump), as: UTF8.self))
+      let selectedProgram = program
+      try coordinateWorkspace(at: url, writing: false) { url in
+        let dump = try workspaceV4DebugDump(
+          at: url, programName: selectedProgram)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        print(String(decoding: try encoder.encode(dump), as: UTF8.self))
+      }
     }
   }
 
@@ -171,19 +171,18 @@ public struct WorkspaceCommand: ParsableCommand {
 
     mutating func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
-      let lockService = WorkspaceLockService()
-      let lock = try lockService.acquire(at: url)
-      defer { lockService.release(lock) }
-      let reader: WorkspaceBundleReaderV4
-      switch makeWorkspaceBundleReader(at: url) {
-      case .v4(let v4Reader):
-        reader = v4Reader
-      case .failure:
-        throw ValidationError("Unsupported Workspace format")
+      try coordinateWorkspace(at: url, writing: false) { url in
+        let reader: WorkspaceBundleReaderV4
+        switch makeWorkspaceBundleReader(at: url) {
+        case .v4(let v4Reader):
+          reader = v4Reader
+        case .failure:
+          throw ValidationError("Unsupported Workspace format")
+        }
+        let workspace = try reader.read()
+        try WorkspaceV4IntegrityValidator.validate(workspace)
+        print("OK: Workspace v4 \(url.path)")
       }
-      let workspace = try reader.read()
-      try WorkspaceV4IntegrityValidator.validate(workspace)
-      print("OK: Workspace v4 \(url.path)")
     }
   }
 }
@@ -335,4 +334,26 @@ struct RecordingInspectionValue: Encodable {
       )
     }
   }
+}
+
+/// Keeps CLI package access coordinated without holding a lifetime lock.
+private func coordinateWorkspace<T>(
+  at url: URL, writing: Bool, _ accessor: (URL) throws -> T
+) throws -> T {
+  let coordinator = NSFileCoordinator()
+  var error: NSError?
+  var result: Result<T, Error>?
+  if writing {
+    coordinator.coordinate(writingItemAt: url, options: .forMerging, error: &error) {
+      coordinatedURL in
+      result = Result { try accessor(coordinatedURL) }
+    }
+  } else {
+    coordinator.coordinate(readingItemAt: url, options: [], error: &error) { coordinatedURL in
+      result = Result { try accessor(coordinatedURL) }
+    }
+  }
+  if let error { throw error }
+  guard let result else { throw CocoaError(.fileReadUnknown) }
+  return try result.get()
 }

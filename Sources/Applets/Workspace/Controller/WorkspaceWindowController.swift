@@ -170,17 +170,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
-  func saveWorkspaceDefinition() async throws {
-    guard let document = document as? WorkspaceDocument else { throw CocoaError(.fileWriteUnknown) }
-    try await document.saveBeforeOutput()
-  }
-
-  func saveWorkspacePreferences() async throws {
-    try await saveWorkspaceDefinition()
-  }
-
   func startOutput() async throws {
-    try await saveWorkspaceDefinition()
+    guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
     await recordingSession.start()
   }

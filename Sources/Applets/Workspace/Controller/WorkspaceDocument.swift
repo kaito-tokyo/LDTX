@@ -17,11 +17,9 @@ public final class WorkspaceDocument: NSDocument {
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID().uuidString)")!
   private struct SaveSnapshot: Sendable {
     let workspace: WorkspaceV4Bundle
-    let sourceURL: URL?
     let formalURL: URL?
   }
   private nonisolated let writingSnapshot = OSAllocatedUnfairLock<SaveSnapshot?>(initialState: nil)
-  private var sourceContentsURL: URL?
   private var definitionExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
     .lowercased()
   private var preferencesExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
@@ -29,18 +27,15 @@ public final class WorkspaceDocument: NSDocument {
   private var isReading = false
   private var outputDefinition: WorkspaceUIState.WorkspaceDefinition?
   private var closeCallbacks: [WorkspaceCloseCallback] = []
-  private var creationSaveFailed: Bool?
   private var saveCallbacks: [WorkspaceSaveCallback] = []
   private var hasShutDown = false
   private var didReportShutdownFailure = false
-  private var heldLock: WorkspaceLock?
-  private let lockService = WorkspaceLockService()
 
   public lazy var persistenceCoordinator = WorkspaceV4PersistenceCoordinator(
     workspaceSnapshot: { [unowned self] in snapshot },
     workspaceIsDirty: { [unowned self] in isDocumentEdited },
     replaceWorkspace: { [unowned self] workspace in try replaceContents(workspace) },
-    markWorkspaceSaved: {}, url: fileURL)
+    url: fileURL)
 
   private var snapshot: WorkspaceV4Bundle {
     WorkspaceV4Bundle(
@@ -71,37 +66,12 @@ public final class WorkspaceDocument: NSDocument {
     }
   }
 
-  /// Restore through AppKit's ordinary contents initializer, then adopt only the
-  /// formal document URL. Recovery contents remain the resource snapshot source.
+  /// Restores only the formal package; legacy recovery contents are not adopted.
   public convenience init(
     for urlOrNil: URL?, withContentsOf contentsURL: URL, ofType typeName: String
   ) throws {
-    try self.init(contentsOf: contentsURL, ofType: typeName)
-    do {
-      if urlOrNil?.standardizedFileURL != contentsURL.standardizedFileURL {
-        if let heldLock { lockService.release(heldLock) }
-        heldLock = nil
-        if let urlOrNil { heldLock = try lockService.acquire(at: urlOrNil) }
-      }
-      fileURL = urlOrNil
-      autosavedContentsFileURL = contentsURL
-      uiState.localStateURL = urlOrNil ?? transientURL
-      persistenceCoordinator.setDocumentURL(urlOrNil)
-      if let urlOrNil {
-        fileModificationDate = try urlOrNil.resourceValues(forKeys: [.contentModificationDateKey])
-          .contentModificationDate
-      }
-      if urlOrNil?.standardizedFileURL != contentsURL.standardizedFileURL {
-        updateChangeCount(.changeReadOtherContents)
-      }
-    } catch {
-      finishClose()
-      throw error
-    }
-  }
-
-  isolated deinit {
-    if let heldLock { lockService.release(heldLock) }
+    guard let urlOrNil else { throw CocoaError(.fileReadNoSuchFile) }
+    try self.init(contentsOf: urlOrNil, ofType: typeName)
   }
 
   static func updateRecordingDockBadge() {
@@ -111,7 +81,9 @@ public final class WorkspaceDocument: NSDocument {
     NSApplication.shared.dockTile.badgeLabel = isOutputActive ? "REC" : nil
   }
 
-  public override class var autosavesInPlace: Bool { true }
+  public override nonisolated class var autosavesInPlace: Bool { false }
+  public override nonisolated class var preservesVersions: Bool { false }
+  public override nonisolated var autosavingFileType: String? { nil }
 
   public override func makeWindowControllers() {
     guard windowControllers.isEmpty else { return }
@@ -125,21 +97,11 @@ public final class WorkspaceDocument: NSDocument {
   public override nonisolated func read(from url: URL, ofType typeName: String) throws {
     try MainActor.assumeIsolated {
       guard !uiState.isOutputActive else { throw CocoaError(.userCancelled) }
-      let acquiredLock = heldLock == nil ? try lockService.acquire(at: url) : nil
-      do {
-        let workspace = try WorkspaceBundleReaderV4(at: url).read()
-        try WorkspaceV4IntegrityValidator.validate(workspace)
-        try replaceContents(workspace)
-        sourceContentsURL = url
-        if let acquiredLock {
-          heldLock = acquiredLock
-          uiState.localStateURL = url
-          persistenceCoordinator.setDocumentURL(url)
-        }
-      } catch {
-        if let acquiredLock { lockService.release(acquiredLock) }
-        throw error
-      }
+      let workspace = try WorkspaceBundleReaderV4(at: url).read()
+      try WorkspaceV4IntegrityValidator.validate(workspace)
+      try replaceContents(workspace)
+      uiState.localStateURL = url
+      persistenceCoordinator.setDocumentURL(url)
     }
   }
 
@@ -152,11 +114,24 @@ public final class WorkspaceDocument: NSDocument {
     preferencesExternalID = workspace.preferencesExternalID
   }
 
+  private var writingChangeCountToken: (token: Any, operation: NSDocument.SaveOperationType)?
+
+  public override func updateChangeCount(_ change: NSDocument.ChangeType) {
+    // Non-autosaving documents clear all changes after a successful asynchronous save.
+    // Apply the snapshot's AppKit token instead so later edits remain unsaved.
+    if change == .changeCleared, let token = writingChangeCountToken {
+      super.updateChangeCount(withToken: token.token, for: token.operation)
+    } else {
+      super.updateChangeCount(change)
+    }
+  }
+
   public override func canAsynchronouslyWrite(
     to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
   ) -> Bool {
+    writingChangeCountToken = (super.changeCountToken(for: saveOperation), saveOperation)
     let contents = SaveSnapshot(
-      workspace: snapshot, sourceURL: sourceContentsURL, formalURL: fileURL)
+      workspace: snapshot, formalURL: fileURL)
     writingSnapshot.withLock { $0 = contents }
     return true
   }
@@ -174,7 +149,7 @@ public final class WorkspaceDocument: NSDocument {
     let contents: SaveSnapshot
     if Thread.isMainThread {
       contents = MainActor.assumeIsolated {
-        SaveSnapshot(workspace: snapshot, sourceURL: sourceContentsURL, formalURL: fileURL)
+        SaveSnapshot(workspace: snapshot, formalURL: fileURL)
       }
     } else {
       guard let saved = writingSnapshot.withLock({ $0 }) else {
@@ -187,15 +162,13 @@ public final class WorkspaceDocument: NSDocument {
     }
     let createsPackage: Bool
     switch saveOperation {
-    case .saveOperation, .autosaveInPlaceOperation:
+    case .saveOperation:
       guard url.standardizedFileURL == contents.formalURL?.standardizedFileURL else {
         throw CocoaError(.featureUnsupported)
       }
       createsPackage = false
     case .saveAsOperation:
       guard contents.formalURL == nil else { throw CocoaError(.featureUnsupported) }
-      createsPackage = true
-    case .autosaveElsewhereOperation, .autosaveAsOperation:
       createsPackage = true
     default:
       throw CocoaError(.featureUnsupported)
@@ -205,25 +178,12 @@ public final class WorkspaceDocument: NSDocument {
     let coordinator = NSFileCoordinator(filePresenter: self)
     var coordinationError: NSError?
     var writeError: Error?
-    func write(to destination: URL, preserving source: URL?) {
+    coordinator.coordinate(writingItemAt: url, options: .forMerging, error: &coordinationError) {
+      destination in
       do {
         try WorkspaceDocumentPackage.write(
-          contents.workspace, to: destination, preserving: source, createsPackage: createsPackage)
+          contents.workspace, to: destination, createsPackage: createsPackage)
       } catch { writeError = error }
-    }
-    if createsPackage, let source = contents.sourceURL,
-      source.standardizedFileURL != url.standardizedFileURL
-    {
-      coordinator.coordinate(
-        readingItemAt: source, options: .withoutChanges,
-        writingItemAt: url, options: .forMerging, error: &coordinationError
-      ) { source, destination in
-        write(to: destination, preserving: source)
-      }
-    } else {
-      coordinator.coordinate(writingItemAt: url, options: .forMerging, error: &coordinationError) {
-        write(to: $0, preserving: nil)
-      }
     }
     if let error = coordinationError ?? writeError as NSError? {
       Logger(subsystem: "tokyo.kaito.ldtx", category: "WorkspaceDocument").error(
@@ -239,9 +199,6 @@ public final class WorkspaceDocument: NSDocument {
     performActivity(withSynchronousWaiting: false) { [self] activityCompletion in
       continueActivity {
         saveUsingAppKit(to: url, ofType: typeName, for: saveOperation) { error in
-          if error != nil, saveOperation == .saveAsOperation, self.creationSaveFailed != nil {
-            self.creationSaveFailed = true
-          }
           activityCompletion()
           completionHandler(error)
         }
@@ -253,68 +210,34 @@ public final class WorkspaceDocument: NSDocument {
     to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
     completionHandler: @escaping (Error?) -> Void
   ) {
-    let adoptsURL =
-      saveOperation == .saveOperation || saveOperation == .saveAsOperation
-      || saveOperation == .autosaveInPlaceOperation
-    if saveOperation == .saveToOperation
-      || (saveOperation == .saveAsOperation && fileURL != nil)
-      || ((saveOperation == .saveOperation || saveOperation == .autosaveInPlaceOperation)
-        && fileURL?.standardizedFileURL != url.standardizedFileURL)
-    {
+    guard
+      (saveOperation == .saveAsOperation && fileURL == nil)
+        || (saveOperation == .saveOperation
+          && fileURL?.standardizedFileURL == url.standardizedFileURL)
+    else {
       completionHandler(CocoaError(.featureUnsupported))
       return
     }
-    if uiState.isOutputActive && saveOperation == .saveAsOperation {
-      completionHandler(CocoaError(.userCancelled))
-      return
-    }
-    var destinationLock: WorkspaceLock?
-    do {
-      if adoptsURL && (heldLock == nil || fileURL?.standardizedFileURL != url.standardizedFileURL) {
-        destinationLock = try lockService.acquire(at: url, createsPackageDirectory: true)
-      }
-    } catch {
-      completionHandler(error)
-      return
-    }
     let initialName = uiState.definition.displayName
-    let derivesInitialName = adoptsURL && fileURL == nil && initialName == "Untitled"
+    let derivesInitialName = fileURL == nil && initialName == "Untitled"
     let destinationName = url.deletingPathExtension().lastPathComponent
     if derivesInitialName { uiState.definition.displayName = destinationName }
-    let acquiredLock = destinationLock
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
+      writingChangeCountToken = nil
       if let error {
         if derivesInitialName && fileURL == nil && uiState.definition.displayName == destinationName
         {
           uiState.definition.displayName = initialName
         }
-        if let acquiredLock { releaseFailedDestination(acquiredLock, at: url) }
         completionHandler(error)
         return
       }
-      if adoptsURL {
-        if let acquiredLock {
-          if let heldLock { lockService.release(heldLock) }
-          heldLock = acquiredLock
-        }
-        adoptDocumentURL(url)
-      }
+      adoptDocumentURL(url)
       completionHandler(nil)
     }
   }
 
-  private func releaseFailedDestination(_ lock: WorkspaceLock, at url: URL) {
-    lockService.release(lock)
-    if lock.createdPackageDirectory,
-      let contents = try? FileManager.default.contentsOfDirectory(atPath: url.path),
-      contents.isEmpty
-    {
-      try? FileManager.default.removeItem(at: url)
-    }
-  }
-
   private func adoptDocumentURL(_ url: URL) {
-    sourceContentsURL = url
     if let previous = uiState.localStateURL, previous != url {
       appletData.copyState(from: previous, to: url)
     }
@@ -325,21 +248,9 @@ public final class WorkspaceDocument: NSDocument {
   public override nonisolated func presentedItemDidMove(to newURL: URL) {
     super.presentedItemDidMove(to: newURL)
     Task { @MainActor [self] in
-      guard !hasShutDown, sourceContentsURL?.standardizedFileURL != newURL.standardizedFileURL
+      guard !hasShutDown, uiState.localStateURL?.standardizedFileURL != newURL.standardizedFileURL
       else { return }
-      do {
-        let destinationLock = try lockService.acquire(at: newURL)
-        if let heldLock { lockService.release(heldLock) }
-        heldLock = destinationLock
-        adoptDocumentURL(newURL)
-      } catch {
-        if let heldLock { lockService.release(heldLock) }
-        heldLock = nil
-        adoptDocumentURL(newURL)
-        Logger(subsystem: "tokyo.kaito.ldtx", category: "WorkspaceDocument").error(
-          "Rebinding moved Workspace failed: \(error.localizedDescription, privacy: .public)")
-        presentError(error)
-      }
+      adoptDocumentURL(newURL)
     }
   }
 
@@ -359,40 +270,21 @@ public final class WorkspaceDocument: NSDocument {
       completionHandler?(CocoaError(.userCancelled))
       return
     }
-    guard fileURL != nil else {
-      super.move(to: url, completionHandler: completionHandler)
-      return
-    }
-    if fileURL?.standardizedFileURL == url.standardizedFileURL {
-      super.move(to: url, completionHandler: completionHandler)
-      return
-    }
-    let destinationLock: WorkspaceLock
-    do { destinationLock = try lockService.acquire(at: url, createsPackageDirectory: true) } catch {
-      completionHandler?(error)
-      return
-    }
     super.move(to: url) { [self] error in
       if let error {
-        releaseFailedDestination(destinationLock, at: url)
         completionHandler?(error)
         return
       }
-      if let heldLock { lockService.release(heldLock) }
-      heldLock = destinationLock
       adoptDocumentURL(url)
       completionHandler?(nil)
     }
   }
 
   public func saveAfterCreation() {
-    creationSaveFailed = false
     let callback = WorkspaceSaveCallback { [weak self] callback, success in
       guard let self else { return }
-      let failed = creationSaveFailed == true
-      creationSaveFailed = nil
       saveCallbacks.removeAll { $0 === callback }
-      if !success && !failed { close() }
+      finishCreation(success: success)
     }
     saveCallbacks.append(callback)
     save(
@@ -400,20 +292,13 @@ public final class WorkspaceDocument: NSDocument {
       didSave: #selector(WorkspaceSaveCallback.saved(_:didSave:contextInfo:)), contextInfo: nil)
   }
 
-  public func saveBeforeOutput() async throws {
-    try await withCheckedThrowingContinuation { continuation in
-      let callback = WorkspaceSaveCallback { [weak self] callback, success in
-        self?.saveCallbacks.removeAll { $0 === callback }
-        if success {
-          continuation.resume()
-        } else {
-          continuation.resume(throwing: CocoaError(.userCancelled))
-        }
-      }
-      saveCallbacks.append(callback)
-      save(
-        withDelegate: callback,
-        didSave: #selector(WorkspaceSaveCallback.saved(_:didSave:contextInfo:)), contextInfo: nil)
+  // Also exercised without a modal panel by the document system tests.
+  func finishCreation(success: Bool) {
+    if success {
+      makeWindowControllers()
+      showWindows()
+    } else {
+      close()
     }
   }
 
@@ -444,10 +329,6 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   private func finishClose() {
-    if let heldLock {
-      lockService.release(heldLock)
-      self.heldLock = nil
-    }
     appletData.removeTransientState(at: transientURL)
     super.close()
     Self.updateRecordingDockBadge()

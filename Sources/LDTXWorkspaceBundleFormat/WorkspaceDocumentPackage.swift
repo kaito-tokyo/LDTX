@@ -8,7 +8,7 @@ import SwiftProtobuf
 /// Serializes model files without materializing package resources in memory.
 public enum WorkspaceDocumentPackage {
   public static func write(
-    _ workspace: WorkspaceV4Bundle, to destination: URL, preserving sourceURL: URL? = nil,
+    _ workspace: WorkspaceV4Bundle, to destination: URL,
     createsPackage: Bool = false
   ) throws {
     try WorkspaceV4IntegrityValidator.validate(workspace)
@@ -29,16 +29,6 @@ public enum WorkspaceDocumentPackage {
     let manager = FileManager.default
     if createsPackage {
       try manager.createDirectory(at: destination, withIntermediateDirectories: true)
-      if let sourceURL, sourceURL.standardizedFileURL != destination.standardizedFileURL {
-        for child in try manager.contentsOfDirectory(
-          at: sourceURL, includingPropertiesForKeys: nil
-        ) where !["definition.pb", "preferences.pb"].contains(child.lastPathComponent) {
-          let target = destination.appendingPathComponent(child.lastPathComponent)
-          // Recovery saves can reuse their destination; refresh its preserved contents.
-          if manager.fileExists(atPath: target.path) { try manager.removeItem(at: target) }
-          try manager.copyItem(at: child, to: target)
-        }
-      }
       let infoURL = destination.appendingPathComponent("Info.plist")
       if !manager.fileExists(atPath: infoURL.path) {
         let encoder = PropertyListEncoder()

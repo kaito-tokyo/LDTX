@@ -11,25 +11,28 @@ NSDocumentController.shared. AppKit creates the standard controller and uses
 the first Editor type in Info.plist (Workspace) as the default New document type.
 AppKit initializes each document and selects
 the registered document class for each file type. File menu Open uses the shared
-document controller's standard action. New uses AppDelegate to create and display
-a document through the shared controller, then requests standard document saving.
+document controller's standard action. New uses AppDelegate to create a hidden
+document through the shared controller and requests standard document saving.
 AppDelegate suppresses automatic
 untitled documents and presents the standard Open panel after launch and
 restoration when no documents are open and no file-open request was received.
 Reopening the application without visible windows presents the Open panel again.
 Cancelling the panel leaves the application running; File > New creates a
 Workspace and immediately requests its first save location. Cancelling this save
-closes only the new document; a write failure retains it for retry. Workspace UI
+closes only the new document. A write failure is presented and also closes the
+new document, leaving any incomplete package on disk. Window controllers are
+constructed and shown only after initial saving succeeds. Workspace UI
 validation disables Save As, Save To, and Duplicate. Their inherited actions are
 not overridden, while the save path rejects copying an already-saved document.
 WorkspaceDocument projects the registered documents' output state into
 NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
 no independent recording identifiers or activity store are maintained. The badge
 remains active until all output stops.
-WorkspaceDocument owns the V4 model, package lock, and persistence coordinator.
-It uses WorkspaceAppletData.shared from initialization, and acquires its package
-lock during reading. Recovery initialization distinguishes the formal document
-URL from autosaved contents; failed reads and document teardown release locks.
+WorkspaceDocument owns the V4 model and persistence coordinator. It uses
+WorkspaceAppletData.shared from initialization. No lifetime package lock or sidecar
+lock file is used. Restoration reads the formal package only; a missing, nil, or
+unreadable formal URL is an error even when legacy recovery contents exist.
+Legacy recovery data, versions, and lock files are not deleted or adopted.
 It creates and registers WorkspaceWindowController with addWindowController;
 AppKit owns document and window-controller lifetime. The controller constructs
 window-scoped runtime resources and injects operations into the pane views.
@@ -60,25 +63,30 @@ Closing uses AppKit’s save/discard/
 cancel confirmation before playback stops. PaneWindow retains existing pane state
 keys; document and window restoration use AppKit’s standard document path.
 
-Workspace Save, Revert, autosave, and unsaved-document recovery use AppKit's
-lifecycle and change-count tracking. WorkspaceDocument captures an immutable V4
-snapshot, releases interaction before filesystem work, and writes on AppKit's
-background saving thread. It overrides writeSafely instead of producing a
-FileWrapper. Coordinated ordinary saves and in-place autosaves atomically replace
-only definition.pb and preferences.pb, leaving Info.plist, resources, and unknown
-files untouched. The two writes are individually atomic, not a transaction: a
-failure can leave mixed revisions on disk, retains unsaved edits, and permits
-retrying both files. No journal or rollback mechanism is added.
-Initial saves create the model package; recovery exports copy preserved contents
-on disk without loading resource bytes into a FileWrapper. Recovery and temporary
-save URLs never become the runtime's formal URL. Local state moves to the formal
-location only after successful first saving. The custom writer returns no
-backupFileURL because it cannot rename the whole old package for a backup; AppKit
-retains responsibility for version preservation when applicable.
+Workspace Save and Revert use AppKit's lifecycle and change-count tracking.
+Autosaving and version preservation are disabled. Definition and preferences
+edits remain in memory until an explicit Save, including saving selected during
+standard close and termination confirmation. WorkspaceDocument captures an
+immutable V4 snapshot, releases interaction before filesystem work, and writes
+on AppKit's background saving thread. A captured AppKit change-count token keeps
+edits made during writing unsaved when the non-autosaving save completes.
+Coordinated ordinary saves atomically
+replace only definition.pb and preferences.pb, leaving Info.plist, resources, and
+unknown files untouched. Initial saving creates Info.plist and the two model
+files. The two writes are individually atomic, not a transaction: a failure can
+leave mixed revisions on disk and retains unsaved edits. No journal, rollback,
+backup, or recovery-package copying is added. The save hook rejects autosave,
+export, and subsequent Save As operations.
+WorkspaceV4PersistenceCoordinator projects the document's model for runtimes;
+it has no independent save API. WorkspaceWindowRuntime and UI dispatchers do not
+write definition or preferences. CLI package operations use file coordination
+instead of the former lifetime lock. Ordinary document opening, duplicate URL
+reuse, external-change detection, and file coordination remain AppKit-managed.
 
-Recording or streaming first saves through the standard save panel when needed.
-Revert, Move, and Rename remain disabled during output. Closing uses NSDocument's
-standard save decision and waits for runtime shutdown before granting permission.
+Recording or streaming starts from the current in-memory model without saving
+pending edits. A formal document URL is required. Revert, Move, and Rename remain
+disabled during output. Closing uses NSDocument's standard save decision and
+waits for runtime shutdown before granting permission.
 Application termination uses AppKit's per-document review. Cancelling does not
 reopen documents that have already closed. Pane visibility does not own resource
 lifetime.

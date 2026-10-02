@@ -20,7 +20,7 @@ struct WorkspaceDocumentSystemTestSuite {
 
   init() { _ = Self.controller }
 
-  @Test func standardInitializationOwnsLockWithoutControllerConfiguration() async throws {
+  @Test func standardControllerReusesDocumentWithoutAnExclusiveLock() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")
@@ -31,76 +31,70 @@ struct WorkspaceDocumentSystemTestSuite {
     let document = try #require(
       controller.makeDocument(withContentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
         as? WorkspaceDocument)
-    #expect(document.appletData === original.appletData)
+    controller.addDocument(document)
+    defer { document.close() }
     #expect(document.fileURL == url)
     #expect(document.uiState.localStateURL == url)
     #expect(document.persistenceCoordinator.url == url)
-    #expect(throws: (any Error).self) {
-      _ = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    let independentlyOpened = try WorkspaceDocument(
+      contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    independentlyOpened.close()
+    let reopened: NSDocument = try await withCheckedThrowingContinuation { continuation in
+      controller.openDocument(withContentsOf: url, display: false) { document, alreadyOpen, error in
+        #expect(alreadyOpen)
+        if let error {
+          continuation.resume(throwing: error)
+        } else if let document {
+          continuation.resume(returning: document)
+        } else {
+          continuation.resume(throwing: CocoaError(.fileReadUnknown))
+        }
+      }
     }
-    document.close()
-    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
-    reopened.close()
+    #expect(reopened === document)
+    #expect(
+      !FileManager.default.fileExists(
+        atPath:
+          root.appendingPathComponent(".Workspace.ldtxworkspace.LDTX.lock").path))
   }
 
-  @Test func restorationLocksFormalURLAndKeepsRecoveryContentsSeparate() async throws {
+  @Test func restorationUsesFormalPackageAndRejectsMissingOrNilURL() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
-    let formalURL = root.appendingPathComponent("Formal.ldtxworkspace")
-    let recoveryURL = root.appendingPathComponent("Recovery.ldtxworkspace")
+    let formal = root.appendingPathComponent("Formal.ldtxworkspace")
+    let recovery = root.appendingPathComponent("LegacyRecovery.ldtxworkspace")
     let source = WorkspaceDocument()
-    try await save(source, to: formalURL)
-    source.uiState.definition.displayName = "Recovered edit"
-    var recovered = try WorkspaceBundleReaderV4(at: formalURL).read()
-    recovered.definition = source.uiState.definition
-    try WorkspaceDocumentPackage.write(
-      recovered, to: recoveryURL, preserving: formalURL, createsPackage: true)
+    try await save(source, to: formal)
     source.close()
-    let controller = Self.controller
-    let document = try #require(
-      controller.makeDocument(
-        for: formalURL, withContentsOf: recoveryURL, ofType: "tokyo.kaito.ldtx.workspace")
-        as? WorkspaceDocument)
+    var legacy = try WorkspaceBundleReaderV4(at: formal).read()
+    legacy.definition.displayName = "Uncommitted legacy edit"
+    try WorkspaceDocumentPackage.write(legacy, to: recovery, createsPackage: true)
+    let document = try WorkspaceDocument(
+      for: formal, withContentsOf: recovery,
+      ofType: "tokyo.kaito.ldtx.workspace")
     defer { document.close() }
-    #expect(document.fileURL == formalURL)
-    #expect(document.autosavedContentsFileURL == recoveryURL)
-    #expect(document.uiState.localStateURL == formalURL)
-    #expect(document.persistenceCoordinator.url == formalURL)
-    #expect(document.uiState.definition.displayName == "Recovered edit")
-    #expect(document.isDocumentEdited)
-    #expect(throws: (any Error).self) { _ = try WorkspaceLockService().acquire(at: formalURL) }
-    let recoveryLock = try WorkspaceLockService().acquire(at: recoveryURL)
-    WorkspaceLockService().release(recoveryLock)
-    let untitled = try WorkspaceDocument(
-      for: nil, withContentsOf: recoveryURL, ofType: "tokyo.kaito.ldtx.workspace")
-    defer { untitled.close() }
-    #expect(untitled.fileURL == nil)
-    #expect(untitled.persistenceCoordinator.url == nil)
-    #expect(untitled.uiState.localStateURL?.scheme == "ldtx-untitled")
-    #expect(untitled.isDocumentEdited)
-  }
-
-  @Test func failedReadAndRecoveryInitializationReleasePackageLocks() async throws {
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: root) }
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    #expect(throws: (any Error).self) {
-      _ = try WorkspaceDocument(contentsOf: root, ofType: "tokyo.kaito.ldtx.workspace")
-    }
-    let lock = try WorkspaceLockService().acquire(at: root)
-    WorkspaceLockService().release(lock)
-    let url = root.appendingPathComponent("Valid.ldtxworkspace")
-    let source = WorkspaceDocument()
-    try await save(source, to: url)
-    source.close()
+    #expect(document.fileURL == formal)
+    #expect(document.uiState.definition.displayName == "Formal")
+    #expect(!document.isDocumentEdited)
+    #expect(document.autosavedContentsFileURL == nil)
     #expect(throws: (any Error).self) {
       _ = try WorkspaceDocument(
-        for: root.appendingPathComponent("Missing.ldtxworkspace"), withContentsOf: url,
-        ofType: "tokyo.kaito.ldtx.workspace")
+        for: nil, withContentsOf: recovery, ofType: "tokyo.kaito.ldtx.workspace")
     }
-    let released = try WorkspaceLockService().acquire(at: url)
-    WorkspaceLockService().release(released)
-
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(
+        for: root.appendingPathComponent("Missing.ldtxworkspace"),
+        withContentsOf: recovery, ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    let corrupt = root.appendingPathComponent("Corrupt.ldtxworkspace")
+    try FileManager.default.createDirectory(at: corrupt, withIntermediateDirectories: true)
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(
+        for: corrupt, withContentsOf: recovery, ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    #expect(
+      try WorkspaceBundleReaderV4(at: recovery).read().definition.displayName
+        == legacy.definition.displayName)
   }
 
   @Test func dockBadgeFollowsRegisteredDocuments() {
@@ -190,10 +184,6 @@ struct WorkspaceDocumentSystemTestSuite {
     let document = WorkspaceDocument()
     defer { document.close() }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let recovery = root.appendingPathComponent("Recovery.ldtxworkspace")
-    try await save(document, to: recovery, operation: .autosaveElsewhereOperation)
-    #expect(document.fileURL == nil)
-    #expect(document.uiState.definition.displayName == "Untitled")
     let first = root.appendingPathComponent("Show.ldtxworkspace")
     try await save(document, to: first)
     #expect(document.uiState.definition.displayName == "Show")
@@ -286,42 +276,69 @@ struct WorkspaceDocumentSystemTestSuite {
     document.close()
   }
 
-  @Test func autosaveElsewhereDoesNotAdoptRecoveryURL() async throws {
+  @Test func autosaveOperationsAreDisabledAndRejected() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
-    document.uiState.definition.displayName = "Recovered"
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    let recovery = root.appendingPathComponent("Recovery.ldtxworkspace")
-    try await save(document, to: recovery, operation: .autosaveElsewhereOperation)
-    #expect(document.fileURL == nil)
-    #expect(document.persistenceCoordinator.url == nil)
-    #expect(document.autosavedContentsFileURL == recovery)
-    #expect(try WorkspaceBundleReaderV4(at: recovery).read().definition.displayName == "Recovered")
-    document.close()
-    await Task.yield()
+    defer { document.close() }
+    let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try await save(document, to: url)
+    let definition = try Data(contentsOf: url.appendingPathComponent("definition.pb"))
+    let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
+    document.uiState.definition.displayName = "Pending"
+    document.uiState.preferences.monitorVolume = -6
+    #expect(!WorkspaceDocument.autosavesInPlace)
+    #expect(!WorkspaceDocument.preservesVersions)
+    #expect(document.autosavingFileType == nil)
+    for operation in [
+      NSDocument.SaveOperationType.autosaveInPlaceOperation,
+      .autosaveElsewhereOperation, .autosaveAsOperation,
+    ] {
+      do {
+        try await save(document, to: url, operation: operation)
+        Issue.record("Autosaving must be rejected")
+      } catch {}
+    }
+    try await document.autosave(withImplicitCancellability: false)
+    #expect(try Data(contentsOf: url.appendingPathComponent("definition.pb")) == definition)
+    #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == preferences)
+    #expect(document.isDocumentEdited)
+    #expect(document.autosavedContentsFileURL == nil)
   }
 
-  @Test func lockConflictPreservesSourceAndDirtyState() async throws {
+  @Test func creationShowsWindowsOnlyAfterSuccessfulSaveAndClosesFailures() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
-    let first = WorkspaceDocument()
-    let second = WorkspaceDocument()
-    let firstURL = root.appendingPathComponent("First.ldtxworkspace")
-    let secondURL = root.appendingPathComponent("Second.ldtxworkspace")
-    try await save(first, to: firstURL)
-    try await save(second, to: secondURL)
-    second.uiState.definition.displayName = "Unsaved"
+    let document = WorkspaceDocument()
+    Self.controller.addDocument(document)
+    #expect(document.windowControllers.isEmpty)
+    let url = root.appendingPathComponent("New.ldtxworkspace")
+    try await save(document, to: url)
+    #expect(document.windowControllers.isEmpty)
+    document.finishCreation(success: true)
+    #expect(document.windowControllers.count == 1)
+    #expect(document.windowControllers.first?.window?.isVisible == true)
+    await document.shutdown()
+    document.close()
+    let canceled = WorkspaceDocument()
+    Self.controller.addDocument(canceled)
+    canceled.finishCreation(success: false)
+    #expect(!Self.controller.documents.contains { $0 === canceled })
+    let failed = WorkspaceDocument()
+    Self.controller.addDocument(failed)
+    let partial = root.appendingPathComponent("Partial.ldtxworkspace")
+    try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: partial.appendingPathComponent("preferences.pb"),
+      withIntermediateDirectories: false)
     do {
-      try await save(second, to: firstURL)
-      Issue.record("Save As should fail while another document owns the package lock")
-    } catch {
-      #expect(second.fileURL == secondURL)
-      #expect(second.isDocumentEdited)
-    }
-    first.close()
-    second.close()
-    await Task.yield()
+      try await save(failed, to: partial)
+      Issue.record("Expected first-save failure")
+    } catch {}
+    failed.finishCreation(success: false)
+    #expect(!Self.controller.documents.contains { $0 === failed })
+    #expect(
+      FileManager.default.fileExists(atPath: partial.appendingPathComponent("Info.plist").path))
   }
 
   @Test func duplicateIsDisabledAndDoesNotCreateAnotherDocument() throws {
@@ -367,7 +384,7 @@ struct WorkspaceDocumentSystemTestSuite {
     let fixedDefinition = document.uiState.definition
     document.uiState.definition.displayName = "Rejected during output"
     document.uiState.preferences.monitorVolume = -8
-    try await save(document, to: url, operation: .autosaveInPlaceOperation)
+    try await save(document, to: url, operation: .saveOperation)
     let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
     #expect(savedOutput.preferences.monitorVolume == -8)
     #expect(savedOutput.definition == fixedDefinition)
@@ -405,7 +422,7 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(document.isDocumentEdited)
   }
 
-  @Test func presentedMoveRebindsStateResourcesAndLock() async throws {
+  @Test func presentedMoveRebindsStateAndPreservesResources() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
@@ -423,9 +440,8 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(document.fileURL == moved)
     #expect(document.uiState.localStateURL == moved)
     #expect(document.persistenceCoordinator.url == moved)
-    #expect(throws: (any Error).self) {
-      _ = try WorkspaceDocument(contentsOf: moved, ofType: "tokyo.kaito.ldtx.workspace")
-    }
+    let other = try WorkspaceDocument(contentsOf: moved, ofType: "tokyo.kaito.ldtx.workspace")
+    other.close()
     document.uiState.definition.displayName = "After move"
     try await save(document, to: moved, operation: .saveOperation)
     #expect(!document.isDocumentEdited)
@@ -433,7 +449,7 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: moved).read().definition.displayName == "After move")
   }
 
-  @Test func moveKeepsRuntimeURLAndLockInSync() async throws {
+  @Test func moveKeepsRuntimeURLInSync() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
@@ -448,13 +464,86 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(document.fileURL == moved)
     #expect(document.persistenceCoordinator.url == moved)
     #expect(!FileManager.default.fileExists(atPath: original.path))
-    let other = WorkspaceDocument()
-    do {
-      try await save(other, to: moved)
-      Issue.record("Moved package must remain locked")
-    } catch { #expect(other.fileURL == nil) }
     document.close()
-    other.close()
+  }
+
+  @Test func startingOutputDoesNotSavePendingModelEdits() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Output.ldtxworkspace")
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    try await save(document, to: url)
+    let definition = try Data(contentsOf: url.appendingPathComponent("definition.pb"))
+    let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
+    document.makeWindowControllers()
+    let controller = try #require(document.windowControllers.first as? WorkspaceWindowController)
+    document.uiState.definition.displayName = "Pending"
+    document.uiState.preferences.monitorVolume = -9
+    // No Program/output is enabled, so this exercises the entry without media I/O.
+    try await controller.startOutput()
+    #expect(document.isDocumentEdited)
+    #expect(document.uiState.definition.displayName == "Pending")
+    #expect(try Data(contentsOf: url.appendingPathComponent("definition.pb")) == definition)
+    #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == preferences)
+    await document.shutdown()
+  }
+
+  @Test func standardCloseCancelKeepsEditsAndDiscardWaitsForShutdown() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Close.ldtxworkspace")
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    try await save(document, to: url)
+    Self.controller.addDocument(document)
+    document.makeWindowControllers()
+    let window = try #require(document.windowControllers.first?.window)
+    window.orderFront(nil)
+    document.uiState.definition.displayName = "Pending"
+    let probe = WorkspaceCloseProbe()
+    document.canClose(
+      withDelegate: probe,
+      shouldClose: #selector(WorkspaceCloseProbe.document(_:shouldClose:contextInfo:)),
+      contextInfo: nil)
+    try await clickCloseSheetButton("Cancel", in: window)
+    for _ in 0..<100 where probe.result == nil { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(probe.result == false)
+    #expect(document.isDocumentEdited)
+    #expect(window.isVisible)
+    #expect(Self.controller.documents.contains { $0 === document })
+    probe.result = nil
+    document.canClose(
+      withDelegate: probe,
+      shouldClose: #selector(WorkspaceCloseProbe.document(_:shouldClose:contextInfo:)),
+      contextInfo: nil)
+    try await clickCloseSheetButton("Don’t Save", in: window)
+    for _ in 0..<200 where probe.result == nil { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(probe.result == true)
+    document.close()
+    #expect(!Self.controller.documents.contains { $0 === document })
+    #expect(!window.isVisible)
+    #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Close")
+  }
+
+  private func clickCloseSheetButton(_ title: String, in window: NSWindow) async throws {
+    func find(_ view: NSView) -> NSButton? {
+      if let button = view as? NSButton {
+        let normalized = button.title.replacingOccurrences(of: "’", with: "'")
+        let expected = title.replacingOccurrences(of: "’", with: "'")
+        let japanese = ["Cancel": "キャンセル", "Don’t Save": "保存しない"][title]
+        if normalized == expected || button.title == japanese { return button }
+      }
+      return view.subviews.lazy.compactMap { find($0) }.first
+    }
+    for _ in 0..<200 {
+      if let content = window.attachedSheet?.contentView, let button = find(content) {
+        button.performClick(nil)
+        return
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    throw CocoaError(.userCancelled)
   }
 
   @Test func outputFreezesDefinitionButTracksPreferences() {
@@ -487,5 +576,15 @@ private struct BackgroundSnapshotWriter: @unchecked Sendable {
   func write() throws {
     try document.writeSafely(
       to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation)
+  }
+}
+
+@MainActor
+private final class WorkspaceCloseProbe: NSObject {
+  var result: Bool?
+  @objc func document(
+    _ document: NSDocument, shouldClose: Bool, contextInfo: UnsafeMutableRawPointer?
+  ) {
+    result = shouldClose
   }
 }
