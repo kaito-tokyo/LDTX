@@ -280,6 +280,34 @@ struct WorkspaceDocumentSystemTestSuite {
     await Task.yield()
   }
 
+  @Test func presentedMoveRebindsStateResourcesAndLock() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    let original = root.appendingPathComponent("Original.ldtxworkspace")
+    let moved = root.appendingPathComponent("Renamed.ldtxworkspace")
+    try await save(document, to: original)
+    let resource = Data("Preserved resource".utf8)
+    try resource.write(to: original.appendingPathComponent("resource.bin"))
+    try FileManager.default.moveItem(at: original, to: moved)
+    document.presentedItemDidMove(to: moved)
+    for _ in 0..<100 where document.uiState.localStateURL != moved {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(document.fileURL == moved)
+    #expect(document.uiState.localStateURL == moved)
+    #expect(document.persistenceCoordinator.url == moved)
+    #expect(throws: (any Error).self) {
+      _ = try WorkspaceDocument(contentsOf: moved, ofType: "tokyo.kaito.ldtx.workspace")
+    }
+    document.uiState.definition.displayName = "After move"
+    try await save(document, to: moved, operation: .saveOperation)
+    #expect(!document.isDocumentEdited)
+    #expect(try Data(contentsOf: moved.appendingPathComponent("resource.bin")) == resource)
+    #expect(try WorkspaceBundleReaderV4(at: moved).read().definition.displayName == "After move")
+  }
+
   @Test func moveKeepsRuntimeURLAndLockInSync() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

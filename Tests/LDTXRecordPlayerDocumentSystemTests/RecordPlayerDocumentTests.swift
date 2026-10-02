@@ -53,6 +53,37 @@ struct RecordPlayerDocumentSystemTestSuite {
     }
   }
 
+  @Test func malformedOptionalMarkersAllowPlaybackButCannotBeOverwritten() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let markerURL = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
+      at: .zero, note: "Original")
+    let malformed = Data([0xff, 0xfe])
+    try malformed.write(to: markerURL)
+    let document = try document(url)
+    defer { document.close() }
+    document.makeWindowControllers()
+    #expect(document.model != nil)
+    #expect(document.markers.isEmpty)
+    try document.createMarker(note: "Pending", at: CMTime(seconds: 1, preferredTimescale: 600))
+    do {
+      try await save(document, to: url)
+      Issue.record("Unreadable marker baseline must not be overwritten")
+    } catch {}
+    #expect(document.isDocumentEdited)
+    #expect(try Data(contentsOf: markerURL) == malformed)
+    #expect(throws: (any Error).self) {
+      try document.revert(toContentsOf: url, ofType: RecordPlayerDocument.typeName)
+    }
+    #expect(document.markers.map(\.note) == ["Pending"])
+    try Data("Repaired\n".utf8).write(to: markerURL)
+    try document.revert(toContentsOf: url, ofType: RecordPlayerDocument.typeName)
+    #expect(document.markers.map(\.note) == ["Repaired"])
+    try document.createMarker(note: "New", at: CMTime(seconds: 1, preferredTimescale: 600))
+    try await save(document, to: url)
+    #expect(!document.isDocumentEdited)
+  }
+
   @Test func legacyRegisteredTypeStillOpensAndSavesMarkers() async throws {
     let url = try package()
     defer { try? FileManager.default.removeItem(at: url) }

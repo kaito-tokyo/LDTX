@@ -13,6 +13,7 @@ public final class RecordPlayerDocument: NSDocument {
   public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
   public private(set) var markers: [RecordingMarker] = []
   private var savedMarkers: [RecordingMarker] = []
+  private var markerReadError: (any Error)?
   private var recordingURL: URL?
   private var securityScopedURL: URL?
   private(set) var model: LDTXRecordPlayerModel?
@@ -39,10 +40,22 @@ public final class RecordPlayerDocument: NSDocument {
       let accessing = url.startAccessingSecurityScopedResource()
       do {
         _ = try RecordingPackage(contentsOf: url)
-        let loaded = try RecordingMarkerStore(recordingDirectoryURL: url).markers()
+        let loaded: [RecordingMarker]
+        var markerError: (any Error)?
+        do {
+          loaded = try RecordingMarkerStore(recordingDirectoryURL: url).markers()
+        } catch {
+          // Revert must preserve current edits if the replacement cannot be read.
+          guard recordingURL == nil else { throw error }
+          logger.error(
+            "Reading optional markers failed: \(error.localizedDescription, privacy: .public)")
+          loaded = []
+          markerError = error
+        }
         if let securityScopedURL { securityScopedURL.stopAccessingSecurityScopedResource() }
         securityScopedURL = accessing ? url : nil
         recordingURL = url.standardizedFileURL
+        markerReadError = markerError
         markers = loaded
         savedMarkers = loaded
         model?.markers = loaded
@@ -124,6 +137,7 @@ public final class RecordPlayerDocument: NSDocument {
       guard saveOperation == .saveOperation, Self.accepts(typeName),
         url.standardizedFileURL == recordingURL
       else { throw RecordingMarkerError.unsupportedOperation }
+      if let markerReadError { throw markerReadError }
       let snapshot = markers
       do {
         try RecordingMarkerStore(recordingDirectoryURL: url).save(

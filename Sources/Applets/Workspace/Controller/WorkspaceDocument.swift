@@ -247,6 +247,27 @@ public final class WorkspaceDocument: NSDocument {
     persistenceCoordinator.setDocumentURL(url)
   }
 
+  public override nonisolated func presentedItemDidMove(to newURL: URL) {
+    super.presentedItemDidMove(to: newURL)
+    Task { @MainActor [self] in
+      guard !hasShutDown, sourceContentsURL?.standardizedFileURL != newURL.standardizedFileURL
+      else { return }
+      do {
+        let destinationLock = try lockService.acquire(at: newURL)
+        if let heldLock { lockService.release(heldLock) }
+        heldLock = destinationLock
+        adoptDocumentURL(newURL)
+      } catch {
+        if let heldLock { lockService.release(heldLock) }
+        heldLock = nil
+        adoptDocumentURL(newURL)
+        Logger(subsystem: "tokyo.kaito.ldtx", category: "WorkspaceDocument").error(
+          "Rebinding moved Workspace failed: \(error.localizedDescription, privacy: .public)")
+        presentError(error)
+      }
+    }
+  }
+
   public override func move(to url: URL, completionHandler: ((Error?) -> Void)? = nil) {
     performActivity(withSynchronousWaiting: false) { [self] activityCompletion in
       continueActivity {
