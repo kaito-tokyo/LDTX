@@ -35,6 +35,7 @@ public struct LDTXRecordPlayerView: View {
   }
   private var markers: [RecordingMarker] { document?.markers ?? [] }
   private var canModifyMarkers: Bool { document?.canModifyMarkers == true }
+  @State private var pendingMarkerDeletion: RecordingMarker?
   @State private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
@@ -294,7 +295,7 @@ public struct LDTXRecordPlayerView: View {
             .tag(marker.fileName)
             .contextMenu {
               Button(role: .destructive) {
-                deleteMarker(marker)
+                pendingMarkerDeletion = marker
               } label: {
                 Label("Delete Marker", systemImage: "trash")
               }
@@ -306,6 +307,18 @@ public struct LDTXRecordPlayerView: View {
         }
       }
     }
+    .alert(
+      "Delete Marker?",
+      isPresented: Binding(
+        get: { pendingMarkerDeletion != nil },
+        set: { if !$0 { pendingMarkerDeletion = nil } }
+      ), presenting: pendingMarkerDeletion
+    ) { marker in
+      Button("Delete", role: .destructive) { deleteMarker(marker) }
+      Button("Cancel", role: .cancel) {}
+    } message: { _ in
+      Text("This marker will be deleted immediately. This action cannot be undone.")
+    }
   }
 
   private func deleteSelectedMarker() {
@@ -314,7 +327,7 @@ public struct LDTXRecordPlayerView: View {
       let selectedMarkerID,
       let marker = markers.first(where: { $0.fileName == selectedMarkerID })
     else { return }
-    deleteMarker(marker)
+    pendingMarkerDeletion = marker
   }
 
   private func deleteMarker(_ marker: RecordingMarker) {

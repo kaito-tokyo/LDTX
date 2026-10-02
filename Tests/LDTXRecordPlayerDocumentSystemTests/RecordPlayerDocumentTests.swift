@@ -72,7 +72,7 @@ struct RecordPlayerDocumentSystemTestSuite {
     try document.createMarker(note: "Pending", at: CMTime(seconds: 1, preferredTimescale: 600))
     do {
       try await save(document, to: url)
-      Issue.record("Unreadable marker baseline must not be overwritten")
+      Issue.record("Unreadable optional markers must not be overwritten")
     } catch {}
     #expect(document.isDocumentEdited)
     #expect(try Data(contentsOf: markerURL) == malformed)
@@ -139,7 +139,7 @@ struct RecordPlayerDocumentSystemTestSuite {
     #expect(controller.documents.contains { $0 === workspace })
   }
 
-  @Test func editsStayInMemoryUntilSaveAndRevertPreservesPlaybackState() async throws {
+  @Test func additionsWaitForSaveAndDeletionIsImmediate() async throws {
     let url = try package()
     defer { try? FileManager.default.removeItem(at: url) }
     let document = try document(url)
@@ -156,11 +156,11 @@ struct RecordPlayerDocumentSystemTestSuite {
     #expect(!document.isDocumentEdited)
     try document.deleteMarker(try #require(document.markers.first))
     #expect(
-      document.validateUserInterfaceItem(
+      !document.validateUserInterfaceItem(
         NSMenuItem(
           title: "Revert", action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")))
-    try document.revert(toContentsOf: url, ofType: RecordPlayerDocument.typeName)
-    #expect(document.markers.map(\.note) == ["Saved"])
+    #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
+    #expect(document.markers.isEmpty)
     #expect(!document.isDocumentEdited)
     #expect(model.player === player)
     #expect(model.selectedCanvas == .portrait)
@@ -339,7 +339,7 @@ struct RecordPlayerDocumentSystemTestSuite {
     controller.close()
   }
 
-  @Test func markerObservationTracksEditsAndRevertWithoutMakingReadsDirty() async throws {
+  @Test func markerObservationTracksAdditionSaveSyncAndImmediateDeletion() async throws {
     let url = try package()
     defer { try? FileManager.default.removeItem(at: url) }
     let document = try document(url)
@@ -355,21 +355,85 @@ struct RecordPlayerDocumentSystemTestSuite {
     observeMarkers()
     try document.createMarker(note: "Saved", at: .zero)
     #expect(notifications.withLock { $0 } == 1)
-    #expect(document.isDocumentEdited)
     try await save(document, to: url)
+    #expect(!document.isDocumentEdited)
+    _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
+      at: CMTime(seconds: 1, preferredTimescale: 1000), note: "External")
+    observeMarkers()
+    try await save(document, to: url)
+    #expect(notifications.withLock { $0 } == 2)
+    #expect(document.markers.map(\.note) == ["Saved", "External"])
     #expect(!document.isDocumentEdited)
     observeMarkers()
     try document.deleteMarker(try #require(document.markers.first))
-    #expect(notifications.withLock { $0 } == 2)
-    #expect(document.isDocumentEdited)
-    observeMarkers()
-    try document.revert(toContentsOf: url, ofType: RecordPlayerDocument.typeName)
     #expect(notifications.withLock { $0 } == 3)
-    #expect(document.markers.map(\.note) == ["Saved"])
     #expect(!document.isDocumentEdited)
-    observeMarkers()
+    #expect(
+      try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["External"])
+  }
+
+  @Test func canonicalCollisionOverwritesExistingNameAndDeletionKeepsPendingEdits() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let directory = url.appendingPathComponent("Markers")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    let name = "0-00-00.000.TXT"
+    try Data("Old\n".utf8).write(to: directory.appendingPathComponent(name))
+    let document = try document(url)
+    defer { document.close() }
+    try document.createMarker(note: "New", at: CMTime(value: 1, timescale: 10000))
+    #expect(document.markers.count == 1)
+    #expect(document.markers.first?.fileName == name)
     try await save(document, to: url)
-    #expect(notifications.withLock { $0 } == 3)
+    try document.createMarker(note: "Pending", at: CMTime(seconds: 1, preferredTimescale: 1000))
+    try document.deleteMarker(try #require(document.markers.first))
+    #expect(document.isDocumentEdited)
+    #expect(document.markers.map(\.note) == ["Pending"])
+    #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
+    document.close()
+    let reopened = try self.document(url)
+    defer { reopened.close() }
+    #expect(reopened.markers.isEmpty)
+  }
+
+  @Test func rereadFailureKeepsPendingEditsAndRetrySynchronizesDiskOnlyMarkers() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try document(url)
+    defer { document.close() }
+    try document.createMarker(note: "Pending", at: .zero)
+    let directory = url.appendingPathComponent("Markers")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    let unreadable = directory.appendingPathComponent("00-00-01.000.txt")
+    try Data([0xff]).write(to: unreadable)
+    do {
+      try await save(document, to: url)
+      Issue.record("Expected reread failure")
+    } catch {}
+    #expect(document.isDocumentEdited)
+    #expect(document.markers.map(\.note) == ["Pending"])
+    #expect(
+      try String(contentsOf: directory.appendingPathComponent("00-00-00.000.txt"), encoding: .utf8)
+        == "Pending\n")
+    try Data("External\n".utf8).write(to: unreadable)
+    try await save(document, to: url)
+    #expect(!document.isDocumentEdited)
+    #expect(document.markers.map(\.note) == ["Pending", "External"])
+  }
+
+  @Test func deletionFailureRetainsMarkerAndDoesNotMakeCleanDocumentDirty() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try document(url)
+    defer { document.close() }
+    try document.createMarker(note: "Saved", at: .zero)
+    try await save(document, to: url)
+    let marker = try #require(document.markers.first)
+    let markerURL = url.appendingPathComponent("Markers").appendingPathComponent(marker.fileName)
+    try FileManager.default.removeItem(at: markerURL)
+    try FileManager.default.createDirectory(at: markerURL, withIntermediateDirectories: false)
+    #expect(throws: RecordingMarkerError.invalidMarkerFile) { try document.deleteMarker(marker) }
+    #expect(document.markers == [marker])
     #expect(!document.isDocumentEdited)
   }
 
@@ -414,11 +478,8 @@ struct RecordPlayerDocumentSystemTestSuite {
       try await Task.sleep(for: .milliseconds(10))
     }
     #expect(firstProbe.notes.isEmpty && secondProbe.notes.isEmpty)
-    try first.revert(toContentsOf: firstURL, ofType: RecordPlayerDocument.typeName)
-    for _ in 0..<100 where firstProbe.notes != ["Shared"] || secondProbe.notes != ["Shared"] {
-      try await Task.sleep(for: .milliseconds(10))
-    }
-    #expect(firstProbe.notes == ["Shared"] && secondProbe.notes == ["Shared"])
+    try await save(first, to: firstURL)
+    #expect(firstProbe.notes.isEmpty && secondProbe.notes.isEmpty)
     #expect(otherProbe.notes.isEmpty)
   }
 
@@ -498,6 +559,7 @@ struct RecordPlayerDocumentSystemTestSuite {
     } catch {}
     #expect(document.autosavingFileType == nil)
     for action in [
+      #selector(NSDocument.revertToSaved(_:)),
       #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
       #selector(NSDocument.duplicate(_:)),
       #selector(NSDocument.rename(_:)), #selector(NSDocument.move(_:)),

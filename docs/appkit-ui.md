@@ -52,12 +52,23 @@ LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
 in-memory marker edits. It registers a
 RecordPlayerWindowController that composes the panes and owns playback lifetime.
-Marker edits notify NSDocument and remain in memory until Save. A coordinated
-safe save replaces only the Markers directory, retaining unknown files and leaving
-media and metadata untouched. Active recordings and external marker changes reject
-saving. Recording documents support explicit Save and Revert, without autosave,
-versions, or UI access to Save As, Duplicate, Move, or Rename. Standard UI
-validation disables these actions; their inherited implementations are not overridden.
+Marker additions and replacements notify NSDocument and stay in memory until Save.
+Markers are auxiliary information without strict conflict detection. A coordinated
+save atomically writes individual marker files, then reads the disk contents under
+the same coordination and updates the document's observable marker list. Disk-only
+markers and unknown files remain intact; media and required metadata are untouched.
+There is no baseline comparison, whole-directory replacement, or rollback. A failed
+write or reread preserves the document's edits and change state for retry, even if
+some files were already written. Timestamp identity uses millisecond precision and
+reuses the first existing filename in filename order. Other same-time files remain
+untouched. Existing empty notes can be saved; new empty notes are rejected.
+Deletion requires a separate confirmation and immediately removes the file before
+updating memory. Missing files count as deleted. Deleting does not add a save change
+count or clear pending edits, and choosing Don't Save on close cannot restore deleted
+markers. Marker Undo/Redo is not provided. Active recordings reject writes.
+Recording documents support explicit Save without autosave or versions. Standard
+UI validation disables Revert, Save As, Duplicate, Move, and Rename; their inherited
+implementations are not overridden.
 The save hook rejects operations other than saving markers to the current package.
 Closing uses AppKit’s save/discard/
 cancel confirmation before playback stops. PaneWindow retains existing pane state
@@ -135,14 +146,14 @@ an asset load. Existing playback resources remain alive across external moves;
 subsequent canvas loads use the current document URL. AppKit manages document
 access, without a separate security-scope lifetime or application move observer.
 Marker identity is a package-relative filename, never an absolute URL. Save
-synchronizes the in-memory snapshot at the URL supplied by AppKit, comparing the
-path-independent baseline and preserving unknown files. Access failures preserve
+writes the in-memory snapshot at the URL supplied by AppKit, then synchronizes
+from disk without comparing a baseline and without deleting unknown files. Access failures preserve
 pending marker edits and are reported through the existing error paths.
 
 RecordPlayerDocument is observable and is the sole owner of marker contents.
 Player panes observe its markers through the weak document environment; playback
 models contain no marker copies or editing callbacks. Marker edits enter through
 the document methods, which maintain AppKit change counts separately from
-Observation notifications. Save baselines and other lifecycle bookkeeping are
-excluded from Observation. Missing documents disable marker actions, and Revert
-clears selections whose marker filenames no longer exist.
+Observation notifications. Lifecycle bookkeeping is excluded from Observation.
+Missing documents disable marker actions. Save synchronization and immediate
+deletion clear selections whose marker filenames no longer exist.

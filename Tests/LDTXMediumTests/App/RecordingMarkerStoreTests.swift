@@ -112,105 +112,143 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     }
   }
 
-  @Test func snapshotSavePreservesMediaMetadataAndUnknownFiles() throws {
+  @Test func savePreservesExternalMarkersMediaAndUnknownFiles() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
-    _ = try store.createMarker(at: .zero, note: "Old")
-    let baseline = try store.markers()
+    _ = try store.createMarker(at: .zero, note: "External")
     let unknown = url.appendingPathComponent("Markers/notes.bin")
     try Data([1, 2, 3]).write(to: unknown)
     for name in ["main.mp4", "Info.plist", "manifest.mpd"] {
       try Data([4, 5, 6]).write(to: url.appendingPathComponent(name))
     }
-    let time = CMTime(seconds: 5, preferredTimescale: 1000)
-    let marker = RecordingMarker(
-      time: time, timecode: "00:00:05.000", note: "New",
-      fileName: "00-00-05.000.txt")
-    try store.save([marker], replacing: baseline)
-    #expect(try store.markers().map(\.note) == ["New"])
+    let loaded = try store.save([marker(5, "New")])
+    #expect(loaded.map(\.note) == ["External", "New"])
+    #expect(try store.save([]) == loaded)
     #expect(try Data(contentsOf: unknown) == Data([1, 2, 3]))
     for name in ["main.mp4", "Info.plist", "manifest.mpd"] {
       #expect(try Data(contentsOf: url.appendingPathComponent(name)) == Data([4, 5, 6]))
     }
-    try store.save([], replacing: store.markers())
-    #expect(try store.markers().isEmpty)
-    #expect(try Data(contentsOf: unknown) == Data([1, 2, 3]))
   }
 
-  @Test func snapshotSaveRejectsExternalChangesAndActiveRecording() throws {
+  @Test func saveOverwritesWithoutComparingExternalEditsAndRejectsActiveRecording() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
-    _ = try store.createMarker(at: .zero, note: "Original")
-    let baseline = try store.markers()
-    try "External\n".write(
-      to: url.appendingPathComponent("Markers").appendingPathComponent(baseline[0].fileName),
-      atomically: true, encoding: .utf8)
-    #expect(throws: RecordingMarkerError.externalChanges) {
-      try store.save([], replacing: baseline)
-    }
-    let current = try store.markers()
+    _ = try store.createMarker(at: .zero, note: "External")
+    #expect(try store.save([marker(0, "Edited")]).map(\.note) == ["Edited"])
     try Data().write(to: url.appendingPathComponent(".shield.json"))
     #expect(throws: RecordingMarkerError.recordingInProgress) {
-      try store.save([], replacing: current)
+      try store.save([marker(0, "Blocked")])
     }
-    #expect(try store.markers() == current)
+    #expect(throws: RecordingMarkerError.recordingInProgress) {
+      try store.deleteMarker(marker(0, "Edited"))
+    }
+    #expect(try store.markers().map(\.note) == ["Edited"])
   }
 
-  @Test func snapshotFailureLeavesOriginalAndFirstSaveCreatesDirectory() throws {
+  @Test func partialSaveCanBeRetriedWithoutLosingExistingFiles() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
-    let marker = RecordingMarker(
-      time: .zero, timecode: "00:00:00.000", note: "First",
-      fileName: "00-00-00.000.txt")
-    try store.save([marker], replacing: [])
-    let baseline = try store.markers()
-    let invalid = RecordingMarker(time: .zero, timecode: "", note: "", fileName: marker.fileName)
-    #expect(throws: RecordingMarkerError.emptyNote) {
-      try store.save([invalid], replacing: baseline)
+    _ = try store.createMarker(at: .zero, note: "Old")
+    let blocked = url.appendingPathComponent("Markers/00-00-02.000.txt")
+    try FileManager.default.createDirectory(at: blocked, withIntermediateDirectories: false)
+    #expect(throws: (any Error).self) {
+      try store.save([marker(1, "Written"), marker(2, "Retry")])
     }
-    #expect(try store.markers() == baseline)
+    #expect(try store.markers().map(\.note) == ["Old", "Written"])
+    try FileManager.default.removeItem(at: blocked)
     #expect(
-      try FileManager.default.contentsOfDirectory(atPath: url.path).allSatisfy {
-        !$0.hasPrefix(".markers-save-")
-      })
+      try store.save([marker(1, "Written"), marker(2, "Retry")]).map(\.note)
+        == ["Old", "Written", "Retry"])
   }
 
-  @Test func preservesOriginalMarkerNamesAndRejectsTraversal() throws {
+  @Test func canonicalTimestampUsesFirstExistingNameAndKeepsOtherNames() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let directory = url.appendingPathComponent("Markers")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
-    let name = "0-00-01.000.TXT"
-    try Data("Original\n".utf8).write(to: directory.appendingPathComponent(name))
+    let names = ["0-00-01.000.TXT", "000-00-01.000.txt"].sorted()
+    for name in names { try Data("Old\n".utf8).write(to: directory.appendingPathComponent(name)) }
+    let loaded = try RecordingMarkerStore(recordingDirectoryURL: url).save([marker(1, "New")])
+    #expect(loaded.map(\.fileName) == names)
+    #expect(loaded.map(\.note) == ["New", "Old"])
+    #expect(
+      try RecordingMarkerStore(recordingDirectoryURL: url).save(loaded).map(\.note) == [
+        "New", "Old",
+      ])
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent("00-00-01.000.txt").path))
+  }
+
+  @Test func emptyLoadedNotesCanBeSavedAndTraversalIsRejected() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
-    let baseline = try store.markers()
-    #expect(baseline.first?.fileName == name)
-    try store.save(baseline, replacing: baseline)
-    #expect(try store.markers() == baseline)
-    #expect(try Data(contentsOf: directory.appendingPathComponent(name)) == Data("Original\n".utf8))
+    try store.save([marker(0, ""), marker(1, "  ")])
+    let loaded = try store.markers()
+    #expect(try store.save(loaded + [marker(2, "New")]).map(\.note) == ["", "  ", "New"])
     let invalid = RecordingMarker(
-      time: .zero, timecode: "00:00:00.000", note: "Escape", fileName: "../00-00-00.000.txt")
-    #expect(throws: RecordingMarkerError.invalidMarkerFile) {
-      try store.save([invalid], replacing: baseline)
-    }
-    #expect(try store.markers() == baseline)
+      time: .zero, timecode: "", note: "Escape", fileName: "../00-00-00.000.txt")
+    #expect(throws: RecordingMarkerError.invalidMarkerFile) { try store.save([invalid]) }
     #expect(
       !FileManager.default.fileExists(atPath: url.appendingPathComponent("00-00-00.000.txt").path))
   }
 
-  @Test func snapshotSaveRoundsPlaybackTimeToMarkerPrecision() throws {
+  @Test func rereadFailureAllowsRetryAndMissingDeletionIsSuccessful() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let store = RecordingMarkerStore(recordingDirectoryURL: url)
+    try store.save([marker(0, "Saved")])
+    let invalid = url.appendingPathComponent("Markers/00-00-01.000.txt")
+    try Data([0xff]).write(to: invalid)
+    #expect(throws: (any Error).self) { try store.save([marker(0, "Committed")]) }
+    #expect(
+      try String(
+        contentsOf: url.appendingPathComponent("Markers/00-00-00.000.txt"), encoding: .utf8)
+        == "Committed\n")
+    try FileManager.default.removeItem(at: invalid)
+    #expect(try store.save([marker(0, "Committed")]).map(\.note) == ["Committed"])
+    try store.deleteMarker(marker(0, "Committed"))
+    try store.deleteMarker(marker(0, "Committed"))
+    #expect(try store.markers().isEmpty)
+  }
+
+  @Test func saveDoesNotOverwriteSymbolicLinks() throws {
+    let url = try makeRecordingDirectory()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let directory = url.appendingPathComponent("Markers")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    let target = url.appendingPathComponent("media.txt")
+    try Data("Untouched".utf8).write(to: target)
+    let link = directory.appendingPathComponent("00-00-00.000.txt")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    #expect(throws: RecordingMarkerError.invalidMarkerFile) {
+      try RecordingMarkerStore(recordingDirectoryURL: url).save([marker(0, "Edited")])
+    }
+    #expect(try Data(contentsOf: target) == Data("Untouched".utf8))
+    #expect(try link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true)
+  }
+
+  @Test func saveRoundsPlaybackTimeToMarkerPrecision() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let time = CMTime(value: 1, timescale: 600)
     let marker = RecordingMarker(
       time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time),
       note: "Frame", fileName: try RecordingMarkerStore.fileName(for: time))
-    let store = RecordingMarkerStore(recordingDirectoryURL: url)
-    try store.save([marker], replacing: [])
-    #expect(try store.markers().first?.fileName == "00-00-00.002.txt")
+    #expect(
+      try RecordingMarkerStore(recordingDirectoryURL: url).save([marker]).first?.fileName
+        == "00-00-00.002.txt")
+  }
+
+  private func marker(_ seconds: Double, _ note: String) throws -> RecordingMarker {
+    let time = CMTime(seconds: seconds, preferredTimescale: 1000)
+    return RecordingMarker(
+      time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time),
+      note: note, fileName: try RecordingMarkerStore.fileName(for: time))
   }
 
   private func makeRecordingDirectory() throws -> URL {

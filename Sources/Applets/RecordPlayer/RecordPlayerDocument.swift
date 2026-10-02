@@ -16,8 +16,6 @@ public final class RecordPlayerDocument: NSDocument {
   public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
   public private(set) var markers: [RecordingMarker] = []
   @ObservationIgnored
-  private var savedMarkers: [RecordingMarker] = []
-  @ObservationIgnored
   private var markerReadError: (any Error)?
   @ObservationIgnored
   private var hasReadContents = false
@@ -59,7 +57,6 @@ public final class RecordPlayerDocument: NSDocument {
         hasReadContents = true
         markerReadError = markerError
         markers = loaded
-        savedMarkers = loaded
       } catch {
         logger.error("Reading recording failed: \(error.localizedDescription, privacy: .public)")
         throw error
@@ -96,13 +93,12 @@ public final class RecordPlayerDocument: NSDocument {
       throw RecordingMarkerError.emptyNote
     }
     let name = try RecordingMarkerStore.fileName(for: time)
-    guard !markers.contains(where: { $0.fileName == name }) else {
-      throw RecordingMarkerError.markerAlreadyExists(name)
-    }
-    markers.append(
+    let index = try markers.firstIndex { try RecordingMarkerStore.fileName(for: $0.time) == name }
+    let marker =
       RecordingMarker(
         time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time), note: note,
-        fileName: name))
+        fileName: index.map { markers[$0].fileName } ?? name)
+    if let index { markers[index] = marker } else { markers.append(marker) }
     markers.sort { CMTimeCompare($0.time, $1.time) < 0 }
     updateChangeCount(.changeDone)
   }
@@ -117,8 +113,9 @@ public final class RecordPlayerDocument: NSDocument {
     guard let index = markers.firstIndex(of: marker) else {
       throw RecordingMarkerError.invalidMarkerFile
     }
+    try RecordingMarkerStore(recordingDirectoryURL: recordingURL).deleteMarker(
+      marker, filePresenter: self)
     markers.remove(at: index)
-    updateChangeCount(.changeDone)
   }
 
   public override func canAsynchronouslyWrite(
@@ -135,9 +132,8 @@ public final class RecordPlayerDocument: NSDocument {
       if let markerReadError { throw markerReadError }
       let snapshot = markers
       do {
-        try RecordingMarkerStore(recordingDirectoryURL: url).save(
-          snapshot, replacing: savedMarkers, filePresenter: self)
-        savedMarkers = try RecordingMarkerStore(recordingDirectoryURL: url).markers()
+        markers = try RecordingMarkerStore(recordingDirectoryURL: url).save(
+          snapshot, filePresenter: self)
       } catch {
         logger.error("Saving markers failed: \(error.localizedDescription, privacy: .public)")
         throw error
@@ -157,7 +153,8 @@ public final class RecordPlayerDocument: NSDocument {
 
   private var prohibitedActions: [Selector] {
     [
-      #selector(saveAs(_:)), #selector(saveTo(_:)), #selector(duplicate(_:)),
+      #selector(revertToSaved(_:)), #selector(saveAs(_:)), #selector(saveTo(_:)),
+      #selector(duplicate(_:)),
       #selector(rename(_:)), #selector(move(_:)), #selector(moveToUbiquityContainer(_:)),
     ]
   }
