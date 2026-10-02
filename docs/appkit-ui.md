@@ -157,3 +157,16 @@ the document methods, which maintain AppKit change counts separately from
 Observation notifications. Lifecycle bookkeeping is excluded from Observation.
 Missing documents disable marker actions. Save synchronization and immediate
 deletion clear selections whose marker filenames no longer exist.
+
+Physical input assignments are app-wide and keyed only by InputDevice internalID.
+WorkspaceAppletData owns the observable dictionary and stores it as a binary plist
+under tokyo.kaito.ldtx.input-device-assignments.v1. Same IDs share assignments across
+workspaces; nil removes an assignment. Closing a document or deleting an input does
+not remove its stored assignment. Legacy URL-keyed device assignments are ignored
+and require reselection; the remaining WorkspaceLocalState fields are retained.
+UI bindings access the assignment API without a document URL. Runtime projections
+and recording sessions receive an explicit assignment provider or snapshot. Each
+window observes shared changes and updates program runtimes, physical captures,
+and audio monitoring, cancelling its observer during shutdown. Program selection,
+monitor selection, mix synchronization and YouTube selection remain path-keyed;
+relocation cleanup for those fields is a separate change.

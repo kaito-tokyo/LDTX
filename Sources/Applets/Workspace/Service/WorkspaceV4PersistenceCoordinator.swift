@@ -70,12 +70,14 @@ public final class WorkspaceV4PersistenceCoordinator {
     programInternalID: UInt64,
     role: ProgramCanvasRole,
     localState: WorkspaceLocalState,
+    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
     return try WorkspaceV4RenderGraph.runtimeProjection(
       definition: currentWorkspace.definition,
       preferences: currentWorkspace.preferences,
       localState: localState,
+      physicalDeviceIDs: physicalDeviceIDs,
       programInternalID: programInternalID,
       role: role,
       timeSeconds: timeSeconds
@@ -88,10 +90,12 @@ public final class WorkspaceV4PersistenceCoordinator {
     programInternalID: UInt64,
     role: ProgramCanvasRole,
     localState: WorkspaceLocalState,
+    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws {
     let projection = try runtimeProjection(
       programInternalID: programInternalID, role: role, localState: localState,
+      physicalDeviceIDs: physicalDeviceIDs,
       timeSeconds: timeSeconds)
     runtime.updateProgram(projection.configuration)
     runtime.updateProgramPreferences(projection.preferences)

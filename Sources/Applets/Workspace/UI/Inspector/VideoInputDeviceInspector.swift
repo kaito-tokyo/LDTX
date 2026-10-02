@@ -9,10 +9,6 @@ import SwiftUI
 
 struct VideoInputDeviceInspector: View {
   @Environment(\.documentReference) private var documentReference
-  private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? uiState.localStateURL
-  }
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
@@ -32,7 +28,7 @@ struct VideoInputDeviceInspector: View {
       Section("Video Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        if workspaceURL != nil {
+        if documentReference?.document != nil {
           Picker(
             "Physical Device",
             selection: physicalDeviceBinding
@@ -77,22 +73,13 @@ struct VideoInputDeviceInspector: View {
   private var physicalDeviceBinding: Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        guard let url = workspaceURL else { return nil }
         guard
-          case .avCaptureDevice? = appletData.state(for: url)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: url).physicalDeviceIDsByInputDeviceInternalID[internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { identifier in
-        guard let url = workspaceURL else { return }
-        appletData.updateState(for: url) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = identifier
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        workspaceDispatcher?.synchronizeCaptureInputs(
-          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-        ) { _ in }
+        appletData.setPhysicalDeviceID(identifier, for: internalID)
       }
     )
   }

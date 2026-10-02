@@ -34,6 +34,7 @@ public final class WorkspaceV4RecordingSession {
   public typealias State = WorkspaceRecordingState
 
   private let windowRuntime: WorkspaceWindowRuntime
+  private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
@@ -61,10 +62,12 @@ public final class WorkspaceV4RecordingSession {
 
   public init(
     windowRuntime: WorkspaceWindowRuntime,
+    physicalDeviceIDs: @escaping () -> [UInt64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.windowRuntime = windowRuntime
+    self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
@@ -270,8 +273,7 @@ public final class WorkspaceV4RecordingSession {
     }
     for wrapper in windowRuntime.definition.inputDevices {
       guard case .videoDevice(let input)? = wrapper.definition,
-        case .avCaptureDevice(let cameraID)? = localStateProvider()
-          .physicalDeviceIDsByInputDeviceInternalID[input.internalID],
+        case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[input.internalID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
@@ -527,8 +529,7 @@ public final class WorkspaceV4RecordingSession {
       uniqueKeysWithValues: windowRuntime.definition.inputDevices
         .compactMap {
           guard case .audioDevice(let input)? = $0.definition,
-            case .coreAudioDevice(let physicalID)? = localStateProvider()
-              .physicalDeviceIDsByInputDeviceInternalID[input.internalID]
+            case .coreAudioDevice(let physicalID)? = physicalDeviceIDsProvider()[input.internalID]
           else { return nil }
           return ("v4-\(input.internalID)", physicalID)
         })
@@ -602,9 +603,7 @@ public final class WorkspaceV4RecordingSession {
       throw CameraCaptureServiceError.cameraAccessDenied
     }
     if audioInputIDs.contains(where: {
-      if case .coreAudioDevice? = localStateProvider()
-        .physicalDeviceIDsByInputDeviceInternalID[$0]
-      {
+      if case .coreAudioDevice? = physicalDeviceIDsProvider()[$0] {
         true
       } else {
         false

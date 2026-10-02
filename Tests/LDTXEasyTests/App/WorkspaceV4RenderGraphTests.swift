@@ -75,10 +75,10 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
       preferences: preferences,
-      localState: WorkspaceLocalState(
-        physicalDeviceIDsByInputDeviceInternalID: [
-          11: .avCaptureDevice(uniqueID: "camera-id")
-        ]),
+      localState: .init(),
+      physicalDeviceIDs: [
+        11: .avCaptureDevice(uniqueID: "camera-id")
+      ],
       programInternalID: 7,
       role: .landscape,
       timeSeconds: 1
@@ -90,10 +90,10 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     let mismatchedDeviceConfiguration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
       preferences: preferences,
-      localState: WorkspaceLocalState(
-        physicalDeviceIDsByInputDeviceInternalID: [
-          11: .coreAudioDevice(uid: "microphone-instead-of-camera")
-        ]),
+      localState: .init(),
+      physicalDeviceIDs: [
+        11: .coreAudioDevice(uid: "microphone-instead-of-camera")
+      ],
       programInternalID: 7,
       role: .landscape,
       timeSeconds: 1

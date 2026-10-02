@@ -14,6 +14,33 @@ import Security
 public final class WorkspaceAppletData {
   public static let shared = WorkspaceAppletData()
 
+  public private(set) var physicalDeviceIDsByInputDeviceInternalID:
+    [UInt64: WorkspacePhysicalDeviceID] = [:]
+  private static let assignmentsKey = "tokyo.kaito.ldtx.input-device-assignments.v1"
+
+  public func physicalDeviceID(for internalID: UInt64) -> WorkspacePhysicalDeviceID? {
+    physicalDeviceIDsByInputDeviceInternalID[internalID]
+  }
+
+  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: UInt64)
+  {
+    var updated = physicalDeviceIDsByInputDeviceInternalID
+    updated[internalID] = identifier
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .binary
+    guard let data = try? encoder.encode(updated) else { return }
+    userDefaults.set(data, forKey: Self.assignmentsKey)
+    physicalDeviceIDsByInputDeviceInternalID = updated
+  }
+
+  private func loadAssignments() {
+    guard let data = userDefaults.data(forKey: Self.assignmentsKey),
+      let assignments = try? PropertyListDecoder().decode(
+        [UInt64: WorkspacePhysicalDeviceID].self, from: data)
+    else { return }
+    physicalDeviceIDsByInputDeviceInternalID = assignments
+  }
+
   private static let persistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v2"
   private static let legacyPersistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
   private static let legacyAudioDeviceIdentifierVersionKey =
@@ -46,6 +73,7 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
   }
@@ -60,6 +88,7 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
   }

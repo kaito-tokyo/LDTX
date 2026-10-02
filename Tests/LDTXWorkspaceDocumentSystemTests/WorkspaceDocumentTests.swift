@@ -3,8 +3,10 @@
 
 import AppKit
 import Foundation
+import LDTXAppletSupport
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Testing
 
@@ -19,6 +21,69 @@ struct WorkspaceDocumentSystemTestSuite {
   private static let controller = WorkspaceInitializingDocumentController()
 
   init() { _ = Self.controller }
+
+  @Test func sharedAssignmentsUpdateBothWindowsAndStopObservingAfterShutdown() async throws {
+    let suite = "WorkspaceDocumentAssignments.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let first = WorkspaceDocument()
+    let second = WorkspaceDocument()
+    defer {
+      first.close()
+      second.close()
+    }
+    first.uiState.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    first.uiState.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    let firstWindow = WorkspaceWindowController(
+      uiState: first.uiState,
+      persistenceCoordinator: first.persistenceCoordinator, appletData: data,
+      documentReference: DocumentReference(first))
+    first.addWindowController(firstWindow)
+    let input = try firstWindow.windowRuntime.addVideoInputDevice(displayName: "Camera")
+    let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
+    try firstWindow.windowRuntime.setVideoLayerOrder(
+      [input], forProgramInternalID: program, role: .landscape)
+    data.updateState(for: first.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
+    second.uiState.definition = first.uiState.definition
+    let secondWindow = WorkspaceWindowController(
+      uiState: second.uiState,
+      persistenceCoordinator: second.persistenceCoordinator, appletData: data,
+      documentReference: DocumentReference(second))
+    second.addWindowController(secondWindow)
+    data.updateState(for: second.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
+    let firstRuntime = try #require(firstWindow.windowRuntime.runtime(for: .landscape))
+    let secondRuntime = try #require(secondWindow.windowRuntime.runtime(for: .landscape))
+    data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
+    for _ in 0..<100
+    where firstRuntime.programState.read({ $0?.cameraIDsByInputKey["v4-\(input)"] })
+      != "test-camera"
+      || secondRuntime.programState.read({ $0?.cameraIDsByInputKey["v4-\(input)"] })
+        != "test-camera"
+    {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(
+      firstRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
+    #expect(
+      secondRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
+    first.presentedItemDidMove(
+      to: URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(
+      try firstWindow.windowRuntime.runtimeProjection(programInternalID: program, role: .landscape)
+        .configuration.cameraIDsByInputKey["v4-\(input)"] == "test-camera")
+    await firstWindow.shutdown()
+    data.setPhysicalDeviceID(nil, for: input)
+    for _ in 0..<100
+    where secondRuntime.programState.read({ $0?.cameraIDsByInputKey.isEmpty }) != true {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(
+      firstRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
+    #expect(secondRuntime.programState.read { $0?.cameraIDsByInputKey.isEmpty } == true)
+    await secondWindow.shutdown()
+  }
 
   @Test func standardControllerReusesDocumentWithoutAnExclusiveLock() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

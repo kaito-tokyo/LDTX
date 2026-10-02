@@ -26,13 +26,14 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private let dispatcher: WorkspaceDispatcher
   private let workspaceWindow: WorkspaceWindow
 
-  private let windowRuntime: WorkspaceWindowRuntime
+  let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
   private let visionFeature: WorkspaceV4VisionFeature
   private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   private var shutdownTask: Task<Void, Never>?
   public private(set) var shutdownFailureMessage: String?
+  private var deviceAssignmentsObservationTask: Task<Void, Never>?
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
 
@@ -51,6 +52,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: persistenceCoordinator,
       captureSessionCoordinator: captureSessionCoordinator,
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
       localState: {
         guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
@@ -62,6 +64,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
     let recordingSession = WorkspaceV4RecordingSession(
       windowRuntime: windowRuntime,
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
       localState: {
         guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
@@ -111,6 +114,14 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     super.init(window: window)
 
     dispatcher.workspaceWindowController = self
+
+    let assignmentChanges = Observations { appletData.physicalDeviceIDsByInputDeviceInternalID }
+    deviceAssignmentsObservationTask = Task { @MainActor [weak self] in
+      for await _ in assignmentChanges {
+        guard !Task.isCancelled, let self, shutdownTask == nil else { return }
+        synchronizeDeviceAssignments()
+      }
+    }
 
     let definitionChanges = Observations { uiState.definition }
     self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
@@ -182,6 +193,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       return
     }
     let task = Task { @MainActor in
+      deviceAssignmentsObservationTask?.cancel()
       definitionObservationTask?.cancel()
       preferencesObservationTask?.cancel()
       visionFeature.stop()
@@ -227,6 +239,13 @@ extension WorkspaceWindowController {
       context: windowRuntime.visionFeatureContext)
   }
 
+  private func synchronizeDeviceAssignments() {
+    windowRuntime.updateRuntimes()
+    let cameraIDs = Set(CaptureSessionManager().availableCameras().map(\.id))
+    synchronizeCaptureInputs(availableCameraIDs: cameraIDs) { _ in }
+    synchronizeAudioMonitor()
+  }
+
   func updateProgramRuntimes() {
     windowRuntime.updateRuntimes()
   }
@@ -255,8 +274,7 @@ extension WorkspaceWindowController {
         input -> (String, String)? in
         guard case .audioDevice(let device)? = input.definition,
           case .coreAudioDevice(let physicalID)? =
-            localState
-            .physicalDeviceIDsByInputDeviceInternalID[device.internalID]
+            appletData.physicalDeviceID(for: device.internalID)
         else { return nil }
         return ("v4-\(device.internalID)", physicalID)
       })

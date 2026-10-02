@@ -804,43 +804,26 @@ public struct WorkspaceContent: View {
   private func videoDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        guard let workspaceURL else { return nil }
         guard
-          case .avCaptureDevice? = appletData.state(for: workspaceURL)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
-          internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { id in
-        guard let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        synchronizeCaptureInputs()
+        appletData.setPhysicalDeviceID(id, for: internalID)
       })
   }
 
   private func audioDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
-        guard let workspaceURL else { return nil }
         guard
-          case .coreAudioDevice? = appletData.state(for: workspaceURL)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .coreAudioDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
-          internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { id in
-        guard let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        synchronizeCaptureInputs()
-        workspaceDispatcher?.synchronizeAudioMonitor()
+        appletData.setPhysicalDeviceID(id, for: internalID)
       })
   }
 
