@@ -51,7 +51,10 @@ Marker edits notify NSDocument and remain in memory until Save. A coordinated
 safe save replaces only the Markers directory, retaining unknown files and leaving
 media and metadata untouched. Active recordings and external marker changes reject
 saving. Recording documents support explicit Save and Revert, without autosave,
-versions, Save As, Duplicate, Move, or Rename. Closing uses AppKit’s save/discard/
+versions, or UI access to Save As, Duplicate, Move, or Rename. Standard UI
+validation disables these actions; their inherited implementations are not overridden.
+The save hook rejects operations other than saving markers to the current package.
+Closing uses AppKit’s save/discard/
 cancel confirmation before playback stops. PaneWindow retains existing pane state
 keys; document and window restoration use AppKit’s standard document path.
 

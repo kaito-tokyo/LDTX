@@ -473,7 +473,7 @@ struct RecordPlayerDocumentSystemTestSuite {
     #expect(model.player == nil)
   }
 
-  @Test func failedSaveAndRevertKeepEditsAndUnsupportedOperationsFail() async throws {
+  @Test func failedSaveAndRevertKeepEditsAndUnsupportedActionsAreDisabled() async throws {
     let url = try package()
     defer { try? FileManager.default.removeItem(at: url) }
     let document = try document(url)
@@ -496,21 +496,16 @@ struct RecordPlayerDocumentSystemTestSuite {
       try await save(document, to: invalid, operation: .saveAsOperation)
       Issue.record("Expected Save As failure")
     } catch {}
-    #expect(throws: RecordingMarkerError.unsupportedOperation) { try document.duplicate() }
     #expect(document.autosavingFileType == nil)
     for action in [
-      #selector(NSDocument.saveAs(_:)), #selector(NSDocument.duplicate(_:)),
+      #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
+      #selector(NSDocument.duplicate(_:)),
       #selector(NSDocument.rename(_:)), #selector(NSDocument.move(_:)),
+      #selector(NSDocument.moveToUbiquityContainer(_:)),
     ] {
       #expect(
         !document.validateUserInterfaceItem(
           NSMenuItem(title: "", action: action, keyEquivalent: "")))
-    }
-    await withCheckedContinuation { continuation in
-      document.move(to: invalid) { error in
-        #expect(error != nil)
-        continuation.resume()
-      }
     }
     #expect(document.fileURL == url)
   }

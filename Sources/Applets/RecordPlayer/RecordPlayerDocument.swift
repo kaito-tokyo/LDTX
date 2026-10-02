@@ -161,31 +161,4 @@ public final class RecordPlayerDocument: NSDocument {
       #selector(rename(_:)), #selector(move(_:)), #selector(moveToUbiquityContainer(_:)),
     ]
   }
-  public override func saveAs(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func saveTo(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func duplicate(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func duplicate() throws -> NSDocument {
-    throw RecordingMarkerError.unsupportedOperation
-  }
-  public override func rename(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func move(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func moveToUbiquityContainer(_ sender: Any?) {
-    presentError(RecordingMarkerError.unsupportedOperation)
-  }
-  public override func move(completionHandler: ((Bool) -> Void)? = nil) {
-    completionHandler?(false)
-  }
-  public override func move(to url: URL, completionHandler: ((Error?) -> Void)? = nil) {
-    completionHandler?(RecordingMarkerError.unsupportedOperation)
-  }
 }
