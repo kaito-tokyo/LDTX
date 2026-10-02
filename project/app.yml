@@ -42,6 +42,7 @@ targets:
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
       - target: LDTXDeviceRegistry

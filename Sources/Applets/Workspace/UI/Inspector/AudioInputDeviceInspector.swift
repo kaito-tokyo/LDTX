@@ -2,15 +2,20 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {
+  @Environment(\.documentReference) private var documentReference
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let workspaceURL: URL?
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
 
@@ -27,10 +32,10 @@ struct AudioInputDeviceInspector: View {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        if let workspaceURL {
+        if workspaceURL != nil {
           Picker(
             "Physical Device",
-            selection: physicalDeviceBinding(url: workspaceURL)
+            selection: physicalDeviceBinding
           ) {
             Text("No Audio Device").tag(Optional<WorkspacePhysicalDeviceID>.none)
             ForEach(deviceRegistry.audioInputDevices, id: \.id) { source in
@@ -69,11 +74,10 @@ struct AudioInputDeviceInspector: View {
     )
   }
 
-  private func physicalDeviceBinding(
-    url: URL
-  ) -> Binding<WorkspacePhysicalDeviceID?> {
+  private var physicalDeviceBinding: Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
+        guard let url = workspaceURL else { return nil }
         guard
           case .coreAudioDevice? = appletData.state(for: url)
             .physicalDeviceIDsByInputDeviceInternalID[internalID]
@@ -81,6 +85,7 @@ struct AudioInputDeviceInspector: View {
         return appletData.state(for: url).physicalDeviceIDsByInputDeviceInternalID[internalID]
       },
       set: { identifier in
+        guard let url = workspaceURL else { return }
         appletData.updateState(for: url) {
           $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = identifier
         }

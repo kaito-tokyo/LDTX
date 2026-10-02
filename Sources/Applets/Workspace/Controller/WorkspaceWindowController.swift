@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXDeviceRegistry
@@ -38,7 +39,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   public init(
     uiState: WorkspaceUIState,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
-    appletData: WorkspaceAppletData
+    appletData: WorkspaceAppletData,
+    documentReference: DocumentReference
   ) {
     let url = uiState.localStateURL!
     self.uiState = uiState
@@ -99,7 +101,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       deviceRegistry: DeviceRegistryService(),
       appletData: appletData,
       dispatcher: dispatcher,
-      uiState: uiState)
+      uiState: uiState, documentReference: documentReference)
     self.workspaceWindow = window
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession

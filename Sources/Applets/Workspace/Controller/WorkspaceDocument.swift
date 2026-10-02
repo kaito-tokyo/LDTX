@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXAppletSupport
 import LDTXProtos
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -115,7 +116,7 @@ public final class WorkspaceDocument: NSDocument {
     appletData.registerTransientState(at: transientURL)
     let windowController = WorkspaceWindowController(
       uiState: uiState, persistenceCoordinator: persistenceCoordinator,
-      appletData: appletData)
+      appletData: appletData, documentReference: DocumentReference(self))
     addWindowController(windowController)
   }
 

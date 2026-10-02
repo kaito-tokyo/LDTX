@@ -4,6 +4,7 @@
 
 import AVFoundation
 import AppKit
+import LDTXAppletSupport
 import LDTXRecording
 import OSLog
 
@@ -82,7 +83,9 @@ public final class RecordPlayerDocument: NSDocument {
       try self.deleteMarker(marker)
     }
     self.model = model
-    addWindowController(RecordPlayerWindowController(recordingURL: recordingURL, model: model))
+    addWindowController(
+      RecordPlayerWindowController(
+        recordingURL: recordingURL, model: model, documentReference: DocumentReference(self)))
   }
 
   public func createMarker(note: String, at time: CMTime) throws {

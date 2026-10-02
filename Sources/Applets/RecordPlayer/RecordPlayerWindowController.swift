@@ -17,19 +17,25 @@ public final class RecordPlayerWindowController: NSWindowController, NSWindowDel
   private let split: PaneSplitViewController
   private var started = false
 
-  init(recordingURL: URL, model: LDTXRecordPlayerModel) {
+  init(recordingURL: URL, model: LDTXRecordPlayerModel, documentReference: DocumentReference) {
     self.model = model
     let presentation = RecordingPresentationState()
     split = PaneSplitViewController(
       sidebar: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .sidebar)),
+          model: model, presentation: presentation, pane: .sidebar
+        )
+        .environment(\.documentReference, documentReference)),
       content: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .content)),
+          model: model, presentation: presentation, pane: .content
+        )
+        .environment(\.documentReference, documentReference)),
       inspector: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .inspector)),
+          model: model, presentation: presentation, pane: .inspector
+        )
+        .environment(\.documentReference, documentReference)),
       sidebarCanCollapse: true, inspectorMaximum: 360)
     let window = PaneWindow(contentViewController: split)
     window.representedURL = recordingURL

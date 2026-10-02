@@ -2,6 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXDocumentEnvironmentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXDocumentEnvironmentSystemTests
+    dependencies:
+      - target: LDTXAppletSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDocumentEnvironmentSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXWorkspaceAppletControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -95,3 +109,12 @@ schemes:
       config: Debug
       targets:
         - LDTXRecordPlayerDocumentSystemTests
+
+  LDTXDocumentEnvironmentSystemTests:
+    build:
+      targets:
+        LDTXDocumentEnvironmentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXDocumentEnvironmentSystemTests

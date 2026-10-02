@@ -31,6 +31,16 @@ URL from autosaved contents; failed reads and document teardown release locks.
 It creates and registers WorkspaceWindowController with addWindowController;
 AppKit owns document and window-controller lifetime. The controller constructs
 window-scoped runtime resources and injects operations into the pane views.
+Each document creates one DocumentReference from LDTXAppletSupport when constructing
+its window controller. All SwiftUI pane roots receive that same box through the
+documentReference environment value. The box weakly references NSDocument; views
+and hosting controllers do not extend the document's lifetime. UI actions query
+NSDocument.fileURL when they run, including Binding getters and setters. Workspace
+local settings use uiState.localStateURL only as the transient key while fileURL
+is nil. Missing environments and released documents disable document-dependent
+settings operations. Existing observable models drive presentation updates;
+the weak reference is not a change-observation mechanism. Read and write hooks
+continue to use AppKit's supplied URLs rather than the environment.
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.

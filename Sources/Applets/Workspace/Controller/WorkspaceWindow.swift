@@ -17,7 +17,8 @@ public final class WorkspaceWindow: NSWindow {
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
     dispatcher: any WorkspaceDispatcherProtocol,
-    uiState: WorkspaceUIState
+    uiState: WorkspaceUIState,
+    documentReference: DocumentReference
   ) {
     self.uiState = uiState
 
@@ -35,7 +36,6 @@ public final class WorkspaceWindow: NSWindow {
       .environment(\.workspaceDispatcher, dispatcher)
 
     let contentView = WorkspaceContent(
-      workspaceURL: url,
       deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
@@ -43,20 +43,22 @@ public final class WorkspaceWindow: NSWindow {
     .environment(\.workspaceDispatcher, dispatcher)
 
     let inspectorView = WorkspaceInspectorContainer(
-      workspaceURL: url,
       deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
     )
     .environment(\.workspaceDispatcher, dispatcher)
 
-    let sidebarController = NSHostingController(rootView: sidebarView)
+    let sidebarController = NSHostingController(
+      rootView: sidebarView.environment(\.documentReference, documentReference))
     sidebarController.sizingOptions = [.minSize]
 
-    let contentController = NSHostingController(rootView: contentView)
+    let contentController = NSHostingController(
+      rootView: contentView.environment(\.documentReference, documentReference))
     contentController.sizingOptions = [.minSize]
 
-    let inspectorController = NSHostingController(rootView: inspectorView)
+    let inspectorController = NSHostingController(
+      rootView: inspectorView.environment(\.documentReference, documentReference))
     inspectorController.sizingOptions = [.minSize]
 
     let splitViewController = NSSplitViewController()
