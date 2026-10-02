@@ -29,6 +29,12 @@ public struct LDTXRecordPlayerView: View {
     result.displayedPane = pane
     return result
   }
+  @Environment(\.documentReference) private var documentReference
+  private var document: RecordPlayerDocument? {
+    documentReference?.document as? RecordPlayerDocument
+  }
+  private var markers: [RecordingMarker] { document?.markers ?? [] }
+  private var canModifyMarkers: Bool { document?.canModifyMarkers == true }
   @State private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
@@ -44,6 +50,9 @@ public struct LDTXRecordPlayerView: View {
 
   public var body: some View {
     paneContent.frame(minHeight: 360)
+      .onChange(of: markers.map(\.fileName)) { _, names in
+        if let selectedMarkerID, !names.contains(selectedMarkerID) { self.selectedMarkerID = nil }
+      }
   }
 
   init(
@@ -144,7 +153,7 @@ public struct LDTXRecordPlayerView: View {
     .padding(.vertical, 8)
     .background(.regularMaterial)
     .overlay(alignment: .top) { Divider() }
-    .disabled(!model.isLoaded || !model.canModifyMarkers)
+    .disabled(!model.isLoaded || !canModifyMarkers)
     .onChange(of: focusedMarkerField) { oldValue, newValue in
       guard oldValue == .timecode, newValue != .timecode else { return }
       pendingTimecodeText = pendingMarkerTime.flatMap(Self.displayTimecode) ?? ""
@@ -175,12 +184,13 @@ public struct LDTXRecordPlayerView: View {
       return
     }
 
-    guard
-      model.createMarker(
-        note: markerNote,
-        at: pendingMarkerTime ?? player.currentTime()
-      )
-    else { return }
+    guard let document else { return }
+    do {
+      try document.createMarker(note: markerNote, at: pendingMarkerTime ?? player.currentTime())
+    } catch {
+      presentMarkerFileError(title: "Marker Could Not Be Added", error: error)
+      return
+    }
     markerNote = ""
     markerError = nil
     clearPendingMarkerTime()
@@ -255,14 +265,14 @@ public struct LDTXRecordPlayerView: View {
   private var markerList: some View {
     VStack(alignment: .leading, spacing: 0) {
       Group {
-        if model.markers.isEmpty {
+        if markers.isEmpty {
           ContentUnavailableView(
             "No Markers",
             systemImage: "bookmark",
             description: Text("Saved markers appear here.")
           )
         } else {
-          List(model.markers, id: \.fileName, selection: $selectedMarkerID) { marker in
+          List(markers, id: \.fileName, selection: $selectedMarkerID) { marker in
             Button {
               selectedMarkerID = marker.fileName
               model.seek(to: marker.time)
@@ -288,7 +298,7 @@ public struct LDTXRecordPlayerView: View {
               } label: {
                 Label("Delete Marker", systemImage: "trash")
               }
-              .disabled(!model.canModifyMarkers)
+              .disabled(!canModifyMarkers)
             }
           }
           .listStyle(.inset)
@@ -300,20 +310,36 @@ public struct LDTXRecordPlayerView: View {
 
   private func deleteSelectedMarker() {
     guard
-      model.canModifyMarkers,
+      canModifyMarkers,
       let selectedMarkerID,
-      let marker = model.markers.first(where: { $0.fileName == selectedMarkerID })
+      let marker = markers.first(where: { $0.fileName == selectedMarkerID })
     else { return }
     deleteMarker(marker)
   }
 
   private func deleteMarker(_ marker: RecordingMarker) {
-    guard model.canModifyMarkers else { return }
-    guard model.deleteMarker(marker) else { return }
+    guard canModifyMarkers else { return }
+    guard let document else { return }
+    do {
+      try document.deleteMarker(marker)
+    } catch {
+      presentMarkerFileError(title: "Marker Could Not Be Deleted", error: error)
+      return
+    }
     if selectedMarkerID == marker.fileName {
       selectedMarkerID = nil
     }
     markerError = nil
+  }
+
+  private func presentMarkerFileError(title: String, error: any Error) {
+    recordingPreviewLogger.error(
+      "Marker file operation failed: \(error.localizedDescription, privacy: .public)"
+    )
+    model.alert = LDTXRecordPlayerAlert(
+      title: title,
+      message: error.localizedDescription
+    )
   }
 
 }
@@ -757,7 +783,6 @@ private final class LDTXPlaybackScrubber: NSSlider {
 @Observable
 final class LDTXRecordPlayerModel {
   var player: AVPlayer?
-  var markers: [RecordingMarker] = []
   var playbackSeekRequest: LDTXPlaybackSeekRequest?
   var alert: LDTXRecordPlayerAlert?
   var isLoading = true
@@ -769,8 +794,6 @@ final class LDTXRecordPlayerModel {
   private let documentReference: DocumentReference
   private let scenarioFixture: RecordingPreviewScenarioFixture?
   private let assetLoader: LDTXRecordPlayerAssetLoader
-  var createDocumentMarker: ((String, CMTime) throws -> Void)?
-  var deleteDocumentMarker: ((RecordingMarker) throws -> Void)?
   private var loadTask: Task<Void, Never>?
 
   init(
@@ -785,13 +808,6 @@ final class LDTXRecordPlayerModel {
 
   var isLoaded: Bool {
     player != nil
-  }
-
-  var canModifyMarkers: Bool {
-    guard let recordingURL = documentReference.document?.fileURL else { return false }
-    return !FileManager.default.fileExists(
-      atPath: recordingURL.appendingPathComponent(".shield.json").path
-    )
   }
 
   func start() {
@@ -818,56 +834,6 @@ final class LDTXRecordPlayerModel {
 
   func seek(to time: CMTime) {
     playbackSeekRequest = LDTXPlaybackSeekRequest(time: time)
-  }
-
-  func createMarker(note: String, at time: CMTime) -> Bool {
-    guard canModifyMarkers else {
-      presentMarkerFileError(
-        title: "Marker Could Not Be Added", error: RecordingMarkerError.recordingInProgress)
-      return false
-    }
-    guard let createDocumentMarker else {
-      closeAfterInternalError("Marker creation was requested before the recording was loaded.")
-      return false
-    }
-
-    do {
-      try createDocumentMarker(note, time)
-      return true
-    } catch {
-      presentMarkerFileError(title: "Marker Could Not Be Added", error: error)
-      return false
-    }
-  }
-
-  func deleteMarker(_ marker: RecordingMarker) -> Bool {
-    guard canModifyMarkers else {
-      presentMarkerFileError(
-        title: "Marker Could Not Be Deleted", error: RecordingMarkerError.recordingInProgress)
-      return false
-    }
-    guard let deleteDocumentMarker else {
-      closeAfterInternalError("Marker deletion was requested before the recording was loaded.")
-      return false
-    }
-
-    do {
-      try deleteDocumentMarker(marker)
-      return true
-    } catch {
-      presentMarkerFileError(title: "Marker Could Not Be Deleted", error: error)
-      return false
-    }
-  }
-
-  private func presentMarkerFileError(title: String, error: any Error) {
-    recordingPreviewLogger.error(
-      "Marker file operation failed: \(error.localizedDescription, privacy: .public)"
-    )
-    alert = LDTXRecordPlayerAlert(
-      title: title,
-      message: error.localizedDescription
-    )
   }
 
   private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {

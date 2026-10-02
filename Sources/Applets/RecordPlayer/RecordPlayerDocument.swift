@@ -7,18 +7,27 @@ import AppKit
 import LDTXAppletSupport
 import LDTXRecording
 import OSLog
+import Observation
 
 @MainActor
+@Observable
 @objc(RecordPlayerDocument)
 public final class RecordPlayerDocument: NSDocument {
   public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
   public private(set) var markers: [RecordingMarker] = []
+  @ObservationIgnored
   private var savedMarkers: [RecordingMarker] = []
+  @ObservationIgnored
   private var markerReadError: (any Error)?
+  @ObservationIgnored
   private var hasReadContents = false
+  @ObservationIgnored
   private(set) var model: LDTXRecordPlayerModel?
+  @ObservationIgnored
   var scenarioFixture: RecordingPreviewScenarioFixture?
+  @ObservationIgnored
   var assetLoader: LDTXRecordPlayerAssetLoader = RecordPlayerWindowController.loadAsset
+  @ObservationIgnored
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "RecordPlayerDocument")
 
   private nonisolated static func accepts(_ typeName: String) -> Bool {
@@ -51,7 +60,6 @@ public final class RecordPlayerDocument: NSDocument {
         markerReadError = markerError
         markers = loaded
         savedMarkers = loaded
-        model?.markers = loaded
       } catch {
         logger.error("Reading recording failed: \(error.localizedDescription, privacy: .public)")
         throw error
@@ -65,19 +73,15 @@ public final class RecordPlayerDocument: NSDocument {
     let model = LDTXRecordPlayerModel(
       documentReference: reference, scenarioFixture: scenarioFixture,
       assetLoader: assetLoader)
-    model.markers = markers
-    model.createDocumentMarker = { [weak self] note, time in
-      guard let self else { throw CocoaError(.fileWriteUnknown) }
-      try self.createMarker(note: note, at: time)
-    }
-    model.deleteDocumentMarker = { [weak self] marker in
-      guard let self else { throw CocoaError(.fileWriteUnknown) }
-      try self.deleteMarker(marker)
-    }
     self.model = model
     addWindowController(
       RecordPlayerWindowController(
         model: model, documentReference: reference))
+  }
+
+  public var canModifyMarkers: Bool {
+    guard let url = fileURL else { return false }
+    return !FileManager.default.fileExists(atPath: url.appendingPathComponent(".shield.json").path)
   }
 
   public func createMarker(note: String, at time: CMTime) throws {
@@ -100,7 +104,6 @@ public final class RecordPlayerDocument: NSDocument {
         time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time), note: note,
         fileName: name))
     markers.sort { CMTimeCompare($0.time, $1.time) < 0 }
-    model?.markers = markers
     updateChangeCount(.changeDone)
   }
 
@@ -115,7 +118,6 @@ public final class RecordPlayerDocument: NSDocument {
       throw RecordingMarkerError.invalidMarkerFile
     }
     markers.remove(at: index)
-    model?.markers = markers
     updateChangeCount(.changeDone)
   }
 

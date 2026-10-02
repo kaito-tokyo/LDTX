@@ -7,7 +7,10 @@ import LDTXAppletSupport
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXWorkspaceAppletController
+import Observation
+import SwiftUI
 import Testing
+import os
 
 @MainActor
 private final class RecordingTestDocumentController: NSDocumentController {
@@ -281,14 +284,14 @@ struct RecordPlayerDocumentSystemTestSuite {
     }
     #expect(document.fileURL == moved)
     #expect(model.player === player)
-    #expect(model.markers.map(\.note) == ["Saved", "Pending"])
+    #expect(document.markers.map(\.note) == ["Saved", "Pending"])
     model.availableCanvases = [.landscape, .portrait]
     model.selectCanvas(.portrait)
     for _ in 0..<100 where loadedURLs.count < 2 || model.isLoading {
       try await Task.sleep(for: .milliseconds(10))
     }
     #expect(loadedURLs == [original, moved])
-    #expect(model.markers.map(\.note) == ["Saved", "Pending"])
+    #expect(document.markers.map(\.note) == ["Saved", "Pending"])
     try await save(document, to: moved)
     #expect(!document.isDocumentEdited)
     #expect(
@@ -328,13 +331,107 @@ struct RecordPlayerDocumentSystemTestSuite {
     }
     for _ in 0..<100 where weakDocument != nil { try await Task.sleep(for: .milliseconds(10)) }
     #expect(weakDocument == nil)
-    #expect(!model.canModifyMarkers)
     model.start()
     for _ in 0..<10 where model.isLoading { try await Task.sleep(for: .milliseconds(10)) }
     #expect(loadCount == 0)
     #expect(pane.view != nil)
     model.stop()
     controller.close()
+  }
+
+  @Test func markerObservationTracksEditsAndRevertWithoutMakingReadsDirty() async throws {
+    let url = try package()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try document(url)
+    defer { document.close() }
+    let notifications = OSAllocatedUnfairLock(initialState: 0)
+    func observeMarkers() {
+      withObservationTracking {
+        _ = document.markers
+      } onChange: {
+        notifications.withLock { $0 += 1 }
+      }
+    }
+    observeMarkers()
+    try document.createMarker(note: "Saved", at: .zero)
+    #expect(notifications.withLock { $0 } == 1)
+    #expect(document.isDocumentEdited)
+    try await save(document, to: url)
+    #expect(!document.isDocumentEdited)
+    observeMarkers()
+    try document.deleteMarker(try #require(document.markers.first))
+    #expect(notifications.withLock { $0 } == 2)
+    #expect(document.isDocumentEdited)
+    observeMarkers()
+    try document.revert(toContentsOf: url, ofType: RecordPlayerDocument.typeName)
+    #expect(notifications.withLock { $0 } == 3)
+    #expect(document.markers.map(\.note) == ["Saved"])
+    #expect(!document.isDocumentEdited)
+    observeMarkers()
+    try await save(document, to: url)
+    #expect(notifications.withLock { $0 } == 3)
+    #expect(!document.isDocumentEdited)
+  }
+
+  @Test func hostedPanesObserveOneDocumentWithoutSharingOtherDocuments() async throws {
+    let firstURL = try package()
+    let secondURL = try package()
+    defer {
+      try? FileManager.default.removeItem(at: firstURL)
+      try? FileManager.default.removeItem(at: secondURL)
+    }
+    let first = try document(firstURL)
+    let second = try document(secondURL)
+    defer {
+      first.close()
+      second.close()
+    }
+    let firstReference = DocumentReference(first)
+    let secondReference = DocumentReference(second)
+    let firstProbe = MarkerPaneProbe()
+    let secondProbe = MarkerPaneProbe()
+    let otherProbe = MarkerPaneProbe()
+    let windows = [
+      hostMarkerProbe(firstReference, probe: firstProbe),
+      hostMarkerProbe(firstReference, probe: secondProbe),
+      hostMarkerProbe(secondReference, probe: otherProbe),
+    ]
+    defer { for window in windows { window.close() } }
+    for _ in 0..<100 where !firstProbe.appeared || !secondProbe.appeared || !otherProbe.appeared {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(firstProbe.appeared && secondProbe.appeared && otherProbe.appeared)
+    try first.createMarker(note: "Shared", at: .zero)
+    for _ in 0..<100 where firstProbe.notes != ["Shared"] || secondProbe.notes != ["Shared"] {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(firstProbe.notes == ["Shared"])
+    #expect(secondProbe.notes == ["Shared"])
+    #expect(otherProbe.notes.isEmpty)
+    try await save(first, to: firstURL)
+    try first.deleteMarker(try #require(first.markers.first))
+    for _ in 0..<100 where !firstProbe.notes.isEmpty || !secondProbe.notes.isEmpty {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(firstProbe.notes.isEmpty && secondProbe.notes.isEmpty)
+    try first.revert(toContentsOf: firstURL, ofType: RecordPlayerDocument.typeName)
+    for _ in 0..<100 where firstProbe.notes != ["Shared"] || secondProbe.notes != ["Shared"] {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(firstProbe.notes == ["Shared"] && secondProbe.notes == ["Shared"])
+    #expect(otherProbe.notes.isEmpty)
+  }
+
+  private func hostMarkerProbe(_ reference: DocumentReference, probe: MarkerPaneProbe) -> NSWindow {
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+      styleMask: [.titled, .closable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = NSHostingController(
+      rootView:
+        MarkerProbeView(probe: probe).environment(\.documentReference, reference))
+    window.orderFront(nil)
+    return window
   }
 
   private func clickSheetButton(_ title: String, in window: NSWindow) async throws {
@@ -426,5 +523,26 @@ private final class CloseProbe: NSObject {
     _ document: NSDocument, shouldClose: Bool, contextInfo: UnsafeMutableRawPointer?
   ) {
     result = shouldClose
+  }
+}
+
+@MainActor
+private final class MarkerPaneProbe {
+  var appeared = false
+  var notes: [String] = []
+}
+
+private struct MarkerProbeView: View {
+  @Environment(\.documentReference) private var reference
+  let probe: MarkerPaneProbe
+  private var notes: [String] {
+    (reference?.document as? RecordPlayerDocument)?.markers.map(\.note) ?? []
+  }
+  var body: some View {
+    Text(notes.joined(separator: ", "))
+      .onChange(of: notes, initial: true) { _, notes in
+        probe.notes = notes
+        probe.appeared = true
+      }
   }
 }

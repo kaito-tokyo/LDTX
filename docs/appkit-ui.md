@@ -119,3 +119,11 @@ Marker identity is a package-relative filename, never an absolute URL. Save
 synchronizes the in-memory snapshot at the URL supplied by AppKit, comparing the
 path-independent baseline and preserving unknown files. Access failures preserve
 pending marker edits and are reported through the existing error paths.
+
+RecordPlayerDocument is observable and is the sole owner of marker contents.
+Player panes observe its markers through the weak document environment; playback
+models contain no marker copies or editing callbacks. Marker edits enter through
+the document methods, which maintain AppKit change counts separately from
+Observation notifications. Save baselines and other lifecycle bookkeeping are
+excluded from Observation. Missing documents disable marker actions, and Revert
+clears selections whose marker filenames no longer exist.
