@@ -18,6 +18,7 @@ public final class WorkspaceDocument: NSDocument {
   private struct SaveSnapshot: Sendable {
     let workspace: WorkspaceV4Bundle
     let sourceURL: URL?
+    let formalURL: URL?
   }
   private nonisolated let writingSnapshot = OSAllocatedUnfairLock<SaveSnapshot?>(initialState: nil)
   private var sourceContentsURL: URL?
@@ -28,6 +29,7 @@ public final class WorkspaceDocument: NSDocument {
   private var isReading = false
   private var outputDefinition: WorkspaceUIState.WorkspaceDefinition?
   private var closeCallbacks: [WorkspaceCloseCallback] = []
+  private var creationSaveFailed: Bool?
   private var saveCallbacks: [WorkspaceSaveCallback] = []
   private var hasShutDown = false
   private var didReportShutdownFailure = false
@@ -153,17 +155,26 @@ public final class WorkspaceDocument: NSDocument {
   public override func canAsynchronouslyWrite(
     to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
   ) -> Bool {
-    let contents = SaveSnapshot(workspace: snapshot, sourceURL: sourceContentsURL)
+    let contents = SaveSnapshot(
+      workspace: snapshot, sourceURL: sourceContentsURL, formalURL: fileURL)
     writingSnapshot.withLock { $0 = contents }
     return true
   }
 
-  public override nonisolated func fileWrapper(ofType typeName: String) throws -> FileWrapper {
+  // Partial writes cannot provide AppKit with a renamed whole-package backup.
+  public override nonisolated var backupFileURL: URL? { nil }
+
+  // Tests can pause I/O after AppKit interaction has been released.
+  nonisolated let writeProbe = OSAllocatedUnfairLock<(@Sendable () throws -> Void)?>(
+    initialState: nil)
+
+  public override nonisolated func writeSafely(
+    to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
+  ) throws {
     let contents: SaveSnapshot
     if Thread.isMainThread {
-      // Synchronous write callers need a snapshot from the main actor.
       contents = MainActor.assumeIsolated {
-        SaveSnapshot(workspace: snapshot, sourceURL: sourceContentsURL)
+        SaveSnapshot(workspace: snapshot, sourceURL: sourceContentsURL, formalURL: fileURL)
       }
     } else {
       guard let saved = writingSnapshot.withLock({ $0 }) else {
@@ -171,10 +182,54 @@ public final class WorkspaceDocument: NSDocument {
       }
       contents = saved
     }
-    let wrapper = try WorkspaceDocumentPackage.fileWrapper(
-      for: contents.workspace, preserving: contents.sourceURL)
+    guard typeName == "tokyo.kaito.ldtx.workspace" else {
+      throw CocoaError(.fileWriteUnsupportedScheme)
+    }
+    let createsPackage: Bool
+    switch saveOperation {
+    case .saveOperation, .autosaveInPlaceOperation:
+      guard url.standardizedFileURL == contents.formalURL?.standardizedFileURL else {
+        throw CocoaError(.featureUnsupported)
+      }
+      createsPackage = false
+    case .saveAsOperation:
+      guard contents.formalURL == nil else { throw CocoaError(.featureUnsupported) }
+      createsPackage = true
+    case .autosaveElsewhereOperation, .autosaveAsOperation:
+      createsPackage = true
+    default:
+      throw CocoaError(.featureUnsupported)
+    }
     unblockUserInteraction()
-    return wrapper
+    try writeProbe.withLock { $0 }?()
+    let coordinator = NSFileCoordinator(filePresenter: self)
+    var coordinationError: NSError?
+    var writeError: Error?
+    func write(to destination: URL, preserving source: URL?) {
+      do {
+        try WorkspaceDocumentPackage.write(
+          contents.workspace, to: destination, preserving: source, createsPackage: createsPackage)
+      } catch { writeError = error }
+    }
+    if createsPackage, let source = contents.sourceURL,
+      source.standardizedFileURL != url.standardizedFileURL
+    {
+      coordinator.coordinate(
+        readingItemAt: source, options: .withoutChanges,
+        writingItemAt: url, options: .forMerging, error: &coordinationError
+      ) { source, destination in
+        write(to: destination, preserving: source)
+      }
+    } else {
+      coordinator.coordinate(writingItemAt: url, options: .forMerging, error: &coordinationError) {
+        write(to: $0, preserving: nil)
+      }
+    }
+    if let error = coordinationError ?? writeError as NSError? {
+      Logger(subsystem: "tokyo.kaito.ldtx", category: "WorkspaceDocument").error(
+        "Saving Workspace failed: \(error.localizedDescription, privacy: .public)")
+      throw error
+    }
   }
 
   public override func save(
@@ -184,6 +239,9 @@ public final class WorkspaceDocument: NSDocument {
     performActivity(withSynchronousWaiting: false) { [self] activityCompletion in
       continueActivity {
         saveUsingAppKit(to: url, ofType: typeName, for: saveOperation) { error in
+          if error != nil, saveOperation == .saveAsOperation, self.creationSaveFailed != nil {
+            self.creationSaveFailed = true
+          }
           activityCompletion()
           completionHandler(error)
         }
@@ -198,6 +256,14 @@ public final class WorkspaceDocument: NSDocument {
     let adoptsURL =
       saveOperation == .saveOperation || saveOperation == .saveAsOperation
       || saveOperation == .autosaveInPlaceOperation
+    if saveOperation == .saveToOperation
+      || (saveOperation == .saveAsOperation && fileURL != nil)
+      || ((saveOperation == .saveOperation || saveOperation == .autosaveInPlaceOperation)
+        && fileURL?.standardizedFileURL != url.standardizedFileURL)
+    {
+      completionHandler(CocoaError(.featureUnsupported))
+      return
+    }
     if uiState.isOutputActive && saveOperation == .saveAsOperation {
       completionHandler(CocoaError(.userCancelled))
       return
@@ -319,6 +385,21 @@ public final class WorkspaceDocument: NSDocument {
     }
   }
 
+  public func saveAfterCreation() {
+    creationSaveFailed = false
+    let callback = WorkspaceSaveCallback { [weak self] callback, success in
+      guard let self else { return }
+      let failed = creationSaveFailed == true
+      creationSaveFailed = nil
+      saveCallbacks.removeAll { $0 === callback }
+      if !success && !failed { close() }
+    }
+    saveCallbacks.append(callback)
+    save(
+      withDelegate: callback,
+      didSave: #selector(WorkspaceSaveCallback.saved(_:didSave:contextInfo:)), contextInfo: nil)
+  }
+
   public func saveBeforeOutput() async throws {
     try await withCheckedThrowingContinuation { continuation in
       let callback = WorkspaceSaveCallback { [weak self] callback, success in
@@ -390,22 +471,18 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   public override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
-    if item.action == #selector(duplicate(_:)) { return false }
+    if item.action == #selector(duplicate(_:)) || item.action == #selector(saveAs(_:))
+      || item.action == #selector(saveTo(_:))
+    {
+      return false
+    }
     if uiState.isOutputActive
-      && (item.action == #selector(saveAs(_:)) || item.action == #selector(revertToSaved(_:))
+      && (item.action == #selector(revertToSaved(_:))
         || item.action == #selector(move(_:)) || item.action == #selector(rename(_:)))
     {
       return false
     }
     return super.validateUserInterfaceItem(item)
-  }
-
-  public override func duplicate(_ sender: Any?) {
-    presentError(CocoaError(.featureUnsupported))
-  }
-
-  public override func duplicate() throws -> NSDocument {
-    throw CocoaError(.featureUnsupported)
   }
 }
 

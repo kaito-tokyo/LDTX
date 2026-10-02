@@ -51,7 +51,10 @@ struct WorkspaceDocumentSystemTestSuite {
     let source = WorkspaceDocument()
     try await save(source, to: formalURL)
     source.uiState.definition.displayName = "Recovered edit"
-    try await save(source, to: recoveryURL)
+    var recovered = try WorkspaceBundleReaderV4(at: formalURL).read()
+    recovered.definition = source.uiState.definition
+    try WorkspaceDocumentPackage.write(
+      recovered, to: recoveryURL, preserving: formalURL, createsPackage: true)
     source.close()
     let controller = Self.controller
     let document = try #require(
@@ -181,7 +184,7 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(!controller.documents.contains { $0 === document })
   }
 
-  @Test func firstSaveNamesUntitledWorkspaceButLaterSaveAsPreservesName() async throws {
+  @Test func firstSaveNamesUntitledWorkspaceAndLaterSaveAsIsRejected() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
@@ -197,11 +200,15 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: first).read().definition.displayName == "Show")
     #expect(!document.isDocumentEdited)
     let next = root.appendingPathComponent("Another.ldtxworkspace")
-    try await save(document, to: next)
+    do {
+      try await save(document, to: next)
+      Issue.record("Expected Save As rejection")
+    } catch {}
+    #expect(document.fileURL == first)
+    #expect(!FileManager.default.fileExists(atPath: next.path))
     #expect(document.uiState.definition.displayName == "Show")
-    #expect(try WorkspaceBundleReaderV4(at: next).read().definition.displayName == "Show")
     document.close()
-    let reopened = try WorkspaceDocument(contentsOf: next, ofType: "tokyo.kaito.ldtx.workspace")
+    let reopened = try WorkspaceDocument(contentsOf: first, ofType: "tokyo.kaito.ldtx.workspace")
     defer { reopened.close() }
     #expect(reopened.uiState.definition.displayName == "Show")
   }
@@ -268,7 +275,7 @@ struct WorkspaceDocumentSystemTestSuite {
     let token = document.changeCountToken(for: .saveOperation)
     #expect(
       document.canAsynchronouslyWrite(
-        to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveOperation))
+        to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation))
     document.uiState.definition.displayName = "Later edit"
     let writer = BackgroundSnapshotWriter(document: document, destination: destination)
     try await Task.detached { try writer.write() }.value
@@ -325,9 +332,77 @@ struct WorkspaceDocumentSystemTestSuite {
       !document.validateUserInterfaceItem(
         NSMenuItem(
           title: "Duplicate", action: #selector(NSDocument.duplicate(_:)), keyEquivalent: "")))
-    #expect(throws: CocoaError(.featureUnsupported)) { try document.duplicate() }
     #expect(NSDocumentController.shared.documents.count == documentsBefore.count)
     #expect(document.fileURL == nil)
+  }
+
+  @Test func copyActionsAreDisabledAndSaveFailureKeepsEdits() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    for action in [
+      #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
+      #selector(NSDocument.duplicate(_:)),
+    ] {
+      #expect(
+        !document.validateUserInterfaceItem(
+          NSMenuItem(title: "", action: action, keyEquivalent: "")))
+    }
+    let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try await save(document, to: url)
+    document.writeProbe.withLock { $0 = { throw CocoaError(.fileWriteNoPermission) } }
+    defer { document.writeProbe.withLock { $0 = nil } }
+    document.uiState.definition.displayName = "Pending"
+    do {
+      try await save(document, to: url, operation: .saveOperation)
+      Issue.record("Expected partial save failure")
+    } catch {}
+    #expect(document.isDocumentEdited)
+    #expect(document.uiState.definition.displayName == "Pending")
+    document.writeProbe.withLock { $0 = nil }
+    try await save(document, to: url, operation: .saveOperation)
+    #expect(!document.isDocumentEdited)
+    document.uiState.isOutputActive = true
+    let fixedDefinition = document.uiState.definition
+    document.uiState.definition.displayName = "Rejected during output"
+    document.uiState.preferences.monitorVolume = -8
+    try await save(document, to: url, operation: .autosaveInPlaceOperation)
+    let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
+    #expect(savedOutput.preferences.monitorVolume == -8)
+    #expect(savedOutput.definition == fixedDefinition)
+    document.uiState.isOutputActive = false
+  }
+
+  @Test func editsCanProceedWhileBackgroundSaveIsPaused() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try await save(document, to: url)
+    document.uiState.definition.displayName = "Snapshot"
+    let gate = DispatchSemaphore(value: 0)
+    let handle = BackgroundSnapshotWriter(document: document, destination: url)
+    defer { document.writeProbe.withLock { $0 = nil } }
+    document.writeProbe.withLock { probe in
+      probe = {
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated {
+            handle.document.uiState.definition.displayName = "Later edit"
+            gate.signal()
+          }
+        }
+        // A bounded wait fails rather than hanging if interaction remains blocked.
+        #expect(!Thread.isMainThread)
+        #expect(gate.wait(timeout: .now() + 5) == .success)
+      }
+    }
+    try await save(document, to: url, operation: .saveOperation)
+    document.writeProbe.withLock { $0 = nil }
+    #expect(document.uiState.definition.displayName == "Later edit")
+    #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Snapshot")
+    #expect(document.isDocumentEdited)
   }
 
   @Test func presentedMoveRebindsStateResourcesAndLock() async throws {
@@ -393,7 +468,7 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(document.isDocumentEdited)
   }
 
-  @Test func outputDisablesSaveAsAndRevertButAllowsDuplicate() {
+  @Test func outputDisablesSaveAsAndRevert() {
     let document = WorkspaceDocument()
     document.uiState.isOutputActive = true
     let saveAs = NSMenuItem(
@@ -410,7 +485,7 @@ private struct BackgroundSnapshotWriter: @unchecked Sendable {
   let document: WorkspaceDocument
   let destination: URL
   func write() throws {
-    try document.fileWrapper(ofType: "tokyo.kaito.ldtx.workspace")
-      .write(to: destination, options: .atomic, originalContentsURL: nil)
+    try document.writeSafely(
+      to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation)
   }
 }

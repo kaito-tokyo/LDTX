@@ -20,8 +20,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
       definitionExternalID: UUID().uuidString.lowercased(),
       preferencesExternalID: UUID().uuidString.lowercased(),
       definition: .init(), preferences: .init())
-    try WorkspaceDocumentPackage.fileWrapper(for: snapshot, preserving: nil)
-      .write(to: original, options: .atomic, originalContentsURL: nil)
+    try WorkspaceDocumentPackage.write(snapshot, to: original, createsPackage: true)
     let infoURL = original.appendingPathComponent("Info.plist")
     var info = try #require(
       PropertyListSerialization.propertyList(
@@ -37,8 +36,8 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try resource.write(to: resourceURL)
     var changed = snapshot
     changed.definition.displayName = "Edited"
-    try WorkspaceDocumentPackage.fileWrapper(for: changed, preserving: original)
-      .write(to: savedAs, options: .atomic, originalContentsURL: nil)
+    try WorkspaceDocumentPackage.write(
+      changed, to: savedAs, preserving: original, createsPackage: true)
     let reloaded = try WorkspaceBundleReaderV4(at: savedAs).read()
     let copiedInfo = try #require(
       PropertyListSerialization.propertyList(
@@ -51,6 +50,47 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     #expect(reloaded.preferencesExternalID == snapshot.preferencesExternalID)
     #expect(try Data(contentsOf: savedAs.appendingPathComponent("Resources/image.bin")) == resource)
     #expect(try WorkspaceBundleReaderV4(at: original).read().definition.displayName == "")
+  }
+
+  @Test func partialSaveLeavesOtherFilesUntouchedAndRetriesAfterFailure() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    var workspace = WorkspaceV4Bundle(
+      definitionExternalID: UUID().uuidString.lowercased(),
+      preferencesExternalID: UUID().uuidString.lowercased(),
+      definition: .init(), preferences: .init())
+    try WorkspaceDocumentPackage.write(workspace, to: url, createsPackage: true)
+    let info = url.appendingPathComponent("Info.plist")
+    let resource = url.appendingPathComponent("unknown.bin")
+    try Data("Resource".utf8).write(to: resource)
+    let oldInfo = try Data(contentsOf: info)
+    let oldResourceAttributes = try FileManager.default.attributesOfItem(atPath: resource.path)
+    let preferences = url.appendingPathComponent("preferences.pb")
+    let oldPreferences = try Data(contentsOf: preferences)
+    try FileManager.default.removeItem(at: preferences)
+    try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: false)
+    workspace.definition.displayName = "Updated"
+    workspace.preferences.monitorVolume = -6
+    #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: url) }
+    #expect(try Data(contentsOf: info) == oldInfo)
+    #expect(try Data(contentsOf: resource) == Data("Resource".utf8))
+    #expect(
+      try FileManager.default.attributesOfItem(atPath: resource.path)[.systemFileNumber]
+        as? NSNumber
+        == oldResourceAttributes[.systemFileNumber] as? NSNumber)
+    try FileManager.default.removeItem(at: preferences)
+    try oldPreferences.write(to: preferences)
+    try WorkspaceDocumentPackage.write(workspace, to: url)
+    let saved = try WorkspaceBundleReaderV4(at: url).read()
+    #expect(saved.definition == workspace.definition)
+    #expect(saved.preferences == workspace.preferences)
+    #expect(saved.definitionExternalID == workspace.definitionExternalID)
+    #expect(saved.preferencesExternalID == workspace.preferencesExternalID)
+    #expect(try Data(contentsOf: info) == oldInfo)
+    #expect(
+      try FileManager.default.attributesOfItem(atPath: resource.path)[.systemFileNumber]
+        as? NSNumber
+        == oldResourceAttributes[.systemFileNumber] as? NSNumber)
   }
 
   @Test @MainActor func transientLocalStateIsOnlyPersistedAfterSave() throws {

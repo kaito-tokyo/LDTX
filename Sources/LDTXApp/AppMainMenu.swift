@@ -53,7 +53,7 @@ final class AppMainMenu: NSMenu {
 
     let newWorkspaceItem = NSMenuItem(
       title: "New Workspace",
-      action: #selector(NSDocumentController.newDocument(_:)),
+      action: #selector(AppDelegate.newWorkspace(_:)),
       keyEquivalent: "n")
     let openFileItem = NSMenuItem(
       title: "Open File…",

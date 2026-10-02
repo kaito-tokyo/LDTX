@@ -47,6 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
   }
 
+  @objc func newWorkspace(_ sender: Any?) {
+    do {
+      let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
+      (document as? WorkspaceDocument)?.saveAfterCreation()
+    } catch { NSDocumentController.shared.presentError(error) }
+  }
+
   @objc func showSettings(_ sender: Any?) {
     if settings == nil {
       SettingsApplet.open { [weak self] window, _ in

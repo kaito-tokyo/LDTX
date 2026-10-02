@@ -5,19 +5,13 @@ import Foundation
 import LDTXProtos
 import SwiftProtobuf
 
-/// Builds a complete package snapshot for NSDocument's safe-saving machinery.
+/// Serializes model files without materializing package resources in memory.
 public enum WorkspaceDocumentPackage {
-  public static func fileWrapper(
-    for workspace: WorkspaceV4Bundle, preserving sourceURL: URL?
-  ) throws -> FileWrapper {
+  public static func write(
+    _ workspace: WorkspaceV4Bundle, to destination: URL, preserving sourceURL: URL? = nil,
+    createsPackage: Bool = false
+  ) throws {
     try WorkspaceV4IntegrityValidator.validate(workspace)
-    let wrapper: FileWrapper
-    if let sourceURL {
-      wrapper = try FileWrapper(url: sourceURL, options: .immediate)
-      guard wrapper.isDirectory else { throw CocoaError(.fileReadCorruptFile) }
-    } else {
-      wrapper = FileWrapper(directoryWithFileWrappers: [:])
-    }
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     definition.externalID =
       workspace.definitionExternalID
@@ -30,18 +24,31 @@ public enum WorkspaceDocumentPackage {
     preferences.workspacePreferencesV4 = workspace.preferences
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
-    let encoder = PropertyListEncoder()
-    encoder.outputFormat = .xml
-    let contents = [
-      "Info.plist": try encoder.encode(WorkspaceBundleInfoV4()),
-      "definition.pb": try definition.serializedData(options: options),
-      "preferences.pb": try preferences.serializedData(options: options),
-    ]
-    for (name, data) in contents {
-      if name == "Info.plist", wrapper.fileWrappers?[name] != nil { continue }
-      if let existing = wrapper.fileWrappers?[name] { wrapper.removeFileWrapper(existing) }
-      wrapper.addRegularFile(withContents: data, preferredFilename: name)
+    let definitionData = try definition.serializedData(options: options)
+    let preferencesData = try preferences.serializedData(options: options)
+    let manager = FileManager.default
+    if createsPackage {
+      try manager.createDirectory(at: destination, withIntermediateDirectories: true)
+      if let sourceURL, sourceURL.standardizedFileURL != destination.standardizedFileURL {
+        for child in try manager.contentsOfDirectory(
+          at: sourceURL, includingPropertiesForKeys: nil
+        ) where !["definition.pb", "preferences.pb"].contains(child.lastPathComponent) {
+          let target = destination.appendingPathComponent(child.lastPathComponent)
+          // Recovery saves can reuse their destination; refresh its preserved contents.
+          if manager.fileExists(atPath: target.path) { try manager.removeItem(at: target) }
+          try manager.copyItem(at: child, to: target)
+        }
+      }
+      let infoURL = destination.appendingPathComponent("Info.plist")
+      if !manager.fileExists(atPath: infoURL.path) {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+        try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+      }
     }
-    return wrapper
+    try definitionData.write(
+      to: destination.appendingPathComponent("definition.pb"), options: .atomic)
+    try preferencesData.write(
+      to: destination.appendingPathComponent("preferences.pb"), options: .atomic)
   }
 }

@@ -10,16 +10,18 @@ and recording files are NSDocument instances managed by the shared
 NSDocumentController.shared. AppKit creates the standard controller and uses
 the first Editor type in Info.plist (Workspace) as the default New document type.
 AppKit initializes each document and selects
-the registered document class for each file type. File menu New and Open use the
-shared document controller's standard actions. AppDelegate suppresses automatic
+the registered document class for each file type. File menu Open uses the shared
+document controller's standard action. New uses AppDelegate to create and display
+a document through the shared controller, then requests standard document saving.
+AppDelegate suppresses automatic
 untitled documents and presents the standard Open panel after launch and
 restoration when no documents are open and no file-open request was received.
 Reopening the application without visible windows presents the Open panel again.
-Cancelling the panel leaves the application running; File > New creates an
-untitled Workspace without first requesting a save location.
-Workspace duplication is unsupported for its resource model. The File menu omits
-Duplicate, and both the document action and direct duplication reject the
-operation. Save As remains available when output is idle.
+Cancelling the panel leaves the application running; File > New creates a
+Workspace and immediately requests its first save location. Cancelling this save
+closes only the new document; a write failure retains it for retry. Workspace UI
+validation disables Save As, Save To, and Duplicate. Their inherited actions are
+not overridden, while the save path rejects copying an already-saved document.
 WorkspaceDocument projects the registered documents' output state into
 NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
 no independent recording identifiers or activity store are maintained. The badge
@@ -58,19 +60,25 @@ Closing uses AppKit’s save/discard/
 cancel confirmation before playback stops. PaneWindow retains existing pane state
 keys; document and window restoration use AppKit’s standard document path.
 
-New creates an untitled Workspace document. Workspace Save, Save As, Duplicate,
-Revert, autosave, and
-unsaved-document recovery use AppKit's document lifecycle. Model mutations notify
-NSDocument synchronously through updateChangeCount. Package snapshots retain
-resources and metadata; LDTXWorkspaceBundleFormat performs package serialization,
-and NSDocument handles safe saving and file coordination. Recovery and temporary
-save URLs do not become the runtime's formal package URL. App-local state remains
-transient until the first successful save and follows subsequent Save As operations.
+Workspace Save, Revert, autosave, and unsaved-document recovery use AppKit's
+lifecycle and change-count tracking. WorkspaceDocument captures an immutable V4
+snapshot, releases interaction before filesystem work, and writes on AppKit's
+background saving thread. It overrides writeSafely instead of producing a
+FileWrapper. Coordinated ordinary saves and in-place autosaves atomically replace
+only definition.pb and preferences.pb, leaving Info.plist, resources, and unknown
+files untouched. The two writes are individually atomic, not a transaction: a
+failure can leave mixed revisions on disk, retains unsaved edits, and permits
+retrying both files. No journal or rollback mechanism is added.
+Initial saves create the model package; recovery exports copy preserved contents
+on disk without loading resource bytes into a FileWrapper. Recovery and temporary
+save URLs never become the runtime's formal URL. Local state moves to the formal
+location only after successful first saving. The custom writer returns no
+backupFileURL because it cannot rename the whole old package for a backup; AppKit
+retains responsibility for version preservation when applicable.
 
-Recording or streaming first saves the document through the standard save panel
-when needed. Save As and Revert are disabled during output. Duplicate creates an
-independent document without running output. Closing uses NSDocument's standard
-save decision and waits for runtime shutdown before returning permission to close.
+Recording or streaming first saves through the standard save panel when needed.
+Revert, Move, and Rename remain disabled during output. Closing uses NSDocument's
+standard save decision and waits for runtime shutdown before granting permission.
 Application termination uses AppKit's per-document review. Cancelling does not
 reopen documents that have already closed. Pane visibility does not own resource
 lifetime.
