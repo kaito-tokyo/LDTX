@@ -2,6 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXDocumentEnvironmentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXDocumentEnvironmentSystemTests
+    dependencies:
+      - target: LDTXAppletSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDocumentEnvironmentSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXWorkspaceAppletControllerSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -12,6 +26,35 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletControllerSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
+  LDTXWorkspaceDocumentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXWorkspaceDocumentSystemTests
+    dependencies:
+      - target: LDTXWorkspaceAppletController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceDocumentSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
+  LDTXRecordPlayerDocumentSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXRecordPlayerDocumentSystemTests
+    dependencies:
+      - target: LDTXRecordPlayerApplet
+      - target: LDTXWorkspaceAppletController
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerDocumentSystemTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         SWIFT_OBJC_INTEROP_MODE: objcxx
@@ -40,6 +83,15 @@ schemes:
       targets:
         - LDTXWorkspaceAppletControllerSystemTests
 
+  LDTXWorkspaceDocumentSystemTests:
+    build:
+      targets:
+        LDTXWorkspaceDocumentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXWorkspaceDocumentSystemTests
+
   LDTXPaneSplitViewControllerSystemTests:
     build:
       targets:
@@ -48,3 +100,21 @@ schemes:
       config: Debug
       targets:
         - LDTXPaneSplitViewControllerSystemTests
+
+  LDTXRecordPlayerDocumentSystemTests:
+    build:
+      targets:
+        LDTXRecordPlayerDocumentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXRecordPlayerDocumentSystemTests
+
+  LDTXDocumentEnvironmentSystemTests:
+    build:
+      targets:
+        LDTXDocumentEnvironmentSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXDocumentEnvironmentSystemTests

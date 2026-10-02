@@ -9,13 +9,13 @@ public struct RecordingMarker: Equatable, Sendable {
   public let time: CMTime
   public let timecode: String
   public let note: String
-  public let fileURL: URL
+  public let fileName: String
 
-  public init(time: CMTime, timecode: String, note: String, fileURL: URL) {
+  public init(time: CMTime, timecode: String, note: String, fileName: String) {
     self.time = time
     self.timecode = timecode
     self.note = note
-    self.fileURL = fileURL
+    self.fileName = fileName
   }
 }
 
@@ -89,9 +89,8 @@ public struct RecordingMarkerStore: Sendable {
         let time = Self.time(fromMarkerFileName: fileURL.lastPathComponent)
       else { continue }
 
-      guard var note = try? String(contentsOf: fileURL, encoding: .utf8),
-        let timecode = try? Self.displayTimecode(for: time)
-      else { continue }
+      var note = try String(contentsOf: fileURL, encoding: .utf8)
+      let timecode = try Self.displayTimecode(for: time)
       while note.last?.isNewline == true {
         note.removeLast()
       }
@@ -100,35 +99,125 @@ public struct RecordingMarkerStore: Sendable {
           time: time,
           timecode: timecode,
           note: note,
-          fileURL: fileURL
+          fileName: fileURL.lastPathComponent
         )
       )
     }
     return markers.sorted {
       let comparison = CMTimeCompare($0.time, $1.time)
       return comparison == 0
-        ? $0.fileURL.lastPathComponent < $1.fileURL.lastPathComponent
+        ? $0.fileName < $1.fileName
         : comparison < 0
     }
   }
 
-  public func deleteMarker(_ marker: RecordingMarker) throws {
-    let markersDirectoryURL = recordingDirectoryURL.appendingPathComponent(
-      Self.directoryName,
-      isDirectory: true
-    ).standardizedFileURL
-    let markerURL = marker.fileURL.standardizedFileURL
-    guard markerURL.deletingLastPathComponent() == markersDirectoryURL,
-      markerURL.pathExtension.lowercased() == "txt"
-    else {
-      throw RecordingMarkerError.invalidMarkerFile
+  public func deleteMarker(
+    _ marker: RecordingMarker, filePresenter: (any NSFilePresenter)? = nil
+  ) throws {
+    try coordinatedWrite(filePresenter: filePresenter) { store in
+      try Self.validateFileName(marker.fileName)
+      let directory = try store.markerDirectory(create: false)
+      let url = directory.appendingPathComponent(marker.fileName)
+      do {
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else {
+          throw RecordingMarkerError.invalidMarkerFile
+        }
+        try FileManager.default.removeItem(at: url)
+      } catch let error as CocoaError
+        where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
+      {
+        // Unsaved or already deleted markers have no file to remove.
+      }
     }
+  }
 
-    let values = try markerURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-    guard values.isRegularFile == true, values.isSymbolicLink != true else {
-      throw RecordingMarkerError.invalidMarkerFile
+  /// Adds or overwrites individual files, then returns the disk contents under the same coordination.
+  @discardableResult
+  public func save(
+    _ snapshot: [RecordingMarker], filePresenter: (any NSFilePresenter)? = nil
+  ) throws -> [RecordingMarker] {
+    try coordinatedWrite(filePresenter: filePresenter) { store in
+      let directory = try store.markerDirectory(create: true)
+      let manager = FileManager.default
+      var names: [String: String] = [:]
+      for url in try manager.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+      ).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true,
+          url.pathExtension.lowercased() == "txt",
+          let time = Self.time(fromMarkerFileName: url.lastPathComponent)
+        else { continue }
+        let key = try Self.fileName(for: time)
+        if names[key] == nil { names[key] = url.lastPathComponent }
+      }
+      var writtenTimes = Set<String>()
+      for marker in snapshot.sorted(by: { $0.fileName < $1.fileName }) {
+        try Self.validateFileName(marker.fileName)
+        let key = try Self.fileName(for: marker.time)
+        guard let storedTime = Self.time(fromMarkerFileName: marker.fileName),
+          try Self.fileName(for: storedTime) == key
+        else { throw RecordingMarkerError.invalidMarkerFile }
+        guard writtenTimes.insert(key).inserted else { continue }
+        let name = names[key] ?? marker.fileName
+        names[key] = name
+        let target = directory.appendingPathComponent(name)
+        if manager.fileExists(atPath: target.path) {
+          let values = try target.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+          guard values.isRegularFile == true, values.isSymbolicLink != true else {
+            throw RecordingMarkerError.invalidMarkerFile
+          }
+        }
+        let contents = marker.note.hasSuffix("\n") ? marker.note : marker.note + "\n"
+        try Data(contents.utf8).write(to: target, options: .atomic)
+      }
+      return try store.markers()
     }
-    try FileManager.default.removeItem(at: markerURL)
+  }
+
+  private func markerDirectory(create: Bool) throws -> URL {
+    let directory = recordingDirectoryURL.appendingPathComponent(
+      Self.directoryName, isDirectory: true)
+    if FileManager.default.fileExists(atPath: directory.path) {
+      let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      guard values.isDirectory == true, values.isSymbolicLink != true else {
+        throw RecordingMarkerError.invalidMarkersDirectory
+      }
+    } else if create {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    }
+    return directory
+  }
+
+  private func coordinatedWrite<T>(
+    filePresenter: (any NSFilePresenter)?, _ operation: (Self) throws -> T
+  ) throws -> T {
+    let coordinator = NSFileCoordinator(filePresenter: filePresenter)
+    var coordinationError: NSError?
+    var result: Result<T, Error>?
+    coordinator.coordinate(
+      writingItemAt: recordingDirectoryURL, options: [], error: &coordinationError
+    ) { url in
+      result = Result {
+        guard
+          !FileManager.default.fileExists(atPath: url.appendingPathComponent(".shield.json").path)
+        else {
+          throw RecordingMarkerError.recordingInProgress
+        }
+        return try operation(Self(recordingDirectoryURL: url))
+      }
+    }
+    if let coordinationError { throw coordinationError }
+    guard let result else { throw CocoaError(.fileWriteUnknown) }
+    return try result.get()
+  }
+
+  private static func validateFileName(_ name: String) throws {
+    guard !name.isEmpty, !name.contains("/"), !name.contains("\u{0}"),
+      name != ".", name != "..", name.lowercased().hasSuffix(".txt"),
+      time(fromMarkerFileName: name) != nil
+    else { throw RecordingMarkerError.invalidMarkerFile }
   }
 
   public static func fileName(for time: CMTime) throws -> String {
@@ -201,6 +290,8 @@ public struct RecordingMarkerStore: Sendable {
 }
 
 public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
+  case recordingInProgress
+  case unsupportedOperation
   case invalidTime
   case emptyNote
   case invalidMarkersDirectory
@@ -210,6 +301,10 @@ public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
 
   public var errorDescription: String? {
     switch self {
+    case .recordingInProgress:
+      "Markers cannot be saved while the recording is being written."
+    case .unsupportedOperation:
+      "Recording documents support saving markers in the original recording only."
     case .invalidTime:
       "The current playback time cannot be used for a marker."
     case .emptyNote:

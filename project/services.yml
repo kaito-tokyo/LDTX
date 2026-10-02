@@ -49,7 +49,7 @@ targets:
     type: tool
     platform: macOS
     sources:
-      - Sources/LDTXHelper/CLIEntryPoint.swift
+      - Sources/LDTXHelper
     dependencies:
       - target: LDTXUtils
         embed: true

@@ -29,6 +29,13 @@ public struct LDTXRecordPlayerView: View {
     result.displayedPane = pane
     return result
   }
+  @Environment(\.documentReference) private var documentReference
+  private var document: RecordPlayerDocument? {
+    documentReference?.document as? RecordPlayerDocument
+  }
+  private var markers: [RecordingMarker] { document?.markers ?? [] }
+  private var canModifyMarkers: Bool { document?.canModifyMarkers == true }
+  @State private var pendingMarkerDeletion: RecordingMarker?
   @State private var model: LDTXRecordPlayerModel
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
@@ -39,73 +46,22 @@ public struct LDTXRecordPlayerView: View {
     get { presentation.selectedFeature }
     nonmutating set { presentation.selectedFeature = newValue }
   }
-  @State private var selectedMarkerURL: URL?
+  @State private var selectedMarkerID: String?
   @FocusState private var focusedMarkerField: MarkerField?
 
-  private let closePreview: () -> Void
-  private let managesStandaloneLifecycle: Bool
-
-  public init(
-    recordingURL: URL,
-    scenarioFixture: RecordingPreviewScenarioFixture? = nil,
-    assetLoader: @escaping LDTXRecordPlayerAssetLoader = { recordingURL, canvas in
-      let package = try RecordingPackage(contentsOf: recordingURL)
-      if let canvas, let media = package.media(for: canvas) {
-        return AVURLAsset(url: media.url)
-      }
-      return AVURLAsset(url: package.mainMediaURL)
-    },
-    closePreview: @escaping () -> Void = {}
-  ) {
-    self.closePreview = closePreview
-    managesStandaloneLifecycle = true
-    presentation = RecordingPresentationState()
-    _model = State(
-      initialValue: LDTXRecordPlayerModel(
-        recordingURL: recordingURL, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
-    )
-
-  }
-
   public var body: some View {
-    @Bindable var model = model
-
-    Group {
-      paneContent.frame(minHeight: 360)
-    }
-    .onAppear {
-      if managesStandaloneLifecycle { model.start() }
-    }
-    .onDisappear {
-      if managesStandaloneLifecycle { model.stop() }
-    }
-    .onChange(of: model.shouldClose) { _, shouldClose in
-      if managesStandaloneLifecycle && shouldClose { closePreview() }
-    }
-    .alert(
-      item: Binding(
-        get: { managesStandaloneLifecycle ? model.alert : nil },
-        set: { model.alert = $0 }
-      )
-    ) { alert in
-      Alert(
-        title: Text(alert.title), message: Text(alert.message),
-        dismissButton: .default(Text("OK")) {
-          model.alert = nil
-          if alert.closeAfterDismissal { closePreview() }
-        })
-    }
+    paneContent.frame(minHeight: 360)
+      .onChange(of: markers.map(\.fileName)) { _, names in
+        if let selectedMarkerID, !names.contains(selectedMarkerID) { self.selectedMarkerID = nil }
+      }
   }
 
   init(
-    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane,
-    closePreview: @escaping () -> Void
+    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane
   ) {
     self.presentation = presentation
     _model = State(initialValue: model)
     self.displayedPane = pane
-    self.closePreview = closePreview
-    managesStandaloneLifecycle = false
   }
 
   @ViewBuilder private var paneContent: some View {
@@ -198,7 +154,7 @@ public struct LDTXRecordPlayerView: View {
     .padding(.vertical, 8)
     .background(.regularMaterial)
     .overlay(alignment: .top) { Divider() }
-    .disabled(!model.isLoaded || !model.canModifyMarkers)
+    .disabled(!model.isLoaded || !canModifyMarkers)
     .onChange(of: focusedMarkerField) { oldValue, newValue in
       guard oldValue == .timecode, newValue != .timecode else { return }
       pendingTimecodeText = pendingMarkerTime.flatMap(Self.displayTimecode) ?? ""
@@ -229,12 +185,13 @@ public struct LDTXRecordPlayerView: View {
       return
     }
 
-    guard
-      model.createMarker(
-        note: markerNote,
-        at: pendingMarkerTime ?? player.currentTime()
-      )
-    else { return }
+    guard let document else { return }
+    do {
+      try document.createMarker(note: markerNote, at: pendingMarkerTime ?? player.currentTime())
+    } catch {
+      presentMarkerFileError(title: "Marker Could Not Be Added", error: error)
+      return
+    }
     markerNote = ""
     markerError = nil
     clearPendingMarkerTime()
@@ -309,16 +266,16 @@ public struct LDTXRecordPlayerView: View {
   private var markerList: some View {
     VStack(alignment: .leading, spacing: 0) {
       Group {
-        if model.markers.isEmpty {
+        if markers.isEmpty {
           ContentUnavailableView(
             "No Markers",
             systemImage: "bookmark",
             description: Text("Saved markers appear here.")
           )
         } else {
-          List(model.markers, id: \.fileURL, selection: $selectedMarkerURL) { marker in
+          List(markers, id: \.fileName, selection: $selectedMarkerID) { marker in
             Button {
-              selectedMarkerURL = marker.fileURL
+              selectedMarkerID = marker.fileName
               model.seek(to: marker.time)
             } label: {
               VStack(alignment: .leading, spacing: 4) {
@@ -335,14 +292,14 @@ public struct LDTXRecordPlayerView: View {
             }
             .buttonStyle(.plain)
             .help("Go to \(marker.timecode)")
-            .tag(marker.fileURL)
+            .tag(marker.fileName)
             .contextMenu {
               Button(role: .destructive) {
-                deleteMarker(marker)
+                pendingMarkerDeletion = marker
               } label: {
                 Label("Delete Marker", systemImage: "trash")
               }
-              .disabled(!model.canModifyMarkers)
+              .disabled(!canModifyMarkers)
             }
           }
           .listStyle(.inset)
@@ -350,24 +307,52 @@ public struct LDTXRecordPlayerView: View {
         }
       }
     }
+    .alert(
+      "Delete Marker?",
+      isPresented: Binding(
+        get: { pendingMarkerDeletion != nil },
+        set: { if !$0 { pendingMarkerDeletion = nil } }
+      ), presenting: pendingMarkerDeletion
+    ) { marker in
+      Button("Delete", role: .destructive) { deleteMarker(marker) }
+      Button("Cancel", role: .cancel) {}
+    } message: { _ in
+      Text("This marker will be deleted immediately. This action cannot be undone.")
+    }
   }
 
   private func deleteSelectedMarker() {
     guard
-      model.canModifyMarkers,
-      let selectedMarkerURL,
-      let marker = model.markers.first(where: { $0.fileURL == selectedMarkerURL })
+      canModifyMarkers,
+      let selectedMarkerID,
+      let marker = markers.first(where: { $0.fileName == selectedMarkerID })
     else { return }
-    deleteMarker(marker)
+    pendingMarkerDeletion = marker
   }
 
   private func deleteMarker(_ marker: RecordingMarker) {
-    guard model.canModifyMarkers else { return }
-    guard model.deleteMarker(marker) else { return }
-    if selectedMarkerURL == marker.fileURL {
-      selectedMarkerURL = nil
+    guard canModifyMarkers else { return }
+    guard let document else { return }
+    do {
+      try document.deleteMarker(marker)
+    } catch {
+      presentMarkerFileError(title: "Marker Could Not Be Deleted", error: error)
+      return
+    }
+    if selectedMarkerID == marker.fileName {
+      selectedMarkerID = nil
     }
     markerError = nil
+  }
+
+  private func presentMarkerFileError(title: String, error: any Error) {
+    recordingPreviewLogger.error(
+      "Marker file operation failed: \(error.localizedDescription, privacy: .public)"
+    )
+    model.alert = LDTXRecordPlayerAlert(
+      title: title,
+      message: error.localizedDescription
+    )
   }
 
 }
@@ -811,7 +796,6 @@ private final class LDTXPlaybackScrubber: NSSlider {
 @Observable
 final class LDTXRecordPlayerModel {
   var player: AVPlayer?
-  var markers: [RecordingMarker] = []
   var playbackSeekRequest: LDTXPlaybackSeekRequest?
   var alert: LDTXRecordPlayerAlert?
   var isLoading = true
@@ -820,40 +804,23 @@ final class LDTXRecordPlayerModel {
   var availableCanvases: [RecordingCanvas] = []
   var selectedCanvas: RecordingCanvas = .landscape
 
-  private let recordingURL: URL
-  private let securityScopedURL: URL
+  private let documentReference: DocumentReference
   private let scenarioFixture: RecordingPreviewScenarioFixture?
   private let assetLoader: LDTXRecordPlayerAssetLoader
-  private let isAccessingSecurityScopedResource: Bool
-  private var markerStore: RecordingMarkerStore?
   private var loadTask: Task<Void, Never>?
 
   init(
-    recordingURL: URL,
+    documentReference: DocumentReference,
     scenarioFixture: RecordingPreviewScenarioFixture?,
     assetLoader: @escaping LDTXRecordPlayerAssetLoader
   ) {
-    securityScopedURL = recordingURL
-    self.recordingURL = recordingURL.standardizedFileURL
+    self.documentReference = documentReference
     self.scenarioFixture = scenarioFixture
     self.assetLoader = assetLoader
-    isAccessingSecurityScopedResource = recordingURL.startAccessingSecurityScopedResource()
-  }
-
-  deinit {
-    if isAccessingSecurityScopedResource {
-      securityScopedURL.stopAccessingSecurityScopedResource()
-    }
   }
 
   var isLoaded: Bool {
-    player != nil && markerStore != nil
-  }
-
-  var canModifyMarkers: Bool {
-    !FileManager.default.fileExists(
-      atPath: recordingURL.appendingPathComponent(".shield.json").path
-    )
+    player != nil
   }
 
   func start() {
@@ -882,56 +849,17 @@ final class LDTXRecordPlayerModel {
     playbackSeekRequest = LDTXPlaybackSeekRequest(time: time)
   }
 
-  func createMarker(note: String, at time: CMTime) -> Bool {
-    guard let markerStore else {
-      closeAfterInternalError("Marker creation was requested before the recording was loaded.")
-      return false
-    }
-
-    do {
-      _ = try markerStore.createMarker(at: time, note: note)
-      markers = try markerStore.markers()
-      return true
-    } catch {
-      presentMarkerFileError(title: "Marker Could Not Be Saved", error: error)
-      return false
-    }
-  }
-
-  func deleteMarker(_ marker: RecordingMarker) -> Bool {
-    guard let markerStore else {
-      closeAfterInternalError("Marker deletion was requested before the recording was loaded.")
-      return false
-    }
-
-    do {
-      try markerStore.deleteMarker(marker)
-      markers = try markerStore.markers()
-      return true
-    } catch {
-      presentMarkerFileError(title: "Marker Could Not Be Deleted", error: error)
-      return false
-    }
-  }
-
-  private func presentMarkerFileError(title: String, error: any Error) {
-    recordingPreviewLogger.error(
-      "Marker file operation failed: \(error.localizedDescription, privacy: .public)"
-    )
-    alert = LDTXRecordPlayerAlert(
-      title: title,
-      message: error.localizedDescription
-    )
-  }
-
   private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {
+    guard let recordingURL = documentReference.document?.fileURL else {
+      isLoading = false
+      return
+    }
     recordingPreviewLogger.info(
-      "Loading recording preview for \(self.recordingURL.lastPathComponent, privacy: .public)"
+      "Loading recording preview for \(recordingURL.lastPathComponent, privacy: .public)"
     )
     if await loadScenarioFixtureIfNeeded() { return }
 
     do {
-      let markerStore = RecordingMarkerStore(recordingDirectoryURL: recordingURL)
       let package = try RecordingPackage(contentsOf: recordingURL)
       availableCanvases = package.availableCanvases.filter { canvas in
         guard let media = package.media(for: canvas) else { return false }
@@ -944,16 +872,8 @@ final class LDTXRecordPlayerModel {
       let asset = try await assetLoader(recordingURL, selected)
       guard !Task.isCancelled else { return }
 
-      self.markerStore = markerStore
-      do {
-        markers = try markerStore.markers()
-      } catch {
-        markers = []
-        recordingPreviewLogger.error(
-          "Loading optional markers failed: \(error.localizedDescription, privacy: .public)"
-        )
-      }
       let duration = try await asset.load(.duration)
+      guard !Task.isCancelled else { return }
       durationSeconds = Self.validSeconds(duration)
       let player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
       self.player = player
@@ -961,6 +881,7 @@ final class LDTXRecordPlayerModel {
       if resumeAt > .zero {
         await player.seek(to: resumeAt)
       }
+      guard !Task.isCancelled else { return }
       if startsPlaying { player.play() }
     } catch {
       guard !Task.isCancelled else { return }

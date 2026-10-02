@@ -105,7 +105,6 @@ struct LinearGradientFillVideoComponentInspector: View {
     else { return }
     definition.videoComponents[index].definition = .linearGradientFill(component)
     uiState.definition = definition
-    uiState.recordDefinitionChange()
   }
 
   private var gradient: LinearGradient {

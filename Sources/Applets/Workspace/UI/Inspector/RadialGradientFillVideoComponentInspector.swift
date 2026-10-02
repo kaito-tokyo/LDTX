@@ -105,7 +105,6 @@ struct RadialGradientFillVideoComponentInspector: View {
     else { return }
     definition.videoComponents[index].definition = .radialGradientFill(component)
     uiState.definition = definition
-    uiState.recordDefinitionChange()
   }
 
   private var gradient: RadialGradient {

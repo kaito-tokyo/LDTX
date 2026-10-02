@@ -67,7 +67,7 @@ let package = Package(
         "LDTXProtos",
       ],
       path: "Sources/Applets/Workspace/Service",
-      sources: ["WorkspaceResourcePathComponentCodec.swift", "WorkspaceLockService.swift"]
+      sources: ["WorkspaceResourcePathComponentCodec.swift"]
     ),
     .target(
       name: "LDTXRecording",

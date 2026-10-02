@@ -2,12 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct ProgramVideoLayersInspector: View {
+  @Environment(\.documentReference) private var documentReference
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
   let uiState: WorkspaceUIState
-  let workspaceURL: URL?
   @Bindable var appletData: WorkspaceAppletData
 
   var body: some View {

@@ -296,7 +296,7 @@ extension WorkspaceWindowRuntime {
   {
     try persistenceCoordinator.runtimeProjection(
       programInternalID: programInternalID, role: role,
-      localState: appletLocalState)
+      localState: appletLocalState, physicalDeviceIDs: physicalDeviceIDs)
   }
 
   private static var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor {

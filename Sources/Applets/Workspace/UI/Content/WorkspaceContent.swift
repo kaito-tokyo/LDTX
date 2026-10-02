@@ -2,26 +2,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
 public struct WorkspaceContent: View {
+  @Environment(\.documentReference) private var documentReference
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
-  let workspaceURL: URL
   let deviceRegistry: DeviceRegistryService
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
 
   public init(
-    workspaceURL: URL,
     deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.workspaceURL = workspaceURL
     self.deviceRegistry = deviceRegistry
     self._uiState = Bindable(wrappedValue: uiState)
     self._appletData = Bindable(wrappedValue: appletData)
@@ -435,6 +438,7 @@ public struct WorkspaceContent: View {
           ForEach(audioInputs, id: \.internalID) { input in
             Toggle("Monitor \(input.displayName)", isOn: monitorBinding(for: input.internalID))
               .toggleStyle(.checkbox)
+              .disabled(workspaceURL == nil)
           }
           Toggle(
             "Sync Landscape Mix to Portrait",
@@ -450,7 +454,9 @@ public struct WorkspaceContent: View {
                 setLocalState(state)
                 workspaceDispatcher?.updateMixPreferences()
               }
-            ))
+            )
+          )
+          .disabled(workspaceURL == nil)
           audioMix(
             role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
         }
@@ -581,6 +587,7 @@ public struct WorkspaceContent: View {
     Binding(
       get: { localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID) },
       set: { enabled in
+        guard let workspaceURL else { return }
         appletData.updateState(for: workspaceURL) { state in
           if enabled {
             state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
@@ -762,6 +769,7 @@ public struct WorkspaceContent: View {
                   Optional(WorkspacePhysicalDeviceID.avCaptureDevice(uniqueID: camera.id)))
               }
             }
+            .disabled(uiState.isOutputActive || workspaceURL == nil)
           }
           ForEach(audioInputs, id: \.internalID) { input in
             Picker(input.displayName, selection: audioDeviceBinding(for: input.internalID)) {
@@ -771,7 +779,7 @@ public struct WorkspaceContent: View {
                   Optional(WorkspacePhysicalDeviceID.coreAudioDevice(uid: device.id)))
               }
             }
-            .disabled(uiState.isOutputActive)
+            .disabled(uiState.isOutputActive || workspaceURL == nil)
           }
           Button("Refresh Physical Devices") { refreshCaptureDevices() }
         }
@@ -797,18 +805,12 @@ public struct WorkspaceContent: View {
     Binding(
       get: {
         guard
-          case .avCaptureDevice? = appletData.state(for: workspaceURL)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
-          internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { id in
-        appletData.updateState(for: workspaceURL) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        synchronizeCaptureInputs()
+        appletData.setPhysicalDeviceID(id, for: internalID)
       })
   }
 
@@ -816,19 +818,12 @@ public struct WorkspaceContent: View {
     Binding(
       get: {
         guard
-          case .coreAudioDevice? = appletData.state(for: workspaceURL)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .coreAudioDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: workspaceURL).physicalDeviceIDsByInputDeviceInternalID[
-          internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { id in
-        appletData.updateState(for: workspaceURL) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = id
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        synchronizeCaptureInputs()
-        workspaceDispatcher?.synchronizeAudioMonitor()
+        appletData.setPhysicalDeviceID(id, for: internalID)
       })
   }
 
@@ -851,10 +846,12 @@ public struct WorkspaceContent: View {
   }
 
   private var localState: WorkspaceLocalState {
-    appletData.state(for: workspaceURL)
+    guard let workspaceURL else { return .init() }
+    return appletData.state(for: workspaceURL)
   }
 
   private func setLocalState(_ state: WorkspaceLocalState) {
+    guard let workspaceURL else { return }
     appletData.setState(state, for: workspaceURL)
     workspaceDispatcher?.updateProgramRuntimes()
   }

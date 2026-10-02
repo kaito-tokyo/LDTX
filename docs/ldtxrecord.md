@@ -201,3 +201,8 @@ ffmpeg \
 
 Matroska is a useful archival output for arbitrary named audio tracks. MP4 can
 be used when its codecs and track layout are supported by downstream players.
+
+The canonical macOS content type is `tokyo.kaito.ldtx.record`. The former
+`tokyo.kaito.ldtx.recording` type remains an imported compatibility alias for
+existing Launch Services registrations. New package metadata uses the canonical
+identifier; existing package metadata remains readable without migration.

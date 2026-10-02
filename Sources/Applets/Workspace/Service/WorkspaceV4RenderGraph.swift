@@ -265,12 +265,14 @@ extension WorkspaceV4RenderGraph {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     localState: WorkspaceLocalState,
+    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     programInternalID: UInt64,
     role: ProgramCanvasRole,
     timeSeconds: Float
   ) throws -> ProgramRuntimeConfiguration {
     try runtimeProjection(
       definition: definition, preferences: preferences, localState: localState,
+      physicalDeviceIDs: physicalDeviceIDs,
       programInternalID: programInternalID, role: role, timeSeconds: timeSeconds
     ).configuration
   }
@@ -279,6 +281,7 @@ extension WorkspaceV4RenderGraph {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     localState: WorkspaceLocalState,
+    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     programInternalID: UInt64,
     role: ProgramCanvasRole,
     timeSeconds: Float
@@ -304,8 +307,7 @@ extension WorkspaceV4RenderGraph {
         guard layerIDs.contains(id) else { return nil }
         guard
           case .avCaptureDevice(let uniqueID)? =
-            localState
-            .physicalDeviceIDsByInputDeviceInternalID[id]
+            physicalDeviceIDs[id]
         else { return nil }
         return ("v4-\(id)", uniqueID)
       })
@@ -313,8 +315,7 @@ extension WorkspaceV4RenderGraph {
       guard case .vfxSource(let source)? = wrapper.definition,
         layerIDs.contains(source.internalID),
         case .avCaptureDevice(let physicalID)? =
-          localState
-          .physicalDeviceIDsByInputDeviceInternalID[source.inputDeviceInternalID]
+          physicalDeviceIDs[source.inputDeviceInternalID]
       else { continue }
       cameraIDs["v4-vfx-\(source.internalID)"] = physicalID
     }
@@ -329,7 +330,7 @@ extension WorkspaceV4RenderGraph {
     }
     let masterCameraID: String?
     if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID,
-      case .avCaptureDevice(let id)? = localState.physicalDeviceIDsByInputDeviceInternalID[
+      case .avCaptureDevice(let id)? = physicalDeviceIDs[
         definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID]
     {
       masterCameraID = id

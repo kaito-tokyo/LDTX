@@ -14,67 +14,53 @@ private enum WorkspaceDispatcherError: Error {
 @Observable
 final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
   @ObservationIgnored
-  public weak var workspaceAppletController: WorkspaceAppletController?
+  public weak var workspaceWindowController: WorkspaceWindowController?
 
   init() {}
 
-  func saveWorkspaceDefinition() async throws {
-    guard let workspaceAppletController else {
-      throw WorkspaceDispatcherError.workspaceClosed
-    }
-    try workspaceAppletController.saveWorkspaceDefinition()
-  }
-
-  func saveWorkspacePreferences() async throws {
-    guard let workspaceAppletController else {
-      throw WorkspaceDispatcherError.workspaceClosed
-    }
-    try workspaceAppletController.saveWorkspacePreferences()
-  }
-
   func synchronizeVision() {
-    workspaceAppletController?.synchronizeVision()
+    workspaceWindowController?.synchronizeVision()
   }
 
   func synchronizeAudioMonitor() {
-    workspaceAppletController?.synchronizeAudioMonitor()
+    workspaceWindowController?.synchronizeAudioMonitor()
   }
 
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
-    workspaceAppletController?.synchronizeCaptureInputs(
+    workspaceWindowController?.synchronizeCaptureInputs(
       availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
   }
 
   func updateProgramRuntimes() {
-    workspaceAppletController?.updateProgramRuntimes()
+    workspaceWindowController?.updateProgramRuntimes()
   }
 
   func startOutput() async throws {
-    guard let workspaceAppletController else {
+    guard let workspaceWindowController else {
       throw WorkspaceDispatcherError.workspaceClosed
     }
-    try await workspaceAppletController.startOutput()
+    try await workspaceWindowController.startOutput()
   }
 
   func stopOutput() async {
-    await workspaceAppletController?.stopOutput()
+    await workspaceWindowController?.stopOutput()
   }
 
   func updateMixPreferences() {
-    workspaceAppletController?.updateMixPreferences()
+    workspaceWindowController?.updateMixPreferences()
   }
 
   func captureScreenshots() throws -> [URL] {
-    guard let workspaceAppletController else {
+    guard let workspaceWindowController else {
       throw WorkspaceDispatcherError.workspaceClosed
     }
-    return try workspaceAppletController.captureScreenshots()
+    return try workspaceWindowController.captureScreenshots()
   }
 
   func openScreenshotsDirectory() {
-    workspaceAppletController?.openScreenshotsDirectory()
+    workspaceWindowController?.openScreenshotsDirectory()
   }
 }

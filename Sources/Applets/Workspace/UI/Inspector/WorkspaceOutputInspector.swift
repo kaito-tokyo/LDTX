@@ -2,11 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceOutputInspector: View {
-  let workspaceURL: URL
+  @Environment(\.documentReference) private var documentReference
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
   let uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var isShowingStreamKeyManager = false
@@ -138,6 +143,7 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { localState.landscapeYouTubeLiveStreamID ?? "" },
       set: { streamID in
+        guard let workspaceURL else { return }
         appletData.updateState(for: workspaceURL) {
           $0.landscapeYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
         }
@@ -148,6 +154,7 @@ struct WorkspaceOutputInspector: View {
     Binding(
       get: { localState.portraitYouTubeLiveStreamID ?? "" },
       set: { streamID in
+        guard let workspaceURL else { return }
         appletData.updateState(for: workspaceURL) {
           $0.portraitYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
         }
@@ -155,7 +162,8 @@ struct WorkspaceOutputInspector: View {
   }
 
   private var localState: WorkspaceLocalState {
-    appletData.state(for: workspaceURL)
+    guard let workspaceURL else { return .init() }
+    return appletData.state(for: workspaceURL)
   }
 
   private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {

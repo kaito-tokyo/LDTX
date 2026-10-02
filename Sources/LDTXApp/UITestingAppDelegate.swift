@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppInterface
 import LDTXAppletSupport
-import LDTXLauncherApplet
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
@@ -157,7 +155,7 @@ import UniformTypeIdentifiers
 //    let panel = NSOpenPanel()
 //    panel.allowedContentTypes = [
 //      UTType(exportedAs: "tokyo.kaito.ldtx.workspace"),
-//      UTType(exportedAs: "tokyo.kaito.ldtx.recording"),
+//      UTType(exportedAs: "tokyo.kaito.ldtx.record"),
 //    ]
 //    panel.allowsMultipleSelection = false
 //    panel.canChooseDirectories = false

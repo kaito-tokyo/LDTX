@@ -18,6 +18,8 @@ SPDX-License-Identifier: Apache-2.0
 			</array>
 			<key>CFBundleTypeName</key>
 			<string>LDTX Workspace</string>
+			<key>NSDocumentClass</key>
+			<string>WorkspaceDocument</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -37,13 +39,16 @@ SPDX-License-Identifier: Apache-2.0
 			<key>CFBundleTypeName</key>
 			<string>LDTX Recording</string>
 			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
+			<string>Editor</string>
+			<key>NSDocumentClass</key>
+			<string>RecordPlayerDocument</string>
 			<key>LSHandlerRank</key>
 			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
 			<key>LSTypeIsPackage</key>
 			<true/>
 			<key>LSItemContentTypes</key>
 			<array>
+				<string>tokyo.kaito.ldtx.record</string>
 				<string>tokyo.kaito.ldtx.recording</string>
 			</array>
 		</dict>
@@ -103,6 +108,17 @@ SPDX-License-Identifier: Apache-2.0
 			<string>Any</string>
 		</dict>
 	</dict>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>tokyo.kaito.ldtx.recording</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>tokyo.kaito.ldtx.record</string>
+			</array>
+		</dict>
+	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -130,7 +146,7 @@ SPDX-License-Identifier: Apache-2.0
 			<key>UTTypeDescription</key>
 			<string>LDTX Recording</string>
 			<key>UTTypeIdentifier</key>
-			<string>tokyo.kaito.ldtx.recording</string>
+			<string>tokyo.kaito.ldtx.record</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

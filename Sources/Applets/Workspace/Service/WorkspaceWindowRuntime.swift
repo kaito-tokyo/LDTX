@@ -25,6 +25,7 @@ private let workspaceV4OperationLogger = Logger(
 public final class WorkspaceWindowRuntime {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let selectProgramHandler: (UInt64?) -> Void
   private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
@@ -38,14 +39,18 @@ public final class WorkspaceWindowRuntime {
   public init(
     persistence: WorkspaceV4PersistenceCoordinator,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    physicalDeviceIDs: @escaping () -> [UInt64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
     selectProgram: @escaping (UInt64?) -> Void = { _ in }
   ) {
     self.persistenceCoordinator = persistence
     self.captureSessionCoordinator = captureSessionCoordinator
+    self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.selectProgramHandler = selectProgram
   }
+
+  var physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
 
   public var workspace: WorkspaceV4Bundle { persistenceCoordinator.workspace }
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
@@ -53,21 +58,7 @@ public final class WorkspaceWindowRuntime {
   public var url: URL? { persistenceCoordinator.url }
   public var isDirty: Bool { persistenceCoordinator.isDirty }
 
-  public func save() throws {
-    guard let url else { throw WorkspaceV4PersistenceCoordinatorError.missingPackageURL }
-    try persistenceCoordinator.save(to: url)
-  }
-
-  public func saveWorkspaceDefinition() throws {
-    try persistenceCoordinator.saveWorkspaceDefinition()
-  }
-
-  public func saveWorkspacePreferences() throws {
-    try persistenceCoordinator.saveWorkspacePreferences()
-  }
-
   public func shutdown() {
-    persistenceCoordinator.releaseActiveLock()
     workspaceV4OperationLogger.notice(
       "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
     )
@@ -141,6 +132,7 @@ public final class WorkspaceWindowRuntime {
         definition: workspace.definition,
         preferences: workspace.preferences,
         localState: localStateProvider(),
+        physicalDeviceIDs: physicalDeviceIDsProvider(),
         programInternalID: selectedProgramInternalID,
         role: role,
         timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
@@ -159,14 +151,14 @@ public final class WorkspaceWindowRuntime {
     for input in workspace.definition.inputDevices {
       switch input.definition {
       case .videoDevice(let device):
-        if case .avCaptureDevice(let id)? = localStateProvider()
-          .physicalDeviceIDsByInputDeviceInternalID[device.internalID], !id.isEmpty
+        if case .avCaptureDevice(let id)? = physicalDeviceIDsProvider()[device.internalID],
+          !id.isEmpty
         {
           videoCameraIDs.insert(id)
         }
       case .audioDevice(let device):
-        if case .coreAudioDevice(let id)? = localStateProvider()
-          .physicalDeviceIDsByInputDeviceInternalID[device.internalID], !id.isEmpty
+        if case .coreAudioDevice(let id)? = physicalDeviceIDsProvider()[device.internalID],
+          !id.isEmpty
         {
           audioDeviceIDs.insert(id)
         }
@@ -225,8 +217,7 @@ public final class WorkspaceWindowRuntime {
       throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
     }
     guard
-      case .avCaptureDevice(let physicalDeviceID)? = localStateProvider()
-        .physicalDeviceIDsByInputDeviceInternalID[inputID]
+      case .avCaptureDevice(let physicalDeviceID)? = physicalDeviceIDsProvider()[inputID]
     else { throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera }
     guard let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
     else { throw WorkspaceVisionFeatureError.frameUnavailable }

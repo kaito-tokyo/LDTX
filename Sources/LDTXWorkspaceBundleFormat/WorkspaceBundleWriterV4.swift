@@ -67,6 +67,18 @@ public struct WorkspaceBundleWriterV4 {
   }
 
   public mutating func makeExternalID() -> UUID {
+    Self.makeExternalID(using: &randomNumberGenerator)
+  }
+
+  /// Generates an envelope identifier without creating a package on disk.
+  public static func makeExternalID() -> UUID {
+    var generator: any RandomNumberGenerator = SystemRandomNumberGenerator()
+    return makeExternalID(using: &generator)
+  }
+
+  private static func makeExternalID(using randomNumberGenerator: inout any RandomNumberGenerator)
+    -> UUID
+  {
     let milliseconds = UInt64(Date().timeIntervalSince1970 * 1_000)
     let randomA = UInt16(truncatingIfNeeded: randomNumberGenerator.next())
     let randomB = randomNumberGenerator.next() & 0x3fff_ffff_ffff_ffff

@@ -10,96 +10,42 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
-  NSToolbarDelegate, NSWindowRestoration
+public final class RecordPlayerWindowController: NSWindowController, NSWindowDelegate,
+  NSToolbarDelegate
 {
-  public static func open(
-    recordingURL: URL,
-    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
-  ) {
-    func getRid(url: URL) -> ((any NSCopying & NSSecureCoding & NSObjectProtocol)?, (any Error)?) {
-      do {
-        let rv = try url.standardizedFileURL.resourceValues(forKeys: [.fileResourceIdentifierKey])
-        guard let rid = rv.fileResourceIdentifier else {
-          return (nil, nil)
-        }
-        return (rid, nil)
-      } catch {
-        return (nil, error)
-      }
-    }
-
-    let (openingRid, err) = getRid(url: recordingURL)
-    guard let openingRid = openingRid else {
-      completionHandler(nil, err)
-      return
-    }
-
-    var foundApplet: RecordPlayerApplet?
-    for window in NSApp.windows {
-      guard
-        let representedURL = window.representedURL,
-        let applet = window.windowController as? RecordPlayerApplet
-      else { continue }
-
-      let (windowRid, _) = getRid(url: representedURL)
-      guard
-        let windowRid = windowRid,
-        windowRid.isEqual(openingRid)
-      else { continue }
-
-      foundApplet = applet
-      break
-    }
-
-    let applet: RecordPlayerApplet
-    if let foundApplet {
-      applet = foundApplet
-    } else {
-      applet = RecordPlayerApplet(recordingURL: recordingURL)
-    }
-
-    completionHandler(applet.window, nil)
-  }
-
   private let model: LDTXRecordPlayerModel
   private let split: PaneSplitViewController
   private var started = false
 
-  public init(
-    recordingURL: URL, scenarioFixture: RecordingPreviewScenarioFixture? = nil,
-    assetLoader: LDTXRecordPlayerAssetLoader? = nil
-  ) {
-    model = LDTXRecordPlayerModel(
-      recordingURL: recordingURL, scenarioFixture: scenarioFixture,
-      assetLoader: assetLoader ?? Self.loadAsset)
-    let model = model
+  init(model: LDTXRecordPlayerModel, documentReference: DocumentReference) {
+    self.model = model
     let presentation = RecordingPresentationState()
     split = PaneSplitViewController(
       sidebar: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .sidebar, closePreview: {})),
+          model: model, presentation: presentation, pane: .sidebar
+        )
+        .environment(\.documentReference, documentReference)),
       content: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .content, closePreview: {})),
+          model: model, presentation: presentation, pane: .content
+        )
+        .environment(\.documentReference, documentReference)),
       inspector: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .inspector, closePreview: {})),
+          model: model, presentation: presentation, pane: .inspector
+        )
+        .environment(\.documentReference, documentReference)),
       sidebarCanCollapse: true, inspectorMaximum: 360)
     let window = PaneWindow(contentViewController: split)
-    window.representedURL = recordingURL
-    window.restorationURL = recordingURL
     window.restorationKind = "recording"
-    window.restorationClass = Self.self
     window.isRestorable = true
-    window.title = recordingURL.deletingPathExtension().lastPathComponent
     window.identifier = NSUserInterfaceItemIdentifier(
       "Recording.AppKit.v1." + UUID().uuidString)
     window.setContentSize(NSSize(width: 960, height: 600))
     window.center()
     window.isReleasedWhenClosed = false
     super.init(window: window)
-    window.windowControllerOwner = self
     window.delegate = self
     split.splitViewItems[0].isCollapsed = true
     let toolbar = NSToolbar(identifier: "RecordingToolbar.AppKit.v1")
@@ -108,7 +54,7 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     window.setFrameAutosaveName("Recording.AppKit.v1")
   }
 
-  private static func loadAsset(
+  static func loadAsset(
     recordingURL: URL, canvas: RecordingCanvas?
   ) async throws -> AVAsset {
     let package = try RecordingPackage(contentsOf: recordingURL)
@@ -166,29 +112,6 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
-  public static func restoreWindow(
-    withIdentifier identifier: NSUserInterfaceItemIdentifier,
-    state: NSCoder,
-    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
-  ) {
-    let url =
-      (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.url) as URL?)
-      ?? (state.decodeObject(of: NSURL.self, forKey: LDTXAppKitRestorationKeys.legacyURL) as URL?)
-    guard
-      let url,
-      FileManager.default.fileExists(atPath: url.path)
-    else {
-      completionHandler(nil, nil)
-      return
-    }
-    open(recordingURL: url) { window, error in
-      window?.identifier = identifier
-      if let applet = window?.windowController as? RecordPlayerApplet {
-        applet.startIfNeeded()
-      }
-      completionHandler(window, error)
-    }
-  }
   public override func showWindow(_ sender: Any?) {
     super.showWindow(sender)
     startIfNeeded()
@@ -207,7 +130,7 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     } onChange: { [weak self] in
       Task { @MainActor in self?.observeClose() }
     }
-    if shouldClose { close() }
+    if shouldClose { window?.performClose(nil) }
   }
   private func observeAlert() {
     let pending = withObservationTracking {
@@ -222,12 +145,11 @@ public final class RecordPlayerApplet: NSWindowController, NSWindowDelegate,
     alert.addButton(withTitle: "OK")
     alert.beginSheetModal(for: window) { [weak self] _ in
       self?.model.alert = nil
-      if pending.closeAfterDismissal { self?.close() }
+      if pending.closeAfterDismissal { self?.window?.performClose(nil) }
     }
   }
   public func windowWillClose(_ notification: Notification) {
     model.stop()
-    (window as? PaneWindow)?.windowControllerOwner = nil
   }
   @objc public func toggleInspector(_ sender: Any?) { split.toggleInspector(sender) }
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {

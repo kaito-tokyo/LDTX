@@ -107,7 +107,10 @@ jobs:
           for scheme in \
             LDTXAppUIComponentTests \
             LDTXAppXpcTests \
-            LDTXPaneSplitViewControllerSystemTests; do
+            LDTXPaneSplitViewControllerSystemTests \
+            LDTXDocumentEnvironmentSystemTests \
+            LDTXWorkspaceDocumentSystemTests \
+            LDTXRecordPlayerDocumentSystemTests; do
             xcodebuild \
               -skipPackagePluginValidation \
               -project LDTX.xcodeproj \

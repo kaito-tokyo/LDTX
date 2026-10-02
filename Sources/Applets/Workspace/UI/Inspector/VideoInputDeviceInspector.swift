@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct VideoInputDeviceInspector: View {
+  @Environment(\.documentReference) private var documentReference
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
-  let workspaceURL: URL?
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
 
@@ -27,10 +28,10 @@ struct VideoInputDeviceInspector: View {
       Section("Video Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        if let workspaceURL {
+        if documentReference?.document != nil {
           Picker(
             "Physical Device",
-            selection: physicalDeviceBinding(url: workspaceURL)
+            selection: physicalDeviceBinding
           ) {
             Text("No Camera").tag(Optional<WorkspacePhysicalDeviceID>.none)
             ForEach(deviceRegistry.cameras, id: \.id) { source in
@@ -69,25 +70,16 @@ struct VideoInputDeviceInspector: View {
     )
   }
 
-  private func physicalDeviceBinding(
-    url: URL
-  ) -> Binding<WorkspacePhysicalDeviceID?> {
+  private var physicalDeviceBinding: Binding<WorkspacePhysicalDeviceID?> {
     Binding(
       get: {
         guard
-          case .avCaptureDevice? = appletData.state(for: url)
-            .physicalDeviceIDsByInputDeviceInternalID[internalID]
+          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
         else { return nil }
-        return appletData.state(for: url).physicalDeviceIDsByInputDeviceInternalID[internalID]
+        return appletData.physicalDeviceID(for: internalID)
       },
       set: { identifier in
-        appletData.updateState(for: url) {
-          $0.physicalDeviceIDsByInputDeviceInternalID[internalID] = identifier
-        }
-        workspaceDispatcher?.updateProgramRuntimes()
-        workspaceDispatcher?.synchronizeCaptureInputs(
-          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-        ) { _ in }
+        appletData.setPhysicalDeviceID(identifier, for: internalID)
       }
     )
   }

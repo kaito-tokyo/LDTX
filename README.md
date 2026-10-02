@@ -23,7 +23,6 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
 | LDTXApp                   | Application lifecycle, Workspace orchestration, UI, and output coordination. |
-| LDTXAppInterface           | Interfaces provided by the app host to applets, including Workspace recording activity reporting. |
 | LDTXAudioEngine            | Workspace-owned C++ HAL input, monitoring, timed mixing and PCM output. |
 | LDTXBackgroundSegmentation | Background-removal model loading and compatibility checks.         |
 | LDTXCapture                | AVCapture camera sources, services, and capture-session management. |
@@ -39,6 +38,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXWorkspaceBundleFormat  | `.ldtxworkspace` package IO and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
+| LDTXRecordPlayerApplet      | Recording playback windows, pane UI, and marker persistence.       |
 | LDTXRecording              | Recording-package inspection, validation, playback, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
@@ -48,7 +48,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
 | LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
 | LDTXWorkspaceAppletService  | Workspace runtime coordination and stateless feature services.   |
-| LDTXWorkspaceAppletController | Workspace runtime and recording lifecycle controllers.         |
+| LDTXWorkspaceAppletController | AppKit Workspace documents, window controllers, and recording lifecycle.         |
 | LDTXWorkspaceAppletUI       | AppKit composition root, SwiftUI interface, and local app data.  |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |

@@ -28,8 +28,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/LDTXUtils/Commands.swift
-      - path: Sources/LDTXUtils/ProgramRenderCommand.swift
+      - Sources/LDTXUtils
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXRecording
@@ -59,15 +58,20 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXAudioEngine/AudioMixEngine.cpp
-      - Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
+      - path: Sources/LDTXAudioEngine
+        excludes:
+          - include
+          - Internal
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
       - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
+        group: Public Headers/LDTXAudioEngine
         buildPhase: headers
         headerVisibility: public
     settings:
@@ -114,22 +118,13 @@ targets:
         PRODUCT_MODULE_NAME: LDTXInternalProtocols
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXAppInterface:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXAppInterface
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppInterface
-        PRODUCT_MODULE_NAME: LDTXAppInterface
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
   LDTXWorkspaceAppletInterface:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Interface
+      - path: Sources/Applets/Workspace
+        includes:
+          - Interface
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXAudioEngine
@@ -424,10 +419,8 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - path: Sources/LDTXProgramRuntime
-        excludes:
-          - Resources/NotoSans
-      - path: Sources/LDTXProgramRuntime/Resources/NotoSans
+      - Sources/LDTXProgramRuntime
+      - path: Resources/LDTX/Fonts/NotoSans
         buildPhase:
           copyFiles:
             destination: resources
@@ -461,7 +454,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Model
+      - path: Sources/Applets/Workspace
+        includes:
+          - Model
     dependencies:
       - target: LDTXProtos
       - target: LDTXProgram
@@ -479,7 +474,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Store
+      - path: Sources/Applets/Workspace
+        includes:
+          - Store
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -501,7 +498,9 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Service
+      - path: Sources/Applets/Workspace
+        includes:
+          - Service
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
@@ -533,11 +532,12 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/Controller
+      - path: Sources/Applets/Workspace
+        includes:
+          - Controller
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceBundleFormat
-      - target: LDTXAppInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
@@ -571,8 +571,11 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXFontRasterizer/LDTXFontRasterizer.c
+      - path: Sources/LDTXFontRasterizer
+        excludes:
+          - include
       - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
+        group: Public Headers/LDTXFontRasterizer
         buildPhase: headers
         headerVisibility: public
     settings:

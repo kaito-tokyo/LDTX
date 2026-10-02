@@ -11,6 +11,7 @@ configs:
   Distribution: release
 
 options:
+  minimumXcodeGenVersion: 2.46.0
   bundleIdPrefix: tokyo.kaito.ldtx
   defaultConfig: Debug
   deploymentTarget:

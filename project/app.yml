@@ -19,7 +19,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXRecordPlayerApplet
+      - Sources/Applets/RecordPlayer
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXRecording
@@ -30,27 +30,19 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-  LDTXLauncherApplet:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXLauncherApplet
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXLauncherApplet
-        PRODUCT_MODULE_NAME: LDTXLauncherApplet
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: "YES"
   LDTXWorkspaceAppletUI:
     type: framework
     platform: macOS
     sources:
-      - Sources/Applets/Workspace/UI
+      - path: Sources/Applets/Workspace
+        includes:
+          - UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
       - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
@@ -112,15 +104,12 @@ targets:
         buildPhase:
           copyFiles:
             destination: resources
-      - path: Sources/LDTXProgramRuntime/Resources/NotoSans/OFL.txt
+      - path: Resources/LDTX/Fonts/NotoSans/OFL.txt
         buildPhase:
           copyFiles:
             destination: resources
     dependencies:
       - target: LDTXAppletSupport
-        embed: true
-        codeSign: true
-      - target: LDTXLauncherApplet
         embed: true
         codeSign: true
       - target: LDTXRecordPlayerApplet
@@ -205,7 +194,6 @@ targets:
         embed: true
       - target: LDTXWorkspaceBundleFormat
         embed: true
-      - target: LDTXAppInterface
         embed: true
       # The Controller framework links this dynamic framework. Embed it in the
       # application bundle as a transitive runtime dependency without linking

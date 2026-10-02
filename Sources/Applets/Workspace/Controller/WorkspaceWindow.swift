@@ -17,7 +17,8 @@ public final class WorkspaceWindow: NSWindow {
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
     dispatcher: any WorkspaceDispatcherProtocol,
-    uiState: WorkspaceUIState
+    uiState: WorkspaceUIState,
+    documentReference: DocumentReference
   ) {
     self.uiState = uiState
 
@@ -35,7 +36,6 @@ public final class WorkspaceWindow: NSWindow {
       .environment(\.workspaceDispatcher, dispatcher)
 
     let contentView = WorkspaceContent(
-      workspaceURL: url,
       deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
@@ -43,20 +43,22 @@ public final class WorkspaceWindow: NSWindow {
     .environment(\.workspaceDispatcher, dispatcher)
 
     let inspectorView = WorkspaceInspectorContainer(
-      workspaceURL: url,
       deviceRegistry: deviceRegistry,
       uiState: uiState,
       appletData: appletData
     )
     .environment(\.workspaceDispatcher, dispatcher)
 
-    let sidebarController = NSHostingController(rootView: sidebarView)
+    let sidebarController = NSHostingController(
+      rootView: sidebarView.environment(\.documentReference, documentReference))
     sidebarController.sizingOptions = [.minSize]
 
-    let contentController = NSHostingController(rootView: contentView)
+    let contentController = NSHostingController(
+      rootView: contentView.environment(\.documentReference, documentReference))
     contentController.sizingOptions = [.minSize]
 
-    let inspectorController = NSHostingController(rootView: inspectorView)
+    let inspectorController = NSHostingController(
+      rootView: inspectorView.environment(\.documentReference, documentReference))
     inspectorController.sizingOptions = [.minSize]
 
     let splitViewController = NSSplitViewController()
@@ -78,13 +80,26 @@ public final class WorkspaceWindow: NSWindow {
     splitViewController.addSplitViewItem(inspectorItem)
 
     self.contentViewController = splitViewController
+    // Installing the content controller replaces the initial size with its fitting size.
+    self.setContentSize(NSSize(width: 1062, height: 700))
 
     self.center()
   }
 
   public override func encodeRestorableState(with coder: NSCoder) {
     super.encodeRestorableState(with: coder)
-    WorkspaceRestoration.encodeRestorableState(
-      representedURL: representedURL, inspectorSelector: uiState.inspectorSelector, with: coder)
+    coder.encode(
+      uiState.inspectorSelector?.asRepresentation(),
+      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
+  }
+
+  public override func restoreState(with coder: NSCoder) {
+    super.restoreState(with: coder)
+    if let representation = coder.decodeObject(
+      of: WorkspaceInspectorSelectorRepresentation.self,
+      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
+    {
+      uiState.inspectorSelector = representation.selector
+    }
   }
 }

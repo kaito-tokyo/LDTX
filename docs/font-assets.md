@@ -31,7 +31,9 @@ Recorded SHA-256 values:
 | `NotoSans-Italic[wght].ttf` | `a4f45c53480a0b04570af420fbbd674ebb9d61f7e3bb6bb2716cf0280c3f0201` |
 | `OFL.txt` | `cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a` |
 
-`LDTXProgramRuntime` copies the directory as a SwiftPM resource bundle.
+The source assets live in `Resources/LDTX/Fonts/NotoSans`.
+XcodeGen copies that directory into the `LDTXProgramRuntime` framework's resources
+and copies `OFL.txt` into the application resources.
 `NotoSansFontResources` is the lookup point for the Metal glyph atlas renderer.
 Clock uses the bundled upright Noto Sans font exclusively; user-provided fonts
 are not imported or referenced by Workspace data.

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
@@ -11,30 +12,20 @@ import SwiftUI
 #endif
 
 public struct WorkspaceInspectorContainer: View {
-  let workspaceURL: URL?
+  @Environment(\.documentReference) private var documentReference
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var uiState: WorkspaceUIState
 
   public init(
-    workspaceURL: URL,
     deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData
   ) {
-    self.workspaceURL = workspaceURL
-    self.deviceRegistry = deviceRegistry
-    self._appletData = Bindable(wrappedValue: appletData)
-    self._uiState = Bindable(wrappedValue: uiState)
-  }
-
-  init(
-    workspaceURL: URL? = nil,
-    deviceRegistry: DeviceRegistryService,
-    uiState: WorkspaceUIState,
-    appletData: WorkspaceAppletData = WorkspaceAppletData()
-  ) {
-    self.workspaceURL = workspaceURL
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._uiState = Bindable(wrappedValue: uiState)
@@ -57,21 +48,20 @@ public struct WorkspaceInspectorContainer: View {
     case .programVideoLayers:
       ProgramVideoLayersInspector(
         uiState: uiState,
-        workspaceURL: workspaceURL,
         appletData: appletData)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(uiState: uiState)
     case .workspaceOutput:
-      if let workspaceURL {
+      if workspaceURL != nil {
         WorkspaceOutputInspector(
-          workspaceURL: workspaceURL, uiState: uiState, appletData: appletData)
+          uiState: uiState, appletData: appletData)
       } else {
         unavailablePreviewInspector
       }
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          uiState: uiState, internalID: internalID, workspaceURL: workspaceURL,
+          uiState: uiState, internalID: internalID,
           deviceRegistry: deviceRegistry,
           appletData: appletData)
       } else {
@@ -80,7 +70,7 @@ public struct WorkspaceInspectorContainer: View {
     case .videoInputDevice:
       if let internalID = selector.internalID {
         VideoInputDeviceInspector(
-          uiState: uiState, internalID: internalID, workspaceURL: workspaceURL,
+          uiState: uiState, internalID: internalID,
           deviceRegistry: deviceRegistry,
           appletData: appletData)
       } else {
