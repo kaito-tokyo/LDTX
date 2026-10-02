@@ -211,9 +211,17 @@ public final class WorkspaceDocument: NSDocument {
       completionHandler(error)
       return
     }
+    let initialName = uiState.definition.displayName
+    let derivesInitialName = adoptsURL && fileURL == nil && initialName == "Untitled"
+    let destinationName = url.deletingPathExtension().lastPathComponent
+    if derivesInitialName { uiState.definition.displayName = destinationName }
     let acquiredLock = destinationLock
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
       if let error {
+        if derivesInitialName && fileURL == nil && uiState.definition.displayName == destinationName
+        {
+          uiState.definition.displayName = initialName
+        }
         if let acquiredLock { releaseFailedDestination(acquiredLock, at: url) }
         completionHandler(error)
         return

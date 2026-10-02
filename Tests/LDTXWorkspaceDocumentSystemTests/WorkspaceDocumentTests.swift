@@ -181,6 +181,43 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(!controller.documents.contains { $0 === document })
   }
 
+  @Test func firstSaveNamesUntitledWorkspaceButLaterSaveAsPreservesName() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let recovery = root.appendingPathComponent("Recovery.ldtxworkspace")
+    try await save(document, to: recovery, operation: .autosaveElsewhereOperation)
+    #expect(document.fileURL == nil)
+    #expect(document.uiState.definition.displayName == "Untitled")
+    let first = root.appendingPathComponent("Show.ldtxworkspace")
+    try await save(document, to: first)
+    #expect(document.uiState.definition.displayName == "Show")
+    #expect(try WorkspaceBundleReaderV4(at: first).read().definition.displayName == "Show")
+    #expect(!document.isDocumentEdited)
+    let next = root.appendingPathComponent("Another.ldtxworkspace")
+    try await save(document, to: next)
+    #expect(document.uiState.definition.displayName == "Show")
+    #expect(try WorkspaceBundleReaderV4(at: next).read().definition.displayName == "Show")
+    document.close()
+    let reopened = try WorkspaceDocument(contentsOf: next, ofType: "tokyo.kaito.ldtx.workspace")
+    defer { reopened.close() }
+    #expect(reopened.uiState.definition.displayName == "Show")
+  }
+
+  @Test func firstSavePreservesExplicitWorkspaceName() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    document.uiState.definition.displayName = "Custom"
+    let destination = root.appendingPathComponent("Show.ldtxworkspace")
+    try await save(document, to: destination)
+    #expect(document.uiState.definition.displayName == "Custom")
+    #expect(try WorkspaceBundleReaderV4(at: destination).read().definition.displayName == "Custom")
+  }
+
   @Test func tracksChangesSynchronouslyAndUsesAppKitSaveState() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
