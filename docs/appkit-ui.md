@@ -17,6 +17,9 @@ restoration when no documents are open and no file-open request was received.
 Reopening the application without visible windows presents the Open panel again.
 Cancelling the panel leaves the application running; File > New creates an
 untitled Workspace without first requesting a save location.
+Workspace duplication is unsupported for its resource model. The File menu omits
+Duplicate, and both the document action and direct duplication reject the
+operation. Save As remains available when output is idle.
 WorkspaceDocument projects the registered documents' output state into
 NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
 no independent recording identifiers or activity store are maintained. The badge

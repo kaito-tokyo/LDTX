@@ -160,7 +160,7 @@ public final class WorkspaceDocument: NSDocument {
   public override nonisolated func fileWrapper(ofType typeName: String) throws -> FileWrapper {
     let contents: SaveSnapshot
     if Thread.isMainThread {
-      // Duplicate uses the synchronous safe-write path rather than save(to:...).
+      // Synchronous write callers need a snapshot from the main actor.
       contents = MainActor.assumeIsolated {
         SaveSnapshot(workspace: snapshot, sourceURL: sourceContentsURL)
       }
@@ -381,6 +381,7 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   public override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(duplicate(_:)) { return false }
     if uiState.isOutputActive
       && (item.action == #selector(saveAs(_:)) || item.action == #selector(revertToSaved(_:))
         || item.action == #selector(move(_:)) || item.action == #selector(rename(_:)))
@@ -388,6 +389,14 @@ public final class WorkspaceDocument: NSDocument {
       return false
     }
     return super.validateUserInterfaceItem(item)
+  }
+
+  public override func duplicate(_ sender: Any?) {
+    presentError(CocoaError(.featureUnsupported))
+  }
+
+  public override func duplicate() throws -> NSDocument {
+    throw CocoaError(.featureUnsupported)
   }
 }
 

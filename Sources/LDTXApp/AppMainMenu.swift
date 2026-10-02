@@ -82,10 +82,6 @@ final class AppMainMenu: NSMenu {
         keyEquivalent: "w"),
       saveItem,
       saveAsItem,
-      NSMenuItem(
-        title: "Duplicate",
-        action: #selector(NSDocument.duplicate(_:)),
-        keyEquivalent: ""),
       reloadItem,
     ].forEach(fileMenu.addItem)
     let fileMenuItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")

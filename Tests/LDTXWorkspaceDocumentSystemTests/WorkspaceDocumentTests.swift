@@ -280,6 +280,19 @@ struct WorkspaceDocumentSystemTestSuite {
     await Task.yield()
   }
 
+  @Test func duplicateIsDisabledAndDoesNotCreateAnotherDocument() throws {
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    let documentsBefore = NSDocumentController.shared.documents
+    #expect(
+      !document.validateUserInterfaceItem(
+        NSMenuItem(
+          title: "Duplicate", action: #selector(NSDocument.duplicate(_:)), keyEquivalent: "")))
+    #expect(throws: CocoaError(.featureUnsupported)) { try document.duplicate() }
+    #expect(NSDocumentController.shared.documents.count == documentsBefore.count)
+    #expect(document.fileURL == nil)
+  }
+
   @Test func presentedMoveRebindsStateResourcesAndLock() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
