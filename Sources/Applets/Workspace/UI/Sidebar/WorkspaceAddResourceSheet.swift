@@ -14,6 +14,7 @@ struct WorkspaceAddResourceSheet: View {
   let submit: () -> Void
   let cancel: () -> Void
   var refresh: () -> Void = {}
+  var deviceDiscoveryMessage: String? = nil
   @FocusState private var nameFocused: Bool
 
   var body: some View {
@@ -21,6 +22,9 @@ struct WorkspaceAddResourceSheet: View {
       Text(sheet.title).font(.title2).bold()
       if sheet == .device {
         Button("Refresh Devices", action: refresh)
+        if let deviceDiscoveryMessage {
+          Text(deviceDiscoveryMessage).font(.caption).foregroundStyle(.red)
+        }
         ScrollView {
           VStack(alignment: .leading, spacing: 2) {
             ForEach(devices) { device in

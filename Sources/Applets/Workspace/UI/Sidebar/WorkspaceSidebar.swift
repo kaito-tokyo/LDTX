@@ -161,13 +161,14 @@ public struct WorkspaceSidebar: View {
           return nil
         },
         validationMessage: WorkspaceResourceAddition.validationMessage(
-          sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState),
-        errorMessage: additionError ?? (sheet == .device ? deviceRegistry.errorMessage : nil),
+          sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+          audioDiscoveryError: deviceRegistry.errorMessage),
+        errorMessage: additionError,
         submit: { addResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
           additionError = nil
-        })
+        }, deviceDiscoveryMessage: deviceRegistry.errorMessage)
     }
   }
 
@@ -186,21 +187,18 @@ public struct WorkspaceSidebar: View {
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
-    additionError = sheet == .device ? deviceRegistry.errorMessage : nil
+    additionError = nil
     addSheet = sheet
   }
 
   private func addResource(_ sheet: WorkspaceAddSheet) {
     if sheet == .device {
       deviceRegistry.refresh()
-      if let message = deviceRegistry.errorMessage {
-        additionError = message
-        return
-      }
     }
     do {
       let id = try WorkspaceResourceAddition.add(
-        sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState)
+        sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+        audioDiscoveryError: deviceRegistry.errorMessage)
       if sheet == .device {
         appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
         dispatcher?.synchronizeCaptureInputs(

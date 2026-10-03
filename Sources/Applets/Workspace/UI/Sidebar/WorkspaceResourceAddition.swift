@@ -81,9 +81,14 @@ enum WorkspaceResourceAddition {
 
   static func validationMessage(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    uiState: WorkspaceUIState
+    uiState: WorkspaceUIState, audioDiscoveryError: String? = nil
   ) -> String? {
     if uiState.isOutputActive { return "Stop output before adding a resource." }
+    if sheet == .device, case .coreAudioDevice? = draft.physicalDeviceID,
+      let audioDiscoveryError
+    {
+      return audioDiscoveryError
+    }
     if sheet == .device && !devices.contains(where: { $0.id == draft.physicalDeviceID }) {
       return "Select an available input device."
     }
@@ -105,10 +110,11 @@ enum WorkspaceResourceAddition {
 
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    uiState: WorkspaceUIState
+    uiState: WorkspaceUIState, audioDiscoveryError: String? = nil
   ) throws -> UInt64 {
     if let message = validationMessage(
-      sheet: sheet, draft: draft, devices: devices, uiState: uiState)
+      sheet: sheet, draft: draft, devices: devices, uiState: uiState,
+      audioDiscoveryError: audioDiscoveryError)
     {
       throw AdditionError(message: message)
     }

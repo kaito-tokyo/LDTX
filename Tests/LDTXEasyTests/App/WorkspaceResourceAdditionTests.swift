@@ -9,6 +9,30 @@ import Testing
 @Suite
 @MainActor
 struct WorkspaceResourceAdditionUnitTestSuite {
+  @Test func audioDiscoveryFailureDoesNotBlockCameraAddition() throws {
+    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
+    let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "audio"), name: "Audio")
+    var draft = WorkspaceAddDraft()
+    draft.physicalDeviceID = camera.id
+    #expect(
+      WorkspaceResourceAddition.validationMessage(
+        sheet: .device, draft: draft, devices: [camera], uiState: state,
+        audioDiscoveryError: "Audio discovery failed") == nil)
+    let id = try WorkspaceResourceAddition.add(
+      sheet: .device, draft: draft, devices: [camera], uiState: state,
+      audioDiscoveryError: "Audio discovery failed")
+    #expect(state.definition.inputDevices.first?.videoDevice.internalID == id)
+    let before = state.definition
+    draft.physicalDeviceID = audio.id
+    #expect(throws: (any Error).self) {
+      try WorkspaceResourceAddition.add(
+        sheet: .device, draft: draft, devices: [camera, audio], uiState: state,
+        audioDiscoveryError: "Audio discovery failed")
+    }
+    #expect(state.definition == before)
+  }
+
   @Test func outputStateLocksDefinitionChangesDuringTransitions() {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
     var draft = WorkspaceAddDraft()
