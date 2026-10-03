@@ -6,7 +6,6 @@ import Foundation
 
 public enum WorkspaceInspectorKind: Int {
   case invalid = 0
-  case programVideoLayers = 1
   case workspaceCanvas = 2
   case workspaceOutput = 3
   case audioInputDevice = 4

@@ -5,6 +5,7 @@ import AppKit
 import Foundation
 import LDTXAppletSupport
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
@@ -21,6 +22,73 @@ struct WorkspaceDocumentSystemTestSuite {
   private static let controller = WorkspaceInitializingDocumentController()
 
   init() { _ = Self.controller }
+
+  @Test func programSelectionUpdatesOwnedRuntimesAndStaysWindowLocal() async throws {
+    let suite = "ProgramSelection.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let first = WorkspaceDocument()
+    let second = WorkspaceDocument()
+    defer {
+      first.close()
+      second.close()
+    }
+    first.uiState.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    first.uiState.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    let firstWindow = WorkspaceWindowController(
+      uiState: first.uiState,
+      persistenceCoordinator: first.persistenceCoordinator, appletData: data,
+      documentReference: DocumentReference(first))
+    first.addWindowController(firstWindow)
+    let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
+    let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
+    second.uiState.definition = first.uiState.definition
+    let secondWindow = WorkspaceWindowController(
+      uiState: second.uiState,
+      persistenceCoordinator: second.persistenceCoordinator, appletData: data,
+      documentReference: DocumentReference(second))
+    second.addWindowController(secondWindow)
+    try secondWindow.selectProgram(internalID: a)
+    let landscape = try #require(firstWindow.windowRuntime.runtime(for: .landscape))
+    let portrait = try #require(firstWindow.windowRuntime.runtime(for: .portrait))
+    let definition = first.uiState.definition
+    try firstWindow.selectProgram(internalID: b)
+    #expect(firstWindow.windowRuntime.runtime(for: .landscape) === landscape)
+    #expect(firstWindow.windowRuntime.runtime(for: .portrait) === portrait)
+    #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
+    #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
+    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
+    #expect(first.uiState.inspectorSelector == nil)
+    #expect(first.uiState.definition == definition)
+    #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: UInt64.max) }
+    for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
+      firstWindow.windowRuntime.setRecordingState(state)
+      #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: a) }
+      #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
+    }
+    firstWindow.windowRuntime.setRecordingState(.paused)
+    try firstWindow.selectProgram(internalID: a)
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Selection.ldtxworkspace")
+    try await save(first, to: url)
+    try firstWindow.selectProgram(internalID: b)
+    await firstWindow.shutdown()
+    first.close()
+    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    defer { reopened.close() }
+    let reopenedWindow = WorkspaceWindowController(
+      uiState: reopened.uiState,
+      persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
+      documentReference: DocumentReference(reopened))
+    reopened.addWindowController(reopenedWindow)
+    #expect(
+      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
+    #expect(reopened.uiState.inspectorSelector == nil)
+    await reopenedWindow.shutdown()
+    await secondWindow.shutdown()
+  }
 
   @Test func sharedAssignmentsUpdateBothWindowsAndStopObservingAfterShutdown() async throws {
     let suite = "WorkspaceDocumentAssignments.\(UUID())"
@@ -243,6 +311,75 @@ struct WorkspaceDocumentSystemTestSuite {
         if let error { continuation.resume(throwing: error) } else { continuation.resume() }
       }
     }
+  }
+
+  @Test func newWorkspaceSaveCloseAndReopenRestoresPreview() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("Lifecycle-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Lifecycle.ldtxworkspace")
+    let document = WorkspaceDocument()
+    #expect(document.windowControllers.isEmpty)
+    #expect(document.fileURL == nil)
+    try await save(document, to: url)
+    document.finishCreation(success: true)
+    let initialWindow = try #require(document.windowControllers.first?.window as? WorkspaceWindow)
+    #expect(initialWindow.isVisible)
+    #expect(!initialWindow.contentPane.showsProgramPreview)
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 101
+    program.displayName = "Main"
+    program.landscapeVideoLayerInternalIds = [202, 203]
+    program.portraitVideoLayerInternalIds = [202, 203]
+    document.uiState.definition.programs = [program]
+    document.uiState.definition.videoComponents = [
+      WorkspaceResourceFactory.makeSolidColor(id: 202, name: "Color"),
+      WorkspaceResourceFactory.makeClock(id: 203, name: "Clock"),
+    ]
+    document.uiState.preferences.monitorVolume = -8
+    var layerPreferences = document.uiState.preferences.programPreferences[101] ?? .init()
+    layerPreferences.landscapeVideoLayerMuted[202] = true
+    layerPreferences.portraitVideoLayerMuted[203] = true
+    document.uiState.preferences.programPreferences[101] = layerPreferences
+    document.uiState.inspectorSelector = .init(kind: .clockVideoComponent, internalID: 203)
+    #expect(initialWindow.contentPane.showsProgramPreview)
+    #expect(document.isDocumentEdited)
+    try await save(document, to: url, operation: .saveOperation)
+    #expect(document.fileURL == url)
+    #expect(document.uiState.localStateURL == url)
+    #expect(!document.isDocumentEdited)
+    let expectedDefinition = document.uiState.definition
+    let expectedPreferences = document.uiState.preferences
+    let firstController = try #require(
+      document.windowControllers.first as? WorkspaceWindowController)
+    await document.shutdown()
+    document.close()
+    #expect(!initialWindow.isVisible)
+    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    reopened.makeWindowControllers()
+    reopened.showWindows()
+    #expect(reopened.windowControllers.count == 1)
+    let controller = try #require(reopened.windowControllers.first as? WorkspaceWindowController)
+    let window = try #require(controller.window as? WorkspaceWindow)
+    #expect(window !== initialWindow)
+    #expect(window.isVisible)
+    #expect(reopened.fileURL == url)
+    #expect(reopened.uiState.localStateURL == url)
+    #expect(reopened.uiState.inspectorSelector == nil)
+    #expect(reopened.uiState.definition == expectedDefinition)
+    #expect(reopened.uiState.preferences == expectedPreferences)
+    #expect(!reopened.isDocumentEdited)
+    #expect(window.contentPane.showsProgramPreview)
+    #expect(
+      window.contentPane.landscapeRuntime === controller.windowRuntime.runtime(for: .landscape))
+    #expect(
+      window.contentPane.landscapeRuntime !== firstController.windowRuntime.runtime(for: .landscape)
+    )
+    #expect(
+      window.toolbar?.items.contains { $0.itemIdentifier.rawValue == "workspace.toggleOutput" }
+        == true)
+    await reopened.shutdown()
+    reopened.close()
   }
 
   @Test func newWorkspacePreservesInitialContentSize() async throws {

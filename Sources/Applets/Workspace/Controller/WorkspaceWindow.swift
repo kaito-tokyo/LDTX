@@ -10,6 +10,7 @@ import LDTXWorkspaceAppletUI
 import SwiftUI
 
 public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
+  let contentPane: WorkspaceContent
   private let uiState: WorkspaceUIState
   private let dispatcher: any WorkspaceDispatcherProtocol
 
@@ -19,10 +20,15 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     appletData: WorkspaceAppletData,
     dispatcher: any WorkspaceDispatcherProtocol,
     uiState: WorkspaceUIState,
-    documentReference: DocumentReference
+    documentReference: DocumentReference,
+    landscapeRuntime: ProgramRuntime,
+    portraitRuntime: ProgramRuntime
   ) {
     self.uiState = uiState
     self.dispatcher = dispatcher
+    self.contentPane = WorkspaceContent(
+      deviceRegistry: deviceRegistry, uiState: uiState, appletData: appletData,
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime)
 
     super.init(
       contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
@@ -39,12 +45,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     )
     .environment(\.workspaceDispatcher, dispatcher)
 
-    let contentView = WorkspaceContent(
-      deviceRegistry: deviceRegistry,
-      uiState: uiState,
-      appletData: appletData
-    )
-    .environment(\.workspaceDispatcher, dispatcher)
+    let contentView =
+      contentPane
+      .environment(\.workspaceDispatcher, dispatcher)
 
     let inspectorView = WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
@@ -176,20 +179,4 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     }
   }
 
-  public override func encodeRestorableState(with coder: NSCoder) {
-    super.encodeRestorableState(with: coder)
-    coder.encode(
-      uiState.inspectorSelector?.asRepresentation(),
-      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
-  }
-
-  public override func restoreState(with coder: NSCoder) {
-    super.restoreState(with: coder)
-    if let representation = coder.decodeObject(
-      of: WorkspaceInspectorSelectorRepresentation.self,
-      forKey: "tokyo.kaito.ldtx.LDTX.WorkspaceAppletController.v1.inspector")
-    {
-      uiState.inspectorSelector = representation.selector
-    }
-  }
 }

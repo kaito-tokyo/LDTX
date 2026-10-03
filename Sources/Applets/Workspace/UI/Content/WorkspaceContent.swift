@@ -11,28 +11,89 @@ import UniformTypeIdentifiers
 public struct WorkspaceContent: View {
   @Environment(\.documentReference) private var documentReference
   private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? uiState.localStateURL
+    documentReference?.document?.fileURL ?? uiState.localStateURL
   }
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
+  let landscapeRuntime: ProgramRuntime
+  let portraitRuntime: ProgramRuntime
   let deviceRegistry: DeviceRegistryService
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
+  @State private var showingProgramSelection = false
 
   public init(
     deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
-    appletData: WorkspaceAppletData
+    appletData: WorkspaceAppletData,
+    landscapeRuntime: ProgramRuntime,
+    portraitRuntime: ProgramRuntime
   ) {
+    self.landscapeRuntime = landscapeRuntime
+    self.portraitRuntime = portraitRuntime
     self.deviceRegistry = deviceRegistry
     self._uiState = Bindable(wrappedValue: uiState)
     self._appletData = Bindable(wrappedValue: appletData)
   }
 
   public var body: some View {
+    GeometryReader { geometry in
+      VStack(spacing: 0) {
+        let size = WorkspacePreviewLayout.size(in: geometry.size)
+        Group {
+          if showsProgramPreview {
+            WorkspaceRuntimeCanvasPairPreview(
+              landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
+              landscapeSize: CGSize(width: 16, height: 9),
+              portraitSize: CGSize(width: 9, height: 16))
+          } else {
+            Text("No Program selected")
+              .foregroundStyle(.secondary)
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .accessibilityIdentifier("workspaceEmptyPreview")
+          }
+        }
+        .frame(width: size.width, height: size.height)
+        .frame(maxWidth: .infinity)
+        Button(selectedProgram?.displayName ?? "Select Program…") { showingProgramSelection = true }
+          .buttonStyle(.plain)
+          .lineLimit(1)
+          .accessibilityLabel("Select Program: \(selectedProgram?.displayName ?? "None")")
+          .accessibilityIdentifier("workspaceProgramSelection")
+          .disabled(!uiState.recordingState.canSelectProgram)
+          .frame(height: WorkspacePreviewLayout.selectionHeight)
+          .frame(maxWidth: .infinity)
+          .padding(.horizontal, 20)
+        Divider()
+        editorContent
+      }
+    }
+    .sheet(isPresented: $showingProgramSelection) {
+      WorkspaceSelectionSheet(
+        title: "Select Program",
+        options: uiState.definition.programs.map { .init(id: $0.internalID, name: $0.displayName) },
+        loadError: nil, clearTitle: nil, isEditable: uiState.recordingState.canSelectProgram,
+        refresh: {},
+        commit: { id in
+          guard let id, let workspaceDispatcher else {
+            throw WorkspaceSelectionError(message: "Select an available Program.")
+          }
+          try workspaceDispatcher.selectProgram(internalID: id)
+        }, cancel: { showingProgramSelection = false },
+        currentDescription: "Current Program: \(selectedProgram?.displayName ?? "None")")
+    }
+    .onAppear {
+      refreshCaptureDevices()
+      workspaceDispatcher?.synchronizeAudioMonitor()
+    }
+  }
+
+  var showsProgramPreview: Bool { selectedProgram != nil }
+
+  private var editorContent: some View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
+        videoLayers
         Text(uiState.definition.displayName)
           .font(.title2.weight(.semibold))
         HStack {
@@ -64,7 +125,6 @@ public struct WorkspaceContent: View {
             }
           }
         }
-        videoLayers
         audioMix
         inputDeviceAssignments
         if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
@@ -74,10 +134,6 @@ public struct WorkspaceContent: View {
         Spacer()
       }
       .padding(20)
-    }
-    .onAppear {
-      refreshCaptureDevices()
-      workspaceDispatcher?.synchronizeAudioMonitor()
     }
   }
 
@@ -309,11 +365,9 @@ public struct WorkspaceContent: View {
     }
   }
 
-  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    guard
-      let id = localState.selectedProgramInternalID ?? uiState.definition.programs.first?.internalID
-    else { return nil }
-    return uiState.definition.programs.first { $0.internalID == id }
+  var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
+    uiState.definition.programs.first { $0.internalID == localState.selectedProgramInternalID }
+      ?? uiState.definition.programs.first
   }
 
   @ViewBuilder
@@ -491,7 +545,7 @@ public struct WorkspaceContent: View {
       })
   }
 
-  private func moveVideoLayer(
+  func moveVideoLayer(
     in program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole,
     from index: Int,
@@ -507,7 +561,7 @@ public struct WorkspaceContent: View {
     performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
   }
 
-  private func removeVideoLayer(
+  func removeVideoLayer(
     in program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole,
     at index: Int
@@ -539,7 +593,7 @@ public struct WorkspaceContent: View {
     return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
   }
 
-  private func addVideoLayer(
+  func addVideoLayer(
     _ internalID: UInt64,
     to program: Ldtx_Workspace_V4_ProgramDefinition,
     role: ProgramCanvasRole
@@ -654,24 +708,16 @@ public struct WorkspaceContent: View {
       GroupBox("Physical Devices") {
         VStack(alignment: .leading) {
           ForEach(videoInputs, id: \.internalID) { input in
-            Picker(input.displayName, selection: videoDeviceBinding(for: input.internalID)) {
-              Text("No camera").tag(Optional<WorkspacePhysicalDeviceID>.none)
-              ForEach(deviceRegistry.cameras) { camera in
-                Text(camera.name).tag(
-                  Optional(WorkspacePhysicalDeviceID.avCaptureDevice(uniqueID: camera.id)))
-              }
-            }
-            .disabled(uiState.isOutputActive || workspaceURL == nil)
+            WorkspacePhysicalDeviceField(
+              title: input.displayName, internalID: input.internalID, isAudio: false,
+              uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry,
+              isEditable: workspaceURL != nil)
           }
           ForEach(audioInputs, id: \.internalID) { input in
-            Picker(input.displayName, selection: audioDeviceBinding(for: input.internalID)) {
-              Text("No audio device").tag(Optional<WorkspacePhysicalDeviceID>.none)
-              ForEach(deviceRegistry.audioInputDevices) { device in
-                Text(device.name).tag(
-                  Optional(WorkspacePhysicalDeviceID.coreAudioDevice(uid: device.id)))
-              }
-            }
-            .disabled(uiState.isOutputActive || workspaceURL == nil)
+            WorkspacePhysicalDeviceField(
+              title: input.displayName, internalID: input.internalID, isAudio: true,
+              uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry,
+              isEditable: workspaceURL != nil)
           }
           Button("Refresh Physical Devices") { refreshCaptureDevices() }
         }
@@ -691,32 +737,6 @@ public struct WorkspaceContent: View {
       guard case .audioDevice(let device)? = input.definition else { return nil }
       return device
     }
-  }
-
-  private func videoDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
-    Binding(
-      get: {
-        guard
-          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
-        else { return nil }
-        return appletData.physicalDeviceID(for: internalID)
-      },
-      set: { id in
-        appletData.setPhysicalDeviceID(id, for: internalID)
-      })
-  }
-
-  private func audioDeviceBinding(for internalID: UInt64) -> Binding<WorkspacePhysicalDeviceID?> {
-    Binding(
-      get: {
-        guard
-          case .coreAudioDevice? = appletData.physicalDeviceID(for: internalID)
-        else { return nil }
-        return appletData.physicalDeviceID(for: internalID)
-      },
-      set: { id in
-        appletData.setPhysicalDeviceID(id, for: internalID)
-      })
   }
 
   private func refreshCaptureDevices() {

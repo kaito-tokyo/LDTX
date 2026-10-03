@@ -31,19 +31,6 @@ public struct WorkspaceSidebar: View {
     let visions = uiState.definition.visions
 
     VStack {
-      Button {
-        uiState.inspectorSelector = .init(kind: .programVideoLayers)
-      } label: {
-        Label("Video Layers", systemImage: "square.stack.3d.up")
-          .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      .background {
-        if uiState.inspectorSelector?.kind == .programVideoLayers {
-          RoundedRectangle(cornerRadius: 6)
-            .fill(Color.accentColor)
-        }
-      }
-
       List(selection: $uiState.inspectorSelector) {
         Section {
           Label("Canvas", systemImage: "rectangle.on.rectangle")
@@ -174,7 +161,11 @@ public struct WorkspaceSidebar: View {
         validationMessage: WorkspaceResourceAddition.validationMessage(
           sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState),
         errorMessage: additionError ?? (sheet == .device ? deviceRegistry.errorMessage : nil),
-        submit: { addResource(sheet) }, cancel: { addSheet = nil })
+        submit: { addResource(sheet) }, cancel: { addSheet = nil },
+        refresh: {
+          deviceRegistry.refresh()
+          additionError = nil
+        })
     }
   }
 
@@ -191,12 +182,6 @@ public struct WorkspaceSidebar: View {
     guard !uiState.isOutputActive else { return }
     if sheet == .device { deviceRegistry.refresh() }
     draft = WorkspaceAddDraft()
-    draft.physicalDeviceID = deviceOptions.first?.id
-    draft.videoInputID =
-      uiState.definition.inputDevices.compactMap {
-        if case .videoDevice(let device) = $0.definition { return device.internalID }
-        return nil
-      }.first
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
     additionError = sheet == .device ? deviceRegistry.errorMessage : nil
@@ -204,7 +189,13 @@ public struct WorkspaceSidebar: View {
   }
 
   private func addResource(_ sheet: WorkspaceAddSheet) {
-    if sheet == .device { deviceRegistry.refresh() }
+    if sheet == .device {
+      deviceRegistry.refresh()
+      if let message = deviceRegistry.errorMessage {
+        additionError = message
+        return
+      }
+    }
     do {
       let id = try WorkspaceResourceAddition.add(
         sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState)

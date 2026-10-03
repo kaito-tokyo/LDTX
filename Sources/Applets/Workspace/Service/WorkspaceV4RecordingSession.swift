@@ -270,6 +270,25 @@ public final class WorkspaceV4RecordingSession {
     terminalFailureMessage = nil
   }
 
+  public func reconfigureProgramOutput() throws {
+    guard state == .recording, let activeSession, let programID = selectedProgramInternalID else {
+      return
+    }
+    guard
+      activeSession.reconfigureAudio(
+        landscapePreferences: preferences(for: programID, role: .landscape),
+        portraitPreferences: portraitPreferences(for: programID),
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
+    else {
+      let error = NSError(
+        domain: "WorkspaceProgramSelection", code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "The selected Program audio could not be applied."])
+      state = .failed(error.localizedDescription)
+      Task { await stop() }
+      throw error
+    }
+  }
+
   public func updateMixPreferences() {
     guard let activeSession, let programID = selectedProgramInternalID else {
       return

@@ -24,5 +24,7 @@ public enum WorkspaceRecordingState: Equatable {
     }
   }
 
+  public var canSelectProgram: Bool { canStart || self == .recording }
+
   public var canStop: Bool { self == .recording || self == .paused }
 }

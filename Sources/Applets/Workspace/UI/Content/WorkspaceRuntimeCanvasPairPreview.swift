@@ -36,3 +36,17 @@ public struct WorkspaceRuntimeCanvasPairPreview: View {
     )
   }
 }
+
+/// Fits the pair inside the Content pane while reserving space for its editor.
+enum WorkspacePreviewLayout {
+  static let selectionHeight: CGFloat = 32
+  static let aspectRatio: CGFloat = 16.0 / 9.0 + 9.0 / 16.0
+
+  static func size(in container: CGSize) -> CGSize {
+    let availableWidth = max(0, container.width - 40)
+    let height = min(
+      max(0, container.height) * 0.45, availableWidth / aspectRatio,
+      max(0, container.height - selectionHeight) * 0.45)
+    return CGSize(width: height * aspectRatio, height: height)
+  }
+}

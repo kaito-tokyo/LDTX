@@ -11,6 +11,7 @@ public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
   @MainActor func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void)
+  @MainActor func selectProgram(internalID: UInt64) throws
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws
   @MainActor func pauseOutput() async

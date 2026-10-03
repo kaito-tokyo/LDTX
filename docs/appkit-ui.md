@@ -184,3 +184,32 @@ and finalizes the current output and leaves the session paused; the next Start
 creates a new output session. Stop from paused returns to idle. Transition states
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
+
+The Workspace Content pane displays a fixed Landscape and Portrait preview above
+its scrollable editor. The window passes the same Program runtimes used by its
+output session to the Content pane. The pair keeps its aspect ratio, has 20-point
+horizontal margins, and uses at most 45 percent of the Content height. Without a
+valid Program, the preview region displays a placeholder. Preview presentation
+does not create capture sessions or change the Workspace definition.
+
+### Dynamic reference selection
+
+Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Explicit user selection and resource-addition selection remain window-local.
+
+Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Assignment removal and use of the default monitor device are explicit actions. Fixed enumerations retain their existing controls.
+
+### Video layer editing belongs to Content
+
+The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
+
+### Program selection below the previews
+
+The fixed preview region includes a plain Program-name button above the editor
+scroll view. Its selection sheet starts unselected and applies only an explicit
+choice. The controller validates both canvas projections before updating the
+Workspace-local selection. Selection leaves Sidebar and Inspector state alone.
+
+Program changes are allowed during output, but not during start, pause, or stop.
+Both existing runtimes and output audio mixes receive the selected Program's
+configuration and preferences. Recording packages and publishing sessions stay
+open across the change; output failures follow the normal finalization path.

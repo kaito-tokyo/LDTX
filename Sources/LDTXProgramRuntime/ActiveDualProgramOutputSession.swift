@@ -153,6 +153,25 @@ public final class ActiveDualProgramOutputSession {
     portrait.endVideoFrameHold()
   }
 
+  @discardableResult
+  public func reconfigureAudio(
+    landscapePreferences: ProgramPreferences, portraitPreferences: ProgramPreferences,
+    audioDeviceIDsByInputKey: [String: String]
+  ) -> Bool {
+    self.portraitPreferences = portraitPreferences
+    self.portraitAudioDeviceIDsByInputKey = audioDeviceIDsByInputKey
+    let landscapeAccepted =
+      !runsLandscape
+      || landscape.reconfigureAudio(
+        programPreferences: landscapePreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey
+      )
+    let portraitAccepted =
+      !runsPortrait
+      || portrait.reconfigureAudio(
+        programPreferences: portraitPreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey)
+    return landscapeAccepted && portraitAccepted
+  }
+
   public func updateProgramPreferences(_ preferences: ProgramPreferences) {
     landscape.updateProgramPreferences(preferences)
   }
