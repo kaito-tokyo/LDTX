@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXProgram
 import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
@@ -46,7 +47,8 @@ struct SwiftUIViewStateUnitTestSuite {
 
   @Test func workspaceSidebarUsesPreviewState() {
     let uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-    let sidebar = WorkspaceSidebar(uiState: uiState)
+    let sidebar = WorkspaceSidebar(
+      uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData())
 
     #expect(uiState.definition.displayName == "Workspace Sidebar Preview")
     _ = sidebar.body

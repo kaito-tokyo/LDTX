@@ -115,24 +115,16 @@ public struct WorkspaceContent: View {
     workspaceDispatcher?.synchronizeAudioMonitor()
   }
   private func addVideoInput() {
-    let id = nextInternalID()
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
-    device.internalID = id
-    device.displayName = uniqueDisplayName("Video Input")
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
+    let wrapper = WorkspaceResourceFactory.makeVideoInput(
+      id: nextInternalID(), name: uniqueDisplayName("Video Input"))
     var definition = uiState.definition
     definition.inputDevices.append(wrapper)
     uiState.definition = definition
     errorMessage = nil
   }
   private func addAudioInput() {
-    let id = nextInternalID()
-    var device = Ldtx_Workspace_V4_AudioInputDevice()
-    device.internalID = id
-    device.displayName = uniqueDisplayName("Audio Input")
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.audioDevice = device
+    let wrapper = WorkspaceResourceFactory.makeAudioInput(
+      id: nextInternalID(), name: uniqueDisplayName("Audio Input"))
     var definition = uiState.definition
     definition.inputDevices.append(wrapper)
     uiState.definition = definition
@@ -140,110 +132,51 @@ public struct WorkspaceContent: View {
   }
   private func addVFXSource() {
     guard let inputID = firstVideoInputID else { return }
-    var component = Ldtx_Workspace_V4_VfxSourceComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("VFX Source")
-    component.inputDeviceInternalID = inputID
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.vfxSource = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeVFXSource(
+        id: nextInternalID(), name: uniqueDisplayName("VFX Source"), inputID: inputID))
   }
 
   private func addSolidColor() {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
-    color.red = 0.2
-    color.green = 0.2
-    color.blue = 0.2
-    color.alpha = 1
-    var component = Ldtx_Workspace_V4_FillSolidColorComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Solid Color")
-    component.color = color
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.solidColorFill = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeSolidColor(
+        id: nextInternalID(), name: uniqueDisplayName("Solid Color")))
   }
 
   private func addClock() {
-    var component = Ldtx_Workspace_V4_ClockComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Clock")
-    component.width = 320 / 1_920
-    component.height = 80 / 1_080
-    component.foregroundColor = opaqueWhite
-    var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
-    background.alpha = 0.65
-    component.backgroundColor = background
-    component.showsSeconds = true
-    component.uses24HourTime = true
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.clock = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeClock(
+        id: nextInternalID(), name: uniqueDisplayName("Clock")))
   }
 
   private func addLinearGradient() {
-    var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Linear Gradient")
-    component.startColor = gradientStartColor
-    component.endX = 1
-    component.endY = 1
-    component.endColor = gradientEndColor
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.linearGradientFill = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeLinearGradient(
+        id: nextInternalID(), name: uniqueDisplayName("Linear Gradient")))
   }
 
   private func addRadialGradient() {
-    var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Radial Gradient")
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.outerRadius = 0.5
-    component.innerColor = gradientStartColor
-    component.outerColor = gradientEndColor
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.radialGradientFill = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeRadialGradient(
+        id: nextInternalID(), name: uniqueDisplayName("Radial Gradient")))
   }
 
   private func addConicGradient() {
-    var component = Ldtx_Workspace_V4_FillConicGradientComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Conic Gradient")
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.startColor = gradientStartColor
-    component.endColor = gradientEndColor
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.conicGradientFill = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeConicGradient(
+        id: nextInternalID(), name: uniqueDisplayName("Conic Gradient")))
   }
 
   private func addTestPattern() {
-    var component = Ldtx_Workspace_V4_TestPatternComponent()
-    component.internalID = nextInternalID()
-    component.displayName = uniqueDisplayName("Test Pattern")
-    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.testPattern = component
-    appendVideoComponent(wrapper)
+    appendVideoComponent(
+      WorkspaceResourceFactory.makeTestPattern(
+        id: nextInternalID(), name: uniqueDisplayName("Test Pattern")))
   }
 
   private func addOcrVision() {
     guard let inputID = firstVideoInputID else { return }
-    var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSeconds = 5
-    var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-    triggerWrapper.intervalTrigger = trigger
-    var vision = Ldtx_Workspace_V4_OcrVision()
-    vision.internalID = nextInternalID()
-    vision.displayName = uniqueDisplayName("OCR Vision")
-    vision.inputDeviceInternalID = inputID
-    vision.source = .inputDeviceInternalID(inputID)
-    vision.triggers = [triggerWrapper]
-    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.ocrVision = vision
+    let wrapper = WorkspaceResourceFactory.makeOcrVision(
+      id: nextInternalID(), name: uniqueDisplayName("OCR Vision"), inputID: inputID)
     var definition = uiState.definition
     definition.visions.append(wrapper)
     uiState.definition = definition
@@ -259,31 +192,7 @@ public struct WorkspaceContent: View {
     errorMessage = nil
   }
 
-  private var gradientStartColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
-    color.red = 1
-    color.green = 1
-    color.blue = 1
-    color.alpha = 1
-    return color
-  }
-
-  private var gradientEndColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
-    color.red = 0.15
-    color.green = 0.35
-    color.blue = 0.85
-    color.alpha = 1
-    return color
-  }
-
-  private var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor { gradientStartColor }
-
-  private func nextInternalID() -> UInt64 {
-    let milliseconds = UInt64(max(0, Date().timeIntervalSince1970 * 1_000))
-    return ((milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15)
-      | UInt64.random(in: 0...0x7fff)
-  }
+  private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
 
   private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
     guard let programID = localState.selectedProgramInternalID else { return }

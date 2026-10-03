@@ -46,6 +46,13 @@ is nil. Missing environments and released documents disable document-dependent
 settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
 continue to use AppKit's supplied URLs rather than the environment.
+The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
+input devices, video components, and OCR visions. The window injects its device
+registry and app-local data. Form drafts do not change the document until Add
+validates the current output state, name, and input references. Add selects the
+new resource in the inspector without placing it in a Program or saving the
+Workspace automatically. Physical-device assignments remain app-local.
+
 WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.

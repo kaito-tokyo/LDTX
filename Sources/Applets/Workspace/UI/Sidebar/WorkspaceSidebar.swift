@@ -2,12 +2,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
   @Bindable var uiState: WorkspaceUIState
+  private let deviceRegistry: DeviceRegistryService
+  private let appletData: WorkspaceAppletData
+  @Environment(\.workspaceDispatcher) private var dispatcher
+  @State private var addSheet: WorkspaceAddSheet?
+  @State private var draft = WorkspaceAddDraft()
+  @State private var additionError: String?
 
-  public init(uiState: WorkspaceUIState) {
+  public init(
+    uiState: WorkspaceUIState,
+    deviceRegistry: DeviceRegistryService,
+    appletData: WorkspaceAppletData
+  ) {
+    self.deviceRegistry = deviceRegistry
+    self.appletData = appletData
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
@@ -59,11 +73,12 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.device)
           } label: {
             Label("Add device...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(uiState.isOutputActive)
         } header: {
           Text("INPUT DEVICES")
         }
@@ -112,11 +127,12 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.videoComponent)
           } label: {
             Label("Add video component...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(uiState.isOutputActive)
         } header: {
           Text("VIDEO COMPONENTS")
         }
@@ -135,23 +151,84 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.vision)
           } label: {
             Label("Add vision...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(uiState.isOutputActive)
         } header: {
           Text("VISIONS")
         }
       }
     }
     .listStyle(.sidebar)
+    .onChange(of: draft) { _, _ in additionError = nil }
+    .sheet(item: $addSheet) { sheet in
+      WorkspaceAddResourceSheet(
+        sheet: sheet, draft: $draft, devices: deviceOptions,
+        videoInputs: uiState.definition.inputDevices.compactMap {
+          if case .videoDevice(let device) = $0.definition { return device }
+          return nil
+        },
+        validationMessage: WorkspaceResourceAddition.validationMessage(
+          sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState),
+        errorMessage: additionError ?? (sheet == .device ? deviceRegistry.errorMessage : nil),
+        submit: { addResource(sheet) }, cancel: { addSheet = nil })
+    }
+  }
+
+  private var deviceOptions: [WorkspaceAddDeviceOption] {
+    deviceRegistry.cameras.map {
+      .init(id: .avCaptureDevice(uniqueID: $0.id), name: $0.name)
+    }
+      + deviceRegistry.audioInputDevices.map {
+        .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
+      }
+  }
+
+  private func beginAdding(_ sheet: WorkspaceAddSheet) {
+    guard !uiState.isOutputActive else { return }
+    if sheet == .device { deviceRegistry.refresh() }
+    draft = WorkspaceAddDraft()
+    draft.physicalDeviceID = deviceOptions.first?.id
+    draft.videoInputID =
+      uiState.definition.inputDevices.compactMap {
+        if case .videoDevice(let device) = $0.definition { return device.internalID }
+        return nil
+      }.first
+    if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
+    if sheet == .vision { draft.name = "OCR Vision" }
+    additionError = sheet == .device ? deviceRegistry.errorMessage : nil
+    addSheet = sheet
+  }
+
+  private func addResource(_ sheet: WorkspaceAddSheet) {
+    if sheet == .device { deviceRegistry.refresh() }
+    do {
+      let id = try WorkspaceResourceAddition.add(
+        sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState)
+      if sheet == .device {
+        appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
+        dispatcher?.synchronizeCaptureInputs(
+          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+        ) { _ in }
+        dispatcher?.synchronizeAudioMonitor()
+      }
+      if sheet == .vision { dispatcher?.synchronizeVision() }
+      additionError = nil
+      addSheet = nil
+    } catch {
+      additionError = error.localizedDescription
+    }
   }
 
 }
 
 #Preview("Workspace Sidebar") {
   @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-  WorkspaceSidebar(uiState: uiState)
-    .frame(width: 260, height: 640)
+  WorkspaceSidebar(
+    uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
+  )
+  .frame(width: 260, height: 640)
 }

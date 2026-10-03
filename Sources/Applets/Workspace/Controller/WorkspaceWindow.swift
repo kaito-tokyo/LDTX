@@ -32,8 +32,10 @@ public final class WorkspaceWindow: NSWindow {
     self.title = url.deletingPathExtension().lastPathComponent
     self.isReleasedWhenClosed = false
 
-    let sidebarView = WorkspaceSidebar(uiState: uiState)
-      .environment(\.workspaceDispatcher, dispatcher)
+    let sidebarView = WorkspaceSidebar(
+      uiState: uiState, deviceRegistry: deviceRegistry, appletData: appletData
+    )
+    .environment(\.workspaceDispatcher, dispatcher)
 
     let contentView = WorkspaceContent(
       deviceRegistry: deviceRegistry,

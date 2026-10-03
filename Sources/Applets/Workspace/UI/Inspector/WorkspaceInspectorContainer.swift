@@ -158,7 +158,7 @@ public struct WorkspaceInspectorContainer: View {
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        uiState: uiState
+        uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
 

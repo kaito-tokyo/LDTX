@@ -6,7 +6,7 @@ import Foundation
 import LDTXAppletSupport
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletService
-import LDTXWorkspaceAppletUI
+@testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Testing
 
@@ -190,6 +190,48 @@ struct WorkspaceDocumentSystemTestSuite {
     second.close()
     #expect(dockTile.badgeLabel == nil)
     #expect(!controller.documents.contains { $0 === first || $0 === second })
+  }
+
+  @Test func sidebarAdditionsStayInTheirDocumentAndPersistOnlyOnSave() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("AddSheets-\(UUID())")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Show.ldtxworkspace")
+    let document = WorkspaceDocument()
+    let other = WorkspaceDocument()
+    defer {
+      document.close()
+      other.close()
+    }
+    try await save(document, to: url)
+    let savedDefinition = document.uiState.definition
+    let otherDefinition = other.uiState.definition
+    let camera = WorkspaceAddDeviceOption(
+      id: .avCaptureDevice(uniqueID: "test-camera"), name: "Camera")
+    var draft = WorkspaceAddDraft()
+    draft.physicalDeviceID = camera.id
+    let inputID = try WorkspaceResourceAddition.add(
+      sheet: .device, draft: draft, devices: [camera], uiState: document.uiState)
+    draft.name = "Color"
+    draft.componentKind = .solidColor
+    try WorkspaceResourceAddition.add(
+      sheet: .videoComponent, draft: draft, devices: [], uiState: document.uiState)
+    draft.name = "OCR"
+    draft.videoInputID = inputID
+    try WorkspaceResourceAddition.add(
+      sheet: .vision, draft: draft, devices: [], uiState: document.uiState)
+    #expect(other.uiState.definition == otherDefinition)
+    #expect(document.isDocumentEdited)
+    #expect(try WorkspaceBundleReaderV4(at: url).read().definition == savedDefinition)
+    let expected = document.uiState.definition
+    try await save(document, to: url, operation: .saveOperation)
+    #expect(!document.isDocumentEdited)
+    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    defer { reopened.close() }
+    #expect(reopened.uiState.definition == expected)
+    #expect(
+      reopened.uiState.definition.visions.first?.ocrVision.source == .inputDeviceInternalID(inputID)
+    )
   }
 
   private func save(
