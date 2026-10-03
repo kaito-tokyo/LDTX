@@ -41,16 +41,9 @@ public struct WorkspaceRuntimeCanvasPairPreview: View {
 enum WorkspacePreviewLayout {
   static let aspectRatio: CGFloat = 16.0 / 9.0 + 9.0 / 16.0
 
-  static func selectionHeight(programCount: Int, in container: CGSize) -> CGFloat {
-    guard programCount > 0 else { return 0 }
-    return min(40, max(0, container.height))
-  }
-
-  static func size(in container: CGSize, selectionHeight: CGFloat = 0) -> CGSize {
+  static func size(in container: CGSize) -> CGSize {
     let availableWidth = max(0, container.width - 40)
-    let height = min(
-      max(0, container.height) * 0.45, availableWidth / aspectRatio,
-      max(0, container.height - selectionHeight) * 0.45)
+    let height = min(max(0, container.height) * 0.45, availableWidth / aspectRatio)
     return CGSize(width: height * aspectRatio, height: height)
   }
 }

@@ -15,19 +15,31 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceToolbarSystemTestSuite {
-  @Test func swiftUIProgramRadiosLayOutAsOneHorizontalRow() {
+  @Test func swiftUIProgramRadiosLayOutVertically() {
     _ = NSApplication.shared
-    let first = WorkspaceSelectionOption(id: UInt64(11), name: "First Program")
-    let second = WorkspaceSelectionOption(id: UInt64(22), name: "Second Program")
+    var first = Ldtx_Workspace_V4_ProgramDefinition()
+    first.internalID = 11
+    first.displayName = "First Program"
+    var second = Ldtx_Workspace_V4_ProgramDefinition()
+    second.internalID = 22
+    second.displayName = "Second Program"
     let single = NSHostingView(
       rootView: WorkspaceProgramSelector(
-        options: [first], selection: .constant(11)))
+        programs: [first], selection: .constant(11)))
     let pair = NSHostingView(
       rootView: WorkspaceProgramSelector(
-        options: [first, second], selection: .constant(22)))
-    #expect(pair.fittingSize.width > single.fittingSize.width)
-    #expect(pair.fittingSize.height == single.fittingSize.height)
-    #expect(pair.fittingSize.height <= 24)
+        programs: [first, second], selection: .constant(22)))
+    #expect(pair.fittingSize.height > single.fittingSize.height)
+    #expect(pair.fittingSize.width < single.fittingSize.width * 2)
+  }
+
+  @Test func emptyProgramSelectorHasVisibleContent() {
+    _ = NSApplication.shared
+    let empty = NSHostingView(
+      rootView: WorkspaceProgramSelector(programs: [], selection: .constant(nil)))
+    #expect(empty.fittingSize.width > 0)
+    #expect(empty.fittingSize.height > 0)
+    #expect(empty.fittingSize.height <= 40)
   }
 
   @Test func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
@@ -42,28 +54,31 @@ struct WorkspaceToolbarSystemTestSuite {
     let window = makeWindow(uiState: state, appletData: data)
     defer { window.close() }
     let content = window.contentPane
-    #expect(content.programSelection == nil)
+    let inspector = WorkspaceProgramsInspector(uiState: state, appletData: data)
+    #expect(inspector.programSelection.wrappedValue == nil)
     var first = Ldtx_Workspace_V4_ProgramDefinition()
     first.internalID = 11
     first.displayName = "Same Name"
     var second = first
     second.internalID = 22
     state.definition.programs = [first, second]
-    #expect(content.programSelection?.wrappedValue == 11)
+    #expect(inspector.programSelection.wrappedValue == 11)
     data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
-    let binding = try #require(content.programSelection)
+    let binding = inspector.programSelection
     #expect(binding.wrappedValue == 22)
-    // A standalone Content value has no injected dispatcher: a rejected edit
+    // A standalone Inspector value has no injected dispatcher: a rejected edit
     // must leave the model-backed binding at its current selection.
     binding.wrappedValue = 11
     #expect(binding.wrappedValue == 22)
     #expect(data.state(for: url).selectedProgramInternalID == 22)
     state.definition.programs = [first]
     #expect(binding.wrappedValue == 11)
-    #expect(content.programSelection?.wrappedValue == 11)
+    #expect(inspector.programSelection.wrappedValue == 11)
     #expect(data.state(for: url).selectedProgramInternalID == 22)
     state.definition.programs = []
-    #expect(content.programSelection == nil)
+    #expect(inspector.programSelection.wrappedValue == nil)
+    #expect(binding.wrappedValue == nil)
+    binding.wrappedValue = nil
     #expect(!content.showsProgramPreview)
     #expect(data.state(for: url).selectedProgramInternalID == 22)
   }
@@ -79,7 +94,7 @@ struct WorkspaceToolbarSystemTestSuite {
       second.close()
     }
     #expect(state.inspectorSelector == nil)
-    state.inspectorSelector = .init(kind: .workspaceCanvas)
+    state.inspectorSelector = .init(kind: .workspacePrograms)
     #expect(state.inspectorSelector != nil)
     #expect(other.inspectorSelector == nil)
   }

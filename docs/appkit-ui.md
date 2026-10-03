@@ -202,20 +202,21 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
 
-### Program selection above the previews
+### Program selection in the Inspector
 
-The fixed preview region lists Program names in a left-aligned horizontal row
-above the previews. A SwiftUI `Picker` with `.radioGroup` and
-`.horizontalRadioGroupLayout()` displays the currently active Program and
-switches immediately on explicit selection. The
-row has a fixed height and scrolls horizontally when the names exceed the
-available width, preserving room for previews and editing.
+The first entry in Sidebar's WORKSPACE section is Programs. Selecting it opens
+an Inspector containing a standard vertical SwiftUI radio-group Picker.
+Content contains only the fixed previews and scrollable editor; Program selection
+has no reserved row, horizontal scrolling, or custom layout sizing.
+
 The Program candidates are static entries in the Workspace definition. The
-Picker uses matching `UInt64` selection and tag values and reads the resolved
-Program directly from model state. Its setter uses the existing dispatcher;
-failed changes retain the model selection and display the error. No independent
-selection state is kept. With no Program, the Picker is omitted and the empty
-preview remains visible. Resolving a stale saved ID does not rewrite it.
+Picker uses matching optional `UInt64` selection and tag values and reads the
+resolved Program directly from model state. Its setter uses the existing
+dispatcher; failed changes retain the model selection and display the error in
+the Inspector. No independent selection state is kept. With an empty Program
+array, the Inspector displays "No Program" instead of constructing a Picker.
+The empty Content preview remains visible. Resolving a stale saved ID does not
+rewrite it. Sidebar initially remains unselected.
 
 The controller validates both canvas projections before updating the
 Workspace-local selection. Selection leaves Sidebar and Inspector state alone.

@@ -38,24 +38,7 @@ public struct WorkspaceContent: View {
   public var body: some View {
     GeometryReader { geometry in
       VStack(spacing: 0) {
-        let selectionHeight = WorkspacePreviewLayout.selectionHeight(
-          programCount: uiState.definition.programs.count, in: geometry.size)
-        ScrollView(.horizontal) {
-          if let programSelection {
-            WorkspaceProgramSelector(
-              options: uiState.definition.programs.map {
-                .init(id: $0.internalID, name: $0.displayName)
-              },
-              selection: programSelection
-            )
-            .disabled(!uiState.recordingState.canSelectProgram)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-          }
-        }
-        .frame(height: selectionHeight)
-        let size = WorkspacePreviewLayout.size(in: geometry.size, selectionHeight: selectionHeight)
+        let size = WorkspacePreviewLayout.size(in: geometry.size)
         Group {
           if showsProgramPreview {
             WorkspaceRuntimeCanvasPairPreview(
@@ -82,23 +65,6 @@ public struct WorkspaceContent: View {
   }
 
   var showsProgramPreview: Bool { selectedProgram != nil }
-
-  var programSelection: Binding<UInt64>? {
-    guard let program = selectedProgram else { return nil }
-    return Binding(
-      // A removed Picker can briefly retain its binding after the last Program
-      // disappears. Retain its last valid ID only for that teardown interval.
-      get: { selectedProgram?.internalID ?? program.internalID },
-      set: { id in
-        do {
-          guard let workspaceDispatcher else {
-            throw WorkspaceSelectionError(message: "Program selection is unavailable.")
-          }
-          try workspaceDispatcher.selectProgram(internalID: id)
-          errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
-      })
-  }
 
   private var editorContent: some View {
     ScrollView(.vertical) {

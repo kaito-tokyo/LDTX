@@ -18,6 +18,7 @@ public enum WorkspaceInspectorKind: Int {
   case clockVideoComponent = 11
   case testPatternVideoComponent = 12
   case ocrVision = 13
+  case workspacePrograms = 14
 }
 
 public struct WorkspaceInspectorSelector: Hashable {

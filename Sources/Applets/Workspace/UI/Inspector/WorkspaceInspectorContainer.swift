@@ -45,6 +45,8 @@ public struct WorkspaceInspectorContainer: View {
     switch selector.kind {
     case .invalid:
       emptyInspector
+    case .workspacePrograms:
+      WorkspaceProgramsInspector(uiState: uiState, appletData: appletData)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(uiState: uiState)
     case .workspaceOutput:

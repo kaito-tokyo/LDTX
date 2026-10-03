@@ -33,6 +33,8 @@ public struct WorkspaceSidebar: View {
     VStack {
       List(selection: $uiState.inspectorSelector) {
         Section {
+          Label("Programs", systemImage: "rectangle.stack")
+            .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
           Label("Canvas", systemImage: "rectangle.on.rectangle")
             .tag(WorkspaceInspectorSelector(kind: .workspaceCanvas))
           Label("Output", systemImage: "dot.radiowaves.left.and.right")

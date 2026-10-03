@@ -53,13 +53,17 @@ struct WorkspaceDocumentSystemTestSuite {
     let landscape = try #require(firstWindow.windowRuntime.runtime(for: .landscape))
     let portrait = try #require(firstWindow.windowRuntime.runtime(for: .portrait))
     let definition = first.uiState.definition
+    first.uiState.inspectorSelector = .init(kind: .workspacePrograms)
     try firstWindow.selectProgram(internalID: b)
     #expect(firstWindow.windowRuntime.runtime(for: .landscape) === landscape)
     #expect(firstWindow.windowRuntime.runtime(for: .portrait) === portrait)
     #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
     #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
     #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
-    #expect(first.uiState.inspectorSelector == nil)
+    #expect(first.uiState.inspectorSelector == .init(kind: .workspacePrograms))
+    let inspector = WorkspaceProgramsInspector(uiState: first.uiState, appletData: data)
+    #expect(inspector.programSelection.wrappedValue == b)
+    #expect(second.uiState.inspectorSelector == nil)
     #expect(first.uiState.definition == definition)
     #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: UInt64.max) }
     for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
