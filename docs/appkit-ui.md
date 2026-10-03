@@ -52,9 +52,13 @@ continue to use AppKit's supplied URLs rather than the environment.
 The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
 input devices, video components, and OCR visions. The window injects its device
 registry and app-local data. Form drafts do not change the document until Add
-validates the current output state, name, and input references. Add selects the
-new resource in the inspector without placing it in a Program or saving the
-Workspace automatically. Physical-device assignments remain app-local.
+validates a live document, the current output state, name, and input references.
+Missing documents disable Sidebar additions, and submission rechecks document
+availability so an already-open sheet cannot add resources after release. Add
+selects the new resource in the inspector without placing it in a Program or saving the
+Workspace automatically. Physical-device assignments remain app-local. Content
+has no duplicate input, component, or Vision creation controls; its Add Video
+Layer menus place existing resources into the selected Program.
 
 WorkspaceWindow uses PaneSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the

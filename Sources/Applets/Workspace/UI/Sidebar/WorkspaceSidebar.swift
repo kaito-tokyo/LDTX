@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
@@ -10,6 +11,7 @@ public struct WorkspaceSidebar: View {
   @Bindable var uiState: WorkspaceUIState
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
+  @Environment(\.documentReference) private var documentReference
   @Environment(\.workspaceDispatcher) private var dispatcher
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
@@ -67,7 +69,7 @@ public struct WorkspaceSidebar: View {
             Label("Add device...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .disabled(uiState.isOutputActive)
+          .disabled(!canAddResource)
         } header: {
           Text("INPUT DEVICES")
         }
@@ -121,7 +123,7 @@ public struct WorkspaceSidebar: View {
             Label("Add video component...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .disabled(uiState.isOutputActive)
+          .disabled(!canAddResource)
         } header: {
           Text("VIDEO COMPONENTS")
         }
@@ -145,7 +147,7 @@ public struct WorkspaceSidebar: View {
             Label("Add vision...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
-          .disabled(uiState.isOutputActive)
+          .disabled(!canAddResource)
         } header: {
           Text("VISIONS")
         }
@@ -160,11 +162,13 @@ public struct WorkspaceSidebar: View {
           if case .videoDevice(let device) = $0.definition { return device }
           return nil
         },
-        validationMessage: WorkspaceResourceAddition.validationMessage(
-          sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
-          audioDiscoveryError: deviceRegistry.errorMessage),
+        validationMessage: documentReference?.document == nil
+          ? "The Workspace document is unavailable."
+          : WorkspaceResourceAddition.validationMessage(
+            sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+            audioDiscoveryError: deviceRegistry.errorMessage),
         errorMessage: additionError,
-        submit: { addResource(sheet) }, cancel: { addSheet = nil },
+        submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
           additionError = nil
@@ -181,8 +185,10 @@ public struct WorkspaceSidebar: View {
       }
   }
 
+  var canAddResource: Bool { documentReference?.document != nil && !uiState.isOutputActive }
+
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
-    guard !uiState.isOutputActive else { return }
+    guard canAddResource else { return }
     if sheet == .device { deviceRegistry.refresh() }
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
@@ -191,27 +197,32 @@ public struct WorkspaceSidebar: View {
     addSheet = sheet
   }
 
-  private func addResource(_ sheet: WorkspaceAddSheet) {
-    if sheet == .device {
-      deviceRegistry.refresh()
-    }
+  private func submitResource(_ sheet: WorkspaceAddSheet) {
     do {
-      let id = try WorkspaceResourceAddition.add(
-        sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
-        audioDiscoveryError: deviceRegistry.errorMessage)
-      if sheet == .device {
-        appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-        dispatcher?.synchronizeCaptureInputs(
-          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-        ) { _ in }
-        dispatcher?.synchronizeAudioMonitor()
-      }
-      if sheet == .vision { dispatcher?.synchronizeVision() }
+      try addResource(sheet, draft: draft)
       additionError = nil
       addSheet = nil
     } catch {
       additionError = error.localizedDescription
     }
+  }
+
+  func addResource(_ sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft) throws {
+    guard documentReference?.document != nil else {
+      throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
+    }
+    if sheet == .device { deviceRegistry.refresh() }
+    let id = try WorkspaceResourceAddition.add(
+      sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+      audioDiscoveryError: deviceRegistry.errorMessage)
+    if sheet == .device {
+      appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
+      dispatcher?.synchronizeCaptureInputs(
+        availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+      ) { _ in }
+      dispatcher?.synchronizeAudioMonitor()
+    }
+    if sheet == .vision { dispatcher?.synchronizeVision() }
   }
 
 }

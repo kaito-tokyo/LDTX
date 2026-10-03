@@ -74,22 +74,6 @@ public struct WorkspaceContent: View {
         videoLayers
         HStack {
           Button("Add Program") { addProgram() }.disabled(uiState.isOutputActive)
-          Button("Add Video Input") { addVideoInput() }.disabled(uiState.isOutputActive)
-          Button("Add Audio Input") { addAudioInput() }.disabled(uiState.isOutputActive)
-          Button("Add VFX Source") { addVFXSource() }
-            .disabled(firstVideoInputID == nil || uiState.isOutputActive)
-          Menu("Add Video Component") {
-            Button("Solid Color") { addSolidColor() }
-            Button("Linear Gradient") { addLinearGradient() }
-            Button("Radial Gradient") { addRadialGradient() }
-            Button("Conic Gradient") { addConicGradient() }
-            Divider()
-            Button("Clock") { addClock() }
-            Button("Test Pattern") { addTestPattern() }
-          }
-          .disabled(uiState.isOutputActive)
-          Button("Add OCR Vision") { addOcrVision() }
-            .disabled(firstVideoInputID == nil || uiState.isOutputActive)
           if uiState.isOutputActive && uiState.isLocalRecording {
             Button("Capture Screenshot(s)") {
               do { _ = try workspaceDispatcher?.captureScreenshots() } catch {
@@ -129,132 +113,7 @@ public struct WorkspaceContent: View {
     errorMessage = nil
     workspaceDispatcher?.synchronizeAudioMonitor()
   }
-  private func addVideoInput() {
-    let wrapper = WorkspaceResourceFactory.makeVideoInput(
-      id: nextInternalID(), name: uniqueDisplayName("Video Input"))
-    var definition = uiState.definition
-    definition.inputDevices.append(wrapper)
-    uiState.definition = definition
-    errorMessage = nil
-  }
-  private func addAudioInput() {
-    let wrapper = WorkspaceResourceFactory.makeAudioInput(
-      id: nextInternalID(), name: uniqueDisplayName("Audio Input"))
-    var definition = uiState.definition
-    definition.inputDevices.append(wrapper)
-    uiState.definition = definition
-    workspaceDispatcher?.synchronizeAudioMonitor()
-  }
-  private func addVFXSource() {
-    guard let inputID = firstVideoInputID else { return }
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeVFXSource(
-        id: nextInternalID(), name: uniqueDisplayName("VFX Source"), inputID: inputID))
-  }
-
-  private func addSolidColor() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeSolidColor(
-        id: nextInternalID(), name: uniqueDisplayName("Solid Color")))
-  }
-
-  private func addClock() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeClock(
-        id: nextInternalID(), name: uniqueDisplayName("Clock")))
-  }
-
-  private func addLinearGradient() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeLinearGradient(
-        id: nextInternalID(), name: uniqueDisplayName("Linear Gradient")))
-  }
-
-  private func addRadialGradient() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeRadialGradient(
-        id: nextInternalID(), name: uniqueDisplayName("Radial Gradient")))
-  }
-
-  private func addConicGradient() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeConicGradient(
-        id: nextInternalID(), name: uniqueDisplayName("Conic Gradient")))
-  }
-
-  private func addTestPattern() {
-    appendVideoComponent(
-      WorkspaceResourceFactory.makeTestPattern(
-        id: nextInternalID(), name: uniqueDisplayName("Test Pattern")))
-  }
-
-  private func addOcrVision() {
-    guard let inputID = firstVideoInputID else { return }
-    let wrapper = WorkspaceResourceFactory.makeOcrVision(
-      id: nextInternalID(), name: uniqueDisplayName("OCR Vision"), inputID: inputID)
-    var definition = uiState.definition
-    definition.visions.append(wrapper)
-    uiState.definition = definition
-    errorMessage = nil
-    workspaceDispatcher?.synchronizeVision()
-  }
-
-  private func appendVideoComponent(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) {
-    var definition = uiState.definition
-    definition.videoComponents.append(wrapper)
-    uiState.definition = definition
-    if let id = componentInternalID(wrapper) { addToSelectedProgram(id) }
-    errorMessage = nil
-  }
-
   private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
-
-  private func addToSelectedProgram(_ videoLayerInternalID: UInt64) {
-    guard let programID = localState.selectedProgramInternalID else { return }
-    for role in ProgramCanvasRole.allCases {
-      let existing =
-        uiState.definition.programs.first {
-          $0.internalID == programID
-        }.map {
-          role == .landscape ? $0.landscapeVideoLayerInternalIds : $0.portraitVideoLayerInternalIds
-        }
-        ?? []
-      performLayerOrderUpdate(existing + [videoLayerInternalID], for: programID, role: role)
-    }
-  }
-
-  private func uniqueDisplayName(_ base: String) -> String {
-    let definition = uiState.definition
-    let names = Set(
-      definition.inputDevices.compactMap { wrapper -> String? in
-        switch wrapper.definition {
-        case .videoDevice(let value): value.displayName
-        case .audioDevice(let value): value.displayName
-        case nil: nil
-        }
-      }
-        + definition.videoComponents.compactMap { wrapper -> String? in
-          switch wrapper.definition {
-          case .solidColorFill(let value): value.displayName
-          case .linearGradientFill(let value): value.displayName
-          case .radialGradientFill(let value): value.displayName
-          case .conicGradientFill(let value): value.displayName
-          case .vfxSource(let value): value.displayName
-          case .clock(let value): value.displayName
-          case .testPattern(let value): value.displayName
-          case nil: nil
-          }
-        }
-        + definition.visions.compactMap { wrapper -> String? in
-          guard case .ocrVision(let value)? = wrapper.definition else { return nil }
-          return value.displayName
-        }
-        + definition.programs.map(\.displayName))
-    guard names.contains(base) else { return base }
-    var suffix = 2
-    while names.contains("\(base) \(suffix)") { suffix += 1 }
-    return "\(base) \(suffix)"
-  }
 
   private func uniqueProgramDisplayName(_ base: String) -> String {
     let names = Set(uiState.definition.programs.map(\.displayName))
@@ -671,13 +530,6 @@ public struct WorkspaceContent: View {
     case .testPattern(let value): value.displayName
     case nil: "Invalid Video Component"
     }
-  }
-
-  private var firstVideoInputID: UInt64? {
-    uiState.definition.inputDevices.compactMap { input -> UInt64? in
-      guard case .videoDevice(let device)? = input.definition else { return nil }
-      return device.internalID
-    }.first
   }
 
   @ViewBuilder
