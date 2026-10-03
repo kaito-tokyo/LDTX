@@ -126,8 +126,9 @@ so the pane's background shows through; the drawable uses linear
 `BGRA8Unorm`.
 
 Menus and toolbars route commands to their owning window. Workspace restoration
-uses NSDocument's standard document reopening and window restoration. Inspector
-selection keeps its existing versioned state key; AppKit owns frame and pane state.
+uses NSDocument's standard document reopening and window restoration. Workspace
+Inspector selection starts at nil and is neither encoded nor restored; the former
+versioned selection key is ignored. AppKit owns frame and pane state.
 
 Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
 `LDTXRecordPlayerDocumentSystemTests` for recording document ownership, marker saving, and close confirmation,

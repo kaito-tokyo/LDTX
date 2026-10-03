@@ -210,8 +210,10 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(first.contentLayoutRect.size == NSSize(width: 1062, height: 700))
     let split = try #require(first.contentViewController as? PaneSplitViewController)
     let other = try #require(second.contentViewController as? PaneSplitViewController)
-    split.setInitialWidths(sidebar: 240, content: 480)
     split.view.layoutSubtreeIfNeeded()
+    for (pane, expectedWidth) in zip(split.splitView.arrangedSubviews, [240.0, 480.0, 340.0]) {
+      #expect(abs(pane.frame.width - expectedWidth) <= 1)
+    }
     for (identifier, index) in [
       (NSToolbarItem.Identifier("workspace.sidebar"), 0), (.init("workspace.inspector"), 2),
     ] {

@@ -85,6 +85,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       NSRect(origin: frame.origin, size: NSSize(width: 1062, height: 700 + toolbarHeight)),
       display: false)
 
+    splitViewController.setInitialWidths(sidebar: 240, content: 480)
+
     self.center()
   }
 
