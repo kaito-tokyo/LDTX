@@ -157,17 +157,16 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
     recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
-      self.uiState.isOutputActive =
-        switch state {
-        case .starting, .recording, .stopping: true
-        case .idle, .failed: false
-        }
+      self.uiState.recordingState = state
+      self.uiState.isOutputActive = state.isOutputActive
+      (self.window as? WorkspaceWindow)?.updateOutputToolbar()
       self.uiState.isLocalRecording = self.recordingSession.isLocalRecording
       self.uiState.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
       }()
     }
+    uiState.recordingState = recordingSession.state
     uiState.isOutputActive = recordingSession.isRecording
     uiState.isLocalRecording = recordingSession.isLocalRecording
     if case .failed(let message) = recordingSession.state {
@@ -182,6 +181,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   func startOutput() async throws {
+    guard recordingSession.state.canStart else { return }
     guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
     await recordingSession.start()
@@ -211,6 +211,10 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
     shutdownTask = task
     await task.value
+  }
+
+  func pauseOutput() async {
+    await recordingSession.pause()
   }
 
   public func stopOutput() async {

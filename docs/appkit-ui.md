@@ -53,7 +53,7 @@ validates the current output state, name, and input references. Add selects the
 new resource in the inspector without placing it in a Program or saving the
 Workspace automatically. Physical-device assignments remain app-local.
 
-WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
+WorkspaceWindow uses PaneSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
@@ -177,3 +177,10 @@ window observes shared changes and updates program runtimes, physical captures,
 and audio monitoring, cancelling its observer during shutdown. Program selection,
 monitor selection, mix synchronization and YouTube selection remain path-keyed;
 relocation cleanup for those fields is a separate change.
+
+The Workspace toolbar places Stop and Start/Pause at the leading edge of the
+Content pane. Its controls project the V4 recording session state. Pause drains
+and finalizes the current output and leaves the session paused; the next Start
+creates a new output session. Stop from paused returns to idle. Transition states
+keep definition editing and output toolbar actions disabled, and finalization
+failures remain visible. Pause state is not persisted in the Workspace package.

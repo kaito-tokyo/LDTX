@@ -13,6 +13,7 @@ public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
     completionHandler: @escaping @Sendable (Set<String>) -> Void)
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws
+  @MainActor func pauseOutput() async
   @MainActor func stopOutput() async
   @MainActor func updateMixPreferences()
   @MainActor func captureScreenshots() throws -> [URL]

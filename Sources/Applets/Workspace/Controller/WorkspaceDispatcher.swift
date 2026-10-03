@@ -45,6 +45,10 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
     try await workspaceWindowController.startOutput()
   }
 
+  func pauseOutput() async {
+    await workspaceWindowController?.pauseOutput()
+  }
+
   func stopOutput() async {
     await workspaceWindowController?.stopOutput()
   }

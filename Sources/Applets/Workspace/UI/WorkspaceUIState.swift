@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceAppletInterface
 import Observation
 
 @MainActor
@@ -31,6 +32,7 @@ public final class WorkspaceUIState {
   public var isOutputActive = false {
     didSet { if isOutputActive != oldValue { documentOutputStateDidChange?() } }
   }
+  public var recordingState: WorkspaceRecordingState = .idle
   public var isLocalRecording = false
   public var outputFailureMessage: String?
 

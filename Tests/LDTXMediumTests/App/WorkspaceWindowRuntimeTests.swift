@@ -267,6 +267,53 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(recording.state == .idle)
   }
 
+  @Test("pause finalizes output and permits a new start")
+  func pausesAndRestartsOutput() async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    recording.state = .recording
+    var transitions: [WorkspaceRecordingState] = []
+    recording.stateDidChange = { transitions.append($0) }
+    async let first: Void = recording.pause()
+    async let second: Void = recording.pause()
+    await first
+    await second
+    #expect(transitions == [.pausing, .paused])
+    #expect(!recording.isRecording)
+    await recording.start()
+    #expect(recording.state == .failed("Select a Program before starting recording."))
+    recording.state = .paused
+    await recording.stop()
+    #expect(recording.state == .idle)
+  }
+
+  @Test("stop joins Pause finalization and leaves the session idle")
+  func stopsWhilePausing() async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    recording.state = .recording
+    var stopTask: Task<Void, Never>?
+    recording.stateDidChange = { value in
+      if value == .pausing {
+        stopTask = Task { @MainActor in await recording.stop() }
+      }
+    }
+    await recording.pause()
+    await stopTask?.value
+    #expect(recording.state == .idle)
+  }
+
+  @Test("stopping preserves an output failure")
+  func preservesOutputFailure() async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    recording.state = .failed("Output failed")
+    await recording.pause()
+    #expect(recording.state == .failed("Output failed"))
+    await recording.stop()
+    #expect(recording.state == .failed("Output failed"))
+  }
+
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
     var saved: WorkspaceV4Bundle

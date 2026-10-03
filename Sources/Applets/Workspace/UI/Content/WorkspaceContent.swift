@@ -53,23 +53,6 @@ public struct WorkspaceContent: View {
           .disabled(uiState.isOutputActive)
           Button("Add OCR Vision") { addOcrVision() }
             .disabled(firstVideoInputID == nil || uiState.isOutputActive)
-          Button(uiState.isOutputActive ? "Stop Output" : "Start Output") {
-            Task {
-              guard let workspaceDispatcher else {
-                errorMessage = "Workspace output is unavailable."
-                return
-              }
-              if uiState.isOutputActive {
-                await workspaceDispatcher.stopOutput()
-              } else {
-                do {
-                  try await workspaceDispatcher.startOutput()
-                } catch {
-                  errorMessage = error.localizedDescription
-                }
-              }
-            }
-          }
           if uiState.isOutputActive && uiState.isLocalRecording {
             Button("Capture Screenshot(s)") {
               do { _ = try workspaceDispatcher?.captureScreenshots() } catch {

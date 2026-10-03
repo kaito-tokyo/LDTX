@@ -2,12 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
 @Suite
 @MainActor
 struct WorkspaceResourceAdditionUnitTestSuite {
+  @Test func outputStateLocksDefinitionChangesDuringTransitions() {
+    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    var draft = WorkspaceAddDraft()
+    draft.componentKind = .solidColor
+    draft.name = "Color"
+    for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
+      state.isOutputActive = value.isOutputActive
+      #expect(!value.canStart)
+      #expect(
+        WorkspaceResourceAddition.validationMessage(
+          sheet: .videoComponent, draft: draft, devices: [], uiState: state) != nil)
+    }
+    for value in [WorkspaceRecordingState.idle, .paused, .failed("Failure")] {
+      state.isOutputActive = value.isOutputActive
+      #expect(value.canStart)
+      #expect(
+        WorkspaceResourceAddition.validationMessage(
+          sheet: .videoComponent, draft: draft, devices: [], uiState: state) == nil)
+    }
+  }
+
   @Test func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
