@@ -71,8 +71,6 @@ public struct WorkspaceContent: View {
     ScrollView(.vertical) {
       VStack(alignment: .leading, spacing: 16) {
         videoLayers
-        Text(uiState.definition.displayName)
-          .font(.title2.weight(.semibold))
         HStack {
           Button("Add Program") { addProgram() }.disabled(uiState.isOutputActive)
           Button("Add Video Input") { addVideoInput() }.disabled(uiState.isOutputActive)

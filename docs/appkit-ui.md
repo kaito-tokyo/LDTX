@@ -181,8 +181,11 @@ and audio monitoring, cancelling its observer during shutdown. Program selection
 monitor selection, mix synchronization and YouTube selection remain path-keyed;
 relocation cleanup for those fields is a separate change.
 
-The Workspace toolbar places Stop and Start/Pause at the leading edge of the
-Content pane. Its controls project the V4 recording session state. Pause drains
+The Workspace toolbar marks Stop and Start/Pause as navigational items, in that
+order, so AppKit places them before the standard document title. The window uses
+the unified toolbar style; AppKit manages the title's placement and synchronizes
+it with the document name. Content does not repeat the title in its editor.
+Toolbar controls project the V4 recording session state. Pause drains
 and finalizes the current output and leaves the session paused; the next Start
 creates a new output session. Stop from paused returns to idle. Transition states
 keep definition editing and output toolbar actions disabled, and finalization

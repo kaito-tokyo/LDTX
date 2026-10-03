@@ -193,13 +193,14 @@ struct WorkspaceToolbarSystemTestSuite {
     let toolbar = try #require(first.toolbar)
     #expect(toolbar.identifier == "WorkspaceV4Toolbar.AppKit.v1")
     #expect(first.toolbarStyle == .unified)
-    #expect(first.titleVisibility == .hidden)
+    #expect(first.titleVisibility == .visible)
     #expect(toolbar.displayMode == .iconOnly)
     #expect(first.styleMask.contains(.fullSizeContentView))
     #expect(
       toolbar.items.map(\.itemIdentifier) == [
         .init("workspace.sidebar"), .sidebarTrackingSeparator,
-        .init("workspace.stopOutput"), .init("workspace.toggleOutput"), .flexibleSpace,
+        .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
+        .flexibleSpace,
         .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
       ])
     #expect(first.contentLayoutRect.size == NSSize(width: 1062, height: 700))
@@ -239,6 +240,8 @@ struct WorkspaceToolbarSystemTestSuite {
     let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
     let toggle = try #require(
       items.first { $0.itemIdentifier.rawValue == "workspace.toggleOutput" })
+    #expect(stop.isNavigational)
+    #expect(toggle.isNavigational)
     for (value, stopEnabled, toggleEnabled, label) in [
       (WorkspaceRecordingState.idle, false, true, "Start Output"),
       (.starting, false, false, "Start Output"),

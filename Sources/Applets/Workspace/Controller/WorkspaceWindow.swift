@@ -73,7 +73,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       sidebarCanCollapse: true)
 
     self.contentViewController = splitViewController
-    self.titleVisibility = .hidden
+    self.titleVisibility = .visible
     self.toolbarStyle = .unified
     let toolbar = NSToolbar(identifier: "WorkspaceV4Toolbar.AppKit.v1")
     toolbar.delegate = self
@@ -91,7 +91,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
     [
       .init("workspace.sidebar"), .sidebarTrackingSeparator,
-      .init("workspace.stopOutput"), .init("workspace.toggleOutput"), .flexibleSpace,
+      .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
+      .flexibleSpace,
       .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
     ]
   }
@@ -115,10 +116,12 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       item.action = #selector(PaneSplitViewController.toggleSidebar(_:))
     case "workspace.stopOutput":
       configureOutputItem(item)
+      item.isNavigational = true
       item.target = self
       item.action = #selector(stopOutput(_:))
     case "workspace.toggleOutput":
       configureOutputItem(item)
+      item.isNavigational = true
       item.target = self
       item.action = #selector(toggleOutput(_:))
     case "workspace.inspector":
