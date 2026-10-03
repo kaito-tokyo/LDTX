@@ -180,6 +180,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   func selectProgram(internalID: UInt64) throws {
+    guard let document = document as? NSDocument else {
+      throw NSError(
+        domain: "WorkspaceProgramSelection", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "The Workspace document is unavailable."])
+    }
     guard shutdownTask == nil, recordingSession.state.canSelectProgram else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 1,
@@ -188,7 +193,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         ])
     }
     guard windowRuntime.definition.programs.contains(where: { $0.internalID == internalID }),
-      let url = uiState.localStateURL
+      let url = document.fileURL ?? uiState.localStateURL
     else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,

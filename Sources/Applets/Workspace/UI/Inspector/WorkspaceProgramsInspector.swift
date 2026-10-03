@@ -32,10 +32,17 @@ struct WorkspaceProgramsInspector: View {
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
 
+  private var workspaceURL: URL? {
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
+  }
+
+  var canSelectProgram: Bool { workspaceURL != nil && uiState.recordingState.canSelectProgram }
+
   var body: some View {
     Form {
       WorkspaceProgramSelector(programs: uiState.definition.programs, selection: programSelection)
-        .disabled(!uiState.recordingState.canSelectProgram)
+        .disabled(!canSelectProgram)
       if let errorMessage {
         Text(errorMessage).foregroundStyle(.red)
       }
@@ -46,14 +53,14 @@ struct WorkspaceProgramsInspector: View {
   var programSelection: Binding<UInt64?> {
     Binding(
       get: {
-        let url = documentReference?.document?.fileURL ?? uiState.localStateURL
-        let selectedID = url.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
+        let selectedID =
+          workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
         return
           (uiState.definition.programs.first { $0.internalID == selectedID }
           ?? uiState.definition.programs.first)?.internalID
       },
       set: { id in
-        guard let id else { return }
+        guard let id, workspaceURL != nil else { return }
         do {
           guard let dispatcher else {
             throw WorkspaceSelectionError(message: "Program selection is unavailable.")

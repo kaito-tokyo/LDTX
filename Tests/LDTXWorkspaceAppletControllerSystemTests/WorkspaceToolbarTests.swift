@@ -68,11 +68,12 @@ struct WorkspaceToolbarSystemTestSuite {
     // local selection through the cached URL.
     #expect(content.selectedProgram?.internalID == 11)
     let binding = inspector.programSelection
-    #expect(binding.wrappedValue == 22)
-    // A standalone Inspector value has no injected dispatcher: a rejected edit
-    // must leave the model-backed binding at its current selection.
+    #expect(!inspector.canSelectProgram)
+    #expect(binding.wrappedValue == 11)
+    // A standalone Inspector has no live document environment. An attempted
+    // edit must not change the cached local selection.
     binding.wrappedValue = 11
-    #expect(binding.wrappedValue == 22)
+    #expect(binding.wrappedValue == 11)
     #expect(data.state(for: url).selectedProgramInternalID == 22)
     state.definition.programs = [first]
     #expect(binding.wrappedValue == 11)

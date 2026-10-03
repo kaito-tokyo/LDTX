@@ -64,7 +64,8 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
     #expect(first.uiState.inspectorSelector == .init(kind: .workspacePrograms))
     let inspector = WorkspaceProgramsInspector(uiState: first.uiState, appletData: data)
-    #expect(inspector.programSelection.wrappedValue == b)
+    #expect(!inspector.canSelectProgram)
+    #expect(inspector.programSelection.wrappedValue == a)
     #expect(second.uiState.inspectorSelector == nil)
     #expect(first.uiState.definition == definition)
     #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: UInt64.max) }
@@ -75,6 +76,11 @@ struct WorkspaceDocumentSystemTestSuite {
     }
     firstWindow.windowRuntime.setRecordingState(.paused)
     try firstWindow.selectProgram(internalID: a)
+    first.removeWindowController(firstWindow)
+    #expect(firstWindow.document == nil)
+    #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: b) }
+    #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == a)
+    first.addWindowController(firstWindow)
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let url = root.appendingPathComponent("Selection.ldtxworkspace")
@@ -90,7 +96,9 @@ struct WorkspaceDocumentSystemTestSuite {
       documentReference: DocumentReference(reopened))
     reopened.addWindowController(reopenedWindow)
     let reopenedInspector = WorkspaceProgramsInspector(uiState: reopened.uiState, appletData: data)
-    #expect(reopenedInspector.programSelection.wrappedValue == b)
+    #expect(data.state(for: url).selectedProgramInternalID == b)
+    #expect(!reopenedInspector.canSelectProgram)
+    #expect(reopenedInspector.programSelection.wrappedValue == a)
     #expect(
       (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
     #expect(reopened.uiState.inspectorSelector == nil)
