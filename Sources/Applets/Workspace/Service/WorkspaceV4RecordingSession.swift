@@ -72,10 +72,10 @@ public final class WorkspaceV4RecordingSession {
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
-  public var isRecording: Bool { state == .recording || state == .starting || state == .stopping }
+  public var isRecording: Bool { state.isOutputActive }
 
   public func start() async {
-    guard state == .idle || isFailed else { return }
+    guard state.canStart else { return }
     if isFailed {
       clearSessionReferences()
       state = .idle
@@ -220,24 +220,43 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
+  public func pause() async {
+    guard state == .recording else { return }
+    await finishOutput(pausing: true)
+  }
+
   public func stop() async {
+    if state == .paused {
+      state = .idle
+      return
+    }
+    await finishOutput(pausing: false)
+    // A shutdown request that joined Pause must also leave the session idle.
+    if state == .paused { state = .idle }
+  }
+
+  private func finishOutput(pausing: Bool) async {
     if let stoppingTask {
       await stoppingTask.value
       return
     }
     guard state == .starting || state == .recording || isFailed else { return }
+    await beginFinishingOutput(pausing: pausing, priorFailure: failureMessage).value
+  }
+
+  private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<Void, Never> {
+    // Lock out another request before the task reaches its first suspension.
+    terminalFailureMessage = priorFailure
+    state = pausing ? .pausing : .stopping
     let task = Task { @MainActor in
-      await finishStopping()
+      await finishStopping(pausing: pausing)
       stoppingTask = nil
     }
     stoppingTask = task
-    await task.value
+    return task
   }
 
-  private func finishStopping() async {
-    let priorFailure = failureMessage
-    state = .stopping
-    terminalFailureMessage = priorFailure
+  private func finishStopping(pausing: Bool) async {
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
     if let recordService {
@@ -250,8 +269,26 @@ public final class WorkspaceV4RecordingSession {
     }
     clearSessionReferences()
     sleepInhibitor.stop()
-    state = terminalFailureMessage.map(State.failed) ?? .idle
+    state = terminalFailureMessage.map(State.failed) ?? (pausing ? .paused : .idle)
     terminalFailureMessage = nil
+  }
+
+  public func reconfigureProgramOutput() throws {
+    guard state == .recording, let activeSession, let programID = selectedProgramInternalID else {
+      return
+    }
+    guard
+      activeSession.reconfigureAudio(
+        landscapePreferences: preferences(for: programID, role: .landscape),
+        portraitPreferences: portraitPreferences(for: programID),
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
+    else {
+      let error = NSError(
+        domain: "WorkspaceProgramSelection", code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "The selected Program audio could not be applied."])
+      _ = beginFinishingOutput(pausing: false, priorFailure: error.localizedDescription)
+      throw error
+    }
   }
 
   public func updateMixPreferences() {
@@ -421,7 +458,11 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
-  private func fail(_ error: Error) async {
+  func fail(_ error: Error) async {
+    if state == .pausing || state == .stopping {
+      terminalFailureMessage = error.localizedDescription
+      return
+    }
     guard state == .starting || state == .recording else { return }
     state = .failed(error.localizedDescription)
     await stop()

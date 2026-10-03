@@ -22,12 +22,23 @@ struct VfxVideoComponentInspector: View {
       if let component {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        Picker("Input Device", selection: inputDeviceBinding) {
-          ForEach(videoDevices, id: \.internalID) { device in
-            Text(device.displayName).tag(device.internalID)
-          }
-        }
-        .disabled((uiState.isOutputActive) || videoDevices.isEmpty)
+        WorkspaceSelectionField(
+          title: "Input Device", current: component.inputDeviceInternalID,
+          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
+          isEditable: !uiState.isOutputActive,
+          commit: { selected in
+            guard !uiState.isOutputActive, self.component != nil,
+              let selected, videoDevices.contains(where: { $0.internalID == selected })
+            else {
+              throw WorkspaceSelectionError(
+                message: "Select an available input while output is stopped.")
+            }
+            updateVideoComponent { wrapper in
+              guard case .vfxSource(var value) = wrapper.definition else { return }
+              value.inputDeviceInternalID = selected
+              wrapper.definition = .vfxSource(value)
+            }
+          })
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
           .disabled(uiState.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
@@ -69,19 +80,6 @@ struct VfxVideoComponentInspector: View {
         updateVideoComponent { wrapper in
           guard case .vfxSource(var value) = wrapper.definition else { return }
           value.displayName = name
-          wrapper.definition = .vfxSource(value)
-        }
-      }
-    )
-  }
-
-  private var inputDeviceBinding: Binding<UInt64> {
-    Binding(
-      get: { component?.inputDeviceInternalID ?? videoDevices.first?.internalID ?? 0 },
-      set: { deviceID in
-        updateVideoComponent { wrapper in
-          guard case .vfxSource(var value) = wrapper.definition else { return }
-          value.inputDeviceInternalID = deviceID
           wrapper.definition = .vfxSource(value)
         }
       }

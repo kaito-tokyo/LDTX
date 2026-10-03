@@ -34,6 +34,11 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
       availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
   }
 
+  func selectProgram(internalID: UInt64) throws {
+    guard let workspaceWindowController else { throw WorkspaceDispatcherError.workspaceClosed }
+    try workspaceWindowController.selectProgram(internalID: internalID)
+  }
+
   func updateProgramRuntimes() {
     workspaceWindowController?.updateProgramRuntimes()
   }
@@ -43,6 +48,10 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
       throw WorkspaceDispatcherError.workspaceClosed
     }
     try await workspaceWindowController.startOutput()
+  }
+
+  func pauseOutput() async {
+    await workspaceWindowController?.pauseOutput()
   }
 
   func stopOutput() async {

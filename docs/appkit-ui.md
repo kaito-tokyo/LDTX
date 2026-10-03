@@ -13,10 +13,13 @@ AppKit initializes each document and selects
 the registered document class for each file type. File menu Open uses the shared
 document controller's standard action. New uses AppDelegate to create a hidden
 document through the shared controller and requests standard document saving.
-AppDelegate suppresses automatic
-untitled documents and presents the standard Open panel after launch and
-restoration when no documents are open and no file-open request was received.
-Reopening the application without visible windows presents the Open panel again.
+AppDelegate handles `applicationShouldOpenUntitledFile(_:)` by presenting the
+standard Open panel only when the shared document controller has no documents,
+then returning `false` to suppress automatic untitled document creation.
+AppKit determines when to request this behavior during launch or reopening;
+launch and restoration notifications do not independently present the panel.
+Reopening uses AppKit's default window handling. No separate startup flags,
+restoration observer, or delayed presentation are needed.
 Cancelling the panel leaves the application running; File > New creates a
 Workspace and immediately requests its first save location. Cancelling this save
 closes only the new document. A write failure is presented and also closes the
@@ -46,7 +49,18 @@ is nil. Missing environments and released documents disable document-dependent
 settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
 continue to use AppKit's supplied URLs rather than the environment.
-WorkspaceWindow uses a standard NSSplitViewController with an NSHostingController
+The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
+input devices, video components, and OCR visions. The window injects its device
+registry and app-local data. Form drafts do not change the document until Add
+validates a live document, the current output state, name, and input references.
+Missing documents disable Sidebar additions, and submission rechecks document
+availability so an already-open sheet cannot add resources after release. Add
+selects the new resource in the inspector without placing it in a Program or saving the
+Workspace automatically. Physical-device assignments remain app-local. Content
+has no duplicate input, component, or Vision creation controls; its Add Video
+Layer menus place existing resources into the selected Program.
+
+WorkspaceWindow uses PaneSplitViewController with an NSHostingController
 for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
@@ -112,8 +126,9 @@ so the pane's background shows through; the drawable uses linear
 `BGRA8Unorm`.
 
 Menus and toolbars route commands to their owning window. Workspace restoration
-uses NSDocument's standard document reopening and window restoration. Inspector
-selection keeps its existing versioned state key; AppKit owns frame and pane state.
+uses NSDocument's standard document reopening and window restoration. Workspace
+Inspector selection starts at nil and is neither encoded nor restored; the former
+versioned selection key is ignored. AppKit owns frame and pane state.
 
 Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
 `LDTXRecordPlayerDocumentSystemTests` for recording document ownership, marker saving, and close confirmation,
@@ -170,3 +185,57 @@ window observes shared changes and updates program runtimes, physical captures,
 and audio monitoring, cancelling its observer during shutdown. Program selection,
 monitor selection, mix synchronization and YouTube selection remain path-keyed;
 relocation cleanup for those fields is a separate change.
+
+The Workspace toolbar marks Stop and Start/Pause as navigational items, in that
+order, so AppKit places them before the standard document title. The window uses
+the unified toolbar style; AppKit manages the title's placement and synchronizes
+it with the document name. Content does not repeat the title in its editor.
+Toolbar controls project the V4 recording session state. Pause drains
+and finalizes the current output and leaves the session paused; the next Start
+creates a new output session. Stop from paused returns to idle. Transition states
+keep definition editing and output toolbar actions disabled, and finalization
+failures remain visible. Pause state is not persisted in the Workspace package.
+
+The Workspace Content pane displays a fixed Landscape and Portrait preview above
+its scrollable editor. The window passes the same Program runtimes used by its
+output session to the Content pane. The pair keeps its aspect ratio, has 20-point
+horizontal margins, and uses at most 45 percent of the Content height. Without a
+valid Program, the preview region displays a placeholder. Preview presentation
+does not create capture sessions or change the Workspace definition.
+
+### Dynamic reference selection
+
+Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Explicit user selection and resource-addition selection remain window-local.
+
+Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Assignment removal and use of the default monitor device are explicit actions. Fixed enumerations retain their existing controls.
+
+### Video layer editing belongs to Content
+
+The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
+
+The Video Layers group uses a standard SwiftUI DisclosureGroup to collapse both
+canvas lists together. It starts expanded and keeps its disclosure state local
+to the Content view, without saving it in the Workspace.
+
+### Program selection in the Inspector
+
+The first entry in Sidebar's WORKSPACE section is Programs. Selecting it opens
+an Inspector containing a standard vertical SwiftUI radio-group Picker.
+Content contains only the fixed previews and scrollable editor; Program selection
+has no reserved row, horizontal scrolling, or custom layout sizing.
+
+The Program candidates are static entries in the Workspace definition. The
+Picker uses matching optional `UInt64` selection and tag values and reads the
+resolved Program directly from model state. Its setter uses the existing
+dispatcher; failed changes retain the model selection and display the error in
+the Inspector. No independent selection state is kept. With an empty Program
+array, the Inspector displays "No Program" instead of constructing a Picker.
+The empty Content preview remains visible. Resolving a stale saved ID does not
+rewrite it. Sidebar initially remains unselected.
+
+The controller validates both canvas projections before updating the
+Workspace-local selection. Selection leaves Sidebar and Inspector state alone.
+Program changes are allowed during output, but not during start, pause, or stop.
+Both existing runtimes and output audio mixes receive the selected Program's
+configuration and preferences. Recording packages and publishing sessions stay
+open across the change; output failures follow the normal finalization path.

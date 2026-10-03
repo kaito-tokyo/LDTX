@@ -2,12 +2,28 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXAppletSupport
+import LDTXDeviceRegistry
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
   @Bindable var uiState: WorkspaceUIState
+  private let deviceRegistry: DeviceRegistryService
+  private let appletData: WorkspaceAppletData
+  @Environment(\.documentReference) private var documentReference
+  @Environment(\.workspaceDispatcher) private var dispatcher
+  @State private var addSheet: WorkspaceAddSheet?
+  @State private var draft = WorkspaceAddDraft()
+  @State private var additionError: String?
 
-  public init(uiState: WorkspaceUIState) {
+  public init(
+    uiState: WorkspaceUIState,
+    deviceRegistry: DeviceRegistryService,
+    appletData: WorkspaceAppletData
+  ) {
+    self.deviceRegistry = deviceRegistry
+    self.appletData = appletData
     self._uiState = Bindable(wrappedValue: uiState)
   }
 
@@ -17,21 +33,10 @@ public struct WorkspaceSidebar: View {
     let visions = uiState.definition.visions
 
     VStack {
-      Button {
-        uiState.inspectorSelector = .init(kind: .programVideoLayers)
-      } label: {
-        Label("Video Layers", systemImage: "square.stack.3d.up")
-          .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      .background {
-        if uiState.inspectorSelector?.kind == .programVideoLayers {
-          RoundedRectangle(cornerRadius: 6)
-            .fill(Color.accentColor)
-        }
-      }
-
       List(selection: $uiState.inspectorSelector) {
         Section {
+          Label("Programs", systemImage: "rectangle.stack")
+            .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
           Label("Canvas", systemImage: "rectangle.on.rectangle")
             .tag(WorkspaceInspectorSelector(kind: .workspaceCanvas))
           Label("Output", systemImage: "dot.radiowaves.left.and.right")
@@ -59,11 +64,12 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.device)
           } label: {
             Label("Add device...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(!canAddResource)
         } header: {
           Text("INPUT DEVICES")
         }
@@ -112,11 +118,12 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.videoComponent)
           } label: {
             Label("Add video component...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(!canAddResource)
         } header: {
           Text("VIDEO COMPONENTS")
         }
@@ -135,23 +142,95 @@ public struct WorkspaceSidebar: View {
           }
 
           Button {
-
+            beginAdding(.vision)
           } label: {
             Label("Add vision...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
+          .disabled(!canAddResource)
         } header: {
           Text("VISIONS")
         }
       }
     }
     .listStyle(.sidebar)
+    .onChange(of: draft) { _, _ in additionError = nil }
+    .sheet(item: $addSheet) { sheet in
+      WorkspaceAddResourceSheet(
+        sheet: sheet, draft: $draft, devices: deviceOptions,
+        videoInputs: uiState.definition.inputDevices.compactMap {
+          if case .videoDevice(let device) = $0.definition { return device }
+          return nil
+        },
+        validationMessage: documentReference?.document == nil
+          ? "The Workspace document is unavailable."
+          : WorkspaceResourceAddition.validationMessage(
+            sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+            audioDiscoveryError: deviceRegistry.errorMessage),
+        errorMessage: additionError,
+        submit: { submitResource(sheet) }, cancel: { addSheet = nil },
+        refresh: {
+          deviceRegistry.refresh()
+          additionError = nil
+        }, deviceDiscoveryMessage: deviceRegistry.errorMessage)
+    }
+  }
+
+  private var deviceOptions: [WorkspaceAddDeviceOption] {
+    deviceRegistry.cameras.map {
+      .init(id: .avCaptureDevice(uniqueID: $0.id), name: $0.name)
+    }
+      + deviceRegistry.audioInputDevices.map {
+        .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
+      }
+  }
+
+  var canAddResource: Bool { documentReference?.document != nil && !uiState.isOutputActive }
+
+  private func beginAdding(_ sheet: WorkspaceAddSheet) {
+    guard canAddResource else { return }
+    if sheet == .device { deviceRegistry.refresh() }
+    draft = WorkspaceAddDraft()
+    if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
+    if sheet == .vision { draft.name = "OCR Vision" }
+    additionError = nil
+    addSheet = sheet
+  }
+
+  private func submitResource(_ sheet: WorkspaceAddSheet) {
+    do {
+      try addResource(sheet, draft: draft)
+      additionError = nil
+      addSheet = nil
+    } catch {
+      additionError = error.localizedDescription
+    }
+  }
+
+  func addResource(_ sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft) throws {
+    guard documentReference?.document != nil else {
+      throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
+    }
+    if sheet == .device { deviceRegistry.refresh() }
+    let id = try WorkspaceResourceAddition.add(
+      sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+      audioDiscoveryError: deviceRegistry.errorMessage)
+    if sheet == .device {
+      appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
+      dispatcher?.synchronizeCaptureInputs(
+        availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+      ) { _ in }
+      dispatcher?.synchronizeAudioMonitor()
+    }
+    if sheet == .vision { dispatcher?.synchronizeVision() }
   }
 
 }
 
 #Preview("Workspace Sidebar") {
   @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-  WorkspaceSidebar(uiState: uiState)
-    .frame(width: 260, height: 640)
+  WorkspaceSidebar(
+    uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
+  )
+  .frame(width: 260, height: 640)
 }

@@ -11,14 +11,9 @@ import LDTXWorkspaceAppletController
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
-  private var didFinishLaunching = false
-  private var didFinishRestoringWindows = false
-  private var receivedOpenURL = false
-  private var didPresentStartupOpenPanel = false
   private lazy var applicationMainMenu = AppMainMenu()
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
-  private var restorationObserver: NSObjectProtocol?
   private let launchID = UUID()
   private let launchUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
   private var diagnosticsService: DiagnosticsSamplingService?
@@ -33,16 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
       MainActor.assumeIsolated {
         guard let self else { return }
         if self.settings?.window === window { self.settings = nil }
-      }
-    }
-    restorationObserver = NotificationCenter.default.addObserver(
-      forName: NSApplication.didFinishRestoringWindowsNotification,
-      object: NSApp,
-      queue: .main
-    ) { [weak self] _ in
-      MainActor.assumeIsolated {
-        self?.didFinishRestoringWindows = true
-        self?.showOpenPanelIfNeeded()
       }
     }
   }
@@ -64,15 +49,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
-  private func showOpenPanelIfNeeded() {
-    guard didFinishLaunching, didFinishRestoringWindows, !receivedOpenURL,
-      !didPresentStartupOpenPanel,
-      NSDocumentController.shared.documents.isEmpty
-    else { return }
-    didPresentStartupOpenPanel = true
-    NSDocumentController.shared.openDocument(nil)
-  }
-
   @objc func toggleInspector(_ sender: Any?) {
     (NSApp.keyWindow?.windowController as? RecordPlayerWindowController)?.toggleInspector(sender)
   }
@@ -90,7 +66,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
   }
 
-  func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+  func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+    if NSDocumentController.shared.documents.isEmpty {
+      NSDocumentController.shared.openDocument(nil)
+    }
+    return false
+  }
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
@@ -99,17 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    didFinishLaunching = true
     NSApp.activate(ignoringOtherApps: true)
     startDiagnosticsSamplingIfNeeded()
-
-    // The restoration notification is not delivered when there are no restorable
-    // windows. Treat launch completion as the fallback in that case so the
-    // Open panel is still available on a clean start.
-    if !didFinishRestoringWindows {
-      didFinishRestoringWindows = true
-    }
-    showOpenPanelIfNeeded()
   }
 
   func applicationWillTerminate(_ notification: Notification) {
@@ -159,19 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
   }
   func application(_ application: NSApplication, open urls: [URL]) {
-    receivedOpenURL = true
     for url in urls where url.isFileURL {
       NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
         if let error { NSDocumentController.shared.presentError(error) }
       }
     }
-  }
-
-  func applicationShouldHandleReopen(
-    _ sender: NSApplication,
-    hasVisibleWindows: Bool
-  ) -> Bool {
-    if !hasVisibleWindows { NSDocumentController.shared.openDocument(nil) }
-    return false
   }
 }

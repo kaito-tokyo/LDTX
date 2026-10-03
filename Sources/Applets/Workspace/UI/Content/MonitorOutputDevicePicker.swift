@@ -9,25 +9,28 @@ struct MonitorOutputDevicePicker: View {
   @AppStorage(WorkspaceAudioEngine.outputDevicePreferenceKey)
   private var deviceUID = ""
   @State private var devices: [(uid: String, name: String)] = []
+  @State private var hasLoaded = false
   @State private var deviceError: String?
   @State private var failures = WorkspaceAudioEngine.failureMessages
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack {
-        Picker("Monitor Device", selection: $deviceUID) {
-          Text("Not selected").tag("")
-          ForEach(devices, id: \.uid) { device in
-            Text(device.name).tag(device.uid)
-          }
-          if !deviceUID.isEmpty && !devices.contains(where: { $0.uid == deviceUID }) {
-            Text("Selected device unavailable").tag(deviceUID)
-          }
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .accessibilityLabel("Monitor Device")
-        .accessibilityIdentifier("monitorOutputDevicePicker")
+        WorkspaceSelectionField(
+          title: "Monitor Device", current: deviceUID.isEmpty ? nil : deviceUID,
+          options: devices.map { .init(id: $0.uid, name: $0.name) },
+          loaded: hasLoaded, loadError: deviceError, emptyLabel: "System Default",
+          clearTitle: "Use System Default", refresh: refreshDevices,
+          commit: { selected in
+            if selected != nil {
+              refreshDevices()
+              if let deviceError { throw WorkspaceSelectionError(message: deviceError) }
+            }
+            guard selected == nil || devices.contains(where: { $0.uid == selected }) else {
+              throw WorkspaceSelectionError(message: "The selected monitor device is unavailable.")
+            }
+            deviceUID = selected ?? ""
+          })
         Button(action: refreshDevices) {
           Image(systemName: "arrow.clockwise")
         }
@@ -55,6 +58,7 @@ struct MonitorOutputDevicePicker: View {
   }
 
   private func refreshDevices() {
+    defer { hasLoaded = true }
     do {
       devices = try AudioHardwareSystem.shared.devices.compactMap { device in
         guard try device.outputStreamConfiguration.contains(where: { $0.mNumberChannels > 0 })

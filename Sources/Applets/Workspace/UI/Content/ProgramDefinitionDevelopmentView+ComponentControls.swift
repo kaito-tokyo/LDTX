@@ -236,17 +236,16 @@ extension ProgramDefinitionDevelopmentView {
       HStack {
         Spacer(minLength: 12)
 
-        Picker(selection: payload.inputDeviceID) {
-          Text("No input device").tag(Optional<String>.none)
-          ForEach(videoInputDevices) { inputDevice in
-            Text(inputDevice.name).tag(Optional(inputDevice.id))
-          }
-        } label: {
-          Text("Input Device")
-        }
-        .labelsHidden()
-        .frame(maxWidth: 300, alignment: .trailing)
-        .accessibilityIdentifier("inputCameraDevicePicker")
+        WorkspaceSelectionField(
+          title: "Input Device", current: payload.inputDeviceID.wrappedValue,
+          options: videoInputDevices.map { .init(id: $0.id, name: $0.name) },
+          clearTitle: "Remove Assignment",
+          commit: { proposed in
+            guard proposed == nil || videoInputDevices.contains(where: { $0.id == proposed }) else {
+              throw WorkspaceSelectionError(message: "The selected input is unavailable.")
+            }
+            payload.inputDeviceID.wrappedValue = proposed
+          })
       }
     } label: {
       Text("Input Device")

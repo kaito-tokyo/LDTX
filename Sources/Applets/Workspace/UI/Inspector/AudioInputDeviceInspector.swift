@@ -29,17 +29,9 @@ struct AudioInputDeviceInspector: View {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
         if documentReference?.document != nil {
-          Picker(
-            "Physical Device",
-            selection: physicalDeviceBinding
-          ) {
-            Text("No Audio Device").tag(Optional<WorkspacePhysicalDeviceID>.none)
-            ForEach(deviceRegistry.audioInputDevices, id: \.id) { source in
-              Text(source.name).tag(
-                Optional(WorkspacePhysicalDeviceID.coreAudioDevice(uid: source.id)))
-            }
-          }
-          .disabled(uiState.isOutputActive)
+          WorkspacePhysicalDeviceField(
+            title: "Physical Device", internalID: internalID, isAudio: true,
+            uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry)
         }
       }
     } else {
@@ -66,20 +58,6 @@ struct AudioInputDeviceInspector: View {
           value.displayName = name
           wrapper.definition = .audioDevice(value)
         }
-      }
-    )
-  }
-
-  private var physicalDeviceBinding: Binding<WorkspacePhysicalDeviceID?> {
-    Binding(
-      get: {
-        guard
-          case .coreAudioDevice? = appletData.physicalDeviceID(for: internalID)
-        else { return nil }
-        return appletData.physicalDeviceID(for: internalID)
-      },
-      set: { identifier in
-        appletData.setPhysicalDeviceID(identifier, for: internalID)
       }
     )
   }

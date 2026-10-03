@@ -45,10 +45,8 @@ public struct WorkspaceInspectorContainer: View {
     switch selector.kind {
     case .invalid:
       emptyInspector
-    case .programVideoLayers:
-      ProgramVideoLayersInspector(
-        uiState: uiState,
-        appletData: appletData)
+    case .workspacePrograms:
+      WorkspaceProgramsInspector(uiState: uiState, appletData: appletData)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(uiState: uiState)
     case .workspaceOutput:
@@ -158,7 +156,7 @@ public struct WorkspaceInspectorContainer: View {
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        uiState: uiState
+        uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
 

@@ -6,7 +6,6 @@ import Foundation
 
 public enum WorkspaceInspectorKind: Int {
   case invalid = 0
-  case programVideoLayers = 1
   case workspaceCanvas = 2
   case workspaceOutput = 3
   case audioInputDevice = 4
@@ -19,6 +18,7 @@ public enum WorkspaceInspectorKind: Int {
   case clockVideoComponent = 11
   case testPatternVideoComponent = 12
   case ocrVision = 13
+  case workspacePrograms = 14
 }
 
 public struct WorkspaceInspectorSelector: Hashable {

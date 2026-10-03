@@ -89,14 +89,12 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
           programPreferencesState: preferences,
           lowFrequencyUpdateRegistry: registry)
       }
-    windowRuntime.installRuntime(
-      programRuntimeFactory(
-        captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry),
-      role: .landscape)
-    windowRuntime.installRuntime(
-      programRuntimeFactory(
-        captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry),
-      role: .portrait)
+    let landscapeRuntime = programRuntimeFactory(
+      captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
+    let portraitRuntime = programRuntimeFactory(
+      captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
+    windowRuntime.installRuntime(landscapeRuntime, role: .landscape)
+    windowRuntime.installRuntime(portraitRuntime, role: .portrait)
     windowRuntime.updateRuntimes()
 
     let window = WorkspaceWindow(
@@ -104,7 +102,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       deviceRegistry: DeviceRegistryService(),
       appletData: appletData,
       dispatcher: dispatcher,
-      uiState: uiState, documentReference: documentReference)
+      uiState: uiState, documentReference: documentReference,
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime)
     self.workspaceWindow = window
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
@@ -157,17 +156,16 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
     recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
-      self.uiState.isOutputActive =
-        switch state {
-        case .starting, .recording, .stopping: true
-        case .idle, .failed: false
-        }
+      self.uiState.recordingState = state
+      self.uiState.isOutputActive = state.isOutputActive
+      (self.window as? WorkspaceWindow)?.updateOutputToolbar()
       self.uiState.isLocalRecording = self.recordingSession.isLocalRecording
       self.uiState.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
       }()
     }
+    uiState.recordingState = recordingSession.state
     uiState.isOutputActive = recordingSession.isRecording
     uiState.isLocalRecording = recordingSession.isLocalRecording
     if case .failed(let message) = recordingSession.state {
@@ -181,7 +179,38 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
+  func selectProgram(internalID: UInt64) throws {
+    guard let document = document as? NSDocument else {
+      throw NSError(
+        domain: "WorkspaceProgramSelection", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "The Workspace document is unavailable."])
+    }
+    guard shutdownTask == nil, recordingSession.state.canSelectProgram else {
+      throw NSError(
+        domain: "WorkspaceProgramSelection", code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey: "Program selection is unavailable during an output transition."
+        ])
+    }
+    guard windowRuntime.definition.programs.contains(where: { $0.internalID == internalID }),
+      let url = document.fileURL ?? uiState.localStateURL
+    else {
+      throw NSError(
+        domain: "WorkspaceProgramSelection", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
+    }
+    for role in ProgramCanvasRole.allCases {
+      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, role: role)
+    }
+    appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+    windowRuntime.updateRuntimes()
+    try recordingSession.reconfigureProgramOutput()
+    synchronizeDeviceAssignments()
+    synchronizeVision()
+  }
+
   func startOutput() async throws {
+    guard recordingSession.state.canStart else { return }
     guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
     await recordingSession.start()
@@ -211,6 +240,10 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
     shutdownTask = task
     await task.value
+  }
+
+  func pauseOutput() async {
+    await recordingSession.pause()
   }
 
   public func stopOutput() async {
