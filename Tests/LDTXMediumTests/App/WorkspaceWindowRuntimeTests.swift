@@ -314,6 +314,30 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(recording.state == .failed("Output failed"))
   }
 
+  @Test(arguments: [false, true])
+  func preservesFailuresReportedDuringFinalization(pausing: Bool) async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
+    recording.state = .recording
+    var failureTask: Task<Void, Never>?
+    var transitions: [WorkspaceRecordingState] = []
+    recording.stateDidChange = { state in
+      transitions.append(state)
+      if state == .pausing || state == .stopping {
+        failureTask = Task { @MainActor in
+          await recording.fail(
+            NSError(
+              domain: "ShutdownTest", code: 1,
+              userInfo: [NSLocalizedDescriptionKey: "Encoder shutdown failed"]))
+        }
+      }
+    }
+    if pausing { await recording.pause() } else { await recording.stop() }
+    await failureTask?.value
+    #expect(recording.state == .failed("Encoder shutdown failed"))
+    #expect(transitions == [pausing ? .pausing : .stopping, .failed("Encoder shutdown failed")])
+  }
+
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
     var saved: WorkspaceV4Bundle

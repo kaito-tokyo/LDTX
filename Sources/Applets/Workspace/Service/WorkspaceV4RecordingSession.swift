@@ -246,17 +246,17 @@ public final class WorkspaceV4RecordingSession {
 
   private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<Void, Never> {
     // Lock out another request before the task reaches its first suspension.
+    terminalFailureMessage = priorFailure
     state = pausing ? .pausing : .stopping
     let task = Task { @MainActor in
-      await finishStopping(pausing: pausing, priorFailure: priorFailure)
+      await finishStopping(pausing: pausing)
       stoppingTask = nil
     }
     stoppingTask = task
     return task
   }
 
-  private func finishStopping(pausing: Bool, priorFailure: String?) async {
-    terminalFailureMessage = priorFailure
+  private func finishStopping(pausing: Bool) async {
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
     if let recordService {
@@ -458,7 +458,11 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
-  private func fail(_ error: Error) async {
+  func fail(_ error: Error) async {
+    if state == .pausing || state == .stopping {
+      terminalFailureMessage = error.localizedDescription
+      return
+    }
     guard state == .starting || state == .recording else { return }
     state = .failed(error.localizedDescription)
     await stop()
