@@ -20,6 +20,7 @@ public struct WorkspaceContent: View {
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
+  @State private var isVideoLayersExpanded = true
 
   public init(
     deviceRegistry: DeviceRegistryService,
@@ -267,10 +268,12 @@ public struct WorkspaceContent: View {
   @ViewBuilder
   private var videoLayers: some View {
     if let selectedProgram {
-      GroupBox("Video Layers") {
-        VStack(alignment: .leading) {
-          videoLayerList(for: selectedProgram, role: .landscape, title: "Landscape")
-          videoLayerList(for: selectedProgram, role: .portrait, title: "Portrait")
+      GroupBox {
+        DisclosureGroup("Video Layers", isExpanded: $isVideoLayersExpanded) {
+          VStack(alignment: .leading) {
+            videoLayerList(for: selectedProgram, role: .landscape, title: "Landscape")
+            videoLayerList(for: selectedProgram, role: .portrait, title: "Portrait")
+          }
         }
       }
     }

@@ -202,6 +202,10 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
 
+The Video Layers group uses a standard SwiftUI DisclosureGroup to collapse both
+canvas lists together. It starts expanded and keeps its disclosure state local
+to the Content view, without saving it in the Workspace.
+
 ### Program selection in the Inspector
 
 The first entry in Sidebar's WORKSPACE section is Programs. Selecting it opens
