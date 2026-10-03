@@ -32,13 +32,20 @@ struct WorkspaceCanvasInspector: View {
           .multilineTextAlignment(.trailing)
           .frame(width: 110)
       }
-      Picker("PTS Master Camera", selection: ptsMasterBinding) {
-        Text("Automatic").tag(nil as UInt64?)
-        ForEach(videoDevices, id: \.internalID) { device in
-          Text(device.displayName).tag(Optional(device.internalID))
-        }
-      }
-      .disabled(uiState.isOutputActive)
+      WorkspaceSelectionField(
+        title: "PTS Master Camera", current: ptsMasterBinding.wrappedValue,
+        options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
+        emptyLabel: "Automatic", clearTitle: "Use Automatic Timing",
+        isEditable: !uiState.isOutputActive,
+        commit: { selected in
+          guard !uiState.isOutputActive,
+            selected == nil || videoDevices.contains(where: { $0.internalID == selected })
+          else {
+            throw WorkspaceSelectionError(
+              message: "Select an available timing input while output is stopped.")
+          }
+          ptsMasterBinding.wrappedValue = selected
+        })
     }
     .disabled(uiState.isOutputActive)
 

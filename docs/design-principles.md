@@ -66,3 +66,10 @@ the relevant design or feature documentation instead.
   must not block the main actor.
 - Such work should use a serialized background executor when ordering is
   significant.
+
+## Dynamic selection starts unselected
+
+- Selection controls populated from dynamic resources must start with no selection.
+- Restored assignments and asynchronously resolved references are displayed separately from editing controls.
+- Editing sheets must not preselect a saved value or the first available candidate. Only an explicit user selection may be applied.
+- Candidate removal clears the editing selection without replacing it or changing the saved assignment.

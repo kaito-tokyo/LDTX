@@ -13,12 +13,14 @@ struct WorkspaceAddResourceSheet: View {
   let errorMessage: String?
   let submit: () -> Void
   let cancel: () -> Void
+  var refresh: () -> Void = {}
   @FocusState private var nameFocused: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       Text(sheet.title).font(.title2).bold()
       if sheet == .device {
+        Button("Refresh Devices", action: refresh)
         ScrollView {
           VStack(alignment: .leading, spacing: 2) {
             ForEach(devices) { device in
@@ -57,19 +59,24 @@ struct WorkspaceAddResourceSheet: View {
           .accessibilityIdentifier("addVideoComponentKindPicker")
         }
         if sheet == .vision || (sheet == .videoComponent && draft.componentKind == .vfxSource) {
-          Picker("Video Input", selection: $draft.videoInputID) {
-            Text(videoInputs.isEmpty ? "No video input devices" : "Select a video input")
-              .tag(UInt64?.none)
-            ForEach(videoInputs, id: \.internalID) { input in
-              Text(input.displayName).tag(Optional(input.internalID))
-            }
+          Text("Video Input")
+          ForEach(videoInputs, id: \.internalID) { input in
+            Button {
+              draft.videoInputID = input.internalID
+            } label: {
+              HStack {
+                Text(input.displayName)
+                Spacer()
+                if draft.videoInputID == input.internalID { Image(systemName: "checkmark") }
+              }
+            }.buttonStyle(.plain)
           }
-          .accessibilityIdentifier("addResourceVideoInputPicker")
+          if videoInputs.isEmpty { Text("No video input devices").foregroundStyle(.secondary) }
         }
         TextField("Name", text: $draft.name, prompt: Text(selectedDeviceName))
           .focused($nameFocused)
           .accessibilityIdentifier("addResourceNameField")
-          .onSubmit { if validationMessage == nil { submit() } }
+          .onSubmit { if validationMessage == nil && errorMessage == nil { submit() } }
       }
       .formStyle(.grouped)
       if sheet == .vision {
@@ -82,13 +89,20 @@ struct WorkspaceAddResourceSheet: View {
         Spacer()
         Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
         Button("Add", action: submit).keyboardShortcut(.defaultAction)
-          .disabled(validationMessage != nil)
+          .disabled(validationMessage != nil || errorMessage != nil)
           .accessibilityIdentifier("confirmAddResourceButton")
       }
     }
     .padding(24)
     .frame(width: 420)
     .onAppear { nameFocused = true }
+    .onChange(of: devices.map(\.id)) { _, ids in
+      draft.physicalDeviceID = WorkspaceSelectionRules.reconciled(
+        draft.physicalDeviceID, availableIDs: ids)
+    }
+    .onChange(of: videoInputs.map(\.internalID)) { _, ids in
+      draft.videoInputID = WorkspaceSelectionRules.reconciled(draft.videoInputID, availableIDs: ids)
+    }
     .onChange(of: draft.componentKind) { _, kind in draft.name = kind.rawValue }
   }
 

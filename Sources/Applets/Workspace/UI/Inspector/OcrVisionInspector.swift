@@ -6,6 +6,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct OcrVisionInspector: View {
+  @Environment(\.workspaceDispatcher) private var dispatcher
   let uiState: WorkspaceUIState
   let internalID: UInt64
 
@@ -22,13 +23,20 @@ struct OcrVisionInspector: View {
       Section("OCR Vision") {
         TextField("Name", text: visionBinding(\.displayName, initial: vision.displayName))
           .disabled(isRecording)
-        Picker("Video Input", selection: sourceBinding) {
-          Text("No Input Device").tag(nil as UInt64?)
-          ForEach(videoDevices, id: \.internalID) { device in
-            Text(device.displayName).tag(Optional(device.internalID))
-          }
-        }
-        .disabled(isRecording)
+        WorkspaceSelectionField(
+          title: "Video Input", current: sourceBinding.wrappedValue,
+          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
+          clearTitle: "Remove Assignment", isEditable: !isRecording,
+          commit: { selected in
+            guard !isRecording, self.vision != nil,
+              selected == nil || videoDevices.contains(where: { $0.internalID == selected })
+            else {
+              throw WorkspaceSelectionError(
+                message: "The input or Vision is no longer available for editing.")
+            }
+            sourceBinding.wrappedValue = selected
+            dispatcher?.synchronizeVision()
+          })
         Picker("Update Interval", selection: intervalBinding) {
           Text("Manual").tag(0.0)
           Text("Every 1 Second").tag(1.0)

@@ -44,6 +44,7 @@ struct OutputOrchestrationDetailPane: View {
   @State private var isShowingStreamKeyManager = false
   @State private var loadedStreamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var didLoadStreamKeyConfigurations = false
+  @State private var streamKeyLoadError: String?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -177,8 +178,10 @@ struct OutputOrchestrationDetailPane: View {
     didLoadStreamKeyConfigurations = true
     do {
       loadedStreamKeyConfigurations = try loadStreamKeyConfigurations()
+      streamKeyLoadError = nil
     } catch {
       loadedStreamKeyConfigurations = []
+      streamKeyLoadError = error.localizedDescription
     }
   }
 
@@ -288,24 +291,34 @@ struct OutputOrchestrationDetailPane: View {
   ) -> some View {
     let excludedStreamKey = loadedStreamKeyConfigurations.first { $0.id == excludedID }?.streamKey
       .trimmingCharacters(in: .whitespacesAndNewlines)
-    Picker(
-      title,
-      selection: Binding(get: { selection }, set: { onSelect($0) })
-    ) {
-      Text("Not selected").tag(String?.none)
-      ForEach(
-        loadedStreamKeyConfigurations.filter {
-          ($0.id != excludedID || $0.id == selection)
-            && (excludedStreamKey == nil
-              || $0.id == selection
-              || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedStreamKey)
+    let options = loadedStreamKeyConfigurations.filter {
+      ($0.id != excludedID || $0.id == selection)
+        && (excludedStreamKey == nil || $0.id == selection
+          || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedStreamKey)
+    }.map { WorkspaceSelectionOption(id: $0.id, name: $0.name) }
+    WorkspaceSelectionField(
+      title: title, current: selection, options: options,
+      loaded: didLoadStreamKeyConfigurations, loadError: streamKeyLoadError,
+      clearTitle: "Remove Assignment",
+      isEditable: canEditDestination,
+      refresh: reloadStreamKeyConfigurations,
+      commit: { proposed in
+        guard canEditDestination else {
+          throw WorkspaceSelectionError(message: "Output settings are locked.")
         }
-      ) {
-        stream in
-        Text(stream.name).tag(Optional(stream.id))
-      }
-    }
-    .disabled(!canEditDestination)
+        let latest = try loadStreamKeyConfigurations()
+        let excludedKey = latest.first { $0.id == excludedID }?.streamKey.trimmingCharacters(
+          in: .whitespacesAndNewlines)
+        guard
+          proposed == nil
+            || latest.contains(where: {
+              $0.id == proposed && ($0.id != excludedID || $0.id == selection)
+                && (excludedKey == nil || $0.id == selection
+                  || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedKey)
+            })
+        else { throw WorkspaceSelectionError(message: "The selected stream key is unavailable.") }
+        onSelect(proposed)
+      })
   }
 
   private var streamKeyManager: some View {
@@ -493,15 +506,21 @@ struct CanvasDetailPane: View {
           LabeledContent("GOP", value: "2 seconds, no B-frames")
         }
         Section("Video Timing") {
-          Picker("PTS Master", selection: $videoPTSMasterInputDeviceID) {
-            Text("Host Clock").tag(String?.none)
-            ForEach(videoPTSMasterInputDeviceOptions) { inputDevice in
-              Text(inputDevice.name).tag(Optional(inputDevice.id))
-            }
-          }
-          .pickerStyle(.menu)
-          .disabled(windowState.mode != .edit || windowState.isOperationLocked)
-          .accessibilityIdentifier("videoPTSMasterPicker")
+          WorkspaceSelectionField(
+            title: "PTS Master", current: videoPTSMasterInputDeviceID,
+            options: videoPTSMasterInputDeviceOptions.map { .init(id: $0.id, name: $0.name) },
+            emptyLabel: "Host Clock", clearTitle: "Use Host Clock",
+            isEditable: windowState.mode == .edit && !windowState.isOperationLocked,
+            commit: { proposed in
+              guard windowState.mode == .edit, !windowState.isOperationLocked,
+                proposed == nil
+                  || videoPTSMasterInputDeviceOptions.contains(where: { $0.id == proposed })
+              else {
+                throw WorkspaceSelectionError(
+                  message: "The timing input is unavailable for editing.")
+              }
+              videoPTSMasterInputDeviceID = proposed
+            })
         }
       }
       .formStyle(.grouped)

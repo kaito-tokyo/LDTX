@@ -29,17 +29,9 @@ struct VideoInputDeviceInspector: View {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
         if documentReference?.document != nil {
-          Picker(
-            "Physical Device",
-            selection: physicalDeviceBinding
-          ) {
-            Text("No Camera").tag(Optional<WorkspacePhysicalDeviceID>.none)
-            ForEach(deviceRegistry.cameras, id: \.id) { source in
-              Text(source.name).tag(
-                Optional(WorkspacePhysicalDeviceID.avCaptureDevice(uniqueID: source.id)))
-            }
-          }
-          .disabled(uiState.isOutputActive)
+          WorkspacePhysicalDeviceField(
+            title: "Physical Device", internalID: internalID, isAudio: false,
+            uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry)
         }
       }
     } else {
@@ -66,20 +58,6 @@ struct VideoInputDeviceInspector: View {
           value.displayName = name
           wrapper.definition = .videoDevice(value)
         }
-      }
-    )
-  }
-
-  private var physicalDeviceBinding: Binding<WorkspacePhysicalDeviceID?> {
-    Binding(
-      get: {
-        guard
-          case .avCaptureDevice? = appletData.physicalDeviceID(for: internalID)
-        else { return nil }
-        return appletData.physicalDeviceID(for: internalID)
-      },
-      set: { identifier in
-        appletData.setPhysicalDeviceID(identifier, for: internalID)
       }
     )
   }

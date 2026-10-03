@@ -25,9 +25,12 @@ public final class DeviceRegistryService {
   public private(set) var audioInputDevices: [AudioInputDevice] = []
   public private(set) var errorMessage: String?
 
+  public private(set) var hasRefreshed = false
+
   public init() {}
 
   public func refresh() {
+    defer { hasRefreshed = true }
     cameras = CaptureSessionManager().availableCameras()
     do {
       audioInputDevices = try CoreAudioInputDeviceEnumerator.availableDevices()

@@ -167,12 +167,30 @@ struct WorkspaceOutputInspector: View {
   }
 
   private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {
-    Picker(title, selection: selection) {
-      Text("Select Stream Key").tag("")
-      ForEach(appletData.youtubeStreamKeyConfigurations) { configuration in
-        Text(configuration.name).tag(configuration.id)
-      }
-    }
+    WorkspaceSelectionField(
+      title: title, current: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue,
+      options: appletData.youtubeStreamKeyConfigurations.map { .init(id: $0.id, name: $0.name) },
+      loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
+      isEditable: !uiState.isOutputActive && workspaceURL != nil,
+      refresh: refreshStreamKeys,
+      commit: { selected in
+        guard !uiState.isOutputActive, workspaceURL != nil else {
+          throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
+        }
+        _ = try appletData.loadYouTubeStreamKeyConfigurations()
+        guard
+          selected == nil
+            || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
+        else { throw WorkspaceSelectionError(message: "The selected stream key no longer exists.") }
+        selection.wrappedValue = selected ?? ""
+      })
+  }
+
+  private func refreshStreamKeys() {
+    do {
+      _ = try appletData.loadYouTubeStreamKeyConfigurations()
+      streamKeyLoadError = nil
+    } catch { streamKeyLoadError = error.localizedDescription }
   }
 
   private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {

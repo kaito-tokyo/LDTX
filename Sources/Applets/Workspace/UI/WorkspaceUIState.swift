@@ -39,7 +39,7 @@ public final class WorkspaceUIState {
   public init(
     definition: WorkspaceDefinition,
     preferences: WorkspacePreferences,
-    inspectorSelector: WorkspaceInspectorSelector? = .init(kind: .programVideoLayers),
+    inspectorSelector: WorkspaceInspectorSelector? = nil,
     isOutputActive: Bool = false,
     isLocalRecording: Bool = false,
     outputFailureMessage: String? = nil
