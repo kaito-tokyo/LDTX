@@ -9,6 +9,14 @@ struct WorkspaceSelectionOption<ID: Hashable>: Identifiable {
 }
 
 enum WorkspaceSelectionRules {
+  static func canSubmit<ID: Hashable>(
+    _ selection: ID?, availableIDs: [ID], isEditable: Bool, loadError: String?
+  ) -> Bool {
+    guard isEditable else { return false }
+    guard let selection else { return true }
+    return loadError == nil && availableIDs.contains(selection)
+  }
+
   static func reconciled<ID: Hashable>(_ selection: ID?, availableIDs: [ID]) -> ID? {
     selection.flatMap { availableIDs.contains($0) ? $0 : nil }
   }
@@ -102,16 +110,17 @@ struct WorkspaceSelectionSheet<ID: Hashable>: View {
       HStack {
         Button("Refresh", action: refresh)
         if let clearTitle {
-          Button(clearTitle) { submit(nil) }.disabled(!isEditable || loadError != nil)
+          Button(clearTitle) { submit(nil) }.disabled(!isEditable)
         }
         Spacer()
         Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
         Button("Apply") { submit(selection) }
           .keyboardShortcut(.defaultAction)
           .disabled(
-            !isEditable || loadError != nil
-              || WorkspaceSelectionRules.reconciled(selection, availableIDs: options.map(\.id))
-                == nil
+            selection == nil
+              || !WorkspaceSelectionRules.canSubmit(
+                selection, availableIDs: options.map(\.id), isEditable: isEditable,
+                loadError: loadError)
           )
       }
     }
@@ -122,7 +131,8 @@ struct WorkspaceSelectionSheet<ID: Hashable>: View {
   }
 
   private func submit(_ proposed: ID?) {
-    guard isEditable, loadError == nil else { return }
+    guard isEditable else { return }
+    guard proposed == nil || loadError == nil else { return }
     guard proposed == nil || options.contains(where: { $0.id == proposed }) else {
       selection = nil
       failure = "Select an available option."

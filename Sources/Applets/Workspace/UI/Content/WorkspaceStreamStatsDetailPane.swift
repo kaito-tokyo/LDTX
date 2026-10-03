@@ -306,16 +306,19 @@ struct OutputOrchestrationDetailPane: View {
         guard canEditDestination else {
           throw WorkspaceSelectionError(message: "Output settings are locked.")
         }
+        guard let proposed else {
+          onSelect(nil)
+          return
+        }
         let latest = try loadStreamKeyConfigurations()
         let excludedKey = latest.first { $0.id == excludedID }?.streamKey.trimmingCharacters(
           in: .whitespacesAndNewlines)
         guard
-          proposed == nil
-            || latest.contains(where: {
-              $0.id == proposed && ($0.id != excludedID || $0.id == selection)
-                && (excludedKey == nil || $0.id == selection
-                  || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedKey)
-            })
+          latest.contains(where: {
+            $0.id == proposed && ($0.id != excludedID || $0.id == selection)
+              && (excludedKey == nil || $0.id == selection
+                || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedKey)
+          })
         else { throw WorkspaceSelectionError(message: "The selected stream key is unavailable.") }
         onSelect(proposed)
       })

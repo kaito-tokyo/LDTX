@@ -22,8 +22,10 @@ struct MonitorOutputDevicePicker: View {
           loaded: hasLoaded, loadError: deviceError, emptyLabel: "System Default",
           clearTitle: "Use System Default", refresh: refreshDevices,
           commit: { selected in
-            refreshDevices()
-            if let deviceError { throw WorkspaceSelectionError(message: deviceError) }
+            if selected != nil {
+              refreshDevices()
+              if let deviceError { throw WorkspaceSelectionError(message: deviceError) }
+            }
             guard selected == nil || devices.contains(where: { $0.uid == selected }) else {
               throw WorkspaceSelectionError(message: "The selected monitor device is unavailable.")
             }

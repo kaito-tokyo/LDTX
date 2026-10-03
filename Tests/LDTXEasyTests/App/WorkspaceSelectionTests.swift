@@ -6,6 +6,24 @@ import LDTXWorkspaceAppletInterface
 import Testing
 
 @Suite struct WorkspaceSelectionUnitTestSuite {
+  @Test func discoveryFailureBlocksSelectionButAllowsClearing() {
+    #expect(
+      WorkspaceSelectionRules.canSubmit(
+        nil as Int?, availableIDs: [], isEditable: true, loadError: "Discovery failed"))
+    #expect(
+      !WorkspaceSelectionRules.canSubmit(
+        1, availableIDs: [1], isEditable: true, loadError: "Discovery failed"))
+    #expect(
+      !WorkspaceSelectionRules.canSubmit(
+        nil as Int?, availableIDs: [], isEditable: false, loadError: "Discovery failed"))
+    #expect(
+      !WorkspaceSelectionRules.canSubmit(
+        2, availableIDs: [1], isEditable: true, loadError: nil))
+    #expect(
+      WorkspaceSelectionRules.canSubmit(
+        1, availableIDs: [1], isEditable: true, loadError: nil))
+  }
+
   @Test func programSwitchingPermitsRunningButRejectsTransitions() {
     for state: WorkspaceRecordingState in [.idle, .paused, .recording, .failed("error")] {
       #expect(state.canSelectProgram)

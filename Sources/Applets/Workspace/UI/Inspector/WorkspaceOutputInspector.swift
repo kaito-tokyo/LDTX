@@ -177,7 +177,7 @@ struct WorkspaceOutputInspector: View {
         guard !uiState.isOutputActive, workspaceURL != nil else {
           throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
         }
-        _ = try appletData.loadYouTubeStreamKeyConfigurations()
+        if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
         guard
           selected == nil
             || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
