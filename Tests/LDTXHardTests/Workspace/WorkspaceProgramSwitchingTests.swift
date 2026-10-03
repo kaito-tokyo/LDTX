@@ -98,6 +98,12 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     if preserveFailure {
       landscape.clearProgram()
       #expect(throws: (any Error).self) { try session.reconfigureProgramOutput() }
+      #expect(session.state == .stopping)
+      #expect(!session.state.canStart)
+      #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
+      await session.start()
+      #expect(session.state == .stopping)
+      #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
       await session.stop()
       #expect(session.state == .failed("The selected Program audio could not be applied."))
     } else {

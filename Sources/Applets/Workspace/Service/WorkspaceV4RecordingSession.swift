@@ -241,15 +241,18 @@ public final class WorkspaceV4RecordingSession {
       return
     }
     guard state == .starting || state == .recording || isFailed else { return }
+    await beginFinishingOutput(pausing: pausing, priorFailure: failureMessage).value
+  }
+
+  private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<Void, Never> {
     // Lock out another request before the task reaches its first suspension.
-    let priorFailure = failureMessage
     state = pausing ? .pausing : .stopping
     let task = Task { @MainActor in
       await finishStopping(pausing: pausing, priorFailure: priorFailure)
       stoppingTask = nil
     }
     stoppingTask = task
-    await task.value
+    return task
   }
 
   private func finishStopping(pausing: Bool, priorFailure: String?) async {
@@ -283,8 +286,7 @@ public final class WorkspaceV4RecordingSession {
       let error = NSError(
         domain: "WorkspaceProgramSelection", code: 3,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program audio could not be applied."])
-      state = .failed(error.localizedDescription)
-      Task { await stop() }
+      _ = beginFinishingOutput(pausing: false, priorFailure: error.localizedDescription)
       throw error
     }
   }
