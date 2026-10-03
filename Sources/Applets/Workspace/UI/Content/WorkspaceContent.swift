@@ -11,7 +11,8 @@ import UniformTypeIdentifiers
 public struct WorkspaceContent: View {
   @Environment(\.documentReference) private var documentReference
   private var workspaceURL: URL? {
-    documentReference?.document?.fileURL ?? uiState.localStateURL
+    guard let document = documentReference?.document else { return nil }
+    return document.fileURL ?? uiState.localStateURL
   }
   @Environment(\.workspaceDispatcher) private var workspaceDispatcher
   let landscapeRuntime: ProgramRuntime

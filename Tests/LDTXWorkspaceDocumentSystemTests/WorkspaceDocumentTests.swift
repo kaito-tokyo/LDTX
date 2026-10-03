@@ -59,7 +59,9 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(firstWindow.windowRuntime.runtime(for: .portrait) === portrait)
     #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
     #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
-    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
+    // This stored Content value is outside the hosted document environment.
+    // It must not resolve the saved local selection through a cached URL.
+    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
     #expect(first.uiState.inspectorSelector == .init(kind: .workspacePrograms))
     let inspector = WorkspaceProgramsInspector(uiState: first.uiState, appletData: data)
     #expect(inspector.programSelection.wrappedValue == b)
@@ -87,8 +89,10 @@ struct WorkspaceDocumentSystemTestSuite {
       persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(reopened))
     reopened.addWindowController(reopenedWindow)
+    let reopenedInspector = WorkspaceProgramsInspector(uiState: reopened.uiState, appletData: data)
+    #expect(reopenedInspector.programSelection.wrappedValue == b)
     #expect(
-      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
+      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
     #expect(reopened.uiState.inspectorSelector == nil)
     await reopenedWindow.shutdown()
     await secondWindow.shutdown()

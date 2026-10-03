@@ -64,6 +64,9 @@ struct WorkspaceToolbarSystemTestSuite {
     state.definition.programs = [first, second]
     #expect(inspector.programSelection.wrappedValue == 11)
     data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
+    // The unhosted Content value has no document environment and must not read
+    // local selection through the cached URL.
+    #expect(content.selectedProgram?.internalID == 11)
     let binding = inspector.programSelection
     #expect(binding.wrappedValue == 22)
     // A standalone Inspector value has no injected dispatcher: a rejected edit
