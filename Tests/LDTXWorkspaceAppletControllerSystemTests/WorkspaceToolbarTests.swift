@@ -9,11 +9,65 @@ import LDTXProtos
 import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Observation
+import SwiftUI
 import Testing
 
 @Suite(.serialized)
 @MainActor
 struct WorkspaceToolbarSystemTestSuite {
+  @Test func swiftUIProgramRadiosLayOutAsOneHorizontalRow() {
+    _ = NSApplication.shared
+    let first = WorkspaceSelectionOption(id: UInt64(11), name: "First Program")
+    let second = WorkspaceSelectionOption(id: UInt64(22), name: "Second Program")
+    let single = NSHostingView(
+      rootView: WorkspaceProgramSelector(
+        options: [first], selection: .constant(11)))
+    let pair = NSHostingView(
+      rootView: WorkspaceProgramSelector(
+        options: [first, second], selection: .constant(22)))
+    #expect(pair.fittingSize.width > single.fittingSize.width)
+    #expect(pair.fittingSize.height == single.fittingSize.height)
+    #expect(pair.fittingSize.height <= 24)
+  }
+
+  @Test func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
+    _ = NSApplication.shared
+    let suite = "ProgramPicker." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let url = URL(fileURLWithPath: "/tmp/ProgramPicker-\(UUID()).ldtxworkspace")
+    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    state.localStateURL = url
+    let window = makeWindow(uiState: state, appletData: data)
+    defer { window.close() }
+    let content = window.contentPane
+    #expect(content.programSelection == nil)
+    var first = Ldtx_Workspace_V4_ProgramDefinition()
+    first.internalID = 11
+    first.displayName = "Same Name"
+    var second = first
+    second.internalID = 22
+    state.definition.programs = [first, second]
+    #expect(content.programSelection?.wrappedValue == 11)
+    data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
+    let binding = try #require(content.programSelection)
+    #expect(binding.wrappedValue == 22)
+    // A standalone Content value has no injected dispatcher: a rejected edit
+    // must leave the model-backed binding at its current selection.
+    binding.wrappedValue = 11
+    #expect(binding.wrappedValue == 22)
+    #expect(data.state(for: url).selectedProgramInternalID == 22)
+    state.definition.programs = [first]
+    #expect(binding.wrappedValue == 11)
+    #expect(content.programSelection?.wrappedValue == 11)
+    #expect(data.state(for: url).selectedProgramInternalID == 22)
+    state.definition.programs = []
+    #expect(content.programSelection == nil)
+    #expect(!content.showsProgramPreview)
+    #expect(data.state(for: url).selectedProgramInternalID == 22)
+  }
+
   @Test func sidebarSelectionStartsEmptyAndStaysWindowLocal() throws {
     _ = NSApplication.shared
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
@@ -264,12 +318,13 @@ struct WorkspaceToolbarSystemTestSuite {
 
   private func makeWindow(
     uiState: WorkspaceUIState? = nil,
-    dispatcher: (any WorkspaceDispatcherProtocol)? = nil
+    dispatcher: (any WorkspaceDispatcherProtocol)? = nil,
+    appletData: WorkspaceAppletData? = nil
   ) -> WorkspaceWindow {
     let document = WorkspaceDocument()
     return WorkspaceWindow(
       url: URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"),
-      deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData(),
+      deviceRegistry: DeviceRegistryService(), appletData: appletData ?? WorkspaceAppletData(),
       dispatcher: dispatcher ?? WorkspaceDispatcher(), uiState: uiState ?? document.uiState,
       documentReference: DocumentReference(document),
       landscapeRuntime: ProgramRuntime(

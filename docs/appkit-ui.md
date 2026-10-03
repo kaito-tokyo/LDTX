@@ -202,13 +202,23 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
 
-### Program selection below the previews
+### Program selection above the previews
 
-The fixed preview region includes a plain Program-name button above the editor
-scroll view. Its selection sheet starts unselected and applies only an explicit
-choice. The controller validates both canvas projections before updating the
+The fixed preview region lists Program names in a left-aligned horizontal row
+above the previews. A SwiftUI `Picker` with `.radioGroup` and
+`.horizontalRadioGroupLayout()` displays the currently active Program and
+switches immediately on explicit selection. The
+row has a fixed height and scrolls horizontally when the names exceed the
+available width, preserving room for previews and editing.
+The Program candidates are static entries in the Workspace definition. The
+Picker uses matching `UInt64` selection and tag values and reads the resolved
+Program directly from model state. Its setter uses the existing dispatcher;
+failed changes retain the model selection and display the error. No independent
+selection state is kept. With no Program, the Picker is omitted and the empty
+preview remains visible. Resolving a stale saved ID does not rewrite it.
+
+The controller validates both canvas projections before updating the
 Workspace-local selection. Selection leaves Sidebar and Inspector state alone.
-
 Program changes are allowed during output, but not during start, pause, or stop.
 Both existing runtimes and output audio mixes receive the selected Program's
 configuration and preferences. Recording packages and publishing sessions stay
