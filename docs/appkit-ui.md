@@ -13,10 +13,13 @@ AppKit initializes each document and selects
 the registered document class for each file type. File menu Open uses the shared
 document controller's standard action. New uses AppDelegate to create a hidden
 document through the shared controller and requests standard document saving.
-AppDelegate suppresses automatic
-untitled documents and presents the standard Open panel after launch and
-restoration when no documents are open and no file-open request was received.
-Reopening the application without visible windows presents the Open panel again.
+AppDelegate handles `applicationShouldOpenUntitledFile(_:)` by presenting the
+standard Open panel only when the shared document controller has no documents,
+then returning `false` to suppress automatic untitled document creation.
+AppKit determines when to request this behavior during launch or reopening;
+launch and restoration notifications do not independently present the panel.
+Reopening uses AppKit's default window handling. No separate startup flags,
+restoration observer, or delayed presentation are needed.
 Cancelling the panel leaves the application running; File > New creates a
 Workspace and immediately requests its first save location. Cancelling this save
 closes only the new document. A write failure is presented and also closes the
