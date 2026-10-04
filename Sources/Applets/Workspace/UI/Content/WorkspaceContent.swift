@@ -212,6 +212,7 @@ public struct WorkspaceContent: View {
     if let selectedProgram, !audioInputs.isEmpty {
       GroupBox("Audio Mix") {
         VStack(alignment: .leading) {
+          MonitorOutputDevicePicker()
           audioMix(
             role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
           HStack {
