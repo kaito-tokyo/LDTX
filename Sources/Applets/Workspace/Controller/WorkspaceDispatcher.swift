@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletUI
 import Observation
 
@@ -37,6 +38,16 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
   func selectProgram(internalID: UInt64) throws {
     guard let workspaceWindowController else { throw WorkspaceDispatcherError.workspaceClosed }
     try workspaceWindowController.selectProgram(internalID: internalID)
+  }
+
+  func setBasicTransform(
+    _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
+    videoLayerInternalID: UInt64, isPortrait: Bool
+  ) throws {
+    guard let workspaceWindowController else { throw WorkspaceDispatcherError.workspaceClosed }
+    try workspaceWindowController.windowRuntime.setBasicTransform(
+      transform, forVideoLayerInternalID: videoLayerInternalID,
+      programInternalID: programInternalID, isPortrait: isPortrait)
   }
 
   func updateProgramRuntimes() {

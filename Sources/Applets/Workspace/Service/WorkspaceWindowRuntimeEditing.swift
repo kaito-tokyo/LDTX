@@ -215,30 +215,32 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setVideoLayerOrder(
-    _ ids: [UInt64], forProgramInternalID programID: UInt64, role: ProgramCanvasRole
+    _ ids: [UInt64], forProgramInternalID programID: UInt64, isPortrait: Bool
   ) throws {
     try editWorkspace { workspace in
       guard
         let index = workspace.definition.programs.firstIndex(where: { $0.internalID == programID })
       else { throw WorkspaceRuntimeError.missingProgram(programID) }
-      switch role {
-      case .landscape: workspace.definition.programs[index].landscapeVideoLayerInternalIds = ids
-      case .portrait: workspace.definition.programs[index].portraitVideoLayerInternalIds = ids
+      if !isPortrait {
+        workspace.definition.programs[index].landscapeVideoLayerInternalIds = ids
+      } else {
+        workspace.definition.programs[index].portraitVideoLayerInternalIds = ids
       }
     }
   }
 
   public func setBasicTransform(
     _ transform: Ldtx_Workspace_V4_BasicTransform, forVideoLayerInternalID id: UInt64,
-    programInternalID: UInt64, role: ProgramCanvasRole
+    programInternalID: UInt64, isPortrait: Bool
   ) throws {
     try editWorkspace { workspace in
       guard workspace.definition.programs.contains(where: { $0.internalID == programInternalID })
       else { throw WorkspaceRuntimeError.missingProgram(programInternalID) }
       var pref = workspace.preferences.programPreferences[programInternalID] ?? .init()
-      switch role {
-      case .landscape: pref.landscapeVideoLayerTransforms[id] = transform
-      case .portrait: pref.portraitVideoLayerTransforms[id] = transform
+      if !isPortrait {
+        pref.landscapeVideoLayerTransforms[id] = transform
+      } else {
+        pref.portraitVideoLayerTransforms[id] = transform
       }
       workspace.preferences.programPreferences[programInternalID] = pref
     }
@@ -246,44 +248,48 @@ extension WorkspaceWindowRuntime {
 
   public func setAudioChannelGain(
     _ value: Double, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    isPortrait: Bool
   ) throws {
     try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeAudioChannelGains[id] = value
-      case .portrait: $0.portraitAudioChannelGains[id] = value
+      if !isPortrait {
+        $0.landscapeAudioChannelGains[id] = value
+      } else {
+        $0.portraitAudioChannelGains[id] = value
       }
     }
   }
   public func setAudioChannelMuted(
     _ value: Bool, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    isPortrait: Bool
   ) throws {
     try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeAudioChannelMuted[id] = value
-      case .portrait: $0.portraitAudioChannelMuted[id] = value
+      if !isPortrait {
+        $0.landscapeAudioChannelMuted[id] = value
+      } else {
+        $0.portraitAudioChannelMuted[id] = value
       }
     }
   }
   public func setVideoLayerMuted(
     _ value: Bool, forVideoLayerInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    isPortrait: Bool
   ) throws {
     try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeVideoLayerMuted[id] = value
-      case .portrait: $0.portraitVideoLayerMuted[id] = value
+      if !isPortrait {
+        $0.landscapeVideoLayerMuted[id] = value
+      } else {
+        $0.portraitVideoLayerMuted[id] = value
       }
     }
   }
-  public func setMasterVolume(_ value: Double, programInternalID: UInt64, role: ProgramCanvasRole)
+  public func setMasterVolume(_ value: Double, programInternalID: UInt64, isPortrait: Bool)
     throws
   {
     try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeMasterVolume = value
-      case .portrait: $0.portraitMasterVolume = value
+      if !isPortrait {
+        $0.landscapeMasterVolume = value
+      } else {
+        $0.portraitMasterVolume = value
       }
     }
   }
@@ -291,11 +297,11 @@ extension WorkspaceWindowRuntime {
     try editWorkspace { $0.preferences.monitorVolume = value }
   }
 
-  public func runtimeProjection(programInternalID: UInt64, role: ProgramCanvasRole) throws
+  public func runtimeProjection(programInternalID: UInt64, isPortrait: Bool) throws
     -> WorkspaceV4RuntimeProjection
   {
     try persistenceCoordinator.runtimeProjection(
-      programInternalID: programInternalID, role: role,
+      programInternalID: programInternalID, isPortrait: isPortrait,
       localState: appletLocalState, physicalDeviceIDs: physicalDeviceIDs)
   }
 

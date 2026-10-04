@@ -89,8 +89,8 @@ public final class WorkspaceV4RecordingSession {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
     }
-    guard let landscapeRuntime = windowRuntime.runtime(for: .landscape),
-      let portraitRuntime = windowRuntime.runtime(for: .portrait)
+    guard let landscapeRuntime = windowRuntime.runtime(isPortrait: false),
+      let portraitRuntime = windowRuntime.runtime(isPortrait: true)
     else {
       state = .failed("The selected Program runtime is unavailable.")
       return
@@ -279,7 +279,7 @@ public final class WorkspaceV4RecordingSession {
     }
     guard
       activeSession.reconfigureAudio(
-        landscapePreferences: preferences(for: programID, role: .landscape),
+        landscapePreferences: preferences(for: programID, isPortrait: false),
         portraitPreferences: portraitPreferences(for: programID),
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
     else {
@@ -295,17 +295,17 @@ public final class WorkspaceV4RecordingSession {
     guard let activeSession, let programID = selectedProgramInternalID else {
       return
     }
-    activeSession.updateProgramPreferences(preferences(for: programID, role: .landscape))
+    activeSession.updateProgramPreferences(preferences(for: programID, isPortrait: false))
     activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
   public func captureScreenshots() throws -> [URL] {
     guard let recordService else { throw ScreenCaptureError.frameUnavailable }
     var sources: [ScreenCaptureSource] = []
-    if let frame = windowRuntime.runtime(for: .landscape)?.latestFrame() {
+    if let frame = windowRuntime.runtime(isPortrait: false)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Landscape", pixelBuffer: frame.pixelBuffer))
     }
-    if let frame = windowRuntime.runtime(for: .portrait)?.latestFrame() {
+    if let frame = windowRuntime.runtime(isPortrait: true)?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
     for wrapper in windowRuntime.definition.inputDevices {
@@ -521,7 +521,7 @@ public final class WorkspaceV4RecordingSession {
 
   private var landscapePreferences: ProgramPreferences {
     guard let id = selectedProgramInternalID else { return ProgramPreferences() }
-    return preferences(for: id, role: .landscape)
+    return preferences(for: id, isPortrait: false)
   }
 
   private var selectedProgramInternalID: UInt64? {
@@ -535,26 +535,25 @@ public final class WorkspaceV4RecordingSession {
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
     preferences(
       for: programInternalID,
-      role: localStateProvider().synchronizesLandscapeMixToPortraitByProgramInternalID[
-        programInternalID] ?? false
-        ? .landscape : .portrait)
+      isPortrait: localStateProvider().synchronizesLandscapeMixToPortraitByProgramInternalID[
+        programInternalID] != true)
   }
 
-  private func preferences(for programInternalID: UInt64, role: ProgramCanvasRole)
+  private func preferences(for programInternalID: UInt64, isPortrait: Bool)
     -> ProgramPreferences
   {
     let preference =
       windowRuntime.preferences.programPreferences[
         programInternalID] ?? .init()
     let gain =
-      role == .landscape ? preference.landscapeMasterVolume : preference.portraitMasterVolume
+      !isPortrait ? preference.landscapeMasterVolume : preference.portraitMasterVolume
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
     let gains =
-      role == .landscape
+      !isPortrait
       ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
     let muted =
-      role == .landscape
+      !isPortrait
       ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
     for inputDeviceInternalID in Set(gains.keys).union(muted.keys) {
       let key = "v4-\(inputDeviceInternalID)"

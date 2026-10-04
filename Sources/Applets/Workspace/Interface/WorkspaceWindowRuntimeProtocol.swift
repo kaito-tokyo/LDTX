@@ -15,5 +15,5 @@ public protocol WorkspaceWindowRuntimeProtocol: AnyObject, Observable {
 
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void)
-  func runtime(for role: ProgramCanvasRole) -> ProgramRuntime?
+  func runtime(isPortrait: Bool) -> ProgramRuntime?
 }

@@ -26,6 +26,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private let dispatcher: WorkspaceDispatcher
   private let workspaceWindow: WorkspaceWindow
 
+  let previewRenderer: ProgramPairPreviewRenderer
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
@@ -93,17 +94,23 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
     let portraitRuntime = programRuntimeFactory(
       captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
-    windowRuntime.installRuntime(landscapeRuntime, role: .landscape)
-    windowRuntime.installRuntime(portraitRuntime, role: .portrait)
+    windowRuntime.installRuntime(landscapeRuntime, isPortrait: false)
+    windowRuntime.installRuntime(portraitRuntime, isPortrait: true)
     windowRuntime.updateRuntimes()
 
+    let previewRenderer = ProgramPairPreviewRenderer(
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
+      landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
+      prefersColor: true)
+    self.previewRenderer = previewRenderer
     let window = WorkspaceWindow(
       url: url,
       deviceRegistry: DeviceRegistryService(),
       appletData: appletData,
       dispatcher: dispatcher,
       uiState: uiState, documentReference: documentReference,
-      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime)
+      previewRenderer: previewRenderer,
+      audioPeakMeter: audioCoordinator.peakMeter)
     self.workspaceWindow = window
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
@@ -112,6 +119,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     super.init(window: window)
 
+    previewRenderer.start()
     dispatcher.workspaceWindowController = self
 
     let assignmentChanges = Observations { appletData.physicalDeviceIDsByInputDeviceInternalID }
@@ -158,8 +166,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       guard let self else { return }
       self.uiState.recordingState = state
       self.uiState.isOutputActive = state.isOutputActive
-      (self.window as? WorkspaceWindow)?.updateOutputToolbar()
       self.uiState.isLocalRecording = self.recordingSession.isLocalRecording
+      (self.window as? WorkspaceWindow)?.updateOutputToolbar()
       self.uiState.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
@@ -199,8 +207,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
     }
-    for role in ProgramCanvasRole.allCases {
-      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, role: role)
+    for isPortrait in [false, true] {
+      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, isPortrait: isPortrait)
     }
     appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
     windowRuntime.updateRuntimes()
@@ -222,6 +230,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       return
     }
     let task = Task { @MainActor in
+      workspaceWindow.contentController.preview.stop()
+      previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
       definitionObservationTask?.cancel()
       preferencesObservationTask?.cancel()
@@ -297,7 +307,7 @@ extension WorkspaceWindowController {
       let programInternalID = localState.selectedProgramInternalID
         ?? windowRuntime.definition.programs.first?.internalID,
       let projection = try? windowRuntime.runtimeProjection(
-        programInternalID: programInternalID, role: .landscape)
+        programInternalID: programInternalID, isPortrait: false)
     else {
       Task { await audioCoordinator.stopAndReset() }
       return
@@ -318,6 +328,13 @@ extension WorkspaceWindowController {
         else { return nil }
         return "v4-\(device.internalID)"
       })
+    let portraitProjection = try? windowRuntime.runtimeProjection(
+      programInternalID: programInternalID, isPortrait: true)
+    audioCoordinator.peakMeter.updateMasterGains(
+      landscapeChannels: projection.configuration.audioChannels,
+      portraitChannels: portraitProjection?.configuration.audioChannels ?? [],
+      landscape: projection.preferences,
+      portrait: portraitProjection?.preferences ?? .init())
     var preferences = projection.preferences
     preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
       fromDecibels: windowRuntime.preferences.monitorVolume)

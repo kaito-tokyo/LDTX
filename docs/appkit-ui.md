@@ -60,8 +60,19 @@ Workspace automatically. Physical-device assignments remain app-local. Content
 has no duplicate input, component, or Vision creation controls; its Add Video
 Layer menus place existing resources into the selected Program.
 
-WorkspaceWindow uses PaneSplitViewController with an NSHostingController
-for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
+The Content pane implementation is organized by feature under
+`Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
+WorkspaceContent supplies the SwiftUI editor hosted below the AppKit preview.
+AudioMixEditor and VideoLayersEditor contain their controls, while
+WorkspaceContent supplies headings and layer actions using the same Workspace state.
+Output and canvas settings, including their supporting types and helpers, live
+under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
+owned by the video and audio input Inspectors, which share
+WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
+
+WorkspaceWindow uses PaneSplitViewController with hosted SwiftUI sidebar and
+Inspector panes and an AppKit WorkspaceContentViewController in the center.
+Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
 in-memory marker edits. It registers a
@@ -196,12 +207,19 @@ creates a new output session. Stop from paused returns to idle. Transition state
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
-The Workspace Content pane displays a fixed Landscape and Portrait preview above
-its scrollable editor. The window passes the same Program runtimes used by its
-output session to the Content pane. The pair keeps its aspect ratio, has 20-point
-horizontal margins, and uses at most 45 percent of the Content height. Without a
-valid Program, the preview region displays a placeholder. Preview presentation
-does not create capture sessions or change the Workspace definition.
+The Workspace Content pane uses an AppKit horizontal split above its SwiftUI
+scrollable editor. `WorkspaceWindowController` owns the
+`ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
+output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
+centers a fixed 16:9 plus 9:16 pair, and shows black when frames are absent.
+Preview clicks and accessibility actions update the window's transient
+`isPortraitAudio` selection without changing document contents.
+
+The divider starts at 280 points with a 100-point minimum for each pane. User
+drags save `contentPreviewHeightRatio` in Workspace-local state; reopening
+restores that ratio within the available height. Window resizing does not
+replace the saved ratio. Shutdown pauses the MTKView, detaches its delegate,
+and stops the renderer before shutting down the runtimes.
 
 ### Dynamic reference selection
 

@@ -43,11 +43,42 @@ struct WorkspaceProgramsInspector: View {
     Form {
       WorkspaceProgramSelector(programs: uiState.definition.programs, selection: programSelection)
         .disabled(!canSelectProgram)
+      Button("Add Program") { addProgram() }
+        .disabled(uiState.isOutputActive)
       if let errorMessage {
         Text(errorMessage).foregroundStyle(.red)
       }
     }
     .formStyle(.grouped)
+  }
+
+  private func addProgram() {
+    let id = nextInternalID()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = id
+    program.displayName = uniqueProgramDisplayName("Program")
+    var definition = uiState.definition
+    definition.programs.append(program)
+    uiState.definition = definition
+    if let workspaceURL {
+      var state = appletData.state(for: workspaceURL)
+      if state.selectedProgramInternalID == nil {
+        state.selectedProgramInternalID = id
+        appletData.setState(state, for: workspaceURL)
+        dispatcher?.updateProgramRuntimes()
+      }
+    }
+    errorMessage = nil
+    dispatcher?.synchronizeAudioMonitor()
+  }
+  private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
+
+  private func uniqueProgramDisplayName(_ base: String) -> String {
+    let names = Set(uiState.definition.programs.map(\.displayName))
+    guard names.contains(base) else { return base }
+    var suffix = 2
+    while names.contains("\(base) \(suffix)") { suffix += 1 }
+    return "\(base) \(suffix)"
   }
 
   var programSelection: Binding<UInt64?> {

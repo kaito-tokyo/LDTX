@@ -46,7 +46,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     preferences.programPreferences = [7: preference]
 
     let graph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: preferences, programInternalID: 7, role: .landscape)
+      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: false)
 
     #expect(graph.composite.steps.map(\.name) == ["v4-11"])
     #expect(graph.layerPreferences.first?.destinationX == 0.25)
@@ -61,7 +61,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let portraitGraph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: preferences, programInternalID: 7, role: .portrait,
+      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: true,
       localState: WorkspaceLocalState(
         synchronizesLandscapeMixToPortraitByProgramInternalID: [7: true]))
     #expect(
@@ -80,7 +80,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         11: .avCaptureDevice(uniqueID: "camera-id")
       ],
       programInternalID: 7,
-      role: .landscape,
+      isPortrait: false,
       timeSeconds: 1
     )
     #expect(configuration.cameraIDsByInputKey == ["v4-11": "camera-id"])
@@ -95,7 +95,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         11: .coreAudioDevice(uid: "microphone-instead-of-camera")
       ],
       programInternalID: 7,
-      role: .landscape,
+      isPortrait: false,
       timeSeconds: 1
     )
     #expect(mismatchedDeviceConfiguration.cameraIDsByInputKey.isEmpty)
@@ -130,7 +130,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       preferences: .init(),
       localState: .init(),
       programInternalID: 7,
-      role: .landscape,
+      isPortrait: false,
       timeSeconds: 1
     )
     let step = try #require(configuration.composite.steps.first)
@@ -139,7 +139,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     let assignedConfiguration = try WorkspaceV4RenderGraph.runtimeProjection(
       definition: definition, preferences: .init(), localState: .init(),
       physicalDeviceIDs: [11: .avCaptureDevice(uniqueID: "camera")],
-      programInternalID: 7, role: .landscape, timeSeconds: 1
+      programInternalID: 7, isPortrait: false, timeSeconds: 1
     ).configuration
     #expect(assignedConfiguration.cameraIDsByInputKey[renderingKey] == "camera")
   }
@@ -174,7 +174,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.videoComponents = [solidWrapper, linearWrapper, radialWrapper, conicWrapper]
 
     let graph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: .init(), programInternalID: 7, role: .landscape)
+      definition: definition, preferences: .init(), programInternalID: 7, isPortrait: false)
 
     #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
     #expect(

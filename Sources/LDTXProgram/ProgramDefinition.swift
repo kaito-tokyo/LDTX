@@ -1648,11 +1648,6 @@ public struct InputDeviceComponent: ProgramComponentParameters {
   }
 }
 
-public enum ProgramCanvasRole: String, Codable, CaseIterable, Sendable {
-  case landscape
-  case portrait
-}
-
 public struct ProgramCanvasDefinition: Codable, Equatable, Sendable {
   public var canvasWidth: Int
   public var canvasHeight: Int
@@ -1746,12 +1741,13 @@ public struct SavedProgramDefinitionRecord: Codable, Equatable, Sendable {
     self.inputDevices = inputDevices
   }
 
-  public subscript(role: ProgramCanvasRole) -> ProgramCanvasDefinition {
-    get { role == .landscape ? landscape : portrait }
+  public subscript(isPortrait: Bool) -> ProgramCanvasDefinition {
+    get { !isPortrait ? landscape : portrait }
     set {
-      switch role {
-      case .landscape: landscape = newValue
-      case .portrait: portrait = newValue
+      if !isPortrait {
+        landscape = newValue
+      } else {
+        portrait = newValue
       }
     }
   }

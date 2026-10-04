@@ -10,6 +10,7 @@ import LDTXWorkspaceAppletUI
 import SwiftUI
 
 public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
+  let contentController: WorkspaceContentViewController
   let contentPane: WorkspaceContent
   private let uiState: WorkspaceUIState
   private let dispatcher: any WorkspaceDispatcherProtocol
@@ -21,14 +22,32 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     dispatcher: any WorkspaceDispatcherProtocol,
     uiState: WorkspaceUIState,
     documentReference: DocumentReference,
-    landscapeRuntime: ProgramRuntime,
-    portraitRuntime: ProgramRuntime
+    previewRenderer: ProgramPairPreviewRenderer,
+    audioPeakMeter: ProgramAudioPeakMeter
   ) {
     self.uiState = uiState
     self.dispatcher = dispatcher
     self.contentPane = WorkspaceContent(
-      deviceRegistry: deviceRegistry, uiState: uiState, appletData: appletData,
-      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime)
+      uiState: uiState, appletData: appletData,
+      audioPeakMeter: audioPeakMeter)
+
+    let preview = ProgramCanvasPairedPreview(
+      device: previewRenderer.device, delegate: previewRenderer,
+      onSelect: { uiState.isPortraitAudio = $0 })
+    let editorController = NSHostingController(
+      rootView:
+        contentPane
+        .environment(\.workspaceDispatcher, dispatcher)
+        .environment(\.documentReference, documentReference))
+    editorController.sizingOptions = [.minSize]
+    self.contentController = WorkspaceContentViewController(
+      preview: preview, delegate: previewRenderer, editor: editorController,
+      initialRatio: appletData.state(for: url).contentPreviewHeightRatio,
+      saveRatio: { ratio in
+        appletData.updateState(for: uiState.localStateURL ?? url) {
+          $0.contentPreviewHeightRatio = ratio
+        }
+      })
 
     super.init(
       contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
@@ -45,10 +64,6 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     )
     .environment(\.workspaceDispatcher, dispatcher)
 
-    let contentView =
-      contentPane
-      .environment(\.workspaceDispatcher, dispatcher)
-
     let inspectorView = WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
       uiState: uiState,
@@ -59,10 +74,6 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     let sidebarController = NSHostingController(
       rootView: sidebarView.environment(\.documentReference, documentReference))
     sidebarController.sizingOptions = [.minSize]
-
-    let contentController = NSHostingController(
-      rootView: contentView.environment(\.documentReference, documentReference))
-    contentController.sizingOptions = [.minSize]
 
     let inspectorController = NSHostingController(
       rootView: inspectorView.environment(\.documentReference, documentReference))
@@ -86,6 +97,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       display: false)
 
     splitViewController.setInitialWidths(sidebar: 240, content: 480)
+    contentController.view.layoutSubtreeIfNeeded()
+    contentController.restoreInitialDividerPosition()
 
     self.center()
   }
@@ -94,6 +107,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     [
       .init("workspace.sidebar"), .sidebarTrackingSeparator,
       .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
+      .init("workspace.captureScreenshots"), .init("workspace.openScreenshotsFolder"),
       .flexibleSpace,
       .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
     ]
@@ -126,6 +140,22 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       item.isNavigational = true
       item.target = self
       item.action = #selector(toggleOutput(_:))
+    case "workspace.captureScreenshots":
+      item.label = "Capture Screenshot(s)"
+      item.paletteLabel = item.label
+      item.toolTip = item.label
+      item.image = NSImage(systemSymbolName: "camera", accessibilityDescription: item.label)
+      item.target = self
+      item.action = #selector(captureScreenshots(_:))
+      item.isEnabled = validateToolbarItem(item)
+    case "workspace.openScreenshotsFolder":
+      item.label = "Open Screenshots Folder"
+      item.paletteLabel = item.label
+      item.toolTip = item.label
+      item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: item.label)
+      item.target = self
+      item.action = #selector(openScreenshotsFolder(_:))
+      item.isEnabled = validateToolbarItem(item)
     case "workspace.inspector":
       item.label = "Inspector"
       item.paletteLabel = "Inspector"
@@ -152,7 +182,10 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
 
   func updateOutputToolbar() {
     for item in toolbar?.items ?? [] where item.target === self {
-      configureOutputItem(item)
+      switch item.itemIdentifier.rawValue {
+      case "workspace.stopOutput", "workspace.toggleOutput": configureOutputItem(item)
+      default: item.isEnabled = validateToolbarItem(item)
+      }
     }
   }
 
@@ -161,8 +194,22 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     case "workspace.stopOutput": uiState.recordingState.canStop
     case "workspace.toggleOutput":
       uiState.recordingState.canStart || uiState.recordingState == .recording
+    case "workspace.captureScreenshots", "workspace.openScreenshotsFolder":
+      uiState.isOutputActive && uiState.isLocalRecording
     default: true
     }
+  }
+
+  @objc private func captureScreenshots(_ sender: Any?) {
+    guard uiState.isOutputActive && uiState.isLocalRecording else { return }
+    do { _ = try dispatcher.captureScreenshots() } catch {
+      uiState.outputFailureMessage = error.localizedDescription
+    }
+  }
+
+  @objc private func openScreenshotsFolder(_ sender: Any?) {
+    guard uiState.isOutputActive && uiState.isLocalRecording else { return }
+    dispatcher.openScreenshotsDirectory()
   }
 
   @objc private func stopOutput(_ sender: Any?) {

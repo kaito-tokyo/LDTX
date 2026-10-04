@@ -28,7 +28,7 @@ public final class WorkspaceWindowRuntime {
   private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let selectProgramHandler: (UInt64?) -> Void
-  private var runtimes: [ProgramCanvasRole: ProgramRuntime] = [:]
+  private var runtimes: [Bool: ProgramRuntime] = [:]
   let internalIDGenerator = WorkspaceInternalIDGenerator()
   public private(set) var recordingState: WorkspaceRecordingState = .idle
   public private(set) var visionFailureMessages: [UInt64: String] = [:]
@@ -95,15 +95,15 @@ public final class WorkspaceWindowRuntime {
 
   var appletLocalState: WorkspaceLocalState { localStateProvider() }
 
-  public func installRuntime(_ runtime: ProgramRuntime, role: ProgramCanvasRole) {
-    runtimes[role] = runtime
-    updateRuntime(role: role)
+  public func installRuntime(_ runtime: ProgramRuntime, isPortrait: Bool) {
+    runtimes[isPortrait] = runtime
+    updateRuntime(isPortrait: isPortrait)
   }
 
-  public func runtime(for role: ProgramCanvasRole) -> ProgramRuntime? { runtimes[role] }
+  public func runtime(isPortrait: Bool) -> ProgramRuntime? { runtimes[isPortrait] }
 
   public func updateRuntimes() {
-    for role in ProgramCanvasRole.allCases { updateRuntime(role: role) }
+    for isPortrait in [false, true] { updateRuntime(isPortrait: isPortrait) }
   }
 
   public func removeProgram(internalID: UInt64) throws {
@@ -120,8 +120,8 @@ public final class WorkspaceWindowRuntime {
     updateRuntimes()
   }
 
-  private func updateRuntime(role: ProgramCanvasRole) {
-    guard let runtime = runtimes[role] else { return }
+  private func updateRuntime(isPortrait: Bool) {
+    guard let runtime = runtimes[isPortrait] else { return }
     guard let selectedProgramInternalID else {
       runtime.clearProgram()
       return
@@ -133,7 +133,7 @@ public final class WorkspaceWindowRuntime {
         localState: localStateProvider(),
         physicalDeviceIDs: physicalDeviceIDsProvider(),
         programInternalID: selectedProgramInternalID,
-        role: role,
+        isPortrait: isPortrait,
         timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
       )
     else { return }

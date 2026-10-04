@@ -36,7 +36,18 @@ public struct WorkspaceInspectorContainer: View {
       inspector(for: selector)
         .id(selector)
     } else {
-      emptyInspector
+      ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Inspector")
+            .font(.headline)
+          Text("Select an item in the Sidebar to view and edit its settings.")
+          Text("Select Programs to add or choose a Program, Canvas to configure frame rate and bit rate, or Output to configure recording and streaming.")
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
   }
 

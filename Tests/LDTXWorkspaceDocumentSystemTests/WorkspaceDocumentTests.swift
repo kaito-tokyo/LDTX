@@ -50,13 +50,13 @@ struct WorkspaceDocumentSystemTestSuite {
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
     try secondWindow.selectProgram(internalID: a)
-    let landscape = try #require(firstWindow.windowRuntime.runtime(for: .landscape))
-    let portrait = try #require(firstWindow.windowRuntime.runtime(for: .portrait))
+    let landscape = try #require(firstWindow.windowRuntime.runtime(isPortrait: false))
+    let portrait = try #require(firstWindow.windowRuntime.runtime(isPortrait: true))
     let definition = first.uiState.definition
     first.uiState.inspectorSelector = .init(kind: .workspacePrograms)
     try firstWindow.selectProgram(internalID: b)
-    #expect(firstWindow.windowRuntime.runtime(for: .landscape) === landscape)
-    #expect(firstWindow.windowRuntime.runtime(for: .portrait) === portrait)
+    #expect(firstWindow.windowRuntime.runtime(isPortrait: false) === landscape)
+    #expect(firstWindow.windowRuntime.runtime(isPortrait: true) === portrait)
     #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
     #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
     // This stored Content value is outside the hosted document environment.
@@ -127,7 +127,7 @@ struct WorkspaceDocumentSystemTestSuite {
     let input = try firstWindow.windowRuntime.addVideoInputDevice(displayName: "Camera")
     let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
     try firstWindow.windowRuntime.setVideoLayerOrder(
-      [input], forProgramInternalID: program, role: .landscape)
+      [input], forProgramInternalID: program, isPortrait: false)
     data.updateState(for: first.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
     second.uiState.definition = first.uiState.definition
     let secondWindow = WorkspaceWindowController(
@@ -136,8 +136,8 @@ struct WorkspaceDocumentSystemTestSuite {
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
     data.updateState(for: second.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
-    let firstRuntime = try #require(firstWindow.windowRuntime.runtime(for: .landscape))
-    let secondRuntime = try #require(secondWindow.windowRuntime.runtime(for: .landscape))
+    let firstRuntime = try #require(firstWindow.windowRuntime.runtime(isPortrait: false))
+    let secondRuntime = try #require(secondWindow.windowRuntime.runtime(isPortrait: false))
     data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
     for _ in 0..<100
     where firstRuntime.programState.read({ $0?.cameraIDsByInputKey["v4-\(input)"] })
@@ -155,7 +155,7 @@ struct WorkspaceDocumentSystemTestSuite {
       to: URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
     try await Task.sleep(for: .milliseconds(20))
     #expect(
-      try firstWindow.windowRuntime.runtimeProjection(programInternalID: program, role: .landscape)
+      try firstWindow.windowRuntime.runtimeProjection(programInternalID: program, isPortrait: false)
         .configuration.cameraIDsByInputKey["v4-\(input)"] == "test-camera")
     await firstWindow.shutdown()
     data.setPhysicalDeviceID(nil, for: input)
@@ -341,7 +341,7 @@ struct WorkspaceDocumentSystemTestSuite {
     document.finishCreation(success: true)
     let initialWindow = try #require(document.windowControllers.first?.window as? WorkspaceWindow)
     #expect(initialWindow.isVisible)
-    #expect(!initialWindow.contentPane.showsProgramPreview)
+    #expect(initialWindow.contentPane.selectedProgram == nil)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 101
     program.displayName = "Main"
@@ -358,7 +358,7 @@ struct WorkspaceDocumentSystemTestSuite {
     layerPreferences.portraitVideoLayerMuted[203] = true
     document.uiState.preferences.programPreferences[101] = layerPreferences
     document.uiState.inspectorSelector = .init(kind: .clockVideoComponent, internalID: 203)
-    #expect(initialWindow.contentPane.showsProgramPreview)
+    #expect(initialWindow.contentPane.selectedProgram != nil)
     #expect(document.isDocumentEdited)
     try await save(document, to: url, operation: .saveOperation)
     #expect(document.fileURL == url)
@@ -385,11 +385,11 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(reopened.uiState.definition == expectedDefinition)
     #expect(reopened.uiState.preferences == expectedPreferences)
     #expect(!reopened.isDocumentEdited)
-    #expect(window.contentPane.showsProgramPreview)
+    #expect(window.contentPane.selectedProgram != nil)
     #expect(
-      window.contentPane.landscapeRuntime === controller.windowRuntime.runtime(for: .landscape))
+      window.contentController.preview.metalView.delegate === controller.previewRenderer)
     #expect(
-      window.contentPane.landscapeRuntime !== firstController.windowRuntime.runtime(for: .landscape)
+      controller.previewRenderer !== firstController.previewRenderer
     )
     #expect(
       window.toolbar?.items.contains { $0.itemIdentifier.rawValue == "workspace.toggleOutput" }

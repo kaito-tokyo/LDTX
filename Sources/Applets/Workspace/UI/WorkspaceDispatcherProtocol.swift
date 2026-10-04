@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXWorkspaceAppletInterface
 import Observation
 
 public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
@@ -12,6 +13,10 @@ public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void)
   @MainActor func selectProgram(internalID: UInt64) throws
+  @MainActor func setBasicTransform(
+    _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
+    videoLayerInternalID: UInt64, isPortrait: Bool
+  ) throws
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws
   @MainActor func pauseOutput() async

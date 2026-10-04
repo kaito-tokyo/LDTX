@@ -3,90 +3,91 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
-import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
-import UniformTypeIdentifiers
 
 public struct WorkspaceContent: View {
   @Environment(\.documentReference) private var documentReference
-  private var workspaceURL: URL? {
+  var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
     return document.fileURL ?? uiState.localStateURL
   }
-  @Environment(\.workspaceDispatcher) private var workspaceDispatcher
-  let landscapeRuntime: ProgramRuntime
-  let portraitRuntime: ProgramRuntime
-  let deviceRegistry: DeviceRegistryService
+  @Environment(\.workspaceDispatcher) var workspaceDispatcher
+  let audioPeakMeter: ProgramAudioPeakMeter
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
-  @State private var errorMessage: String?
-  @State private var isVideoLayersExpanded = true
+  @State var errorMessage: String?
+  @State var transformDrafts: [String: [String]] = [:]
 
   public init(
-    deviceRegistry: DeviceRegistryService,
     uiState: WorkspaceUIState,
     appletData: WorkspaceAppletData,
-    landscapeRuntime: ProgramRuntime,
-    portraitRuntime: ProgramRuntime
+    audioPeakMeter: ProgramAudioPeakMeter
   ) {
-    self.landscapeRuntime = landscapeRuntime
-    self.portraitRuntime = portraitRuntime
-    self.deviceRegistry = deviceRegistry
+    self.audioPeakMeter = audioPeakMeter
     self._uiState = Bindable(wrappedValue: uiState)
     self._appletData = Bindable(wrappedValue: appletData)
   }
 
   public var body: some View {
-    GeometryReader { geometry in
-      VStack(spacing: 0) {
-        let size = WorkspacePreviewLayout.size(in: geometry.size)
-        Group {
-          if showsProgramPreview {
-            WorkspaceRuntimeCanvasPairPreview(
-              landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
-              landscapeSize: CGSize(width: 16, height: 9),
-              portraitSize: CGSize(width: 9, height: 16))
-          } else {
-            Text("No Program selected")
-              .foregroundStyle(.secondary)
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .accessibilityIdentifier("workspaceEmptyPreview")
+    ScrollView(.vertical) {
+      VStack(alignment: .leading) {
+        if let program = selectedProgram, !audioInputs.isEmpty {
+          VStack(alignment: .leading, spacing: 12) {
+            HStack {
+              Text("Audio Mix").font(.headline)
+              Spacer()
+              Toggle("Sync", isOn: audioMixSyncBinding)
+                .toggleStyle(.switch)
+                .disabled(workspaceURL == nil)
+            }
+            AudioMixEditor(
+              uiState: uiState, appletData: appletData, workspaceURL: workspaceURL,
+              programInternalID: program.internalID, audioInputs: audioInputs,
+              isAudioMixSynced: isAudioMixSynced, audioPeakMeter: audioPeakMeter)
           }
         }
-        .frame(width: size.width, height: size.height)
-        .frame(maxWidth: .infinity)
-        Divider()
-        editorContent
-      }
-    }
-    .onAppear {
-      refreshCaptureDevices()
-      workspaceDispatcher?.synchronizeAudioMonitor()
-    }
-  }
-
-  var showsProgramPreview: Bool { selectedProgram != nil }
-
-  private var editorContent: some View {
-    ScrollView(.vertical) {
-      VStack(alignment: .leading, spacing: 16) {
-        videoLayers
-        HStack {
-          Button("Add Program") { addProgram() }.disabled(uiState.isOutputActive)
-          if uiState.isOutputActive && uiState.isLocalRecording {
-            Button("Capture Screenshot(s)") {
-              do { _ = try workspaceDispatcher?.captureScreenshots() } catch {
-                errorMessage = error.localizedDescription
+        if let selectedProgram {
+          Divider()
+          let preference = uiState.preferences.programPreferences[selectedProgram.internalID]
+          VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading) {
+              Text("Landscape Video Layers").font(.headline)
+              VideoLayersEditor(
+                uiState: uiState,
+                transforms: preference?.landscapeVideoLayerTransforms ?? [:],
+                muted: preference?.landscapeVideoLayerMuted ?? [:],
+                width: 1920, height: 1080,
+                draftKeyPrefix: "\(selectedProgram.internalID)/false",
+                layerIDs: selectedProgram.landscapeVideoLayerInternalIds,
+                transformDrafts: $transformDrafts
+              ) { internalID, action in
+                performVideoLayerAction(
+                  internalID, action: action, programInternalID: selectedProgram.internalID,
+                  isPortrait: false)
               }
             }
-            Button("Open Screenshots Folder") {
-              workspaceDispatcher?.openScreenshotsDirectory()
+            Divider()
+            VStack(alignment: .leading) {
+              Text("Portrait Video Layers").font(.headline)
+              VideoLayersEditor(
+                uiState: uiState,
+                transforms: preference?.portraitVideoLayerTransforms ?? [:],
+                muted: preference?.portraitVideoLayerMuted ?? [:],
+                width: 1080, height: 1920,
+                draftKeyPrefix: "\(selectedProgram.internalID)/true",
+                layerIDs: selectedProgram.portraitVideoLayerInternalIds,
+                transformDrafts: $transformDrafts
+              ) { internalID, action in
+                performVideoLayerAction(
+                  internalID, action: action, programInternalID: selectedProgram.internalID,
+                  isPortrait: true)
+              }
             }
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .id(selectedProgram.internalID)
         }
-        audioMix
-        inputDeviceAssignments
         if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
         if let message = uiState.outputFailureMessage {
           Text(message).foregroundStyle(.red)
@@ -94,472 +95,84 @@ public struct WorkspaceContent: View {
         Spacer()
       }
       .padding(20)
+      .padding(.bottom, pendingTransforms.isEmpty ? 0 : 48)
     }
-  }
-
-  private func addProgram() {
-    let id = nextInternalID()
-    var program = Ldtx_Workspace_V4_ProgramDefinition()
-    program.internalID = id
-    program.displayName = uniqueProgramDisplayName("Program")
-    var definition = uiState.definition
-    definition.programs.append(program)
-    uiState.definition = definition
-    if localState.selectedProgramInternalID == nil {
-      var state = localState
-      state.selectedProgramInternalID = id
-      setLocalState(state)
-    }
-    errorMessage = nil
-    workspaceDispatcher?.synchronizeAudioMonitor()
-  }
-  private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
-
-  private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(uiState.definition.programs.map(\.displayName))
-    guard names.contains(base) else { return base }
-    var suffix = 2
-    while names.contains("\(base) \(suffix)") { suffix += 1 }
-    return "\(base) \(suffix)"
-  }
-
-  @ViewBuilder
-  private var videoLayers: some View {
-    if let selectedProgram {
-      GroupBox {
-        DisclosureGroup("Video Layers", isExpanded: $isVideoLayersExpanded) {
-          VStack(alignment: .leading) {
-            videoLayerList(for: selectedProgram, role: .landscape, title: "Landscape")
-            videoLayerList(for: selectedProgram, role: .portrait, title: "Portrait")
-          }
-        }
+    .onSubmit { applyChanges() }
+    .overlay(alignment: .bottomTrailing) {
+      if !pendingTransforms.isEmpty {
+        Button("Apply Changes") { applyChanges() }
+          .disabled(pendingTransforms.contains { $0.transform == nil })
+          .padding(20)
       }
     }
-  }
-
-  private func videoLayerList(
-    for program: Ldtx_Workspace_V4_ProgramDefinition,
-    role: ProgramCanvasRole,
-    title: String
-  ) -> some View {
-    let layerIDs =
-      role == .landscape
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    return VStack(alignment: .leading) {
-      HStack {
-        Text(title).font(.headline)
-        Spacer()
-        Menu("Add Video Layer") {
-          ForEach(availableVideoLayerIDs(for: program, role: role), id: \.self) { internalID in
-            Button(videoLayerDisplayName(for: internalID)) {
-              addVideoLayer(internalID, to: program, role: role)
-            }
-          }
-        }
-        .disabled(
-          uiState.isOutputActive
-            || availableVideoLayerIDs(for: program, role: role).isEmpty)
-      }
-      if layerIDs.isEmpty {
-        Text("No video layers").foregroundStyle(.secondary)
-      }
-      ForEach(Array(layerIDs.enumerated()), id: \.element) { index, internalID in
-        VStack(alignment: .leading) {
-          HStack {
-            Text(videoLayerDisplayName(for: internalID))
-            Spacer()
-            Toggle(
-              "Mute",
-              isOn: videoLayerMuteBinding(
-                layerInternalID: internalID, programInternalID: program.internalID, role: role)
-            )
-            .toggleStyle(.checkbox)
-            Button {
-              moveVideoLayer(in: program, role: role, from: index, offset: -1)
-            } label: {
-              Image(systemName: "arrow.up")
-            }
-            .disabled(uiState.isOutputActive || index == 0)
-            Button {
-              moveVideoLayer(in: program, role: role, from: index, offset: 1)
-            } label: {
-              Image(systemName: "arrow.down")
-            }
-            .disabled(uiState.isOutputActive || index == layerIDs.count - 1)
-            Button {
-              removeVideoLayer(in: program, role: role, at: index)
-            } label: {
-              Image(systemName: "minus")
-            }
-            .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID)) from \(title)")
-            .disabled(uiState.isOutputActive)
-          }
-          WorkspaceV4LayerTransformEditor(
-            uiState: uiState, programInternalID: program.internalID,
-            role: role, videoLayerInternalID: internalID)
-        }
-      }
+    .onAppear {
+      workspaceDispatcher?.synchronizeAudioMonitor()
     }
   }
 
-  var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    uiState.definition.programs.first { $0.internalID == localState.selectedProgramInternalID }
-      ?? uiState.definition.programs.first
-  }
-
-  @ViewBuilder
-  private var audioMix: some View {
-    if let selectedProgram, !audioInputs.isEmpty {
-      GroupBox("Audio Mix") {
-        VStack(alignment: .leading) {
-          MonitorOutputDevicePicker()
-          audioMix(
-            role: .landscape, title: "Landscape", programInternalID: selectedProgram.internalID)
-          HStack {
-            Text("Monitor").frame(width: 96, alignment: .leading)
-            Slider(value: monitorVolumeBinding, in: -60...12)
-          }
-          ForEach(audioInputs, id: \.internalID) { input in
-            Toggle("Monitor \(input.displayName)", isOn: monitorBinding(for: input.internalID))
-              .toggleStyle(.checkbox)
-              .disabled(workspaceURL == nil)
-          }
-          Toggle(
-            "Sync Landscape Mix to Portrait",
-            isOn: Binding(
-              get: {
-                localState.synchronizesLandscapeMixToPortraitByProgramInternalID[
-                  selectedProgram.internalID] ?? false
-              },
-              set: {
-                var state = localState
-                state.synchronizesLandscapeMixToPortraitByProgramInternalID[
-                  selectedProgram.internalID] = $0
-                setLocalState(state)
-                workspaceDispatcher?.updateMixPreferences()
-              }
-            )
-          )
-          .disabled(workspaceURL == nil)
-          audioMix(
-            role: .portrait, title: "Portrait", programInternalID: selectedProgram.internalID)
-        }
-      }
-    }
-  }
-
-  private func audioMix(
-    role: ProgramCanvasRole,
-    title: String,
-    programInternalID: UInt64
-  ) -> some View {
-    VStack(alignment: .leading) {
-      Text(title).font(.headline)
-      HStack {
-        Text("Master").frame(width: 96, alignment: .leading)
-        Slider(value: masterVolumeBinding(for: programInternalID, role: role), in: -60...12)
-      }
-      ForEach(audioInputs, id: \.internalID) { input in
-        HStack {
-          Text(input.displayName).frame(width: 96, alignment: .leading)
-          Slider(
-            value: audioGainBinding(
-              for: input.internalID, programInternalID: programInternalID, role: role), in: -60...12
-          )
-          Toggle(
-            "Mute",
-            isOn: audioMuteBinding(
-              for: input.internalID, programInternalID: programInternalID, role: role)
-          )
-          .toggleStyle(.checkbox)
-        }
-      }
-    }
-  }
-
-  private func masterVolumeBinding(
-    for programInternalID: UInt64,
-    role: ProgramCanvasRole
-  ) -> Binding<Double> {
-    Binding(
-      get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return role == .landscape
-          ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
-      },
-      set: { value in
-        var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        switch role {
-        case .landscape: preference.landscapeMasterVolume = value
-        case .portrait: preference.portraitMasterVolume = value
-        }
-        preferences.programPreferences[programInternalID] = preference
-        uiState.preferences = preferences
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  private func audioGainBinding(
-    for inputDeviceInternalID: UInt64,
-    programInternalID: UInt64,
-    role: ProgramCanvasRole
-  ) -> Binding<Double> {
-    Binding(
-      get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return role == .landscape
-          ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
-          : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
-      },
-      set: { value in
-        var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        switch role {
-        case .landscape: preference.landscapeAudioChannelGains[inputDeviceInternalID] = value
-        case .portrait: preference.portraitAudioChannelGains[inputDeviceInternalID] = value
-        }
-        preferences.programPreferences[programInternalID] = preference
-        uiState.preferences = preferences
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  private func audioMuteBinding(
-    for inputDeviceInternalID: UInt64,
-    programInternalID: UInt64,
-    role: ProgramCanvasRole
-  ) -> Binding<Bool> {
-    Binding(
-      get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return role == .landscape
-          ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
-          : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
-      },
-      set: { value in
-        var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        switch role {
-        case .landscape: preference.landscapeAudioChannelMuted[inputDeviceInternalID] = value
-        case .portrait: preference.portraitAudioChannelMuted[inputDeviceInternalID] = value
-        }
-        preferences.programPreferences[programInternalID] = preference
-        uiState.preferences = preferences
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  private var monitorVolumeBinding: Binding<Double> {
-    Binding(
-      get: { uiState.preferences.monitorVolume },
-      set: { value in
-        var preferences = uiState.preferences
-        preferences.monitorVolume = value
-        uiState.preferences = preferences
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  private func monitorBinding(for inputDeviceInternalID: UInt64) -> Binding<Bool> {
-    Binding(
-      get: { localState.monitorAudioInputDeviceInternalIDs.contains(inputDeviceInternalID) },
-      set: { enabled in
-        guard let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) { state in
-          if enabled {
-            state.monitorAudioInputDeviceInternalIDs.insert(inputDeviceInternalID)
-          } else {
-            state.monitorAudioInputDeviceInternalIDs.remove(inputDeviceInternalID)
-          }
-        }
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  func moveVideoLayer(
-    in program: Ldtx_Workspace_V4_ProgramDefinition,
-    role: ProgramCanvasRole,
-    from index: Int,
-    offset: Int
-  ) {
-    guard !uiState.isOutputActive else { return }
-    var layerIDs =
-      role == .landscape
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    let destination = index + offset
-    guard layerIDs.indices.contains(index), layerIDs.indices.contains(destination) else { return }
-    layerIDs.swapAt(index, destination)
-    performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
-  }
-
-  func removeVideoLayer(
-    in program: Ldtx_Workspace_V4_ProgramDefinition,
-    role: ProgramCanvasRole,
-    at index: Int
-  ) {
-    guard !uiState.isOutputActive else { return }
-    var layerIDs =
-      role == .landscape
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    guard layerIDs.indices.contains(index) else { return }
-    layerIDs.remove(at: index)
-    performLayerOrderUpdate(layerIDs, for: program.internalID, role: role)
-  }
-
-  private func availableVideoLayerIDs(
-    for program: Ldtx_Workspace_V4_ProgramDefinition,
-    role: ProgramCanvasRole
-  ) -> [UInt64] {
-    let usedIDs = Set(
-      role == .landscape
-        ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds)
-    let inputIDs = uiState.definition.inputDevices.compactMap {
-      input -> UInt64? in
-      guard case .videoDevice(let device)? = input.definition else { return nil }
-      return device.internalID
-    }
-    let componentIDs = uiState.definition.videoComponents.compactMap {
-      componentInternalID($0)
-    }
-    return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
-  }
-
-  func addVideoLayer(
-    _ internalID: UInt64,
-    to program: Ldtx_Workspace_V4_ProgramDefinition,
-    role: ProgramCanvasRole
-  ) {
-    guard !uiState.isOutputActive else { return }
-    let existing =
-      role == .landscape
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    performLayerOrderUpdate(existing + [internalID], for: program.internalID, role: role)
-  }
-
-  private func performLayerOrderUpdate(
-    _ layerIDs: [UInt64], for programInternalID: UInt64, role: ProgramCanvasRole
-  ) {
-    guard
-      let index = uiState.definition.programs.firstIndex(where: {
-        $0.internalID == programInternalID
-      })
-    else { return }
-    var definition = uiState.definition
-    switch role {
-    case .landscape: definition.programs[index].landscapeVideoLayerInternalIds = layerIDs
-    case .portrait: definition.programs[index].portraitVideoLayerInternalIds = layerIDs
-    }
-    uiState.definition = definition
-    errorMessage = nil
-  }
-
-  private func videoLayerMuteBinding(
-    layerInternalID: UInt64,
-    programInternalID: UInt64,
-    role: ProgramCanvasRole
-  ) -> Binding<Bool> {
-    Binding(
-      get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        switch role {
-        case .landscape: return preference?.landscapeVideoLayerMuted[layerInternalID] ?? false
-        case .portrait: return preference?.portraitVideoLayerMuted[layerInternalID] ?? false
-        }
-      },
-      set: { muted in
-        var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        switch role {
-        case .landscape: preference.landscapeVideoLayerMuted[layerInternalID] = muted
-        case .portrait: preference.portraitVideoLayerMuted[layerInternalID] = muted
-        }
-        preferences.programPreferences[programInternalID] = preference
-        uiState.preferences = preferences
-      }
-    )
-  }
-
-  private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = uiState.definition.inputDevices.first(where: {
-      input in
-      switch input.definition {
-      case .videoDevice(let device): device.internalID == internalID
-      case .audioDevice, nil: false
-      }
-    }), case .videoDevice(let device)? = input.definition {
-      return device.displayName
-    }
-    if let component = uiState.definition.videoComponents.first(where: {
-      componentInternalID($0) == internalID
-    }) {
-      return componentDisplayName(component)
-    }
-    return "Missing Video Layer"
-  }
-
-  private func componentInternalID(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> UInt64?
+  var pendingTransforms:
+    [(
+      key: String, programID: UInt64, layerID: UInt64,
+      isPortrait: Bool, transform: Ldtx_Workspace_V4_BasicTransform?
+    )]
   {
-    switch component.definition {
-    case .vfxSource(let value): value.internalID
-    case .solidColorFill(let value): value.internalID
-    case .linearGradientFill(let value): value.internalID
-    case .radialGradientFill(let value): value.internalID
-    case .conicGradientFill(let value): value.internalID
-    case .clock(let value): value.internalID
-    case .testPattern(let value): value.internalID
-    case nil: nil
-    }
-  }
-
-  private func componentDisplayName(_ component: Ldtx_Workspace_V4_VideoComponentWrapper) -> String
-  {
-    switch component.definition {
-    case .vfxSource(let value): value.displayName
-    case .solidColorFill(let value): value.displayName
-    case .linearGradientFill(let value): value.displayName
-    case .radialGradientFill(let value): value.displayName
-    case .conicGradientFill(let value): value.displayName
-    case .clock(let value): value.displayName
-    case .testPattern(let value): value.displayName
-    case nil: "Invalid Video Component"
-    }
-  }
-
-  @ViewBuilder
-  private var inputDeviceAssignments: some View {
-    if !videoInputs.isEmpty || !audioInputs.isEmpty {
-      GroupBox("Physical Devices") {
-        VStack(alignment: .leading) {
-          ForEach(videoInputs, id: \.internalID) { input in
-            WorkspacePhysicalDeviceField(
-              title: input.displayName, internalID: input.internalID, isAudio: false,
-              uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry,
-              isEditable: workspaceURL != nil)
+    var result: [(String, UInt64, UInt64, Bool, Ldtx_Workspace_V4_BasicTransform?)] = []
+    for program in uiState.definition.programs {
+      let preference = uiState.preferences.programPreferences[program.internalID]
+      for isPortrait in [false, true] {
+        let width = Double(isPortrait ? 1080 : 1920)
+        let height = Double(isPortrait ? 1920 : 1080)
+        let layerIDs =
+          isPortrait
+          ? program.portraitVideoLayerInternalIds
+          : program.landscapeVideoLayerInternalIds
+        for layerID in layerIDs {
+          let key = "\(program.internalID)/\(isPortrait)/\(layerID)"
+          guard let strings = transformDrafts[key] else { continue }
+          let current =
+            (isPortrait
+              ? preference?.portraitVideoLayerTransforms[layerID]
+              : preference?.landscapeVideoLayerTransforms[layerID]) ?? .init()
+          let initial = [
+            String(Double(current.translationX) * width),
+            String(Double(current.translationY) * height),
+            String(current.scaleX), String(current.scaleY),
+          ]
+          guard strings != initial else { continue }
+          let values = strings.compactMap { Double($0) }
+          var transform: Ldtx_Workspace_V4_BasicTransform?
+          if values.count == 4 && values.allSatisfy(\.isFinite) {
+            let numbers = [
+              Float(values[0] / width), Float(values[1] / height),
+              Float(values[2]), Float(values[3]),
+            ]
+            if numbers.allSatisfy(\.isFinite) {
+              transform = .init(
+                translationX: numbers[0], translationY: numbers[1],
+                scaleX: numbers[2], scaleY: numbers[3])
+            }
           }
-          ForEach(audioInputs, id: \.internalID) { input in
-            WorkspacePhysicalDeviceField(
-              title: input.displayName, internalID: input.internalID, isAudio: true,
-              uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry,
-              isEditable: workspaceURL != nil)
-          }
-          Button("Refresh Physical Devices") { refreshCaptureDevices() }
+          result.append((key, program.internalID, layerID, isPortrait, transform))
         }
       }
     }
+    return result
   }
 
-  private var videoInputs: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { input in
-      guard case .videoDevice(let device)? = input.definition else { return nil }
-      return device
+  func applyChanges() {
+    let changes = pendingTransforms
+    guard let workspaceDispatcher, changes.allSatisfy({ $0.transform != nil }) else { return }
+    do {
+      for change in changes {
+        guard let transform = change.transform else { continue }
+        try workspaceDispatcher.setBasicTransform(
+          transform, programInternalID: change.programID,
+          videoLayerInternalID: change.layerID, isPortrait: change.isPortrait)
+        transformDrafts.removeValue(forKey: change.key)
+      }
+      errorMessage = nil
+    } catch {
+      errorMessage = error.localizedDescription
     }
   }
 
@@ -570,32 +183,67 @@ public struct WorkspaceContent: View {
     }
   }
 
-  private func refreshCaptureDevices() {
-    deviceRegistry.refresh()
-    errorMessage = deviceRegistry.errorMessage
-    synchronizeCaptureInputs()
+  private var isAudioMixSynced: Bool {
+    guard let program = selectedProgram else { return false }
+    return localState.synchronizesLandscapeMixToPortraitByProgramInternalID[program.internalID]
+      ?? false
   }
 
-  private func synchronizeCaptureInputs() {
-    workspaceDispatcher?.synchronizeCaptureInputs(
-      availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-    ) { failedIDs in
-      guard !failedIDs.isEmpty else { return }
-      Task { @MainActor in
-        errorMessage =
-          "Assigned camera(s) are unavailable: \(failedIDs.sorted().joined(separator: ", "))"
-      }
-    }
+  private var audioMixSyncBinding: Binding<Bool> {
+    Binding(
+      get: { isAudioMixSynced },
+      set: { value in
+        guard let program = selectedProgram else { return }
+        var state = localState
+        state.synchronizesLandscapeMixToPortraitByProgramInternalID[program.internalID] = value
+        setLocalState(state)
+        workspaceDispatcher?.updateMixPreferences()
+        workspaceDispatcher?.synchronizeAudioMonitor()
+      })
   }
 
-  private var localState: WorkspaceLocalState {
+  var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
+    uiState.definition.programs.first { $0.internalID == localState.selectedProgramInternalID }
+      ?? uiState.definition.programs.first
+  }
+
+  var localState: WorkspaceLocalState {
     guard let workspaceURL else { return .init() }
     return appletData.state(for: workspaceURL)
   }
 
-  private func setLocalState(_ state: WorkspaceLocalState) {
+  func setLocalState(_ state: WorkspaceLocalState) {
     guard let workspaceURL else { return }
     appletData.setState(state, for: workspaceURL)
     workspaceDispatcher?.updateProgramRuntimes()
   }
 }
+
+#if DEBUG
+  #Preview("Workspace Content") {
+    @Previewable @State var uiState: WorkspaceUIState = {
+      let state = WorkspaceSidebarPreviewFixtures.makeUIState()
+      var program = Ldtx_Workspace_V4_ProgramDefinition()
+      program.internalID = 100
+      program.displayName = "Preview Program"
+      program.landscapeVideoLayerInternalIds = [1, 4, 3]
+      state.definition.programs = [program]
+      var transform = Ldtx_Workspace_V4_BasicTransform()
+      transform.scaleX = 1
+      transform.scaleY = 1
+      var preference = Ldtx_Workspace_V4_ProgramPreference()
+      preference.landscapeVideoLayerTransforms = [1: transform, 4: transform, 3: transform]
+      state.preferences.programPreferences[program.internalID] = preference
+      return state
+    }()
+    @Previewable @State var appletData = WorkspaceAppletData(
+      userDefaults: UserDefaults(suiteName: "WorkspaceContentPreview")!)
+
+    WorkspaceContent(
+      uiState: uiState,
+      appletData: appletData,
+      audioPeakMeter: ProgramAudioPeakMeter()
+    )
+    .frame(width: 720, height: 1000)
+  }
+#endif

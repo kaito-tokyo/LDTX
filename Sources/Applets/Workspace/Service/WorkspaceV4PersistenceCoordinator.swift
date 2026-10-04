@@ -64,7 +64,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   /// Device assignments are app-local and never become Workspace data.
   func runtimeProjection(
     programInternalID: UInt64,
-    role: ProgramCanvasRole,
+    isPortrait: Bool,
     localState: WorkspaceLocalState,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
@@ -75,7 +75,7 @@ public final class WorkspaceV4PersistenceCoordinator {
       localState: localState,
       physicalDeviceIDs: physicalDeviceIDs,
       programInternalID: programInternalID,
-      role: role,
+      isPortrait: isPortrait,
       timeSeconds: timeSeconds
     )
   }
@@ -84,13 +84,13 @@ public final class WorkspaceV4PersistenceCoordinator {
   func applyRuntime(
     _ runtime: ProgramRuntime,
     programInternalID: UInt64,
-    role: ProgramCanvasRole,
+    isPortrait: Bool,
     localState: WorkspaceLocalState,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws {
     let projection = try runtimeProjection(
-      programInternalID: programInternalID, role: role, localState: localState,
+      programInternalID: programInternalID, isPortrait: isPortrait, localState: localState,
       physicalDeviceIDs: physicalDeviceIDs,
       timeSeconds: timeSeconds)
     runtime.updateProgram(projection.configuration)

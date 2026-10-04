@@ -26,6 +26,8 @@ public final class WorkspaceUIState {
   @ObservationIgnored public var documentContentsDidChange: (() -> Void)?
   public var localStateURL: URL?
 
+  public var isPortraitAudio = false
+
   public var inspectorSelector: WorkspaceInspectorSelector?
 
   @ObservationIgnored public var documentOutputStateDidChange: (() -> Void)?

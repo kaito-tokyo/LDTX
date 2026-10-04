@@ -113,8 +113,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    runtime.installRuntime(landscape, role: .landscape)
-    runtime.installRuntime(portrait, role: .portrait)
+    runtime.installRuntime(landscape, isPortrait: false)
+    runtime.installRuntime(portrait, isPortrait: true)
     runtime.selectedProgramInternalID = programID
 
     #expect(landscape.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
@@ -156,12 +156,12 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
     let programID = try windowRuntime.addProgram(displayName: "Main")
     try windowRuntime.setVideoLayerOrder(
-      [videoInputID], forProgramInternalID: programID, role: .landscape)
+      [videoInputID], forProgramInternalID: programID, isPortrait: false)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    windowRuntime.installRuntime(programRuntime, role: .landscape)
+    windowRuntime.installRuntime(programRuntime, isPortrait: false)
     windowRuntime.selectedProgramInternalID = programID
 
     appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)
