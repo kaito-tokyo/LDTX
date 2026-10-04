@@ -16,8 +16,8 @@ public struct WorkspaceContent: View {
   let audioPeakMeter: ProgramAudioPeakMeter
   @Bindable var uiState: WorkspaceUIState
   @Bindable var appletData: WorkspaceAppletData
+  @State private var volumeDrafts: [String: String] = [:]
   @State var errorMessage: String?
-  @State var transformDrafts: [String: [String]] = [:]
 
   public init(
     uiState: WorkspaceUIState,
@@ -32,39 +32,147 @@ public struct WorkspaceContent: View {
   public var body: some View {
     ScrollView(.vertical) {
       VStack(alignment: .leading) {
-        if let program = selectedProgram, !audioInputs.isEmpty {
-          VStack(alignment: .leading, spacing: 12) {
-            HStack {
-              Text("Audio Mix").font(.headline)
-              Spacer()
-              Toggle("Sync", isOn: audioMixSyncBinding)
-                .toggleStyle(.switch)
-                .disabled(workspaceURL == nil)
+        Section {
+          Grid(alignment: .center, horizontalSpacing: 8, verticalSpacing: 12) {
+            GridRow {
+              let key = "\(selectedProgram?.internalID ?? 0)/false"
+              let volume = masterVolumeBinding(for: selectedProgram?.internalID, isPortrait: false)
+              Label("Landscape", systemImage: "rectangle")
+                .labelStyle(.iconOnly)
+                .gridColumnAlignment(.center)
+              MasterVolumeEditor(
+                volume: volume, peakProvider: { audioPeakMeter.peak(for: .landscape) })
+              TextField(
+                "Volume",
+                text: Binding(
+                  get: { volumeDrafts[key] ?? String(format: "%.1f", volume.wrappedValue) },
+                  set: { volumeDrafts[key] = $0 })
+              )
+              .frame(width: 50)
+              .multilineTextAlignment(.trailing)
+              .autocorrectionDisabled()
+              .onSubmit {
+                guard
+                  let value = Double(
+                    volumeDrafts[key] ?? String(format: "%.1f", volume.wrappedValue)),
+                  value.isFinite,
+                  (ProgramPreferences
+                    .minimumAudioChannelGainDecibels...ProgramPreferences
+                    .maximumAudioChannelGainDecibels).contains(value)
+                else { return }
+                volume.wrappedValue = (value * 10).rounded() / 10
+              }
+              Text("dB")
+              if let draft = volumeDrafts[key],
+                Double(draft).map({
+                  $0.isFinite
+                    && (ProgramPreferences
+                      .minimumAudioChannelGainDecibels...ProgramPreferences
+                      .maximumAudioChannelGainDecibels).contains($0)
+                }) != true
+              {
+                Text("Invalid volume.")
+              }
             }
-            AudioMixEditor(
-              uiState: uiState, appletData: appletData, workspaceURL: workspaceURL,
-              programInternalID: program.internalID, audioInputs: audioInputs,
-              isAudioMixSynced: isAudioMixSynced, audioPeakMeter: audioPeakMeter)
+            .accessibilityLabel("Landscape Volume")
+            .disabled(selectedProgram == nil)
+            GridRow {
+              let key = "\(selectedProgram?.internalID ?? 0)/true"
+              let volume = masterVolumeBinding(for: selectedProgram?.internalID, isPortrait: true)
+              Label("Portrait", systemImage: "rectangle.portrait")
+                .labelStyle(.iconOnly)
+                .gridColumnAlignment(.center)
+              MasterVolumeEditor(
+                volume: volume, peakProvider: { audioPeakMeter.peak(for: .portrait) })
+              TextField(
+                "Volume",
+                text: Binding(
+                  get: { volumeDrafts[key] ?? String(format: "%.1f", volume.wrappedValue) },
+                  set: { volumeDrafts[key] = $0 })
+              )
+              .frame(width: 50)
+              .multilineTextAlignment(.trailing)
+              .autocorrectionDisabled()
+              .onSubmit {
+                guard
+                  let value = Double(
+                    volumeDrafts[key] ?? String(format: "%.1f", volume.wrappedValue)),
+                  value.isFinite,
+                  (ProgramPreferences
+                    .minimumAudioChannelGainDecibels...ProgramPreferences
+                    .maximumAudioChannelGainDecibels).contains(value)
+                else { return }
+                volume.wrappedValue = (value * 10).rounded() / 10
+              }
+              Text("dB")
+              if let draft = volumeDrafts[key],
+                Double(draft).map({
+                  $0.isFinite
+                    && (ProgramPreferences
+                      .minimumAudioChannelGainDecibels...ProgramPreferences
+                      .maximumAudioChannelGainDecibels).contains($0)
+                }) != true
+              {
+                Text("Invalid volume.")
+              }
+            }
+            .accessibilityLabel("Portrait Volume")
+            .disabled(selectedProgram == nil)
           }
+          HStack {
+            let volume = monitorVolumeBinding
+            MonitorOutputDevicePicker()
+            Slider(
+              value: volume,
+              in: ProgramPreferences
+                .minimumAudioChannelGainDecibels...ProgramPreferences
+                .maximumAudioChannelGainDecibels)
+          }
+          .accessibilityLabel("Monitor Volume")
+        } header: {
+          Text("Master Volumes").font(.headline)
         }
+
+        Divider()
+
+        Section {
+          AudioMixEditor(
+            uiState: uiState, appletData: appletData, workspaceURL: workspaceURL,
+            programInternalID: selectedProgram?.internalID, audioInputs: audioInputs,
+            audioPeakMeter: audioPeakMeter)
+        } header: {
+          Text("Audio Mix").font(.headline)
+        }
+
+        Divider()
+
         if let selectedProgram {
-          Divider()
-          let preference = uiState.preferences.programPreferences[selectedProgram.internalID]
+          let landscapePreference = uiState.preferences.landscapeProgramPreferences[
+            selectedProgram.internalID]
+          let portraitPreference = uiState.preferences.portraitProgramPreferences[
+            selectedProgram.internalID]
           VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading) {
               Text("Landscape Video Layers").font(.headline)
               VideoLayersEditor(
                 uiState: uiState,
-                transforms: preference?.landscapeVideoLayerTransforms ?? [:],
-                muted: preference?.landscapeVideoLayerMuted ?? [:],
+                transforms: landscapePreference?.videoLayerTransforms ?? [:],
+                hidden: landscapePreference?.videoLayerHidden ?? [:],
                 width: 1920, height: 1080,
-                draftKeyPrefix: "\(selectedProgram.internalID)/false",
-                layerIDs: selectedProgram.landscapeVideoLayerInternalIds,
-                transformDrafts: $transformDrafts
+                layerIDs: selectedProgram.landscapeVideoLayerInternalIds
               ) { internalID, action in
                 performVideoLayerAction(
                   internalID, action: action, programInternalID: selectedProgram.internalID,
                   isPortrait: false)
+              } onCommitTransform: { internalID, transform in
+                guard let workspaceDispatcher else {
+                  throw NSError(
+                    domain: "Workspace", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Workspace is unavailable."])
+                }
+                try workspaceDispatcher.setBasicTransform(
+                  transform, programInternalID: selectedProgram.internalID,
+                  videoLayerInternalID: internalID, isPortrait: false)
               }
             }
             Divider()
@@ -72,108 +180,89 @@ public struct WorkspaceContent: View {
               Text("Portrait Video Layers").font(.headline)
               VideoLayersEditor(
                 uiState: uiState,
-                transforms: preference?.portraitVideoLayerTransforms ?? [:],
-                muted: preference?.portraitVideoLayerMuted ?? [:],
+                transforms: portraitPreference?.videoLayerTransforms ?? [:],
+                hidden: portraitPreference?.videoLayerHidden ?? [:],
                 width: 1080, height: 1920,
-                draftKeyPrefix: "\(selectedProgram.internalID)/true",
-                layerIDs: selectedProgram.portraitVideoLayerInternalIds,
-                transformDrafts: $transformDrafts
+                layerIDs: selectedProgram.portraitVideoLayerInternalIds
               ) { internalID, action in
                 performVideoLayerAction(
                   internalID, action: action, programInternalID: selectedProgram.internalID,
                   isPortrait: true)
+              } onCommitTransform: { internalID, transform in
+                guard let workspaceDispatcher else {
+                  throw NSError(
+                    domain: "Workspace", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Workspace is unavailable."])
+                }
+                try workspaceDispatcher.setBasicTransform(
+                  transform, programInternalID: selectedProgram.internalID,
+                  videoLayerInternalID: internalID, isPortrait: true)
               }
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .id(selectedProgram.internalID)
+        } else {
+          Text("No program selected").foregroundStyle(.secondary)
         }
-        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+
+        if let errorMessage {
+          Text(errorMessage).foregroundStyle(.red)
+        }
         if let message = uiState.outputFailureMessage {
           Text(message).foregroundStyle(.red)
         }
         Spacer()
       }
       .padding(20)
-      .padding(.bottom, pendingTransforms.isEmpty ? 0 : 48)
-    }
-    .onSubmit { applyChanges() }
-    .overlay(alignment: .bottomTrailing) {
-      if !pendingTransforms.isEmpty {
-        Button("Apply Changes") { applyChanges() }
-          .disabled(pendingTransforms.contains { $0.transform == nil })
-          .padding(20)
-      }
     }
     .onAppear {
       workspaceDispatcher?.synchronizeAudioMonitor()
     }
   }
 
-  var pendingTransforms:
-    [(
-      key: String, programID: UInt64, layerID: UInt64,
-      isPortrait: Bool, transform: Ldtx_Workspace_V4_BasicTransform?
-    )]
-  {
-    var result: [(String, UInt64, UInt64, Bool, Ldtx_Workspace_V4_BasicTransform?)] = []
-    for program in uiState.definition.programs {
-      let preference = uiState.preferences.programPreferences[program.internalID]
-      for isPortrait in [false, true] {
-        let width = Double(isPortrait ? 1080 : 1920)
-        let height = Double(isPortrait ? 1920 : 1080)
-        let layerIDs =
-          isPortrait
-          ? program.portraitVideoLayerInternalIds
-          : program.landscapeVideoLayerInternalIds
-        for layerID in layerIDs {
-          let key = "\(program.internalID)/\(isPortrait)/\(layerID)"
-          guard let strings = transformDrafts[key] else { continue }
-          let current =
-            (isPortrait
-              ? preference?.portraitVideoLayerTransforms[layerID]
-              : preference?.landscapeVideoLayerTransforms[layerID]) ?? .init()
-          let initial = [
-            String(Double(current.translationX) * width),
-            String(Double(current.translationY) * height),
-            String(current.scaleX), String(current.scaleY),
-          ]
-          guard strings != initial else { continue }
-          let values = strings.compactMap { Double($0) }
-          var transform: Ldtx_Workspace_V4_BasicTransform?
-          if values.count == 4 && values.allSatisfy(\.isFinite) {
-            let numbers = [
-              Float(values[0] / width), Float(values[1] / height),
-              Float(values[2]), Float(values[3]),
-            ]
-            if numbers.allSatisfy(\.isFinite) {
-              transform = .init(
-                translationX: numbers[0], translationY: numbers[1],
-                scaleX: numbers[2], scaleY: numbers[3])
-            }
-          }
-          result.append((key, program.internalID, layerID, isPortrait, transform))
+  private func masterVolumeBinding(
+    for programInternalID: UInt64?,
+    isPortrait: Bool
+  ) -> Binding<Double> {
+    Binding(
+      get: {
+        let preference = programInternalID.flatMap {
+          (isPortrait
+            ? uiState.preferences.portraitProgramPreferences
+            : uiState.preferences.landscapeProgramPreferences)[$0]
         }
-      }
-    }
-    return result
+        return Double(preference?.audioMasterVolumeDecibelTenths ?? 0) / 10
+      },
+      set: { value in
+        guard let programInternalID else { return }
+        volumeDrafts["\(programInternalID)/\(isPortrait)"] = String(format: "%.1f", value)
+        var preferences = uiState.preferences
+        var preference =
+          (isPortrait
+          ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
+            programInternalID] ?? .init()
+        preference.audioMasterVolumeDecibelTenths = Int32((value * 10).rounded())
+        if isPortrait {
+          preferences.portraitProgramPreferences[programInternalID] = preference
+        } else {
+          preferences.landscapeProgramPreferences[programInternalID] = preference
+        }
+        uiState.preferences = preferences
+        workspaceDispatcher?.updateMixPreferences()
+        workspaceDispatcher?.synchronizeAudioMonitor()
+      })
   }
 
-  func applyChanges() {
-    let changes = pendingTransforms
-    guard let workspaceDispatcher, changes.allSatisfy({ $0.transform != nil }) else { return }
-    do {
-      for change in changes {
-        guard let transform = change.transform else { continue }
-        try workspaceDispatcher.setBasicTransform(
-          transform, programInternalID: change.programID,
-          videoLayerInternalID: change.layerID, isPortrait: change.isPortrait)
-        transformDrafts.removeValue(forKey: change.key)
-      }
-      errorMessage = nil
-    } catch {
-      errorMessage = error.localizedDescription
-    }
+  private var monitorVolumeBinding: Binding<Double> {
+    Binding(
+      get: { localState.monitorVolume ?? 0 },
+      set: { value in
+        var state = localState
+        state.monitorVolume = value
+        setLocalState(state)
+        workspaceDispatcher?.synchronizeAudioMonitor()
+      })
   }
 
   private var audioInputs: [Ldtx_Workspace_V4_AudioInputDevice] {
@@ -181,25 +270,6 @@ public struct WorkspaceContent: View {
       guard case .audioDevice(let device)? = input.definition else { return nil }
       return device
     }
-  }
-
-  private var isAudioMixSynced: Bool {
-    guard let program = selectedProgram else { return false }
-    return localState.synchronizesLandscapeMixToPortraitByProgramInternalID[program.internalID]
-      ?? false
-  }
-
-  private var audioMixSyncBinding: Binding<Bool> {
-    Binding(
-      get: { isAudioMixSynced },
-      set: { value in
-        guard let program = selectedProgram else { return }
-        var state = localState
-        state.synchronizesLandscapeMixToPortraitByProgramInternalID[program.internalID] = value
-        setLocalState(state)
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
   }
 
   var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
@@ -231,9 +301,9 @@ public struct WorkspaceContent: View {
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleX = 1
       transform.scaleY = 1
-      var preference = Ldtx_Workspace_V4_ProgramPreference()
-      preference.landscapeVideoLayerTransforms = [1: transform, 4: transform, 3: transform]
-      state.preferences.programPreferences[program.internalID] = preference
+      var preference = Ldtx_Workspace_V4_ProgramPreferences()
+      preference.videoLayerTransforms = [1: transform, 4: transform, 3: transform]
+      state.preferences.landscapeProgramPreferences[program.internalID] = preference
       return state
     }()
     @Previewable @State var appletData = WorkspaceAppletData(

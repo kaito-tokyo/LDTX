@@ -68,7 +68,6 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try FileManager.default.removeItem(at: preferences)
     try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: false)
     workspace.definition.displayName = "Updated"
-    workspace.preferences.monitorVolume = -6
     #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: url) }
     #expect(try Data(contentsOf: info) == oldInfo)
     #expect(try Data(contentsOf: resource) == Data("Resource".utf8))

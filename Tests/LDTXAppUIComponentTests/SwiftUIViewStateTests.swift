@@ -11,24 +11,6 @@ import Testing
 @Suite
 @MainActor
 struct SwiftUIViewStateUnitTestSuite {
-  @Test func transformEditorPreservesDraftAndRejectsInvalidNumbers() {
-    let posX = BindingState("192.00000286102295")
-    let posY = BindingState("0")
-    let scaleX = BindingState("1")
-    let scaleY = BindingState("1")
-    let editor = VideoLayerTransformEditor(
-      posXStr: binding(to: posX), posYStr: binding(to: posY),
-      scaleXStr: binding(to: scaleX), scaleYStr: binding(to: scaleY))
-    #expect(editor.isValid)
-    #expect(posX.value == "192.00000286102295")
-    posX.value = "-"
-    #expect(!editor.isValid)
-    #expect(posX.value == "-")
-    posX.value = "0"
-    scaleY.value = "inf"
-    #expect(!editor.isValid)
-  }
-
   @Test func itemNameDialogNormalizesCandidateAndValidatesAvailability() {
     let name = BindingState("  Camera  \n")
     let dialog = ItemNameDialog(

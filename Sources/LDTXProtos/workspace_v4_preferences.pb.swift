@@ -32,61 +32,37 @@ public nonisolated struct Ldtx_Workspace_V4_WorkspacePreferencesV4: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Mutable preferences for Programs in this Workspace, keyed by Program
-  /// internal_id.
-  public var programPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreference> = [:]
+  /// Preferences for each Landscape Program, keyed by Program internal_id.
+  public var landscapeProgramPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreferences> = [:]
 
-  /// The Workspace-wide monitor volume in decibels.
-  public var monitorVolume: Double = 0
+  /// Preferences for each Portrait Program, keyed by Program internal_id.
+  public var portraitProgramPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreferences> = [:]
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// Contains mutable preferences for one Program.
-public nonisolated struct Ldtx_Workspace_V4_ProgramPreference: Sendable {
+/// Contains mutable preferences for one Program canvas.
+public nonisolated struct Ldtx_Workspace_V4_ProgramPreferences: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The Landscape audio gain in decibels for each Audio Input Device, keyed by
-  /// Input Device internal_id.
-  public var landscapeAudioChannelGains: Dictionary<UInt64,Double> = [:]
+  /// Master volume in tenths of a decibel (-32 represents -3.2 dB).
+  public var audioMasterVolumeDecibelTenths: Int32 = 0
 
-  /// Whether each Landscape Audio Input Device is muted, keyed by Input Device
-  /// internal_id.
-  public var landscapeAudioChannelMuted: Dictionary<UInt64,Bool> = [:]
+  /// Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
+  public var audioChannelGainsDecibelTenths: Dictionary<UInt64,Int32> = [:]
 
-  /// The transforms for Landscape Video Layers, keyed by Video Input Device or
-  /// Video Component internal_id.
-  public var landscapeVideoLayerTransforms: Dictionary<UInt64,Ldtx_Workspace_V4_BasicTransform> = [:]
+  /// Whether each Audio Input Device is muted, keyed by internal_id.
+  public var audioChannelMuted: Dictionary<UInt64,Bool> = [:]
 
-  /// Whether each Landscape Video Layer is muted, keyed by Video Input Device
-  /// or Video Component internal_id.
-  public var landscapeVideoLayerMuted: Dictionary<UInt64,Bool> = [:]
+  /// Video Layer transforms, keyed by Video Input Device or Component internal_id.
+  public var videoLayerTransforms: Dictionary<UInt64,Ldtx_Workspace_V4_BasicTransform> = [:]
 
-  /// The Portrait audio gain in decibels for each Audio Input Device, keyed by
-  /// Input Device internal_id.
-  public var portraitAudioChannelGains: Dictionary<UInt64,Double> = [:]
-
-  /// Whether each Portrait Audio Input Device is muted, keyed by Input Device
-  /// internal_id.
-  public var portraitAudioChannelMuted: Dictionary<UInt64,Bool> = [:]
-
-  /// The transforms for Portrait Video Layers, keyed by Video Input Device or
-  /// Video Component internal_id.
-  public var portraitVideoLayerTransforms: Dictionary<UInt64,Ldtx_Workspace_V4_BasicTransform> = [:]
-
-  /// Whether each Portrait Video Layer is muted, keyed by Video Input Device or
-  /// Video Component internal_id.
-  public var portraitVideoLayerMuted: Dictionary<UInt64,Bool> = [:]
-
-  /// The Landscape master volume in decibels.
-  public var landscapeMasterVolume: Double = 0
-
-  /// The Portrait master volume in decibels.
-  public var portraitMasterVolume: Double = 0
+  /// Whether each Video Layer is hidden, keyed by internal_id.
+  public var videoLayerHidden: Dictionary<UInt64,Bool> = [:]
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -141,7 +117,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_WorkspacePreferencesV4: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspacePreferencesV4"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}program_preferences\0\u{3}monitor_volume\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_program_preferences\0\u{3}portrait_program_preferences\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -149,34 +125,34 @@ nonisolated extension Ldtx_Workspace_V4_WorkspacePreferencesV4: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreference>.self, value: &self.programPreferences) }()
-      case 2: try { try decoder.decodeSingularDoubleField(value: &self.monitorVolume) }()
+      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.landscapeProgramPreferences) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.portraitProgramPreferences) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.programPreferences.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreference>.self, value: self.programPreferences, fieldNumber: 1)
+    if !self.landscapeProgramPreferences.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.landscapeProgramPreferences, fieldNumber: 1)
     }
-    if self.monitorVolume.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.monitorVolume, fieldNumber: 2)
+    if !self.portraitProgramPreferences.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.portraitProgramPreferences, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_WorkspacePreferencesV4, rhs: Ldtx_Workspace_V4_WorkspacePreferencesV4) -> Bool {
-    if lhs.programPreferences != rhs.programPreferences {return false}
-    if lhs.monitorVolume != rhs.monitorVolume {return false}
+    if lhs.landscapeProgramPreferences != rhs.landscapeProgramPreferences {return false}
+    if lhs.portraitProgramPreferences != rhs.portraitProgramPreferences {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Ldtx_Workspace_V4_ProgramPreference: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".ProgramPreference"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_audio_channel_gains\0\u{3}landscape_audio_channel_muted\0\u{3}landscape_video_layer_transforms\0\u{3}landscape_video_layer_muted\0\u{3}portrait_audio_channel_gains\0\u{3}portrait_audio_channel_muted\0\u{3}portrait_video_layer_transforms\0\u{3}portrait_video_layer_muted\0\u{3}landscape_master_volume\0\u{3}portrait_master_volume\0")
+nonisolated extension Ldtx_Workspace_V4_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_master_volume_decibel_tenths\0\u{3}audio_channel_gains_decibel_tenths\0\u{3}audio_channel_muted\0\u{3}video_layer_transforms\0\u{3}video_layer_hidden\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -184,66 +160,41 @@ nonisolated extension Ldtx_Workspace_V4_ProgramPreference: SwiftProtobuf.Message
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufDouble>.self, value: &self.landscapeAudioChannelGains) }()
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.landscapeAudioChannelMuted) }()
-      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: &self.landscapeVideoLayerTransforms) }()
-      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.landscapeVideoLayerMuted) }()
-      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufDouble>.self, value: &self.portraitAudioChannelGains) }()
-      case 6: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.portraitAudioChannelMuted) }()
-      case 7: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: &self.portraitVideoLayerTransforms) }()
-      case 8: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.portraitVideoLayerMuted) }()
-      case 9: try { try decoder.decodeSingularDoubleField(value: &self.landscapeMasterVolume) }()
-      case 10: try { try decoder.decodeSingularDoubleField(value: &self.portraitMasterVolume) }()
+      case 1: try { try decoder.decodeSingularSInt32Field(value: &self.audioMasterVolumeDecibelTenths) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: &self.audioChannelGainsDecibelTenths) }()
+      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.audioChannelMuted) }()
+      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: &self.videoLayerTransforms) }()
+      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.videoLayerHidden) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.landscapeAudioChannelGains.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufDouble>.self, value: self.landscapeAudioChannelGains, fieldNumber: 1)
+    if self.audioMasterVolumeDecibelTenths != 0 {
+      try visitor.visitSingularSInt32Field(value: self.audioMasterVolumeDecibelTenths, fieldNumber: 1)
     }
-    if !self.landscapeAudioChannelMuted.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.landscapeAudioChannelMuted, fieldNumber: 2)
+    if !self.audioChannelGainsDecibelTenths.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: self.audioChannelGainsDecibelTenths, fieldNumber: 2)
     }
-    if !self.landscapeVideoLayerTransforms.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: self.landscapeVideoLayerTransforms, fieldNumber: 3)
+    if !self.audioChannelMuted.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.audioChannelMuted, fieldNumber: 3)
     }
-    if !self.landscapeVideoLayerMuted.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.landscapeVideoLayerMuted, fieldNumber: 4)
+    if !self.videoLayerTransforms.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: self.videoLayerTransforms, fieldNumber: 4)
     }
-    if !self.portraitAudioChannelGains.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufDouble>.self, value: self.portraitAudioChannelGains, fieldNumber: 5)
-    }
-    if !self.portraitAudioChannelMuted.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.portraitAudioChannelMuted, fieldNumber: 6)
-    }
-    if !self.portraitVideoLayerTransforms.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: self.portraitVideoLayerTransforms, fieldNumber: 7)
-    }
-    if !self.portraitVideoLayerMuted.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.portraitVideoLayerMuted, fieldNumber: 8)
-    }
-    if self.landscapeMasterVolume.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.landscapeMasterVolume, fieldNumber: 9)
-    }
-    if self.portraitMasterVolume.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.portraitMasterVolume, fieldNumber: 10)
+    if !self.videoLayerHidden.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.videoLayerHidden, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V4_ProgramPreference, rhs: Ldtx_Workspace_V4_ProgramPreference) -> Bool {
-    if lhs.landscapeAudioChannelGains != rhs.landscapeAudioChannelGains {return false}
-    if lhs.landscapeAudioChannelMuted != rhs.landscapeAudioChannelMuted {return false}
-    if lhs.landscapeVideoLayerTransforms != rhs.landscapeVideoLayerTransforms {return false}
-    if lhs.landscapeVideoLayerMuted != rhs.landscapeVideoLayerMuted {return false}
-    if lhs.portraitAudioChannelGains != rhs.portraitAudioChannelGains {return false}
-    if lhs.portraitAudioChannelMuted != rhs.portraitAudioChannelMuted {return false}
-    if lhs.portraitVideoLayerTransforms != rhs.portraitVideoLayerTransforms {return false}
-    if lhs.portraitVideoLayerMuted != rhs.portraitVideoLayerMuted {return false}
-    if lhs.landscapeMasterVolume != rhs.landscapeMasterVolume {return false}
-    if lhs.portraitMasterVolume != rhs.portraitMasterVolume {return false}
+  public static func ==(lhs: Ldtx_Workspace_V4_ProgramPreferences, rhs: Ldtx_Workspace_V4_ProgramPreferences) -> Bool {
+    if lhs.audioMasterVolumeDecibelTenths != rhs.audioMasterVolumeDecibelTenths {return false}
+    if lhs.audioChannelGainsDecibelTenths != rhs.audioChannelGainsDecibelTenths {return false}
+    if lhs.audioChannelMuted != rhs.audioChannelMuted {return false}
+    if lhs.videoLayerTransforms != rhs.videoLayerTransforms {return false}
+    if lhs.videoLayerHidden != rhs.videoLayerHidden {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

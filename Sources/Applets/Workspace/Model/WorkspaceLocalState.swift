@@ -11,26 +11,25 @@ public enum WorkspacePhysicalDeviceID: Codable, Equatable, Hashable, Sendable {
 }
 
 public struct WorkspaceLocalState: Codable, Equatable, Sendable {
+  public var monitorVolume: Double?
   public var contentPreviewHeightRatio: Double?
   public var selectedProgramInternalID: UInt64?
   public var monitorAudioInputDeviceInternalIDs: Set<UInt64>
-  public var synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool]
   public var landscapeYouTubeLiveStreamID: String?
   public var portraitYouTubeLiveStreamID: String?
 
   public init(
     selectedProgramInternalID: UInt64? = nil,
     contentPreviewHeightRatio: Double? = nil,
+    monitorVolume: Double? = nil,
     monitorAudioInputDeviceInternalIDs: Set<UInt64> = [],
-    synchronizesLandscapeMixToPortraitByProgramInternalID: [UInt64: Bool] = [:],
     landscapeYouTubeLiveStreamID: String? = nil,
     portraitYouTubeLiveStreamID: String? = nil
   ) {
+    self.monitorVolume = monitorVolume
     self.contentPreviewHeightRatio = contentPreviewHeightRatio
     self.selectedProgramInternalID = selectedProgramInternalID
     self.monitorAudioInputDeviceInternalIDs = monitorAudioInputDeviceInternalIDs
-    self.synchronizesLandscapeMixToPortraitByProgramInternalID =
-      synchronizesLandscapeMixToPortraitByProgramInternalID
     self.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamID
     self.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamID
   }

@@ -7,6 +7,29 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceV4IntegrityValidatorUnitTestSuite {
+  @Test("round trips independent canvas preferences through Protobuf")
+  func canvasPreferencesRoundTrip() throws {
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    var landscape = Ldtx_Workspace_V4_ProgramPreferences()
+    landscape.audioMasterVolumeDecibelTenths = -32
+    landscape.audioChannelGainsDecibelTenths[2] = -61
+    landscape.videoLayerHidden[3] = true
+    var portrait = Ldtx_Workspace_V4_ProgramPreferences()
+    portrait.audioMasterVolumeDecibelTenths = 17
+    portrait.audioChannelMuted[2] = true
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.scaleX = 0.5
+    transform.scaleY = 1
+    portrait.videoLayerTransforms[3] = transform
+    preferences.landscapeProgramPreferences[1] = landscape
+    preferences.portraitProgramPreferences[1] = portrait
+    let decoded = try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+      serializedBytes: preferences.serializedData())
+    #expect(decoded == preferences)
+    #expect(decoded.landscapeProgramPreferences[1] == landscape)
+    #expect(decoded.portraitProgramPreferences[1] == portrait)
+  }
+
   @Test("rejects a Program that references a missing video layer")
   func rejectsMissingVideoLayer() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
@@ -72,10 +95,14 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
   }
 
-  @Test("rejects program preferences that reference a missing program")
-  func rejectsDanglingProgramPreferences() {
+  @Test("rejects program preferences that reference a missing program", arguments: [false, true])
+  func rejectsDanglingProgramPreferences(isPortrait: Bool) {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    preferences.programPreferences[99] = .init()
+    if isPortrait {
+      preferences.portraitProgramPreferences[99] = .init()
+    } else {
+      preferences.landscapeProgramPreferences[99] = .init()
+    }
     let workspace = WorkspaceV4Bundle(
       definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4(),
       preferences: preferences

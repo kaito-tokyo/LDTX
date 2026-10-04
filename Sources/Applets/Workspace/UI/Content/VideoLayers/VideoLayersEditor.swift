@@ -5,85 +5,41 @@
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
-enum VideoLayerAction {
+enum VideoLayerAction: Equatable {
   case add
   case remove
   case moveUp
   case moveDown
-  case mute
-  case unmute
+  case move(fromOffsets: IndexSet, toOffset: Int)
+  case hide
+  case show
 }
 
 struct VideoLayersEditor: View {
   @Bindable var uiState: WorkspaceUIState
   let transforms: [UInt64: Ldtx_Workspace_V4_BasicTransform]
-  let muted: [UInt64: Bool]
+  let hidden: [UInt64: Bool]
   let width: Double
   let height: Double
-  let draftKeyPrefix: String
   let layerIDs: [UInt64]
-  @Binding var transformDrafts: [String: [String]]
   let onAction: (UInt64, VideoLayerAction) -> Void
+  let onCommitTransform: (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void
 
   var body: some View {
     VStack(alignment: .leading) {
       if layerIDs.isEmpty {
         Text("No video layers").foregroundStyle(.secondary)
       }
-      ForEach(Array(layerIDs.enumerated()), id: \.element) { index, internalID in
-        VStack(alignment: .leading) {
-          HStack {
-            Text(videoLayerDisplayName(for: internalID))
-            Spacer()
-            Toggle(
-              "Mute",
-              isOn: Binding(
-                get: { muted[internalID] ?? false },
-                set: { onAction(internalID, $0 ? .mute : .unmute) })
-            )
-            .toggleStyle(.checkbox)
-            Button {
-              onAction(internalID, .moveUp)
-            } label: {
-              Image(systemName: "arrow.up")
-            }
-            .disabled(uiState.isOutputActive || index == 0)
-            Button {
-              onAction(internalID, .moveDown)
-            } label: {
-              Image(systemName: "arrow.down")
-            }
-            .disabled(uiState.isOutputActive || index == layerIDs.count - 1)
-            Button {
-              onAction(internalID, .remove)
-            } label: {
-              Image(systemName: "minus")
-            }
-            .accessibilityLabel("Remove \(videoLayerDisplayName(for: internalID))")
-            .disabled(uiState.isOutputActive)
-          }
-          let transform = transforms[internalID] ?? .init()
-          let key = "\(draftKeyPrefix)/\(internalID)"
-          let initial = [
-            String(Double(transform.translationX) * width),
-            String(Double(transform.translationY) * height),
-            String(transform.scaleX), String(transform.scaleY),
-          ]
-          VideoLayerTransformEditor(
-            posXStr: Binding(
-              get: { transformDrafts[key]?[0] ?? initial[0] },
-              set: { transformDrafts[key, default: initial][0] = $0 }),
-            posYStr: Binding(
-              get: { transformDrafts[key]?[1] ?? initial[1] },
-              set: { transformDrafts[key, default: initial][1] = $0 }),
-            scaleXStr: Binding(
-              get: { transformDrafts[key]?[2] ?? initial[2] },
-              set: { transformDrafts[key, default: initial][2] = $0 }),
-            scaleYStr: Binding(
-              get: { transformDrafts[key]?[3] ?? initial[3] },
-              set: { transformDrafts[key, default: initial][3] = $0 }))
-        }
-      }
+      VideoLayersTable(
+        layerIDs: layerIDs, transforms: transforms, hidden: hidden,
+        names: Dictionary(
+          uniqueKeysWithValues: layerIDs.map { ($0, videoLayerDisplayName(for: $0)) }),
+        width: width, height: height, isOutputActive: uiState.isOutputActive,
+        onAction: onAction, onCommitTransform: onCommitTransform
+      )
+      .frame(
+        height: CGFloat(layerIDs.count) * VideoLayersTableView.layerRowHeight
+          + (layerIDs.isEmpty ? 0 : VideoLayersTableView.dropAreaHeight))
       Menu("Add Video Layer") {
         ForEach(availableVideoLayerIDs, id: \.self) {
           internalID in

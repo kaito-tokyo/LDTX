@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXWorkspaceAppletInterface
+import SwiftUI
 
 extension WorkspaceContent {
   func performVideoLayerAction(
@@ -15,17 +16,20 @@ extension WorkspaceContent {
     else { return }
 
     switch action {
-    case .mute, .unmute:
+    case .hide, .show:
       var preferences = uiState.preferences
-      var preference = preferences.programPreferences[programInternalID] ?? .init()
+      var preference =
+        (isPortrait
+        ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
+          programInternalID] ?? .init()
+      preference.videoLayerHidden[internalID] = action == .hide
       if isPortrait {
-        preference.portraitVideoLayerMuted[internalID] = action == .mute
+        preferences.portraitProgramPreferences[programInternalID] = preference
       } else {
-        preference.landscapeVideoLayerMuted[internalID] = action == .mute
+        preferences.landscapeProgramPreferences[programInternalID] = preference
       }
-      preferences.programPreferences[programInternalID] = preference
       uiState.preferences = preferences
-    case .add, .remove, .moveUp, .moveDown:
+    case .add, .remove, .moveUp, .moveDown, .move:
       var definition = uiState.definition
       let program = definition.programs[programIndex]
       var layerIDs =
@@ -42,7 +46,12 @@ extension WorkspaceContent {
         let destination = index + (action == .moveUp ? -1 : 1)
         guard layerIDs.indices.contains(destination) else { return }
         layerIDs.swapAt(index, destination)
-      case .mute, .unmute:
+      case .move(let offsets, let destination):
+        guard !offsets.isEmpty, offsets.allSatisfy({ layerIDs.indices.contains($0) }),
+          (0...layerIDs.count).contains(destination)
+        else { return }
+        layerIDs.move(fromOffsets: offsets, toOffset: destination)
+      case .hide, .show:
         break
       }
       if isPortrait {

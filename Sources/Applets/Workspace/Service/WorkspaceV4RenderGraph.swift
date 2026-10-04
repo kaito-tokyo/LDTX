@@ -29,13 +29,12 @@ public struct WorkspaceV4RenderGraph: Sendable {
     let layerIDs =
       !isPortrait
       ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    let preference = preferences.programPreferences[programInternalID] ?? .init()
-    let transforms =
-      !isPortrait
-      ? preference.landscapeVideoLayerTransforms : preference.portraitVideoLayerTransforms
-    let muted =
-      !isPortrait
-      ? preference.landscapeVideoLayerMuted : preference.portraitVideoLayerMuted
+    let preference =
+      (isPortrait
+      ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
+        programInternalID] ?? .init()
+    let transforms = preference.videoLayerTransforms
+    let hidden = preference.videoLayerHidden
     let components = Self.componentsByInternalID(definition)
     let inputDevices = Self.videoInputDevicesByInternalID(definition)
     let canvasWidth: Float = !isPortrait ? 1_920 : 1_080
@@ -86,30 +85,23 @@ public struct WorkspaceV4RenderGraph: Sendable {
           destinationY: translationY,
           destinationScaleX: scaleX,
           destinationScaleY: scaleY,
-          isMuted: muted[internalID] ?? false
+          isMuted: hidden[internalID] ?? false
         ))
     }
     let audioChannels = Self.audioChannels(definition)
     composite = CompositeProgramDefinition(steps: steps, audioChannels: audioChannels)
     self.layerPreferences = layerPreferences
-    let isPortraitAudioMix =
-      isPortrait
-      && localState.synchronizesLandscapeMixToPortraitByProgramInternalID[programInternalID] != true
     var audioPreferences = ProgramPreferences(
       masterVolume: Self.linearGain(
-        !isPortraitAudioMix
-          ? preference.landscapeMasterVolume : preference.portraitMasterVolume))
-    let gains =
-      !isPortraitAudioMix
-      ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
-    let mutedAudio =
-      !isPortraitAudioMix
-      ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
+        Double(preference.audioMasterVolumeDecibelTenths) / 10))
+    let gains = preference.audioChannelGainsDecibelTenths
+    let mutedAudio = preference.audioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,
         let id = input.inputDeviceID.flatMap({ UInt64($0.dropFirst(3)) })
       else { continue }
-      audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(gains[id] ?? 0)
+      audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(
+        Double(gains[id] ?? 0) / 10)
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
     audioPreferences.videoLayersByProgramName["v4-\(programInternalID)"] = layerPreferences

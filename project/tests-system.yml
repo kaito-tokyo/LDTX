@@ -2,6 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXVideoLayersEditorSystemTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXVideoLayersEditorSystemTests
+    dependencies:
+      - target: LDTXWorkspaceAppletUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoLayersEditorSystemTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+
   LDTXDocumentEnvironmentSystemTests:
     type: bundle.unit-test
     platform: macOS
@@ -74,6 +88,15 @@ targets:
         SWIFT_OBJC_INTEROP_MODE: objcxx
 
 schemes:
+  LDTXVideoLayersEditorSystemTests:
+    build:
+      targets:
+        LDTXVideoLayersEditorSystemTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXVideoLayersEditorSystemTests
+
   LDTXWorkspaceAppletControllerSystemTests:
     build:
       targets:

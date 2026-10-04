@@ -11,6 +11,16 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  @Test func persistsMonitorVolumeWithLocalState() throws {
+    let state = WorkspaceLocalState(monitorVolume: -12.5)
+    let data = try PropertyListEncoder().encode(state)
+    #expect(
+      try PropertyListDecoder().decode(WorkspaceLocalState.self, from: data).monitorVolume == -12.5)
+    let legacy = try PropertyListEncoder().encode(WorkspaceLocalState())
+    #expect(
+      try PropertyListDecoder().decode(WorkspaceLocalState.self, from: legacy).monitorVolume == nil)
+  }
+
   @Test func roundTripsTypedAssignmentsInBinaryPropertyList() throws {
     let assignments: [UInt64: WorkspacePhysicalDeviceID] = [
       8: .avCaptureDevice(uniqueID: "camera-uid"), 9: .coreAudioDevice(uid: "microphone-uid"),
@@ -28,7 +38,6 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
     let state = WorkspaceLocalState(
       selectedProgramInternalID: 17,
       monitorAudioInputDeviceInternalIDs: [5],
-      synchronizesLandscapeMixToPortraitByProgramInternalID: [17: true],
       landscapeYouTubeLiveStreamID: "landscape", portraitYouTubeLiveStreamID: "portrait")
     let encoder = PropertyListEncoder()
     let data = try encoder.encode(state)

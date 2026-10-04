@@ -163,27 +163,26 @@ public enum WorkspaceV4IntegrityValidator {
     let definition = workspace.definition
     try validate(definition)
 
-    let programIDs = Set(definition.programs.map(\.internalID))
     let audioInputIDs = Set(
       definition.inputDevices.compactMap { wrapper -> UInt64? in
         guard case .audioDevice(let device)? = wrapper.definition else { return nil }
         return device.internalID
       })
     let preferences = workspace.preferences
-    guard preferences.monitorVolume.isFinite else { throw WorkspaceV4IntegrityError.invalidColor }
-    for (programID, preference) in workspace.preferences.programPreferences {
-      guard programIDs.contains(programID) else {
-        throw WorkspaceV4IntegrityError.missingProgram(programID)
+    for isPortrait in [false, true] {
+      let programPreferences =
+        isPortrait
+        ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences
+      for (programID, preference) in programPreferences {
+        guard let program = definition.programs.first(where: { $0.internalID == programID }) else {
+          throw WorkspaceV4IntegrityError.missingProgram(programID)
+        }
+        try validate(
+          preference, audioInputIDs: audioInputIDs,
+          videoLayerIDs: Set(
+            isPortrait
+              ? program.portraitVideoLayerInternalIds : program.landscapeVideoLayerInternalIds))
       }
-      guard let program = definition.programs.first(where: { $0.internalID == programID }) else {
-        throw WorkspaceV4IntegrityError.missingProgram(programID)
-      }
-      try validate(
-        preference,
-        audioInputIDs: audioInputIDs,
-        landscapeVideoLayerIDs: Set(program.landscapeVideoLayerInternalIds),
-        portraitVideoLayerIDs: Set(program.portraitVideoLayerInternalIds)
-      )
     }
   }
 
@@ -295,44 +294,23 @@ public enum WorkspaceV4IntegrityValidator {
   }
 
   private static func validate(
-    _ preference: Ldtx_Workspace_V4_ProgramPreference,
+    _ preference: Ldtx_Workspace_V4_ProgramPreferences,
     audioInputIDs: Set<UInt64>,
-    landscapeVideoLayerIDs: Set<UInt64>,
-    portraitVideoLayerIDs: Set<UInt64>
+    videoLayerIDs: Set<UInt64>
   ) throws {
-    guard preference.landscapeMasterVolume.isFinite,
-      preference.portraitMasterVolume.isFinite
-    else { throw WorkspaceV4IntegrityError.invalidColor }
-    let audioPreferenceIDs =
-      Array(preference.landscapeAudioChannelGains.keys)
-      + preference.landscapeAudioChannelMuted.keys
-      + preference.portraitAudioChannelGains.keys
-      + preference.portraitAudioChannelMuted.keys
-    for id in audioPreferenceIDs {
+    for id in Array(preference.audioChannelGainsDecibelTenths.keys)
+      + preference.audioChannelMuted.keys
+    {
       guard audioInputIDs.contains(id) else {
         throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
       }
     }
-    guard preference.landscapeAudioChannelGains.values.allSatisfy(\.isFinite),
-      preference.portraitAudioChannelGains.values.allSatisfy(\.isFinite)
-    else { throw WorkspaceV4IntegrityError.invalidColor }
-    for id in Array(preference.landscapeVideoLayerTransforms.keys)
-      + preference.landscapeVideoLayerMuted.keys
-    {
-      guard landscapeVideoLayerIDs.contains(id) else {
+    for id in Array(preference.videoLayerTransforms.keys) + preference.videoLayerHidden.keys {
+      guard videoLayerIDs.contains(id) else {
         throw WorkspaceV4IntegrityError.missingVideoLayer(id)
       }
     }
-    for id in Array(preference.portraitVideoLayerTransforms.keys)
-      + preference.portraitVideoLayerMuted.keys
-    {
-      guard portraitVideoLayerIDs.contains(id) else {
-        throw WorkspaceV4IntegrityError.missingVideoLayer(id)
-      }
-    }
-    for transform in Array(preference.landscapeVideoLayerTransforms.values)
-      + Array(preference.portraitVideoLayerTransforms.values)
-    {
+    for transform in preference.videoLayerTransforms.values {
       guard transform.translationX.isFinite, (0...1).contains(transform.translationX),
         transform.translationY.isFinite, (0...1).contains(transform.translationY),
         transform.scaleX.isFinite, transform.scaleX >= 0,

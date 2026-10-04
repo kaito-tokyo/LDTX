@@ -73,7 +73,7 @@ struct CommandsSystemTestSuite {
       let definitionURL = root.appendingPathComponent("definition.json")
       try definition.jsonUTF8Data().write(to: definitionURL)
       var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-      preferences.programPreferences[42] = .init()
+      preferences.landscapeProgramPreferences[42] = .init()
       let preferencesURL = root.appendingPathComponent("preferences.json")
       try preferences.jsonUTF8Data().write(to: preferencesURL)
 
@@ -84,7 +84,7 @@ struct CommandsSystemTestSuite {
       try await command.run()
       let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
       #expect(workspace.definition.displayName == "Overridden")
-      #expect(workspace.preferences.programPreferences[42] != nil)
+      #expect(workspace.preferences.landscapeProgramPreferences[42] != nil)
     }
   }
 

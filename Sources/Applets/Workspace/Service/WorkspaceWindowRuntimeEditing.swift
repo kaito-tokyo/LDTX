@@ -233,16 +233,8 @@ extension WorkspaceWindowRuntime {
     _ transform: Ldtx_Workspace_V4_BasicTransform, forVideoLayerInternalID id: UInt64,
     programInternalID: UInt64, isPortrait: Bool
   ) throws {
-    try editWorkspace { workspace in
-      guard workspace.definition.programs.contains(where: { $0.internalID == programInternalID })
-      else { throw WorkspaceRuntimeError.missingProgram(programInternalID) }
-      var pref = workspace.preferences.programPreferences[programInternalID] ?? .init()
-      if !isPortrait {
-        pref.landscapeVideoLayerTransforms[id] = transform
-      } else {
-        pref.portraitVideoLayerTransforms[id] = transform
-      }
-      workspace.preferences.programPreferences[programInternalID] = pref
+    try editProgramPreference(programInternalID, isPortrait: isPortrait) {
+      $0.videoLayerTransforms[id] = transform
     }
   }
 
@@ -250,51 +242,40 @@ extension WorkspaceWindowRuntime {
     _ value: Double, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
     isPortrait: Bool
   ) throws {
-    try editProgramPreference(programInternalID) {
-      if !isPortrait {
-        $0.landscapeAudioChannelGains[id] = value
-      } else {
-        $0.portraitAudioChannelGains[id] = value
-      }
+    let tenths = (value * 10).rounded()
+    guard tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max) else {
+      throw WorkspaceRuntimeError.invalidAudioChannelGain
+    }
+    try editProgramPreference(programInternalID, isPortrait: isPortrait) {
+      $0.audioChannelGainsDecibelTenths[id] = Int32(tenths)
     }
   }
   public func setAudioChannelMuted(
     _ value: Bool, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
     isPortrait: Bool
   ) throws {
-    try editProgramPreference(programInternalID) {
-      if !isPortrait {
-        $0.landscapeAudioChannelMuted[id] = value
-      } else {
-        $0.portraitAudioChannelMuted[id] = value
-      }
+    try editProgramPreference(programInternalID, isPortrait: isPortrait) {
+      $0.audioChannelMuted[id] = value
     }
   }
-  public func setVideoLayerMuted(
+  public func setVideoLayerHidden(
     _ value: Bool, forVideoLayerInternalID id: UInt64, programInternalID: UInt64,
     isPortrait: Bool
   ) throws {
-    try editProgramPreference(programInternalID) {
-      if !isPortrait {
-        $0.landscapeVideoLayerMuted[id] = value
-      } else {
-        $0.portraitVideoLayerMuted[id] = value
-      }
+    try editProgramPreference(programInternalID, isPortrait: isPortrait) {
+      $0.videoLayerHidden[id] = value
     }
   }
   public func setMasterVolume(_ value: Double, programInternalID: UInt64, isPortrait: Bool)
     throws
   {
-    try editProgramPreference(programInternalID) {
-      if !isPortrait {
-        $0.landscapeMasterVolume = value
-      } else {
-        $0.portraitMasterVolume = value
-      }
+    let tenths = (value * 10).rounded()
+    guard tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max) else {
+      throw WorkspaceRuntimeError.invalidAudioMasterVolume
     }
-  }
-  public func setMonitorVolume(_ value: Double) throws {
-    try editWorkspace { $0.preferences.monitorVolume = value }
+    try editProgramPreference(programInternalID, isPortrait: isPortrait) {
+      $0.audioMasterVolumeDecibelTenths = Int32(tenths)
+    }
   }
 
   public func runtimeProjection(programInternalID: UInt64, isPortrait: Bool) throws
@@ -373,33 +354,47 @@ extension WorkspaceWindowRuntime {
           removedIDs.contains($0)
         }
       }
-      for programID in workspace.preferences.programPreferences.keys {
-        guard var pref = workspace.preferences.programPreferences[programID] else { continue }
-        for removedID in removedIDs {
-          pref.landscapeAudioChannelGains.removeValue(forKey: removedID)
-          pref.portraitAudioChannelGains.removeValue(forKey: removedID)
-          pref.landscapeAudioChannelMuted.removeValue(forKey: removedID)
-          pref.portraitAudioChannelMuted.removeValue(forKey: removedID)
-          pref.landscapeVideoLayerTransforms.removeValue(forKey: removedID)
-          pref.portraitVideoLayerTransforms.removeValue(forKey: removedID)
-          pref.landscapeVideoLayerMuted.removeValue(forKey: removedID)
-          pref.portraitVideoLayerMuted.removeValue(forKey: removedID)
+      for programID in workspace.definition.programs.map(\.internalID) {
+        for isPortrait in [false, true] {
+          guard
+            var pref =
+              (isPortrait
+              ? workspace.preferences.portraitProgramPreferences
+              : workspace.preferences.landscapeProgramPreferences)[programID]
+          else { continue }
+          for removedID in removedIDs {
+            pref.audioChannelGainsDecibelTenths.removeValue(forKey: removedID)
+            pref.audioChannelMuted.removeValue(forKey: removedID)
+            pref.videoLayerTransforms.removeValue(forKey: removedID)
+            pref.videoLayerHidden.removeValue(forKey: removedID)
+          }
+          if isPortrait {
+            workspace.preferences.portraitProgramPreferences[programID] = pref
+          } else {
+            workspace.preferences.landscapeProgramPreferences[programID] = pref
+          }
         }
-        workspace.preferences.programPreferences[programID] = pref
       }
     }
   }
 
   private func editProgramPreference(
-    _ id: UInt64, _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void
+    _ id: UInt64, isPortrait: Bool, _ mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void
   ) throws {
     try editWorkspace { workspace in
       guard workspace.definition.programs.contains(where: { $0.internalID == id }) else {
         throw WorkspaceRuntimeError.missingProgram(id)
       }
-      var preference = workspace.preferences.programPreferences[id] ?? .init()
+      var preference =
+        (isPortrait
+        ? workspace.preferences.portraitProgramPreferences
+        : workspace.preferences.landscapeProgramPreferences)[id] ?? .init()
       mutation(&preference)
-      workspace.preferences.programPreferences[id] = preference
+      if isPortrait {
+        workspace.preferences.portraitProgramPreferences[id] = preference
+      } else {
+        workspace.preferences.landscapeProgramPreferences[id] = preference
+      }
     }
   }
 }

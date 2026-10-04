@@ -17,6 +17,56 @@ import Testing
 @MainActor
 @Suite("Workspace window runtime")
 struct WorkspaceWindowRuntimeIntegrationTestSuite {
+  @Test("edits and removes independent canvas preferences")
+  func editsIndependentCanvasPreferences() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let id = try runtime.addProgram(displayName: "Canvas Preferences")
+    try runtime.setMasterVolume(-3.24, programInternalID: id, isPortrait: false)
+    try runtime.setMasterVolume(-9, programInternalID: id, isPortrait: true)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -32)
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
+    try runtime.setMasterVolume(-6, programInternalID: id, isPortrait: false)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
+    for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
+        try runtime.setMasterVolume(invalid, programInternalID: id, isPortrait: false)
+      }
+    }
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+    let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
+    try runtime.setAudioChannelGain(
+      -12.34, forAudioInputDeviceInternalID: inputID,
+      programInternalID: id, isPortrait: false)
+    try runtime.setAudioChannelGain(
+      1.26, forAudioInputDeviceInternalID: inputID,
+      programInternalID: id, isPortrait: true)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
+        == -123)
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
+        == 13)
+    for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
+        try runtime.setAudioChannelGain(
+          invalid, forAudioInputDeviceInternalID: inputID,
+          programInternalID: id, isPortrait: false)
+      }
+    }
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
+        == -123)
+    try runtime.removeProgram(internalID: id)
+    #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
+    #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
+  }
+
   @Test("resolves a selected single-Canvas V4 RTMPS destination")
   func resolvesSingleCanvasRTMPSDestination() throws {
     var output = Ldtx_Workspace_V4_OutputConfiguration()

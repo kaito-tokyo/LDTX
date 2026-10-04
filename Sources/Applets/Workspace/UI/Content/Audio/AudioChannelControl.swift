@@ -11,6 +11,7 @@ struct AudioChannelControl: NSViewRepresentable {
   @Environment(\.isEnabled) private var isEnabled
   var label: String
   var value: Double
+  var showsValue: Bool
   var peakProvider: (() -> Float)?
   var onPreview: (Double) -> Void
   var onCommit: (Double) -> Void
@@ -18,12 +19,14 @@ struct AudioChannelControl: NSViewRepresentable {
   init(
     label: String,
     value: Double,
+    showsValue: Bool = true,
     peakProvider: (() -> Float)?,
     onPreview: @escaping (Double) -> Void,
     onCommit: @escaping (Double) -> Void
   ) {
     self.label = label
     self.value = value
+    self.showsValue = showsValue
     self.peakProvider = peakProvider
     self.onPreview = onPreview
     self.onCommit = onCommit
@@ -34,6 +37,7 @@ struct AudioChannelControl: NSViewRepresentable {
     row.configure(
       label: label,
       value: value,
+      showsValue: showsValue,
       isEnabled: isEnabled,
       peakProvider: peakProvider,
       onPreview: onPreview,
@@ -46,6 +50,7 @@ struct AudioChannelControl: NSViewRepresentable {
     nsView.configure(
       label: label,
       value: value,
+      showsValue: showsValue,
       isEnabled: isEnabled,
       peakProvider: peakProvider,
       onPreview: onPreview,
@@ -70,7 +75,12 @@ final class AudioChannelControlView: NSView {
     action: nil
   )
   private var titleSpacingConstraint: NSLayoutConstraint?
+  private var meterBottomConstraint: NSLayoutConstraint?
+  private var meterCenterConstraint: NSLayoutConstraint?
   private let titleLabel = NSTextField(labelWithString: "")
+  private var valueWidthConstraint: NSLayoutConstraint?
+  private var valueGapConstraint: NSLayoutConstraint?
+  private var valueWidth: CGFloat = 0
   private let valueLabel = NSTextField(labelWithString: "")
   private let meterWindow = NSView()
   private var meterView: AudioPeakMeterMTKView?
@@ -96,16 +106,22 @@ final class AudioChannelControlView: NSView {
   func configure(
     label: String,
     value: Double,
+    showsValue: Bool = true,
     isEnabled: Bool = true,
     peakProvider: (() -> Float)?,
     onPreview: @escaping (Double) -> Void,
     onCommit: @escaping (Double) -> Void
   ) {
+    valueLabel.isHidden = !showsValue
+    valueWidthConstraint?.constant = showsValue ? valueWidth : 0
+    valueGapConstraint?.constant = showsValue ? -8 : 0
     slider.isEnabled = isEnabled
     alphaValue = isEnabled ? 1 : 0.5
     titleLabel.stringValue = label
     titleLabel.isHidden = label.isEmpty
     titleSpacingConstraint?.isActive = !label.isEmpty
+    meterBottomConstraint?.isActive = !label.isEmpty
+    meterCenterConstraint?.isActive = label.isEmpty
     invalidateIntrinsicContentSize()
     if let peakProvider {
       if meterView == nil {
@@ -189,19 +205,21 @@ final class AudioChannelControlView: NSView {
       String(format: "%+.1f dB", ProgramPreferences.maximumAudioChannelGainDecibels),
       "0.0 dB",
     ]
-    let valueWidth = ceil(
+    valueWidth = ceil(
       decibelLabels.map {
         ($0 as NSString).size(withAttributes: [.font: valueLabel.font!]).width
       }.max() ?? 0)
 
+    valueWidthConstraint = valueLabel.widthAnchor.constraint(equalToConstant: valueWidth)
+    valueGapConstraint = meterWindow.trailingAnchor.constraint(
+      equalTo: valueLabel.leadingAnchor, constant: -8)
     NSLayoutConstraint.activate([
-      valueLabel.widthAnchor.constraint(equalToConstant: valueWidth),
+      valueWidthConstraint!,
+      valueGapConstraint!,
       titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
       titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
       titleLabel.topAnchor.constraint(equalTo: topAnchor),
       meterWindow.leadingAnchor.constraint(equalTo: leadingAnchor),
-      meterWindow.trailingAnchor.constraint(equalTo: valueLabel.leadingAnchor, constant: -8),
-      meterWindow.bottomAnchor.constraint(equalTo: bottomAnchor),
       slider.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor, constant: 10),
       slider.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor, constant: -10),
       slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
@@ -213,6 +231,9 @@ final class AudioChannelControlView: NSView {
     titleSpacingConstraint = titleLabel.bottomAnchor.constraint(
       equalTo: meterWindow.topAnchor, constant: -Layout.rowSpacing)
     titleSpacingConstraint?.isActive = true
+    meterBottomConstraint = meterWindow.bottomAnchor.constraint(equalTo: bottomAnchor)
+    meterCenterConstraint = meterWindow.centerYAnchor.constraint(equalTo: centerYAnchor)
+    meterBottomConstraint?.isActive = true
   }
 
   private func setDecibelValue(_ decibels: Double) {

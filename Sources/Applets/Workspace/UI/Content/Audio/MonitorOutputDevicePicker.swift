@@ -9,18 +9,22 @@ struct MonitorOutputDevicePicker: View {
   @AppStorage(WorkspaceAudioEngine.outputDevicePreferenceKey)
   private var deviceUID = ""
   @State private var devices: [(uid: String, name: String)] = []
-  @State private var hasLoaded = false
+  @State private var showingSheet = false
   @State private var deviceError: String?
   @State private var failures = WorkspaceAudioEngine.failureMessages
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      HStack {
-        WorkspaceSelectionField(
-          title: "Monitor Device", current: deviceUID.isEmpty ? nil : deviceUID,
-          options: devices.map { .init(id: $0.uid, name: $0.name) },
-          loaded: hasLoaded, loadError: deviceError, emptyLabel: "System Default",
-          clearTitle: "Use System Default", refresh: refreshDevices,
+    Button("Monitor") {
+      refreshDevices()
+      showingSheet = true
+    }
+    .accessibilityLabel("Monitor")
+    .sheet(isPresented: $showingSheet) {
+      VStack(alignment: .leading) {
+        WorkspaceSelectionSheet(
+          title: "Monitor Device", options: devices.map { .init(id: $0.uid, name: $0.name) },
+          loadError: deviceError,
+          clearTitle: "Use System Default", isEditable: true, refresh: refreshDevices,
           commit: { selected in
             if selected != nil {
               refreshDevices()
@@ -30,19 +34,13 @@ struct MonitorOutputDevicePicker: View {
               throw WorkspaceSelectionError(message: "The selected monitor device is unavailable.")
             }
             deviceUID = selected ?? ""
-          })
-        Button(action: refreshDevices) {
-          Image(systemName: "arrow.clockwise")
+          },
+          cancel: { showingSheet = false },
+          currentDescription: deviceUID.isEmpty
+            ? "System Default" : devices.first { $0.uid == deviceUID }?.name ?? "Unavailable")
+        ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
+          Text(failure).foregroundStyle(.red).padding(.horizontal, 24)
         }
-        .buttonStyle(.borderless)
-        .help("Refresh Monitor Devices")
-        .accessibilityLabel("Refresh Monitor Devices")
-      }
-      ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
-        Text(failure).font(.caption).foregroundStyle(.red)
-      }
-      if let deviceError {
-        Text(deviceError).font(.caption).foregroundStyle(.red)
       }
     }
     .onAppear {
@@ -58,7 +56,6 @@ struct MonitorOutputDevicePicker: View {
   }
 
   private func refreshDevices() {
-    defer { hasLoaded = true }
     do {
       devices = try AudioHardwareSystem.shared.devices.compactMap { device in
         guard try device.outputStreamConfiguration.contains(where: { $0.mNumberChannels > 0 })

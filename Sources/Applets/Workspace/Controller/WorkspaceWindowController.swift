@@ -337,7 +337,7 @@ extension WorkspaceWindowController {
       portrait: portraitProjection?.preferences ?? .init())
     var preferences = projection.preferences
     preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
-      fromDecibels: windowRuntime.preferences.monitorVolume)
+      fromDecibels: localState.monitorVolume ?? 0)
     _ = audioCoordinator.restart(
       audioChannels: projection.configuration.audioChannels,
       inputAudioDeviceMappings: audioDeviceIDs,

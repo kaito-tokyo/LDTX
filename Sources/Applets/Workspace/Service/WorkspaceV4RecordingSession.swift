@@ -535,30 +535,26 @@ public final class WorkspaceV4RecordingSession {
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
     preferences(
       for: programInternalID,
-      isPortrait: localStateProvider().synchronizesLandscapeMixToPortraitByProgramInternalID[
-        programInternalID] != true)
+      isPortrait: true)
   }
 
   private func preferences(for programInternalID: UInt64, isPortrait: Bool)
     -> ProgramPreferences
   {
     let preference =
-      windowRuntime.preferences.programPreferences[
-        programInternalID] ?? .init()
-    let gain =
-      !isPortrait ? preference.landscapeMasterVolume : preference.portraitMasterVolume
+      (isPortrait
+      ? windowRuntime.preferences.portraitProgramPreferences
+      : windowRuntime.preferences.landscapeProgramPreferences)[programInternalID] ?? .init()
+    let gain = Double(preference.audioMasterVolumeDecibelTenths) / 10
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
-    let gains =
-      !isPortrait
-      ? preference.landscapeAudioChannelGains : preference.portraitAudioChannelGains
-    let muted =
-      !isPortrait
-      ? preference.landscapeAudioChannelMuted : preference.portraitAudioChannelMuted
+    let gains = preference.audioChannelGainsDecibelTenths
+    let muted = preference.audioChannelMuted
     for inputDeviceInternalID in Set(gains.keys).union(muted.keys) {
       let key = "v4-\(inputDeviceInternalID)"
       preferences.audioChannelGainsByName[key] =
-        ProgramPreferences.linearAudioChannelGain(fromDecibels: gains[inputDeviceInternalID] ?? 0)
+        ProgramPreferences.linearAudioChannelGain(
+          fromDecibels: Double(gains[inputDeviceInternalID] ?? 0) / 10)
       preferences.audioMutedByInputDeviceName[key] = muted[inputDeviceInternalID] ?? false
     }
     return preferences

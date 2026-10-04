@@ -23,6 +23,21 @@ struct WorkspaceDocumentSystemTestSuite {
 
   init() { _ = Self.controller }
 
+  @Test func monitorVolumeUsesAppletDataWithoutEditingDocument() throws {
+    let suite = "MonitorVolume.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    let preferences = document.uiState.preferences
+    let url = try #require(document.uiState.localStateURL)
+    data.updateState(for: url) { $0.monitorVolume = -12.5 }
+    #expect(data.state(for: url).monitorVolume == -12.5)
+    #expect(document.uiState.preferences == preferences)
+    #expect(!document.isDocumentEdited)
+  }
+
   @Test func programSelectionUpdatesOwnedRuntimesAndStaysWindowLocal() async throws {
     let suite = "ProgramSelection.\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -352,11 +367,13 @@ struct WorkspaceDocumentSystemTestSuite {
       WorkspaceResourceFactory.makeSolidColor(id: 202, name: "Color"),
       WorkspaceResourceFactory.makeClock(id: 203, name: "Clock"),
     ]
-    document.uiState.preferences.monitorVolume = -8
-    var layerPreferences = document.uiState.preferences.programPreferences[101] ?? .init()
-    layerPreferences.landscapeVideoLayerMuted[202] = true
-    layerPreferences.portraitVideoLayerMuted[203] = true
-    document.uiState.preferences.programPreferences[101] = layerPreferences
+    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+      .audioMasterVolumeDecibelTenths = -80
+    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+      .videoLayerHidden[
+        202] = true
+    document.uiState.preferences.portraitProgramPreferences[101, default: .init()].videoLayerHidden[
+      203] = true
     document.uiState.inspectorSelector = .init(kind: .clockVideoComponent, internalID: 203)
     #expect(initialWindow.contentPane.selectedProgram != nil)
     #expect(document.isDocumentEdited)
@@ -540,13 +557,18 @@ struct WorkspaceDocumentSystemTestSuite {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 101
+    program.displayName = "Main"
+    document.uiState.definition.programs = [program]
     defer { document.close() }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")
     try await save(document, to: url)
     let definition = try Data(contentsOf: url.appendingPathComponent("definition.pb"))
     let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
     document.uiState.definition.displayName = "Pending"
-    document.uiState.preferences.monitorVolume = -6
+    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+      .audioMasterVolumeDecibelTenths = -60
     #expect(!WorkspaceDocument.autosavesInPlace)
     #expect(!WorkspaceDocument.preservesVersions)
     #expect(document.autosavingFileType == nil)
@@ -617,6 +639,10 @@ struct WorkspaceDocumentSystemTestSuite {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 101
+    program.displayName = "Main"
+    document.uiState.definition.programs = [program]
     defer { document.close() }
     for action in [
       #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
@@ -643,10 +669,13 @@ struct WorkspaceDocumentSystemTestSuite {
     document.uiState.isOutputActive = true
     let fixedDefinition = document.uiState.definition
     document.uiState.definition.displayName = "Rejected during output"
-    document.uiState.preferences.monitorVolume = -8
+    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+      .audioMasterVolumeDecibelTenths = -80
     try await save(document, to: url, operation: .saveOperation)
     let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
-    #expect(savedOutput.preferences.monitorVolume == -8)
+    #expect(
+      savedOutput.preferences.landscapeProgramPreferences[101]?.audioMasterVolumeDecibelTenths
+        == -80)
     #expect(savedOutput.definition == fixedDefinition)
     document.uiState.isOutputActive = false
   }
@@ -739,7 +768,6 @@ struct WorkspaceDocumentSystemTestSuite {
     document.makeWindowControllers()
     let controller = try #require(document.windowControllers.first as? WorkspaceWindowController)
     document.uiState.definition.displayName = "Pending"
-    document.uiState.preferences.monitorVolume = -9
     // No Program/output is enabled, so this exercises the entry without media I/O.
     try await controller.startOutput()
     #expect(document.isDocumentEdited)
@@ -808,12 +836,18 @@ struct WorkspaceDocumentSystemTestSuite {
 
   @Test func outputFreezesDefinitionButTracksPreferences() {
     let document = WorkspaceDocument()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 101
+    program.displayName = "Main"
+    document.uiState.definition.programs = [program]
+    document.updateChangeCount(.changeCleared)
     let original = document.uiState.definition
     document.uiState.isOutputActive = true
     document.uiState.definition.displayName = "Rejected"
     #expect(document.uiState.definition == original)
     #expect(!document.isDocumentEdited)
-    document.uiState.preferences.monitorVolume = -6
+    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+      .audioMasterVolumeDecibelTenths = -60
     #expect(document.isDocumentEdited)
   }
 

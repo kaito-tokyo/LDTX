@@ -88,7 +88,6 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let state = WorkspaceLocalState(
       selectedProgramInternalID: 42,
       monitorAudioInputDeviceInternalIDs: [5],
-      synchronizesLandscapeMixToPortraitByProgramInternalID: [42: true],
       landscapeYouTubeLiveStreamID: "landscape",
       portraitYouTubeLiveStreamID: "portrait")
     appletData.setState(state, for: url)
@@ -141,7 +140,6 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let state = WorkspaceLocalState(
       selectedProgramInternalID: 17,
       monitorAudioInputDeviceInternalIDs: [5],
-      synchronizesLandscapeMixToPortraitByProgramInternalID: [17: true],
       landscapeYouTubeLiveStreamID: "landscape",
       portraitYouTubeLiveStreamID: "portrait")
     appletData.setState(state, for: url)

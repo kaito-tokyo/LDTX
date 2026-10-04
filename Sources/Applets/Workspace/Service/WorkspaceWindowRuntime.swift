@@ -112,7 +112,8 @@ public final class WorkspaceWindowRuntime {
     guard workspace.definition.programs.count != self.workspace.definition.programs.count else {
       throw WorkspaceRuntimeError.missingProgram(internalID)
     }
-    workspace.preferences.programPreferences.removeValue(forKey: internalID)
+    workspace.preferences.landscapeProgramPreferences.removeValue(forKey: internalID)
+    workspace.preferences.portraitProgramPreferences.removeValue(forKey: internalID)
     try replaceWorkspace(workspace)
     if selectedProgramInternalID == internalID {
       selectProgramHandler(workspace.definition.programs.first?.internalID)
@@ -242,6 +243,8 @@ public final class WorkspaceWindowRuntime {
 extension WorkspaceWindowRuntime: WorkspaceWindowRuntimeProtocol {}
 
 public enum WorkspaceRuntimeError: Error, Equatable, Sendable {
+  case invalidAudioChannelGain
+  case invalidAudioMasterVolume
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
   case missingVision(UInt64)

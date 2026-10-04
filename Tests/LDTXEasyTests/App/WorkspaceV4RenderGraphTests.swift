@@ -34,16 +34,18 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     transform.translationY = 0.5
     transform.scaleX = 0.75
     transform.scaleY = 0.6
-    var preference = Ldtx_Workspace_V4_ProgramPreference()
-    preference.landscapeVideoLayerTransforms = [11: transform]
-    preference.landscapeMasterVolume = -3
-    preference.landscapeAudioChannelGains = [12: -12]
-    preference.landscapeAudioChannelMuted = [12: true]
-    preference.portraitMasterVolume = -9
-    preference.portraitAudioChannelGains = [12: -30]
-    preference.portraitAudioChannelMuted = [12: false]
+    var preference = Ldtx_Workspace_V4_ProgramPreferences()
+    var portraitPreference = Ldtx_Workspace_V4_ProgramPreferences()
+    preference.videoLayerTransforms = [11: transform]
+    preference.audioMasterVolumeDecibelTenths = -32
+    preference.audioChannelGainsDecibelTenths = [12: -123]
+    preference.audioChannelMuted = [12: true]
+    portraitPreference.audioMasterVolumeDecibelTenths = -91
+    portraitPreference.audioChannelGainsDecibelTenths = [12: -307]
+    portraitPreference.audioChannelMuted = [12: false]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    preferences.programPreferences = [7: preference]
+    preferences.landscapeProgramPreferences = [7: preference]
+    preferences.portraitProgramPreferences = [7: portraitPreference]
 
     let graph = try WorkspaceV4RenderGraph(
       definition: definition, preferences: preferences, programInternalID: 7, isPortrait: false)
@@ -54,23 +56,21 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(graph.composite.audioChannels.map(\.name) == ["v4-12"])
     #expect(
       graph.audioPreferences.masterVolume
-        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3.2))
     #expect(
       graph.audioPreferences.audioChannelGainsByName["v4-12"]
-        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12.3))
     #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let portraitGraph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: true,
-      localState: WorkspaceLocalState(
-        synchronizesLandscapeMixToPortraitByProgramInternalID: [7: true]))
+      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: true)
     #expect(
       portraitGraph.audioPreferences.masterVolume
-        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -3))
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -9.1))
     #expect(
       portraitGraph.audioPreferences.audioChannelGainsByName["v4-12"]
-        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
-    #expect(portraitGraph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -30.7))
+    #expect(portraitGraph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == false)
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,

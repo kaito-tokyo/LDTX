@@ -161,14 +161,25 @@ struct WorkspaceToolbarSystemTestSuite {
           isPortrait: isPortrait)
       }
       let content = VideoLayersEditor(
-        uiState: state, transforms: [:], muted: [:],
+        uiState: state, transforms: [:], hidden: [:],
         width: isPortrait ? 1080 : 1920, height: isPortrait ? 1920 : 1080,
-        draftKeyPrefix: "\(program.internalID)/\(isPortrait)",
         layerIDs: isPortrait
           ? program.portraitVideoLayerInternalIds : program.landscapeVideoLayerInternalIds,
-        transformDrafts: .constant([:]), onAction: onAction)
+        onAction: onAction, onCommitTransform: { _, _ in })
       content.onAction(10, .add)
       content.onAction(20, .add)
+      content.onAction(30, .add)
+      content.onAction(30, .move(fromOffsets: IndexSet(integer: 2), toOffset: 0))
+      #expect(
+        (isPortrait
+          ? state.definition.programs[0].portraitVideoLayerInternalIds
+          : state.definition.programs[0].landscapeVideoLayerInternalIds) == [30, 10, 20])
+      content.onAction(30, .move(fromOffsets: IndexSet(integer: 0), toOffset: 3))
+      #expect(
+        (isPortrait
+          ? state.definition.programs[0].portraitVideoLayerInternalIds
+          : state.definition.programs[0].landscapeVideoLayerInternalIds) == [10, 20, 30])
+      content.onAction(30, .remove)
       content.onAction(20, .moveUp)
       let ids =
         !isPortrait
@@ -176,21 +187,28 @@ struct WorkspaceToolbarSystemTestSuite {
         : state.definition.programs[0].portraitVideoLayerInternalIds
       #expect(ids == [20, 10])
       content.onAction(20, .remove)
-      content.onAction(10, .mute)
-      let muted = state.preferences.programPreferences[program.internalID]
+      content.onAction(10, .hide)
+      let hidden =
+        (isPortrait
+        ? state.preferences.portraitProgramPreferences
+        : state.preferences.landscapeProgramPreferences)[program.internalID]
       #expect(
-        (isPortrait ? muted?.portraitVideoLayerMuted[10] : muted?.landscapeVideoLayerMuted[10])
+        hidden?.videoLayerHidden[10]
           == true)
-      content.onAction(10, .unmute)
-      let unmuted = state.preferences.programPreferences[program.internalID]
+      content.onAction(10, .show)
+      let shown =
+        (isPortrait
+        ? state.preferences.portraitProgramPreferences
+        : state.preferences.landscapeProgramPreferences)[program.internalID]
       #expect(
-        (isPortrait ? unmuted?.portraitVideoLayerMuted[10] : unmuted?.landscapeVideoLayerMuted[10])
+        shown?.videoLayerHidden[10]
           == false)
       let before = state.definition
       for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
         state.isOutputActive = value.isOutputActive
         content.onAction(30, .add)
         content.onAction(10, .moveDown)
+        content.onAction(10, .move(fromOffsets: IndexSet(integer: 0), toOffset: 0))
         content.onAction(10, .remove)
         #expect(state.definition == before)
       }

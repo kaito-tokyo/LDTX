@@ -10,27 +10,12 @@ struct AudioMixEditor: View {
   @Bindable var uiState: WorkspaceUIState
   let appletData: WorkspaceAppletData
   let workspaceURL: URL?
-  let programInternalID: UInt64
+  let programInternalID: UInt64?
   let audioInputs: [Ldtx_Workspace_V4_AudioInputDevice]
-  let isAudioMixSynced: Bool
   let audioPeakMeter: ProgramAudioPeakMeter
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      audioMasterControl(
-        "Landscape", symbol: "rectangle",
-        value: masterVolumeBinding(for: programInternalID, isPortrait: false),
-        meter: .landscape
-      )
-      audioMasterControl(
-        "Portrait", symbol: "rectangle.portrait",
-        value: masterVolumeBinding(for: programInternalID, isPortrait: true), meter: .portrait
-      )
-      .disabled(isAudioMixSynced)
-      VStack(alignment: .leading, spacing: 4) {
-        audioMasterControl("Monitor", symbol: "headphones", value: monitorVolumeBinding)
-        MonitorOutputDevicePicker().padding(.leading, 28)
-      }
       ForEach(audioInputs, id: \.internalID) { input in
         VStack(spacing: 4) {
           HStack {
@@ -41,7 +26,7 @@ struct AudioMixEditor: View {
             audioConnectionToggle(
               input, programInternalID: programInternalID, isPortrait: true
             )
-            .disabled(isAudioMixSynced)
+            .disabled(programInternalID == nil)
             let monitored = monitorBinding(for: input.internalID)
             Toggle("Monitor", isOn: monitored)
               .toggleStyle(.checkbox)
@@ -62,7 +47,7 @@ struct AudioMixEditor: View {
             },
             onCommit: { _ in }
           )
-          .disabled(uiState.isPortraitAudio && isAudioMixSynced)
+          .disabled(programInternalID == nil)
           .accessibilityLabel(
             (!uiState.isPortraitAudio ? "Landscape " : "Portrait ") + input.displayName
               + " Gain")
@@ -71,87 +56,48 @@ struct AudioMixEditor: View {
     }
   }
 
-  private func audioMasterControl(
-    _ name: String, symbol: String, value: Binding<Double>,
-    meter: ProgramAudioPeakMeter.Master? = nil
-  ) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: symbol).frame(width: 20).accessibilityHidden(true)
-      AudioChannelControl(
-        label: "",
-        value: ProgramPreferences.linearAudioChannelGain(fromDecibels: value.wrappedValue),
-        peakProvider: meter.map { bus in { audioPeakMeter.peak(for: bus) } },
-        onPreview: {
-          value.wrappedValue = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: $0)
-        },
-        onCommit: { _ in }
-      )
-      .accessibilityLabel(name + " Master Volume")
-    }
-    .help(name + " Master Volume")
-  }
-
   private func audioConnectionToggle(
-    _ input: Ldtx_Workspace_V4_AudioInputDevice, programInternalID: UInt64, isPortrait: Bool
+    _ input: Ldtx_Workspace_V4_AudioInputDevice, programInternalID: UInt64?, isPortrait: Bool
   ) -> some View {
     let muted = audioMuteBinding(
       for: input.internalID, programInternalID: programInternalID, isPortrait: isPortrait)
     let connected = Binding(get: { !muted.wrappedValue }, set: { muted.wrappedValue = !$0 })
     let name = !isPortrait ? "Landscape" : "Portrait"
     return Toggle(name, isOn: connected)
+      .disabled(programInternalID == nil)
       .toggleStyle(.checkbox)
       .help(name)
       .accessibilityLabel(name + " " + input.displayName)
   }
 
-  private func masterVolumeBinding(
-    for programInternalID: UInt64,
-    isPortrait: Bool
-  ) -> Binding<Double> {
-    Binding(
-      get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return !isPortrait || isAudioMixSynced
-          ? preference?.landscapeMasterVolume ?? 0 : preference?.portraitMasterVolume ?? 0
-      },
-      set: { value in
-        var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        if !isPortrait {
-          preference.landscapeMasterVolume = value
-        } else {
-          preference.portraitMasterVolume = value
-        }
-        preferences.programPreferences[programInternalID] = preference
-        uiState.preferences = preferences
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
   private func audioGainBinding(
     for inputDeviceInternalID: UInt64,
-    programInternalID: UInt64,
+    programInternalID: UInt64?,
     isPortrait: Bool
   ) -> Binding<Double> {
     Binding(
       get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return !isPortrait || isAudioMixSynced
-          ? preference?.landscapeAudioChannelGains[inputDeviceInternalID] ?? 0
-          : preference?.portraitAudioChannelGains[inputDeviceInternalID] ?? 0
+        let preference = programInternalID.flatMap {
+          (isPortrait
+            ? uiState.preferences.portraitProgramPreferences
+            : uiState.preferences.landscapeProgramPreferences)[$0]
+        }
+        return Double(preference?.audioChannelGainsDecibelTenths[inputDeviceInternalID] ?? 0) / 10
       },
       set: { value in
+        guard let programInternalID else { return }
         var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        if !isPortrait {
-          preference.landscapeAudioChannelGains[inputDeviceInternalID] = value
+        var preference =
+          (isPortrait
+          ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
+            programInternalID] ?? .init()
+        preference.audioChannelGainsDecibelTenths[inputDeviceInternalID] = Int32(
+          (value * 10).rounded())
+        if isPortrait {
+          preferences.portraitProgramPreferences[programInternalID] = preference
         } else {
-          preference.portraitAudioChannelGains[inputDeviceInternalID] = value
+          preferences.landscapeProgramPreferences[programInternalID] = preference
         }
-        preferences.programPreferences[programInternalID] = preference
         uiState.preferences = preferences
         workspaceDispatcher?.updateMixPreferences()
         workspaceDispatcher?.synchronizeAudioMonitor()
@@ -160,39 +106,33 @@ struct AudioMixEditor: View {
 
   private func audioMuteBinding(
     for inputDeviceInternalID: UInt64,
-    programInternalID: UInt64,
+    programInternalID: UInt64?,
     isPortrait: Bool
   ) -> Binding<Bool> {
     Binding(
       get: {
-        let preference = uiState.preferences.programPreferences[
-          programInternalID]
-        return !isPortrait || isAudioMixSynced
-          ? preference?.landscapeAudioChannelMuted[inputDeviceInternalID] ?? false
-          : preference?.portraitAudioChannelMuted[inputDeviceInternalID] ?? false
+        let preference = programInternalID.flatMap {
+          (isPortrait
+            ? uiState.preferences.portraitProgramPreferences
+            : uiState.preferences.landscapeProgramPreferences)[$0]
+        }
+        return preference?.audioChannelMuted[inputDeviceInternalID] ?? false
       },
       set: { value in
+        guard let programInternalID else { return }
         var preferences = uiState.preferences
-        var preference = preferences.programPreferences[programInternalID] ?? .init()
-        if !isPortrait {
-          preference.landscapeAudioChannelMuted[inputDeviceInternalID] = value
+        var preference =
+          (isPortrait
+          ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
+            programInternalID] ?? .init()
+        preference.audioChannelMuted[inputDeviceInternalID] = value
+        if isPortrait {
+          preferences.portraitProgramPreferences[programInternalID] = preference
         } else {
-          preference.portraitAudioChannelMuted[inputDeviceInternalID] = value
+          preferences.landscapeProgramPreferences[programInternalID] = preference
         }
-        preferences.programPreferences[programInternalID] = preference
         uiState.preferences = preferences
         workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
-      })
-  }
-
-  private var monitorVolumeBinding: Binding<Double> {
-    Binding(
-      get: { uiState.preferences.monitorVolume },
-      set: { value in
-        var preferences = uiState.preferences
-        preferences.monitorVolume = value
-        uiState.preferences = preferences
         workspaceDispatcher?.synchronizeAudioMonitor()
       })
   }
