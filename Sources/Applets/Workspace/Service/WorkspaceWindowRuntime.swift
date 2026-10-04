@@ -56,7 +56,6 @@ public final class WorkspaceWindowRuntime {
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { workspace.preferences }
   public var url: URL? { persistenceCoordinator.url }
-  public var isDirty: Bool { persistenceCoordinator.isDirty }
 
   public func shutdown() {
     workspaceV4OperationLogger.notice(

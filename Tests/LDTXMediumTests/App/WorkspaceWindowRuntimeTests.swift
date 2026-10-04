@@ -93,7 +93,6 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     try WorkspaceDocumentPackage.write(runtime.workspace, to: packageURL, createsPackage: true)
     runtime.persistenceCoordinator.setDocumentURL(packageURL)
     #expect(runtime.url == packageURL)
-    #expect(runtime.isDirty)
 
     let reopened = try makeRuntime(capture: capture)
     try reopened.persistenceCoordinator.open(at: packageURL)
@@ -145,7 +144,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let appletData = WorkspaceAppletData(userDefaults: defaults)
     let url = URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) }, url: url)
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: coordinator, captureSessionCoordinator: capture,
@@ -189,7 +188,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let originalURL = URL(
       fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) },
       url: originalURL)
     let runtime = WorkspaceWindowRuntime(
@@ -340,17 +339,13 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
 
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
-    var saved: WorkspaceV4Bundle
     init(_ workspace: WorkspaceV4Bundle) {
       self.workspace = workspace
-      self.saved = workspace
     }
-    var isDirty: Bool { workspace != saved }
     func replace(_ value: WorkspaceV4Bundle) throws {
       try WorkspaceV4IntegrityValidator.validate(value)
       workspace = value
     }
-    func markSaved() { saved = workspace }
   }
 
   private func makeRuntime(
@@ -359,7 +354,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     var localState = WorkspaceLocalState()
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) },
       url: URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace"))
     return WorkspaceWindowRuntime(

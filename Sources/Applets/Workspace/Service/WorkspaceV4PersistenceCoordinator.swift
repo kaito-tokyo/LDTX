@@ -16,18 +16,15 @@ import Observation
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
-  private let workspaceIsDirty: () -> Bool
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
   public init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
-    workspaceIsDirty: @escaping () -> Bool,
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
     url: URL? = nil
   ) {
     self.workspaceSnapshot = workspaceSnapshot
-    self.workspaceIsDirty = workspaceIsDirty
     self.replaceWorkspace = replaceWorkspace
     self.url = url
   }
@@ -43,7 +40,6 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
-  var isDirty: Bool { workspaceIsDirty() }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)

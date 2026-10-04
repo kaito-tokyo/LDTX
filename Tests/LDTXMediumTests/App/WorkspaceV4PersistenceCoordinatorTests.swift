@@ -23,7 +23,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     var didChange = false
   }
 
-  @Test("loads a package without writing or marking the model saved")
+  @Test("loads a package without writing or replacing current edits")
   func loadsWithoutWritingOrMarkingSaved() throws {
     let rootURL = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -36,8 +36,8 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
 
     #expect(reloaded.definition.displayName == "Unite")
     box.workspace.definition.displayName = "Pending"
-    #expect(coordinator.isDirty)
     #expect(try coordinator.load(at: packageURL).definition.displayName == "Unite")
+    #expect(coordinator.workspace.definition.displayName == "Pending")
   }
 
   @Test("keeps app-local state keyed by package path and reloads it")
@@ -212,24 +212,20 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
 
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
-    var saved: WorkspaceV4Bundle
     init(_ workspace: WorkspaceV4Bundle) {
       self.workspace = workspace
-      saved = workspace
     }
-    var isDirty: Bool { workspace != saved }
     func replace(_ value: WorkspaceV4Bundle) throws {
       try WorkspaceV4IntegrityValidator.validate(value)
       workspace = value
     }
-    func markSaved() { saved = workspace }
   }
 
   private func makeCoordinator(_ box: WorkspaceBox, url: URL? = nil)
     -> WorkspaceV4PersistenceCoordinator
   {
     return WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) },
       url: url)
   }

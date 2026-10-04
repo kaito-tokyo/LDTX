@@ -33,7 +33,6 @@ public final class WorkspaceDocument: NSDocument {
 
   public lazy var persistenceCoordinator = WorkspaceV4PersistenceCoordinator(
     workspaceSnapshot: { [unowned self] in snapshot },
-    workspaceIsDirty: { [unowned self] in isDocumentEdited },
     replaceWorkspace: { [unowned self] workspace in try replaceContents(workspace) },
     url: fileURL)
 
