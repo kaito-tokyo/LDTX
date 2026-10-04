@@ -26,7 +26,7 @@ public final class WorkspaceUIState {
   @ObservationIgnored public var documentContentsDidChange: (() -> Void)?
   public var localStateURL: URL?
 
-  public var isPortraitAudio = false
+  public var selectedAudioMix: ProgramAudioPeakMeter.Master = .landscape
 
   public var inspectorSelector: WorkspaceInspectorSelector?
 

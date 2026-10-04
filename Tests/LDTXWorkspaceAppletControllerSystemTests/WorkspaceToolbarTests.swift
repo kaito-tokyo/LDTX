@@ -154,52 +154,43 @@ struct WorkspaceToolbarSystemTestSuite {
       first.close()
       second.close()
     }
-    for isPortrait in [false, true] {
+    for target in [WorkspaceCanvasTarget.landscape, .portrait] {
       let onAction: (UInt64, VideoLayerAction) -> Void = { internalID, action in
         first.contentPane.performVideoLayerAction(
           internalID, action: action, programInternalID: program.internalID,
-          isPortrait: isPortrait)
+          target: target)
       }
       let content = VideoLayersEditor(
-        uiState: state, transforms: [:], hidden: [:],
-        width: isPortrait ? 1080 : 1920, height: isPortrait ? 1920 : 1080,
-        layerIDs: isPortrait
-          ? program.portraitVideoLayerInternalIds : program.landscapeVideoLayerInternalIds,
+        definition: state.definition, isLayerFrozen: state.isOutputActive,
+        programPreferences: .init(),
+        canvasWidth: Double(target.defaultProfile.width),
+        canvasHeight: Double(target.defaultProfile.height),
+        layerIDs: program[keyPath: target.layerIDs],
         onAction: onAction, onCommitTransform: { _, _ in })
       content.onAction(10, .add)
       content.onAction(20, .add)
       content.onAction(30, .add)
       content.onAction(30, .move(fromOffsets: IndexSet(integer: 2), toOffset: 0))
       #expect(
-        (isPortrait
-          ? state.definition.programs[0].portraitVideoLayerInternalIds
-          : state.definition.programs[0].landscapeVideoLayerInternalIds) == [30, 10, 20])
+        state.definition.programs[0][keyPath: target.layerIDs] == [30, 10, 20])
       content.onAction(30, .move(fromOffsets: IndexSet(integer: 0), toOffset: 3))
       #expect(
-        (isPortrait
-          ? state.definition.programs[0].portraitVideoLayerInternalIds
-          : state.definition.programs[0].landscapeVideoLayerInternalIds) == [10, 20, 30])
+        state.definition.programs[0][keyPath: target.layerIDs] == [10, 20, 30])
       content.onAction(30, .remove)
       content.onAction(20, .moveUp)
       let ids =
-        !isPortrait
-        ? state.definition.programs[0].landscapeVideoLayerInternalIds
-        : state.definition.programs[0].portraitVideoLayerInternalIds
+        state.definition.programs[0][keyPath: target.layerIDs]
       #expect(ids == [20, 10])
       content.onAction(20, .remove)
       content.onAction(10, .hide)
       let hidden =
-        (isPortrait
-        ? state.preferences.portraitProgramPreferences
-        : state.preferences.landscapeProgramPreferences)[program.internalID]
+        state.preferences[keyPath: target.preferences][program.internalID]
       #expect(
         hidden?.videoLayerHidden[10]
           == true)
       content.onAction(10, .show)
       let shown =
-        (isPortrait
-        ? state.preferences.portraitProgramPreferences
-        : state.preferences.landscapeProgramPreferences)[program.internalID]
+        state.preferences[keyPath: target.preferences][program.internalID]
       #expect(
         shown?.videoLayerHidden[10]
           == false)
@@ -369,8 +360,8 @@ struct WorkspaceToolbarSystemTestSuite {
     let window = try #require(controller.window as? WorkspaceWindow)
     #expect(window.contentController.preview.metalView.delegate === controller.previewRenderer)
     #expect(
-      controller.windowRuntime.runtime(isPortrait: false)
-        !== controller.windowRuntime.runtime(isPortrait: true))
+      controller.windowRuntime.landscapeRuntime
+        !== controller.windowRuntime.portraitRuntime)
     await controller.shutdown()
     #expect(window.contentController.preview.metalView.delegate == nil)
     #expect(window.contentController.preview.metalView.isPaused)
@@ -432,9 +423,9 @@ struct WorkspaceToolbarSystemTestSuite {
     pane.preview.layout()
     let size = pane.preview.metalView.bounds.size
     pane.preview.selectCanvas(at: CGPoint(x: size.width - 20, y: size.height / 2))
-    #expect(state.isPortraitAudio)
+    #expect(state.selectedAudioMix == .portrait)
     pane.preview.selectCanvas(at: CGPoint(x: 20, y: size.height / 2))
-    #expect(!state.isPortraitAudio)
+    #expect(state.selectedAudioMix == .landscape)
     pane.splitView.setPosition(220, ofDividerAt: 0)
     pane.saveDividerPosition()
     let saved = try #require(data.state(for: url).contentPreviewHeightRatio)
@@ -511,7 +502,7 @@ private final class ToolbarDispatcher: WorkspaceDispatcherProtocol {
   func selectProgram(internalID: UInt64) throws {}
   func setBasicTransform(
     _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
-    videoLayerInternalID: UInt64, isPortrait: Bool
+    videoLayerInternalID: UInt64, target: WorkspaceCanvasTarget
   ) throws {}
 
   func updateProgramRuntimes() {}

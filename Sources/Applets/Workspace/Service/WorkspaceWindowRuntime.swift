@@ -28,7 +28,8 @@ public final class WorkspaceWindowRuntime {
   private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let selectProgramHandler: (UInt64?) -> Void
-  private var runtimes: [Bool: ProgramRuntime] = [:]
+  public private(set) var landscapeRuntime: ProgramRuntime?
+  public private(set) var portraitRuntime: ProgramRuntime?
   let internalIDGenerator = WorkspaceInternalIDGenerator()
   public private(set) var recordingState: WorkspaceRecordingState = .idle
   public private(set) var visionFailureMessages: [UInt64: String] = [:]
@@ -95,15 +96,15 @@ public final class WorkspaceWindowRuntime {
 
   var appletLocalState: WorkspaceLocalState { localStateProvider() }
 
-  public func installRuntime(_ runtime: ProgramRuntime, isPortrait: Bool) {
-    runtimes[isPortrait] = runtime
-    updateRuntime(isPortrait: isPortrait)
+  public func installRuntimes(landscape: ProgramRuntime, portrait: ProgramRuntime) {
+    landscapeRuntime = landscape
+    portraitRuntime = portrait
+    updateRuntimes()
   }
 
-  public func runtime(isPortrait: Bool) -> ProgramRuntime? { runtimes[isPortrait] }
-
   public func updateRuntimes() {
-    for isPortrait in [false, true] { updateRuntime(isPortrait: isPortrait) }
+    updateRuntime(landscapeRuntime, target: .landscape)
+    updateRuntime(portraitRuntime, target: .portrait)
   }
 
   public func removeProgram(internalID: UInt64) throws {
@@ -121,22 +122,20 @@ public final class WorkspaceWindowRuntime {
     updateRuntimes()
   }
 
-  private func updateRuntime(isPortrait: Bool) {
-    guard let runtime = runtimes[isPortrait] else { return }
+  private func updateRuntime(_ runtime: ProgramRuntime?, target: WorkspaceCanvasTarget) {
+    guard let runtime else { return }
     guard let selectedProgramInternalID else {
       runtime.clearProgram()
       return
     }
     guard
+      let canvas = try? WorkspaceProgramCanvasSnapshot(
+        definition: workspace.definition, preferences: workspace.preferences,
+        programInternalID: selectedProgramInternalID, target: target),
       let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
-        definition: workspace.definition,
-        preferences: workspace.preferences,
-        localState: localStateProvider(),
+        definition: workspace.definition, canvas: canvas,
         physicalDeviceIDs: physicalDeviceIDsProvider(),
-        programInternalID: selectedProgramInternalID,
-        isPortrait: isPortrait,
-        timeSeconds: Float(ProcessInfo.processInfo.systemUptime)
-      )
+        timeSeconds: Float(ProcessInfo.processInfo.systemUptime))
     else { return }
     runtime.updateProgram(projection.configuration)
     runtime.updateProgramPreferences(projection.preferences)

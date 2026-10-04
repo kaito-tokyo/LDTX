@@ -15,7 +15,7 @@ public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
   @MainActor func selectProgram(internalID: UInt64) throws
   @MainActor func setBasicTransform(
     _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
-    videoLayerInternalID: UInt64, isPortrait: Bool
+    videoLayerInternalID: UInt64, target: WorkspaceCanvasTarget
   ) throws
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws

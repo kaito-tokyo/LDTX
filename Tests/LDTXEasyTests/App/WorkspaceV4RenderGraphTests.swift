@@ -12,6 +12,63 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace render graph")
 struct WorkspaceV4RenderGraphUnitTestSuite {
+  @Test("clock dimensions preserve the same pixel size on both canvases")
+  func preservesClockDimensions() throws {
+    var clock = Ldtx_Workspace_V4_ClockComponent()
+    clock.internalID = 1
+    clock.width = 320.0 / 1920
+    clock.height = 80.0 / 1080
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.clock = clock
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 7
+    program.landscapeVideoLayerInternalIds = [1]
+    program.portraitVideoLayerInternalIds = [1]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [program]
+    definition.videoComponents = [wrapper]
+    for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+      let canvas = try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: .init(), programInternalID: 7, target: target)
+      let graph = try WorkspaceV4RenderGraph(definition: definition, canvas: canvas)
+      guard case .clock(let value) = graph.composite.steps.first?.component else {
+        Issue.record("Clock component missing")
+        return
+      }
+      #expect(abs(value.destinationWidth * Float(canvas.outputProfile.width) - 320) < 0.001)
+      #expect(abs(value.destinationHeight * Float(canvas.outputProfile.height) - 80) < 0.001)
+    }
+  }
+
+  @Test("resolves independent canvas snapshots without sharing preferences")
+  func resolvesCanvasSnapshots() throws {
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 7
+    program.landscapeVideoLayerInternalIds = [1, 2]
+    program.portraitVideoLayerInternalIds = [2, 1]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [program]
+    definition.canvasConfiguration.landscapeVideoBitRate = 8_000_000
+    definition.canvasConfiguration.portraitVideoBitRate = 4_000_000
+    definition.canvasConfiguration.frameRate = 30
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[7] = .init()
+    preferences.landscapeProgramPreferences[7]?.videoLayerHidden[1] = true
+    let landscape = try WorkspaceProgramCanvasSnapshot(
+      definition: definition, preferences: preferences, programInternalID: 7, target: .landscape)
+    let portrait = try WorkspaceProgramCanvasSnapshot(
+      definition: definition, preferences: preferences, programInternalID: 7, target: .portrait)
+    #expect(landscape.layerIDs == [1, 2])
+    #expect(portrait.layerIDs == [2, 1])
+    #expect(landscape.preferences.videoLayerHidden[1] == true)
+    #expect(portrait.preferences.videoLayerHidden.isEmpty)
+    #expect(landscape.outputProfile.width == 1920)
+    #expect(portrait.outputProfile.height == 1920)
+    #expect(landscape.outputProfile.videoBitRate == 8_000_000)
+    #expect(portrait.outputProfile.videoBitRate == 4_000_000)
+    #expect(landscape.frameRate == 30 && portrait.frameRate == 30)
+  }
+
   @Test("projects V4 layer IDs and transforms directly for rendering")
   func projectsV4RenderGraph() throws {
     var video = Ldtx_Workspace_V4_VideoInputDevice()
@@ -48,7 +105,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     preferences.portraitProgramPreferences = [7: portraitPreference]
 
     let graph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: false)
+      definition: definition,
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape))
 
     #expect(graph.composite.steps.map(\.name) == ["v4-11"])
     #expect(graph.layerPreferences.first?.destinationX == 0.25)
@@ -63,7 +122,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(graph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == true)
 
     let portraitGraph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: preferences, programInternalID: 7, isPortrait: true)
+      definition: definition,
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences, programInternalID: 7, target: .portrait))
     #expect(
       portraitGraph.audioPreferences.masterVolume
         == ProgramPreferences.linearAudioChannelGain(fromDecibels: -9.1))
@@ -74,30 +135,22 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
-      preferences: preferences,
-      localState: .init(),
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape),
       physicalDeviceIDs: [
         11: .avCaptureDevice(uniqueID: "camera-id")
-      ],
-      programInternalID: 7,
-      isPortrait: false,
-      timeSeconds: 1
-    )
+      ], timeSeconds: 1)
     #expect(configuration.cameraIDsByInputKey == ["v4-11": "camera-id"])
     #expect(configuration.composite.steps.map(\.name) == ["v4-11"])
     #expect(configuration.frameRate == ProgramOutputProfile.sdr1080p60.frameRate)
 
     let mismatchedDeviceConfiguration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
-      preferences: preferences,
-      localState: .init(),
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape),
       physicalDeviceIDs: [
         11: .coreAudioDevice(uid: "microphone-instead-of-camera")
-      ],
-      programInternalID: 7,
-      isPortrait: false,
-      timeSeconds: 1
-    )
+      ], timeSeconds: 1)
     #expect(mismatchedDeviceConfiguration.cameraIDsByInputKey.isEmpty)
   }
 
@@ -127,19 +180,17 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
-      preferences: .init(),
-      localState: .init(),
-      programInternalID: 7,
-      isPortrait: false,
-      timeSeconds: 1
-    )
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape),
+      timeSeconds: 1)
     let step = try #require(configuration.composite.steps.first)
     let renderingKey = configuration.composite.inputCameraDeviceMappingKey(for: step)
     #expect(configuration.backgroundRemovalInputKeys == [renderingKey])
     let assignedConfiguration = try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: definition, preferences: .init(), localState: .init(),
-      physicalDeviceIDs: [11: .avCaptureDevice(uniqueID: "camera")],
-      programInternalID: 7, isPortrait: false, timeSeconds: 1
+      definition: definition,
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape),
+      physicalDeviceIDs: [11: .avCaptureDevice(uniqueID: "camera")], timeSeconds: 1
     ).configuration
     #expect(assignedConfiguration.cameraIDsByInputKey[renderingKey] == "camera")
   }
@@ -174,7 +225,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.videoComponents = [solidWrapper, linearWrapper, radialWrapper, conicWrapper]
 
     let graph = try WorkspaceV4RenderGraph(
-      definition: definition, preferences: .init(), programInternalID: 7, isPortrait: false)
+      definition: definition,
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape))
 
     #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
     #expect(

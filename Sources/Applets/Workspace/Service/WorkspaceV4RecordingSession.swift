@@ -89,8 +89,8 @@ public final class WorkspaceV4RecordingSession {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
     }
-    guard let landscapeRuntime = windowRuntime.runtime(isPortrait: false),
-      let portraitRuntime = windowRuntime.runtime(isPortrait: true)
+    guard let landscapeRuntime = windowRuntime.landscapeRuntime,
+      let portraitRuntime = windowRuntime.portraitRuntime
     else {
       state = .failed("The selected Program runtime is unavailable.")
       return
@@ -279,7 +279,8 @@ public final class WorkspaceV4RecordingSession {
     }
     guard
       activeSession.reconfigureAudio(
-        landscapePreferences: preferences(for: programID, isPortrait: false),
+        landscapePreferences: preferences(
+          windowRuntime.preferences.landscapeProgramPreferences[programID] ?? .init()),
         portraitPreferences: portraitPreferences(for: programID),
         audioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
     else {
@@ -295,17 +296,18 @@ public final class WorkspaceV4RecordingSession {
     guard let activeSession, let programID = selectedProgramInternalID else {
       return
     }
-    activeSession.updateProgramPreferences(preferences(for: programID, isPortrait: false))
+    activeSession.updateProgramPreferences(
+      preferences(windowRuntime.preferences.landscapeProgramPreferences[programID] ?? .init()))
     activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
   public func captureScreenshots() throws -> [URL] {
     guard let recordService else { throw ScreenCaptureError.frameUnavailable }
     var sources: [ScreenCaptureSource] = []
-    if let frame = windowRuntime.runtime(isPortrait: false)?.latestFrame() {
+    if let frame = windowRuntime.landscapeRuntime?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Landscape", pixelBuffer: frame.pixelBuffer))
     }
-    if let frame = windowRuntime.runtime(isPortrait: true)?.latestFrame() {
+    if let frame = windowRuntime.portraitRuntime?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
     for wrapper in windowRuntime.definition.inputDevices {
@@ -521,7 +523,7 @@ public final class WorkspaceV4RecordingSession {
 
   private var landscapePreferences: ProgramPreferences {
     guard let id = selectedProgramInternalID else { return ProgramPreferences() }
-    return preferences(for: id, isPortrait: false)
+    return preferences(windowRuntime.preferences.landscapeProgramPreferences[id] ?? .init())
   }
 
   private var selectedProgramInternalID: UInt64? {
@@ -533,18 +535,11 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
-    preferences(
-      for: programInternalID,
-      isPortrait: true)
+    preferences(windowRuntime.preferences.portraitProgramPreferences[programInternalID] ?? .init())
   }
 
-  private func preferences(for programInternalID: UInt64, isPortrait: Bool)
-    -> ProgramPreferences
+  private func preferences(_ preference: Ldtx_Workspace_V4_ProgramPreferences) -> ProgramPreferences
   {
-    let preference =
-      (isPortrait
-      ? windowRuntime.preferences.portraitProgramPreferences
-      : windowRuntime.preferences.landscapeProgramPreferences)[programInternalID] ?? .init()
     let gain = Double(preference.audioMasterVolumeDecibelTenths) / 10
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))

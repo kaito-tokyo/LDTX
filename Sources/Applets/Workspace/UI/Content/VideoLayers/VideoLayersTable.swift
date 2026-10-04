@@ -8,12 +8,11 @@ import SwiftUI
 
 struct VideoLayersTable: NSViewRepresentable {
   let layerIDs: [UInt64]
-  let transforms: [UInt64: Ldtx_Workspace_V4_BasicTransform]
-  let hidden: [UInt64: Bool]
-  let names: [UInt64: String]
-  let width: Double
-  let height: Double
-  let isOutputActive: Bool
+  let programPreferences: Ldtx_Workspace_V4_ProgramPreferences
+  let definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
+  let canvasWidth: Double
+  let canvasHeight: Double
+  let isLayerFrozen: Bool
   let onAction: (UInt64, VideoLayerAction) -> Void
   let onCommitTransform: (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void
 
@@ -62,7 +61,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   static let pasteboardType = NSPasteboard.PasteboardType("tokyo.kaito.ldtx.video-layer")
   private(set) var layerIDs: [UInt64] = []
   private(set) var rows: [UInt64: VideoLayerRowView] = [:]
-  var isOutputActive = false
+  var isLayerFrozen = false
   var onAction: (UInt64, VideoLayerAction) -> Void = { _, _ in }
 
   init() {
@@ -89,7 +88,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func update(_ input: VideoLayersTable) {
-    isOutputActive = input.isOutputActive
+    isLayerFrozen = input.isLayerFrozen
     onAction = input.onAction
     // Keep cell identity, field editors, and uncommitted text across model updates.
     let previousIDs = layerIDs
@@ -98,11 +97,12 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
       let cell = rows[id] ?? VideoLayerRowView(internalID: id)
       rows[id] = cell
       cell.configure(
-        name: input.names[id] ?? "Missing Video Layer", transform: input.transforms[id] ?? .init(),
-        width: input.width, height: input.height, hidden: input.hidden[id] ?? false,
-        canMoveUp: !isOutputActive && index > 0,
-        canMoveDown: !isOutputActive && index < layerIDs.count - 1,
-        canRemove: !isOutputActive, onAction: input.onAction,
+        definition: input.definition,
+        programPreferences: input.programPreferences,
+        canvasWidth: input.canvasWidth, canvasHeight: input.canvasHeight,
+        canMoveUp: !isLayerFrozen && index > 0,
+        canMoveDown: !isLayerFrozen && index < layerIDs.count - 1,
+        canRemove: !isLayerFrozen, onAction: input.onAction,
         onCommitTransform: input.onCommitTransform)
     }
     if previousIDs != layerIDs {
@@ -146,7 +146,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   }
 
   override func canDragRows(with rowIndexes: IndexSet, at mouseDownPoint: NSPoint) -> Bool {
-    guard !isOutputActive, rowIndexes.count == 1, let row = rowIndexes.first,
+    guard !isLayerFrozen, rowIndexes.count == 1, let row = rowIndexes.first,
       layerIDs.indices.contains(row), let cell = rows[layerIDs[row]],
       cell.handle.bounds.contains(cell.handle.convert(mouseDownPoint, from: self))
     else { return false }
@@ -155,7 +155,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
 
   func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting?
   {
-    guard !isOutputActive, layerIDs.indices.contains(row) else { return nil }
+    guard !isLayerFrozen, layerIDs.indices.contains(row) else { return nil }
     let item = NSPasteboardItem()
     item.setString(String(layerIDs[row]), forType: Self.pasteboardType)
     return item
@@ -169,7 +169,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   }
 
   func dropSourceRow(_ info: NSDraggingInfo, destination: Int) -> Int? {
-    guard !isOutputActive, info.draggingSource as? VideoLayersTableView === self,
+    guard !isLayerFrozen, info.draggingSource as? VideoLayersTableView === self,
       (0...layerIDs.count).contains(destination),
       info.draggingPasteboard.pasteboardItems?.count == 1,
       let value = info.draggingPasteboard.string(forType: Self.pasteboardType),
@@ -202,3 +202,67 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
     return true
   }
 }
+
+#if DEBUG
+  #Preview("Video Layers Table") {
+    @Previewable @State var layerIDs: [UInt64] = [1, 2, 3]
+    @Previewable @State var programPreferences: Ldtx_Workspace_V4_ProgramPreferences = {
+      var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
+      for id: UInt64 in [1, 2, 3] {
+        var transform = Ldtx_Workspace_V4_BasicTransform()
+        transform.scaleX = 1
+        transform.scaleY = 1
+        programPreferences.videoLayerTransforms[id] = transform
+      }
+      programPreferences.videoLayerHidden[2] = true
+      return programPreferences
+    }()
+
+    VideoLayersTable(
+      layerIDs: layerIDs,
+      programPreferences: programPreferences,
+      definition: {
+        var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+        definition.inputDevices = ["Camera", "Background", "Clock"].enumerated().map {
+          index, name in
+          var device = Ldtx_Workspace_V4_VideoInputDevice()
+          device.internalID = UInt64(index + 1)
+          device.displayName = name
+          var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+          wrapper.videoDevice = device
+          return wrapper
+        }
+        return definition
+      }(),
+      canvasWidth: 1920, canvasHeight: 1080,
+      isLayerFrozen: false,
+      onAction: { id, action in
+        switch action {
+        case .move(let offsets, let destination):
+          layerIDs.move(fromOffsets: offsets, toOffset: destination)
+        case .moveUp:
+          if let index = layerIDs.firstIndex(of: id), index > 0 {
+            layerIDs.swapAt(index, index - 1)
+          }
+        case .moveDown:
+          if let index = layerIDs.firstIndex(of: id), index + 1 < layerIDs.count {
+            layerIDs.swapAt(index, index + 1)
+          }
+        case .hide: programPreferences.videoLayerHidden[id] = true
+        case .show: programPreferences.videoLayerHidden[id] = false
+        case .remove: layerIDs.removeAll { $0 == id }
+        case .add: layerIDs.append(id)
+        }
+      },
+      onCommitTransform: { id, transform in
+        programPreferences.videoLayerTransforms[id] = transform
+      }
+    )
+    .frame(
+      height: CGFloat(layerIDs.count) * VideoLayersTableView.layerRowHeight
+        + VideoLayersTableView.dropAreaHeight
+    )
+    .padding()
+    .frame(width: 720)
+  }
+#endif

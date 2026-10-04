@@ -7,7 +7,8 @@ import SwiftUI
 
 extension WorkspaceContent {
   func performVideoLayerAction(
-    _ internalID: UInt64, action: VideoLayerAction, programInternalID: UInt64, isPortrait: Bool
+    _ internalID: UInt64, action: VideoLayerAction, programInternalID: UInt64,
+    target: WorkspaceCanvasTarget
   ) {
     guard !uiState.isOutputActive,
       let programIndex = uiState.definition.programs.firstIndex(where: {
@@ -18,23 +19,14 @@ extension WorkspaceContent {
     switch action {
     case .hide, .show:
       var preferences = uiState.preferences
-      var preference =
-        (isPortrait
-        ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
-          programInternalID] ?? .init()
+      var preference = preferences[keyPath: target.preferences][programInternalID] ?? .init()
       preference.videoLayerHidden[internalID] = action == .hide
-      if isPortrait {
-        preferences.portraitProgramPreferences[programInternalID] = preference
-      } else {
-        preferences.landscapeProgramPreferences[programInternalID] = preference
-      }
+      preferences[keyPath: target.preferences][programInternalID] = preference
       uiState.preferences = preferences
     case .add, .remove, .moveUp, .moveDown, .move:
       var definition = uiState.definition
       let program = definition.programs[programIndex]
-      var layerIDs =
-        isPortrait
-        ? program.portraitVideoLayerInternalIds : program.landscapeVideoLayerInternalIds
+      var layerIDs = program[keyPath: target.layerIDs]
       switch action {
       case .add:
         guard !layerIDs.contains(internalID) else { return }
@@ -54,11 +46,7 @@ extension WorkspaceContent {
       case .hide, .show:
         break
       }
-      if isPortrait {
-        definition.programs[programIndex].portraitVideoLayerInternalIds = layerIDs
-      } else {
-        definition.programs[programIndex].landscapeVideoLayerInternalIds = layerIDs
-      }
+      definition.programs[programIndex][keyPath: target.layerIDs] = layerIDs
       uiState.definition = definition
       errorMessage = nil
     }

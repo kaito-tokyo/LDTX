@@ -95,21 +95,22 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
   }
 
-  @Test("rejects program preferences that reference a missing program", arguments: [false, true])
-  func rejectsDanglingProgramPreferences(isPortrait: Bool) {
-    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    if isPortrait {
-      preferences.portraitProgramPreferences[99] = .init()
-    } else {
-      preferences.landscapeProgramPreferences[99] = .init()
-    }
-    let workspace = WorkspaceV4Bundle(
-      definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4(),
-      preferences: preferences
-    )
+  @Test("rejects dangling program preferences in both maps")
+  func rejectsDanglingProgramPreferences() {
+    for target in [
+      \Ldtx_Workspace_V4_WorkspacePreferencesV4.landscapeProgramPreferences,
+      \Ldtx_Workspace_V4_WorkspacePreferencesV4.portraitProgramPreferences,
+    ] {
+      var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      preferences[keyPath: target][99] = .init()
+      let workspace = WorkspaceV4Bundle(
+        definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4(),
+        preferences: preferences
+      )
 
-    #expect(throws: WorkspaceV4IntegrityError.missingProgram(99)) {
-      try WorkspaceV4IntegrityValidator.validate(workspace)
+      #expect(throws: WorkspaceV4IntegrityError.missingProgram(99)) {
+        try WorkspaceV4IntegrityValidator.validate(workspace)
+      }
     }
   }
 

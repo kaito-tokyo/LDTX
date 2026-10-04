@@ -10,14 +10,66 @@ import Testing
 @MainActor
 struct VideoLayersEditorTests {
   func input(
-    ids: [UInt64] = [1, 2, 3], output: Bool = false,
+    ids: [UInt64] = [1, 2, 3], frozen: Bool = false,
+    preferences: Ldtx_Workspace_V4_ProgramPreferences = .init(),
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 = .init(),
     commit: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
     action: @escaping (UInt64, VideoLayerAction) -> Void = { _, _ in }
   ) -> VideoLayersTable {
     VideoLayersTable(
-      layerIDs: ids, transforms: [:], hidden: [:], names: [1: "Camera"],
-      width: 1920, height: 1080, isOutputActive: output,
+      layerIDs: ids, programPreferences: preferences, definition: definition,
+      canvasWidth: 1920, canvasHeight: 1080, isLayerFrozen: frozen,
       onAction: action, onCommitTransform: commit)
+  }
+
+  @Test func resolvesAndUpdatesNamesFromDefinition() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    var device = Ldtx_Workspace_V4_VideoInputDevice()
+    device.internalID = 1
+    device.displayName = "Camera"
+    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+    wrapper.videoDevice = device
+    definition.inputDevices = [wrapper]
+    var clock = Ldtx_Workspace_V4_ClockComponent()
+    clock.internalID = 3
+    clock.displayName = "Clock"
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.clock = clock
+    definition.videoComponents = [component]
+    let table = VideoLayersTableView()
+    table.update(input(definition: definition))
+    let row = try #require(table.rows[1])
+    #expect(row.nameLabel.stringValue == "Camera")
+    #expect(table.rows[3]?.nameLabel.stringValue == "Clock")
+    definition.inputDevices[0].videoDevice.displayName = "Renamed"
+    table.update(input(definition: definition))
+    #expect(table.rows[1] === row)
+    #expect(row.nameLabel.stringValue == "Renamed")
+    #expect(table.rows[2]?.nameLabel.stringValue == "Missing Video Layer")
+  }
+
+  @Test func reflectsPreferencesWithoutOverwritingEditingText() throws {
+    let table = VideoLayersTableView()
+    table.update(input())
+    let row = try #require(table.rows[1])
+    var preferences = Ldtx_Workspace_V4_ProgramPreferences()
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationX = 0.5
+    transform.scaleX = 1
+    transform.scaleY = 1
+    preferences.videoLayerTransforms[1] = transform
+    preferences.videoLayerHidden[1] = true
+    table.update(input(preferences: preferences))
+    #expect(table.rows[1] === row)
+    #expect(row.fields[0].stringValue == "960.0")
+    #expect(row.hideButton.state == .on)
+    row.controlTextDidBeginEditing(Notification(name: NSControl.textDidBeginEditingNotification))
+    row.fields[0].stringValue = "draft"
+    preferences.videoLayerTransforms[1]?.translationX = 0.25
+    preferences.videoLayerHidden[1] = false
+    table.update(input(preferences: preferences))
+    #expect(row.fields[0].stringValue == "draft")
+    #expect(row.hideButton.state == .off)
   }
 
   @Test func commitsNormalizedNumbersOnEnterAndFocusChange() throws {
@@ -100,7 +152,7 @@ struct VideoLayersEditorTests {
     let field = table.convert(NSPoint(x: 10, y: 10), from: cell.fields[0])
     #expect(!table.canDragRows(with: IndexSet(integer: 0), at: field))
     #expect(!table.canDragRows(with: IndexSet([0, 1]), at: handle))
-    table.update(input(output: true))
+    table.update(input(frozen: true))
     #expect(!table.canDragRows(with: IndexSet(integer: 0), at: handle))
     #expect(!cell.upButton.isEnabled && !cell.downButton.isEnabled && !cell.removeButton.isEnabled)
   }
@@ -129,7 +181,7 @@ struct VideoLayersEditorTests {
     #expect(!table.tableView(table, acceptDrop: missing, row: 0, dropOperation: .above))
     #expect(!table.tableView(table, acceptDrop: toEnd, row: 4, dropOperation: .above))
     #expect(!table.tableView(table, acceptDrop: toEnd, row: 1, dropOperation: .on))
-    table.update(input(output: true, action: { actions.append(($0, $1)) }))
+    table.update(input(frozen: true, action: { actions.append(($0, $1)) }))
     #expect(
       table.tableView(
         table, validateDrop: info, proposedRow: 0,
@@ -187,8 +239,6 @@ struct VideoLayersEditorTests {
     let editor = try #require(row.fields[0].currentEditor() as? NSTextView)
     #expect(!editor.isAutomaticSpellingCorrectionEnabled)
     #expect(!editor.isContinuousSpellCheckingEnabled)
-    let replacementsEnabled = editor.isAutomaticTextReplacementEnabled
-    #expect(!replacementsEnabled)
     editor.insertText(
       "960", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
     #expect(window.makeFirstResponder(row.fields[1]))

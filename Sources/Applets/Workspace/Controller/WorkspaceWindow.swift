@@ -33,7 +33,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
 
     let preview = ProgramCanvasPairedPreview(
       device: previewRenderer.device, delegate: previewRenderer,
-      onSelect: { uiState.isPortraitAudio = $0 })
+      onSelectLandscape: { uiState.selectedAudioMix = .landscape },
+      onSelectPortrait: { uiState.selectedAudioMix = .portrait })
     let editorController = NSHostingController(
       rootView:
         contentPane

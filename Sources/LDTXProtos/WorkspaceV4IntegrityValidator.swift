@@ -169,20 +169,28 @@ public enum WorkspaceV4IntegrityValidator {
         return device.internalID
       })
     let preferences = workspace.preferences
-    for isPortrait in [false, true] {
-      let programPreferences =
-        isPortrait
-        ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences
-      for (programID, preference) in programPreferences {
-        guard let program = definition.programs.first(where: { $0.internalID == programID }) else {
-          throw WorkspaceV4IntegrityError.missingProgram(programID)
-        }
-        try validate(
-          preference, audioInputIDs: audioInputIDs,
-          videoLayerIDs: Set(
-            isPortrait
-              ? program.portraitVideoLayerInternalIds : program.landscapeVideoLayerInternalIds))
+    try validateProgramPreferences(
+      preferences.landscapeProgramPreferences,
+      definition: definition, audioInputIDs: audioInputIDs,
+      layerIDs: \.landscapeVideoLayerInternalIds)
+    try validateProgramPreferences(
+      preferences.portraitProgramPreferences,
+      definition: definition, audioInputIDs: audioInputIDs,
+      layerIDs: \.portraitVideoLayerInternalIds)
+  }
+
+  private static func validateProgramPreferences(
+    _ preferences: [UInt64: Ldtx_Workspace_V4_ProgramPreferences],
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, audioInputIDs: Set<UInt64>,
+    layerIDs: KeyPath<Ldtx_Workspace_V4_ProgramDefinition, [UInt64]>
+  ) throws {
+    for (programID, preference) in preferences {
+      guard let program = definition.programs.first(where: { $0.internalID == programID }) else {
+        throw WorkspaceV4IntegrityError.missingProgram(programID)
       }
+      try validate(
+        preference, audioInputIDs: audioInputIDs,
+        videoLayerIDs: Set(program[keyPath: layerIDs]))
     }
   }
 

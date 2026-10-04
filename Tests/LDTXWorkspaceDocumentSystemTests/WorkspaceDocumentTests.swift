@@ -65,13 +65,13 @@ struct WorkspaceDocumentSystemTestSuite {
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
     try secondWindow.selectProgram(internalID: a)
-    let landscape = try #require(firstWindow.windowRuntime.runtime(isPortrait: false))
-    let portrait = try #require(firstWindow.windowRuntime.runtime(isPortrait: true))
+    let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
+    let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
     let definition = first.uiState.definition
     first.uiState.inspectorSelector = .init(kind: .workspacePrograms)
     try firstWindow.selectProgram(internalID: b)
-    #expect(firstWindow.windowRuntime.runtime(isPortrait: false) === landscape)
-    #expect(firstWindow.windowRuntime.runtime(isPortrait: true) === portrait)
+    #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
+    #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
     #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
     #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
     // This stored Content value is outside the hosted document environment.
@@ -142,7 +142,7 @@ struct WorkspaceDocumentSystemTestSuite {
     let input = try firstWindow.windowRuntime.addVideoInputDevice(displayName: "Camera")
     let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
     try firstWindow.windowRuntime.setVideoLayerOrder(
-      [input], forProgramInternalID: program, isPortrait: false)
+      [input], forProgramInternalID: program, target: .landscape)
     data.updateState(for: first.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
     second.uiState.definition = first.uiState.definition
     let secondWindow = WorkspaceWindowController(
@@ -151,8 +151,8 @@ struct WorkspaceDocumentSystemTestSuite {
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
     data.updateState(for: second.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
-    let firstRuntime = try #require(firstWindow.windowRuntime.runtime(isPortrait: false))
-    let secondRuntime = try #require(secondWindow.windowRuntime.runtime(isPortrait: false))
+    let firstRuntime = try #require(firstWindow.windowRuntime.landscapeRuntime)
+    let secondRuntime = try #require(secondWindow.windowRuntime.landscapeRuntime)
     data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
     for _ in 0..<100
     where firstRuntime.programState.read({ $0?.cameraIDsByInputKey["v4-\(input)"] })
@@ -170,8 +170,10 @@ struct WorkspaceDocumentSystemTestSuite {
       to: URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
     try await Task.sleep(for: .milliseconds(20))
     #expect(
-      try firstWindow.windowRuntime.runtimeProjection(programInternalID: program, isPortrait: false)
-        .configuration.cameraIDsByInputKey["v4-\(input)"] == "test-camera")
+      try firstWindow.windowRuntime.runtimeProjection(
+        programInternalID: program, target: .landscape
+      )
+      .configuration.cameraIDsByInputKey["v4-\(input)"] == "test-camera")
     await firstWindow.shutdown()
     data.setPhysicalDeviceID(nil, for: input)
     for _ in 0..<100

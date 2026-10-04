@@ -7,12 +7,16 @@ import MetalKit
 
 public final class ProgramCanvasPairedPreview: NSView {
   public let metalView: MTKView
-  private let onSelect: (Bool) -> Void
+  private let onSelectLandscape: () -> Void
+  private let onSelectPortrait: () -> Void
 
-  public init(device: MTLDevice?, delegate: any MTKViewDelegate, onSelect: @escaping (Bool) -> Void)
-  {
+  public init(
+    device: MTLDevice?, delegate: any MTKViewDelegate, onSelectLandscape: @escaping () -> Void,
+    onSelectPortrait: @escaping () -> Void
+  ) {
     metalView = ProgramPreviewMTKView(frame: .zero, device: device)
-    self.onSelect = onSelect
+    self.onSelectLandscape = onSelectLandscape
+    self.onSelectPortrait = onSelectPortrait
     super.init(frame: .zero)
     metalView.colorPixelFormat = .bgra8Unorm
     metalView.framebufferOnly = false
@@ -75,18 +79,18 @@ public final class ProgramCanvasPairedPreview: NSView {
       landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16))
     let point = metalView.convertToBacking(point)
     if regions.landscape.contains(point) {
-      onSelect(false)
+      onSelectLandscape()
     } else if regions.portrait.contains(point) {
-      onSelect(true)
+      onSelectPortrait()
     }
   }
 
   @objc private func selectLandscape() -> Bool {
-    onSelect(false)
+    onSelectLandscape()
     return true
   }
   @objc private func selectPortrait() -> Bool {
-    onSelect(true)
+    onSelectPortrait()
     return true
   }
 

@@ -17,28 +17,16 @@ public struct WorkspaceV4RenderGraph: Sendable {
 
   public init(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
-    programInternalID: UInt64,
-    isPortrait: Bool,
-    localState: WorkspaceLocalState = .init()
+    canvas: WorkspaceProgramCanvasSnapshot
   ) throws {
-    guard let program = definition.programs.first(where: { $0.internalID == programInternalID })
-    else {
-      throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
-    }
-    let layerIDs =
-      !isPortrait
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-    let preference =
-      (isPortrait
-      ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
-        programInternalID] ?? .init()
+    let layerIDs = canvas.layerIDs
+    let preference = canvas.preferences
     let transforms = preference.videoLayerTransforms
     let hidden = preference.videoLayerHidden
     let components = Self.componentsByInternalID(definition)
     let inputDevices = Self.videoInputDevicesByInternalID(definition)
-    let canvasWidth: Float = !isPortrait ? 1_920 : 1_080
-    let canvasHeight: Float = !isPortrait ? 1_080 : 1_920
+    let canvasWidth = Float(canvas.outputProfile.width)
+    let canvasHeight = Float(canvas.outputProfile.height)
     var steps: [CompositeProgramStep] = []
     var layerPreferences: [VideoLayerPreference] = []
     for internalID in layerIDs {
@@ -69,10 +57,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
       if case .clock(var clock) = component {
         clock.destinationX = translationX
         clock.destinationY = translationY
-        if isPortrait {
-          clock.destinationWidth *= 1_920 / 1_080
-          clock.destinationHeight *= 1_080 / 1_920
-        }
+        clock.destinationWidth *= 1_920 / canvasWidth
+        clock.destinationHeight *= 1_080 / canvasHeight
         clock.destinationWidth *= scaleX
         clock.destinationHeight *= scaleY
         component = .clock(clock)
@@ -104,7 +90,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
         Double(gains[id] ?? 0) / 10)
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
-    audioPreferences.videoLayersByProgramName["v4-\(programInternalID)"] = layerPreferences
+    audioPreferences.videoLayersByProgramName["v4-\(canvas.programInternalID)"] = layerPreferences
     self.audioPreferences = audioPreferences
   }
 
@@ -253,44 +239,26 @@ extension WorkspaceV4RenderGraph {
   /// assignments. The persisted V4 documents remain authoritative.
   public static func runtimeConfiguration(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
-    localState: WorkspaceLocalState,
+    canvas: WorkspaceProgramCanvasSnapshot,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
-    programInternalID: UInt64,
-    isPortrait: Bool,
     timeSeconds: Float
   ) throws -> ProgramRuntimeConfiguration {
     try runtimeProjection(
-      definition: definition, preferences: preferences, localState: localState,
-      physicalDeviceIDs: physicalDeviceIDs,
-      programInternalID: programInternalID, isPortrait: isPortrait, timeSeconds: timeSeconds
+      definition: definition, canvas: canvas,
+      physicalDeviceIDs: physicalDeviceIDs, timeSeconds: timeSeconds
     ).configuration
   }
 
   public static func runtimeProjection(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
-    localState: WorkspaceLocalState,
+    canvas: WorkspaceProgramCanvasSnapshot,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
-    programInternalID: UInt64,
-    isPortrait: Bool,
     timeSeconds: Float
   ) throws -> WorkspaceV4RuntimeProjection {
-    let graph = try Self(
-      definition: definition, preferences: preferences,
-      programInternalID: programInternalID, isPortrait: isPortrait, localState: localState)
-    let layerIDs = try requiredLayerIDs(
-      definition: definition, programInternalID: programInternalID, isPortrait: isPortrait)
-    let profile = try outputProfile(isPortrait: isPortrait, canvas: definition.canvasConfiguration)
-    let bitRate =
-      !isPortrait
-      ? definition.canvasConfiguration.landscapeVideoBitRate
-      : definition.canvasConfiguration.portraitVideoBitRate
-    let resolvedProfile = bitRate == 0 ? profile : profile.withVideoBitRate(Int(bitRate))
-    let frameRate =
-      definition.canvasConfiguration.frameRate == 0
-      ? resolvedProfile.frameRate
-      : Int(definition.canvasConfiguration.frameRate)
+    let graph = try Self(definition: definition, canvas: canvas)
+    let layerIDs = canvas.layerIDs
+    let resolvedProfile = canvas.outputProfile
+    let frameRate = canvas.frameRate
     let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
     var cameraIDs: [String: String] = Dictionary(
       uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
@@ -344,42 +312,10 @@ extension WorkspaceV4RenderGraph {
         cameraInputColorOverrides: [:],
         backgroundRemovalInputKeys: backgroundRemovalInputKeys(
           definition: definition, layerIDs: layerIDs),
-        videoLayerProgramName: "v4-\(programInternalID)"
+        videoLayerProgramName: "v4-\(canvas.programInternalID)"
       ),
       preferences: graph.audioPreferences
     )
-  }
-
-  private static func requiredLayerIDs(
-    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    programInternalID: UInt64,
-    isPortrait: Bool
-  ) throws -> [UInt64] {
-    guard let program = definition.programs.first(where: { $0.internalID == programInternalID })
-    else {
-      throw WorkspaceV4RenderGraphError.missingProgram(programInternalID)
-    }
-    return !isPortrait
-      ? program.landscapeVideoLayerInternalIds : program.portraitVideoLayerInternalIds
-  }
-
-  private static func outputProfile(
-    isPortrait: Bool,
-    canvas: Ldtx_Workspace_V4_CanvasConfiguration
-  ) throws -> ProgramOutputProfile {
-    if !isPortrait {
-      guard
-        canvas.landscapeProfileID.isEmpty
-          || canvas.landscapeProfileID == "sdr-landscape-1080p60"
-      else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.landscapeProfileID) }
-      return .sdr1080p60
-    } else {
-      guard
-        canvas.portraitProfileID.isEmpty
-          || canvas.portraitProfileID == "sdr-portrait-1080p60"
-      else { throw WorkspaceV4RenderGraphError.unsupportedOutputProfile(canvas.portraitProfileID) }
-      return .sdrPortrait1080p60
-    }
   }
 
   private static func backgroundRemovalInputKeys(

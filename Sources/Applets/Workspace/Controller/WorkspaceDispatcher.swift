@@ -42,12 +42,12 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
 
   func setBasicTransform(
     _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
-    videoLayerInternalID: UInt64, isPortrait: Bool
+    videoLayerInternalID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
     guard let workspaceWindowController else { throw WorkspaceDispatcherError.workspaceClosed }
     try workspaceWindowController.windowRuntime.setBasicTransform(
       transform, forVideoLayerInternalID: videoLayerInternalID,
-      programInternalID: programInternalID, isPortrait: isPortrait)
+      programInternalID: programInternalID, target: target)
   }
 
   func updateProgramRuntimes() {

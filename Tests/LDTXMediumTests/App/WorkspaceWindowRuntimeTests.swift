@@ -17,24 +17,58 @@ import Testing
 @MainActor
 @Suite("Workspace window runtime")
 struct WorkspaceWindowRuntimeIntegrationTestSuite {
+  @Test("canvas updates preserve current values after reading an old snapshot")
+  func preservesCurrentCanvasValues() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let id = try runtime.addProgram(displayName: "Independent")
+    let first = try runtime.addVideoInputDevice(displayName: "First")
+    let second = try runtime.addVideoInputDevice(displayName: "Second")
+    try runtime.setVideoLayerOrder([first, second], forProgramInternalID: id, target: .landscape)
+    try runtime.setVideoLayerOrder([second, first], forProgramInternalID: id, target: .portrait)
+    let old = try WorkspaceProgramCanvasSnapshot(
+      definition: runtime.definition, preferences: runtime.preferences,
+      programInternalID: id, target: .landscape)
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationX = 0.25
+    transform.scaleX = 1
+    transform.scaleY = 1
+    try runtime.setBasicTransform(
+      transform, forVideoLayerInternalID: first,
+      programInternalID: id, target: .landscape)
+    try runtime.setVideoLayerHidden(
+      true, forVideoLayerInternalID: second,
+      programInternalID: id, target: .portrait)
+    try runtime.setMasterVolume(-6, programInternalID: id, target: .landscape)
+    #expect(old.preferences.videoLayerTransforms.isEmpty)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.videoLayerTransforms[first] == transform)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+    #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.videoLayerTransforms.isEmpty == true)
+    #expect(runtime.definition.programs.first?.landscapeVideoLayerInternalIds == [first, second])
+    #expect(runtime.definition.programs.first?.portraitVideoLayerInternalIds == [second, first])
+  }
+
   @Test("edits and removes independent canvas preferences")
   func editsIndependentCanvasPreferences() throws {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     let id = try runtime.addProgram(displayName: "Canvas Preferences")
-    try runtime.setMasterVolume(-3.24, programInternalID: id, isPortrait: false)
-    try runtime.setMasterVolume(-9, programInternalID: id, isPortrait: true)
+    try runtime.setMasterVolume(-3.24, programInternalID: id, target: .landscape)
+    try runtime.setMasterVolume(-9, programInternalID: id, target: .portrait)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -32)
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
-    try runtime.setMasterVolume(-6, programInternalID: id, isPortrait: false)
+    try runtime.setMasterVolume(-6, programInternalID: id, target: .landscape)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
     for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
       #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
-        try runtime.setMasterVolume(invalid, programInternalID: id, isPortrait: false)
+        try runtime.setMasterVolume(invalid, programInternalID: id, target: .landscape)
       }
     }
     #expect(
@@ -42,10 +76,10 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
     try runtime.setAudioChannelGain(
       -12.34, forAudioInputDeviceInternalID: inputID,
-      programInternalID: id, isPortrait: false)
+      programInternalID: id, target: .landscape)
     try runtime.setAudioChannelGain(
       1.26, forAudioInputDeviceInternalID: inputID,
-      programInternalID: id, isPortrait: true)
+      programInternalID: id, target: .portrait)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
         == -123)
@@ -56,7 +90,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
         try runtime.setAudioChannelGain(
           invalid, forAudioInputDeviceInternalID: inputID,
-          programInternalID: id, isPortrait: false)
+          programInternalID: id, target: .landscape)
       }
     }
     #expect(
@@ -163,8 +197,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    runtime.installRuntime(landscape, isPortrait: false)
-    runtime.installRuntime(portrait, isPortrait: true)
+    runtime.installRuntimes(landscape: landscape, portrait: portrait)
     runtime.selectedProgramInternalID = programID
 
     #expect(landscape.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
@@ -206,12 +239,17 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
     let programID = try windowRuntime.addProgram(displayName: "Main")
     try windowRuntime.setVideoLayerOrder(
-      [videoInputID], forProgramInternalID: programID, isPortrait: false)
+      [videoInputID], forProgramInternalID: programID, target: .landscape)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    windowRuntime.installRuntime(programRuntime, isPortrait: false)
+    windowRuntime.installRuntimes(
+      landscape: programRuntime,
+      portrait: ProgramRuntime(
+        captureSessionCoordinator: capture,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
+        scheduler: ManualProgramRuntimeScheduler()))
     windowRuntime.selectedProgramInternalID = programID
 
     appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)

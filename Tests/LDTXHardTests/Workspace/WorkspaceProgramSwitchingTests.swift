@@ -45,8 +45,7 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
       captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates)
     let portrait = ProgramRuntime(
       captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates)
-    runtime.installRuntime(landscape, isPortrait: false)
-    runtime.installRuntime(portrait, isPortrait: true)
+    runtime.installRuntimes(landscape: landscape, portrait: portrait)
     let first = try runtime.addProgram(displayName: "First")
     let second = try runtime.addProgram(displayName: "Second")
     var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
@@ -54,15 +53,15 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     color.alpha = 1
     let fill = try runtime.addSolidColorFill(displayName: "Blue", color: color)
     let clock = try runtime.addClock(displayName: "Clock")
-    for isPortrait in [false, true] {
-      try runtime.setVideoLayerOrder([fill], forProgramInternalID: first, isPortrait: isPortrait)
-      try runtime.setVideoLayerOrder([clock], forProgramInternalID: second, isPortrait: isPortrait)
+    for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+      try runtime.setVideoLayerOrder([fill], forProgramInternalID: first, target: target)
+      try runtime.setVideoLayerOrder([clock], forProgramInternalID: second, target: target)
     }
     let audio = try runtime.addAudioInputDevice(displayName: "Unavailable Audio")
     try runtime.setAudioChannelGain(
-      -12, forAudioInputDeviceInternalID: audio, programInternalID: second, isPortrait: false)
+      -12, forAudioInputDeviceInternalID: audio, programInternalID: second, target: .landscape)
     try runtime.setAudioChannelMuted(
-      true, forAudioInputDeviceInternalID: audio, programInternalID: second, isPortrait: true)
+      true, forAudioInputDeviceInternalID: audio, programInternalID: second, target: .portrait)
     local.selectedProgramInternalID = first
     runtime.updateRuntimes()
     landscape.startPreview()
@@ -84,18 +83,20 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     local.selectedProgramInternalID = second
     runtime.updateRuntimes()
     try session.reconfigureProgramOutput()
-    for isPortrait in [false, true] {
-      let expected = try runtime.runtimeProjection(
-        programInternalID: second, isPortrait: isPortrait)
-      let actual = try #require(runtime.runtime(isPortrait: isPortrait)?.programState.read { $0 })
+    for (target, installedRuntime) in [
+      (WorkspaceCanvasTarget.landscape, runtime.landscapeRuntime),
+      (WorkspaceCanvasTarget.portrait, runtime.portraitRuntime),
+    ] {
+      let expected = try runtime.runtimeProjection(programInternalID: second, target: target)
+      let actual = try #require(installedRuntime?.programState.read { $0 })
       #expect(actual.composite.steps.map(\.id) == expected.configuration.composite.steps.map(\.id))
       #expect(actual.audioChannels.count == 1)
     }
     try await Task.sleep(for: .milliseconds(350))
     #expect(session.state == .recording)
     #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
-    #expect(runtime.runtime(isPortrait: false) === landscape)
-    #expect(runtime.runtime(isPortrait: true) === portrait)
+    #expect(runtime.landscapeRuntime === landscape)
+    #expect(runtime.portraitRuntime === portrait)
     if preserveFailure {
       landscape.clearProgram()
       #expect(throws: (any Error).self) { try session.reconfigureProgramOutput() }

@@ -16,11 +16,11 @@ enum VideoLayerAction: Equatable {
 }
 
 struct VideoLayersEditor: View {
-  @Bindable var uiState: WorkspaceUIState
-  let transforms: [UInt64: Ldtx_Workspace_V4_BasicTransform]
-  let hidden: [UInt64: Bool]
-  let width: Double
-  let height: Double
+  let definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
+  let isLayerFrozen: Bool
+  let programPreferences: Ldtx_Workspace_V4_ProgramPreferences
+  let canvasWidth: Double
+  let canvasHeight: Double
   let layerIDs: [UInt64]
   let onAction: (UInt64, VideoLayerAction) -> Void
   let onCommitTransform: (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void
@@ -31,10 +31,9 @@ struct VideoLayersEditor: View {
         Text("No video layers").foregroundStyle(.secondary)
       }
       VideoLayersTable(
-        layerIDs: layerIDs, transforms: transforms, hidden: hidden,
-        names: Dictionary(
-          uniqueKeysWithValues: layerIDs.map { ($0, videoLayerDisplayName(for: $0)) }),
-        width: width, height: height, isOutputActive: uiState.isOutputActive,
+        layerIDs: layerIDs, programPreferences: programPreferences,
+        definition: definition,
+        canvasWidth: canvasWidth, canvasHeight: canvasHeight, isLayerFrozen: isLayerFrozen,
         onAction: onAction, onCommitTransform: onCommitTransform
       )
       .frame(
@@ -49,26 +48,26 @@ struct VideoLayersEditor: View {
         }
       }
       .disabled(
-        uiState.isOutputActive
+        isLayerFrozen
           || availableVideoLayerIDs.isEmpty)
     }
   }
 
   private var availableVideoLayerIDs: [UInt64] {
     let usedIDs = Set(layerIDs)
-    let inputIDs = uiState.definition.inputDevices.compactMap {
+    let inputIDs = definition.inputDevices.compactMap {
       input -> UInt64? in
       guard case .videoDevice(let device)? = input.definition else { return nil }
       return device.internalID
     }
-    let componentIDs = uiState.definition.videoComponents.compactMap {
+    let componentIDs = definition.videoComponents.compactMap {
       componentInternalID($0)
     }
     return (inputIDs + componentIDs).filter { !usedIDs.contains($0) }
   }
 
   private func videoLayerDisplayName(for internalID: UInt64) -> String {
-    if let input = uiState.definition.inputDevices.first(where: {
+    if let input = definition.inputDevices.first(where: {
       input in
       switch input.definition {
       case .videoDevice(let device): device.internalID == internalID
@@ -77,7 +76,7 @@ struct VideoLayersEditor: View {
     }), case .videoDevice(let device)? = input.definition {
       return device.displayName
     }
-    if let component = uiState.definition.videoComponents.first(where: {
+    if let component = definition.videoComponents.first(where: {
       componentInternalID($0) == internalID
     }) {
       return componentDisplayName(component)

@@ -12,12 +12,41 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   let upButton = NSButton(title: "↑", target: nil, action: nil)
   let downButton = NSButton(title: "↓", target: nil, action: nil)
   let removeButton = NSButton(title: "−", target: nil, action: nil)
-  let fields = (0..<4).map { _ in VideoLayerTextField(string: "") }
+  let fields = (0..<4).map { _ in NSTextField(string: "") }
   let errorLabel = NSTextField(labelWithString: "")
   private(set) var hasUnconfirmedChanges = false
+  private var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+  private var layerName: String {
+    for input in definition.inputDevices {
+      if case .videoDevice(let device)? = input.definition, device.internalID == internalID {
+        return device.displayName
+      }
+    }
+    for component in definition.videoComponents {
+      let id: UInt64?
+      let name: String
+      switch component.definition {
+      case .vfxSource(let value): (id, name) = (value.internalID, value.displayName)
+      case .solidColorFill(let value): (id, name) = (value.internalID, value.displayName)
+      case .linearGradientFill(let value): (id, name) = (value.internalID, value.displayName)
+      case .radialGradientFill(let value): (id, name) = (value.internalID, value.displayName)
+      case .conicGradientFill(let value): (id, name) = (value.internalID, value.displayName)
+      case .clock(let value): (id, name) = (value.internalID, value.displayName)
+      case .testPattern(let value): (id, name) = (value.internalID, value.displayName)
+      case nil: (id, name) = (nil, "Invalid Video Component")
+      }
+      if id == internalID { return name }
+    }
+    return "Missing Video Layer"
+  }
+  private var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
+  private var transform: Ldtx_Workspace_V4_BasicTransform {
+    programPreferences.videoLayerTransforms[internalID] ?? .init()
+  }
+  private var isLayerHidden: Bool { programPreferences.videoLayerHidden[internalID] ?? false }
   private var isEditing = false
-  private var width: Double = 1920
-  private var height: Double = 1080
+  private var canvasWidth: Double = 1920
+  private var canvasHeight: Double = 1080
   private var onAction: (UInt64, VideoLayerAction) -> Void = { _, _ in }
   private var onCommitTransform: (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = {
     _, _ in
@@ -85,17 +114,20 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   func configure(
-    name: String, transform: Ldtx_Workspace_V4_BasicTransform,
-    width: Double, height: Double, hidden: Bool, canMoveUp: Bool, canMoveDown: Bool,
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    programPreferences: Ldtx_Workspace_V4_ProgramPreferences,
+    canvasWidth: Double, canvasHeight: Double, canMoveUp: Bool, canMoveDown: Bool,
     canRemove: Bool, onAction: @escaping (UInt64, VideoLayerAction) -> Void,
     onCommitTransform: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void
   ) {
-    nameLabel.stringValue = name
-    self.width = width
-    self.height = height
+    self.definition = definition
+    self.programPreferences = programPreferences
+    nameLabel.stringValue = layerName
+    self.canvasWidth = canvasWidth
+    self.canvasHeight = canvasHeight
     self.onAction = onAction
     self.onCommitTransform = onCommitTransform
-    hideButton.state = hidden ? .on : .off
+    hideButton.state = isLayerHidden ? .on : .off
     upButton.isEnabled = canMoveUp
     downButton.isEnabled = canMoveDown
     removeButton.isEnabled = canRemove
@@ -104,8 +136,8 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
 
   private func display(_ transform: Ldtx_Workspace_V4_BasicTransform) {
     let strings = [
-      String(Double(transform.translationX) * width),
-      String(Double(transform.translationY) * height), String(transform.scaleX),
+      String(Double(transform.translationX) * canvasWidth),
+      String(Double(transform.translationY) * canvasHeight), String(transform.scaleX),
       String(transform.scaleY),
     ]
     for (field, string) in zip(fields, strings) { field.stringValue = string }
@@ -120,6 +152,16 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
 
   func controlTextDidBeginEditing(_ notification: Notification) {
     isEditing = true
+    if let field = notification.object as? NSTextField,
+      let editor = field.currentEditor() as? NSTextView
+    {
+      editor.isAutomaticSpellingCorrectionEnabled = false
+      editor.isContinuousSpellCheckingEnabled = false
+      editor.isGrammarCheckingEnabled = false
+      editor.isAutomaticQuoteSubstitutionEnabled = false
+      editor.isAutomaticDashSubstitutionEnabled = false
+      editor.isAutomaticDataDetectionEnabled = false
+    }
   }
 
   func controlTextDidChange(_ notification: Notification) { hasUnconfirmedChanges = true }
@@ -145,7 +187,8 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
       return
     }
     let numbers = [
-      Float(values[0] / width), Float(values[1] / height), Float(values[2]), Float(values[3]),
+      Float(values[0] / canvasWidth), Float(values[1] / canvasHeight), Float(values[2]),
+      Float(values[3]),
     ]
     guard numbers.allSatisfy(\.isFinite) else {
       errorLabel.stringValue = "Invalid number."
@@ -164,23 +207,5 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
     } catch {
       errorLabel.stringValue = error.localizedDescription
     }
-  }
-}
-
-// AppKit applies field-editor defaults after the begin-editing notification.
-// Configure these options after the standard responder setup has completed.
-final class VideoLayerTextField: NSTextField {
-  override func becomeFirstResponder() -> Bool {
-    let accepted = super.becomeFirstResponder()
-    if accepted, let editor = currentEditor() as? NSTextView {
-      editor.isAutomaticSpellingCorrectionEnabled = false
-      editor.isContinuousSpellCheckingEnabled = false
-      editor.isGrammarCheckingEnabled = false
-      editor.isAutomaticTextReplacementEnabled = false
-      editor.isAutomaticQuoteSubstitutionEnabled = false
-      editor.isAutomaticDashSubstitutionEnabled = false
-      editor.isAutomaticDataDetectionEnabled = false
-    }
-    return accepted
   }
 }

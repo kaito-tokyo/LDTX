@@ -35,8 +35,8 @@ public struct WorkspaceContent: View {
         Section {
           Grid(alignment: .center, horizontalSpacing: 8, verticalSpacing: 12) {
             GridRow {
-              let key = "\(selectedProgram?.internalID ?? 0)/false"
-              let volume = masterVolumeBinding(for: selectedProgram?.internalID, isPortrait: false)
+              let key = "\(selectedProgram?.internalID ?? 0)/sdr-1080p60"
+              let volume = masterVolumeBinding(for: selectedProgram?.internalID, target: .landscape)
               Label("Landscape", systemImage: "rectangle")
                 .labelStyle(.iconOnly)
                 .gridColumnAlignment(.center)
@@ -77,8 +77,8 @@ public struct WorkspaceContent: View {
             .accessibilityLabel("Landscape Volume")
             .disabled(selectedProgram == nil)
             GridRow {
-              let key = "\(selectedProgram?.internalID ?? 0)/true"
-              let volume = masterVolumeBinding(for: selectedProgram?.internalID, isPortrait: true)
+              let key = "\(selectedProgram?.internalID ?? 0)/sdr-portrait-1080p60"
+              let volume = masterVolumeBinding(for: selectedProgram?.internalID, target: .portrait)
               Label("Portrait", systemImage: "rectangle.portrait")
                 .labelStyle(.iconOnly)
                 .gridColumnAlignment(.center)
@@ -136,10 +136,52 @@ public struct WorkspaceContent: View {
         Divider()
 
         Section {
+          let programID = selectedProgram?.internalID
+          let landscape =
+            programID.flatMap { uiState.preferences.landscapeProgramPreferences[$0] } ?? .init()
+          let portrait =
+            programID.flatMap { uiState.preferences.portraitProgramPreferences[$0] } ?? .init()
+          let selectedPreferences = uiState.selectedAudioMix == .landscape ? landscape : portrait
+          let selectedTarget: WorkspaceCanvasTarget =
+            uiState.selectedAudioMix == .landscape ? .landscape : .portrait
           AudioMixEditor(
-            uiState: uiState, appletData: appletData, workspaceURL: workspaceURL,
-            programInternalID: selectedProgram?.internalID, audioInputs: audioInputs,
-            audioPeakMeter: audioPeakMeter)
+            landscapePreferences: landscape, portraitPreferences: portrait,
+            selectedPreferences: selectedPreferences,
+            isEnabled: programID != nil, canMonitor: workspaceURL != nil,
+            monitoredInputIDs: localState.monitorAudioInputDeviceInternalIDs,
+            audioInputs: audioInputs, audioPeakMeter: audioPeakMeter,
+            gainAccessibilityLabel: { input in
+              switch uiState.selectedAudioMix {
+              case .landscape: return "Landscape " + input.displayName + " Gain"
+              case .portrait: return "Portrait " + input.displayName + " Gain"
+              }
+            },
+            onSetLandscapeMuted: { id, value in
+              updateCanvasPreferences(for: programID, target: .landscape) {
+                $0.audioChannelMuted[id] = value
+              }
+            },
+            onSetPortraitMuted: { id, value in
+              updateCanvasPreferences(for: programID, target: .portrait) {
+                $0.audioChannelMuted[id] = value
+              }
+            },
+            onSetGain: { id, value in
+              updateCanvasPreferences(for: programID, target: selectedTarget) {
+                $0.audioChannelGainsDecibelTenths[id] = value
+              }
+            },
+            onSetMonitor: { id, enabled in
+              guard let workspaceURL else { return }
+              appletData.updateState(for: workspaceURL) { state in
+                if enabled {
+                  state.monitorAudioInputDeviceInternalIDs.insert(id)
+                } else {
+                  state.monitorAudioInputDeviceInternalIDs.remove(id)
+                }
+              }
+              workspaceDispatcher?.synchronizeAudioMonitor()
+            })
         } header: {
           Text("Audio Mix").font(.headline)
         }
@@ -155,15 +197,14 @@ public struct WorkspaceContent: View {
             VStack(alignment: .leading) {
               Text("Landscape Video Layers").font(.headline)
               VideoLayersEditor(
-                uiState: uiState,
-                transforms: landscapePreference?.videoLayerTransforms ?? [:],
-                hidden: landscapePreference?.videoLayerHidden ?? [:],
-                width: 1920, height: 1080,
+                definition: uiState.definition, isLayerFrozen: uiState.isOutputActive,
+                programPreferences: landscapePreference ?? .init(),
+                canvasWidth: 1920, canvasHeight: 1080,
                 layerIDs: selectedProgram.landscapeVideoLayerInternalIds
               ) { internalID, action in
                 performVideoLayerAction(
                   internalID, action: action, programInternalID: selectedProgram.internalID,
-                  isPortrait: false)
+                  target: .landscape)
               } onCommitTransform: { internalID, transform in
                 guard let workspaceDispatcher else {
                   throw NSError(
@@ -172,22 +213,21 @@ public struct WorkspaceContent: View {
                 }
                 try workspaceDispatcher.setBasicTransform(
                   transform, programInternalID: selectedProgram.internalID,
-                  videoLayerInternalID: internalID, isPortrait: false)
+                  videoLayerInternalID: internalID, target: .landscape)
               }
             }
             Divider()
             VStack(alignment: .leading) {
               Text("Portrait Video Layers").font(.headline)
               VideoLayersEditor(
-                uiState: uiState,
-                transforms: portraitPreference?.videoLayerTransforms ?? [:],
-                hidden: portraitPreference?.videoLayerHidden ?? [:],
-                width: 1080, height: 1920,
+                definition: uiState.definition, isLayerFrozen: uiState.isOutputActive,
+                programPreferences: portraitPreference ?? .init(),
+                canvasWidth: 1080, canvasHeight: 1920,
                 layerIDs: selectedProgram.portraitVideoLayerInternalIds
               ) { internalID, action in
                 performVideoLayerAction(
                   internalID, action: action, programInternalID: selectedProgram.internalID,
-                  isPortrait: true)
+                  target: .portrait)
               } onCommitTransform: { internalID, transform in
                 guard let workspaceDispatcher else {
                   throw NSError(
@@ -196,7 +236,7 @@ public struct WorkspaceContent: View {
                 }
                 try workspaceDispatcher.setBasicTransform(
                   transform, programInternalID: selectedProgram.internalID,
-                  videoLayerInternalID: internalID, isPortrait: true)
+                  videoLayerInternalID: internalID, target: .portrait)
               }
             }
           }
@@ -222,36 +262,39 @@ public struct WorkspaceContent: View {
   }
 
   private func masterVolumeBinding(
-    for programInternalID: UInt64?,
-    isPortrait: Bool
+    for programInternalID: UInt64?, target: WorkspaceCanvasTarget
   ) -> Binding<Double> {
     Binding(
       get: {
         let preference = programInternalID.flatMap {
-          (isPortrait
-            ? uiState.preferences.portraitProgramPreferences
-            : uiState.preferences.landscapeProgramPreferences)[$0]
+          uiState.preferences[keyPath: target.preferences][$0]
         }
         return Double(preference?.audioMasterVolumeDecibelTenths ?? 0) / 10
       },
       set: { value in
         guard let programInternalID else { return }
-        volumeDrafts["\(programInternalID)/\(isPortrait)"] = String(format: "%.1f", value)
-        var preferences = uiState.preferences
-        var preference =
-          (isPortrait
-          ? preferences.portraitProgramPreferences : preferences.landscapeProgramPreferences)[
-            programInternalID] ?? .init()
-        preference.audioMasterVolumeDecibelTenths = Int32((value * 10).rounded())
-        if isPortrait {
-          preferences.portraitProgramPreferences[programInternalID] = preference
-        } else {
-          preferences.landscapeProgramPreferences[programInternalID] = preference
+        let key = "\(programInternalID)/\(target.defaultProfile.id)"
+        volumeDrafts[key] = String(format: "%.1f", value)
+        updateCanvasPreferences(for: programInternalID, target: target) {
+          $0.audioMasterVolumeDecibelTenths = Int32((value * 10).rounded())
         }
-        uiState.preferences = preferences
-        workspaceDispatcher?.updateMixPreferences()
-        workspaceDispatcher?.synchronizeAudioMonitor()
       })
+  }
+
+  private func updateCanvasPreferences(
+    for programInternalID: UInt64?, target: WorkspaceCanvasTarget,
+    mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void
+  ) {
+    guard let programInternalID,
+      uiState.definition.programs.contains(where: { $0.internalID == programInternalID })
+    else { return }
+    var preferences = uiState.preferences
+    var preference = preferences[keyPath: target.preferences][programInternalID] ?? .init()
+    mutation(&preference)
+    preferences[keyPath: target.preferences][programInternalID] = preference
+    uiState.preferences = preferences
+    workspaceDispatcher?.updateMixPreferences()
+    workspaceDispatcher?.synchronizeAudioMonitor()
   }
 
   private var monitorVolumeBinding: Binding<Double> {

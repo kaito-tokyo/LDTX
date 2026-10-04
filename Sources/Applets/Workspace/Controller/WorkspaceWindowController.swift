@@ -94,8 +94,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
     let portraitRuntime = programRuntimeFactory(
       captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
-    windowRuntime.installRuntime(landscapeRuntime, isPortrait: false)
-    windowRuntime.installRuntime(portraitRuntime, isPortrait: true)
+    windowRuntime.installRuntimes(landscape: landscapeRuntime, portrait: portraitRuntime)
     windowRuntime.updateRuntimes()
 
     let previewRenderer = ProgramPairPreviewRenderer(
@@ -207,8 +206,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
     }
-    for isPortrait in [false, true] {
-      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, isPortrait: isPortrait)
+    for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, target: target)
     }
     appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
     windowRuntime.updateRuntimes()
@@ -307,7 +306,7 @@ extension WorkspaceWindowController {
       let programInternalID = localState.selectedProgramInternalID
         ?? windowRuntime.definition.programs.first?.internalID,
       let projection = try? windowRuntime.runtimeProjection(
-        programInternalID: programInternalID, isPortrait: false)
+        programInternalID: programInternalID, target: .landscape)
     else {
       Task { await audioCoordinator.stopAndReset() }
       return
@@ -329,7 +328,7 @@ extension WorkspaceWindowController {
         return "v4-\(device.internalID)"
       })
     let portraitProjection = try? windowRuntime.runtimeProjection(
-      programInternalID: programInternalID, isPortrait: true)
+      programInternalID: programInternalID, target: .portrait)
     audioCoordinator.peakMeter.updateMasterGains(
       landscapeChannels: projection.configuration.audioChannels,
       portraitChannels: portraitProjection?.configuration.audioChannels ?? [],
