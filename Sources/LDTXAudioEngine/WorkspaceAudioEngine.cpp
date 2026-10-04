@@ -215,6 +215,8 @@ struct LDTXWorkspaceAudioEngine {
     }
   }
   void report(const std::string &source, OSStatus status) {
+    if (status)
+      os_log_error(logger, "Audio engine %{public}s failed: Core Audio error %d", source.c_str(), int(status));
     if (errorHandler)
       errorHandler(errorContext, source.c_str(), status);
   }
@@ -238,6 +240,8 @@ struct LDTXWorkspaceAudioEngine {
     if (!hardware)
       return;
     watch(kAudioObjectSystemObject, kAudioHardwarePropertyDevices);
+    if (outputUID.empty())
+      watch(kAudioObjectSystemObject, kAudioHardwarePropertyDefaultOutputDevice);
     for (auto &[id, r] : inputs)
       if (r.input && r.input->device) {
         watch(r.input->device, kAudioDevicePropertyDeviceIsAlive);
@@ -245,9 +249,9 @@ struct LDTXWorkspaceAudioEngine {
         watch(r.input->device, kAudioDevicePropertyBufferFrameSize);
         watch(r.input->device, kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeInput);
       }
-    if (!outputUID.empty())
+    if (!monitorRoutes.empty())
       try {
-        auto id = deviceForUID(outputUID.c_str());
+        auto id = monitorDeviceForUID(outputUID.c_str());
         watch(id, kAudioDevicePropertyDeviceIsAlive);
         watch(id, kAudioDevicePropertyNominalSampleRate);
         watch(id, kAudioDevicePropertyStreamConfiguration, kAudioObjectPropertyScopeOutput);
@@ -343,9 +347,9 @@ struct LDTXWorkspaceAudioEngine {
     if (changedInputs)
       delivery.restart();
     bool changedOutput = false;
-    if (monitor && !outputUID.empty())
+    if (monitor)
       try {
-        auto d = deviceForUID(outputUID.c_str());
+        auto d = monitorDeviceForUID(outputUID.c_str());
         auto actual =
             monitor->output->get<AudioDeviceID>(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0);
         auto f = monitor->output->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat,
@@ -357,7 +361,7 @@ struct LDTXWorkspaceAudioEngine {
       } catch (...) {
         changedOutput = true;
       }
-    if (changedInputs || changedOutput || (!monitor && !outputUID.empty())) {
+    if (changedInputs || changedOutput || (!monitor && !monitorRoutes.empty())) {
       rebuildMonitor();
       rebuildWatches();
     }
@@ -379,7 +383,7 @@ struct LDTXWorkspaceAudioEngine {
   void rebuildMonitor() {
     if (!stopMonitor())
       return;
-    if (!hardware || outputUID.empty()) {
+    if (!hardware || monitorRoutes.empty()) {
       report("Monitor", 0);
       return;
     }
@@ -393,7 +397,7 @@ struct LDTXWorkspaceAudioEngine {
         report("Monitor", 0);
         return;
       }
-      auto device = deviceForUID(outputUID.c_str());
+      auto device = monitorDeviceForUID(outputUID.c_str());
       graph->output = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
       auto &out = *graph->output;
       out.set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(0));

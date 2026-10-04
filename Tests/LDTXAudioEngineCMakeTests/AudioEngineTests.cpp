@@ -10,6 +10,28 @@
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
+TEST_CASE("system default monitor output") {
+  // Opt in on a Mac with an output device; the ordinary CI run stays hardware-free.
+  if (!std::getenv("LDTX_TEST_MONITOR_HARDWARE"))
+    return;
+  auto *engine = LDTXAudioCreate(true);
+  REQUIRE(engine);
+  LDTXAudioSetErrorHandler(engine, [](void *, const char *source, int32_t status) {
+    if (status)
+      std::cerr << source << ": Core Audio error " << status << '\n';
+  }, nullptr);
+  auto input = LDTXAudioAddInput(engine, "monitor-silence", 2, 48000, 2);
+  LDTXAudioRoute route{input, 1, true};
+  LDTXAudioConfigureMonitor(engine, "", &route, 1, 1);
+  CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames > 0);
+  if (auto *uid = std::getenv("LDTX_TEST_MONITOR_OUTPUT_UID")) {
+    LDTXAudioConfigureMonitor(engine, uid, &route, 1, 1);
+    CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames > 0);
+  }
+  LDTXAudioConfigureMonitor(engine, "", nullptr, 0, 1);
+  CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames == 0);
+  LDTXAudioDestroy(engine);
+}
 TEST_CASE("stop retry") {
   for (unsigned failures = 0; failures <= 4; ++failures) {
     unsigned attempts = 0, waits = 0;
