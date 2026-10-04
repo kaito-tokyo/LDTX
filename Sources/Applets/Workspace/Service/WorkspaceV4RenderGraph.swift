@@ -181,7 +181,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
         case .vfxSource(let source):
           return (
             source.internalID,
-            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-vfx-\(source.internalID)"))
+            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-\(source.internalID)"))
           )
         case .clock(let clock):
           return (
@@ -317,7 +317,7 @@ extension WorkspaceV4RenderGraph {
         case .avCaptureDevice(let physicalID)? =
           physicalDeviceIDs[source.inputDeviceInternalID]
       else { continue }
-      cameraIDs["v4-vfx-\(source.internalID)"] = physicalID
+      cameraIDs["v4-\(source.internalID)"] = physicalID
     }
     var inputDeviceNames = Dictionary(
       uniqueKeysWithValues: videoDeviceIDs.compactMap {
@@ -326,7 +326,7 @@ extension WorkspaceV4RenderGraph {
     for wrapper in definition.videoComponents {
       guard case .vfxSource(let source)? = wrapper.definition, layerIDs.contains(source.internalID)
       else { continue }
-      inputDeviceNames["v4-vfx-\(source.internalID)"] = source.displayName
+      inputDeviceNames["v4-\(source.internalID)"] = source.displayName
     }
     let masterCameraID: String?
     if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID,
@@ -406,7 +406,7 @@ extension WorkspaceV4RenderGraph {
             return removal.model == .mediapipeLandscape
           })
         else { return nil }
-        return "v4-vfx-\(source.internalID)"
+        return "v4-\(source.internalID)"
       })
   }
 }

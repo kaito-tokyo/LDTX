@@ -133,7 +133,15 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       role: .landscape,
       timeSeconds: 1
     )
-    #expect(configuration.backgroundRemovalInputKeys == ["v4-vfx-12"])
+    let step = try #require(configuration.composite.steps.first)
+    let renderingKey = configuration.composite.inputCameraDeviceMappingKey(for: step)
+    #expect(configuration.backgroundRemovalInputKeys == [renderingKey])
+    let assignedConfiguration = try WorkspaceV4RenderGraph.runtimeProjection(
+      definition: definition, preferences: .init(), localState: .init(),
+      physicalDeviceIDs: [11: .avCaptureDevice(uniqueID: "camera")],
+      programInternalID: 7, role: .landscape, timeSeconds: 1
+    ).configuration
+    #expect(assignedConfiguration.cameraIDsByInputKey[renderingKey] == "camera")
   }
 
   @Test("projects every V4 fill component into the rendering graph")
