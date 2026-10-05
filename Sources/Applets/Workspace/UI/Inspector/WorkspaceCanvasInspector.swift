@@ -33,7 +33,7 @@ struct WorkspaceCanvasInspector: View {
           .frame(width: 110)
       }
       WorkspaceSelectionField(
-        title: "PTS Master Camera", current: ptsMasterBinding.wrappedValue,
+        title: "PTS Master VFX Source", current: ptsMasterBinding.wrappedValue,
         options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
         emptyLabel: "Automatic", clearTitle: "Use Automatic Timing",
         isEditable: !uiState.isOutputActive,
@@ -55,9 +55,9 @@ struct WorkspaceCanvasInspector: View {
     uiState.definition.canvasConfiguration
   }
 
-  private var videoDevices: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { wrapper in
-      guard case .videoDevice(let device) = wrapper.definition else { return nil }
+  private var videoDevices: [Ldtx_Workspace_V4_VfxSourceComponent] {
+    uiState.definition.videoComponents.compactMap { wrapper in
+      guard case .vfxSource(let device) = wrapper.definition else { return nil }
       return device
     }
   }
@@ -103,15 +103,15 @@ struct WorkspaceCanvasInspector: View {
   private var ptsMasterBinding: Binding<UInt64?> {
     Binding(
       get: {
-        canvas.hasPtsMasterVideoInputDeviceInternalID
-          ? canvas.ptsMasterVideoInputDeviceInternalID : nil
+        canvas.hasPtsMasterVfxSourceInternalID
+          ? canvas.ptsMasterVfxSourceInternalID : nil
       },
       set: { internalID in
         var definition = uiState.definition
         if let internalID {
-          definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID = internalID
+          definition.canvasConfiguration.ptsMasterVfxSourceInternalID = internalID
         } else {
-          definition.canvasConfiguration.clearPtsMasterVideoInputDeviceInternalID()
+          definition.canvasConfiguration.clearPtsMasterVfxSourceInternalID()
         }
         uiState.definition = definition
       }

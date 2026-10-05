@@ -78,7 +78,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         }
       }
       do {
-        let frame = try context.frameForVision(vision)
+        let frame = try await context.frameForVision(vision)
         let result = try await ocrService.recognizeText(
           in: frame.image,
           configuration: Self.ocrConfiguration(for: vision),
@@ -92,6 +92,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         return
       } catch {
         guard !Task.isCancelled else { return }
+        self.resultsByVisionInternalID.removeValue(forKey: internalID)
         context.reportFailure(internalID, error)
       }
     }

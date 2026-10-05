@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
+import CoreVideo
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
@@ -26,6 +27,7 @@ public final class WorkspaceWindowRuntime {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
+  @ObservationIgnored private var componentFrameRenderer: VideoComponentFrameRenderer?
   private let localStateProvider: () -> WorkspaceLocalState
   private let selectProgramHandler: (UInt64?) -> Void
   public private(set) var landscapeRuntime: ProgramRuntime?
@@ -58,7 +60,12 @@ public final class WorkspaceWindowRuntime {
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { workspace.preferences }
   public var url: URL? { persistenceCoordinator.url }
 
+  public func installComponentFrameRenderer(_ renderer: VideoComponentFrameRenderer) {
+    componentFrameRenderer = renderer
+  }
+
   public func shutdown() {
+    componentFrameRenderer?.retainComponents([])
     workspaceV4OperationLogger.notice(
       "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
     )
@@ -103,6 +110,11 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func updateRuntimes() {
+    componentFrameRenderer?.retainComponents(
+      Set(
+        definition.videoComponents.compactMap {
+          try? WorkspaceV4IntegrityValidator.videoComponentID($0)
+        }))
     updateRuntime(landscapeRuntime, target: .landscape)
     updateRuntime(portraitRuntime, target: .portrait)
   }
@@ -147,23 +159,17 @@ public final class WorkspaceWindowRuntime {
   ) {
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
-    for input in workspace.definition.inputDevices {
-      switch input.definition {
-      case .videoDevice(let device):
-        if case .avCaptureDevice(let id)? = physicalDeviceIDsProvider()[device.internalID],
-          !id.isEmpty
-        {
-          videoCameraIDs.insert(id)
-        }
-      case .audioDevice(let device):
-        if case .coreAudioDevice(let id)? = physicalDeviceIDsProvider()[device.internalID],
-          !id.isEmpty
-        {
-          audioDeviceIDs.insert(id)
-        }
-      case nil:
-        continue
-      }
+    let assignments = physicalDeviceIDsProvider()
+    for wrapper in workspace.definition.videoComponents {
+      guard case .vfxSource(let source) = wrapper.definition,
+        case .avCaptureDevice(let id)? = assignments[source.internalID], !id.isEmpty
+      else { continue }
+      videoCameraIDs.insert(id)
+    }
+    for device in workspace.definition.audioDevices {
+      guard case .coreAudioDevice(let id)? = assignments[device.internalID], !id.isEmpty
+      else { continue }
+      audioDeviceIDs.insert(id)
     }
     let canvas = workspace.definition.canvasConfiguration
     captureSessionCoordinator.synchronizePhysicalInputCaptures(
@@ -191,7 +197,7 @@ public final class WorkspaceWindowRuntime {
           return vision
         }.first
       },
-      frameForVision: { vision in try self.frameForVision(vision) },
+      frameForVision: { vision in try await self.frameForVision(vision) },
       reportResult: { internalID, result in
         self.visionResults[internalID] = result
         self.visionFailureMessages.removeValue(forKey: internalID)
@@ -211,19 +217,40 @@ public final class WorkspaceWindowRuntime {
 
   private func frameForVision(
     _ vision: Ldtx_Workspace_V4_OcrVision
-  ) throws -> WorkspaceVisionAnalysisFrame {
-    guard case .inputDeviceInternalID(let inputID)? = vision.source else {
-      throw WorkspaceVisionFeatureError.referencedInputDeviceMissing
+  ) async throws -> WorkspaceVisionAnalysisFrame {
+    guard case .videoComponentInternalID(let componentID)? = vision.source,
+      let wrapper = definition.videoComponents.first(where: {
+        (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
+      })
+    else { throw WorkspaceVisionFeatureError.referencedVideoComponentMissing }
+    var width = 1920
+    var height = 1080
+    switch wrapper.definition {
+    case .vfxSource:
+      guard case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[componentID]
+      else { throw WorkspaceVisionFeatureError.vfxSourceHasNoPhysicalCamera }
+      guard let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: cameraID)
+      else { throw WorkspaceVisionFeatureError.frameUnavailable }
+      width = CVPixelBufferGetWidth(frame.pixelBuffer)
+      height = CVPixelBufferGetHeight(frame.pixelBuffer)
+    case .clock(let clock):
+      width = max(1, Int((clock.width * 1920).rounded()))
+      height = max(1, Int((clock.height * 1080).rounded()))
+    default: break
     }
-    guard
-      case .avCaptureDevice(let physicalDeviceID)? = physicalDeviceIDsProvider()[inputID]
-    else { throw WorkspaceVisionFeatureError.inputDeviceHasNoPhysicalCamera }
-    guard let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: physicalDeviceID)
-    else { throw WorkspaceVisionFeatureError.frameUnavailable }
+    guard let renderer = componentFrameRenderer else {
+      throw WorkspaceVisionFeatureError.frameUnavailable
+    }
+    let configuration = try WorkspaceV4RenderGraph.componentConfiguration(
+      definition: definition, componentID: componentID,
+      physicalDeviceIDs: physicalDeviceIDsProvider(), width: width, height: height)
+    let frame = try await renderer.render(componentID: componentID, configuration: configuration)
+    try Task.checkCancellation()
+    guard !frame.isPreparingRenderResources else {
+      throw WorkspaceVisionFeatureError.frameUnavailable
+    }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
-    guard vision.hasRegionOfInterest else {
-      return WorkspaceVisionAnalysisFrame(image: image)
-    }
+    guard vision.hasRegionOfInterest else { return WorkspaceVisionAnalysisFrame(image: image) }
     let region = vision.regionOfInterest
     let extent = image.extent
     return WorkspaceVisionAnalysisFrame(
@@ -232,20 +259,27 @@ public final class WorkspaceWindowRuntime {
           x: extent.minX + extent.width * CGFloat(region.x),
           y: extent.minY + extent.height * CGFloat(region.y),
           width: extent.width * CGFloat(region.width),
-          height: extent.height * CGFloat(region.height)
-        ))
-    )
+          height: extent.height * CGFloat(region.height))))
   }
 
 }
 
 extension WorkspaceWindowRuntime: WorkspaceWindowRuntimeProtocol {}
 
-public enum WorkspaceRuntimeError: Error, Equatable, Sendable {
+public enum WorkspaceRuntimeError: Error, LocalizedError, Equatable, Sendable {
   case invalidAudioChannelGain
   case invalidAudioMasterVolume
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
   case missingVision(UInt64)
   case missingResource(UInt64)
+  case resourceInUse(UInt64)
+
+  public var errorDescription: String? {
+    switch self {
+    case .resourceInUse:
+      "Remove this Video Component from Programs, OCR Visions, and the PTS master before deleting it."
+    default: "The Workspace operation could not be completed: \(self)."
+    }
+  }
 }

@@ -48,17 +48,14 @@ struct WorkspacePhysicalDeviceField: View {
     guard isEditable, !uiState.isOutputActive else {
       throw WorkspaceSelectionError(message: "Stop output before changing an assignment.")
     }
-    guard
-      uiState.definition.inputDevices.contains(where: {
-        if isAudio, case .audioDevice(let value) = $0.definition {
-          return value.internalID == internalID
-        }
-        if !isAudio, case .videoDevice(let value) = $0.definition {
-          return value.internalID == internalID
-        }
-        return false
-      })
-    else { throw WorkspaceSelectionError(message: "This input no longer exists.") }
+    let exists =
+      isAudio
+      ? uiState.definition.audioDevices.contains { $0.internalID == internalID }
+      : uiState.definition.videoComponents.contains {
+        guard case .vfxSource(let source) = $0.definition else { return false }
+        return source.internalID == internalID
+      }
+    guard exists else { throw WorkspaceSelectionError(message: "This resource no longer exists.") }
     if proposed != nil { deviceRegistry.refresh() }
     if proposed != nil, isAudio, let error = deviceRegistry.errorMessage {
       throw WorkspaceSelectionError(message: error)

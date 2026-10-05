@@ -8,57 +8,223 @@ import Testing
 
 @Suite(.serialized)
 @MainActor
-struct VideoLayersEditorTests {
-  func input(
+final class VideoLayersEditorTests {
+  private var editors: [ObjectIdentifier: VideoLayersEditor] = [:]
+
+  func makeTable() -> VideoLayersTableView {
+    let editor = VideoLayersEditor()
+    editors[ObjectIdentifier(editor.table)] = editor
+    return editor.table
+  }
+
+  func makeContainer() -> (scrollView: NSScrollView, table: VideoLayersTableView) {
+    let table = makeTable()
+    return (editors[ObjectIdentifier(table)]!.scrollView, table)
+  }
+
+  @Test func previewConstraintsPreserveEditorSize() {
+    let editor = VideoLayersEditor()
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080)
+    NSLayoutConstraint.activate([
+      editor.view.widthAnchor.constraint(equalToConstant: 720),
+      editor.view.heightAnchor.constraint(equalToConstant: 360),
+    ])
+    #expect(editor.view.fittingSize == NSSize(width: 720, height: 360))
+  }
+
+  @Test func editorRowsUseAvailableWidth() throws {
+    let editor = VideoLayersEditor()
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
+      styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentViewController = editor
+    window.setContentSize(NSSize(width: 720, height: 360))
+    window.contentView?.layoutSubtreeIfNeeded()
+    let row = try #require(
+      editor.table.view(atColumn: 0, row: 0, makeIfNecessary: true)
+        as? VideoLayersTableRow)
+    row.layoutSubtreeIfNeeded()
+    #expect(editor.scrollView.frame.width >= 690)
+    #expect(row.frame.width >= 670)
+    #expect(row.rootView.state === row.state)
+    #expect(row.rootView.canvasWidth == 1920)
+    #expect(row.rootView.canvasHeight == 1080)
+  }
+  func update(
+    _ table: VideoLayersTableView,
     ids: [UInt64] = [1, 2, 3],
     preferences: Ldtx_Workspace_V4_ProgramPreferences = .init(),
-    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 = .init(),
     commit: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
-    order: @escaping ([UInt64]) throws -> Void = { _ in }
-  ) -> VideoLayersTableInput {
-    var current = preferences
-    return VideoLayersTableInput(
-      layerIDs: ids, programPreferences: preferences, definition: definition,
+    order: @escaping ([UInt64]) throws -> Void = { _ in },
+    setHidden: @escaping (UInt64, Bool) throws -> Void = { _, _ in },
+    onError: @escaping (Error) -> Void = { _ in }
+  ) {
+    let editor = editors[ObjectIdentifier(table)] ?? VideoLayersEditor()
+    editors[ObjectIdentifier(table)] = editor
+    editor.update(
+      definition: .init(), programPreferences: preferences, layerIDs: ids,
       canvasWidth: 1920, canvasHeight: 1080,
-      preferences: { current },
-      onCommitPreferences: { value in
-        for (id, transform) in value.videoLayerTransforms
-        where current.videoLayerTransforms[id] != transform {
-          try commit(id, transform)
-        }
-        current = value
-      }, onCommitLayerOrder: order)
+      onCommitTransform: { id, value in
+        try commit(id, value)
+        return value
+      },
+      onSetHidden: setHidden, onCommitLayerOrder: order, onError: onError)
+    if editor.table !== table {
+      table.update(
+        layerIDs: ids, rows: editor.table.rows,
+        onCommitLayerOrder: order, onError: onError)
+    }
+  }
+
+  @Test func editorReusesRowsAndRefreshesSaveConnections() throws {
+    let editor = VideoLayersEditor()
+    var saved: [UInt64] = []
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080,
+      onCommitTransform: { id, value in
+        saved.append(id)
+        return value
+      })
+    let row = try #require(editor.table.rows[1])
+    #expect(row.delegate === editor)
+    row.state.strings[0] = "960"
+    row.state.hasUnconfirmedChanges = true
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [2, 1],
+      canvasWidth: 1920, canvasHeight: 1080,
+      onCommitTransform: { id, value in
+        saved.append(id + 100)
+        return value
+      })
+    #expect(editor.table.rows[1] === row)
+    #expect(row.state.strings[0] == "960")
+    row.state.onCommit()
+    #expect(saved == [101])
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [2, 1],
+      canvasWidth: 1080, canvasHeight: 1920)
+    let replacement = try #require(editor.table.rows[1])
+    #expect(replacement !== row)
+    #expect(replacement.rootView.canvasWidth == 1080)
+    #expect(replacement.rootView.canvasHeight == 1920)
+    #expect(!row.state.hasUnconfirmedChanges)
+  }
+
+  @Test func validationErrorsAreAggregatedAtEditor() throws {
+    let editor = VideoLayersEditor()
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080)
+    let first = try #require(editor.table.rows[1])
+    let second = try #require(editor.table.rows[2])
+    first.state.name = "Camera"
+    second.state.name = "Background"
+    first.state.strings[0] = "bad"
+    second.state.strings[3] = "inf"
+    first.state.hasUnconfirmedChanges = true
+    second.state.hasUnconfirmedChanges = true
+    first.state.onCommit()
+    second.state.onCommit()
+    #expect(editor.errorLabel.stringValue.contains("Camera: Invalid number (Pos X)"))
+    #expect(editor.errorLabel.stringValue.contains("Background: Invalid number (Scale Y)"))
+    #expect(!editor.errorLabel.isHidden)
+    #expect(first.state.strings[0] == "bad")
+    first.state.strings[0] = "960"
+    first.state.onCommit()
+    #expect(!editor.errorLabel.stringValue.contains("Camera:"))
+    #expect(editor.errorLabel.stringValue.contains("Background:"))
+    second.state.strings[3] = "1"
+    second.state.onCommit()
+    #expect(editor.errorLabel.stringValue.isEmpty)
+    #expect(editor.errorLabel.isHidden)
+
+    second.state.strings[3] = "-"
+    second.state.hasUnconfirmedChanges = true
+    second.state.onCommit()
+    editor.table.removeAllRows()
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080)
+    #expect(editor.errorLabel.stringValue.isEmpty)
+  }
+
+  @Test func editorAndTableReleaseWiredRows() {
+    weak var releasedEditor: VideoLayersEditor?
+    weak var releasedTable: VideoLayersTableView?
+    weak var releasedRow: VideoLayersTableRow?
+    var state: VideoLayersTableRowState?
+    autoreleasepool {
+      let editor = VideoLayersEditor()
+      editor.update(
+        definition: .init(), programPreferences: .init(), layerIDs: [1],
+        canvasWidth: 1920, canvasHeight: 1080)
+      releasedEditor = editor
+      releasedTable = editor.table
+      releasedRow = editor.table.rows[1]
+      state = releasedRow?.state
+    }
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    #expect(releasedEditor == nil)
+    #expect(releasedTable == nil)
+    #expect(releasedRow == nil)
+    #expect(state != nil)
+    state?.onCommit()
+    state?.onSetHidden(true)
+  }
+
+  @Test func missingSaveDelegateRetainsDraftAndHide() {
+    let row = VideoLayersTableRow(
+      rootView: VideoLayersTableRowContent(
+        state: VideoLayersTableRowState(), canvasWidth: 1920, canvasHeight: 1080))
+    row.state.strings[0] = "960"
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    row.state.onSetHidden(true)
+    #expect(row.state.hasUnconfirmedChanges)
+    #expect(row.state.strings[0] == "960")
+    #expect(!row.state.isHidden)
   }
 
   @Test func resolvesAndUpdatesNamesFromDefinition() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
+    var device = Ldtx_Workspace_V4_VfxSourceComponent()
     device.internalID = 1
     device.displayName = "Camera"
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
-    definition.inputDevices = [wrapper]
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.vfxSource = device
+    definition.videoComponents = [wrapper]
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 3
     clock.displayName = "Clock"
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()
     component.clock = clock
-    definition.videoComponents = [component]
-    let table = VideoLayersTableView()
-    table.update(input(definition: definition))
+    definition.videoComponents.append(component)
+    let editor = VideoLayersEditor()
+    let table = editor.table
+    editor.update(
+      definition: definition, programPreferences: .init(), layerIDs: [1, 2, 3], canvasWidth: 1920,
+      canvasHeight: 1080)
     let row = try #require(table.rows[1])
-    #expect(row.nameLabel.stringValue == "Camera")
-    #expect(table.rows[3]?.nameLabel.stringValue == "Clock")
-    definition.inputDevices[0].videoDevice.displayName = "Renamed"
-    table.update(input(definition: definition))
+    #expect(row.state.name == "Camera")
+    #expect(table.rows[3]?.state.name == "Clock")
+    definition.videoComponents[0].vfxSource.displayName = "Renamed"
+    editor.update(
+      definition: definition, programPreferences: .init(), layerIDs: [1, 2, 3], canvasWidth: 1920,
+      canvasHeight: 1080)
     #expect(table.rows[1] === row)
-    #expect(row.nameLabel.stringValue == "Renamed")
-    #expect(table.rows[2]?.nameLabel.stringValue == "Missing Video Layer")
+    #expect(row.state.name == "Renamed")
+    #expect(table.rows[2]?.state.name == "Missing Video Layer")
   }
 
   @Test func reflectsPreferencesWithoutOverwritingEditingText() throws {
-    let table = VideoLayersTableView()
-    table.update(input())
+    let table = makeTable()
+    update(table)
     let row = try #require(table.rows[1])
     var preferences = Ldtx_Workspace_V4_ProgramPreferences()
     var transform = Ldtx_Workspace_V4_BasicTransform()
@@ -67,105 +233,161 @@ struct VideoLayersEditorTests {
     transform.scaleY = 1
     preferences.videoLayerTransforms[1] = transform
     preferences.videoLayerHidden[1] = true
-    table.update(input(preferences: preferences))
+    update(table, preferences: preferences)
     #expect(table.rows[1] === row)
-    #expect(row.fields[0].stringValue == "960.0")
-    #expect(row.hideButton.state == .on)
-    row.controlTextDidBeginEditing(Notification(name: NSControl.textDidBeginEditingNotification))
-    row.fields[0].stringValue = "draft"
+    #expect(row.state.strings[0] == "960.0")
+    #expect(row.state.isHidden)
+    row.state.isEditing = true
+    row.state.strings[0] = "draft"
     preferences.videoLayerTransforms[1]?.translationX = 0.25
     preferences.videoLayerHidden[1] = false
-    table.update(input(preferences: preferences))
-    #expect(row.fields[0].stringValue == "draft")
-    #expect(row.hideButton.state == .off)
+    update(table, preferences: preferences)
+    #expect(row.state.strings[0] == "draft")
+    #expect(!row.state.isHidden)
   }
 
-  @Test func commitsNormalizedNumbersOnEnterAndFocusChange() throws {
+  @Test func commitsNormalizedNumbersOnSubmit() throws {
     var saved: [Ldtx_Workspace_V4_BasicTransform] = []
-    let table = VideoLayersTableView()
-    table.update(input(commit: { _, value in saved.append(value) }))
+    let table = makeTable()
+    update(table, commit: { _, value in saved.append(value) })
     let row = try #require(table.rows[1])
-    for (field, value) in zip(row.fields, ["960", "270", "1.5", "2"]) { field.stringValue = value }
-    row.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-    #expect(
-      row.control(
-        row.fields[0], textView: NSTextView(),
-        doCommandBy: #selector(NSResponder.insertNewline(_:))))
+    row.state.strings = ["960", "270", "1.5", "2"]
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
     #expect(saved.count == 1)
     #expect(saved[0].translationX == 0.5)
     #expect(saved[0].translationY == 0.25)
     #expect(saved[0].scaleX == 1.5)
-    row.fields[0].stringValue = "192"
-    row.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-    row.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+    row.state.strings[0] = "192"
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
     #expect(saved.count == 2)
     #expect(saved[1].translationX == 0.1)
-    #expect(!row.hasUnconfirmedChanges)
-    #expect(
-      !row.control(
-        row.fields[0], textView: NSTextView(),
-        doCommandBy: #selector(NSResponder.insertTab(_:))))
-    #expect(
-      !row.control(
-        row.fields[0], textView: NSTextView(),
-        doCommandBy: #selector(NSResponder.insertBacktab(_:))))
+    #expect(!row.state.hasUnconfirmedChanges)
+  }
+
+  @Test func appKitCommitRequestsReadCurrentDraftOnce() throws {
+    var saved: [Ldtx_Workspace_V4_BasicTransform] = []
+    let table = makeTable()
+    update(table, commit: { _, value in saved.append(value) })
+    let row = try #require(table.rows[1])
+    row.state.strings = ["960", "270", "1.5", "2"]
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    row.state.onCommit()
+    row.state.onCommit()
+    #expect(saved.count == 1)
+    #expect(saved.first?.translationX == 0.5)
+    #expect(row.state.strings[0] == "960.0")
+
+    row.state.strings[0] = "192"
+    row.state.hasUnconfirmedChanges = true
+    table.removeAllRows()
+    row.state.onCommit()
+    #expect(saved.count == 1)
+  }
+
+  @Test func hostedCallbacksDoNotRetainRow() {
+    weak var releasedRow: VideoLayersTableRow?
+    var content: VideoLayersTableRowContent?
+    autoreleasepool {
+      let row = VideoLayersTableRow(
+        rootView: VideoLayersTableRowContent(
+          state: VideoLayersTableRowState(), canvasWidth: 1920, canvasHeight: 1080))
+      row.state.onCommit = { [weak row] in
+        guard let row else { return }
+        row.delegate?.videoLayersTableRowDidRequestCommit(row)
+      }
+      row.state.onSetHidden = { [weak row] value in
+        guard let row else { return }
+        row.delegate?.videoLayersTableRow(row, setHidden: value)
+      }
+      releasedRow = row
+      content = row.rootView
+    }
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    #expect(releasedRow == nil)
+    content?.state.onCommit()
+    content?.state.onSetHidden(true)
   }
 
   @Test(arguments: ["-", "１２", "inf", "1e100"])
   func invalidInputSurvivesModelUpdates(value: String) throws {
     var commits = 0
-    let table = VideoLayersTableView()
-    table.update(input(commit: { _, _ in commits += 1 }))
+    let table = makeTable()
+    update(table, commit: { _, _ in commits += 1 })
     let row = try #require(table.rows[1])
-    row.fields[2].stringValue = value
-    row.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-    row.commit()
-    table.update(input(ids: [3, 1, 2]))
+    row.state.strings[2] = value
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    update(table, ids: [3, 1, 2])
     #expect(table.rows[1] === row)
-    #expect(row.fields[2].stringValue == value)
-    #expect(row.errorLabel.stringValue == "Invalid number.")
+    #expect(row.state.strings[2] == value)
+    #expect(
+      editors[ObjectIdentifier(table)]?.errorLabel.stringValue.contains("Invalid number") == true)
     #expect(commits == 0)
   }
 
   @Test func failureRetainsDraftAndCanBeRetried() throws {
-    let table = VideoLayersTableView()
-    table.update(
-      input(commit: { _, _ in
+    let table = makeTable()
+    update(
+      table,
+      commit: { _, _ in
         throw NSError(
           domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Save failed."])
-      }))
+      })
     let row = try #require(table.rows[1])
-    row.fields[0].stringValue = "960.000"
-    row.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-    row.commit()
-    #expect(row.errorLabel.stringValue == "Save failed.")
-    #expect(row.hasUnconfirmedChanges)
-    #expect(row.fields[0].stringValue == "960.000")
-    table.update(input())
-    row.commit()
-    #expect(!row.hasUnconfirmedChanges)
-    #expect(row.fields[0].stringValue == "960.0")
+    row.state.strings[0] = "960.000"
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    #expect(
+      editors[ObjectIdentifier(table)]?.errorLabel.stringValue.contains("Save failed.") == true)
+    #expect(row.state.hasUnconfirmedChanges)
+    #expect(row.state.strings[0] == "960.000")
+    update(table)
+    row.state.onCommit()
+    #expect(!row.state.hasUnconfirmedChanges)
+    #expect(row.state.strings[0] == "960.0")
   }
 
-  @Test func onlyHandleStartsDrag() throws {
-    let table = VideoLayersTableView()
-    table.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
-    table.update(input())
-    table.layoutSubtreeIfNeeded()
+  @Test func usesStandardRowDragging() throws {
+    let container = makeContainer()
+    let table = container.table
+    container.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
+    let window = NSWindow(
+      contentRect: container.scrollView.frame, styleMask: [.titled], backing: .buffered,
+      defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = container.scrollView
+    defer { window.close() }
+    update(table)
+    window.displayIfNeeded()
+    container.scrollView.layoutSubtreeIfNeeded()
     let cell = try #require(
-      table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? VideoLayerRowView)
+      table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? VideoLayersTableRow)
     cell.layoutSubtreeIfNeeded()
-    let handle = table.convert(NSPoint(x: 10, y: 10), from: cell.handle)
-    #expect(table.canDragRows(with: IndexSet(integer: 0), at: handle))
-    let field = table.convert(NSPoint(x: 10, y: 10), from: cell.fields[0])
-    #expect(!table.canDragRows(with: IndexSet(integer: 0), at: field))
-    #expect(!table.canDragRows(with: IndexSet([0, 1]), at: handle))
+    let name = table.convert(NSPoint(x: 10, y: 10), from: cell)
+    #expect(table.canDragRows(with: IndexSet(integer: 0), at: name))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    table.layoutSubtreeIfNeeded()
+    let bounds = table.rect(ofRow: 0)
+    let boundary = bounds.minY + VideoLayersTableView.dragRegionHeight
+    #expect(
+      table.canDragRows(
+        with: IndexSet(integer: 0), at: NSPoint(x: bounds.midX, y: boundary - 1)))
+    #expect(
+      !table.canDragRows(
+        with: IndexSet(integer: 0), at: NSPoint(x: bounds.midX, y: boundary)))
+    #expect(
+      !table.canDragRows(
+        with: IndexSet(integer: 0), at: NSPoint(x: bounds.midX, y: bounds.maxY - 1)))
+
   }
 
   @Test func acceptsSingleLocalMovesAndRejectsForeign() throws {
-    let table = VideoLayersTableView()
+    let table = makeTable()
     var actions: [[UInt64]] = []
-    table.update(input(order: { actions.append($0) }))
+    update(table, order: { actions.append($0) })
     let info = LayerDraggingInfo(source: table, id: 3)
     #expect(
       table.tableView(
@@ -193,7 +415,7 @@ struct VideoLayersEditorTests {
     let table = DropRecordingTable()
     table.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
     var actions: [[UInt64]] = []
-    table.update(input(order: { actions.append($0) }))
+    update(table, order: { actions.append($0) })
     let info = LayerDraggingInfo(source: table, id: 1)
     info.draggingLocation = table.convert(
       NSPoint(x: 40, y: table.rect(ofRow: 2).midY + 1), to: nil)
@@ -219,72 +441,162 @@ struct VideoLayersEditorTests {
     #expect(table.insertionRow == 3)
   }
 
-  @Test func realFieldEditorCommitsOnFocusMovementAndDisablesCorrections() throws {
-    let container = VideoLayersTableContainer()
-    container.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
+  @Test func hostingViewRendersEditableFields() throws {
+    let container = makeContainer()
+    container.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
     let window = NSWindow(
-      contentRect: container.frame, styleMask: [.titled],
+      contentRect: container.scrollView.frame, styleMask: [.titled], backing: .buffered,
+      defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = container.scrollView
+    defer { window.close() }
+    update(container.table)
+    window.displayIfNeeded()
+    container.scrollView.layoutSubtreeIfNeeded()
+    _ = container.table.view(atColumn: 0, row: 0, makeIfNecessary: true)
+    let row = try #require(container.table.rows[1])
+    row.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let fields = nativeFields(in: row)
+    #expect(fields.count == 4)
+    #expect(fields.allSatisfy { $0.frame.width >= 60 })
+    #expect(row.rootView.state === row.state)
+    #expect(row.hitTest(row.convert(NSPoint(x: 5, y: 5), to: row.superview)) == nil)
+    for field in fields {
+      let point = container.table.convert(
+        NSPoint(x: field.bounds.midX, y: field.bounds.midY), from: field)
+      #expect(!container.table.canDragRows(with: IndexSet(integer: 0), at: point))
+    }
+    update(container.table, ids: [3, 2, 1])
+    #expect(container.table.rows[1] === row)
+    #expect(row.rootView.state === row.state)
+  }
+
+  @Test func hostedFieldsCommitOnlyOnEnter() throws {
+    let container = makeContainer()
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 720, height: 308), styleMask: [.titled],
       backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
-    window.contentView = container
+    window.contentView = container.scrollView
     defer { window.close() }
     var saved: [Ldtx_Workspace_V4_BasicTransform] = []
-    container.table.update(input(commit: { _, value in saved.append(value) }))
-    container.layoutSubtreeIfNeeded()
-    let row = try #require(container.table.rows[1])
-    #expect(!row.draggingImageComponents.isEmpty)
-    #expect(window.makeFirstResponder(row.fields[0]))
-    let editor = try #require(row.fields[0].currentEditor() as? NSTextView)
-    #expect(!editor.isAutomaticSpellingCorrectionEnabled)
-    #expect(!editor.isContinuousSpellCheckingEnabled)
+    update(container.table, commit: { _, value in saved.append(value) })
+    window.displayIfNeeded()
+    container.scrollView.layoutSubtreeIfNeeded()
+    let row = try #require(
+      container.table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? VideoLayersTableRow)
+    row.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let fields = nativeFields(in: row)
+    try #require(fields.count == 4)
+    #expect(window.makeFirstResponder(fields[0]))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let editor = try #require(fields[0].currentEditor() as? NSTextView)
     editor.insertText(
       "960", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
-    #expect(window.makeFirstResponder(row.fields[1]))
+    #expect(window.makeFirstResponder(fields[1]))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    #expect(saved.isEmpty)
+    #expect(row.state.strings[0] == "960")
+    #expect(row.state.hasUnconfirmedChanges)
+    let secondEditor = try #require(fields[1].currentEditor() as? NSTextView)
+    secondEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     #expect(saved.count == 1)
     #expect(saved.first?.translationX == 0.5)
-    let next = try #require(row.fields[1].currentEditor() as? NSTextView)
-    next.insertText("-", replacementRange: NSRange(location: 0, length: next.string.utf16.count))
+    #expect(!row.state.hasUnconfirmedChanges)
+
+    #expect(window.makeFirstResponder(fields[0]))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    let nextEditor = try #require(fields[0].currentEditor() as? NSTextView)
+    nextEditor.insertText(
+      "480", replacementRange: NSRange(location: 0, length: nextEditor.string.utf16.count))
     #expect(window.makeFirstResponder(container.table))
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     #expect(saved.count == 1)
-    #expect(row.fields[1].stringValue == "-")
-    #expect(row.errorLabel.stringValue == "Invalid number.")
+    #expect(!row.state.isEditing)
+    #expect(row.state.hasUnconfirmedChanges)
+    update(container.table, ids: [3, 2, 1])
+    #expect(container.table.rows[1] === row)
+    #expect(row.state.strings[0] == "480")
+    container.table.removeAllRows()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    row.state.onCommit()
+    #expect(saved.count == 1)
+    #expect(container.table.rows.isEmpty)
+  }
+
+  func nativeFields(in view: NSView) -> [NSTextField] {
+    if let field = view as? NSTextField, field.isEditable { return [field] }
+    return view.subviews.flatMap { nativeFields(in: $0) }
   }
 
   @Test func containerScrollsIndependentlyAndUpdatesRowsInPlace() throws {
-    let container = VideoLayersTableContainer()
-    container.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
-    container.table.update(input())
-    container.layoutSubtreeIfNeeded()
-    #expect(container.hasVerticalScroller)
+    let container = makeContainer()
+    container.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
+    update(container.table)
+    container.scrollView.layoutSubtreeIfNeeded()
+    #expect(container.scrollView.hasVerticalScroller)
+    #expect(container.table.frame.width == container.scrollView.contentSize.width)
+    // The full-width AppKit style retains a small standard cell gutter.
+    #expect(container.table.tableColumns[0].width >= container.scrollView.contentSize.width - 16)
     let first = try #require(container.table.rows[1])
-    container.table.update(input(ids: [3, 1, 4]))
+    update(container.table, ids: [3, 1, 4])
     #expect(container.table.rows[1] === first)
     #expect(container.table.rows[2] == nil)
     #expect(container.table.rows[4] != nil)
     #expect(container.table.layerIDs == [3, 1, 4])
-    container.table.update(input(ids: []))
+    update(container.table, ids: [])
     #expect(container.table.rows.isEmpty)
-    container.table.update(input(ids: [1]))
+    update(container.table, ids: [1])
     #expect(container.table.rows[1] !== first)
-    container.frame = NSRect(x: 0, y: 0, width: 650, height: 116)
-    container.layoutSubtreeIfNeeded()
+    container.scrollView.frame = NSRect(x: 0, y: 0, width: 650, height: 116)
+    container.scrollView.layoutSubtreeIfNeeded()
+    #expect(container.table.frame.width == container.scrollView.contentSize.width)
+    // The full-width AppKit style retains a small standard cell gutter.
+    #expect(container.table.tableColumns[0].width >= container.scrollView.contentSize.width - 16)
   }
 
   @Test func activeEditorSurvivesOrdinaryRefresh() throws {
-    let table = VideoLayersTableView()
-    table.update(input())
+    let table = makeTable()
+    update(table)
     let row = try #require(table.rows[1])
-    row.controlTextDidBeginEditing(
-      Notification(
-        name: NSControl.textDidBeginEditingNotification,
-        object: row.fields[0]))
-    row.fields[0].stringValue = "192.00000286102295"
-    table.update(input())
-    #expect(row.fields[0].stringValue == "192.00000286102295")
+    row.state.isEditing = true
+    row.state.strings[0] = "192.00000286102295"
+    update(table)
+    #expect(row.state.strings[0] == "192.00000286102295")
     #expect(table.rows[1] === row)
-    let other = VideoLayersTableView()
-    other.update(input())
+    let other = makeTable()
+    update(other)
     #expect(other.rows[1] !== row)
+  }
+
+  @Test func mixedMembershipAndOrderUpdatesKeepRetainedRows() throws {
+    let container = makeContainer()
+    container.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 500)
+    let table = container.table
+    update(table, ids: [1, 2, 3, 4])
+    container.scrollView.layoutSubtreeIfNeeded()
+    for index in 0..<4 { _ = table.view(atColumn: 0, row: index, makeIfNecessary: true) }
+    let retained = try #require(table.rows[3])
+    retained.state.strings[0] = "draft"
+    retained.state.hasUnconfirmedChanges = true
+    for ids: [UInt64] in [[4, 3, 1, 2], [5, 3, 2], [2, 5, 3, 6], []] {
+      update(table, ids: ids)
+      container.scrollView.layoutSubtreeIfNeeded()
+      #expect(table.numberOfRows == ids.count)
+      for (index, id) in ids.enumerated() {
+        let row = try #require(
+          table.view(atColumn: 0, row: index, makeIfNecessary: true) as? VideoLayersTableRow)
+        #expect(row === table.rows[id])
+      }
+      if ids.contains(3) {
+        #expect(table.rows[3] === retained)
+        #expect(retained.state.strings[0] == "draft")
+      }
+    }
+    #expect(table.rows.isEmpty)
   }
 }
 
@@ -335,35 +647,63 @@ private final class DropRecordingTable: VideoLayersTableView {
 
 extension VideoLayersEditorTests {
   @Test func preferenceCommitUsesLatestValueAndPreservesInsets() throws {
-    var live = Ldtx_Workspace_V4_ProgramPreferences()
+    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    program.landscapeVideoLayerInternalIds = [1, 2]
+    state.definition.programs = [program]
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.scaleX = 1
     transform.scaleY = 1
-    transform.topInset = 0.2
-    live.videoLayerTransforms[1] = transform
-    let table = VideoLayersTableView()
-    table.update(
-      VideoLayersTableInput(
-        layerIDs: [1], programPreferences: live, definition: .init(),
-        canvasWidth: 1920, canvasHeight: 1080, preferences: { live },
-        onCommitPreferences: { live = $0 }))
-    live.audioMasterVolumeDecibelTenths = -90
-    let row = try #require(table.rows[1])
-    row.fields[0].stringValue = "960"
-    row.controlTextDidChange(
-      Notification(name: NSControl.textDidChangeNotification, object: row.fields[0]))
-    row.commit()
+    state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[1] =
+      transform
+    let content = WorkspaceContent(
+      uiState: state, appletData: WorkspaceAppletData(), audioPeakMeter: ProgramAudioPeakMeter())
+    content.refresh()
+    let row = try #require(content.landscape.table.rows[1])
+    state.preferences.landscapeProgramPreferences[1, default: .init()]
+      .audioMasterVolumeDecibelTenths = -90
+    state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
+      1, default: .init()
+    ].topInset = 0.2
+    state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
+    row.state.strings[0] = "960"
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    let live = state.preferences.landscapeProgramPreferences[1] ?? .init()
     #expect(live.audioMasterVolumeDecibelTenths == -90)
     #expect(live.videoLayerTransforms[1]?.topInset == 0.2)
     #expect(live.videoLayerTransforms[1]?.translationX == 0.5)
+    #expect(live.videoLayerHidden[2] == true)
+    #expect(state.preferences.portraitProgramPreferences.isEmpty)
+    #expect(row.state.strings[0] == "960.0")
+  }
+
+  @Test func hideCallbacksRestoreStateOnFailure() throws {
+    let table = makeTable()
+    var saved: [(UInt64, Bool)] = []
+    var failures = 0
+    update(table, ids: [1], setHidden: { id, hidden in saved.append((id, hidden)) })
+    let row = try #require(table.rows[1])
+    row.state.onSetHidden(!row.state.isHidden)
+    #expect(saved.count == 1)
+    #expect(saved[0].0 == 1 && saved[0].1)
+    update(
+      table, ids: [1],
+      setHidden: { _, _ in throw WorkspaceSelectionError(message: "Rejected") },
+      onError: { _ in failures += 1 })
+    row.state.onSetHidden(!row.state.isHidden)
+    #expect(!row.state.isHidden)
+    #expect(failures == 1)
+    #expect(table.rows[1] === row)
   }
 
   @Test func failedOrderCommitDoesNotAcceptDrop() {
-    let table = VideoLayersTableView()
+    let table = makeTable()
     var failures = 0
-    var value = input(order: { _ in throw WorkspaceSelectionError(message: "Rejected") })
-    value.onError = { _ in failures += 1 }
-    table.update(value)
+    update(
+      table, order: { _ in throw WorkspaceSelectionError(message: "Rejected") },
+      onError: { _ in failures += 1 })
     #expect(
       !table.tableView(
         table, acceptDrop: LayerDraggingInfo(source: table, id: 1), row: 3, dropOperation: .above))
@@ -394,29 +734,39 @@ extension VideoLayersEditorTests {
   }
 
   @Test func changingProgramDiscardsDraftAndActiveOutputClosesSheet() throws {
-    let editor = VideoLayersEditor()
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    program.landscapeVideoLayerInternalIds = [1, 2, 3]
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [program]
+    let state = WorkspaceUIState(definition: definition, preferences: .init())
+    let content = WorkspaceContent(
+      uiState: state, appletData: WorkspaceAppletData(), audioPeakMeter: ProgramAudioPeakMeter())
+    let editor = content.landscape
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
       backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
-    window.contentViewController = editor
+    window.contentViewController = content
     defer {
-      editor.closeManager()
+      content.stop()
       window.close()
     }
-    editor.update(programID: 1, input: input(), active: false)
-    let old = try #require(editor.container.table.rows[1])
-    old.fields[0].stringValue = "draft"
-    old.controlTextDidChange(
-      Notification(name: NSControl.textDidChangeNotification, object: old.fields[0]))
-    editor.openManager()
-    #expect(editor.manager != nil)
-    editor.update(programID: 1, input: input(), active: true)
-    #expect(editor.manager == nil)
+    content.refresh()
+    let old = try #require(editor.table.rows[1])
+    old.state.strings[0] = "draft"
+    old.state.hasUnconfirmedChanges = true
+    editor.manageButton.performClick(nil)
+    #expect(content.videoLayerManager != nil)
+    state.isOutputActive = true
+    content.refresh()
+    #expect(content.videoLayerManager == nil)
     #expect(!editor.manageButton.isEnabled)
-    editor.update(programID: 2, input: input(), active: false)
-    #expect(editor.container.table.rows[1] !== old)
-    #expect(editor.container.table.rows[1]?.hasUnconfirmedChanges == false)
+    state.isOutputActive = false
+    state.definition.programs[0].internalID = 2
+    content.refresh()
+    #expect(editor.table.rows[1] !== old)
+    #expect(editor.table.rows[1]?.state.hasUnconfirmedChanges == false)
     #expect(editor.manageButton.isEnabled)
   }
 

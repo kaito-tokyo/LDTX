@@ -21,16 +21,17 @@ message WorkspaceDefinitionV4 {
   CanvasConfiguration canvas_configuration = 3;
   // Represents Output in the Workspace sidebar.
   OutputConfiguration output_configuration = 4;
-  // Represents Input Devices in the Workspace sidebar.
-  repeated InputDeviceWrapper input_devices = 5;
+  reserved 5;
+  reserved "input_devices";
+  // Represents Audio devices in the Workspace sidebar.
+  repeated AudioInputDevice audio_devices = 8;
   // Represents Video Components in the Workspace sidebar.
   repeated VideoComponentWrapper video_components = 6;
   // Represents Visions in the Workspace sidebar.
   repeated VisionWrapper visions = 7;
 }
 
-// Defines the Video Layer order for one Program. A Video Layer is either a
-// Video Input Device or a Video Component.
+// Defines the Video Component order for one Program.
 message ProgramDefinition {
   // The Workspace-local identifier for this entity. Its most significant bit
   // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
@@ -38,10 +39,10 @@ message ProgramDefinition {
   uint64 internal_id = 1;
   // The name of this Program shown on the selector.
   string display_name = 2;
-  // The Video Input Device or Video Component internal IDs in Landscape Video
+  // The Video Component internal IDs in Landscape Video
   // Layer order.
   repeated uint64 landscape_video_layer_internal_ids = 3;
-  // The Video Input Device or Video Component internal IDs in Portrait Video
+  // The Video Component internal IDs in Portrait Video
   // Layer order.
   repeated uint64 portrait_video_layer_internal_ids = 4;
 }
@@ -58,9 +59,10 @@ message CanvasConfiguration {
   uint32 landscape_video_bit_rate = 4;
   // The target video bit rate for the Portrait Canvas in bits per second.
   uint32 portrait_video_bit_rate = 5;
-  // The Video Input Device internal ID used as the master clock for video
-  // presentation timestamps. When absent, the runtime default applies.
-  optional uint64 pts_master_video_input_device_internal_id = 6;
+  reserved 6;
+  reserved "pts_master_video_input_device_internal_id";
+  // The VFX Source used as the master clock for video presentation timestamps.
+  optional uint64 pts_master_vfx_source_internal_id = 7;
 }
 
 // Represents Output in the Workspace sidebar.

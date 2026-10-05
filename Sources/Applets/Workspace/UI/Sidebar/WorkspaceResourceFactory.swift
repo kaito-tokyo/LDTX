@@ -5,31 +5,19 @@ import Foundation
 import LDTXProtos
 
 enum WorkspaceResourceFactory {
-  static func makeVideoInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_InputDeviceWrapper {
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
-    device.internalID = id
-    device.displayName = name
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
-    return wrapper
-  }
-
-  static func makeAudioInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_InputDeviceWrapper {
+  static func makeAudioInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = name
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.audioDevice = device
-    return wrapper
+    return device
   }
 
-  static func makeVFXSource(id: UInt64, name: String, inputID: UInt64)
+  static func makeVFXSource(id: UInt64, name: String)
     -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
     component.displayName = name
-    component.inputDeviceInternalID = inputID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
     return wrapper
@@ -121,7 +109,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeOcrVision(id: UInt64, name: String, inputID: UInt64)
+  static func makeOcrVision(id: UInt64, name: String, componentID: UInt64)
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
@@ -131,8 +119,8 @@ enum WorkspaceResourceFactory {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = name
-    vision.inputDeviceInternalID = inputID
-    vision.source = .inputDeviceInternalID(inputID)
+    vision.videoComponentInternalID = componentID
+    vision.source = .videoComponentInternalID(componentID)
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision

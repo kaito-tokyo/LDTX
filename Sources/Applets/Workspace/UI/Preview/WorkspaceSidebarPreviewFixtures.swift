@@ -22,23 +22,14 @@
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.displayName = "Workspace Sidebar Preview"
 
-      var videoDevice = Ldtx_Workspace_V4_VideoInputDevice()
-      videoDevice.internalID = 1
-      videoDevice.displayName = "Studio Camera"
-      var videoDeviceWrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-      videoDeviceWrapper.videoDevice = videoDevice
-
       var audioDevice = Ldtx_Workspace_V4_AudioInputDevice()
       audioDevice.internalID = 2
       audioDevice.displayName = "USB Microphone"
-      var audioDeviceWrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-      audioDeviceWrapper.audioDevice = audioDevice
-      definition.inputDevices = [videoDeviceWrapper, audioDeviceWrapper]
+      definition.audioDevices = [audioDevice]
 
       var vfxSource = Ldtx_Workspace_V4_VfxSourceComponent()
       vfxSource.internalID = 3
       vfxSource.displayName = "Camera Source"
-      vfxSource.inputDeviceInternalID = videoDevice.internalID
       var vfxSourceWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       vfxSourceWrapper.vfxSource = vfxSource
 
@@ -130,8 +121,8 @@
       var ocrVision = Ldtx_Workspace_V4_OcrVision()
       ocrVision.internalID = 10
       ocrVision.displayName = "Program Text OCR"
-      ocrVision.inputDeviceInternalID = videoDevice.internalID
-      ocrVision.source = .inputDeviceInternalID(videoDevice.internalID)
+      ocrVision.videoComponentInternalID = vfxSource.internalID
+      ocrVision.source = .videoComponentInternalID(vfxSource.internalID)
       ocrVision.triggers = [triggerWrapper]
       var ocrVisionWrapper = Ldtx_Workspace_V4_VisionWrapper()
       ocrVisionWrapper.ocrVision = ocrVision

@@ -71,21 +71,20 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
 
   @Test("projects V4 layer IDs and transforms directly for rendering")
   func projectsV4RenderGraph() throws {
-    var video = Ldtx_Workspace_V4_VideoInputDevice()
+    var video = Ldtx_Workspace_V4_VfxSourceComponent()
     video.internalID = 11
-    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
-    input.videoDevice = video
+    var input = Ldtx_Workspace_V4_VideoComponentWrapper()
+    input.vfxSource = video
     var audio = Ldtx_Workspace_V4_AudioInputDevice()
     audio.internalID = 12
-    var audioInput = Ldtx_Workspace_V4_InputDeviceWrapper()
-    audioInput.audioDevice = audio
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
     program.landscapeVideoLayerInternalIds = [11]
     program.portraitVideoLayerInternalIds = [11]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
-    definition.inputDevices = [input, audioInput]
+    definition.videoComponents = [input]
+    definition.audioDevices = [audio]
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = 0.25
     transform.translationY = 0.5
@@ -156,17 +155,12 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
 
   @Test("projects a V4 background-removal VFX effect into the runtime")
   func projectsBackgroundRemovalEffect() throws {
-    var video = Ldtx_Workspace_V4_VideoInputDevice()
-    video.internalID = 11
-    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
-    input.videoDevice = video
     var removal = Ldtx_Workspace_V4_BackgroundRemovalVfxEffect()
     removal.model = .mediapipeLandscape
     var effect = Ldtx_Workspace_V4_VideoEffectWrapper()
     effect.backgroundRemoval = removal
     var source = Ldtx_Workspace_V4_VfxSourceComponent()
     source.internalID = 12
-    source.inputDeviceInternalID = 11
     source.effects = [effect]
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()
     component.vfxSource = source
@@ -174,7 +168,6 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     program.internalID = 7
     program.landscapeVideoLayerInternalIds = [12]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.inputDevices = [input]
     definition.videoComponents = [component]
     definition.programs = [program]
 
@@ -190,7 +183,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       definition: definition,
       canvas: try WorkspaceProgramCanvasSnapshot(
         definition: definition, preferences: .init(), programInternalID: 7, target: .landscape),
-      physicalDeviceIDs: [11: .avCaptureDevice(uniqueID: "camera")], timeSeconds: 1
+      physicalDeviceIDs: [12: .avCaptureDevice(uniqueID: "camera")], timeSeconds: 1
     ).configuration
     #expect(assignedConfiguration.cameraIDsByInputKey[renderingKey] == "camera")
   }

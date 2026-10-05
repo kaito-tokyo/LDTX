@@ -14,23 +14,23 @@ import Security
 public final class WorkspaceAppletData {
   public static let shared = WorkspaceAppletData()
 
-  public private(set) var physicalDeviceIDsByInputDeviceInternalID:
+  public private(set) var physicalDeviceIDsByResourceInternalID:
     [UInt64: WorkspacePhysicalDeviceID] = [:]
   private static let assignmentsKey = "tokyo.kaito.ldtx.input-device-assignments.v1"
 
   public func physicalDeviceID(for internalID: UInt64) -> WorkspacePhysicalDeviceID? {
-    physicalDeviceIDsByInputDeviceInternalID[internalID]
+    physicalDeviceIDsByResourceInternalID[internalID]
   }
 
   public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: UInt64)
   {
-    var updated = physicalDeviceIDsByInputDeviceInternalID
+    var updated = physicalDeviceIDsByResourceInternalID
     updated[internalID] = identifier
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .binary
     guard let data = try? encoder.encode(updated) else { return }
     userDefaults.set(data, forKey: Self.assignmentsKey)
-    physicalDeviceIDsByInputDeviceInternalID = updated
+    physicalDeviceIDsByResourceInternalID = updated
   }
 
   private func loadAssignments() {
@@ -38,7 +38,7 @@ public final class WorkspaceAppletData {
       let assignments = try? PropertyListDecoder().decode(
         [UInt64: WorkspacePhysicalDeviceID].self, from: data)
     else { return }
-    physicalDeviceIDsByInputDeviceInternalID = assignments
+    physicalDeviceIDsByResourceInternalID = assignments
   }
 
   private static let persistenceKey = "tokyo.kaito.ldtx.workspace-local-state.v2"

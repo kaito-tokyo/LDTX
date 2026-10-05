@@ -5,34 +5,11 @@
 import AppKit
 import LDTXWorkspaceAppletInterface
 
-struct VideoLayersTableInput {
-  let layerIDs: [UInt64]
-  let programPreferences: Ldtx_Workspace_V4_ProgramPreferences
-  let definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
-  let canvasWidth: Double
-  let canvasHeight: Double
-  var preferences: () throws -> Ldtx_Workspace_V4_ProgramPreferences = { .init() }
-  var onCommitPreferences: (Ldtx_Workspace_V4_ProgramPreferences) throws -> Void = { _ in }
-  var onCommitLayerOrder: ([UInt64]) throws -> Void = { _ in }
-  var onError: (Error) -> Void = { _ in }
-}
-
-final class VideoLayersTableContainer: NSScrollView {
-  let table = VideoLayersTableView()
-  init() {
-    super.init(frame: .zero)
-    hasVerticalScroller = true
-    table.autoresizingMask = [.width]
-    documentView = table
-  }
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-}
-
-class VideoLayersTableView: NSTableView {
-  static let layerRowHeight: CGFloat = 96
+class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDelegate {
+  static let dragRegionHeight: CGFloat = 28
   static let pasteboardType = NSPasteboard.PasteboardType("tokyo.kaito.ldtx.video-layer")
   private(set) var layerIDs: [UInt64] = []
-  private(set) var rows: [UInt64: VideoLayerRowView] = [:]
+  private(set) var rows: [UInt64: VideoLayersTableRow] = [:]
   private var onCommitLayerOrder: ([UInt64]) throws -> Void = { _ in }
   private var onError: (Error) -> Void = { _ in }
 
@@ -41,7 +18,8 @@ class VideoLayersTableView: NSTableView {
     let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("layer"))
     addTableColumn(column)
     headerView = nil
-    rowHeight = Self.layerRowHeight
+    style = .fullWidth
+    usesAutomaticRowHeights = true
     intercellSpacing = .zero
     dataSource = self
     delegate = self
@@ -52,61 +30,63 @@ class VideoLayersTableView: NSTableView {
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  func update(_ input: VideoLayersTableInput) {
-    onCommitLayerOrder = input.onCommitLayerOrder
-    onError = input.onError
-    // Keep cell identity, field editors, and uncommitted text across model updates.
-    let previousIDs = layerIDs
-    layerIDs = input.layerIDs
-    configureRows(input)
-    synchronizeRows(from: previousIDs)
+  func removeAllRows() {
+    window?.makeFirstResponder(nil)
+    layerIDs = []
+    rows.removeAll()
+    reloadData()
   }
 
-  private func configureRows(_ input: VideoLayersTableInput) {
-    for id in layerIDs {
-      let cell = rows[id] ?? VideoLayerRowView(internalID: id)
-      rows[id] = cell
-      cell.configure(
-        definition: input.definition,
-        programPreferences: input.programPreferences,
-        canvasWidth: input.canvasWidth, canvasHeight: input.canvasHeight,
-        preferences: input.preferences,
-        onCommitPreferences: input.onCommitPreferences, onError: input.onError)
+  func update(
+    layerIDs: [UInt64], rows: [UInt64: VideoLayersTableRow],
+    onCommitLayerOrder: @escaping ([UInt64]) throws -> Void = { _ in },
+    onError: @escaping (Error) -> Void = { _ in }
+  ) {
+    self.onCommitLayerOrder = onCommitLayerOrder
+    self.onError = onError
+    let previousIDs = self.layerIDs
+    let replacedRows = IndexSet(
+      layerIDs.indices.filter { self.rows[layerIDs[$0]] !== rows[layerIDs[$0]] })
+    self.layerIDs = layerIDs
+    self.rows = rows.filter { layerIDs.contains($0.key) }
+
+    guard previousIDs != layerIDs else {
+      if !replacedRows.isEmpty {
+        reloadData(forRowIndexes: replacedRows, columnIndexes: IndexSet(integer: 0))
+      }
+      return
     }
-  }
-
-  private func synchronizeRows(from previousIDs: [UInt64]) {
-    guard previousIDs != layerIDs else { return }
     guard !previousIDs.isEmpty else {
       reloadData()
       return
     }
 
-    let retainedIDs = Set(layerIDs)
     var orderedIDs = previousIDs
     beginUpdates()
-    defer { endUpdates() }
-    for index in orderedIDs.indices.reversed() where !retainedIDs.contains(orderedIDs[index]) {
-      rows.removeValue(forKey: orderedIDs.remove(at: index))
+    for index in orderedIDs.indices.reversed() where !layerIDs.contains(orderedIDs[index]) {
+      orderedIDs.remove(at: index)
       removeRows(at: IndexSet(integer: index), withAnimation: [])
     }
     for (index, id) in layerIDs.enumerated() {
-      if let old = orderedIDs.firstIndex(of: id) {
-        guard old != index else { continue }
-        orderedIDs.remove(at: old)
-        orderedIDs.insert(id, at: index)
-        moveRow(at: old, to: index)
+      if let source = orderedIDs.firstIndex(of: id) {
+        guard source != index else { continue }
+        orderedIDs.remove(at: source)
+        moveRow(at: source, to: index)
       } else {
-        orderedIDs.insert(id, at: index)
         insertRows(at: IndexSet(integer: index), withAnimation: [])
       }
+      orderedIDs.insert(id, at: index)
+    }
+    endUpdates()
+    if !replacedRows.isEmpty {
+      reloadData(forRowIndexes: replacedRows, columnIndexes: IndexSet(integer: 0))
     }
   }
 
   override func canDragRows(with rowIndexes: IndexSet, at mouseDownPoint: NSPoint) -> Bool {
-    guard rowIndexes.count == 1, let row = rowIndexes.first,
-      layerIDs.indices.contains(row), let cell = rows[layerIDs[row]],
-      cell.handle.bounds.contains(cell.handle.convert(mouseDownPoint, from: self))
+    let index = row(at: mouseDownPoint)
+    guard layerIDs.indices.contains(index), rowIndexes == IndexSet(integer: index),
+      mouseDownPoint.y < rect(ofRow: index).minY + Self.dragRegionHeight
     else { return false }
     return super.canDragRows(with: rowIndexes, at: mouseDownPoint)
   }
@@ -121,9 +101,6 @@ class VideoLayersTableView: NSTableView {
     return source
   }
 
-}
-
-extension VideoLayersTableView: NSTableViewDataSource {
   func numberOfRows(in tableView: NSTableView) -> Int { layerIDs.count }
 
   func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting?
@@ -172,9 +149,6 @@ extension VideoLayersTableView: NSTableViewDataSource {
       return false
     }
   }
-}
-
-extension VideoLayersTableView: NSTableViewDelegate {
   func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView?
   {
     guard layerIDs.indices.contains(row) else { return nil }
@@ -182,3 +156,38 @@ extension VideoLayersTableView: NSTableViewDelegate {
   }
 
 }
+
+#if DEBUG
+  import SwiftUI
+
+  #Preview("Video Layers Table") {
+    let editor = VideoLayersEditor()
+    editor.view = editor.scrollView
+    editor.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 320)
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    var preferences = Ldtx_Workspace_V4_ProgramPreferences()
+    for (index, name) in ["Camera", "Background", "Clock"].enumerated() {
+      let id = UInt64(index + 1)
+      var device = Ldtx_Workspace_V4_VfxSourceComponent()
+      device.internalID = id
+      device.displayName = name
+      var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+      wrapper.vfxSource = device
+      definition.videoComponents.append(wrapper)
+      var transform = Ldtx_Workspace_V4_BasicTransform()
+      transform.scaleX = 1
+      transform.scaleY = 1
+      preferences.videoLayerTransforms[id] = transform
+    }
+    preferences.videoLayerHidden[2] = true
+    editor.update(
+      definition: definition, programPreferences: preferences, layerIDs: [1, 2, 3],
+      canvasWidth: 1920, canvasHeight: 1080,
+      onCommitTransform: { id, value in
+        preferences.videoLayerTransforms[id] = value
+        return value
+      },
+      onSetHidden: { id, value in preferences.videoLayerHidden[id] = value })
+    return editor
+  }
+#endif

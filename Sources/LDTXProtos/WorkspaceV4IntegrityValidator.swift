@@ -10,8 +10,11 @@ public enum WorkspaceV4IntegrityValidator {
 
   public static func validate(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) throws {
     try validateCanvasConfiguration(definition.canvasConfiguration)
-    let inputIDs = try definition.inputDevices.map { try inputDeviceID($0) }
-    let videoInputIDs = try definition.inputDevices.compactMap { try videoInputDeviceID($0) }
+    let inputIDs = definition.audioDevices.map(\.internalID)
+    let vfxSourceIDs = definition.videoComponents.compactMap { wrapper -> UInt64? in
+      guard case .vfxSource(let source) = wrapper.definition else { return nil }
+      return source.internalID
+    }
     let componentIDs = try definition.videoComponents.map { try videoComponentID($0) }
     let programIDs = definition.programs.map(\.internalID)
     let visionIDs = try definition.visions.map { try visionID($0) }
@@ -23,13 +26,12 @@ public enum WorkspaceV4IntegrityValidator {
       throw WorkspaceV4IntegrityError.duplicateInternalID
     }
 
-    let inputIDSet = Set(inputIDs)
-    let videoInputIDSet = Set(videoInputIDs)
-    let videoLayerIDs = videoInputIDSet.union(componentIDs)
-    if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID {
-      let masterID = definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID
-      guard videoInputIDSet.contains(masterID) else {
-        throw WorkspaceV4IntegrityError.missingVideoInputDevice(masterID)
+    let vfxSourceIDSet = Set(vfxSourceIDs)
+    let videoLayerIDs = Set(componentIDs)
+    if definition.canvasConfiguration.hasPtsMasterVfxSourceInternalID {
+      let masterID = definition.canvasConfiguration.ptsMasterVfxSourceInternalID
+      guard vfxSourceIDSet.contains(masterID) else {
+        throw WorkspaceV4IntegrityError.missingVfxSource(masterID)
       }
     }
     for program in definition.programs {
@@ -47,9 +49,6 @@ public enum WorkspaceV4IntegrityValidator {
     for component in definition.videoComponents {
       switch component.definition {
       case .vfxSource(let source):
-        guard videoInputIDSet.contains(source.inputDeviceInternalID) else {
-          throw WorkspaceV4IntegrityError.missingVideoInputDevice(source.inputDeviceInternalID)
-        }
         guard source.effects.allSatisfy({ $0.definition != nil }) else {
           throw WorkspaceV4IntegrityError.missingConcreteDefinition
         }
@@ -95,7 +94,7 @@ public enum WorkspaceV4IntegrityValidator {
       }
     }
     for vision in definition.visions {
-      try validate(vision, inputIDs: inputIDSet, videoInputIDs: videoInputIDSet)
+      try validate(vision, componentIDs: Set(componentIDs))
     }
     try validateDisplayNames(definition)
   }
@@ -114,7 +113,7 @@ public enum WorkspaceV4IntegrityValidator {
   ) throws {
     var names = Set<String>()
     let values =
-      definition.inputDevices.map { inputDeviceName($0) }
+      definition.audioDevices.map(\.displayName)
       + definition.videoComponents.map { videoComponentName($0) }
       + definition.visions.map { visionName($0) }
       + definition.programs.map(\.displayName)
@@ -125,14 +124,6 @@ public enum WorkspaceV4IntegrityValidator {
       guard names.insert(name).inserted else {
         throw WorkspaceV4IntegrityError.duplicateDisplayName(name)
       }
-    }
-  }
-
-  private static func inputDeviceName(_ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper) -> String {
-    switch wrapper.definition {
-    case .videoDevice(let device): device.displayName
-    case .audioDevice(let device): device.displayName
-    case nil: ""
     }
   }
 
@@ -163,11 +154,7 @@ public enum WorkspaceV4IntegrityValidator {
     let definition = workspace.definition
     try validate(definition)
 
-    let audioInputIDs = Set(
-      definition.inputDevices.compactMap { wrapper -> UInt64? in
-        guard case .audioDevice(let device)? = wrapper.definition else { return nil }
-        return device.internalID
-      })
+    let audioInputIDs = Set(definition.audioDevices.map(\.internalID))
     let preferences = workspace.preferences
     try validateProgramPreferences(
       preferences.landscapeProgramPreferences,
@@ -191,25 +178,6 @@ public enum WorkspaceV4IntegrityValidator {
       try validate(
         preference, audioInputIDs: audioInputIDs,
         videoLayerIDs: Set(program[keyPath: layerIDs]))
-    }
-  }
-
-  public static func inputDeviceID(_ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper) throws -> UInt64
-  {
-    switch wrapper.definition {
-    case .videoDevice(let device): device.internalID
-    case .audioDevice(let device): device.internalID
-    case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
-    }
-  }
-
-  public static func videoInputDeviceID(
-    _ wrapper: Ldtx_Workspace_V4_InputDeviceWrapper
-  ) throws -> UInt64? {
-    switch wrapper.definition {
-    case .videoDevice(let device): device.internalID
-    case .audioDevice: nil
-    case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
   }
 
@@ -241,20 +209,16 @@ public enum WorkspaceV4IntegrityValidator {
 
   private static func validate(
     _ wrapper: Ldtx_Workspace_V4_VisionWrapper,
-    inputIDs: Set<UInt64>,
-    videoInputIDs: Set<UInt64>
+    componentIDs: Set<UInt64>
   ) throws {
     guard case .ocrVision(let vision)? = wrapper.definition else {
       throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
-    guard case .inputDeviceInternalID(let inputID)? = vision.source else {
-      throw WorkspaceV4IntegrityError.missingVisionInputDevice
+    guard case .videoComponentInternalID(let inputID)? = vision.source else {
+      throw WorkspaceV4IntegrityError.missingVisionVideoComponent
     }
-    guard inputIDs.contains(inputID) else {
-      throw WorkspaceV4IntegrityError.missingInputDevice(inputID)
-    }
-    guard videoInputIDs.contains(inputID) else {
-      throw WorkspaceV4IntegrityError.missingVideoInputDevice(inputID)
+    guard componentIDs.contains(inputID) else {
+      throw WorkspaceV4IntegrityError.missingVideoComponent(inputID)
     }
     for trigger in vision.triggers {
       guard case .intervalTrigger(let interval)? = trigger.definition else {
@@ -341,10 +305,10 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case duplicateVideoLayer(UInt64)
   case missingVideoLayer(UInt64)
   case missingProgram(UInt64)
-  case missingInputDevice(UInt64)
-  case missingVideoInputDevice(UInt64)
+  case missingVideoComponent(UInt64)
+  case missingVfxSource(UInt64)
   case missingAudioInputDevice(UInt64)
-  case missingVisionInputDevice
+  case missingVisionVideoComponent
   case invalidVisionInterval
   case invalidVisionRegionOfInterest
   case invalidMinimumTextHeight

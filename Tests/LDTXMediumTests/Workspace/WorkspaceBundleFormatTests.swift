@@ -20,7 +20,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let infoData = try Data(contentsOf: packageURL.appendingPathComponent("Info.plist"))
     let infoXML = String(decoding: infoData, as: UTF8.self)
     #expect(infoXML.hasPrefix("<?xml"))
-    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
+    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.1")
   }
 
   @Test("generates a UUID version 7 identifier")
@@ -57,8 +57,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         as? [String: Any])
     #expect(info["CFBundlePackageType"] as? String == "BNDL")
     #expect(info["LDTXWorkspaceVersion"] as? Int == 4)
-    #expect(info["LDTXWorkspaceBundleVersion"] as? String == "4.0")
-    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
+    #expect(info["LDTXWorkspaceBundleVersion"] as? String == "4.1")
+    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.1")
     let selectedReader = makeWorkspaceBundleReader(at: packageURL)
     guard case .v4(let v4Reader) = selectedReader else {
       Issue.record("Expected the V4 reader")
@@ -139,7 +139,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       fromPropertyList: [
         "CFBundlePackageType": "APPL",
         "LDTXWorkspaceVersion": 4,
-        "LDTXWorkspaceBundleVersion": "4.0",
+        "LDTXWorkspaceBundleVersion": "4.1",
       ],
       format: .xml,
       options: 0
@@ -187,7 +187,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
     try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    try writeFormatInfo(to: packageURL, bundleVersion: "4.1")
+    try writeFormatInfo(to: packageURL, bundleVersion: "4.0")
 
     guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
       Issue.record("Expected V4 selection from the logical Workspace version")
@@ -262,6 +262,30 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"
+    definition.audioDevices = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Microphone"
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.vfxSource = .with {
+          $0.internalID = 2
+          $0.displayName = "Camera"
+        }
+      }
+    ]
+    definition.visions = [
+      .with {
+        $0.ocrVision = .with {
+          $0.internalID = 3
+          $0.displayName = "OCR"
+          $0.videoComponentInternalID = 2
+        }
+      }
+    ]
+    definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 2
     return WorkspaceV4Bundle(
       definitionExternalID: "0198f4b4-1fa3-7000-8000-000000000001",
       preferencesExternalID: "0198f4b4-1fa3-7000-8000-000000000002",
@@ -303,7 +327,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   private func writeFormatInfo(
     to bundleURL: URL,
     version: Int = 4,
-    bundleVersion: String = "4.0"
+    bundleVersion: String = "4.1"
   ) throws {
     let data = try PropertyListSerialization.data(
       fromPropertyList: [

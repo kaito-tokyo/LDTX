@@ -43,7 +43,13 @@ public actor VisionOCRService {
     try Task.checkCancellation()
     let startedAt = ContinuousClock.now
     let request = VNRecognizeTextRequest()
-    request.recognitionLevel = configuration.prefersAccurateRecognition ? .accurate : .fast
+    // macOS 27's Fast backend traps inside TextRecognition when language correction
+    // is disabled. Accurate preserves uncorrected recognition and automatic languages.
+    var usesAccurateRecognition = configuration.prefersAccurateRecognition
+    if #available(macOS 27.0, *), !configuration.usesLanguageCorrection {
+      usesAccurateRecognition = true
+    }
+    request.recognitionLevel = usesAccurateRecognition ? .accurate : .fast
     if !configuration.recognitionLanguages.isEmpty {
       request.recognitionLanguages = configuration.recognitionLanguages
     } else {

@@ -53,7 +53,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: persistenceCoordinator,
       captureSessionCoordinator: captureSessionCoordinator,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
         guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
@@ -65,7 +65,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
     let recordingSession = WorkspaceV4RecordingSession(
       windowRuntime: windowRuntime,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
         guard let url = uiState.localStateURL else { return .init() }
         return appletData.state(for: url)
@@ -80,6 +80,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       device, textureCache in
       BackgroundRemovalVideoInputPreprocessor(device: device, textureCache: textureCache)
     }
+    windowRuntime.installComponentFrameRenderer(
+      VideoComponentFrameRenderer(
+        captureSessionCoordinator: captureSessionCoordinator,
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
     let programRuntimeFactory:
       @MainActor (
         WorkspaceCaptureSessionCoordinator, ProgramPreferencesState, LowFrequencyUpdateRegistry
@@ -121,7 +126,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     previewRenderer.start()
     dispatcher.workspaceWindowController = self
 
-    let assignmentChanges = Observations { appletData.physicalDeviceIDsByInputDeviceInternalID }
+    let assignmentChanges = Observations { appletData.physicalDeviceIDsByResourceInternalID }
     deviceAssignmentsObservationTask = Task { @MainActor [weak self] in
       for await _ in assignmentChanges {
         guard !Task.isCancelled, let self, shutdownTask == nil else { return }
@@ -178,9 +183,26 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     if case .failed(let message) = recordingSession.state {
       uiState.outputFailureMessage = message
     }
-    visionFeature.synchronize(
-      visions: windowRuntime.definition.visions,
-      context: windowRuntime.visionFeatureContext)
+    let ids = Set(
+      windowRuntime.definition.visions.compactMap {
+        try? WorkspaceV4IntegrityValidator.visionID($0)
+      })
+    uiState.visionResults = uiState.visionResults.filter { ids.contains($0.key) }
+    uiState.visionFailureMessages = uiState.visionFailureMessages.filter { ids.contains($0.key) }
+    var context = windowRuntime.visionFeatureContext
+    let reportResult = context.reportResult
+    let reportFailure = context.reportFailure
+    context.reportResult = { [weak uiState] id, output in
+      reportResult(id, output)
+      uiState?.visionResults[id] = output
+      uiState?.visionFailureMessages.removeValue(forKey: id)
+    }
+    context.reportFailure = { [weak uiState] id, error in
+      reportFailure(id, error)
+      uiState?.visionResults.removeValue(forKey: id)
+      uiState?.visionFailureMessages[id] = error.localizedDescription
+    }
+    visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
 
   @available(*, unavailable)
@@ -277,9 +299,26 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
 extension WorkspaceWindowController {
   func synchronizeVision() {
-    visionFeature.synchronize(
-      visions: windowRuntime.definition.visions,
-      context: windowRuntime.visionFeatureContext)
+    let ids = Set(
+      windowRuntime.definition.visions.compactMap {
+        try? WorkspaceV4IntegrityValidator.visionID($0)
+      })
+    uiState.visionResults = uiState.visionResults.filter { ids.contains($0.key) }
+    uiState.visionFailureMessages = uiState.visionFailureMessages.filter { ids.contains($0.key) }
+    var context = windowRuntime.visionFeatureContext
+    let reportResult = context.reportResult
+    let reportFailure = context.reportFailure
+    context.reportResult = { [weak uiState] id, output in
+      reportResult(id, output)
+      uiState?.visionResults[id] = output
+      uiState?.visionFailureMessages.removeValue(forKey: id)
+    }
+    context.reportFailure = { [weak uiState] id, error in
+      reportFailure(id, error)
+      uiState?.visionResults.removeValue(forKey: id)
+      uiState?.visionFailureMessages[id] = error.localizedDescription
+    }
+    visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
 
   private func synchronizeDeviceAssignments() {
@@ -313,20 +352,20 @@ extension WorkspaceWindowController {
       return
     }
     let audioDeviceIDs = Dictionary(
-      uniqueKeysWithValues: windowRuntime.definition.inputDevices.compactMap {
+      uniqueKeysWithValues: windowRuntime.definition.audioDevices.compactMap {
         input -> (String, String)? in
-        guard case .audioDevice(let device)? = input.definition,
+        guard
           case .coreAudioDevice(let physicalID)? =
-            appletData.physicalDeviceID(for: device.internalID)
+            appletData.physicalDeviceID(for: input.internalID)
         else { return nil }
-        return ("v4-\(device.internalID)", physicalID)
+        return ("v4-\(input.internalID)", physicalID)
       })
     let monitoredKeys = Set(
-      windowRuntime.definition.inputDevices.compactMap { input -> String? in
-        guard case .audioDevice(let device)? = input.definition,
-          localState.monitorAudioInputDeviceInternalIDs.contains(device.internalID)
+      windowRuntime.definition.audioDevices.compactMap { input -> String? in
+        guard
+          localState.monitorAudioInputDeviceInternalIDs.contains(input.internalID)
         else { return nil }
-        return "v4-\(device.internalID)"
+        return "v4-\(input.internalID)"
       })
     let portraitProjection = try? windowRuntime.runtimeProjection(
       programInternalID: programInternalID, target: .portrait)

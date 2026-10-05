@@ -109,9 +109,9 @@ struct WorkspaceToolbarSystemTestSuite {
     defer { defaults.removePersistentDomain(forName: suite) }
     let data = WorkspaceAppletData(userDefaults: defaults)
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    state.definition.inputDevices = [
-      WorkspaceResourceFactory.makeVideoInput(id: 101, name: "Camera"),
-      WorkspaceResourceFactory.makeVideoInput(id: 102, name: "Other Camera"),
+    state.definition.videoComponents = [
+      WorkspaceResourceFactory.makeVFXSource(id: 101, name: "Camera"),
+      WorkspaceResourceFactory.makeVFXSource(id: 102, name: "Other Camera"),
     ]
     let unavailable = WorkspacePhysicalDeviceID.avCaptureDevice(uniqueID: "missing-camera")
     data.setPhysicalDeviceID(unavailable, for: 101)
@@ -133,7 +133,7 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(WorkspaceAppletData(userDefaults: defaults).physicalDeviceID(for: 101) == nil)
     #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(unavailable) }
     #expect(data.physicalDeviceID(for: 101) == nil)
-    state.definition.inputDevices.removeAll()
+    state.definition.videoComponents.removeAll()
     #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
   }
 
@@ -155,7 +155,7 @@ struct WorkspaceToolbarSystemTestSuite {
       second.close()
     }
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
-      let candidates = VideoLayersEditor.options(in: state.definition)
+      let candidates = VideoLayersManagementSheet.options(in: state.definition)
       let content = first.contentPane
       try content.commitVideoLayerMembership(
         [10, 20, 30], expectedIDs: [], expectedCandidates: candidates,

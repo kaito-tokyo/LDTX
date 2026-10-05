@@ -41,12 +41,7 @@ struct AudioInputDeviceInspector: View {
   }
 
   private var device: Ldtx_Workspace_V4_AudioInputDevice? {
-    uiState.definition.inputDevices.compactMap { wrapper -> Ldtx_Workspace_V4_AudioInputDevice? in
-      guard case .audioDevice(let device) = wrapper.definition,
-        device.internalID == internalID
-      else { return nil }
-      return device
-    }.first
+    uiState.definition.audioDevices.first { $0.internalID == internalID }
   }
 
   private var nameBinding: Binding<String> {
@@ -54,9 +49,7 @@ struct AudioInputDeviceInspector: View {
       get: { device?.displayName ?? "" },
       set: { name in
         updateInputDevice { wrapper in
-          guard case .audioDevice(var value) = wrapper.definition else { return }
-          value.displayName = name
-          wrapper.definition = .audioDevice(value)
+          wrapper.displayName = name
         }
       }
     )
@@ -68,17 +61,12 @@ struct AudioInputDeviceInspector: View {
         .foregroundStyle(.secondary)
     }
   }
-  private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_InputDeviceWrapper) -> Void) {
+  private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_AudioInputDevice) -> Void) {
     var definition = uiState.definition
     guard
-      let index = definition.inputDevices.firstIndex(where: { wrapper in
-        switch wrapper.id {
-        case .audioDevice(let id), .videoDevice(let id): id == internalID
-        case .invalid: false
-        }
-      })
+      let index = definition.audioDevices.firstIndex(where: { $0.internalID == internalID })
     else { return }
-    mutation(&definition.inputDevices[index])
+    mutation(&definition.audioDevices[index])
     uiState.definition = definition
   }
 

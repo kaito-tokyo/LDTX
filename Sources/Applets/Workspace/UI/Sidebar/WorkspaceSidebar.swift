@@ -28,7 +28,7 @@ public struct WorkspaceSidebar: View {
   }
 
   public var body: some View {
-    let inputDevices = uiState.definition.inputDevices
+    let inputDevices = uiState.definition.audioDevices
     let videoComponents = uiState.definition.videoComponents
     let visions = uiState.definition.visions
 
@@ -47,31 +47,20 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(inputDevices) { device in
-            switch device.definition {
-            case .audioDevice(let audioDevice):
-              Label(audioDevice.displayName, systemImage: "waveform")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .audioInputDevice, internalID: audioDevice.internalID))
-            case .videoDevice(let videoDevice):
-              Label(videoDevice.displayName, systemImage: "video")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .videoInputDevice, internalID: videoDevice.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
-            }
+            Label(device.displayName, systemImage: "waveform")
+              .tag(
+                WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID))
           }
 
           Button {
             beginAdding(.device)
           } label: {
-            Label("Add device...", systemImage: "plus")
+            Label("Add audio device...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           .disabled(!canAddResource)
         } header: {
-          Text("INPUT DEVICES")
+          Text("AUDIO DEVICES")
         }
 
         Section {
@@ -158,10 +147,7 @@ public struct WorkspaceSidebar: View {
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoInputs: uiState.definition.inputDevices.compactMap {
-          if case .videoDevice(let device) = $0.definition { return device }
-          return nil
-        },
+        videoComponents: uiState.definition.videoComponents,
         validationMessage: documentReference?.document == nil
           ? "The Workspace document is unavailable."
           : WorkspaceResourceAddition.validationMessage(
@@ -177,12 +163,9 @@ public struct WorkspaceSidebar: View {
   }
 
   private var deviceOptions: [WorkspaceAddDeviceOption] {
-    deviceRegistry.cameras.map {
-      .init(id: .avCaptureDevice(uniqueID: $0.id), name: $0.name)
+    deviceRegistry.audioInputDevices.map {
+      .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
     }
-      + deviceRegistry.audioInputDevices.map {
-        .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
-      }
   }
 
   var canAddResource: Bool { documentReference?.document != nil && !uiState.isOutputActive }

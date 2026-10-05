@@ -134,8 +134,8 @@ public nonisolated struct Ldtx_App_V1_WorkspaceLocalState: Sendable {
   /// Clears the value of `selectedProgramInternalID`. Subsequent reads from it will return its default value.
   public mutating func clearSelectedProgramInternalID() {self._selectedProgramInternalID = nil}
 
-  /// Physical device IDs for Video Input Devices, keyed by their internal IDs.
-  public var videoInputDevicePhysicalIds: Dictionary<UInt64,String> = [:]
+  /// Physical camera IDs keyed by VFX Source internal IDs.
+  public var vfxSourcePhysicalIds: Dictionary<UInt64,String> = [:]
 
   /// Physical device IDs for Audio Input Devices, keyed by their internal IDs.
   public var audioInputDevicePhysicalIds: Dictionary<UInt64,String> = [:]
@@ -349,7 +349,7 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalStateStore: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceLocalState"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}selected_program_internal_id\0\u{3}video_input_device_physical_ids\0\u{3}audio_input_device_physical_ids\0\u{3}monitor_audio_input_device_internal_ids\0\u{3}synchronizes_landscape_mix_to_portrait_by_program_internal_id\0\u{3}landscape_youtube_live_stream_id\0\u{3}portrait_youtube_live_stream_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}selected_program_internal_id\0\u{4}\u{2}audio_input_device_physical_ids\0\u{3}monitor_audio_input_device_internal_ids\0\u{3}synchronizes_landscape_mix_to_portrait_by_program_internal_id\0\u{3}landscape_youtube_live_stream_id\0\u{3}portrait_youtube_live_stream_id\0\u{3}vfx_source_physical_ids\0\u{b}video_input_device_physical_ids\0\u{c}\u{2}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -358,12 +358,12 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self._selectedProgramInternalID) }()
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: &self.videoInputDevicePhysicalIds) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: &self.audioInputDevicePhysicalIds) }()
       case 4: try { try decoder.decodeRepeatedUInt64Field(value: &self.monitorAudioInputDeviceInternalIds) }()
       case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.synchronizesLandscapeMixToPortraitByProgramInternalID) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self._landscapeYoutubeLiveStreamID) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._portraitYoutubeLiveStreamID) }()
+      case 8: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: &self.vfxSourcePhysicalIds) }()
       default: break
       }
     }
@@ -377,9 +377,6 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
     try { if let v = self._selectedProgramInternalID {
       try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
     } }()
-    if !self.videoInputDevicePhysicalIds.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: self.videoInputDevicePhysicalIds, fieldNumber: 2)
-    }
     if !self.audioInputDevicePhysicalIds.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: self.audioInputDevicePhysicalIds, fieldNumber: 3)
     }
@@ -395,12 +392,15 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
     try { if let v = self._portraitYoutubeLiveStreamID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 7)
     } }()
+    if !self.vfxSourcePhysicalIds.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: self.vfxSourcePhysicalIds, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_App_V1_WorkspaceLocalState, rhs: Ldtx_App_V1_WorkspaceLocalState) -> Bool {
     if lhs._selectedProgramInternalID != rhs._selectedProgramInternalID {return false}
-    if lhs.videoInputDevicePhysicalIds != rhs.videoInputDevicePhysicalIds {return false}
+    if lhs.vfxSourcePhysicalIds != rhs.vfxSourcePhysicalIds {return false}
     if lhs.audioInputDevicePhysicalIds != rhs.audioInputDevicePhysicalIds {return false}
     if lhs.monitorAudioInputDeviceInternalIds != rhs.monitorAudioInputDeviceInternalIds {return false}
     if lhs.synchronizesLandscapeMixToPortraitByProgramInternalID != rhs.synchronizesLandscapeMixToPortraitByProgramInternalID {return false}

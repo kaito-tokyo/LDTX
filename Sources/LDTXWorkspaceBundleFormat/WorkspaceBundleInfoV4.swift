@@ -7,7 +7,7 @@ import Foundation
 struct WorkspaceBundleInfoV4: Codable {
   var packageType = "BNDL"
   var workspaceVersion = 4
-  var workspaceBundleVersion = "4.0"
+  var workspaceBundleVersion = "4.1"
 
   enum CodingKeys: String, CodingKey {
     case packageType = "CFBundlePackageType"

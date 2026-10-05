@@ -8,7 +8,7 @@ struct WorkspaceAddResourceSheet: View {
   let sheet: WorkspaceAddSheet
   @Binding var draft: WorkspaceAddDraft
   let devices: [WorkspaceAddDeviceOption]
-  let videoInputs: [Ldtx_Workspace_V4_VideoInputDevice]
+  let videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper]
   let validationMessage: String?
   let errorMessage: String?
   let submit: () -> Void
@@ -49,7 +49,7 @@ struct WorkspaceAddResourceSheet: View {
               )
               .accessibilityAddTraits(draft.physicalDeviceID == device.id ? [.isSelected] : [])
             }
-            if devices.isEmpty { Text("No input devices available").foregroundStyle(.secondary) }
+            if devices.isEmpty { Text("No audio devices available").foregroundStyle(.secondary) }
           }
         }
         .frame(height: min(240, CGFloat(max(1, devices.count)) * 40))
@@ -62,20 +62,20 @@ struct WorkspaceAddResourceSheet: View {
           }
           .accessibilityIdentifier("addVideoComponentKindPicker")
         }
-        if sheet == .vision || (sheet == .videoComponent && draft.componentKind == .vfxSource) {
-          Text("Video Input")
-          ForEach(videoInputs, id: \.internalID) { input in
+        if sheet == .vision {
+          Text("Video Component")
+          ForEach(componentOptions) { input in
             Button {
-              draft.videoInputID = input.internalID
+              draft.videoComponentID = input.id
             } label: {
               HStack {
-                Text(input.displayName)
+                Text(input.name)
                 Spacer()
-                if draft.videoInputID == input.internalID { Image(systemName: "checkmark") }
+                if draft.videoComponentID == input.id { Image(systemName: "checkmark") }
               }
             }.buttonStyle(.plain)
           }
-          if videoInputs.isEmpty { Text("No video input devices").foregroundStyle(.secondary) }
+          if videoComponents.isEmpty { Text("No video components").foregroundStyle(.secondary) }
         }
         TextField("Name", text: $draft.name, prompt: Text(selectedDeviceName))
           .focused($nameFocused)
@@ -104,10 +104,20 @@ struct WorkspaceAddResourceSheet: View {
       draft.physicalDeviceID = WorkspaceSelectionRules.reconciled(
         draft.physicalDeviceID, availableIDs: ids)
     }
-    .onChange(of: videoInputs.map(\.internalID)) { _, ids in
-      draft.videoInputID = WorkspaceSelectionRules.reconciled(draft.videoInputID, availableIDs: ids)
+    .onChange(of: componentOptions.map(\.id)) { _, ids in
+      draft.videoComponentID = WorkspaceSelectionRules.reconciled(
+        draft.videoComponentID, availableIDs: ids)
     }
     .onChange(of: draft.componentKind) { _, kind in draft.name = kind.rawValue }
+  }
+
+  private var componentOptions: [WorkspaceSelectionOption<UInt64>] {
+    videoComponents.compactMap {
+      guard let id = try? WorkspaceV4IntegrityValidator.videoComponentID($0),
+        let name = $0.displayName
+      else { return nil }
+      return .init(id: id, name: name)
+    }
   }
 
   private var selectedDeviceName: String {

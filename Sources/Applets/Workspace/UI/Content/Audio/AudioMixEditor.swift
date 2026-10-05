@@ -88,11 +88,7 @@ final class AudioMixEditor: NSViewController {
     targetSelector.selectedSegment = content.uiState.selectedAudioMix == .portrait ? 1 : 0
     monitorVolume.doubleValue = content.localState.monitorVolume ?? 0
     monitorVolume.isEnabled = content.canMonitor
-    let inputs = content.uiState.definition.inputDevices.compactMap {
-      wrapper -> Ldtx_Workspace_V4_AudioInputDevice? in
-      guard case .audioDevice(let input)? = wrapper.definition else { return nil }
-      return input
-    }
+    let inputs = content.uiState.definition.audioDevices
     let ids = Set(inputs.map(\.internalID))
     for id in Array(rows.keys) where !ids.contains(id) {
       if let row = rows.removeValue(forKey: id) {

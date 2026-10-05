@@ -8,7 +8,8 @@ import LDTXWorkspaceAppletModel
 @MainActor
 public struct WorkspaceV4VisionFeatureContext {
   public var vision: (UInt64) -> Ldtx_Workspace_V4_OcrVision?
-  public var frameForVision: (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame
+  public var frameForVision:
+    (Ldtx_Workspace_V4_OcrVision) async throws -> WorkspaceVisionAnalysisFrame
   public var reportResult: (UInt64, String) -> Void
   public var reportFailure: (UInt64, Error) -> Void
   public var archiveResult: ((UInt64, CIImage, String) -> Void)?
@@ -16,7 +17,8 @@ public struct WorkspaceV4VisionFeatureContext {
 
   public init(
     vision: @escaping (UInt64) -> Ldtx_Workspace_V4_OcrVision?,
-    frameForVision: @escaping (Ldtx_Workspace_V4_OcrVision) throws -> WorkspaceVisionAnalysisFrame,
+    frameForVision:
+      @escaping (Ldtx_Workspace_V4_OcrVision) async throws -> WorkspaceVisionAnalysisFrame,
     reportResult: @escaping (UInt64, String) -> Void,
     reportFailure: @escaping (UInt64, Error) -> Void,
     archiveResult: ((UInt64, CIImage, String) -> Void)? = nil,
@@ -36,8 +38,17 @@ public struct WorkspaceVisionAnalysisFrame: @unchecked Sendable {
   public init(image: CIImage) { self.image = image }
 }
 
-public enum WorkspaceVisionFeatureError: Error, Equatable, Sendable {
-  case referencedInputDeviceMissing
-  case inputDeviceHasNoPhysicalCamera
+public enum WorkspaceVisionFeatureError: Error, LocalizedError, Equatable, Sendable {
+  case referencedVideoComponentMissing
+  case vfxSourceHasNoPhysicalCamera
   case frameUnavailable
+
+  public var errorDescription: String? {
+    switch self {
+    case .referencedVideoComponentMissing: "The referenced Video Component is unavailable."
+    case .vfxSourceHasNoPhysicalCamera:
+      "Assign a physical camera to the VFX Source before recognizing text."
+    case .frameUnavailable: "The Video Component frame is unavailable or still preparing."
+    }
+  }
 }

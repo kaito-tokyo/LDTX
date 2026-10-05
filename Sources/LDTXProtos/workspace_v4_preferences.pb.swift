@@ -69,8 +69,7 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramPreferences: Sendable {
   public init() {}
 }
 
-/// The basic transform applied to a Video Layer, which is a Video Input Device
-/// or a Video Component.
+/// The basic transform applied to a Video Layer, which is a Video Component.
 public nonisolated struct Ldtx_Workspace_V4_BasicTransform: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

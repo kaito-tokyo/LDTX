@@ -24,14 +24,13 @@ public struct WorkspaceV4RenderGraph: Sendable {
     let transforms = preference.videoLayerTransforms
     let hidden = preference.videoLayerHidden
     let components = Self.componentsByInternalID(definition)
-    let inputDevices = Self.videoInputDevicesByInternalID(definition)
     let canvasWidth = Float(canvas.outputProfile.width)
     let canvasHeight = Float(canvas.outputProfile.height)
     var steps: [CompositeProgramStep] = []
     var layerPreferences: [VideoLayerPreference] = []
     for internalID in layerIDs {
       guard
-        var component = components[internalID] ?? inputDevices[internalID].map(Self.inputComponent)
+        var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
       let topInset = Self.unitInterval(transform.topInset, default: 0)
@@ -94,17 +93,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
     self.audioPreferences = audioPreferences
   }
 
-  private static func videoInputDevicesByInternalID(
-    _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
-  ) -> [UInt64: Ldtx_Workspace_V4_VideoInputDevice] {
-    Dictionary(
-      uniqueKeysWithValues: definition.inputDevices.compactMap {
-        guard case .videoDevice(let device)? = $0.definition else { return nil }
-        return (device.internalID, device)
-      })
-  }
-
-  private static func componentsByInternalID(
+  static func componentsByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) -> [UInt64: ProgramComponent] {
     Dictionary(
@@ -185,21 +174,11 @@ public struct WorkspaceV4RenderGraph: Sendable {
       })
   }
 
-  private static func inputComponent(_ device: Ldtx_Workspace_V4_VideoInputDevice)
-    -> ProgramComponent
-  {
-    inputComponent(inputDeviceInternalID: device.internalID)
-  }
-
-  private static func inputComponent(inputDeviceInternalID: UInt64) -> ProgramComponent {
-    .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-\(inputDeviceInternalID)"))
-  }
-
   private static func audioChannels(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) -> [ProgramAudioChannel] {
-    definition.inputDevices.compactMap {
-      guard case .audioDevice(let device)? = $0.definition else { return nil }
+    definition.audioDevices.compactMap {
+      let device = $0
       return ProgramAudioChannel(
         name: "v4-\(device.internalID)",
         component: .inputAudioDevice(
@@ -259,37 +238,25 @@ extension WorkspaceV4RenderGraph {
     let layerIDs = canvas.layerIDs
     let resolvedProfile = canvas.outputProfile
     let frameRate = canvas.frameRate
-    let videoDeviceIDs = Self.videoInputDevicesByInternalID(definition)
-    var cameraIDs: [String: String] = Dictionary(
-      uniqueKeysWithValues: videoDeviceIDs.keys.compactMap { id in
-        guard layerIDs.contains(id) else { return nil }
-        guard
-          case .avCaptureDevice(let uniqueID)? =
-            physicalDeviceIDs[id]
-        else { return nil }
-        return ("v4-\(id)", uniqueID)
-      })
+    var cameraIDs: [String: String] = [:]
     for wrapper in definition.videoComponents {
       guard case .vfxSource(let source)? = wrapper.definition,
         layerIDs.contains(source.internalID),
         case .avCaptureDevice(let physicalID)? =
-          physicalDeviceIDs[source.inputDeviceInternalID]
+          physicalDeviceIDs[source.internalID]
       else { continue }
       cameraIDs["v4-\(source.internalID)"] = physicalID
     }
-    var inputDeviceNames = Dictionary(
-      uniqueKeysWithValues: videoDeviceIDs.compactMap {
-        layerIDs.contains($0.key) ? ("v4-\($0.key)", $0.value.displayName) : nil
-      })
+    var inputDeviceNames: [String: String] = [:]
     for wrapper in definition.videoComponents {
       guard case .vfxSource(let source)? = wrapper.definition, layerIDs.contains(source.internalID)
       else { continue }
       inputDeviceNames["v4-\(source.internalID)"] = source.displayName
     }
     let masterCameraID: String?
-    if definition.canvasConfiguration.hasPtsMasterVideoInputDeviceInternalID,
+    if definition.canvasConfiguration.hasPtsMasterVfxSourceInternalID,
       case .avCaptureDevice(let id)? = physicalDeviceIDs[
-        definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID]
+        definition.canvasConfiguration.ptsMasterVfxSourceInternalID]
     {
       masterCameraID = id
     } else {
@@ -316,6 +283,34 @@ extension WorkspaceV4RenderGraph {
       ),
       preferences: graph.audioPreferences
     )
+  }
+
+  /// Projects one component without any Program transforms or visibility preferences.
+  static func componentConfiguration(
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, componentID: UInt64,
+    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080
+  ) throws -> ProgramRuntimeConfiguration {
+    guard var component = componentsByInternalID(definition)[componentID] else {
+      throw WorkspaceV4RenderGraphError.missingVideoLayer(componentID)
+    }
+    if case .clock(var clock) = component {
+      clock.destinationWidth = 1
+      clock.destinationHeight = 1
+      component = .clock(clock)
+    }
+    let key = "v4-\(componentID)"
+    var cameraIDs: [String: String] = [:]
+    if case .avCaptureDevice(let id)? = physicalDeviceIDs[componentID] {
+      cameraIDs[key] = id
+    }
+    return ProgramRuntimeConfiguration(
+      composite: CompositeProgramDefinition(steps: [.init(id: key, component: component)]),
+      audioChannels: [], canvasWidth: width, canvasHeight: height,
+      outputWidth: width, outputHeight: height, frameRate: 60,
+      timeSeconds: Float(ProcessInfo.processInfo.systemUptime), videoPTSMasterCameraID: nil,
+      cameraIDsByInputKey: cameraIDs, cameraInputColorOverrides: [:],
+      backgroundRemovalInputKeys: backgroundRemovalInputKeys(
+        definition: definition, layerIDs: [componentID]))
   }
 
   private static func backgroundRemovalInputKeys(

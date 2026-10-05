@@ -29,8 +29,7 @@ message ProgramPreferences {
   map<uint64, bool> video_layer_hidden = 5;
 }
 
-// The basic transform applied to a Video Layer, which is a Video Input Device
-// or a Video Component.
+// The basic transform applied to a Video Layer, which is a Video Component.
 message BasicTransform {
   // The horizontal translation in coordinates normalized to the Canvas that
   // renders this Video Layer, in the range [0, 1].

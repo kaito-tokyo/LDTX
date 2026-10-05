@@ -134,7 +134,11 @@ public nonisolated struct Ldtx_Workspace_V4_VideoComponentWrapper: Sendable {
   public init() {}
 }
 
-/// A Video Component that renders a CSS solid-color fill.
+/// A Video Component that fills the entire Canvas with one uniform source
+/// color. The Extended sRGB source color at every Canvas point is the value of
+/// the color field. Conversion from Extended sRGB to an output or display color
+/// space, alpha compositing, filtering, and pixel quantization are
+/// implementation-defined.
 public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -148,7 +152,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The color of this fill.
+  /// The uniform source color of this fill, represented by ExtendedSrgbColor.
   public var color: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_color ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_color = newValue}
@@ -165,7 +169,25 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   fileprivate var _color: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
 }
 
-/// A Video Component that renders a CSS linear-gradient fill.
+/// A Video Component with linear-gradient control points defined in the local
+/// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+/// its top-left corner, x increases to the right, and y increases downward. For
+/// a Canvas with positive width W and height H, a point (x, y) has normalized
+/// coordinates (u, v) = (x / W, y / H). The start and end points are
+/// (start_x, start_y) and (end_x, end_y) in these normalized coordinates. If
+/// the points differ, the directed gradient axis extends from the start point
+/// to the end point. For a normalized Canvas point p, let s be the start
+/// point and e the end point; its gradient position is the scalar projection
+/// t = dot(p - s, e - s) / dot(e - s, e - s). Thus t is zero at s, one at e,
+/// and is equal for points on the same line perpendicular to the gradient axis.
+/// For 2D vectors a and b, dot(a, b) = a.x * b.x + a.y * b.y.
+/// start_color and end_color are the specified Extended sRGB source colors at
+/// their respective control points. Source colors at other positions,
+/// including interpolation, conversion to an output or display color space,
+/// alpha handling, compositing, filtering, and pixel quantization, are
+/// implementation-defined. If the two points coincide, the rendered result is
+/// implementation-defined. This definition does not require a particular CSS
+/// rendering or color interpolation algorithm.
 public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -179,15 +201,15 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendabl
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The horizontal coordinate of the gradient start point, expressed as a
-  /// fraction of the width of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized horizontal coordinate of the gradient start point, in
+  /// [0, 1]. Zero is the Canvas's left edge and one is its right edge.
   public var startX: Float = 0
 
-  /// The vertical coordinate of the gradient start point, expressed as a
-  /// fraction of the height of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized vertical coordinate of the gradient start point, in
+  /// [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
   public var startY: Float = 0
 
-  /// The color at the gradient start point.
+  /// The specified Extended sRGB source color at the gradient start point.
   public var startColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_startColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_startColor = newValue}
@@ -197,15 +219,15 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendabl
   /// Clears the value of `startColor`. Subsequent reads from it will return its default value.
   public mutating func clearStartColor() {self._startColor = nil}
 
-  /// The horizontal coordinate of the gradient end point, expressed as a
-  /// fraction of the width of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized horizontal coordinate of the gradient end point, in
+  /// [0, 1]. Zero is the Canvas's left edge and one is its right edge.
   public var endX: Float = 0
 
-  /// The vertical coordinate of the gradient end point, expressed as a
-  /// fraction of the height of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized vertical coordinate of the gradient end point, in
+  /// [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
   public var endY: Float = 0
 
-  /// The color at the gradient end point.
+  /// The specified Extended sRGB source color at the gradient end point.
   public var endColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_endColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_endColor = newValue}
@@ -223,7 +245,24 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendabl
   fileprivate var _endColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
 }
 
-/// A Video Component that renders a CSS radial-gradient fill.
+/// A Video Component with radial-gradient geometry defined in the local
+/// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+/// its top-left corner, x increases to the right, and y increases downward. For
+/// a Canvas with positive width W and height H, a point (x, y) has normalized
+/// coordinates (u, v) = (x / W, y / H). Let c be the center
+/// (center_x, center_y), and let d = sqrt((u - center_x)^2 +
+/// (v - center_y)^2). The inner and outer control contours are the sets of
+/// points where d equals inner_radius and outer_radius. Thus a radius r defines
+/// an ellipse centered at c with horizontal radius r * W and vertical radius
+/// r * H.
+///
+/// inner_color and outer_color are the specified Extended sRGB source colors
+/// on their respective control contours. Source colors at all other Canvas
+/// points, including inside, between, and outside the contours, are
+/// implementation-defined. Color interpolation, conversion to an output or
+/// display color space, alpha handling, compositing, filtering, and pixel
+/// quantization are implementation-defined. This definition does not require a
+/// particular CSS rendering or color interpolation algorithm.
 public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -237,23 +276,23 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendabl
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The horizontal coordinate of the gradient center, expressed as a fraction
-  /// of the width of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized horizontal coordinate of the gradient center, in [0, 1].
+  /// Zero is the Canvas's left edge and one is its right edge.
   public var centerX: Float = 0
 
-  /// The vertical coordinate of the gradient center, expressed as a fraction
-  /// of the height of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized vertical coordinate of the gradient center, in [0, 1].
+  /// Zero is the Canvas's top edge and one is its bottom edge.
   public var centerY: Float = 0
 
-  /// The inner radius parameter is in [0, 1] and must be less than
-  /// outer_radius.
+  /// The inner control contour's radius in normalized Canvas coordinates, in
+  /// [0, 1]. It must be less than outer_radius.
   public var innerRadius: Float = 0
 
-  /// The outer radius parameter is in [0, 1] and must be greater than
-  /// inner_radius.
+  /// The outer control contour's radius in normalized Canvas coordinates, in
+  /// [0, 1]. It must be greater than inner_radius.
   public var outerRadius: Float = 0
 
-  /// The color at the inner radius.
+  /// The specified Extended sRGB source color at the inner control contour.
   public var innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_innerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_innerColor = newValue}
@@ -263,7 +302,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendabl
   /// Clears the value of `innerColor`. Subsequent reads from it will return its default value.
   public mutating func clearInnerColor() {self._innerColor = nil}
 
-  /// The color at the outer radius.
+  /// The specified Extended sRGB source color at the outer control contour.
   public var outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_outerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_outerColor = newValue}
@@ -281,7 +320,37 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendabl
   fileprivate var _outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
 }
 
-/// A Video Component that renders a CSS conic-gradient fill.
+/// A Video Component whose conic-gradient geometry is defined in the local
+/// coordinate system of the Canvas that renders this Fill. The Canvas origin is
+/// its top-left corner; x increases to the right and y increases downward. For
+/// a Canvas of positive width W and height H, a point (x, y) has normalized
+/// coordinates (u, v) = (x / W, y / H). The gradient center is
+/// c = (center_x, center_y) in these normalized coordinates. At every Canvas
+/// point other than c, define dx = u - center_x, dy = v - center_y, and
+/// angle = atan2(dy, dx), in radians, using the conventional atan2(y, x)
+/// function. Thus zero radians points right and positive angles proceed
+/// clockwise because the Canvas y-axis points downward. The x and y axes are
+/// normalized independently, so angles are measured in normalized Canvas
+/// space, not in pixel space; on a non-square Canvas this can change angular
+/// spacing compared with pixel-space angles. Define
+/// q = (angle - start_angle_radians) / (2*pi) and t = q - floor(q), where pi
+/// is the mathematical constant and floor returns the greatest integer not
+/// greater than its argument. Thus t is in [0, 1), increases clockwise from
+/// the start ray, and is periodic in start_angle_radians with period 2*pi.
+/// Every point on the same ray from c has the same t.
+///
+/// start_color is the specified Extended sRGB source color on the start ray
+/// (t = 0). end_color is the specified Extended sRGB source color in the limit
+/// as t approaches 1 from below. The start ray itself uses start_color; if the
+/// endpoint colors differ, the angular wrap creates a seam on that ray. These
+/// two endpoint colors and the geometry above are required. The source color at
+/// intermediate angular positions, including its interpolation space and
+/// progression, conversion to an output or display color space, alpha handling,
+/// compositing, filtering, and pixel quantization are implementation-defined.
+/// The result at the exact center c is implementation-defined because its
+/// angular position is undefined. This definition does not require the angle
+/// convention or rendering behavior of CSS conic-gradient(), SwiftUI
+/// AngularGradient, or any other particular API.
 public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -295,18 +364,20 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The horizontal coordinate of the gradient center, expressed as a fraction
-  /// of the width of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized horizontal coordinate of the gradient center, in [0, 1].
+  /// Zero is the Canvas's left edge and one is its right edge.
   public var centerX: Float = 0
 
-  /// The vertical coordinate of the gradient center, expressed as a fraction
-  /// of the height of the Canvas that renders this Fill, in [0, 1].
+  /// The normalized vertical coordinate of the gradient center, in [0, 1].
+  /// Zero is the Canvas's top edge and one is its bottom edge.
   public var centerY: Float = 0
 
-  /// The gradient start angle in radians.
+  /// A finite start angle in radians, measured clockwise from the positive
+  /// horizontal axis in the normalized Canvas coordinate system. Values that
+  /// differ by an integer multiple of 2 * pi represent the same start ray.
   public var startAngleRadians: Float = 0
 
-  /// The color at the gradient start angle.
+  /// The specified Extended sRGB source color on the start ray (t = 0).
   public var startColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_startColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_startColor = newValue}
@@ -316,7 +387,8 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
   /// Clears the value of `startColor`. Subsequent reads from it will return its default value.
   public mutating func clearStartColor() {self._startColor = nil}
 
-  /// The color at the gradient end angle.
+  /// The specified Extended sRGB source color in the limit as t approaches 1
+  /// from below, immediately before the angular wrap to the start ray.
   public var endColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
     get {_endColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
     set {_endColor = newValue}
@@ -348,10 +420,7 @@ public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The Video Input Device that provides this VFX Source's input video. This
-  /// must not reference a Video Component or an Audio Input Device.
-  public var inputDeviceInternalID: UInt64 = 0
-
+  /// Physical camera assignment is app-local and keyed by internal_id.
   /// The VFX effects applied to the input video, in evaluation order.
   public var effects: [Ldtx_Workspace_V4_VideoEffectWrapper] = []
 
@@ -928,7 +997,7 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
 
 nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VfxSourceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}input_device_internal_id\0\u{1}effects\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{2}\u{2}effects\0\u{b}input_device_internal_id\0\u{c}\u{3}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -938,7 +1007,6 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.inputDeviceInternalID) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.effects) }()
       default: break
       }
@@ -952,9 +1020,6 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
     if !self.displayName.isEmpty {
       try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
     }
-    if self.inputDeviceInternalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.inputDeviceInternalID, fieldNumber: 3)
-    }
     if !self.effects.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.effects, fieldNumber: 4)
     }
@@ -964,7 +1029,6 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
   public static func ==(lhs: Ldtx_Workspace_V4_VfxSourceComponent, rhs: Ldtx_Workspace_V4_VfxSourceComponent) -> Bool {
     if lhs.internalID != rhs.internalID {return false}
     if lhs.displayName != rhs.displayName {return false}
-    if lhs.inputDeviceInternalID != rhs.inputDeviceInternalID {return false}
     if lhs.effects != rhs.effects {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

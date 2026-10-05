@@ -43,7 +43,7 @@ struct SwiftUIViewStateUnitTestSuite {
     let definition = uiState.definition
     let selection = uiState.inspectorSelector
     let data = WorkspaceAppletData()
-    let assignments = data.physicalDeviceIDsByInputDeviceInternalID
+    let assignments = data.physicalDeviceIDsByResourceInternalID
     let sidebar = WorkspaceSidebar(
       uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: data)
     var draft = WorkspaceAddDraft()
@@ -59,7 +59,7 @@ struct SwiftUIViewStateUnitTestSuite {
     }
     #expect(uiState.definition == definition)
     #expect(uiState.inspectorSelector == selection)
-    #expect(data.physicalDeviceIDsByInputDeviceInternalID == assignments)
+    #expect(data.physicalDeviceIDsByResourceInternalID == assignments)
   }
 
   private func binding<Value>(to state: BindingState<Value>) -> Binding<Value> {

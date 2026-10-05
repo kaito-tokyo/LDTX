@@ -36,8 +36,10 @@ message WorkspaceLocalStateStore {
 message WorkspaceLocalState {
   // The selected Program internal ID. When absent, no Program is selected.
   optional uint64 selected_program_internal_id = 1;
-  // Physical device IDs for Video Input Devices, keyed by their internal IDs.
-  map<uint64, string> video_input_device_physical_ids = 2;
+  reserved 2;
+  reserved "video_input_device_physical_ids";
+  // Physical camera IDs keyed by VFX Source internal IDs.
+  map<uint64, string> vfx_source_physical_ids = 8;
   // Physical device IDs for Audio Input Devices, keyed by their internal IDs.
   map<uint64, string> audio_input_device_physical_ids = 3;
   // Audio Input Device internal IDs routed to the local monitor output.

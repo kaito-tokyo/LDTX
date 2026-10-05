@@ -2,12 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {
   let uiState: WorkspaceUIState
   let internalID: UInt64
+  let deviceRegistry: DeviceRegistryService
+  let appletData: WorkspaceAppletData
 
   var body: some View {
     Form {
@@ -18,27 +21,13 @@ struct VfxVideoComponentInspector: View {
 
   @ViewBuilder
   private var formContent: some View {
-    Section("VFX Video Component") {
+    Section("VFX Source") {
       if let component {
         TextField("Name", text: nameBinding)
           .disabled(uiState.isOutputActive)
-        WorkspaceSelectionField(
-          title: "Input Device", current: component.inputDeviceInternalID,
-          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
-          isEditable: !uiState.isOutputActive,
-          commit: { selected in
-            guard !uiState.isOutputActive, self.component != nil,
-              let selected, videoDevices.contains(where: { $0.internalID == selected })
-            else {
-              throw WorkspaceSelectionError(
-                message: "Select an available input while output is stopped.")
-            }
-            updateVideoComponent { wrapper in
-              guard case .vfxSource(var value) = wrapper.definition else { return }
-              value.inputDeviceInternalID = selected
-              wrapper.definition = .vfxSource(value)
-            }
-          })
+        WorkspacePhysicalDeviceField(
+          title: "Physical Device", internalID: internalID, isAudio: false,
+          uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry)
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
           .disabled(uiState.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
@@ -64,13 +53,6 @@ struct VfxVideoComponentInspector: View {
       else { return nil }
       return component
     }.first
-  }
-
-  private var videoDevices: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { wrapper in
-      guard case .videoDevice(let device) = wrapper.definition else { return nil }
-      return device
-    }
   }
 
   private var nameBinding: Binding<String> {

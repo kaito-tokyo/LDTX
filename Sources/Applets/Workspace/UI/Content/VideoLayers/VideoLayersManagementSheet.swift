@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 import AppKit
+import LDTXWorkspaceAppletInterface
 
 final class VideoLayersManagementSheet: NSWindowController {
   private(set) var draft: VideoLayersManagementDraft
@@ -77,5 +78,59 @@ final class VideoLayersManagementSheet: NSWindowController {
       try draft.apply(currentIDs: currentIDs, options: options, active: active, commit: commit)
       onClose()
     } catch { errorLabel.stringValue = error.localizedDescription }
+  }
+}
+
+struct VideoLayersManagementDraft {
+  let originalIDs: [UInt64]
+  let originalOptions: [WorkspaceSelectionOption<UInt64>]
+  var ids: [UInt64]
+
+  init(ids: [UInt64], options: [WorkspaceSelectionOption<UInt64>]) {
+    originalIDs = ids
+    originalOptions = options
+    self.ids = ids
+  }
+
+  mutating func add(_ id: UInt64) {
+    guard !ids.contains(id),
+      originalIDs.contains(id) || originalOptions.contains(where: { $0.id == id })
+    else { return }
+    ids.append(id)
+    // Restoring a checkbox must not reorder an existing layer.
+    ids = originalIDs.filter { ids.contains($0) } + ids.filter { !originalIDs.contains($0) }
+  }
+
+  mutating func remove(_ id: UInt64) { ids.removeAll { $0 == id } }
+
+  func canApply(currentIDs: [UInt64], options: [WorkspaceSelectionOption<UInt64>], active: Bool)
+    -> Bool
+  {
+    !active && ids != originalIDs && currentIDs == originalIDs && options == originalOptions
+  }
+  func apply(
+    currentIDs: [UInt64], options: [WorkspaceSelectionOption<UInt64>], active: Bool,
+    commit: ([UInt64], [UInt64], [WorkspaceSelectionOption<UInt64>]) throws -> Void
+  ) throws {
+    guard canApply(currentIDs: currentIDs, options: options, active: active) else {
+      throw WorkspaceSelectionError(message: "Video layers changed or cannot be managed now.")
+    }
+    try commit(ids, originalIDs, originalOptions)
+  }
+
+}
+
+extension VideoLayersManagementSheet {
+  static func options(in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4)
+    -> [WorkspaceSelectionOption<UInt64>]
+  {
+    let components = definition.videoComponents.compactMap {
+      component -> WorkspaceSelectionOption<UInt64>? in
+      guard let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component),
+        let name = component.displayName
+      else { return nil }
+      return .init(id: id, name: name)
+    }
+    return components
   }
 }

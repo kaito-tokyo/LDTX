@@ -22,9 +22,9 @@ the commands below.
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
 | `Sources/LDTXProgram/persistence.pb.swift`            | `Protos/persistence.proto`                        |
 | `Sources/LDTXProgram/program.pb.swift`                | `Protos/program.proto`                            |
-| `Sources/Applets/Workspace/Model/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
-| `Sources/Applets/Workspace/Model/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Sources/Applets/Workspace/Model/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Sources/LDTXProtos/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
+| `Sources/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a Program schema under `Protos/` changes:**
@@ -51,7 +51,7 @@ protoc \
   --swift_opt=ProtoPathModuleMappings=Protos/module_mappings.asciipb \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/Applets/Workspace/Model \
+  --swift_out=Sources/LDTXProtos \
   Protos/app_settings.proto \
   Protos/envelope.proto \
   Protos/workspace_v4_definition.proto \

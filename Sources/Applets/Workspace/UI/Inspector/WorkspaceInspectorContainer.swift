@@ -41,7 +41,9 @@ public struct WorkspaceInspectorContainer: View {
           Text("Inspector")
             .font(.headline)
           Text("Select an item in the Sidebar to view and edit its settings.")
-          Text("Select Programs to add or choose a Program, Canvas to configure frame rate and bit rate, or Output to configure recording and streaming.")
+          Text(
+            "Select Programs to add or choose a Program, Canvas to configure frame rate and bit rate, or Output to configure recording and streaming."
+          )
         }
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -76,19 +78,11 @@ public struct WorkspaceInspectorContainer: View {
       } else {
         emptyInspector
       }
-    case .videoInputDevice:
-      if let internalID = selector.internalID {
-        VideoInputDeviceInspector(
-          uiState: uiState, internalID: internalID,
-          deviceRegistry: deviceRegistry,
-          appletData: appletData)
-      } else {
-        emptyInspector
-      }
     case .vfxVideoComponent:
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
-          uiState: uiState, internalID: internalID)
+          uiState: uiState, internalID: internalID,
+          deviceRegistry: deviceRegistry, appletData: appletData)
       } else {
         emptyInspector
       }

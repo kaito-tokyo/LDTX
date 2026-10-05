@@ -8,6 +8,11 @@ public final class WorkspaceContent: NSTabViewController {
   let landscape = VideoLayersEditor()
   let portrait = VideoLayersEditor()
   let audio = AudioMixEditor()
+  let landscapeStatus = NSTextField(wrappingLabelWithString: "")
+  let portraitStatus = NSTextField(wrappingLabelWithString: "")
+  private(set) var videoLayerManager: VideoLayersManagementSheet?
+  private var managedTarget: WorkspaceCanvasTarget?
+  private var displayedProgramID: UInt64?
   let uiState: WorkspaceUIState
   let appletData: WorkspaceAppletData
   private let peakMeter: ProgramAudioPeakMeter
@@ -31,13 +36,24 @@ public final class WorkspaceContent: NSTabViewController {
     self.appletData = appletData
     self.peakMeter = audioPeakMeter
     super.init(nibName: nil, bundle: nil)
-    for (title, controller) in [
-      ("Landscape", landscape as NSViewController), ("Portrait", portrait), ("Audio Mix", audio),
+    for (title, editor, status) in [
+      ("Landscape", landscape, landscapeStatus), ("Portrait", portrait, portraitStatus),
     ] {
+      let controller = NSViewController()
+      controller.view = NSView()
+      controller.addChild(editor)
+      let stack = contentStack([editor.view, status])
+      pinContent(stack, in: controller.view, inset: 0)
+      editor.view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+      status.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
+      status.isHidden = true
       let item = NSTabViewItem(viewController: controller)
       item.label = title
       addTabViewItem(item)
     }
+    let audioItem = NSTabViewItem(viewController: audio)
+    audioItem.label = "Audio Mix"
+    addTabViewItem(audioItem)
     selectedTabViewItemIndex = 0
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -54,26 +70,39 @@ public final class WorkspaceContent: NSTabViewController {
 
   public func refresh() {
     let id = selectedProgram?.internalID
-    for (target, editor) in [(WorkspaceCanvasTarget.landscape, landscape), (.portrait, portrait)] {
+    if displayedProgramID != id {
+      closeVideoLayerManager()
+      landscape.table.removeAllRows()
+      portrait.table.removeAllRows()
+      displayedProgramID = id
+    }
+    if uiState.isOutputActive { closeVideoLayerManager() }
+    for (target, editor, status) in [
+      (WorkspaceCanvasTarget.landscape, landscape, landscapeStatus),
+      (.portrait, portrait, portraitStatus),
+    ] {
       let program = selectedProgram
       let preference =
         id.flatMap { uiState.preferences[keyPath: target.preferences][$0] } ?? .init()
-      let input = VideoLayersTableInput(
-        layerIDs: program?[keyPath: target.layerIDs] ?? [], programPreferences: preference,
-        definition: uiState.definition,
+      let layerIDs = program?[keyPath: target.layerIDs] ?? []
+      editor.update(
+        definition: uiState.definition, programPreferences: preference, layerIDs: layerIDs,
         canvasWidth: Double(target.defaultProfile.width),
         canvasHeight: Double(target.defaultProfile.height),
-        preferences: { [weak self] in
+        onCommitTransform: { [weak self] layerID, value in
           guard let self, let id else {
             throw WorkspaceSelectionError(message: "No program selected.")
           }
-          return try preferences(for: id, target: target)
+          return try commitVideoLayerTransform(
+            value, layerID: layerID, programID: id, target: target)
         },
-        onCommitPreferences: { [weak self] value in
+        onSetHidden: { [weak self] layerID, value in
           guard let self, let id else {
             throw WorkspaceSelectionError(message: "No program selected.")
           }
-          try commitPreferences(value, programID: id, target: target)
+          var updated = try preferences(for: id, target: target)
+          updated.videoLayerHidden[layerID] = value
+          try commitPreferences(updated, programID: id, target: target)
         },
         onCommitLayerOrder: { [weak self] ids in
           guard let self, let id else {
@@ -81,20 +110,23 @@ public final class WorkspaceContent: NSTabViewController {
           }
           try commitLayerOrder(ids, programID: id, target: target)
         },
-        onError: { [weak editor] error in
-          editor?.errorLabel.stringValue = error.localizedDescription
+        onError: { [weak status] error in
+          status?.textColor = .systemRed
+          status?.stringValue = error.localizedDescription
+          status?.isHidden = false
         })
-      editor.commitMembership = { [weak self] ids, expected, candidates in
-        guard let self, let id else {
-          throw WorkspaceSelectionError(message: "No program selected.")
-        }
-        try commitVideoLayerMembership(
-          ids, expectedIDs: expected, expectedCandidates: candidates, programInternalID: id,
-          target: target)
+      editor.manageButton.invoke = { [weak self] in self?.openVideoLayerManager(target: target) }
+      editor.manageButton.isEnabled = id != nil && !uiState.isOutputActive
+      status.textColor = .secondaryLabelColor
+      status.stringValue =
+        uiState.outputFailureMessage
+        ?? (id == nil ? "No program selected" : layerIDs.isEmpty ? "No video layers" : "")
+      status.isHidden = status.stringValue.isEmpty
+      if managedTarget?.preferences == target.preferences {
+        videoLayerManager?.update(
+          ids: layerIDs, options: VideoLayersManagementSheet.options(in: uiState.definition),
+          active: uiState.isOutputActive)
       }
-      editor.update(programID: id, input: input, active: uiState.isOutputActive)
-      editor.outputErrorLabel.stringValue = uiState.outputFailureMessage ?? ""
-      editor.outputErrorLabel.isHidden = uiState.outputFailureMessage == nil
     }
     audio.refresh(peakMeter: peakMeter)
     audio.outputErrorLabel.stringValue = uiState.outputFailureMessage ?? ""
@@ -109,6 +141,21 @@ public final class WorkspaceContent: NSTabViewController {
     }
     return uiState.preferences[keyPath: target.preferences][id] ?? .init()
   }
+  func commitVideoLayerTransform(
+    _ value: Ldtx_Workspace_V4_BasicTransform, layerID: UInt64,
+    programID: UInt64, target: WorkspaceCanvasTarget
+  ) throws -> Ldtx_Workspace_V4_BasicTransform {
+    var updated = try preferences(for: programID, target: target)
+    var transform = updated.videoLayerTransforms[layerID] ?? .init()
+    transform.translationX = value.translationX
+    transform.translationY = value.translationY
+    transform.scaleX = value.scaleX
+    transform.scaleY = value.scaleY
+    updated.videoLayerTransforms[layerID] = transform
+    try commitPreferences(updated, programID: programID, target: target)
+    return transform
+  }
+
   func commitPreferences(
     _ value: Ldtx_Workspace_V4_ProgramPreferences, programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
@@ -147,7 +194,7 @@ public final class WorkspaceContent: NSTabViewController {
       })
     else { throw WorkspaceSelectionError(message: "Video layers cannot be managed now.") }
     let current = uiState.definition.programs[index][keyPath: target.layerIDs]
-    let candidates = VideoLayersEditor.options(in: uiState.definition)
+    let candidates = VideoLayersManagementSheet.options(in: uiState.definition)
     guard current == expectedIDs, candidates == expectedCandidates else {
       throw WorkspaceSelectionError(message: "Video layers changed. Reopen this sheet.")
     }
@@ -187,9 +234,35 @@ public final class WorkspaceContent: NSTabViewController {
     uiState.selectedAudioMix = portrait ? .portrait : .landscape
     refresh()
   }
+  func openVideoLayerManager(target: WorkspaceCanvasTarget) {
+    guard !uiState.isOutputActive, videoLayerManager == nil,
+      let program = selectedProgram, let window = view.window
+    else { return }
+    let sheet = VideoLayersManagementSheet(
+      ids: program[keyPath: target.layerIDs],
+      options: VideoLayersManagementSheet.options(in: uiState.definition))
+    sheet.commit = { [weak self] ids, baseline, candidates in
+      guard let self else { throw WorkspaceSelectionError(message: "Workspace is unavailable.") }
+      try commitVideoLayerMembership(
+        ids, expectedIDs: baseline, expectedCandidates: candidates,
+        programInternalID: program.internalID, target: target)
+    }
+    sheet.onClose = { [weak self] in self?.closeVideoLayerManager() }
+    videoLayerManager = sheet
+    managedTarget = target
+    window.beginSheet(sheet.window!)
+  }
+
+  func closeVideoLayerManager() {
+    guard let manager = videoLayerManager else { return }
+    if let window = manager.window, let parent = window.sheetParent { parent.endSheet(window) }
+    manager.window?.orderOut(nil)
+    videoLayerManager = nil
+    managedTarget = nil
+  }
+
   public func stop() {
-    landscape.closeManager()
-    portrait.closeManager()
+    closeVideoLayerManager()
     audio.stop()
   }
 }

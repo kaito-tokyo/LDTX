@@ -10,7 +10,7 @@ enum WorkspaceAddSheet: String, Identifiable {
   var id: Self { self }
   var title: String {
     switch self {
-    case .device: "Add Input Device"
+    case .device: "Add Audio Device"
     case .videoComponent: "Add Video Component"
     case .vision: "Add Vision"
     }
@@ -37,9 +37,9 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
     case .testPattern: .testPatternVideoComponent
     }
   }
-  func make(id: UInt64, name: String, inputID: UInt64?) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  func make(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     switch self {
-    case .vfxSource: WorkspaceResourceFactory.makeVFXSource(id: id, name: name, inputID: inputID!)
+    case .vfxSource: WorkspaceResourceFactory.makeVFXSource(id: id, name: name)
     case .solidColor: WorkspaceResourceFactory.makeSolidColor(id: id, name: name)
     case .linearGradient: WorkspaceResourceFactory.makeLinearGradient(id: id, name: name)
     case .radialGradient: WorkspaceResourceFactory.makeRadialGradient(id: id, name: name)
@@ -54,7 +54,7 @@ struct WorkspaceAddDraft: Equatable {
   var name = ""
   var physicalDeviceID: WorkspacePhysicalDeviceID?
   var componentKind: WorkspaceAddComponentKind = .vfxSource
-  var videoInputID: UInt64?
+  var videoComponentID: UInt64?
 }
 
 struct WorkspaceAddDeviceOption: Identifiable {
@@ -89,17 +89,16 @@ enum WorkspaceResourceAddition {
     {
       return audioDiscoveryError
     }
-    if sheet == .device && !devices.contains(where: { $0.id == draft.physicalDeviceID }) {
-      return "Select an available input device."
+    if sheet == .device
+      && !devices.contains(where: { $0.id == draft.physicalDeviceID && $0.isAudio })
+    {
+      return "Select an available audio device."
     }
-    if sheet == .vision || (sheet == .videoComponent && draft.componentKind == .vfxSource) {
-      if !uiState.definition.inputDevices.contains(where: {
-        if case .videoDevice(let device) = $0.definition {
-          return device.internalID == draft.videoInputID
-        }
-        return false
+    if sheet == .vision {
+      if !uiState.definition.videoComponents.contains(where: {
+        (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == draft.videoComponentID
       }) {
-        return "Select a video input device."
+        return "Select a video component."
       }
     }
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
@@ -124,19 +123,16 @@ enum WorkspaceResourceAddition {
     let inspectorKind: WorkspaceInspectorKind
     switch sheet {
     case .device:
-      let isAudio = devices.first { $0.id == draft.physicalDeviceID }!.isAudio
-      definition.inputDevices.append(
-        isAudio
-          ? WorkspaceResourceFactory.makeAudioInput(id: id, name: name)
-          : WorkspaceResourceFactory.makeVideoInput(id: id, name: name))
-      inspectorKind = isAudio ? .audioInputDevice : .videoInputDevice
+      definition.audioDevices.append(WorkspaceResourceFactory.makeAudioInput(id: id, name: name))
+      inspectorKind = .audioInputDevice
     case .videoComponent:
       definition.videoComponents.append(
-        draft.componentKind.make(id: id, name: name, inputID: draft.videoInputID))
+        draft.componentKind.make(id: id, name: name))
       inspectorKind = draft.componentKind.inspectorKind
     case .vision:
       definition.visions.append(
-        WorkspaceResourceFactory.makeOcrVision(id: id, name: name, inputID: draft.videoInputID!))
+        WorkspaceResourceFactory.makeOcrVision(id: id, name: name, componentID: draft.videoComponentID!)
+      )
       inspectorKind = .ocrVision
     }
     uiState.definition = definition
@@ -153,13 +149,7 @@ enum WorkspaceResourceAddition {
     String
   > {
     Set(
-      definition.inputDevices.compactMap {
-        switch $0.definition {
-        case .videoDevice(let value): value.displayName
-        case .audioDevice(let value): value.displayName
-        case nil: nil
-        }
-      }
+      definition.audioDevices.map(\.displayName)
         + definition.videoComponents.compactMap {
           switch $0.definition {
           case .vfxSource(let value): value.displayName

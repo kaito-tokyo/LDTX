@@ -707,7 +707,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         frameID: frameID,
         pixelBuffer: outputPixelBuffer,
         presentationTime: presentationTime,
-        isPreparingRenderResources: isPreparingRenderResources,
+        isPreparingRenderResources: isPreparingRenderResources
+          || renderComposite.steps.contains {
+            guard case .clock = $0.component else { return false }
+            return clockOverlayRegistry?.retainedTexture(forStepNamed: $0.name) == nil
+          },
         videoPipelineID: videoPipelineID
       )
     } catch {

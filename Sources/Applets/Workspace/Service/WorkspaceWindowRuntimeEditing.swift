@@ -29,26 +29,12 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addVideoInputDevice(displayName: String) throws -> UInt64 {
-    let id = internalIDGenerator.next()
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
-    device.internalID = id
-    device.displayName = displayName
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
-    try editWorkspace { $0.definition.inputDevices.append(wrapper) }
-    return id
-  }
-
-  @discardableResult
   public func addAudioInputDevice(displayName: String) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = displayName
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.audioDevice = device
-    try editWorkspace { $0.definition.inputDevices.append(wrapper) }
+    try editWorkspace { $0.definition.audioDevices.append(device) }
     return id
   }
 
@@ -63,12 +49,11 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addVFXSource(displayName: String, inputDeviceInternalID: UInt64) throws -> UInt64 {
+  public func addVFXSource(displayName: String) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
     component.displayName = displayName
-    component.inputDeviceInternalID = inputDeviceInternalID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -185,7 +170,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addOcrVision(
-    displayName: String, inputDeviceInternalID: UInt64, intervalSeconds: Double = 5
+    displayName: String, videoComponentInternalID: UInt64, intervalSeconds: Double = 5
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
@@ -195,8 +180,8 @@ extension WorkspaceWindowRuntime {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = displayName
-    vision.inputDeviceInternalID = inputDeviceInternalID
-    vision.source = .inputDeviceInternalID(inputDeviceInternalID)
+    vision.videoComponentInternalID = videoComponentInternalID
+    vision.source = .videoComponentInternalID(videoComponentInternalID)
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
@@ -296,9 +281,21 @@ extension WorkspaceWindowRuntime {
   private enum ResourceKind { case component, vision, input }
   private func removeResource(_ id: UInt64, kind: ResourceKind) throws {
     try editWorkspace { workspace in
-      var removedIDs = [id]
+      let removedIDs = [id]
       switch kind {
       case .component:
+        let definition = workspace.definition
+        let usedByProgram = definition.programs.contains {
+          $0.landscapeVideoLayerInternalIds.contains(id)
+            || $0.portraitVideoLayerInternalIds.contains(id)
+        }
+        let usedByVision = definition.visions.contains {
+          guard case .ocrVision(let vision) = $0.definition else { return false }
+          return vision.source == .videoComponentInternalID(id)
+        }
+        guard !usedByProgram, !usedByVision,
+          definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id
+        else { throw WorkspaceRuntimeError.resourceInUse(id) }
         let before = workspace.definition.videoComponents.count
         workspace.definition.videoComponents.removeAll {
           (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == id
@@ -315,34 +312,14 @@ extension WorkspaceWindowRuntime {
           throw WorkspaceRuntimeError.missingResource(id)
         }
       case .input:
-        let before = workspace.definition.inputDevices.count
-        workspace.definition.inputDevices.removeAll {
-          (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == id
+        let before = workspace.definition.audioDevices.count
+        workspace.definition.audioDevices.removeAll {
+          $0.internalID == id
         }
-        guard before != workspace.definition.inputDevices.count else {
+        guard before != workspace.definition.audioDevices.count else {
           throw WorkspaceRuntimeError.missingResource(id)
         }
-        let dependentVFXIDs = Set(
-          workspace.definition.videoComponents.compactMap { wrapper -> UInt64? in
-            guard case .vfxSource(let source)? = wrapper.definition,
-              source.inputDeviceInternalID == id
-            else { return nil }
-            return source.internalID
-          })
-        removedIDs.append(contentsOf: dependentVFXIDs)
-        workspace.definition.videoComponents.removeAll { wrapper in
-          guard case .vfxSource(let source)? = wrapper.definition else { return false }
-          return source.inputDeviceInternalID == id
-        }
-        workspace.definition.visions.removeAll { wrapper in
-          guard case .ocrVision(let vision)? = wrapper.definition,
-            case .inputDeviceInternalID(let sourceID)? = vision.source
-          else { return false }
-          return sourceID == id
-        }
-        if workspace.definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID == id {
-          workspace.definition.canvasConfiguration.clearPtsMasterVideoInputDeviceInternalID()
-        }
+
       }
       for index in workspace.definition.programs.indices {
         workspace.definition.programs[index].landscapeVideoLayerInternalIds.removeAll {

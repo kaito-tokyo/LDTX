@@ -21,8 +21,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   func preservesCurrentCanvasValues() throws {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     let id = try runtime.addProgram(displayName: "Independent")
-    let first = try runtime.addVideoInputDevice(displayName: "First")
-    let second = try runtime.addVideoInputDevice(displayName: "Second")
+    let first = try runtime.addVFXSource(displayName: "First")
+    let second = try runtime.addVFXSource(displayName: "Second")
     try runtime.setVideoLayerOrder([first, second], forProgramInternalID: id, target: .landscape)
     try runtime.setVideoLayerOrder([second, first], forProgramInternalID: id, target: .portrait)
     let old = try WorkspaceProgramCanvasSnapshot(
@@ -149,16 +149,16 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 42
     vision.displayName = "OCR"
-    vision.source = .inputDeviceInternalID(1)
-    var videoInput = Ldtx_Workspace_V4_VideoInputDevice()
+    vision.source = .videoComponentInternalID(1)
+    var videoInput = Ldtx_Workspace_V4_VfxSourceComponent()
     videoInput.internalID = 1
     videoInput.displayName = "Camera"
-    var inputWrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    inputWrapper.videoDevice = videoInput
+    var inputWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    inputWrapper.vfxSource = videoInput
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
     try runtime.editDefinition {
-      $0.inputDevices = [inputWrapper]
+      $0.videoComponents = [inputWrapper]
       $0.visions = [wrapper]
     }
 
@@ -231,15 +231,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       replaceWorkspace: { try box.replace($0) }, url: url)
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: coordinator, captureSessionCoordinator: capture,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: { appletData.state(for: url) },
       selectProgram: { internalID in
         appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       })
-    let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
+    let videoComponentID = try windowRuntime.addVFXSource(displayName: "Camera")
     let programID = try windowRuntime.addProgram(displayName: "Main")
     try windowRuntime.setVideoLayerOrder(
-      [videoInputID], forProgramInternalID: programID, target: .landscape)
+      [videoComponentID], forProgramInternalID: programID, target: .landscape)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
@@ -252,15 +252,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         scheduler: ManualProgramRuntimeScheduler()))
     windowRuntime.selectedProgramInternalID = programID
 
-    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)
+    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoComponentID)
     windowRuntime.updateRuntimes()
 
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
       programRuntime.programState.read { $0?.cameraIDsByInputKey }
-        == ["v4-\(videoInputID)": "camera-id"])
+        == ["v4-\(videoComponentID)": "camera-id"])
   }
 
   @Test("uses local state at the document-provided URL")
@@ -282,20 +282,20 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = WorkspaceWindowRuntime(
       persistence: coordinator,
       captureSessionCoordinator: capture,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: { coordinator.url.map { appletData.state(for: $0) } ?? .init() })
-    let videoInputID = try runtime.addVideoInputDevice(displayName: "Camera")
-    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)
+    let videoComponentID = try runtime.addVFXSource(displayName: "Camera")
+    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoComponentID)
 
     let destination = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     appletData.copyState(from: originalURL, to: destination)
     runtime.persistenceCoordinator.setDocumentURL(destination)
 
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
   }
 
@@ -423,6 +423,29 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     await failureTask?.value
     #expect(recording.state == .failed("Encoder shutdown failed"))
     #expect(transitions == [pausing ? .pausing : .stopping, .failed("Encoder shutdown failed")])
+  }
+
+  @Test func referencedComponentsRequireExplicitReferenceRemoval() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let source = try runtime.addVFXSource(displayName: "Camera")
+    let program = try runtime.addProgram(displayName: "Main")
+    try runtime.setVideoLayerOrder([source], forProgramInternalID: program, target: .landscape)
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.setVideoLayerOrder([], forProgramInternalID: program, target: .landscape)
+    let vision = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: source)
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.removeVision(internalID: vision)
+    try runtime.editDefinition { $0.canvasConfiguration.ptsMasterVfxSourceInternalID = source }
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.editDefinition { $0.canvasConfiguration.clearPtsMasterVfxSourceInternalID() }
+    try runtime.removeVideoComponent(internalID: source)
+    #expect(runtime.definition.videoComponents.isEmpty)
   }
 
   private final class WorkspaceBox {

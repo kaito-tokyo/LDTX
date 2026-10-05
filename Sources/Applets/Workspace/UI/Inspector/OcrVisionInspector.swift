@@ -24,12 +24,12 @@ struct OcrVisionInspector: View {
         TextField("Name", text: visionBinding(\.displayName, initial: vision.displayName))
           .disabled(isRecording)
         WorkspaceSelectionField(
-          title: "Video Input", current: sourceBinding.wrappedValue,
-          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
+          title: "Video Component", current: sourceBinding.wrappedValue,
+          options: videoDevices,
           clearTitle: "Remove Assignment", isEditable: !isRecording,
           commit: { selected in
             guard !isRecording, self.vision != nil,
-              selected == nil || videoDevices.contains(where: { $0.internalID == selected })
+              selected == nil || videoDevices.contains(where: { $0.id == selected })
             else {
               throw WorkspaceSelectionError(
                 message: "The input or Vision is no longer available for editing.")
@@ -50,6 +50,10 @@ struct OcrVisionInspector: View {
           Text("Accurate").tag(true)
         }
         .disabled(isRecording)
+        if #available(macOS 27.0, *), !vision.accurate, !vision.usesLanguageCorrection {
+          Text("Fast recognition without language correction uses Accurate on this macOS version.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
         Toggle(
           "Language Correction",
           isOn: visionBinding(\.usesLanguageCorrection, initial: vision.usesLanguageCorrection)
@@ -71,6 +75,15 @@ struct OcrVisionInspector: View {
             .frame(width: 90)
           }
           .disabled(isRecording)
+        }
+      }
+      Section("Recognition Result") {
+        if let failure = uiState.visionFailureMessages[internalID] {
+          Text(failure).foregroundStyle(.red)
+        } else if let result = uiState.visionResults[internalID] {
+          Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
+        } else {
+          Text("Waiting for recognition.").foregroundStyle(.secondary)
         }
       }
       Section("Region of Interest") {
@@ -100,11 +113,8 @@ struct OcrVisionInspector: View {
     }.first
   }
 
-  private var videoDevices: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { wrapper in
-      guard case .videoDevice(let device) = wrapper.definition else { return nil }
-      return device
-    }
+  private var videoDevices: [WorkspaceSelectionOption<UInt64>] {
+    VideoLayersManagementSheet.options(in: uiState.definition)
   }
 
   private var isRecording: Bool { uiState.isOutputActive }
@@ -121,12 +131,16 @@ struct OcrVisionInspector: View {
   private var sourceBinding: Binding<UInt64?> {
     Binding(
       get: {
-        if case .inputDeviceInternalID(let value)? = vision?.source { return value }
+        if case .videoComponentInternalID(let value)? = vision?.source { return value }
         return nil
       },
       set: { internalID in
         editVision { value in
-          if let internalID { value.inputDeviceInternalID = internalID } else { value.source = nil }
+          if let internalID {
+            value.videoComponentInternalID = internalID
+          } else {
+            value.source = nil
+          }
         }
       }
     )

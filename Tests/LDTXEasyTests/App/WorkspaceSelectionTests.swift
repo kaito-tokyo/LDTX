@@ -64,7 +64,7 @@ import Testing
   @Test @MainActor func resourceDraftsAndSidebarStartUnselected() {
     let draft = WorkspaceAddDraft()
     #expect(draft.physicalDeviceID == nil)
-    #expect(draft.videoInputID == nil)
+    #expect(draft.videoComponentID == nil)
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
     #expect(state.inspectorSelector == nil)
     let before = state.definition

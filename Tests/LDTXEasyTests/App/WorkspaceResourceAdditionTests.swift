@@ -9,28 +9,29 @@ import Testing
 @Suite
 @MainActor
 struct WorkspaceResourceAdditionUnitTestSuite {
-  @Test func audioDiscoveryFailureDoesNotBlockCameraAddition() throws {
+  @Test func cameraCannotBeAddedAsAudioDevice() {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
-    let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "audio"), name: "Audio")
     var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = camera.id
-    #expect(
-      WorkspaceResourceAddition.validationMessage(
-        sheet: .device, draft: draft, devices: [camera], uiState: state,
-        audioDiscoveryError: "Audio discovery failed") == nil)
-    let id = try WorkspaceResourceAddition.add(
-      sheet: .device, draft: draft, devices: [camera], uiState: state,
-      audioDiscoveryError: "Audio discovery failed")
-    #expect(state.definition.inputDevices.first?.videoDevice.internalID == id)
-    let before = state.definition
+    #expect(throws: (any Error).self) {
+      try WorkspaceResourceAddition.add(
+        sheet: .device, draft: draft, devices: [camera], uiState: state)
+    }
+    #expect(state.definition.audioDevices.isEmpty)
+  }
+
+  @Test func audioDiscoveryFailureRejectsAddition() {
+    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "audio"), name: "Audio")
+    var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = audio.id
     #expect(throws: (any Error).self) {
       try WorkspaceResourceAddition.add(
-        sheet: .device, draft: draft, devices: [camera, audio], uiState: state,
+        sheet: .device, draft: draft, devices: [audio], uiState: state,
         audioDiscoveryError: "Audio discovery failed")
     }
-    #expect(state.definition == before)
+    #expect(state.definition.audioDevices.isEmpty)
   }
 
   @Test func outputStateLocksDefinitionChangesDuringTransitions() {
@@ -56,19 +57,19 @@ struct WorkspaceResourceAdditionUnitTestSuite {
 
   @Test func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
+    let camera = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
     var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = camera.id
     let id = try WorkspaceResourceAddition.add(
       sheet: .device, draft: draft, devices: [camera], uiState: state)
-    #expect(state.definition.inputDevices.first?.videoDevice.displayName == "Camera")
-    #expect(state.inspectorSelector == .init(kind: .videoInputDevice, internalID: id))
+    #expect(state.definition.audioDevices.first?.displayName == "Microphone")
+    #expect(state.inspectorSelector == .init(kind: .audioInputDevice, internalID: id))
     let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
     draft.physicalDeviceID = audio.id
     draft.name = "  Voice  "
     try WorkspaceResourceAddition.add(
       sheet: .device, draft: draft, devices: [audio], uiState: state)
-    #expect(state.definition.inputDevices.last?.audioDevice.displayName == "Voice")
+    #expect(state.definition.audioDevices.last?.displayName == "Voice")
     #expect(state.inspectorSelector?.kind == .audioInputDevice)
   }
 
@@ -91,11 +92,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     }
     state.isOutputActive = false
     draft.componentKind = .vfxSource
-    draft.videoInputID = 99
-    #expect(throws: (any Error).self) {
-      try WorkspaceResourceAddition.add(
-        sheet: .videoComponent, draft: draft, devices: [], uiState: state)
-    }
+    draft.videoComponentID = 99
     #expect(throws: (any Error).self) {
       try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], uiState: state)
     }
@@ -109,11 +106,13 @@ struct WorkspaceResourceAdditionUnitTestSuite {
 
   @Test func duplicateNamesAreRejectedAcrossResourceKinds() throws {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    state.definition.inputDevices = [WorkspaceResourceFactory.makeVideoInput(id: 1, name: "Shared")]
+    state.definition.videoComponents = [
+      WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Shared")
+    ]
     var draft = WorkspaceAddDraft()
     draft.name = " Shared "
     draft.componentKind = .clock
-    draft.videoInputID = 1
+    draft.videoComponentID = 1
     #expect(throws: (any Error).self) {
       try WorkspaceResourceAddition.add(
         sheet: .videoComponent, draft: draft, devices: [], uiState: state)
@@ -121,27 +120,26 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     #expect(throws: (any Error).self) {
       try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], uiState: state)
     }
-    #expect(state.definition.videoComponents.isEmpty)
+    #expect(state.definition.videoComponents.count == 1)
     #expect(state.definition.visions.isEmpty)
   }
 
   @Test(arguments: WorkspaceAddComponentKind.allCases)
   func componentUsesDefaultsWithoutPlacingProgramLayers(kind: WorkspaceAddComponentKind) throws {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    state.definition.inputDevices = [WorkspaceResourceFactory.makeVideoInput(id: 1, name: "Camera")]
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 2
     state.definition.programs = [program]
     var draft = WorkspaceAddDraft()
     draft.componentKind = kind
     draft.name = kind.rawValue
-    draft.videoInputID = 1
+    draft.videoComponentID = 1
     let id = try WorkspaceResourceAddition.add(
       sheet: .videoComponent, draft: draft, devices: [], uiState: state)
     #expect(state.inspectorSelector == .init(kind: kind.inspectorKind, internalID: id))
     let component = try #require(state.definition.videoComponents.first)
     switch kind {
-    case .vfxSource: #expect(component.vfxSource.inputDeviceInternalID == 1)
+    case .vfxSource: #expect(component.vfxSource.internalID == id)
     case .solidColor: #expect(component.solidColorFill.color.alpha == 1)
     case .linearGradient: #expect(component.linearGradientFill.endX == 1)
     case .radialGradient: #expect(component.radialGradientFill.outerRadius == 0.5)
@@ -156,15 +154,17 @@ struct WorkspaceResourceAdditionUnitTestSuite {
 
   @Test func visionReferencesChosenInputAndUsesFiveSecondTrigger() throws {
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    state.definition.inputDevices = [WorkspaceResourceFactory.makeVideoInput(id: 7, name: "Camera")]
+    state.definition.videoComponents = [
+      WorkspaceResourceFactory.makeVFXSource(id: 7, name: "Camera")
+    ]
     var draft = WorkspaceAddDraft()
     draft.name = "OCR"
-    draft.videoInputID = 7
+    draft.videoComponentID = 7
     let id = try WorkspaceResourceAddition.add(
       sheet: .vision, draft: draft, devices: [], uiState: state)
     let vision = try #require(state.definition.visions.first?.ocrVision)
-    #expect(vision.source == .inputDeviceInternalID(7))
-    #expect(vision.inputDeviceInternalID == 7)
+    #expect(vision.source == .videoComponentInternalID(7))
+    #expect(vision.videoComponentInternalID == 7)
     #expect(vision.triggers.first?.intervalTrigger.intervalSeconds == 5)
     #expect(state.inspectorSelector == .init(kind: .ocrVision, internalID: id))
   }

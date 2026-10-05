@@ -53,9 +53,11 @@ message OcrVision {
   string display_name = 2;
   // The conditions that automatically trigger this Vision.
   repeated VisionTriggerWrapper triggers = 3;
+  reserved 4;
+  reserved "input_device_internal_id";
   oneof source {
-    // Uses this Input Device as input.
-    uint64 input_device_internal_id = 4;
+    // Analyzes the component after effects and before Program placement.
+    uint64 video_component_internal_id = 11;
   }
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 5;

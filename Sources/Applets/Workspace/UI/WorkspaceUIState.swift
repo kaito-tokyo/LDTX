@@ -37,6 +37,8 @@ public final class WorkspaceUIState {
   public var recordingState: WorkspaceRecordingState = .idle
   public var isLocalRecording = false
   public var outputFailureMessage: String?
+  public var visionResults: [UInt64: String] = [:]
+  public var visionFailureMessages: [UInt64: String] = [:]
 
   public init(
     definition: WorkspaceDefinition,

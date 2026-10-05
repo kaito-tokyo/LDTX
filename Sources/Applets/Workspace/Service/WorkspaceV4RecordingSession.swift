@@ -310,8 +310,8 @@ public final class WorkspaceV4RecordingSession {
     if let frame = windowRuntime.portraitRuntime?.latestFrame() {
       sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
     }
-    for wrapper in windowRuntime.definition.inputDevices {
-      guard case .videoDevice(let input)? = wrapper.definition,
+    for wrapper in windowRuntime.definition.videoComponents {
+      guard case .vfxSource(let input)? = wrapper.definition,
         case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[input.internalID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
@@ -557,9 +557,10 @@ public final class WorkspaceV4RecordingSession {
 
   private func audioDeviceIDsByInputKey() -> [String: String] {
     Dictionary(
-      uniqueKeysWithValues: windowRuntime.definition.inputDevices
+      uniqueKeysWithValues: windowRuntime.definition.audioDevices
         .compactMap {
-          guard case .audioDevice(let input)? = $0.definition,
+          let input = $0
+          guard
             case .coreAudioDevice(let physicalID)? = physicalDeviceIDsProvider()[input.internalID]
           else { return nil }
           return ("v4-\(input.internalID)", physicalID)
@@ -569,8 +570,8 @@ public final class WorkspaceV4RecordingSession {
   private var inputAudioTracks: [SessionRecordAudioTrack] {
     let names: [String: String] = Dictionary(
       uniqueKeysWithValues:
-        windowRuntime.definition.inputDevices.compactMap { input in
-          guard case .audioDevice(let device)? = input.definition else { return nil }
+        windowRuntime.definition.audioDevices.compactMap { input in
+          let device = input
           return ("v4-\(device.internalID)", device.displayName)
         })
     return SessionRecordAudioTrack.make(

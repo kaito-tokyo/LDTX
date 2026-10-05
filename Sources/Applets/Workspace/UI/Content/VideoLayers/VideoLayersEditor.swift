@@ -2,150 +2,205 @@
 // SPDX-License-Identifier: Apache-2.0
 import AppKit
 import LDTXWorkspaceAppletInterface
+import SwiftUI
 
-final class VideoLayersEditor: NSViewController {
-  let container = VideoLayersTableContainer()
-  let manageButton = NSButton(title: "Manage Video Layers…", target: nil, action: nil)
-  let errorLabel = NSTextField(labelWithString: "")
-  let outputErrorLabel = NSTextField(wrappingLabelWithString: "")
-  let emptyLabel = NSTextField(labelWithString: "No program selected")
-  private(set) var manager: VideoLayersManagementSheet?
-  private var programID: UInt64?
-  private var input: VideoLayersTableInput?
-  private var isOutputActive = false
-  var commitMembership: ([UInt64], [UInt64], [WorkspaceSelectionOption<UInt64>]) throws -> Void = {
-    _, _, _ in
+final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
+  let scrollView = NSScrollView()
+  let table = VideoLayersTableView()
+  let manageButton = ContentActionButton("Manage Video Layers…")
+
+  let errorLabel = NSTextField(wrappingLabelWithString: "")
+  private var errors: [UInt64: String] = [:] {
+    didSet {
+      errorLabel.stringValue = table.layerIDs.compactMap { errors[$0] }.joined(separator: "\n")
+      errorLabel.isHidden = errorLabel.stringValue.isEmpty
+    }
+  }
+
+  override init(nibName: NSNib.Name? = nil, bundle: Bundle? = nil) {
+    super.init(nibName: nibName, bundle: bundle)
+    scrollView.hasVerticalScroller = true
+    scrollView.documentView = table
+  }
+
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  private var onCommitTransform:
+    (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Ldtx_Workspace_V4_BasicTransform = {
+      _, value in value
+    }
+  private var onSetHidden: (UInt64, Bool) throws -> Void = { _, _ in }
+  private var onError: (Error) -> Void = { _ in }
+
+  private func internalID(for row: VideoLayersTableRow) throws -> UInt64 {
+    guard let id = table.rows.first(where: { $0.value === row })?.key else {
+      throw WorkspaceSelectionError(message: "Video layer is no longer available.")
+    }
+    return id
+  }
+
+  func videoLayersTableRowDidRequestCommit(_ row: VideoLayersTableRow) {
+    guard row.state.hasUnconfirmedChanges,
+      let id = try? internalID(for: row)
+    else { return }
+    let values = row.state.strings.map { Double($0) }
+    let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
+    let invalid = values.indices.filter { values[$0]?.isFinite != true }
+    guard invalid.isEmpty else {
+      errors[id] =
+        "\(row.state.name): Invalid number (\(invalid.map { labels[$0] }.joined(separator: ", ")))."
+      return
+    }
+    let numbers = [
+      Float(values[0]! / row.rootView.canvasWidth), Float(values[1]! / row.rootView.canvasHeight),
+      Float(values[2]!), Float(values[3]!),
+    ]
+    let overflow = numbers.indices.filter { !numbers[$0].isFinite }
+    guard overflow.isEmpty else {
+      errors[id] =
+        "\(row.state.name): Invalid number (\(overflow.map { labels[$0] }.joined(separator: ", ")))."
+      return
+    }
+    do {
+      var transform = Ldtx_Workspace_V4_BasicTransform()
+      transform.translationX = numbers[0]
+      transform.translationY = numbers[1]
+      transform.scaleX = numbers[2]
+      transform.scaleY = numbers[3]
+      let saved = try onCommitTransform(id, transform)
+      row.state.hasUnconfirmedChanges = false
+      row.state.display(
+        saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
+      errors.removeValue(forKey: id)
+    } catch {
+      errors[id] = "\(row.state.name): \(error.localizedDescription)"
+    }
+  }
+
+  func videoLayersTableRow(_ row: VideoLayersTableRow, setHidden hidden: Bool) {
+    guard let id = try? internalID(for: row) else { return }
+    do {
+      try onSetHidden(id, hidden)
+      row.state.isHidden = hidden
+      if !row.state.hasUnconfirmedChanges { errors.removeValue(forKey: id) }
+    } catch {
+      errors[id] = "\(row.state.name): \(error.localizedDescription)"
+      onError(error)
+    }
+  }
+
+  func update(
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    programPreferences: Ldtx_Workspace_V4_ProgramPreferences,
+    layerIDs: [UInt64], canvasWidth: Double, canvasHeight: Double,
+    onCommitTransform:
+      @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws ->
+      Ldtx_Workspace_V4_BasicTransform = { _, value in value },
+    onSetHidden: @escaping (UInt64, Bool) throws -> Void = { _, _ in },
+    onCommitLayerOrder: @escaping ([UInt64]) throws -> Void = { _ in },
+    onError: @escaping (Error) -> Void = { _ in }
+  ) {
+    self.onCommitTransform = onCommitTransform
+    self.onSetHidden = onSetHidden
+    self.onError = onError
+    var names: [UInt64: String] = [:]
+    for component in definition.videoComponents {
+      if let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component), names[id] == nil {
+        names[id] = component.displayName
+      }
+    }
+    errors = errors.filter { layerIDs.contains($0.key) && table.rows[$0.key] != nil }
+    var rows: [UInt64: VideoLayersTableRow] = [:]
+    for id in layerIDs {
+      let row: VideoLayersTableRow
+      if let existing = table.rows[id],
+        existing.rootView.canvasWidth == canvasWidth, existing.rootView.canvasHeight == canvasHeight
+      {
+        row = existing
+      } else {
+        errors.removeValue(forKey: id)
+        row = VideoLayersTableRow(
+          rootView: VideoLayersTableRowContent(
+            state: VideoLayersTableRowState(),
+            canvasWidth: canvasWidth, canvasHeight: canvasHeight))
+        row.state.onCommit = { [weak row] in
+          guard let row else { return }
+          row.delegate?.videoLayersTableRowDidRequestCommit(row)
+        }
+        row.state.onSetHidden = { [weak row] value in
+          guard let row else { return }
+          row.delegate?.videoLayersTableRow(row, setHidden: value)
+        }
+      }
+      row.delegate = self
+      row.state.name = names[id] ?? "Missing Video Layer"
+      row.state.isHidden = programPreferences.videoLayerHidden[id] ?? false
+      if !row.state.hasUnconfirmedChanges && !row.state.isEditing {
+        row.state.display(
+          programPreferences.videoLayerTransforms[id] ?? .init(),
+          canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+      }
+      rows[id] = row
+    }
+    table.update(
+      layerIDs: layerIDs, rows: rows,
+      onCommitLayerOrder: onCommitLayerOrder, onError: onError)
   }
 
   override func loadView() {
-    let stack = NSStackView(views: [
-      manageButton, emptyLabel, container, errorLabel, outputErrorLabel,
-    ])
-    stack.orientation = .vertical
-    stack.alignment = .leading
-    stack.spacing = 8
     view = NSView()
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(stack)
+    errorLabel.isHidden = errorLabel.stringValue.isEmpty
+    let stack = contentStack([manageButton, errorLabel, scrollView])
+    pinContent(stack, in: view)
+  }
+}
+
+#if DEBUG
+
+  #Preview("Video Layers Editor", traits: .fixedLayout(width: 720, height: 360)) {
+    let editor = VideoLayersEditor()
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.videoComponents = ["Camera", "Background", "Portrait Source"].enumerated().map {
+      index, name in
+      var device = Ldtx_Workspace_V4_VfxSourceComponent()
+      device.internalID = UInt64(index + 1)
+      device.displayName = name
+      var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+      wrapper.vfxSource = device
+      return wrapper
+    }
+    var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
+    for id: UInt64 in [1, 2] {
+      var transform = Ldtx_Workspace_V4_BasicTransform()
+      transform.scaleX = 1
+      transform.scaleY = 1
+      programPreferences.videoLayerTransforms[id] = transform
+    }
+    programPreferences.videoLayerHidden[2] = true
+    editor.update(
+      definition: definition, programPreferences: programPreferences, layerIDs: [1, 2],
+      canvasWidth: 1920, canvasHeight: 1080,
+      onCommitTransform: { id, value in
+        programPreferences.videoLayerTransforms[id] = value
+        return value
+      },
+      onSetHidden: { id, value in programPreferences.videoLayerHidden[id] = value })
     NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-      stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-      stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 12),
-      stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
-      container.widthAnchor.constraint(equalTo: stack.widthAnchor),
-      container.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
+      editor.view.widthAnchor.constraint(equalToConstant: 720),
+      editor.view.heightAnchor.constraint(equalToConstant: 360),
     ])
-    errorLabel.textColor = .systemRed
-    outputErrorLabel.textColor = .systemRed
-    manageButton.target = self
-    manageButton.action = #selector(openManager)
+    return editor
   }
 
-  func update(programID: UInt64?, input: VideoLayersTableInput, active: Bool) {
-    _ = view
-    if self.programID != programID {
-      closeManager()
-      // Discard the old Program's field editor before replacing its rows.
-      container.table.rows.values.forEach { $0.discardEditing() }
-      view.window?.makeFirstResponder(nil)
-      container.table.update(
-        VideoLayersTableInput(
-          layerIDs: [], programPreferences: .init(), definition: .init(),
-          canvasWidth: input.canvasWidth, canvasHeight: input.canvasHeight))
-      errorLabel.stringValue = ""
-    }
-    self.programID = programID
-    self.input = input
-    isOutputActive = active
-    manageButton.isEnabled = programID != nil && !active
-    emptyLabel.stringValue = programID == nil ? "No program selected" : "No video layers"
-    emptyLabel.isHidden = programID != nil && !input.layerIDs.isEmpty
-    container.table.update(input)
-    if active { closeManager() }
-    manager?.update(
-      ids: input.layerIDs, options: Self.options(in: input.definition), active: active)
+  #Preview("Video Layers Editor — No Program", traits: .fixedLayout(width: 720, height: 360)) {
+    let editor = VideoLayersEditor()
+    editor.update(
+      definition: .init(), programPreferences: .init(), layerIDs: [],
+      canvasWidth: 1920, canvasHeight: 1080)
+    NSLayoutConstraint.activate([
+      editor.view.widthAnchor.constraint(equalToConstant: 720),
+      editor.view.heightAnchor.constraint(equalToConstant: 360),
+    ])
+    return editor
   }
-
-  @objc func openManager() {
-    guard programID != nil, !isOutputActive, manager == nil, let input, let window = view.window
-    else { return }
-    let sheet = VideoLayersManagementSheet(
-      ids: input.layerIDs, options: Self.options(in: input.definition))
-    sheet.commit = { [weak self] ids, baseline, candidates in
-      guard let self else { throw WorkspaceSelectionError(message: "Workspace is unavailable.") }
-      try commitMembership(ids, baseline, candidates)
-    }
-    sheet.onClose = { [weak self] in self?.closeManager() }
-    manager = sheet
-    window.beginSheet(sheet.window!)
-  }
-
-  func closeManager() {
-    guard let manager else { return }
-    if let window = manager.window, let parent = window.sheetParent { parent.endSheet(window) }
-    manager.window?.orderOut(nil)
-    self.manager = nil
-  }
-
-  static func options(in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4)
-    -> [WorkspaceSelectionOption<UInt64>]
-  {
-    let inputs = definition.inputDevices.compactMap { input -> WorkspaceSelectionOption<UInt64>? in
-      guard case .videoDevice(let device)? = input.definition else { return nil }
-      return .init(id: device.internalID, name: device.displayName)
-    }
-    let components = definition.videoComponents.compactMap {
-      component -> WorkspaceSelectionOption<UInt64>? in
-      switch component.definition {
-      case .vfxSource(let v): return .init(id: v.internalID, name: v.displayName)
-      case .solidColorFill(let v): return .init(id: v.internalID, name: v.displayName)
-      case .linearGradientFill(let v): return .init(id: v.internalID, name: v.displayName)
-      case .radialGradientFill(let v): return .init(id: v.internalID, name: v.displayName)
-      case .conicGradientFill(let v): return .init(id: v.internalID, name: v.displayName)
-      case .clock(let v): return .init(id: v.internalID, name: v.displayName)
-      case .testPattern(let v): return .init(id: v.internalID, name: v.displayName)
-      case nil: return nil
-      }
-    }
-    return inputs + components
-  }
-}
-
-struct VideoLayersManagementDraft {
-  let originalIDs: [UInt64]
-  let originalOptions: [WorkspaceSelectionOption<UInt64>]
-  var ids: [UInt64]
-
-  init(ids: [UInt64], options: [WorkspaceSelectionOption<UInt64>]) {
-    originalIDs = ids
-    originalOptions = options
-    self.ids = ids
-  }
-
-  mutating func add(_ id: UInt64) {
-    guard !ids.contains(id),
-      originalIDs.contains(id) || originalOptions.contains(where: { $0.id == id })
-    else { return }
-    ids.append(id)
-    // Restoring a checkbox must not reorder an existing layer.
-    ids = originalIDs.filter { ids.contains($0) } + ids.filter { !originalIDs.contains($0) }
-  }
-
-  mutating func remove(_ id: UInt64) { ids.removeAll { $0 == id } }
-
-  func canApply(currentIDs: [UInt64], options: [WorkspaceSelectionOption<UInt64>], active: Bool)
-    -> Bool
-  {
-    !active && ids != originalIDs && currentIDs == originalIDs && options == originalOptions
-  }
-  func apply(
-    currentIDs: [UInt64], options: [WorkspaceSelectionOption<UInt64>], active: Bool,
-    commit: ([UInt64], [UInt64], [WorkspaceSelectionOption<UInt64>]) throws -> Void
-  ) throws {
-    guard canApply(currentIDs: currentIDs, options: options, active: active) else {
-      throw WorkspaceSelectionError(message: "Video layers changed or cannot be managed now.")
-    }
-    try commit(ids, originalIDs, originalOptions)
-  }
-
-}
+#endif

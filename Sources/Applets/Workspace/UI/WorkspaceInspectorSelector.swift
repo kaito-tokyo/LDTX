@@ -9,7 +9,6 @@ public enum WorkspaceInspectorKind: Int {
   case workspaceCanvas = 2
   case workspaceOutput = 3
   case audioInputDevice = 4
-  case videoInputDevice = 5
   case vfxVideoComponent = 6
   case solidColorFillVideoComponent = 7
   case linearGradientFillVideoComponent = 8

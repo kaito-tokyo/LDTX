@@ -180,15 +180,14 @@ and a concrete WorkspacePreferences.</p>
             </tr>
 
             <tr>
-              <td><code>pts_master_video_input_device_internal_id</code></td>
+              <td><code>pts_master_vfx_source_internal_id</code></td>
               <td>
 
                   <code>uint64</code>
 
               </td>
               <td>optional</td>
-              <td>The Video Input Device internal ID used as the master clock for video
-presentation timestamps. When absent, the runtime default applies.</td>
+              <td>The VFX Source used as the master clock for video presentation timestamps.</td>
             </tr>
 
           </tbody>
@@ -286,8 +285,7 @@ output folder applies.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></h3>
-        <p>Defines the Video Layer order for one Program. A Video Layer is either a
-Video Input Device or a Video Component.</p>
+        <p>Defines the Video Component order for one Program.</p>
 
         <table>
           <thead>
@@ -327,7 +325,7 @@ and bits 14 through 0 are uniformly random.</td>
 
               </td>
               <td>repeated</td>
-              <td>The Video Input Device or Video Component internal IDs in Landscape Video
+              <td>The Video Component internal IDs in Landscape Video
 Layer order.</td>
             </tr>
 
@@ -339,7 +337,7 @@ Layer order.</td>
 
               </td>
               <td>repeated</td>
-              <td>The Video Input Device or Video Component internal IDs in Portrait Video
+              <td>The Video Component internal IDs in Portrait Video
 Layer order.</td>
             </tr>
 
@@ -405,14 +403,14 @@ Layer order.</td>
             </tr>
 
             <tr>
-              <td><code>input_devices</code></td>
+              <td><code>audio_devices</code></td>
               <td>
 
-                  <a href="#ldtx.workspace.v4.InputDeviceWrapper"><code>InputDeviceWrapper</code></a>
+                  <a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a>
 
               </td>
               <td>repeated</td>
-              <td>Represents Input Devices in the Workspace sidebar.</td>
+              <td>Represents Audio devices in the Workspace sidebar.</td>
             </tr>
 
             <tr>
@@ -555,88 +553,6 @@ and bits 14 through 0 are uniformly random.</td>
 
 
 
-      <article>
-        <h3 id="ldtx.workspace.v4.InputDeviceWrapper"><code>InputDeviceWrapper</code></h3>
-        <p>Wraps one concrete Input Device definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>video_device</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VideoInputDevice"><code>VideoInputDevice</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The Video Input Device definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>audio_device</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The Audio Input Device definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VideoInputDevice"><code>VideoInputDevice</code></h3>
-        <p>A video Input Device available in a Workspace.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Input Device shown in the Workspace sidebar.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
 
     </section>
 
@@ -648,8 +564,7 @@ and bits 14 through 0 are uniformly random.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></h3>
-        <p>The basic transform applied to a Video Layer, which is a Video Input Device
-or a Video Component.</p>
+        <p>The basic transform applied to a Video Layer, which is a Video Component.</p>
 
         <table>
           <thead>
@@ -1653,18 +1568,6 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>input_device_internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Video Input Device that provides this VFX Source's input video. This
-must not reference a Video Component or an Audio Input Device.</td>
-            </tr>
-
-            <tr>
               <td><code>effects</code></td>
               <td>
 
@@ -1672,7 +1575,8 @@ must not reference a Video Component or an Audio Input Device.</td>
 
               </td>
               <td>repeated</td>
-              <td>The VFX effects applied to the input video, in evaluation order.</td>
+              <td>Physical camera assignment is app-local and keyed by internal_id.
+The VFX effects applied to the input video, in evaluation order.</td>
             </tr>
 
           </tbody>
@@ -1998,14 +1902,14 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>input_device_internal_id</code></td>
+              <td><code>video_component_internal_id</code></td>
               <td>
 
                   <code>uint64</code>
 
               </td>
               <td>oneof <code>source</code></td>
-              <td>Uses this Input Device as input.</td>
+              <td>Analyzes the component after effects and before Program placement.</td>
             </tr>
 
             <tr>

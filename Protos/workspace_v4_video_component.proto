@@ -202,9 +202,9 @@ message VfxSourceComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The Video Input Device that provides this VFX Source's input video. This
-  // must not reference a Video Component or an Audio Input Device.
-  uint64 input_device_internal_id = 3;
+  reserved 3;
+  reserved "input_device_internal_id";
+  // Physical camera assignment is app-local and keyed by internal_id.
   // The VFX effects applied to the input video, in evaluation order.
   repeated VideoEffectWrapper effects = 4;
 }

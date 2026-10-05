@@ -141,13 +141,13 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: Sendable {
 
   public var source: Ldtx_Workspace_V4_OcrVision.OneOf_Source? = nil
 
-  /// Uses this Input Device as input.
-  public var inputDeviceInternalID: UInt64 {
+  /// Analyzes the component after effects and before Program placement.
+  public var videoComponentInternalID: UInt64 {
     get {
-      if case .inputDeviceInternalID(let v)? = source {return v}
+      if case .videoComponentInternalID(let v)? = source {return v}
       return 0
     }
-    set {source = .inputDeviceInternalID(newValue)}
+    set {source = .videoComponentInternalID(newValue)}
   }
 
   /// The region of the input image in which Vision performs the request.
@@ -189,8 +189,8 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Source: Equatable, Sendable {
-    /// Uses this Input Device as input.
-    case inputDeviceInternalID(UInt64)
+    /// Analyzes the component after effects and before Program placement.
+    case videoComponentInternalID(UInt64)
 
   }
 
@@ -373,7 +373,7 @@ nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Mes
 
 nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OcrVision"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}triggers\0\u{3}input_device_internal_id\0\u{3}region_of_interest\0\u{1}accurate\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}triggers\0\u{4}\u{2}region_of_interest\0\u{1}accurate\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0\u{3}video_component_internal_id\0\u{b}input_device_internal_id\0\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -384,20 +384,20 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.triggers) }()
-      case 4: try {
-        var v: UInt64?
-        try decoder.decodeSingularUInt64Field(value: &v)
-        if let v = v {
-          if self.source != nil {try decoder.handleConflictingOneOf()}
-          self.source = .inputDeviceInternalID(v)
-        }
-      }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._regionOfInterest) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.accurate) }()
       case 7: try { try decoder.decodeRepeatedStringField(value: &self.recognitionLanguages) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self.usesLanguageCorrection) }()
       case 9: try { try decoder.decodeRepeatedStringField(value: &self.customWords) }()
       case 10: try { try decoder.decodeSingularFloatField(value: &self._minimumTextHeight) }()
+      case 11: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.source != nil {try decoder.handleConflictingOneOf()}
+          self.source = .videoComponentInternalID(v)
+        }
+      }()
       default: break
       }
     }
@@ -417,9 +417,6 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
     if !self.triggers.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.triggers, fieldNumber: 3)
     }
-    try { if case .inputDeviceInternalID(let v)? = self.source {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
-    } }()
     try { if let v = self._regionOfInterest {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
@@ -437,6 +434,9 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
     }
     try { if let v = self._minimumTextHeight {
       try visitor.visitSingularFloatField(value: v, fieldNumber: 10)
+    } }()
+    try { if case .videoComponentInternalID(let v)? = self.source {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 11)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }

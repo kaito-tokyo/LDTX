@@ -138,7 +138,7 @@ struct WorkspaceDocumentSystemTestSuite {
       persistenceCoordinator: first.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(first))
     first.addWindowController(firstWindow)
-    let input = try firstWindow.windowRuntime.addVideoInputDevice(displayName: "Camera")
+    let input = try firstWindow.windowRuntime.addVFXSource(displayName: "Camera")
     let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
     try firstWindow.windowRuntime.setVideoLayerOrder(
       [input], forProgramInternalID: program, target: .landscape)
@@ -306,18 +306,17 @@ struct WorkspaceDocumentSystemTestSuite {
     try await save(document, to: url)
     let savedDefinition = document.uiState.definition
     let otherDefinition = other.uiState.definition
-    let camera = WorkspaceAddDeviceOption(
-      id: .avCaptureDevice(uniqueID: "test-camera"), name: "Camera")
     var draft = WorkspaceAddDraft()
-    draft.physicalDeviceID = camera.id
+    draft.name = "Camera"
+    draft.componentKind = .vfxSource
     let inputID = try WorkspaceResourceAddition.add(
-      sheet: .device, draft: draft, devices: [camera], uiState: document.uiState)
+      sheet: .videoComponent, draft: draft, devices: [], uiState: document.uiState)
     draft.name = "Color"
     draft.componentKind = .solidColor
     try WorkspaceResourceAddition.add(
       sheet: .videoComponent, draft: draft, devices: [], uiState: document.uiState)
     draft.name = "OCR"
-    draft.videoInputID = inputID
+    draft.videoComponentID = inputID
     try WorkspaceResourceAddition.add(
       sheet: .vision, draft: draft, devices: [], uiState: document.uiState)
     #expect(other.uiState.definition == otherDefinition)
@@ -330,7 +329,8 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { reopened.close() }
     #expect(reopened.uiState.definition == expected)
     #expect(
-      reopened.uiState.definition.visions.first?.ocrVision.source == .inputDeviceInternalID(inputID)
+      reopened.uiState.definition.visions.first?.ocrVision.source
+        == .videoComponentInternalID(inputID)
     )
   }
 
@@ -695,12 +695,12 @@ struct WorkspaceDocumentSystemTestSuite {
     program.landscapeVideoLayerInternalIds = [1, 2, 3]
     program.portraitVideoLayerInternalIds = [3, 2, 1]
     document.uiState.definition.programs = [program]
-    document.uiState.definition.inputDevices = [1, 2, 3].map { id in
-      var device = Ldtx_Workspace_V4_VideoInputDevice()
+    document.uiState.definition.videoComponents = [1, 2, 3].map { id in
+      var device = Ldtx_Workspace_V4_VfxSourceComponent()
       device.internalID = UInt64(id)
       device.displayName = "Camera \(id)"
-      var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-      wrapper.videoDevice = device
+      var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+      wrapper.vfxSource = device
       return wrapper
     }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")

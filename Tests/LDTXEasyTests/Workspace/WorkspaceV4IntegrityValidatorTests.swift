@@ -43,36 +43,68 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
   }
 
-  @Test("rejects a VFX Source that references an audio input device")
-  func rejectsAudioInputDeviceForVFXSource() {
-    var audioDevice = Ldtx_Workspace_V4_AudioInputDevice()
-    audioDevice.internalID = 1
-    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
-    input.definition = .audioDevice(audioDevice)
-
-    var source = Ldtx_Workspace_V4_VfxSourceComponent()
-    source.internalID = 2
-    source.inputDeviceInternalID = 1
-    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
-    component.definition = .vfxSource(source)
-
+  @Test("allows an unassigned VFX Source")
+  func allowsUnassignedVFXSource() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.inputDevices = [input]
-    definition.videoComponents = [component]
+    definition.videoComponents = [
+      .with {
+        $0.vfxSource = .with {
+          $0.internalID = 1
+          $0.displayName = "Camera"
+        }
+      }
+    ]
+    try WorkspaceV4IntegrityValidator.validate(definition)
+  }
 
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoInputDevice(1)) {
+  @Test("PTS master must reference a VFX Source")
+  func rejectsNonVFXTimingMaster() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.videoComponents = [
+      .with {
+        $0.testPattern = .with {
+          $0.internalID = 1
+          $0.displayName = "Pattern"
+        }
+      }
+    ]
+    definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 1
+    #expect(throws: WorkspaceV4IntegrityError.missingVfxSource(1)) {
       try WorkspaceV4IntegrityValidator.validate(definition)
     }
   }
 
+  @Test("OCR can reference a generated Video Component")
+  func allowsGeneratedComponentForOCR() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.videoComponents = [
+      .with {
+        $0.testPattern = .with {
+          $0.internalID = 1
+          $0.displayName = "Pattern"
+        }
+      }
+    ]
+    definition.visions = [
+      .with {
+        $0.ocrVision = .with {
+          $0.internalID = 2
+          $0.displayName = "OCR"
+          $0.videoComponentInternalID = 1
+        }
+      }
+    ]
+    try WorkspaceV4IntegrityValidator.validate(definition)
+  }
+
   @Test("rejects entity IDs reused across resource kinds")
   func rejectsCrossKindDuplicateInternalID() {
-    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
-    input.videoDevice = .with { $0.internalID = 1 }
+    var input = Ldtx_Workspace_V4_VideoComponentWrapper()
+    input.vfxSource = .with { $0.internalID = 1 }
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.inputDevices = [input]
+    definition.videoComponents = [input]
     definition.programs = [program]
 
     #expect(throws: WorkspaceV4IntegrityError.duplicateInternalID) {
@@ -80,17 +112,17 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
   }
 
-  @Test("rejects an OCR Vision without a video input device")
+  @Test("rejects an OCR Vision without a video component")
   func rejectsVisionWithMissingVideoInput() {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 2
-    vision.inputDeviceInternalID = 1
+    vision.videoComponentInternalID = 1
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.visions = [wrapper]
 
-    #expect(throws: WorkspaceV4IntegrityError.missingInputDevice(1)) {
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoComponent(1)) {
       try WorkspaceV4IntegrityValidator.validate(definition)
     }
   }
@@ -138,15 +170,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
 
   @Test("rejects duplicate video layers in one Program")
   func rejectsDuplicateVideoLayers() {
-    var video = Ldtx_Workspace_V4_VideoInputDevice()
+    var video = Ldtx_Workspace_V4_VfxSourceComponent()
     video.internalID = 1
-    var input = Ldtx_Workspace_V4_InputDeviceWrapper()
-    input.videoDevice = video
+    var input = Ldtx_Workspace_V4_VideoComponentWrapper()
+    input.vfxSource = video
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 2
     program.landscapeVideoLayerInternalIds = [1, 1]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.inputDevices = [input]
+    definition.videoComponents = [input]
     definition.programs = [program]
 
     #expect(throws: WorkspaceV4IntegrityError.duplicateVideoLayer(2)) {

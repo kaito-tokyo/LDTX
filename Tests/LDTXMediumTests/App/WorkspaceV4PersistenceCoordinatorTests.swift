@@ -118,7 +118,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
         == .coreAudioDevice(uid: "mic"))
     defaults.set(Data([0xff]), forKey: "tokyo.kaito.ldtx.input-device-assignments.v1")
     #expect(
-      WorkspaceAppletData(userDefaults: defaults).physicalDeviceIDsByInputDeviceInternalID.isEmpty)
+      WorkspaceAppletData(userDefaults: defaults).physicalDeviceIDsByResourceInternalID.isEmpty)
   }
 
   @Test func discardsOldProtobufStoreAndPersistsNewLocalState() throws {
