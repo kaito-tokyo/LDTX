@@ -43,11 +43,11 @@ final class AudioMixEditor: NSViewController {
     outputErrorLabel.textColor = .systemRed
     let stack = contentStack(
       [NSTextField(labelWithString: "Master Volumes")] + masterRows + [
-        contentStack([monitorButton, monitorVolume], vertical: false), targetSelector, channels,
+        contentStack([monitorButton, monitorVolume], vertical: false),
+        NSTextField(labelWithString: "Audio Mix"), targetSelector, channels,
         errorLabel, outputErrorLabel,
       ])
-    let scroll = contentScroll(stack)
-    pinContent(scroll, in: view, inset: 0)
+    pinContent(stack, in: view)
     for row in masterRows { row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
     channels.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
   }

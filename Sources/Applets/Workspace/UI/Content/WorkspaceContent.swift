@@ -4,7 +4,8 @@ import AppKit
 import LDTXAppletSupport
 import LDTXWorkspaceAppletInterface
 
-public final class WorkspaceContent: NSTabViewController {
+public final class WorkspaceContent: NSViewController {
+  let videoTabs = NSTabViewController()
   let landscape = VideoLayersEditor()
   let portrait = VideoLayersEditor()
   let audio = AudioMixEditor()
@@ -49,13 +50,23 @@ public final class WorkspaceContent: NSTabViewController {
       status.isHidden = true
       let item = NSTabViewItem(viewController: controller)
       item.label = title
-      addTabViewItem(item)
+      videoTabs.addTabViewItem(item)
     }
-    let audioItem = NSTabViewItem(viewController: audio)
-    audioItem.label = "Audio Mix"
-    addTabViewItem(audioItem)
-    selectedTabViewItemIndex = 0
+    videoTabs.selectedTabViewItemIndex = 0
+    addChild(audio)
+    addChild(videoTabs)
   }
+
+  public override func loadView() {
+    view = NSView()
+    let stack = contentStack([audio.view, videoTabs.view])
+    stack.spacing = 0
+    pinContent(stack, in: view, inset: 0)
+    audio.view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    videoTabs.view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    videoTabs.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+  }
+
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   public func connect(

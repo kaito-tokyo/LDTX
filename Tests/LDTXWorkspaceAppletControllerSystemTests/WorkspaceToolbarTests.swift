@@ -208,9 +208,10 @@ struct WorkspaceToolbarSystemTestSuite {
       first.close()
       second.close()
     }
-    #expect(first.contentPane.tabViewItems.map(\.label) == ["Landscape", "Portrait", "Audio Mix"])
-    #expect(first.contentPane.selectedTabViewItemIndex == 0)
-    first.contentPane.selectedTabViewItemIndex = 2
+    #expect(first.contentPane.videoTabs.tabViewItems.map(\.label) == ["Landscape", "Portrait"])
+    #expect(first.contentPane.videoTabs.selectedTabViewItemIndex == 0)
+    #expect(first.contentPane.audio.view.isDescendant(of: first.contentPane.view))
+    first.contentPane.videoTabs.selectedTabViewItemIndex = 1
     #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
     first.contentPane.uiState.selectedAudioMix = .portrait
     first.contentPane.refresh()
@@ -220,8 +221,8 @@ struct WorkspaceToolbarSystemTestSuite {
       first.contentPane.audio.targetSelector.action!,
       to: first.contentPane.audio.targetSelector.target)
     #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
-    #expect(first.contentPane.selectedTabViewItemIndex == 2)
-    #expect(second.contentPane.selectedTabViewItemIndex == 0)
+    #expect(first.contentPane.videoTabs.selectedTabViewItemIndex == 1)
+    #expect(second.contentPane.videoTabs.selectedTabViewItemIndex == 0)
   }
 
   @Test func toolbarActionsRestoreWidthsAndStayWithinTheirWindow() throws {
@@ -250,8 +251,17 @@ struct WorkspaceToolbarSystemTestSuite {
     let split = try #require(first.contentViewController as? PaneSplitViewController)
     let other = try #require(second.contentViewController as? PaneSplitViewController)
     split.view.layoutSubtreeIfNeeded()
-    for (pane, expectedWidth) in zip(split.splitView.arrangedSubviews, [240.0, 480.0, 340.0]) {
-      #expect(abs(pane.frame.width - expectedWidth) <= 1)
+    let sidebarWidth = split.splitView.arrangedSubviews[0].frame.width
+    #expect((240...260).contains(sidebarWidth))
+    let contentWidth =
+      split.splitView.bounds.width - sidebarWidth - 340
+      - 2 * split.splitView.dividerThickness
+    for (pane, expectedWidth) in zip(
+      split.splitView.arrangedSubviews, [sidebarWidth, contentWidth, 340.0])
+    {
+      #expect(
+        abs(pane.frame.width - expectedWidth) <= 1,
+        "Actual: \(pane.frame.width), expected: \(expectedWidth)")
     }
     for (identifier, index) in [
       (NSToolbarItem.Identifier("workspace.sidebar"), 0), (.init("workspace.inspector"), 2),

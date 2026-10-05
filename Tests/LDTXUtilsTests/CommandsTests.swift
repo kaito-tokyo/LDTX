@@ -224,7 +224,7 @@ struct CommandsSystemTestSuite {
         fromPropertyList: [
           "CFBundlePackageType": "BNDL",
           "LDTXWorkspaceVersion": 4,
-          "LDTXWorkspaceBundleVersion": "4.1",
+          "LDTXWorkspaceBundleVersion": "4.0",
         ],
         format: .xml,
         options: 0

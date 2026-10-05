@@ -23,10 +23,7 @@ public struct WorkspaceBundleReaderV4 {
   }
 
   public func read() throws -> WorkspaceV4Bundle {
-    let bundleVersion = try WorkspaceBundleValidatorV4(at: bundleURL).validate()
-    guard bundleVersion == "4.1" else {
-      throw CocoaError(.fileReadUnsupportedScheme, userInfo: [NSURLErrorKey: bundleURL])
-    }
+    _ = try WorkspaceBundleValidatorV4(at: bundleURL).validate()
 
     let legacyDefinitionURL = bundleURL.appending(
       path: "workspace.json", directoryHint: .notDirectory)

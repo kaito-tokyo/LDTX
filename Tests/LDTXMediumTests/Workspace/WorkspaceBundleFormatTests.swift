@@ -20,7 +20,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let infoData = try Data(contentsOf: packageURL.appendingPathComponent("Info.plist"))
     let infoXML = String(decoding: infoData, as: UTF8.self)
     #expect(infoXML.hasPrefix("<?xml"))
-    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.1")
+    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
   }
 
   @Test("generates a UUID version 7 identifier")
@@ -57,8 +57,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         as? [String: Any])
     #expect(info["CFBundlePackageType"] as? String == "BNDL")
     #expect(info["LDTXWorkspaceVersion"] as? Int == 4)
-    #expect(info["LDTXWorkspaceBundleVersion"] as? String == "4.1")
-    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.1")
+    #expect(info["LDTXWorkspaceBundleVersion"] as? String == "4.0")
+    #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
     let selectedReader = makeWorkspaceBundleReader(at: packageURL)
     guard case .v4(let v4Reader) = selectedReader else {
       Issue.record("Expected the V4 reader")
@@ -139,7 +139,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       fromPropertyList: [
         "CFBundlePackageType": "APPL",
         "LDTXWorkspaceVersion": 4,
-        "LDTXWorkspaceBundleVersion": "4.1",
+        "LDTXWorkspaceBundleVersion": "4.0",
       ],
       format: .xml,
       options: 0
@@ -155,47 +155,31 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Reader validates that the bundle version is a string")
-  func readerRequiresStringBundleVersion() throws {
+  @Test("Reader ignores the bundle version value", arguments: ["4.0", "4.1", "99.0"])
+  func readerIgnoresBundleVersion(bundleVersion: String) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
-    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    let infoData = try PropertyListSerialization.data(
-      fromPropertyList: [
-        "CFBundlePackageType": "BNDL",
-        "LDTXWorkspaceVersion": 4,
-        "LDTXWorkspaceBundleVersion": 4.0,
-      ],
-      format: .xml,
-      options: 0
-    )
-    try infoData.write(to: packageURL.appendingPathComponent("Info.plist"))
-
-    guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
-      Issue.record("Expected V4 selection from the logical Workspace version")
-      return
-    }
-    #expect(throws: CocoaError.self) {
-      try reader.read()
-    }
+    let workspace = makeWorkspace()
+    var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
+    try writeWorkspace(workspace, using: &writer)
+    try writeFormatInfo(to: packageURL, bundleVersion: bundleVersion)
+    #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
-  @Test("Reader rejects a bundle version it does not implement")
-  func readerRejectsUnsupportedBundleVersion() throws {
+  @Test("Reader ignores missing and non-string bundle versions", arguments: [false, true])
+  func readerIgnoresUnusableBundleVersion(includeValue: Bool) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
-    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    try writeFormatInfo(to: packageURL, bundleVersion: "4.0")
-
-    guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
-      Issue.record("Expected V4 selection from the logical Workspace version")
-      return
-    }
-    #expect(throws: CocoaError.self) {
-      try reader.read()
-    }
+    let workspace = makeWorkspace()
+    var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
+    try writeWorkspace(workspace, using: &writer)
+    var info: [String: Any] = ["CFBundlePackageType": "BNDL", "LDTXWorkspaceVersion": 4]
+    if includeValue { info["LDTXWorkspaceBundleVersion"] = 4.0 }
+    let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+    try data.write(to: packageURL.appendingPathComponent("Info.plist"))
+    #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
   @Test("requires a declared format version")
@@ -327,7 +311,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   private func writeFormatInfo(
     to bundleURL: URL,
     version: Int = 4,
-    bundleVersion: String = "4.1"
+    bundleVersion: String = "4.0"
   ) throws {
     let data = try PropertyListSerialization.data(
       fromPropertyList: [

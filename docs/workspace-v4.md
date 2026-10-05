@@ -10,7 +10,7 @@ Workspace v4 persists exactly two protobuf documents in each
 `.ldtxworkspace` package: `definition.pb` and `preferences.pb`. Its `Info.plist`
 contains `CFBundlePackageType` with the value `BNDL`, `LDTXWorkspaceVersion`
 with the integer value `4`, and `LDTXWorkspaceBundleVersion` with the string
-value `4.1`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
+value `4.0`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
 `LDTXWorkspaceBundleVersion` is an extensibility field and does not imply a
 compatibility rule. JSON mirrors are not part of the package format. The current
 format does not define `Assets` or `Extensions` resources.
@@ -28,9 +28,12 @@ version-specific Reader or a cause-free failure case. The selected
 `WorkspaceBundleReaderV4` uses
 `WorkspaceBundleValidatorV4` before decoding either protobuf document. The
 validator requires `CFBundlePackageType` to be `BNDL`,
-`LDTXWorkspaceVersion` to be integer `4`, and `LDTXWorkspaceBundleVersion` to
-be a string, then returns the bundle-version string for the Reader to interpret.
-`WorkspaceBundleReaderV4` currently accepts the exact physical version `4.1`.
+`LDTXWorkspaceVersion` to be integer `4`. The Reader ignores
+`LDTXWorkspaceBundleVersion`, including unknown, missing, and non-string values.
+New bundles retain the string `4.0` unless a fundamental, incompatible change
+requires a new bundle format. Protobuf model changes alone do not require a
+bundle-version change. Logical format validation and reference integrity checks
+still apply.
 The `.v4` case wraps `WorkspaceBundleReaderV4`, which is initialized with the
 package URL and reads that package with `read()`. Create a Reader for each read operation; it does not
 represent reusable Workspace state. Missing or unsupported packages are
@@ -80,7 +83,7 @@ envelopes.
 
 ## Audio devices, VFX Sources, and OCR
 
-Physical format 4.1 stores audio inputs in `audio_devices`. Video inputs are
+The Workspace model stores audio inputs in `audio_devices`. Video inputs are
 VFX Source Video Components; physical camera assignments are app-local and keyed
 by the VFX Source internal ID. Sources may remain unassigned. Multiple Sources
 can share a camera while applying their own effects. Programs reference only
@@ -94,7 +97,8 @@ to that component image. OCR does not require a selected Program or active outpu
 A referenced component cannot be deleted until its Program, OCR, and PTS
 references are removed.
 
-Format 4.0 is unsupported; no migration or compatibility adapter is provided.
+No migration or compatibility adapter is provided for removed model fields.
+The bundle-version value is not a compatibility gate.
 Removed protobuf fields are reserved, and their numbers are not reused.
 
 On macOS 27, Fast recognition with language correction disabled uses Accurate
