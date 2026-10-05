@@ -40,16 +40,6 @@ final class WorkspaceDispatcher: WorkspaceDispatcherProtocol {
     try workspaceWindowController.selectProgram(internalID: internalID)
   }
 
-  func setBasicTransform(
-    _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
-    videoLayerInternalID: UInt64, target: WorkspaceCanvasTarget
-  ) throws {
-    guard let workspaceWindowController else { throw WorkspaceDispatcherError.workspaceClosed }
-    try workspaceWindowController.windowRuntime.setBasicTransform(
-      transform, forVideoLayerInternalID: videoLayerInternalID,
-      programInternalID: programInternalID, target: target)
-  }
-
   func updateProgramRuntimes() {
     workspaceWindowController?.updateProgramRuntimes()
   }

@@ -74,9 +74,8 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
     #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
     #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
-    // This stored Content value is outside the hosted document environment.
-    // It must not resolve the saved local selection through a cached URL.
-    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
+    // Content is now the live AppKit controller connected to this document.
+    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
     #expect(first.uiState.inspectorSelector == .init(kind: .workspacePrograms))
     let inspector = WorkspaceProgramsInspector(uiState: first.uiState, appletData: data)
     #expect(!inspector.canSelectProgram)
@@ -115,7 +114,7 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(!reopenedInspector.canSelectProgram)
     #expect(reopenedInspector.programSelection.wrappedValue == a)
     #expect(
-      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == a)
+      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
     #expect(reopened.uiState.inspectorSelector == nil)
     await reopenedWindow.shutdown()
     await secondWindow.shutdown()
@@ -680,6 +679,57 @@ struct WorkspaceDocumentSystemTestSuite {
         == -80)
     #expect(savedOutput.definition == fixedDefinition)
     document.uiState.isOutputActive = false
+  }
+
+  @Test func outputAllowsOnlyLayerPermutationsAndPersistsLatestOrder() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer {
+      document.uiState.isOutputActive = false
+      document.close()
+    }
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 101
+    program.displayName = "Main"
+    program.landscapeVideoLayerInternalIds = [1, 2, 3]
+    program.portraitVideoLayerInternalIds = [3, 2, 1]
+    document.uiState.definition.programs = [program]
+    document.uiState.definition.inputDevices = [1, 2, 3].map { id in
+      var device = Ldtx_Workspace_V4_VideoInputDevice()
+      device.internalID = UInt64(id)
+      device.displayName = "Camera \(id)"
+      var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
+      wrapper.videoDevice = device
+      return wrapper
+    }
+    let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try await save(document, to: url)
+    document.uiState.isOutputActive = true
+    document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = [3, 1, 2]
+    document.uiState.definition.programs[0].portraitVideoLayerInternalIds = [1, 3, 2]
+    #expect(document.isDocumentEdited)
+    let reordered = document.uiState.definition
+    for rejected: [UInt64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
+      document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = rejected
+      #expect(document.uiState.definition == reordered)
+    }
+    var mixed = reordered
+    mixed.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
+    mixed.displayName = "Forbidden"
+    document.uiState.definition = mixed
+    #expect(document.uiState.definition == reordered)
+    document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
+    let latest = document.uiState.definition
+    document.uiState.definition.programs.removeAll()
+    #expect(document.uiState.definition == latest)
+    try await save(document, to: url, operation: .saveOperation)
+    #expect(try WorkspaceBundleReaderV4(at: url).read().definition == latest)
+    document.uiState.isOutputActive = false
+    let reopened = WorkspaceDocument()
+    defer { reopened.close() }
+    try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
+    #expect(reopened.uiState.definition == latest)
   }
 
   @Test func editsCanProceedWhileBackgroundSaveIsPaused() async throws {

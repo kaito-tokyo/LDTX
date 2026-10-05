@@ -3,7 +3,7 @@
 
 import SwiftUI
 
-struct WorkspaceSelectionOption<ID: Hashable>: Identifiable {
+struct WorkspaceSelectionOption<ID: Hashable>: Identifiable, Equatable {
   let id: ID
   let name: String
 }

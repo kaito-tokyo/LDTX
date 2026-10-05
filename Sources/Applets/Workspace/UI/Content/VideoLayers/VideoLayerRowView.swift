@@ -9,9 +9,6 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   let handle = NSImageView()
   let nameLabel = NSTextField(labelWithString: "")
   let hideButton = NSButton(checkboxWithTitle: "Hide", target: nil, action: nil)
-  let upButton = NSButton(title: "↑", target: nil, action: nil)
-  let downButton = NSButton(title: "↓", target: nil, action: nil)
-  let removeButton = NSButton(title: "−", target: nil, action: nil)
   let fields = (0..<4).map { _ in NSTextField(string: "") }
   let errorLabel = NSTextField(labelWithString: "")
   private(set) var hasUnconfirmedChanges = false
@@ -47,10 +44,9 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   private var isEditing = false
   private var canvasWidth: Double = 1920
   private var canvasHeight: Double = 1080
-  private var onAction: (UInt64, VideoLayerAction) -> Void = { _, _ in }
-  private var onCommitTransform: (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = {
-    _, _ in
-  }
+  private var preferences: () throws -> Ldtx_Workspace_V4_ProgramPreferences = { .init() }
+  private var onCommitPreferences: (Ldtx_Workspace_V4_ProgramPreferences) throws -> Void = { _ in }
+  private var onError: (Error) -> Void = { _ in }
 
   init(internalID: UInt64) {
     self.internalID = internalID
@@ -61,7 +57,7 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
       systemSymbolName: "line.3.horizontal", accessibilityDescription: "Reorder layer")
     handle.setAccessibilityLabel("Reorder layer")
     let top = NSStackView(views: [
-      handle, nameLabel, hideButton, upButton, downButton, removeButton,
+      handle, nameLabel, hideButton,
     ])
     top.orientation = .horizontal
     top.alignment = .centerY
@@ -100,15 +96,9 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
       handle.widthAnchor.constraint(equalToConstant: 20),
       handle.heightAnchor.constraint(equalToConstant: 20),
     ])
-    for button in [hideButton, upButton, downButton, removeButton] {
-      button.setContentHuggingPriority(.required, for: .horizontal)
-      button.target = self
-      button.action = #selector(performAction(_:))
-      if button !== hideButton { button.bezelStyle = .rounded }
-    }
-    upButton.setAccessibilityLabel("Move layer up")
-    downButton.setAccessibilityLabel("Move layer down")
-    removeButton.setAccessibilityLabel("Remove layer")
+    hideButton.setContentHuggingPriority(.required, for: .horizontal)
+    hideButton.target = self
+    hideButton.action = #selector(performAction(_:))
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -116,21 +106,20 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   func configure(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     programPreferences: Ldtx_Workspace_V4_ProgramPreferences,
-    canvasWidth: Double, canvasHeight: Double, canMoveUp: Bool, canMoveDown: Bool,
-    canRemove: Bool, onAction: @escaping (UInt64, VideoLayerAction) -> Void,
-    onCommitTransform: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void
+    canvasWidth: Double, canvasHeight: Double,
+    preferences: @escaping () throws -> Ldtx_Workspace_V4_ProgramPreferences,
+    onCommitPreferences: @escaping (Ldtx_Workspace_V4_ProgramPreferences) throws -> Void,
+    onError: @escaping (Error) -> Void
   ) {
     self.definition = definition
     self.programPreferences = programPreferences
     nameLabel.stringValue = layerName
     self.canvasWidth = canvasWidth
     self.canvasHeight = canvasHeight
-    self.onAction = onAction
-    self.onCommitTransform = onCommitTransform
+    self.preferences = preferences
+    self.onCommitPreferences = onCommitPreferences
+    self.onError = onError
     hideButton.state = isLayerHidden ? .on : .off
-    upButton.isEnabled = canMoveUp
-    downButton.isEnabled = canMoveDown
-    removeButton.isEnabled = canRemove
     if !hasUnconfirmedChanges && !isEditing { display(transform) }
   }
 
@@ -144,10 +133,14 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
   }
 
   @objc private func performAction(_ sender: NSButton) {
-    if sender === hideButton { onAction(internalID, sender.state == .on ? .hide : .show) }
-    if sender === upButton { onAction(internalID, .moveUp) }
-    if sender === downButton { onAction(internalID, .moveDown) }
-    if sender === removeButton { onAction(internalID, .remove) }
+    do {
+      var updated = try preferences()
+      updated.videoLayerHidden[internalID] = sender.state == .on
+      try onCommitPreferences(updated)
+    } catch {
+      hideButton.state = isLayerHidden ? .on : .off
+      onError(error)
+    }
   }
 
   func controlTextDidBeginEditing(_ notification: Notification) {
@@ -179,6 +172,11 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
     return true
   }
 
+  func discardEditing() {
+    hasUnconfirmedChanges = false
+    isEditing = false
+  }
+
   func commit() {
     guard hasUnconfirmedChanges else { return }
     let values = fields.compactMap { Double($0.stringValue) }
@@ -194,13 +192,15 @@ final class VideoLayerRowView: NSTableCellView, NSTextFieldDelegate {
       errorLabel.stringValue = "Invalid number."
       return
     }
-    var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationX = numbers[0]
-    transform.translationY = numbers[1]
-    transform.scaleX = numbers[2]
-    transform.scaleY = numbers[3]
     do {
-      try onCommitTransform(internalID, transform)
+      var updated = try preferences()
+      var transform = updated.videoLayerTransforms[internalID] ?? .init()
+      transform.translationX = numbers[0]
+      transform.translationY = numbers[1]
+      transform.scaleX = numbers[2]
+      transform.scaleY = numbers[3]
+      updated.videoLayerTransforms[internalID] = transform
+      try onCommitPreferences(updated)
       hasUnconfirmedChanges = false
       errorLabel.stringValue = ""
       display(transform)

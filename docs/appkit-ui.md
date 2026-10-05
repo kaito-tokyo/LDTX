@@ -62,9 +62,9 @@ Layer menus place existing resources into the selected Program.
 
 The Content pane implementation is organized by feature under
 `Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
-WorkspaceContent supplies the SwiftUI editor hosted below the AppKit preview.
-AudioMixEditor and VideoLayersEditor contain their controls, while
-WorkspaceContent supplies headings and layer actions using the same Workspace state.
+WorkspaceContent is an AppKit tab controller below the AppKit preview.
+Landscape and Portrait use VideoLayersEditor controllers; Audio Mix uses
+AudioMixEditor. Window-scoped Observation updates them from the Workspace model.
 Output and canvas settings, including their supporting types and helpers, live
 under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
@@ -207,8 +207,8 @@ creates a new output session. Stop from paused returns to idle. Transition state
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
-The Workspace Content pane uses an AppKit horizontal split above its SwiftUI
-scrollable editor. `WorkspaceWindowController` owns the
+The Workspace Content pane uses an AppKit horizontal split above its AppKit
+tabbed editor. `WorkspaceWindowController` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
 centers a fixed 16:9 plus 9:16 pair, and shows black when frames are absent.
@@ -229,17 +229,26 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 ### Video layer editing belongs to Content
 
-The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
+The Editor has Landscape, Portrait, and Audio Mix tabs. Each canvas has a standard
+scrolling NSTableView, a Manage Video Layers button, and error/empty-state labels.
+Transforms remain in the layer rows. Audio Mix contains both master volumes,
+monitor controls, input mute/gain/monitor controls, and a Landscape/Portrait gain
+selector sharing selectedAudioMix with Preview clicks. Tab selection starts at
+Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
-The Video Layers group uses a standard SwiftUI DisclosureGroup to collapse both
-canvas lists together. It starts expanded and keeps its disclosure state local
-to the Content view, without saving it in the Workspace.
+The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
+AppKit controls retain their default selection, background, and focus behavior.
+Each layer operation copies the latest ProgramPreferences and submits the complete
+value, preserving unrelated fields. Reordering submits the complete ID array and
+must preserve the current membership. Tab changes retain drafts; Program changes
+discard field editors and close management sheets. Window shutdown cancels Content
+Observation, closes sheets, and stops meter rendering before runtime shutdown.
 
 ### Program selection in the Inspector
 
 The first entry in Sidebar's WORKSPACE section is Programs. Selecting it opens
 an Inspector containing a standard vertical SwiftUI radio-group Picker.
-Content contains only the fixed previews and scrollable editor; Program selection
+Content contains only the fixed previews and tabbed editor; Program selection
 has no reserved row, horizontal scrolling, or custom layout sizing.
 
 The Program candidates are static entries in the Workspace definition. The
@@ -257,3 +266,19 @@ Program changes are allowed during output, but not during start, pause, or stop.
 Both existing runtimes and output audio mixes receive the selected Program's
 configuration and preferences. Recording packages and publishing sessions stay
 open across the change; output failures follow the normal finalization path.
+
+Video layer tables always allow ordering, visibility, and transform editing,
+including during output. Reordering uses the drag handle and is restricted to
+a single layer from the same table. The table keeps
+cell identity and unconfirmed transform text across ordinary model updates.
+
+Each canvas Editor opens a Manage Video Layers sheet for membership changes.
+The sheet shows existing and available layers as checkboxes, with current
+membership checked. It edits a local draft and applies it in one update.
+Rechecking an existing layer preserves its original order; new layers are appended. Cancel discards the
+draft. Removing a layer does not delete its resource or saved preferences.
+Management is unavailable during output; starting output or changing Programs
+closes the sheet. Changes to the source membership or resource candidates require
+reopening it, and submission revalidates output state and current candidates.
+WorkspaceDocument allows only permutations of existing video-layer arrays during
+output and retains the latest accepted order as its protected definition.

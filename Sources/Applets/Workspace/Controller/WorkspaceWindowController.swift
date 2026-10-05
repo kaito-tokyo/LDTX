@@ -229,6 +229,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       return
     }
     let task = Task { @MainActor in
+      workspaceWindow.stopContent()
       workspaceWindow.contentController.preview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()

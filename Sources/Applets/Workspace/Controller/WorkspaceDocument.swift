@@ -51,10 +51,13 @@ public final class WorkspaceDocument: NSDocument {
     uiState.documentContentsDidChange = { [weak self] in
       guard let self, !isReading else { return }
       if let outputDefinition, uiState.definition != outputDefinition {
-        isReading = true
-        uiState.definition = outputDefinition
-        isReading = false
-        return
+        guard Self.isVideoLayerReordering(uiState.definition, of: outputDefinition) else {
+          isReading = true
+          uiState.definition = outputDefinition
+          isReading = false
+          return
+        }
+        self.outputDefinition = uiState.definition
       }
       updateChangeCount(.changeDone)
     }
@@ -63,6 +66,29 @@ public final class WorkspaceDocument: NSDocument {
       outputDefinition = uiState.isOutputActive ? uiState.definition : nil
       Self.updateRecordingDockBadge()
     }
+  }
+
+  private static func isVideoLayerReordering(
+    _ candidate: WorkspaceUIState.WorkspaceDefinition,
+    of baseline: WorkspaceUIState.WorkspaceDefinition
+  ) -> Bool {
+    guard candidate.programs.count == baseline.programs.count else { return false }
+    var normalized = candidate
+    for index in baseline.programs.indices {
+      let before = baseline.programs[index]
+      let after = candidate.programs[index]
+      guard
+        before.landscapeVideoLayerInternalIds.sorted()
+          == after.landscapeVideoLayerInternalIds.sorted(),
+        before.portraitVideoLayerInternalIds.sorted()
+          == after.portraitVideoLayerInternalIds.sorted()
+      else { return false }
+      normalized.programs[index].landscapeVideoLayerInternalIds =
+        before.landscapeVideoLayerInternalIds
+      normalized.programs[index].portraitVideoLayerInternalIds =
+        before.portraitVideoLayerInternalIds
+    }
+    return normalized == baseline
   }
 
   /// Restores only the formal package; legacy recovery contents are not adopted.

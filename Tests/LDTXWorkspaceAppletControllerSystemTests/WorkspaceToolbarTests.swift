@@ -137,7 +137,7 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
   }
 
-  @Test func videoLayersEditorEditsBothCanvases() {
+  @Test func videoLayersEditorEditsBothCanvases() throws {
     _ = NSApplication.shared
     let state = WorkspaceUIState(definition: .init(), preferences: .init())
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -155,55 +155,40 @@ struct WorkspaceToolbarSystemTestSuite {
       second.close()
     }
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
-      let onAction: (UInt64, VideoLayerAction) -> Void = { internalID, action in
-        first.contentPane.performVideoLayerAction(
-          internalID, action: action, programInternalID: program.internalID,
-          target: target)
+      let candidates = VideoLayersEditor.options(in: state.definition)
+      let content = first.contentPane
+      try content.commitVideoLayerMembership(
+        [10, 20, 30], expectedIDs: [], expectedCandidates: candidates,
+        programInternalID: 100, target: target)
+      try content.commitLayerOrder([30, 10, 20], programID: 100, target: target)
+      #expect(state.definition.programs[0][keyPath: target.layerIDs] == [30, 10, 20])
+      #expect(throws: WorkspaceSelectionError.self) {
+        try content.commitLayerOrder([10], programID: 100, target: target)
       }
-      let content = VideoLayersEditor(
-        definition: state.definition, isLayerFrozen: state.isOutputActive,
-        programPreferences: .init(),
-        canvasWidth: Double(target.defaultProfile.width),
-        canvasHeight: Double(target.defaultProfile.height),
-        layerIDs: program[keyPath: target.layerIDs],
-        onAction: onAction, onCommitTransform: { _, _ in })
-      content.onAction(10, .add)
-      content.onAction(20, .add)
-      content.onAction(30, .add)
-      content.onAction(30, .move(fromOffsets: IndexSet(integer: 2), toOffset: 0))
+      try content.commitVideoLayerMembership(
+        [10, 20], expectedIDs: [30, 10, 20], expectedCandidates: candidates,
+        programInternalID: 100, target: target)
+      var preference = try content.preferences(for: 100, target: target)
+      preference.audioMasterVolumeDecibelTenths = -80
+      preference.videoLayerHidden[10] = true
+      try content.commitPreferences(preference, programID: 100, target: target)
+      #expect(state.preferences[keyPath: target.preferences][100]?.videoLayerHidden[10] == true)
       #expect(
-        state.definition.programs[0][keyPath: target.layerIDs] == [30, 10, 20])
-      content.onAction(30, .move(fromOffsets: IndexSet(integer: 0), toOffset: 3))
-      #expect(
-        state.definition.programs[0][keyPath: target.layerIDs] == [10, 20, 30])
-      content.onAction(30, .remove)
-      content.onAction(20, .moveUp)
-      let ids =
-        state.definition.programs[0][keyPath: target.layerIDs]
-      #expect(ids == [20, 10])
-      content.onAction(20, .remove)
-      content.onAction(10, .hide)
-      let hidden =
-        state.preferences[keyPath: target.preferences][program.internalID]
-      #expect(
-        hidden?.videoLayerHidden[10]
-          == true)
-      content.onAction(10, .show)
-      let shown =
-        state.preferences[keyPath: target.preferences][program.internalID]
-      #expect(
-        shown?.videoLayerHidden[10]
-          == false)
-      let before = state.definition
+        state.preferences[keyPath: target.preferences][100]?.audioMasterVolumeDecibelTenths == -80)
       for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
         state.isOutputActive = value.isOutputActive
-        content.onAction(30, .add)
-        content.onAction(10, .moveDown)
-        content.onAction(10, .move(fromOffsets: IndexSet(integer: 0), toOffset: 0))
-        content.onAction(10, .remove)
-        #expect(state.definition == before)
+        #expect(throws: WorkspaceSelectionError.self) {
+          try content.commitVideoLayerMembership(
+            [10], expectedIDs: [10, 20], expectedCandidates: candidates,
+            programInternalID: 100, target: target)
+        }
+        try content.commitLayerOrder([20, 10], programID: 100, target: target)
+        try content.commitLayerOrder([10, 20], programID: 100, target: target)
       }
       state.isOutputActive = false
+      try content.commitVideoLayerMembership(
+        [10], expectedIDs: [10, 20], expectedCandidates: candidates,
+        programInternalID: 100, target: target)
     }
     #expect(state.definition.programs[0].landscapeVideoLayerInternalIds == [10])
     #expect(state.definition.programs[0].portraitVideoLayerInternalIds == [10])
@@ -214,6 +199,29 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(WorkspaceInspectorKind(rawValue: 1) == nil)
     #expect(WorkspaceInspectorKind.workspaceCanvas.rawValue == 2)
     #expect(WorkspaceInspectorKind.ocrVision.rawValue == 13)
+  }
+
+  @Test func contentTabsAndAudioTargetAreIndependentAndWindowLocal() {
+    let first = makeWindow()
+    let second = makeWindow()
+    defer {
+      first.close()
+      second.close()
+    }
+    #expect(first.contentPane.tabViewItems.map(\.label) == ["Landscape", "Portrait", "Audio Mix"])
+    #expect(first.contentPane.selectedTabViewItemIndex == 0)
+    first.contentPane.selectedTabViewItemIndex = 2
+    #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
+    first.contentPane.uiState.selectedAudioMix = .portrait
+    first.contentPane.refresh()
+    #expect(first.contentPane.audio.targetSelector.selectedSegment == 1)
+    first.contentPane.audio.targetSelector.selectedSegment = 0
+    first.contentPane.audio.targetSelector.sendAction(
+      first.contentPane.audio.targetSelector.action!,
+      to: first.contentPane.audio.targetSelector.target)
+    #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
+    #expect(first.contentPane.selectedTabViewItemIndex == 2)
+    #expect(second.contentPane.selectedTabViewItemIndex == 0)
   }
 
   @Test func toolbarActionsRestoreWidthsAndStayWithinTheirWindow() throws {
@@ -500,11 +508,6 @@ private final class ToolbarDispatcher: WorkspaceDispatcherProtocol {
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) { completionHandler([]) }
   func selectProgram(internalID: UInt64) throws {}
-  func setBasicTransform(
-    _ transform: Ldtx_Workspace_V4_BasicTransform, programInternalID: UInt64,
-    videoLayerInternalID: UInt64, target: WorkspaceCanvasTarget
-  ) throws {}
-
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
   func captureScreenshots() throws -> [URL] {

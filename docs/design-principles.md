@@ -35,12 +35,15 @@ the relevant design or feature documentation instead.
 
 - `definition` is the authoritative Workspace structure, including resources,
   Programs, layers, physical assignments, and output configuration.
-- `definition` must not be changed while recording or streaming is active.
+- While recording or streaming is active, `definition` changes are limited to
+  reordering existing video layers within each Program and canvas. Layer IDs and
+  their occurrence counts must remain unchanged; all other definition fields
+  remain fixed.
 - `preferences` contain editable presentation and mix state, such as
   transforms, mute state, gain, and selections.
 - `preferences` may be changed while output is active when the running output
   pipeline supports the change.
-- The UI must prevent changes to `definition` during active output while
+- The UI must prevent other changes to `definition` during active output while
   continuing to allow supported `preferences` changes.
 
 ## Device availability must not make output start unintuitive

@@ -5,59 +5,6 @@
 import AppKit
 import LDTXWorkspaceAppletInterface
 import MetalKit
-import SwiftUI
-
-struct AudioChannelControl: NSViewRepresentable {
-  @Environment(\.isEnabled) private var isEnabled
-  var label: String
-  var value: Double
-  var showsValue: Bool
-  var peakProvider: (() -> Float)?
-  var onPreview: (Double) -> Void
-  var onCommit: (Double) -> Void
-
-  init(
-    label: String,
-    value: Double,
-    showsValue: Bool = true,
-    peakProvider: (() -> Float)?,
-    onPreview: @escaping (Double) -> Void,
-    onCommit: @escaping (Double) -> Void
-  ) {
-    self.label = label
-    self.value = value
-    self.showsValue = showsValue
-    self.peakProvider = peakProvider
-    self.onPreview = onPreview
-    self.onCommit = onCommit
-  }
-
-  func makeNSView(context: Context) -> AudioChannelControlView {
-    let row = AudioChannelControlView()
-    row.configure(
-      label: label,
-      value: value,
-      showsValue: showsValue,
-      isEnabled: isEnabled,
-      peakProvider: peakProvider,
-      onPreview: onPreview,
-      onCommit: onCommit
-    )
-    return row
-  }
-
-  func updateNSView(_ nsView: AudioChannelControlView, context: Context) {
-    nsView.configure(
-      label: label,
-      value: value,
-      showsValue: showsValue,
-      isEnabled: isEnabled,
-      peakProvider: peakProvider,
-      onPreview: onPreview,
-      onCommit: onCommit
-    )
-  }
-}
 
 final class AudioChannelControlView: NSView {
   private enum Layout {
@@ -272,28 +219,6 @@ final class AudioChannelControlView: NSView {
   }
 
 }
-
-#if DEBUG
-  #Preview("Audio Channel Control") {
-    AudioChannelControlPreviewHost()
-      .padding()
-      .frame(width: 520, height: 64)
-  }
-
-  private struct AudioChannelControlPreviewHost: View {
-    @State private var gain = 1.0
-
-    var body: some View {
-      AudioChannelControl(
-        label: "Mic 1",
-        value: gain,
-        peakProvider: { 0.64 },
-        onPreview: { gain = $0 },
-        onCommit: { gain = $0 }
-      )
-    }
-  }
-#endif
 
 final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
   private enum MeterScale {

@@ -10,16 +10,24 @@ import Testing
 @MainActor
 struct VideoLayersEditorTests {
   func input(
-    ids: [UInt64] = [1, 2, 3], frozen: Bool = false,
+    ids: [UInt64] = [1, 2, 3],
     preferences: Ldtx_Workspace_V4_ProgramPreferences = .init(),
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 = .init(),
     commit: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
-    action: @escaping (UInt64, VideoLayerAction) -> Void = { _, _ in }
-  ) -> VideoLayersTable {
-    VideoLayersTable(
+    order: @escaping ([UInt64]) throws -> Void = { _ in }
+  ) -> VideoLayersTableInput {
+    var current = preferences
+    return VideoLayersTableInput(
       layerIDs: ids, programPreferences: preferences, definition: definition,
-      canvasWidth: 1920, canvasHeight: 1080, isLayerFrozen: frozen,
-      onAction: action, onCommitTransform: commit)
+      canvasWidth: 1920, canvasHeight: 1080,
+      preferences: { current },
+      onCommitPreferences: { value in
+        for (id, transform) in value.videoLayerTransforms
+        where current.videoLayerTransforms[id] != transform {
+          try commit(id, transform)
+        }
+        current = value
+      }, onCommitLayerOrder: order)
   }
 
   @Test func resolvesAndUpdatesNamesFromDefinition() throws {
@@ -139,7 +147,7 @@ struct VideoLayersEditorTests {
     #expect(row.fields[0].stringValue == "960.0")
   }
 
-  @Test func onlyHandleStartsDragAndOutputDisablesIt() throws {
+  @Test func onlyHandleStartsDrag() throws {
     let table = VideoLayersTableView()
     table.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
     table.update(input())
@@ -152,15 +160,12 @@ struct VideoLayersEditorTests {
     let field = table.convert(NSPoint(x: 10, y: 10), from: cell.fields[0])
     #expect(!table.canDragRows(with: IndexSet(integer: 0), at: field))
     #expect(!table.canDragRows(with: IndexSet([0, 1]), at: handle))
-    table.update(input(frozen: true))
-    #expect(!table.canDragRows(with: IndexSet(integer: 0), at: handle))
-    #expect(!cell.upButton.isEnabled && !cell.downButton.isEnabled && !cell.removeButton.isEnabled)
   }
 
-  @Test func acceptsSingleLocalMovesAndRejectsForeignOrActiveOutput() throws {
+  @Test func acceptsSingleLocalMovesAndRejectsForeign() throws {
     let table = VideoLayersTableView()
-    var actions: [(UInt64, VideoLayerAction)] = []
-    table.update(input(action: { actions.append(($0, $1)) }))
+    var actions: [[UInt64]] = []
+    table.update(input(order: { actions.append($0) }))
     let info = LayerDraggingInfo(source: table, id: 3)
     #expect(
       table.tableView(
@@ -169,33 +174,26 @@ struct VideoLayersEditorTests {
     #expect(table.tableView(table, acceptDrop: info, row: 0, dropOperation: .above))
     #expect(actions.count == 1)
     #expect(
-      actions[0].0 == 3 && actions[0].1 == .move(fromOffsets: IndexSet(integer: 2), toOffset: 0))
+      actions[0] == [3, 1, 2])
     let toEnd = LayerDraggingInfo(source: table, id: 1)
     #expect(table.tableView(table, acceptDrop: toEnd, row: 3, dropOperation: .above))
-    #expect(actions[1].1 == .move(fromOffsets: IndexSet(integer: 0), toOffset: 3))
+    #expect(actions[1] == [2, 3, 1])
     #expect(table.tableView(table, acceptDrop: toEnd, row: 2, dropOperation: .above))
-    #expect(actions[2].1 == .move(fromOffsets: IndexSet(integer: 0), toOffset: 2))
+    #expect(actions[2] == [2, 1, 3])
     let foreign = LayerDraggingInfo(source: VideoLayersTableView(), id: 1)
     #expect(!table.tableView(table, acceptDrop: foreign, row: 0, dropOperation: .above))
     let missing = LayerDraggingInfo(source: table, id: 999)
     #expect(!table.tableView(table, acceptDrop: missing, row: 0, dropOperation: .above))
     #expect(!table.tableView(table, acceptDrop: toEnd, row: 4, dropOperation: .above))
     #expect(!table.tableView(table, acceptDrop: toEnd, row: 1, dropOperation: .on))
-    table.update(input(frozen: true, action: { actions.append(($0, $1)) }))
-    #expect(
-      table.tableView(
-        table, validateDrop: info, proposedRow: 0,
-        proposedDropOperation: .above
-      ).isEmpty)
-    #expect(!table.tableView(table, acceptDrop: toEnd, row: 0, dropOperation: .above))
-    #expect(actions.count == 3)
+
   }
 
   @Test func lowerHalfOfLastRowTargetsEndInsertion() {
     let table = DropRecordingTable()
     table.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
-    var actions: [VideoLayerAction] = []
-    table.update(input(action: { _, action in actions.append(action) }))
+    var actions: [[UInt64]] = []
+    table.update(input(order: { actions.append($0) }))
     let info = LayerDraggingInfo(source: table, id: 1)
     info.draggingLocation = table.convert(
       NSPoint(x: 40, y: table.rect(ofRow: 2).midY + 1), to: nil)
@@ -206,7 +204,7 @@ struct VideoLayersEditorTests {
     #expect(table.insertionRow == 3)
     #expect(
       table.tableView(table, acceptDrop: info, row: table.insertionRow, dropOperation: .above))
-    #expect(actions == [.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)])
+    #expect(actions == [[2, 3, 1]])
     info.draggingLocation = table.convert(
       NSPoint(x: 40, y: table.rect(ofRow: 2).midY - 1), to: nil)
     #expect(
@@ -252,13 +250,12 @@ struct VideoLayersEditorTests {
     #expect(row.errorLabel.stringValue == "Invalid number.")
   }
 
-  @Test func containerHasNoIndependentScrollRangeAndUpdatesRowsInPlace() throws {
+  @Test func containerScrollsIndependentlyAndUpdatesRowsInPlace() throws {
     let container = VideoLayersTableContainer()
     container.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
     container.table.update(input())
     container.layoutSubtreeIfNeeded()
-    #expect(!container.hasVerticalScroller && !container.hasHorizontalScroller)
-    #expect(container.table.frame.height == container.contentSize.height)
+    #expect(container.hasVerticalScroller)
     let first = try #require(container.table.rows[1])
     container.table.update(input(ids: [3, 1, 4]))
     #expect(container.table.rows[1] === first)
@@ -271,8 +268,6 @@ struct VideoLayersEditorTests {
     #expect(container.table.rows[1] !== first)
     container.frame = NSRect(x: 0, y: 0, width: 650, height: 116)
     container.layoutSubtreeIfNeeded()
-    #expect(container.table.frame.width == container.contentSize.width)
-    #expect(container.table.frame.height == container.contentSize.height)
   }
 
   @Test func activeEditorSurvivesOrdinaryRefresh() throws {
@@ -335,5 +330,145 @@ private final class DropRecordingTable: VideoLayersTableView {
   override func setDropRow(_ row: Int, dropOperation: NSTableView.DropOperation) {
     insertionRow = row
     super.setDropRow(row, dropOperation: dropOperation)
+  }
+}
+
+extension VideoLayersEditorTests {
+  @Test func preferenceCommitUsesLatestValueAndPreservesInsets() throws {
+    var live = Ldtx_Workspace_V4_ProgramPreferences()
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.scaleX = 1
+    transform.scaleY = 1
+    transform.topInset = 0.2
+    live.videoLayerTransforms[1] = transform
+    let table = VideoLayersTableView()
+    table.update(
+      VideoLayersTableInput(
+        layerIDs: [1], programPreferences: live, definition: .init(),
+        canvasWidth: 1920, canvasHeight: 1080, preferences: { live },
+        onCommitPreferences: { live = $0 }))
+    live.audioMasterVolumeDecibelTenths = -90
+    let row = try #require(table.rows[1])
+    row.fields[0].stringValue = "960"
+    row.controlTextDidChange(
+      Notification(name: NSControl.textDidChangeNotification, object: row.fields[0]))
+    row.commit()
+    #expect(live.audioMasterVolumeDecibelTenths == -90)
+    #expect(live.videoLayerTransforms[1]?.topInset == 0.2)
+    #expect(live.videoLayerTransforms[1]?.translationX == 0.5)
+  }
+
+  @Test func failedOrderCommitDoesNotAcceptDrop() {
+    let table = VideoLayersTableView()
+    var failures = 0
+    var value = input(order: { _ in throw WorkspaceSelectionError(message: "Rejected") })
+    value.onError = { _ in failures += 1 }
+    table.update(value)
+    #expect(
+      !table.tableView(
+        table, acceptDrop: LayerDraggingInfo(source: table, id: 1), row: 3, dropOperation: .above))
+    #expect(table.layerIDs == [1, 2, 3])
+    #expect(failures == 1)
+  }
+
+  @Test func membershipSheetRetainsDraftOnFailureAndInvalidatesExternalChanges() throws {
+    let options: [WorkspaceSelectionOption<UInt64>] = [
+      .init(id: 1, name: "One"), .init(id: 2, name: "Two"),
+    ]
+    let sheet = VideoLayersManagementSheet(ids: [1], options: options)
+    #expect(sheet.checkboxes[1]?.state == .on)
+    #expect(sheet.checkboxes[2]?.state == .off)
+    #expect(!sheet.applyButton.isEnabled)
+    try #require(sheet.checkboxes[2]).performClick(nil)
+    #expect(sheet.draft.ids == [1, 2])
+    var closed = false
+    sheet.onClose = { closed = true }
+    sheet.commit = { _, _, _ in throw WorkspaceSelectionError(message: "Failed") }
+    sheet.apply()
+    #expect(!closed)
+    #expect(sheet.errorLabel.stringValue == "Failed")
+    #expect(sheet.draft.ids == [1, 2])
+    sheet.update(ids: [1], options: Array(options.prefix(1)), active: false)
+    #expect(!sheet.applyButton.isEnabled)
+    #expect(sheet.checkboxes[2]?.isEnabled == false)
+  }
+
+  @Test func changingProgramDiscardsDraftAndActiveOutputClosesSheet() throws {
+    let editor = VideoLayersEditor()
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = editor
+    defer {
+      editor.closeManager()
+      window.close()
+    }
+    editor.update(programID: 1, input: input(), active: false)
+    let old = try #require(editor.container.table.rows[1])
+    old.fields[0].stringValue = "draft"
+    old.controlTextDidChange(
+      Notification(name: NSControl.textDidChangeNotification, object: old.fields[0]))
+    editor.openManager()
+    #expect(editor.manager != nil)
+    editor.update(programID: 1, input: input(), active: true)
+    #expect(editor.manager == nil)
+    #expect(!editor.manageButton.isEnabled)
+    editor.update(programID: 2, input: input(), active: false)
+    #expect(editor.container.table.rows[1] !== old)
+    #expect(editor.container.table.rows[1]?.hasUnconfirmedChanges == false)
+    #expect(editor.manageButton.isEnabled)
+  }
+
+  @Test func audioNumericDraftSurvivesRefreshAndFailure() {
+    let field = AudioDecibelField()
+    field.configure(value: 0, enabled: true) { _ in false }
+    field.stringValue = "-12.5"
+    field.controlTextDidChange(
+      Notification(name: NSControl.textDidChangeNotification, object: field))
+    field.configure(value: -4, enabled: true) { _ in false }
+    #expect(field.stringValue == "-12.5")
+    field.commit()
+    #expect(field.dirty)
+    var committed = 0.0
+    field.configure(value: -4, enabled: true) {
+      committed = $0
+      return true
+    }
+    field.commit()
+    #expect(committed == -12.5)
+    #expect(!field.dirty)
+  }
+}
+
+extension VideoLayersEditorTests {
+  @Test func monitorDeviceSheetStartsUnselectedAndClearsUnavailableDraft() throws {
+    let name = "MonitorSheet-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    defaults.set("saved", forKey: WorkspaceAudioEngine.outputDevicePreferenceKey)
+    var devices: [(uid: String, name: String)] = [("saved", "Saved Device"), ("new", "New Device")]
+    let sheet = MonitorOutputDeviceSheet(defaults: defaults, deviceProvider: { devices })
+    defer { sheet.stop() }
+    #expect(sheet.selectedUID == nil)
+    #expect(sheet.table.selectedRow == -1)
+    #expect(sheet.currentLabel.stringValue == "Saved Device")
+    #expect(!sheet.applyButton.isEnabled)
+    sheet.table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+    let selected = try #require(sheet.selectedUID)
+    sheet.refreshDevices()
+    #expect(sheet.selectedUID == selected)
+    devices.removeAll { $0.uid == selected }
+    sheet.refreshDevices()
+    #expect(sheet.selectedUID == nil)
+    #expect(!sheet.applyButton.isEnabled)
+    #expect(defaults.string(forKey: WorkspaceAudioEngine.outputDevicePreferenceKey) == "saved")
+    var closed = false
+    sheet.onClose = { closed = true }
+    sheet.table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+    sheet.applyButton.performClick(nil)
+    #expect(closed)
+    #expect(
+      defaults.string(forKey: WorkspaceAudioEngine.outputDevicePreferenceKey) == devices[0].uid)
   }
 }

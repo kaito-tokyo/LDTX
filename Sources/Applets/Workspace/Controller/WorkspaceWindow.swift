@@ -7,12 +7,14 @@ import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletUI
+import Observation
 import SwiftUI
 
 public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
   let contentController: WorkspaceContentViewController
   let contentPane: WorkspaceContent
   private let uiState: WorkspaceUIState
+  private var contentObservationTask: Task<Void, Never>?
   private let dispatcher: any WorkspaceDispatcherProtocol
 
   init(
@@ -35,14 +37,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       device: previewRenderer.device, delegate: previewRenderer,
       onSelectLandscape: { uiState.selectedAudioMix = .landscape },
       onSelectPortrait: { uiState.selectedAudioMix = .portrait })
-    let editorController = NSHostingController(
-      rootView:
-        contentPane
-        .environment(\.workspaceDispatcher, dispatcher)
-        .environment(\.documentReference, documentReference))
-    editorController.sizingOptions = [.minSize]
     self.contentController = WorkspaceContentViewController(
-      preview: preview, delegate: previewRenderer, editor: editorController,
+      preview: preview, delegate: previewRenderer, editor: contentPane,
       initialRatio: appletData.state(for: url).contentPreviewHeightRatio,
       saveRatio: { ratio in
         appletData.updateState(for: uiState.localStateURL ?? url) {
@@ -101,7 +97,33 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     contentController.view.layoutSubtreeIfNeeded()
     contentController.restoreInitialDividerPosition()
 
+    contentPane.connect(dispatcher: dispatcher, documentReference: documentReference)
+    let changes = Observations {
+      let documentURL = documentReference.document?.fileURL ?? uiState.localStateURL
+      return (
+        uiState.definition, uiState.preferences, uiState.isOutputActive, uiState.selectedAudioMix,
+        uiState.outputFailureMessage,
+        documentURL.map { appletData.state(for: $0) }
+      )
+    }
+    contentObservationTask = Task { @MainActor [weak self] in
+      for await _ in changes {
+        guard !Task.isCancelled, let self else { return }
+        contentPane.refresh()
+      }
+    }
     self.center()
+  }
+
+  public override func close() {
+    stopContent()
+    super.close()
+  }
+
+  func stopContent() {
+    contentObservationTask?.cancel()
+    contentObservationTask = nil
+    contentPane.stop()
   }
 
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
