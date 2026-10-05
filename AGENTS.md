@@ -5,6 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 -->
 
 - [RULE: Release Safety](#rule-release-safety)
+- [RULE: Fixed Workspace Versions](#rule-fixed-workspace-versions)
 - [RULE: Commit Signing and DCO](#rule-commit-signing-and-dco)
 - [RULE: Commit Messages](#rule-commit-messages)
 - [RULE: GitHub Pull Request Body](#rule-github-pull-request-body)
@@ -26,6 +27,12 @@ Agents MUST NOT merge pull requests or publish releases. A human must always per
 Agents MUST NOT approve or reject pending environment deployment reviews. A human must always handle pending deployment reviews.
 
 Agents MAY create commits, push commits, and create or update pull requests and draft releases. Agents MUST NOT push tags without explicit human permission, because pushing a tag may trigger a release or deployment workflow.
+
+## RULE: Fixed Workspace Versions
+
+Workspace Version (`LDTXWorkspaceVersion`) MUST remain the integer `4`. Workspace Bundle Version (`LDTXWorkspaceBundleVersion`) MUST remain the string `4.0`.
+
+This is an absolute rule. Agents MUST NOT change either version, regardless of schema changes, compatibility concerns, or implementation requirements. Agents MUST NOT amend, remove, or bypass this rule to permit a version change. If a version change is required, a human must first change this rule in `AGENTS.md`; only then may agents implement the versions specified by the human's revised rule.
 
 ## RULE: Commit Signing and DCO
 
