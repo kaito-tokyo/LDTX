@@ -15,6 +15,7 @@ import LDTXVision
 import LDTXWorkspaceAppletStore
 import Metal
 import Testing
+import Vision
 
 @Suite(.serialized)
 @MainActor
@@ -71,13 +72,15 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let frame = try await readyFrame(runtime: runtime, vision: vision)
     #expect(frame.image.extent == CGRect(x: 0, y: 0, width: 320, height: 80))
     #expect(runtime.definition.programs.isEmpty)
-    // Hosted CI has no Neural Engine backend. Exercise real OCR on the CPU.
+    // Revision 3's macOS 27 detector requires ANE even with CPU stage assignments.
+    // Exercise real Clock OCR with revision 2 on hosted CI, which has no ANE backend.
     let cpu = try #require(
       MLComputeDevice.allComputeDevices.first {
         if case .cpu = $0 { return true }
         return false
       })
-    let service = VisionOCRService(computeDevice: cpu)
+    let service = VisionOCRService(
+      computeDevice: cpu, requestRevision: VNRecognizeTextRequestRevision2)
     var recognizedClock = false
     for _ in 0..<10 {
       try await Task.sleep(for: .milliseconds(100))
@@ -86,7 +89,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
         in: current.image,
         configuration: .init(
           prefersAccurateRecognition: false,
-          recognitionLanguages: [], usesLanguageCorrection: false), stopToken: .neverStopped)
+          recognitionLanguages: ["en-US"], usesLanguageCorrection: false), stopToken: .neverStopped)
       #expect(output.elapsedSeconds >= 0)
       recognizedClock = recognizedClock || output.output.contains(":")
     }

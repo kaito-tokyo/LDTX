@@ -34,9 +34,11 @@ public struct VisionOCRConfiguration: Equatable, Sendable {
 
 public actor VisionOCRService {
   private let computeDevice: MLComputeDevice?
+  private let requestRevision: Int?
 
-  public init(computeDevice: MLComputeDevice? = nil) {
+  public init(computeDevice: MLComputeDevice? = nil, requestRevision: Int? = nil) {
     self.computeDevice = computeDevice
+    self.requestRevision = requestRevision
   }
 
   public func recognizeText(
@@ -48,6 +50,7 @@ public actor VisionOCRService {
     try Task.checkCancellation()
     let startedAt = ContinuousClock.now
     let request = VNRecognizeTextRequest()
+    if let requestRevision { request.revision = requestRevision }
     // macOS 27's Fast backend traps inside TextRecognition when language correction
     // is disabled. Accurate preserves uncorrected recognition and automatic languages.
     var usesAccurateRecognition = configuration.prefersAccurateRecognition
@@ -66,9 +69,6 @@ public actor VisionOCRService {
       request.minimumTextHeight = minimumTextHeight
     }
     if let computeDevice {
-      // macOS 27's OCR model loader can use ANE despite a main-stage CPU assignment.
-      // The request-wide CPU restriction also covers internal detector initialization.
-      if case .cpu = computeDevice { request.usesCPUOnly = true }
       request.setComputeDevice(computeDevice, for: .main)
       for stage in try request.supportedComputeStageDevices.keys {
         request.setComputeDevice(computeDevice, for: stage)
