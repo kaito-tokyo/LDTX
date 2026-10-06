@@ -11,7 +11,7 @@ on:
   workflow_call:
 
 jobs:
-  tahoe:
+  golden_gate:
     runs-on: xcode-27
     timeout-minutes: 180
 
