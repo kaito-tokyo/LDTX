@@ -13,7 +13,7 @@ path = [
   ".github/workflows/actions.lock",
   ".swift-format",
   ".swift-version",
-  ".vscode/settings.json",
+  ".vscode/launch.json",
   ".vscode/settings.json",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
