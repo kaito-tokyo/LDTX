@@ -46,6 +46,7 @@ jobs:
 
   xcode:
     uses: ./.github/workflows/xcode.yml
+    secrets: inherit
     permissions:
       contents: read
 
