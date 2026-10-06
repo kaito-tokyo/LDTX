@@ -207,12 +207,12 @@ public struct WorkspaceSidebar: View {
 }
 
 #if DEBUG
-#Preview("Workspace Sidebar") {
-  @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
-  WorkspaceSidebar(
-    storeService: storeService, deviceRegistry: DeviceRegistryService(),
-    appletData: WorkspaceAppletData()
-  )
-  .frame(width: 260, height: 640)
-}
+  #Preview("Workspace Sidebar") {
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+    WorkspaceSidebar(
+      storeService: storeService, deviceRegistry: DeviceRegistryService(),
+      appletData: WorkspaceAppletData()
+    )
+    .frame(width: 260, height: 640)
+  }
 #endif
