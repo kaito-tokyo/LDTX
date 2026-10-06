@@ -6,8 +6,8 @@ import LDTXProtos
 import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
-  let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
+  let storeService: WorkspaceStoreService
+  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
 
   private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
 
@@ -19,10 +19,13 @@ struct LinearGradientFillVideoComponentInspector: View {
   @State private var startColor: Color
   @State private var endColor: Color
 
-  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
-    self.uiState = uiState
+  init(
+    storeService: WorkspaceStoreService,
+    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  ) {
+    self.storeService = storeService
     self.videoComponentID = videoComponentID
-    self.component = uiState.definition.videoComponents
+    self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
         guard case .linearGradientFill(let component) = wrapper.definition else { return nil }
@@ -39,6 +42,7 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
       Section("Linear Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -68,7 +72,7 @@ struct LinearGradientFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(uiState.isOutputActive || component == nil)
+    .disabled(storeService.isOutputActive || component == nil)
     .onChange(of: name) { commitDraft() }
     .onChange(of: startX) { commitDraft() }
     .onChange(of: startY) { commitDraft() }
@@ -100,11 +104,11 @@ struct LinearGradientFillVideoComponentInspector: View {
     component.endColor.blue = Float(endNSColor.blueComponent)
     component.endColor.alpha = Float(endNSColor.alphaComponent)
 
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
     else { return }
     definition.videoComponents[index].definition = .linearGradientFill(component)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 
   private var gradient: LinearGradient {
@@ -117,10 +121,10 @@ struct LinearGradientFillVideoComponentInspector: View {
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: .linearGradientFill(5)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -128,11 +132,11 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5),
       isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: .linearGradientFill(5)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -140,10 +144,10 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Invalid") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(404)
+      storeService: storeService, videoComponentID: .linearGradientFill(404)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

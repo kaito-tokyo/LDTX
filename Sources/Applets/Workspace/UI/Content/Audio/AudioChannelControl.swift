@@ -235,6 +235,29 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
 
   var peakProvider: (() -> Float)?
 
+  override func viewWillMove(toWindow newWindow: NSWindow?) {
+    if let window {
+      NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+    }
+    super.viewWillMove(toWindow: newWindow)
+    isPaused = true
+    if let newWindow {
+      NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
+        name: NSWindow.willCloseNotification, object: newWindow)
+    }
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    lastDrawTimeSeconds = nil
+    isPaused = window == nil || device == nil
+  }
+
+  @objc private func windowWillClose(_ notification: Notification) {
+    isPaused = true
+    lastDrawTimeSeconds = nil
+  }
+
   private var commandQueue: MTLCommandQueue?
   private var pipelineState: MTLRenderPipelineState?
   private var displayedDecibels: Float = MeterScale.minimumDecibels
@@ -251,7 +274,7 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
     clearColor = MTLClearColorMake(0.08, 0.085, 0.09, 1.0)
     preferredFramesPerSecond = FrameRate.preferred
     enableSetNeedsDisplay = false
-    isPaused = false
+    isPaused = true
     commandQueue = metalDevice.makeCommandQueue()
     pipelineState = Self.makePipelineState(device: metalDevice, pixelFormat: colorPixelFormat)
     delegate = self
@@ -269,7 +292,7 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
     clearColor = MTLClearColorMake(0.08, 0.085, 0.09, 1.0)
     preferredFramesPerSecond = FrameRate.preferred
     enableSetNeedsDisplay = false
-    isPaused = false
+    isPaused = true
     commandQueue = metalDevice.makeCommandQueue()
     pipelineState = Self.makePipelineState(device: metalDevice, pixelFormat: colorPixelFormat)
     delegate = self

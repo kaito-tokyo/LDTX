@@ -33,6 +33,7 @@ public struct WorkspaceCanvasTarget {
 
 /// A read-only projection of the current persisted values for one canvas.
 public struct WorkspaceProgramCanvasSnapshot: Sendable {
+  public let audioChannelGainsDecibelTenths: [UInt64: Int32]
   public let programInternalID: UInt64
   public let layerIDs: [UInt64]
   public let preferences: Ldtx_Workspace_V4_ProgramPreferences
@@ -53,6 +54,7 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
     guard profileID.isEmpty || profileID == target.expectedProfileID else {
       throw WorkspaceCanvasSnapshotError.unsupportedOutputProfile(profileID)
     }
+    audioChannelGainsDecibelTenths = preferences.audioChannelGainsDecibelTenths
     self.programInternalID = programInternalID
     layerIDs = program[keyPath: target.layerIDs]
     self.preferences = preferences[keyPath: target.preferences][programInternalID] ?? .init()

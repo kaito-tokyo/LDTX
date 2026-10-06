@@ -32,6 +32,9 @@ public nonisolated struct Ldtx_Workspace_V4_WorkspacePreferencesV4: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
+  public var audioChannelGainsDecibelTenths: Dictionary<UInt64,Int32> = [:]
+
   /// Preferences for each Landscape Program, keyed by Program internal_id.
   public var landscapeProgramPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreferences> = [:]
 
@@ -51,9 +54,6 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramPreferences: Sendable {
 
   /// Master volume in tenths of a decibel (-32 represents -3.2 dB).
   public var audioMasterVolumeDecibelTenths: Int32 = 0
-
-  /// Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
-  public var audioChannelGainsDecibelTenths: Dictionary<UInt64,Int32> = [:]
 
   /// Whether each Audio Input Device is muted, keyed by internal_id.
   public var audioChannelMuted: Dictionary<UInt64,Bool> = [:]
@@ -116,7 +116,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_WorkspacePreferencesV4: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspacePreferencesV4"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_program_preferences\0\u{3}portrait_program_preferences\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_decibel_tenths\0\u{3}landscape_program_preferences\0\u{3}portrait_program_preferences\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -124,24 +124,29 @@ nonisolated extension Ldtx_Workspace_V4_WorkspacePreferencesV4: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.landscapeProgramPreferences) }()
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.portraitProgramPreferences) }()
+      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: &self.audioChannelGainsDecibelTenths) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.landscapeProgramPreferences) }()
+      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: &self.portraitProgramPreferences) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.audioChannelGainsDecibelTenths.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: self.audioChannelGainsDecibelTenths, fieldNumber: 1)
+    }
     if !self.landscapeProgramPreferences.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.landscapeProgramPreferences, fieldNumber: 1)
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.landscapeProgramPreferences, fieldNumber: 2)
     }
     if !self.portraitProgramPreferences.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.portraitProgramPreferences, fieldNumber: 2)
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_ProgramPreferences>.self, value: self.portraitProgramPreferences, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_WorkspacePreferencesV4, rhs: Ldtx_Workspace_V4_WorkspacePreferencesV4) -> Bool {
+    if lhs.audioChannelGainsDecibelTenths != rhs.audioChannelGainsDecibelTenths {return false}
     if lhs.landscapeProgramPreferences != rhs.landscapeProgramPreferences {return false}
     if lhs.portraitProgramPreferences != rhs.portraitProgramPreferences {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -151,7 +156,7 @@ nonisolated extension Ldtx_Workspace_V4_WorkspacePreferencesV4: SwiftProtobuf.Me
 
 nonisolated extension Ldtx_Workspace_V4_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_master_volume_decibel_tenths\0\u{3}audio_channel_gains_decibel_tenths\0\u{3}audio_channel_muted\0\u{3}video_layer_transforms\0\u{3}video_layer_hidden\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_master_volume_decibel_tenths\0\u{3}audio_channel_muted\0\u{3}video_layer_transforms\0\u{3}video_layer_hidden\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -160,10 +165,9 @@ nonisolated extension Ldtx_Workspace_V4_ProgramPreferences: SwiftProtobuf.Messag
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularSInt32Field(value: &self.audioMasterVolumeDecibelTenths) }()
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: &self.audioChannelGainsDecibelTenths) }()
-      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.audioChannelMuted) }()
-      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: &self.videoLayerTransforms) }()
-      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.videoLayerHidden) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.audioChannelMuted) }()
+      case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: &self.videoLayerTransforms) }()
+      case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.videoLayerHidden) }()
       default: break
       }
     }
@@ -173,24 +177,20 @@ nonisolated extension Ldtx_Workspace_V4_ProgramPreferences: SwiftProtobuf.Messag
     if self.audioMasterVolumeDecibelTenths != 0 {
       try visitor.visitSingularSInt32Field(value: self.audioMasterVolumeDecibelTenths, fieldNumber: 1)
     }
-    if !self.audioChannelGainsDecibelTenths.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufSInt32>.self, value: self.audioChannelGainsDecibelTenths, fieldNumber: 2)
-    }
     if !self.audioChannelMuted.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.audioChannelMuted, fieldNumber: 3)
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.audioChannelMuted, fieldNumber: 2)
     }
     if !self.videoLayerTransforms.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: self.videoLayerTransforms, fieldNumber: 4)
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufUInt64,Ldtx_Workspace_V4_BasicTransform>.self, value: self.videoLayerTransforms, fieldNumber: 3)
     }
     if !self.videoLayerHidden.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.videoLayerHidden, fieldNumber: 5)
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.videoLayerHidden, fieldNumber: 4)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_ProgramPreferences, rhs: Ldtx_Workspace_V4_ProgramPreferences) -> Bool {
     if lhs.audioMasterVolumeDecibelTenths != rhs.audioMasterVolumeDecibelTenths {return false}
-    if lhs.audioChannelGainsDecibelTenths != rhs.audioChannelGainsDecibelTenths {return false}
     if lhs.audioChannelMuted != rhs.audioChannelMuted {return false}
     if lhs.videoLayerTransforms != rhs.videoLayerTransforms {return false}
     if lhs.videoLayerHidden != rhs.videoLayerHidden {return false}

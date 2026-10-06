@@ -156,6 +156,11 @@ public enum WorkspaceV4IntegrityValidator {
 
     let audioInputIDs = Set(definition.audioDevices.map(\.internalID))
     let preferences = workspace.preferences
+    for id in preferences.audioChannelGainsDecibelTenths.keys {
+      guard audioInputIDs.contains(id) else {
+        throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
+      }
+    }
     try validateProgramPreferences(
       preferences.landscapeProgramPreferences,
       definition: definition, audioInputIDs: audioInputIDs,
@@ -270,9 +275,7 @@ public enum WorkspaceV4IntegrityValidator {
     audioInputIDs: Set<UInt64>,
     videoLayerIDs: Set<UInt64>
   ) throws {
-    for id in Array(preference.audioChannelGainsDecibelTenths.keys)
-      + preference.audioChannelMuted.keys
-    {
+    for id in preference.audioChannelMuted.keys {
       guard audioInputIDs.contains(id) else {
         throw WorkspaceV4IntegrityError.missingAudioInputDevice(id)
       }

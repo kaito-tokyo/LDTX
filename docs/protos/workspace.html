@@ -695,17 +695,6 @@ content width, in the range [0, 1].</td>
             </tr>
 
             <tr>
-              <td><code>audio_channel_gains_decibel_tenths</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>sint32</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.</td>
-            </tr>
-
-            <tr>
               <td><code>audio_channel_muted</code></td>
               <td>
 
@@ -751,8 +740,6 @@ content width, in the range [0, 1].</td>
 
 
 
-
-
       <article>
         <h3 id="ldtx.workspace.v4.WorkspacePreferencesV4"><code>WorkspacePreferencesV4</code></h3>
         <p>Contains mutable preferences for one WorkspaceDefinitionV4.</p>
@@ -762,6 +749,17 @@ content width, in the range [0, 1].</td>
             <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
           </thead>
           <tbody>
+
+            <tr>
+              <td><code>audio_channel_gains_decibel_tenths</code></td>
+              <td>
+
+                  <code>map&lt;</code><code>uint64</code><code>, </code><code>sint32</code><code>&gt;</code>
+
+              </td>
+              <td>map</td>
+              <td>Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.</td>
+            </tr>
 
             <tr>
               <td><code>landscape_program_preferences</code></td>
@@ -789,6 +787,8 @@ content width, in the range [0, 1].</td>
         </table>
 
       </article>
+
+
 
 
 

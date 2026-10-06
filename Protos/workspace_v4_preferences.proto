@@ -9,24 +9,24 @@ package ldtx.workspace.v4;
 
 // Contains mutable preferences for one WorkspaceDefinitionV4.
 message WorkspacePreferencesV4 {
+  // Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
+  map<uint64, sint32> audio_channel_gains_decibel_tenths = 1;
   // Preferences for each Landscape Program, keyed by Program internal_id.
-  map<uint64, ProgramPreferences> landscape_program_preferences = 1;
+  map<uint64, ProgramPreferences> landscape_program_preferences = 2;
   // Preferences for each Portrait Program, keyed by Program internal_id.
-  map<uint64, ProgramPreferences> portrait_program_preferences = 2;
+  map<uint64, ProgramPreferences> portrait_program_preferences = 3;
 }
 
 // Contains mutable preferences for one Program canvas.
 message ProgramPreferences {
   // Master volume in tenths of a decibel (-32 represents -3.2 dB).
   sint32 audio_master_volume_decibel_tenths = 1;
-  // Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
-  map<uint64, sint32> audio_channel_gains_decibel_tenths = 2;
   // Whether each Audio Input Device is muted, keyed by internal_id.
-  map<uint64, bool> audio_channel_muted = 3;
+  map<uint64, bool> audio_channel_muted = 2;
   // Video Layer transforms, keyed by Video Input Device or Component internal_id.
-  map<uint64, BasicTransform> video_layer_transforms = 4;
+  map<uint64, BasicTransform> video_layer_transforms = 3;
   // Whether each Video Layer is hidden, keyed by internal_id.
-  map<uint64, bool> video_layer_hidden = 5;
+  map<uint64, bool> video_layer_hidden = 4;
 }
 
 // The basic transform applied to a Video Layer, which is a Video Component.

@@ -8,32 +8,31 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  @Bindable var uiState: WorkspaceUIState
+  @Bindable var storeService: WorkspaceStoreService
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
   @Environment(\.documentReference) private var documentReference
-  @Environment(\.workspaceDispatcher) private var dispatcher
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
   @State private var additionError: String?
 
   public init(
-    uiState: WorkspaceUIState,
+    storeService: WorkspaceStoreService,
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData
   ) {
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
-    self._uiState = Bindable(wrappedValue: uiState)
+    self._storeService = Bindable(wrappedValue: storeService)
   }
 
   public var body: some View {
-    let inputDevices = uiState.definition.audioDevices
-    let videoComponents = uiState.definition.videoComponents
-    let visions = uiState.definition.visions
+    let inputDevices = storeService.definition.audioDevices
+    let videoComponents = storeService.definition.videoComponents
+    let visions = storeService.definition.visions
 
     VStack {
-      List(selection: $uiState.inspectorSelector) {
+      List(selection: $storeService.inspectorSelector) {
         Section {
           Label("Programs", systemImage: "rectangle.stack")
             .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
@@ -147,11 +146,11 @@ public struct WorkspaceSidebar: View {
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoComponents: uiState.definition.videoComponents,
+        videoComponents: storeService.definition.videoComponents,
         validationMessage: documentReference?.document == nil
           ? "The Workspace document is unavailable."
           : WorkspaceResourceAddition.validationMessage(
-            sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+            sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
             audioDiscoveryError: deviceRegistry.errorMessage),
         errorMessage: additionError,
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
@@ -168,7 +167,7 @@ public struct WorkspaceSidebar: View {
     }
   }
 
-  var canAddResource: Bool { documentReference?.document != nil && !uiState.isOutputActive }
+  var canAddResource: Bool { documentReference?.document != nil && !storeService.isOutputActive }
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
@@ -196,24 +195,25 @@ public struct WorkspaceSidebar: View {
     }
     if sheet == .device { deviceRegistry.refresh() }
     let id = try WorkspaceResourceAddition.add(
-      sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+      sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-      dispatcher?.synchronizeCaptureInputs(
+      storeService.synchronizeCaptureInputs(
         availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
       ) { _ in }
-      dispatcher?.synchronizeAudioMonitor()
+      storeService.synchronizeAudioMonitor()
     }
-    if sheet == .vision { dispatcher?.synchronizeVision() }
+    if sheet == .vision { storeService.synchronizeVision() }
   }
 
 }
 
 #Preview("Workspace Sidebar") {
-  @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
+  @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
   WorkspaceSidebar(
-    uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
+    storeService: storeService, deviceRegistry: DeviceRegistryService(),
+    appletData: WorkspaceAppletData()
   )
   .frame(width: 260, height: 640)
 }

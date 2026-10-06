@@ -6,8 +6,8 @@ import LDTXProtos
 import SwiftUI
 
 struct RadialGradientFillVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
-  let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
+  let storeService: WorkspaceStoreService
+  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
 
   private let component: Ldtx_Workspace_V4_FillRadialGradientComponent?
 
@@ -19,10 +19,13 @@ struct RadialGradientFillVideoComponentInspector: View {
   @State private var innerColor: Color
   @State private var outerColor: Color
 
-  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
-    self.uiState = uiState
+  init(
+    storeService: WorkspaceStoreService,
+    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  ) {
+    self.storeService = storeService
     self.videoComponentID = videoComponentID
-    self.component = uiState.definition.videoComponents
+    self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
         guard case .radialGradientFill(let component) = wrapper.definition else { return nil }
@@ -39,6 +42,7 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
       Section("Radial Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -68,7 +72,7 @@ struct RadialGradientFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(uiState.isOutputActive || component == nil)
+    .disabled(storeService.isOutputActive || component == nil)
     .onChange(of: name) { commitDraft() }
     .onChange(of: centerX) { commitDraft() }
     .onChange(of: centerY) { commitDraft() }
@@ -100,11 +104,11 @@ struct RadialGradientFillVideoComponentInspector: View {
     component.outerColor.blue = Float(outerNSColor.blueComponent)
     component.outerColor.alpha = Float(outerNSColor.alphaComponent)
 
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
     else { return }
     definition.videoComponents[index].definition = .radialGradientFill(component)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 
   private var gradient: RadialGradient {
@@ -118,10 +122,10 @@ struct RadialGradientFillVideoComponentInspector: View {
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(6)
+      storeService: storeService, videoComponentID: .radialGradientFill(6)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -129,11 +133,11 @@ struct RadialGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6),
       isOutputActive: true)
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(6)
+      storeService: storeService, videoComponentID: .radialGradientFill(6)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -141,10 +145,10 @@ struct RadialGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Invalid") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .radialGradientFill(404)
+      storeService: storeService, videoComponentID: .radialGradientFill(404)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

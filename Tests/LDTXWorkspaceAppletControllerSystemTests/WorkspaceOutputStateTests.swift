@@ -8,22 +8,22 @@ import Testing
 @MainActor
 struct WorkspaceOutputStateSystemTestSuite {
   @Test func storesOutputStatusForWorkspaceUI() {
-    let uiState = WorkspaceUIState(definition: .init(), preferences: .init())
+    let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
 
-    uiState.isOutputActive = true
-    uiState.isLocalRecording = true
-    uiState.outputFailureMessage = nil
+    storeService.isOutputActive = true
+    storeService.isLocalRecording = true
+    storeService.outputFailureMessage = nil
 
-    #expect(uiState.isOutputActive)
-    #expect(uiState.isLocalRecording)
-    #expect(uiState.outputFailureMessage == nil)
+    #expect(storeService.isOutputActive)
+    #expect(storeService.isLocalRecording)
+    #expect(storeService.outputFailureMessage == nil)
 
-    uiState.isOutputActive = false
-    uiState.isLocalRecording = false
-    uiState.outputFailureMessage = "Output failed."
+    storeService.isOutputActive = false
+    storeService.isLocalRecording = false
+    storeService.outputFailureMessage = "Output failed."
 
-    #expect(!uiState.isOutputActive)
-    #expect(!uiState.isLocalRecording)
-    #expect(uiState.outputFailureMessage == "Output failed.")
+    #expect(!storeService.isOutputActive)
+    #expect(!storeService.isLocalRecording)
+    #expect(storeService.outputFailureMessage == "Output failed.")
   }
 }

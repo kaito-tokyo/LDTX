@@ -74,31 +74,25 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
-    try runtime.setAudioChannelGain(
-      -12.34, forAudioInputDeviceInternalID: inputID,
-      programInternalID: id, target: .landscape)
-    try runtime.setAudioChannelGain(
-      1.26, forAudioInputDeviceInternalID: inputID,
-      programInternalID: id, target: .portrait)
-    #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
-        == -123)
-    #expect(
-      runtime.preferences.portraitProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
-        == 13)
+    try runtime.setAudioChannelGain(-12.34, forAudioInputDeviceInternalID: inputID)
+    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == -123)
+    try runtime.setAudioChannelGain(1.26, forAudioInputDeviceInternalID: inputID)
+    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
     for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
       #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
-        try runtime.setAudioChannelGain(
-          invalid, forAudioInputDeviceInternalID: inputID,
-          programInternalID: id, target: .landscape)
+        try runtime.setAudioChannelGain(invalid, forAudioInputDeviceInternalID: inputID)
       }
     }
-    #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioChannelGainsDecibelTenths[inputID]
-        == -123)
+    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
+    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
+      try runtime.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999)
+    }
     try runtime.removeProgram(internalID: id)
     #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
     #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
+    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
+    try runtime.removeInputDevice(internalID: inputID)
+    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == nil)
   }
 
   @Test("resolves a selected single-Canvas V4 RTMPS destination")

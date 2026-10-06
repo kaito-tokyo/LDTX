@@ -51,8 +51,8 @@ Detail Pane remains responsible only for that resource's settings.
    Program Video Layers UI is shown in `workspaceProgramContent`.
 3. Select `1-ScreenVideo` and confirm `workspaceInputDevicePreview` shows the
    unprocessed device image.
-4. Select `2-ScreenAudio` and confirm `workspaceInputDevicePreview` shows the
-   input spectrogram.
+4. Select `2-ScreenAudio` and confirm the Audio Input Device inspector shows
+   its physical device assignment.
 5. Select `3-MainScreen` and confirm `workspaceVideoComponentPreview` shows
    only that component after Crop processing and before Destination placement.
 6. Confirm each Crop field is labeled `%`, then change each edge in the Detail Pane and confirm the component preview

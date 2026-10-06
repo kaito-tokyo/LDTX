@@ -20,12 +20,14 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
-  private let uiState: WorkspaceUIState
+public final class WorkspaceWindowController: NSWindowController, NSWindowDelegate,
+  WorkspaceRuntimeActions
+{
+  private let storeService: WorkspaceStoreService
   private let appletData: WorkspaceAppletData
-  private let dispatcher: WorkspaceDispatcher
   private let workspaceWindow: WorkspaceWindow
 
+  let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
@@ -39,15 +41,15 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var preferencesObservationTask: Task<Void, Never>?
 
   public init(
-    uiState: WorkspaceUIState,
+    storeService: WorkspaceStoreService,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
     documentReference: DocumentReference
   ) {
-    let url = uiState.localStateURL!
-    self.uiState = uiState
+    let url = storeService.localStateURL!
+    self.storeService = storeService
     self.appletData = appletData
-    self.dispatcher = WorkspaceDispatcher()
+    storeService.appletData = appletData
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
@@ -55,11 +57,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator: captureSessionCoordinator,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = uiState.localStateURL else { return .init() }
+        guard let url = storeService.localStateURL else { return .init() }
         return appletData.state(for: url)
       },
       selectProgram: { internalID in
-        guard let url = uiState.localStateURL else { return }
+        guard let url = storeService.localStateURL else { return }
         appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       })
 
@@ -67,7 +69,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       windowRuntime: windowRuntime,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = uiState.localStateURL else { return .init() }
+        guard let url = storeService.localStateURL else { return .init() }
         return appletData.state(for: url)
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
@@ -107,14 +109,18 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
       prefersColor: true)
     self.previewRenderer = previewRenderer
+    storeService.audioPeakMeter = audioCoordinator.peakMeter
+    let pairedPreview = ProgramCanvasPairedPreview(
+      device: previewRenderer.device, delegate: previewRenderer,
+      onSelectLandscape: { storeService.selectedAudioMix = .landscape },
+      onSelectPortrait: { storeService.selectedAudioMix = .portrait })
+    self.pairedPreview = pairedPreview
     let window = WorkspaceWindow(
       url: url,
       deviceRegistry: DeviceRegistryService(),
       appletData: appletData,
-      dispatcher: dispatcher,
-      uiState: uiState, documentReference: documentReference,
-      previewRenderer: previewRenderer,
-      audioPeakMeter: audioCoordinator.peakMeter)
+      storeService: storeService, documentReference: documentReference,
+      pairedPreview: pairedPreview)
     self.workspaceWindow = window
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
@@ -124,7 +130,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     super.init(window: window)
 
     previewRenderer.start()
-    dispatcher.workspaceWindowController = self
+    storeService.runtimeActions = self
+    storeService.synchronizeAudioMonitor()
 
     let assignmentChanges = Observations { appletData.physicalDeviceIDsByResourceInternalID }
     deviceAssignmentsObservationTask = Task { @MainActor [weak self] in
@@ -134,7 +141,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       }
     }
 
-    let definitionChanges = Observations { uiState.definition }
+    let definitionChanges = Observations { storeService.definition }
     self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
       var isInitialValue = true
       for await _ in definitionChanges {
@@ -143,11 +150,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
           isInitialValue = false
           continue
         }
-        dispatcher.updateProgramRuntimes()
+        storeService.updateProgramRuntimes()
       }
     }
 
-    let preferencesChanges = Observations { uiState.preferences }
+    let preferencesChanges = Observations { storeService.preferences }
     self.preferencesObservationTask = Task { @MainActor [weak windowRuntime] in
       var isInitialValue = true
       for await _ in preferencesChanges {
@@ -156,7 +163,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
           isInitialValue = false
           continue
         }
-        dispatcher.updateProgramRuntimes()
+        storeService.updateProgramRuntimes()
       }
     }
 
@@ -168,39 +175,41 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
     recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
-      self.uiState.recordingState = state
-      self.uiState.isOutputActive = state.isOutputActive
-      self.uiState.isLocalRecording = self.recordingSession.isLocalRecording
+      self.storeService.recordingState = state
+      self.storeService.isOutputActive = state.isOutputActive
+      self.storeService.isLocalRecording = self.recordingSession.isLocalRecording
       (self.window as? WorkspaceWindow)?.updateOutputToolbar()
-      self.uiState.outputFailureMessage = {
+      self.storeService.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
       }()
     }
-    uiState.recordingState = recordingSession.state
-    uiState.isOutputActive = recordingSession.isRecording
-    uiState.isLocalRecording = recordingSession.isLocalRecording
+    storeService.recordingState = recordingSession.state
+    storeService.isOutputActive = recordingSession.isRecording
+    storeService.isLocalRecording = recordingSession.isLocalRecording
     if case .failed(let message) = recordingSession.state {
-      uiState.outputFailureMessage = message
+      storeService.outputFailureMessage = message
     }
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
         try? WorkspaceV4IntegrityValidator.visionID($0)
       })
-    uiState.visionResults = uiState.visionResults.filter { ids.contains($0.key) }
-    uiState.visionFailureMessages = uiState.visionFailureMessages.filter { ids.contains($0.key) }
+    storeService.visionResults = storeService.visionResults.filter { ids.contains($0.key) }
+    storeService.visionFailureMessages = storeService.visionFailureMessages.filter {
+      ids.contains($0.key)
+    }
     var context = windowRuntime.visionFeatureContext
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
-    context.reportResult = { [weak uiState] id, output in
+    context.reportResult = { [weak storeService] id, output in
       reportResult(id, output)
-      uiState?.visionResults[id] = output
-      uiState?.visionFailureMessages.removeValue(forKey: id)
+      storeService?.visionResults[id] = output
+      storeService?.visionFailureMessages.removeValue(forKey: id)
     }
-    context.reportFailure = { [weak uiState] id, error in
+    context.reportFailure = { [weak storeService] id, error in
       reportFailure(id, error)
-      uiState?.visionResults.removeValue(forKey: id)
-      uiState?.visionFailureMessages[id] = error.localizedDescription
+      storeService?.visionResults.removeValue(forKey: id)
+      storeService?.visionFailureMessages[id] = error.localizedDescription
     }
     visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
@@ -208,7 +217,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
-  func selectProgram(internalID: UInt64) throws {
+  public func selectProgram(internalID: UInt64) throws {
     guard let document = document as? NSDocument else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
@@ -222,7 +231,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         ])
     }
     guard windowRuntime.definition.programs.contains(where: { $0.internalID == internalID }),
-      let url = document.fileURL ?? uiState.localStateURL
+      let url = document.fileURL ?? storeService.localStateURL
     else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
@@ -238,7 +247,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     synchronizeVision()
   }
 
-  func startOutput() async throws {
+  public func startOutput() async throws {
     guard recordingSession.state.canStart else { return }
     guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
@@ -251,17 +260,17 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       return
     }
     let task = Task { @MainActor in
-      workspaceWindow.stopContent()
-      workspaceWindow.contentController.preview.stop()
+      storeService.runtimeActions = nil
+      pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
       definitionObservationTask?.cancel()
       preferencesObservationTask?.cancel()
       visionFeature.stop()
-      let priorFailure = uiState.outputFailureMessage
+      let priorFailure = storeService.outputFailureMessage
       await recordingSession.stop()
-      if uiState.outputFailureMessage != priorFailure {
-        shutdownFailureMessage = uiState.outputFailureMessage
+      if storeService.outputFailureMessage != priorFailure {
+        shutdownFailureMessage = storeService.outputFailureMessage
       }
       await withCheckedContinuation { continuation in
         windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
@@ -274,7 +283,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     await task.value
   }
 
-  func pauseOutput() async {
+  public func pauseOutput() async {
     await recordingSession.pause()
   }
 
@@ -282,15 +291,15 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     await recordingSession.stop()
   }
 
-  func updateMixPreferences() {
+  public func updateMixPreferences() {
     recordingSession.updateMixPreferences()
   }
 
-  func captureScreenshots() throws -> [URL] {
+  public func captureScreenshots() throws -> [URL] {
     try recordingSession.captureScreenshots()
   }
 
-  func openScreenshotsDirectory() {
+  public func openScreenshotsDirectory() {
     if let url = recordingSession.screenshotsDirectory {
       NSWorkspace.shared.open(url)
     }
@@ -298,25 +307,27 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 }
 
 extension WorkspaceWindowController {
-  func synchronizeVision() {
+  public func synchronizeVision() {
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
         try? WorkspaceV4IntegrityValidator.visionID($0)
       })
-    uiState.visionResults = uiState.visionResults.filter { ids.contains($0.key) }
-    uiState.visionFailureMessages = uiState.visionFailureMessages.filter { ids.contains($0.key) }
+    storeService.visionResults = storeService.visionResults.filter { ids.contains($0.key) }
+    storeService.visionFailureMessages = storeService.visionFailureMessages.filter {
+      ids.contains($0.key)
+    }
     var context = windowRuntime.visionFeatureContext
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
-    context.reportResult = { [weak uiState] id, output in
+    context.reportResult = { [weak storeService] id, output in
       reportResult(id, output)
-      uiState?.visionResults[id] = output
-      uiState?.visionFailureMessages.removeValue(forKey: id)
+      storeService?.visionResults[id] = output
+      storeService?.visionFailureMessages.removeValue(forKey: id)
     }
-    context.reportFailure = { [weak uiState] id, error in
+    context.reportFailure = { [weak storeService] id, error in
       reportFailure(id, error)
-      uiState?.visionResults.removeValue(forKey: id)
-      uiState?.visionFailureMessages[id] = error.localizedDescription
+      storeService?.visionResults.removeValue(forKey: id)
+      storeService?.visionFailureMessages[id] = error.localizedDescription
     }
     visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
@@ -328,11 +339,11 @@ extension WorkspaceWindowController {
     synchronizeAudioMonitor()
   }
 
-  func updateProgramRuntimes() {
+  public func updateProgramRuntimes() {
     windowRuntime.updateRuntimes()
   }
 
-  func synchronizeCaptureInputs(
+  public func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
@@ -340,8 +351,8 @@ extension WorkspaceWindowController {
       availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
   }
 
-  func synchronizeAudioMonitor() {
-    let localState = uiState.localStateURL.map { appletData.state(for: $0) } ?? .init()
+  public func synchronizeAudioMonitor() {
+    let localState = storeService.localStateURL.map { appletData.state(for: $0) } ?? .init()
     guard
       let programInternalID = localState.selectedProgramInternalID
         ?? windowRuntime.definition.programs.first?.internalID,

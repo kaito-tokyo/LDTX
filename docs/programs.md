@@ -43,7 +43,8 @@ A **Program Definition** is the source code for the **Program**'s render graph: 
 | State | Owner | Examples |
 | --- | --- | --- |
 | **Output Track** topology and reusable **Workspace resources** | **WorkspaceDefinitionV4** | **Program** name, **Canvas Size**, **Video Component** appearance, audio configuration |
-| Per-**Program** arrangement and operational **Preferences** | **WorkspacePreferencesV4** | **Video Layer** order, X/Y/Scale, audio gains, mute state |
+| Workspace-wide audio **Preferences** | **WorkspacePreferencesV4** | One gain per Audio Input Device, shared by all Programs and canvases |
+| Per-**Program** canvas **Preferences** | **ProgramPreferences** | X/Y/Scale, layer visibility, master volume, and input mute state |
 
 **Preferences** never define a new **Video Component**. They refer to an existing **Video Component** by name.
 

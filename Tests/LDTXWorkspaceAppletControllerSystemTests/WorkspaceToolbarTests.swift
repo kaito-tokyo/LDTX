@@ -15,6 +15,141 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceToolbarSystemTestSuite {
+  @Test func meterOwnsDrawingLifetimeAndEditorsReleaseWithoutStop() async throws {
+    _ = NSApplication.shared
+    let first = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+    let second = NSWindow(contentRect: first.frame, styleMask: [.titled], backing: .buffered, defer: false)
+    first.isReleasedWhenClosed = false
+    second.isReleasedWhenClosed = false
+    defer { first.close(); second.close() }
+    var meter: AudioPeakMeterMTKView? = AudioPeakMeterMTKView()
+    weak var releasedMeter = meter
+    #expect(try #require(meter).isPaused)
+    first.contentView?.addSubview(try #require(meter))
+    #expect(meter?.isPaused == (meter?.device == nil))
+    first.close()
+    #expect(meter?.isPaused == true)
+    meter?.removeFromSuperview()
+    second.contentView?.addSubview(try #require(meter))
+    #expect(meter?.isPaused == (meter?.device == nil))
+    meter?.removeFromSuperview()
+    #expect(meter?.isPaused == true)
+    meter = nil
+    for _ in 0..<100 {
+      if releasedMeter == nil { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(releasedMeter == nil)
+
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    var audio: AudioMixEditor? = AudioMixEditor(storeService: service)
+    var master: MasterVolumeEditor? = MasterVolumeEditor(storeService: service)
+    var layers: VideoLayersEditor? = VideoLayersEditor(storeService: service, target: .landscape)
+    weak var releasedAudio = audio
+    weak var releasedMaster = master
+    weak var releasedLayers = layers
+    _ = audio?.view
+    _ = master?.view
+    _ = layers?.view
+    audio = nil
+    master = nil
+    layers = nil
+    #expect(releasedAudio == nil)
+    #expect(releasedMaster == nil)
+    #expect(releasedLayers == nil)
+  }
+
+  @Test func storeRejectsOperationsWithoutRuntime() async {
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    await #expect(throws: WorkspaceSelectionError.self) { try await service.startOutput() }
+    #expect(throws: WorkspaceSelectionError.self) { try service.selectProgram(internalID: 1) }
+    #expect(throws: WorkspaceSelectionError.self) { try service.captureScreenshots() }
+    let ids: Set<String> = await withCheckedContinuation { continuation in
+      service.synchronizeCaptureInputs(availableCameraIDs: []) { ids in
+        continuation.resume(returning: ids)
+      }
+    }
+    #expect(ids.isEmpty)
+    service.synchronizeAudioMonitor()
+  }
+
+  @Test func editorsObserveStoreThroughAppKitLayout() async throws {
+    _ = NSApplication.shared
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let content = AudioMixEditor(storeService: service)
+    #expect(!content.isViewLoaded)
+    service.editorFailureMessage = "Initial failure"
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = content
+    window.orderFront(nil)
+    defer { window.close() }
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(content.errorLabel.stringValue == "Initial failure")
+    service.editorFailureMessage = "Updated failure"
+    for _ in 0..<50 {
+      if content.errorLabel.stringValue == "Updated failure" { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(content.errorLabel.stringValue == "Updated failure")
+  }
+
+  @Test func masterEditorObservesAndEditsVolumesIndependently() async throws {
+    _ = NSApplication.shared
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 100
+    service.definition.programs = [program]
+    let editor = MasterVolumeEditor(storeService: service)
+    #expect(!editor.isViewLoaded)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = editor
+    window.orderFront(nil)
+    defer { window.close() }
+    window.contentView?.layoutSubtreeIfNeeded()
+    let field = editor.masterFields[0]
+    field.stringValue = "-12.0"
+    field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+    field.commit()
+    #expect(
+      try service.preferences(for: 100, target: .landscape).audioMasterVolumeDecibelTenths == -120)
+    #expect(service.selectedAudioMix == .landscape)
+    service.updateAudio(target: .landscape) { $0.audioMasterVolumeDecibelTenths = -60 }
+    for _ in 0..<50 {
+      if field.stringValue == "-6.0" { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(field.stringValue == "-6.0")
+  }
+
+  @Test func audioMixEditsWorkspaceGainWithoutCanvasOrProgramSelection() throws {
+    _ = NSApplication.shared
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    service.definition.audioDevices = [
+      WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
+    ]
+    service.selectedAudioMix = .portrait
+    let editor = AudioMixEditor(storeService: service)
+    func descendants(_ view: NSView) -> [NSView] {
+      view.subviews.flatMap { [$0] + descendants($0) }
+    }
+    let views = descendants(editor.view)
+    #expect(!views.contains { $0 is NSSegmentedControl })
+    let gains = views.compactMap { $0 as? AudioChannelControlView }
+    #expect(gains.count == 1)
+    let gain = try #require(gains.first)
+    let slider = try #require(descendants(gain).compactMap { $0 as? NSSlider }.first)
+    #expect(slider.isEnabled)
+    slider.doubleValue = -12
+    slider.sendAction(try #require(slider.action), to: slider.target)
+    #expect(service.preferences.audioChannelGainsDecibelTenths[10] == -120)
+    #expect(!service.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
+    #expect(!service.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
+    #expect(service.preferences.audioChannelGainsDecibelTenths[10] == -120)
+    #expect(service.selectedAudioMix == .portrait)
+  }
+
   @Test func swiftUIProgramRadiosLayOutVertically() {
     _ = NSApplication.shared
     var first = Ldtx_Workspace_V4_ProgramDefinition()
@@ -49,12 +184,12 @@ struct WorkspaceToolbarSystemTestSuite {
     defer { defaults.removePersistentDomain(forName: suite) }
     let data = WorkspaceAppletData(userDefaults: defaults)
     let url = URL(fileURLWithPath: "/tmp/ProgramPicker-\(UUID()).ldtxworkspace")
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     state.localStateURL = url
-    let window = makeWindow(uiState: state, appletData: data)
+    let window = makeWindow(storeService: state, appletData: data)
     defer { window.close() }
     let content = window.contentPane
-    let inspector = WorkspaceProgramsInspector(uiState: state, appletData: data)
+    let inspector = WorkspaceProgramsInspector(storeService: state, appletData: data)
     #expect(inspector.programSelection.wrappedValue == nil)
     var first = Ldtx_Workspace_V4_ProgramDefinition()
     first.internalID = 11
@@ -66,7 +201,7 @@ struct WorkspaceToolbarSystemTestSuite {
     data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
     // The unhosted Content value has no document environment and must not read
     // local selection through the cached URL.
-    #expect(content.selectedProgram?.internalID == 11)
+    #expect(content.storeService.selectedProgram?.internalID == 11)
     let binding = inspector.programSelection
     #expect(!inspector.canSelectProgram)
     #expect(binding.wrappedValue == 11)
@@ -83,16 +218,16 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(inspector.programSelection.wrappedValue == nil)
     #expect(binding.wrappedValue == nil)
     binding.wrappedValue = nil
-    #expect(content.selectedProgram == nil)
+    #expect(content.storeService.selectedProgram == nil)
     #expect(data.state(for: url).selectedProgramInternalID == 22)
   }
 
   @Test func sidebarSelectionStartsEmptyAndStaysWindowLocal() throws {
     _ = NSApplication.shared
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    let other = WorkspaceUIState(definition: .init(), preferences: .init())
-    let window = makeWindow(uiState: state)
-    let second = makeWindow(uiState: other)
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let other = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let window = makeWindow(storeService: state)
+    let second = makeWindow(storeService: other)
     defer {
       window.close()
       second.close()
@@ -108,7 +243,7 @@ struct WorkspaceToolbarSystemTestSuite {
     let defaults = try #require(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let data = WorkspaceAppletData(userDefaults: defaults)
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     state.definition.videoComponents = [
       WorkspaceResourceFactory.makeVFXSource(id: 101, name: "Camera"),
       WorkspaceResourceFactory.makeVFXSource(id: 102, name: "Other Camera"),
@@ -117,7 +252,7 @@ struct WorkspaceToolbarSystemTestSuite {
     data.setPhysicalDeviceID(unavailable, for: 101)
     data.setPhysicalDeviceID(unavailable, for: 102)
     let field = WorkspacePhysicalDeviceField(
-      title: "Camera", internalID: 101, isAudio: false, uiState: state,
+      title: "Camera", internalID: 101, isAudio: false, storeService: state,
       appletData: data, deviceRegistry: DeviceRegistryService())
     let before = state.definition
     _ = field.body
@@ -139,7 +274,7 @@ struct WorkspaceToolbarSystemTestSuite {
 
   @Test func videoLayersEditorEditsBothCanvases() throws {
     _ = NSApplication.shared
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 100
     program.displayName = "Main"
@@ -147,48 +282,41 @@ struct WorkspaceToolbarSystemTestSuite {
     state.definition.videoComponents = [10, 20, 30].map {
       WorkspaceResourceFactory.makeSolidColor(id: UInt64($0), name: "Color \($0)")
     }
-    let other = WorkspaceUIState(definition: state.definition, preferences: .init())
-    let first = makeWindow(uiState: state)
-    let second = makeWindow(uiState: other)
+    let other = WorkspaceStoreService(definition: state.definition, preferences: .init())
+    let first = makeWindow(storeService: state)
+    let second = makeWindow(storeService: other)
     defer {
       first.close()
       second.close()
     }
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
-      let candidates = VideoLayersManagementSheet.options(in: state.definition)
       let content = first.contentPane
-      try content.commitVideoLayerMembership(
-        [10, 20, 30], expectedIDs: [], expectedCandidates: candidates,
-        programInternalID: 100, target: target)
-      try content.commitLayerOrder([30, 10, 20], programID: 100, target: target)
+      for id: UInt64 in [10, 20, 30] {
+        try content.storeService.setVideoLayerIncluded(true, componentID: id, programID: 100, target: target)
+      }
+      try content.storeService.commitLayerOrder([30, 10, 20], programID: 100, target: target)
       #expect(state.definition.programs[0][keyPath: target.layerIDs] == [30, 10, 20])
       #expect(throws: WorkspaceSelectionError.self) {
-        try content.commitLayerOrder([10], programID: 100, target: target)
+        try content.storeService.commitLayerOrder([10], programID: 100, target: target)
       }
-      try content.commitVideoLayerMembership(
-        [10, 20], expectedIDs: [30, 10, 20], expectedCandidates: candidates,
-        programInternalID: 100, target: target)
-      var preference = try content.preferences(for: 100, target: target)
+      try content.storeService.setVideoLayerIncluded(false, componentID: 30, programID: 100, target: target)
+      var preference = try content.storeService.preferences(for: 100, target: target)
       preference.audioMasterVolumeDecibelTenths = -80
       preference.videoLayerHidden[10] = true
-      try content.commitPreferences(preference, programID: 100, target: target)
+      try content.storeService.commitPreferences(preference, programID: 100, target: target)
       #expect(state.preferences[keyPath: target.preferences][100]?.videoLayerHidden[10] == true)
       #expect(
         state.preferences[keyPath: target.preferences][100]?.audioMasterVolumeDecibelTenths == -80)
       for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
         state.isOutputActive = value.isOutputActive
         #expect(throws: WorkspaceSelectionError.self) {
-          try content.commitVideoLayerMembership(
-            [10], expectedIDs: [10, 20], expectedCandidates: candidates,
-            programInternalID: 100, target: target)
+          try content.storeService.setVideoLayerIncluded(false, componentID: 20, programID: 100, target: target)
         }
-        try content.commitLayerOrder([20, 10], programID: 100, target: target)
-        try content.commitLayerOrder([10, 20], programID: 100, target: target)
+        try content.storeService.commitLayerOrder([20, 10], programID: 100, target: target)
+        try content.storeService.commitLayerOrder([10, 20], programID: 100, target: target)
       }
       state.isOutputActive = false
-      try content.commitVideoLayerMembership(
-        [10], expectedIDs: [10, 20], expectedCandidates: candidates,
-        programInternalID: 100, target: target)
+      try content.storeService.setVideoLayerIncluded(false, componentID: 20, programID: 100, target: target)
     }
     #expect(state.definition.programs[0].landscapeVideoLayerInternalIds == [10])
     #expect(state.definition.programs[0].portraitVideoLayerInternalIds == [10])
@@ -208,21 +336,20 @@ struct WorkspaceToolbarSystemTestSuite {
       first.close()
       second.close()
     }
-    #expect(first.contentPane.videoTabs.tabViewItems.map(\.label) == ["Landscape", "Portrait"])
-    #expect(first.contentPane.videoTabs.selectedTabViewItemIndex == 0)
-    #expect(first.contentPane.audio.view.isDescendant(of: first.contentPane.view))
-    first.contentPane.videoTabs.selectedTabViewItemIndex = 1
-    #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
-    first.contentPane.uiState.selectedAudioMix = .portrait
-    first.contentPane.refresh()
-    #expect(first.contentPane.audio.targetSelector.selectedSegment == 1)
-    first.contentPane.audio.targetSelector.selectedSegment = 0
-    first.contentPane.audio.targetSelector.sendAction(
-      first.contentPane.audio.targetSelector.action!,
-      to: first.contentPane.audio.targetSelector.target)
-    #expect(first.contentPane.uiState.selectedAudioMix == .landscape)
-    #expect(first.contentPane.videoTabs.selectedTabViewItemIndex == 1)
-    #expect(second.contentPane.videoTabs.selectedTabViewItemIndex == 0)
+    #expect(
+      first.contentPane.testVideoTabs.tabViewItems.map(\.label) == [
+        "Landscape Video Layers", "Portrait Video Layers",
+      ])
+    #expect(first.contentPane.testVideoTabs.selectedTabViewItemIndex == 0)
+    #expect(
+      first.contentPane.testAudioMixEditor.view.isDescendant(
+        of: first.contentPane.view))
+    first.contentPane.testVideoTabs.selectedTabViewItemIndex = 1
+    #expect(first.contentPane.storeService.selectedAudioMix == .landscape)
+    first.contentPane.storeService.selectedAudioMix = .portrait
+    #expect(first.contentPane.storeService.selectedAudioMix == .portrait)
+    #expect(first.contentPane.testVideoTabs.selectedTabViewItemIndex == 1)
+    #expect(second.contentPane.testVideoTabs.selectedTabViewItemIndex == 0)
   }
 
   @Test func toolbarActionsRestoreWidthsAndStayWithinTheirWindow() throws {
@@ -282,10 +409,10 @@ struct WorkspaceToolbarSystemTestSuite {
 
   @Test func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
     _ = NSApplication.shared
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     let dispatcher = ToolbarDispatcher()
     let otherDispatcher = ToolbarDispatcher()
-    let first = makeWindow(uiState: state, dispatcher: dispatcher)
+    let first = makeWindow(storeService: state, dispatcher: dispatcher)
     let second = makeWindow(dispatcher: otherDispatcher)
     defer {
       first.close()
@@ -340,9 +467,9 @@ struct WorkspaceToolbarSystemTestSuite {
 
   @Test func screenshotToolbarActionsRequireLocalRecording() throws {
     _ = NSApplication.shared
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     let dispatcher = ToolbarDispatcher()
-    let window = makeWindow(uiState: state, dispatcher: dispatcher)
+    let window = makeWindow(storeService: state, dispatcher: dispatcher)
     defer { window.close() }
     for (id, expected) in [
       ("workspace.captureScreenshots", "screenshot"),
@@ -373,49 +500,50 @@ struct WorkspaceToolbarSystemTestSuite {
     _ = NSApplication.shared
     let document = WorkspaceDocument()
     let controller = WorkspaceWindowController(
-      uiState: document.uiState, persistenceCoordinator: document.persistenceCoordinator,
+      storeService: document.storeService, persistenceCoordinator: document.persistenceCoordinator,
       appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
     let window = try #require(controller.window as? WorkspaceWindow)
-    #expect(window.contentController.preview.metalView.delegate === controller.previewRenderer)
+    #expect(
+      window.contentPane.testPairedPreview.metalView.delegate === controller.previewRenderer)
     #expect(
       controller.windowRuntime.landscapeRuntime
         !== controller.windowRuntime.portraitRuntime)
     await controller.shutdown()
-    #expect(window.contentController.preview.metalView.delegate == nil)
-    #expect(window.contentController.preview.metalView.isPaused)
+    #expect(window.contentPane.testPairedPreview.metalView.delegate == nil)
+    #expect(window.contentPane.testPairedPreview.metalView.isPaused)
     window.close()
     document.close()
   }
 
   @Test func contentPreviewUsesInjectedRuntimesAndTracksItsOwnProgram() {
     _ = NSApplication.shared
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
-    let otherState = WorkspaceUIState(definition: .init(), preferences: .init())
-    let first = makeWindow(uiState: state)
-    let second = makeWindow(uiState: otherState)
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let otherState = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let first = makeWindow(storeService: state)
+    let second = makeWindow(storeService: otherState)
     defer {
       first.close()
       second.close()
     }
-    let firstPreview = first.contentController.preview
+    let firstPreview = first.contentPane.testPairedPreview
     let firstDelegate = firstPreview.metalView.delegate
-    #expect(firstPreview !== second.contentController.preview)
-    #expect(firstDelegate !== second.contentController.preview.metalView.delegate)
-    #expect(first.contentPane.selectedProgram == nil)
+    #expect(firstPreview !== second.contentPane.testPairedPreview)
+    #expect(firstDelegate !== second.contentPane.testPairedPreview.metalView.delegate)
+    #expect(first.contentPane.storeService.selectedProgram == nil)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 42
     program.displayName = "Preview"
     state.definition.programs = [program]
-    #expect(first.contentPane.selectedProgram != nil)
-    #expect(second.contentPane.selectedProgram == nil)
+    #expect(first.contentPane.storeService.selectedProgram != nil)
+    #expect(second.contentPane.storeService.selectedProgram == nil)
     for value in [WorkspaceRecordingState.idle, .recording, .paused] {
       state.recordingState = value
-      #expect(first.contentPane.selectedProgram != nil)
-      #expect(first.contentController.preview === firstPreview)
+      #expect(first.contentPane.storeService.selectedProgram != nil)
+      #expect(first.contentPane.testPairedPreview === firstPreview)
       #expect(firstPreview.metalView.delegate === firstDelegate)
     }
     state.definition.programs = []
-    #expect(first.contentPane.selectedProgram == nil)
+    #expect(first.contentPane.storeService.selectedProgram == nil)
   }
 
   @Test func appKitPreviewSelectionAndSplitPositionAreWindowLocal() throws {
@@ -423,52 +551,115 @@ struct WorkspaceToolbarSystemTestSuite {
     let url = URL(fileURLWithPath: "/tmp/PreviewLayout-\(UUID()).ldtxworkspace")
     let defaults = try #require(UserDefaults(suiteName: "PreviewLayout-\(UUID())"))
     let data = WorkspaceAppletData(userDefaults: defaults)
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     var changes = 0
     state.documentContentsDidChange = { changes += 1 }
-    let first = makeWindow(uiState: state, appletData: data, url: url)
+    let externalID = UUID().uuidString.lowercased()
+    let first = makeWindow(storeService: state, appletData: data, url: url, externalID: externalID)
     defer { first.close() }
-    let pane = first.contentController
-    #expect(!pane.splitView.isVertical)
-    #expect(pane.preview.metalView.delegate != nil)
+    let pane = first.contentPane
+    #expect(!pane.testSplitView.isVertical)
+    #expect(pane.testPairedPreview.metalView.delegate != nil)
     first.orderFront(nil)
-    pane.splitView.setPosition(150, ofDividerAt: 0)
+    #expect(pane.testSplitView.arrangedSubviews[1] === pane.testEditorScrollView)
+    #expect(pane.testEditorScrollView.hasVerticalScroller)
+    pane.testSplitView.setPosition(pane.testSplitView.bounds.height - 80, ofDividerAt: 0)
     first.contentView?.layoutSubtreeIfNeeded()
-    pane.preview.layout()
-    let metalFrameInWindow = pane.preview.metalView.convert(pane.preview.metalView.bounds, to: nil)
+    let editorDocument = try #require(pane.testEditorScrollView.documentView)
+    #expect(editorDocument is NSStackView)
+    #expect(editorDocument.isFlipped)
+    #expect(editorDocument.frame.height > pane.testEditorScrollView.contentView.bounds.height)
+    #expect(
+      abs(editorDocument.frame.width - pane.testEditorScrollView.contentView.bounds.width) < 0.5)
+    editorDocument.scroll(NSPoint(x: 0, y: editorDocument.frame.height))
+    #expect(pane.testEditorScrollView.contentView.bounds.origin.y > 0)
+    editorDocument.scroll(.zero)
+    #expect(pane.testEditorScrollView.contentView.bounds.origin.y == 0)
+    pane.testSplitView.setPosition(150, ofDividerAt: 0)
+    first.contentView?.layoutSubtreeIfNeeded()
+    pane.testPairedPreview.layout()
+    let metalFrameInWindow = pane.testPairedPreview.metalView.convert(
+      pane.testPairedPreview.metalView.bounds, to: nil)
     #expect(metalFrameInWindow.maxY <= first.contentLayoutRect.maxY + 0.5)
-    pane.preview.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
-    pane.preview.layout()
-    let size = pane.preview.metalView.bounds.size
-    pane.preview.selectCanvas(at: CGPoint(x: size.width - 20, y: size.height / 2))
+    pane.testPairedPreview.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+    pane.testPairedPreview.layout()
+    let size = pane.testPairedPreview.metalView.bounds.size
+    pane.testPairedPreview.selectCanvas(at: CGPoint(x: size.width - 20, y: size.height / 2))
     #expect(state.selectedAudioMix == .portrait)
-    pane.preview.selectCanvas(at: CGPoint(x: 20, y: size.height / 2))
+    pane.testPairedPreview.selectCanvas(at: CGPoint(x: 20, y: size.height / 2))
     #expect(state.selectedAudioMix == .landscape)
-    pane.splitView.setPosition(220, ofDividerAt: 0)
-    pane.saveDividerPosition()
-    let saved = try #require(data.state(for: url).contentPreviewHeightRatio)
-    #expect(saved > 0 && saved < 1)
+    pane.testSplitView.setPosition(220, ofDividerAt: 0)
+    first.contentView?.layoutSubtreeIfNeeded()
+    let previewHeight = pane.testPairedPreview.frame.height
+    #expect(
+      pane.testSplitView.autosaveName == "WorkspaceContentPane.\(externalID)")
     first.setContentSize(NSSize(width: 1100, height: 800))
     first.contentView?.layoutSubtreeIfNeeded()
-    #expect(data.state(for: url).contentPreviewHeightRatio == saved)
-    let reopened = makeWindow(uiState: state, appletData: data, url: url)
+    #expect(abs(pane.testPairedPreview.frame.height - previewHeight) < 0.5)
+    pane.testSplitView.setPosition(100, ofDividerAt: 0)
+    first.contentView?.layoutSubtreeIfNeeded()
+    #expect(editorDocument.frame.height < pane.testEditorScrollView.contentView.bounds.height)
+    #expect(editorDocument.frame.minY == 0)
+    #expect(pane.testEditorScrollView.contentView.bounds.minY == 0)
+    let reopened = makeWindow(
+      storeService: state, appletData: data,
+      url: URL(fileURLWithPath: "/tmp/Renamed-\(UUID()).ldtxworkspace"), externalID: externalID)
     defer { reopened.close() }
-    let split = reopened.contentController.splitView
-    let ratio = Double(
-      split.arrangedSubviews[0].frame.height / (split.bounds.height - split.dividerThickness))
-    #expect(abs(ratio - saved) < 0.01)
+    let split = reopened.contentPane.testSplitView
+    #expect(split.autosaveName == pane.testSplitView.autosaveName)
     #expect(changes == 0)
-    pane.preview.stop()
-    #expect(pane.preview.metalView.delegate == nil)
-    #expect(pane.preview.metalView.isPaused)
+    pane.testPairedPreview.stop()
+    #expect(pane.testPairedPreview.metalView.delegate == nil)
+    #expect(pane.testPairedPreview.metalView.isPaused)
   }
 
-  @Test func oldLocalStateDoesNotRequirePreviewHeight() throws {
-    let encoded = try JSONEncoder().encode(WorkspaceLocalState())
-    #expect(!String(decoding: encoded, as: UTF8.self).contains("contentPreviewHeightRatio"))
+  @Test func initialDividerRestoresAndPreservesDraggedHeight() throws {
+    let externalID = UUID().uuidString.lowercased()
+    let first = makeWindow(externalID: externalID)
+    defer { first.close() }
+    first.orderFront(nil)
+    first.contentView?.layoutSubtreeIfNeeded()
+    let split = first.contentPane.testSplitView
+    #expect(abs(split.arrangedSubviews[0].frame.height - 280) < 0.5)
+
+    let initialHeight = split.arrangedSubviews[0].frame.height
+    let start = NSPoint(x: split.bounds.midX, y: initialHeight + split.dividerThickness / 2)
+    let end = NSPoint(x: start.x, y: 360)
+    let timestamp = ProcessInfo.processInfo.systemUptime
+    let down = try #require(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: split.convert(start, to: nil), modifierFlags: [],
+        timestamp: timestamp, windowNumber: first.windowNumber, context: nil,
+        eventNumber: 1, clickCount: 1, pressure: 1))
+    for type in [NSEvent.EventType.leftMouseDragged, .leftMouseUp] {
+      let event = try #require(
+        NSEvent.mouseEvent(
+          with: type, location: split.convert(end, to: nil), modifierFlags: [],
+          timestamp: timestamp + 0.01, windowNumber: first.windowNumber, context: nil,
+          eventNumber: 2, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+      NSApplication.shared.postEvent(event, atStart: false)
+    }
+    split.mouseDown(with: down)
+    first.contentView?.layoutSubtreeIfNeeded()
+    let draggedHeight = split.arrangedSubviews[0].frame.height
+    #expect(abs(draggedHeight - 360) < 1)
+
+    for height: CGFloat in [800, 700] {
+      first.setContentSize(NSSize(width: 1062, height: height))
+      first.contentView?.layoutSubtreeIfNeeded()
+      #expect(abs(split.arrangedSubviews[0].frame.height - draggedHeight) < 0.5)
+    }
+    first.close()
+    let reopened = makeWindow(externalID: externalID)
+    defer { reopened.close() }
+    reopened.orderFront(nil)
+    reopened.contentView?.layoutSubtreeIfNeeded()
     #expect(
-      try JSONDecoder().decode(WorkspaceLocalState.self, from: encoded).contentPreviewHeightRatio
-        == nil)
+      abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
+    reopened.setContentSize(NSSize(width: 1100, height: 850))
+    reopened.contentView?.layoutSubtreeIfNeeded()
+    #expect(
+      abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
   }
 
   private func drainTasks() async {
@@ -477,33 +668,41 @@ struct WorkspaceToolbarSystemTestSuite {
   }
 
   private func makeWindow(
-    uiState: WorkspaceUIState? = nil,
-    dispatcher: (any WorkspaceDispatcherProtocol)? = nil,
+    storeService: WorkspaceStoreService? = nil,
+    dispatcher: (any WorkspaceRuntimeActions)? = nil,
     appletData: WorkspaceAppletData? = nil,
-    url: URL? = nil
+    url: URL? = nil,
+    externalID: String = UUID().uuidString.lowercased()
   ) -> WorkspaceWindow {
     let document = WorkspaceDocument()
+    let state = storeService ?? document.storeService
+    state.externalID = externalID
+    state.appletData = appletData ?? WorkspaceAppletData()
+    state.runtimeActions = dispatcher
+    let renderer = ProgramPairPreviewRenderer(
+      landscapeRuntime: ProgramRuntime(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
+      portraitRuntime: ProgramRuntime(
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
+      landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
+      prefersColor: true)
+    let preview = ProgramCanvasPairedPreview(
+      device: renderer.device, delegate: renderer,
+      onSelectLandscape: { state.selectedAudioMix = .landscape },
+      onSelectPortrait: { state.selectedAudioMix = .portrait })
     return WorkspaceWindow(
       url: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"),
-      deviceRegistry: DeviceRegistryService(), appletData: appletData ?? WorkspaceAppletData(),
-      dispatcher: dispatcher ?? WorkspaceDispatcher(), uiState: uiState ?? document.uiState,
-      documentReference: DocumentReference(document),
-      previewRenderer: ProgramPairPreviewRenderer(
-        landscapeRuntime: ProgramRuntime(
-          captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-          lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
-        portraitRuntime: ProgramRuntime(
-          captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-          lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
-        landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
-        prefersColor: true),
-      audioPeakMeter: ProgramAudioPeakMeter())
+      deviceRegistry: DeviceRegistryService(), appletData: state.appletData,
+      storeService: state, documentReference: DocumentReference(document), pairedPreview: preview)
+
   }
 }
 
 @MainActor
 @Observable
-private final class ToolbarDispatcher: WorkspaceDispatcherProtocol {
+private final class ToolbarDispatcher: WorkspaceRuntimeActions {
   var actions: [String] = []
   var failStart = false
   func startOutput() async throws {
@@ -525,4 +724,21 @@ private final class ToolbarDispatcher: WorkspaceDispatcherProtocol {
     return []
   }
   func openScreenshotsDirectory() { actions.append("screenshotsFolder") }
+}
+
+@MainActor
+extension WorkspaceContentPane {
+  fileprivate var testSplitView: NSSplitView { view as! NSSplitView }
+  fileprivate var testPairedPreview: ProgramCanvasPairedPreview {
+    testSplitView.arrangedSubviews[0] as! ProgramCanvasPairedPreview
+  }
+  fileprivate var testEditorScrollView: NSScrollView {
+    testSplitView.arrangedSubviews[1] as! NSScrollView
+  }
+  fileprivate var testVideoTabs: NSTabViewController {
+    children.first { $0 is NSTabViewController } as! NSTabViewController
+  }
+  fileprivate var testAudioMixEditor: AudioMixEditor {
+    children.first { $0 is AudioMixEditor } as! AudioMixEditor
+  }
 }

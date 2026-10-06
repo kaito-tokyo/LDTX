@@ -27,24 +27,25 @@ struct WorkspaceProgramSelector: View {
 
 struct WorkspaceProgramsInspector: View {
   @Environment(\.documentReference) private var documentReference
-  @Environment(\.workspaceDispatcher) private var dispatcher
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   @Bindable var appletData: WorkspaceAppletData
   @State private var errorMessage: String?
 
   private var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? uiState.localStateURL
+    return document.fileURL ?? storeService.localStateURL
   }
 
-  var canSelectProgram: Bool { workspaceURL != nil && uiState.recordingState.canSelectProgram }
+  var canSelectProgram: Bool { workspaceURL != nil && storeService.recordingState.canSelectProgram }
 
   var body: some View {
     Form {
-      WorkspaceProgramSelector(programs: uiState.definition.programs, selection: programSelection)
-        .disabled(!canSelectProgram)
+      WorkspaceProgramSelector(
+        programs: storeService.definition.programs, selection: programSelection
+      )
+      .disabled(!canSelectProgram)
       Button("Add Program") { addProgram() }
-        .disabled(uiState.isOutputActive)
+        .disabled(storeService.isOutputActive)
       if let errorMessage {
         Text(errorMessage).foregroundStyle(.red)
       }
@@ -57,24 +58,24 @@ struct WorkspaceProgramsInspector: View {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = id
     program.displayName = uniqueProgramDisplayName("Program")
-    var definition = uiState.definition
+    var definition = storeService.definition
     definition.programs.append(program)
-    uiState.definition = definition
+    storeService.definition = definition
     if let workspaceURL {
       var state = appletData.state(for: workspaceURL)
       if state.selectedProgramInternalID == nil {
         state.selectedProgramInternalID = id
         appletData.setState(state, for: workspaceURL)
-        dispatcher?.updateProgramRuntimes()
+        storeService.updateProgramRuntimes()
       }
     }
     errorMessage = nil
-    dispatcher?.synchronizeAudioMonitor()
+    storeService.synchronizeAudioMonitor()
   }
   private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
 
   private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(uiState.definition.programs.map(\.displayName))
+    let names = Set(storeService.definition.programs.map(\.displayName))
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
@@ -87,16 +88,13 @@ struct WorkspaceProgramsInspector: View {
         let selectedID =
           workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
         return
-          (uiState.definition.programs.first { $0.internalID == selectedID }
-          ?? uiState.definition.programs.first)?.internalID
+          (storeService.definition.programs.first { $0.internalID == selectedID }
+          ?? storeService.definition.programs.first)?.internalID
       },
       set: { id in
         guard let id, workspaceURL != nil else { return }
         do {
-          guard let dispatcher else {
-            throw WorkspaceSelectionError(message: "Program selection is unavailable.")
-          }
-          try dispatcher.selectProgram(internalID: id)
+          try storeService.selectProgram(internalID: id)
           errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
       })

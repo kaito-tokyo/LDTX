@@ -129,7 +129,7 @@ final class MonitorOutputDeviceSheet: NSWindowController, NSTableViewDataSource,
 }
 
 @MainActor
-private func availableMonitorDevices() throws -> [(uid: String, name: String)] {
+func availableMonitorDevices() throws -> [(uid: String, name: String)] {
   try AudioHardwareSystem.shared.devices.compactMap { device in
     guard try device.outputStreamConfiguration.contains(where: { $0.mNumberChannels > 0 }) else {
       return nil

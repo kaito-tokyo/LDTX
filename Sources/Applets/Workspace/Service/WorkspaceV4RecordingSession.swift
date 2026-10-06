@@ -543,7 +543,7 @@ public final class WorkspaceV4RecordingSession {
     let gain = Double(preference.audioMasterVolumeDecibelTenths) / 10
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
-    let gains = preference.audioChannelGainsDecibelTenths
+    let gains = windowRuntime.preferences.audioChannelGainsDecibelTenths
     let muted = preference.audioChannelMuted
     for inputDeviceInternalID in Set(gains.keys).union(muted.keys) {
       let key = "v4-\(inputDeviceInternalID)"

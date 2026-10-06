@@ -7,6 +7,10 @@ import MetalKit
 
 public final class ProgramCanvasPairedPreview: NSView {
   public let metalView: MTKView
+  public var padding: CGFloat = 0 {
+    didSet { needsLayout = true }
+  }
+  private let previewDelegate: any MTKViewDelegate
   private let onSelectLandscape: () -> Void
   private let onSelectPortrait: () -> Void
 
@@ -14,13 +18,14 @@ public final class ProgramCanvasPairedPreview: NSView {
     device: MTLDevice?, delegate: any MTKViewDelegate, onSelectLandscape: @escaping () -> Void,
     onSelectPortrait: @escaping () -> Void
   ) {
-    metalView = ProgramPreviewMTKView(frame: .zero, device: device)
+    metalView = MTKView(frame: .zero, device: device)
+    previewDelegate = delegate
     self.onSelectLandscape = onSelectLandscape
     self.onSelectPortrait = onSelectPortrait
     super.init(frame: .zero)
     metalView.colorPixelFormat = .bgra8Unorm
     metalView.framebufferOnly = false
-    metalView.autoResizeDrawable = false
+    metalView.autoResizeDrawable = true
     metalView.enableSetNeedsDisplay = false
     metalView.isPaused = false
     metalView.preferredFramesPerSecond = 15
@@ -59,7 +64,13 @@ public final class ProgramCanvasPairedPreview: NSView {
   public override func layout() {
     super.layout()
     let ratio: CGFloat = 16.0 / 9.0 + 9.0 / 16.0
-    let available = safeAreaRect
+    let safeArea = safeAreaRect
+    let inset = max(0, padding)
+    let available = NSRect(
+      x: safeArea.minX + min(inset, safeArea.width / 2),
+      y: safeArea.minY + min(inset, safeArea.height / 2),
+      width: max(0, safeArea.width - inset * 2),
+      height: max(0, safeArea.height - inset * 2))
     let height = min(available.height, available.width / ratio)
     let width = height * ratio
     metalView.frame = NSRect(

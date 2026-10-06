@@ -44,7 +44,7 @@ its window controller. All SwiftUI pane roots receive that same box through the
 documentReference environment value. The box weakly references NSDocument; views
 and hosting controllers do not extend the document's lifetime. UI actions query
 NSDocument.fileURL when they run, including Binding getters and setters. Workspace
-local settings use uiState.localStateURL only as the transient key while fileURL
+local settings use storeService.localStateURL only as the transient key while fileURL
 is nil. Missing environments and released documents disable document-dependent
 settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
@@ -62,16 +62,22 @@ Layer menus place existing resources into the selected Program.
 
 The Content pane implementation is organized by feature under
 `Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
-WorkspaceContent is an AppKit tab controller below the AppKit preview.
-Landscape and Portrait use VideoLayersEditor controllers; Audio Mix uses
-AudioMixEditor. Window-scoped Observation updates them from the Workspace model.
+WorkspaceContentPane is an NSViewController containing the configured AppKit preview
+and the editors in a vertical NSSplitView. It does not subclass NSSplitViewController.
+MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
+Layers and Portrait Video Layers tabs, which use VideoLayersEditor controllers.
+Each editor owns its Observation task and reads the shared WorkspaceStoreService.
+The editor stack is the vertical NSScrollView's document view directly. Its
+flipped coordinates keep the controls at the top, and its width tracks the
+viewport without an intermediate container. Reducing the lower pane height scrolls the controls rather
+than requiring the pane to fit all editors at once.
 Output and canvas settings, including their supporting types and helpers, live
 under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
 WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 
 WorkspaceWindow uses PaneSplitViewController with hosted SwiftUI sidebar and
-Inspector panes and an AppKit WorkspaceContentViewController in the center.
+Inspector panes and an AppKit WorkspaceContentPane in the center.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
@@ -129,7 +135,8 @@ lifetime.
 
 Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
 
-The Program preview's single `MTKView` belongs to the Content pane. A
+WorkspaceWindowController constructs and retains the Program preview's single
+`MTKView`, then passes the configured preview to the Content view controller. A
 `ProgramPairPreviewRenderer` supplied as its delegate reads the latest
 `ProgramFrame` from the Landscape and Portrait runtimes and draws the 16:9 and
 9:16 images at equal height into the drawable. The four-pixel gap is transparent
@@ -211,14 +218,28 @@ The Workspace Content pane uses an AppKit horizontal split above its AppKit
 tabbed editor. `WorkspaceWindowController` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
-centers a fixed 16:9 plus 9:16 pair, and shows black when frames are absent.
+centers a fixed 16:9 plus 9:16 pair with 12-point padding, and shows black when
+frames are absent. It uses a standard `MTKView` with automatic drawable resizing.
+Xcode previews use a dedicated delegate under `Content/XcodeHelpers` to draw
+black canvases separated by a gray gap. Those previews pause the timed draw loop
+and redraw on display invalidation without starting Program runtimes.
 Preview clicks and accessibility actions update the window's transient
 `isPortraitAudio` selection without changing document contents.
 
-The divider starts at 280 points with a 100-point minimum for each pane. User
-drags save `contentPreviewHeightRatio` in Workspace-local state; reopening
-restores that ratio within the available height. Window resizing does not
-replace the saved ratio. Shutdown pauses the MTKView, detaches its delegate,
+`configureAfterEstablished()` is a custom lifecycle hook called once after the
+pane is attached to the window and the parent sizes are established. It calls
+`layoutSubtreeIfNeeded()` before configuring size-dependent behavior.
+The pane uses `setPosition` to
+set the initial preview height to 280 points, then assigns `autosaveName` so
+AppKit can restore saved divider configuration over that default. The pane does
+not seed the layout by assigning view frames. Its higher holding priority
+keeps its height when resizing the window, with the editor taking the size change
+first. The content split uses AppKit default divider limits and collapse behavior.
+`NSSplitView.autosaveName`, keyed by the definition envelope external
+ID, lets AppKit save and restore divider configuration in application preferences.
+`WorkspaceStoreService.externalID` holds that ID, and `WorkspaceContentPane`
+constructs the autosave name internally. Divider
+configuration is not stored in Workspace-local state. Shutdown pauses the MTKView, detaches its delegate,
 and stops the renderer before shutting down the runtimes.
 
 ### Dynamic reference selection
@@ -229,11 +250,14 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 ### Video layer editing belongs to Content
 
-The Editor has Landscape, Portrait, and Audio Mix tabs. Each canvas has a standard
-scrolling NSTableView, a Manage Video Layers button, and error/empty-state labels.
-Transforms remain in the layer rows. Audio Mix contains both master volumes,
-monitor controls, input mute/gain/monitor controls, and a Landscape/Portrait gain
-selector sharing selectedAudioMix with Preview clicks. Tab selection starts at
+The Editor vertically arranges MasterVolumeEditor, AudioMixEditor, and the
+Landscape/Portrait Video Layers tabs. Each canvas has an NSTableView sized to
+show all its rows and error/empty-state labels.
+VideoLayersEditor has no internal scroll view; the Content pane scrolls all
+editors together.
+Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
+and monitor output controls. AudioMixEditor owns one Workspace-wide gain per input, independent Landscape/Portrait
+mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
 Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
 The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
@@ -241,8 +265,10 @@ AppKit controls retain their default selection, background, and focus behavior.
 Each layer operation copies the latest ProgramPreferences and submits the complete
 value, preserving unrelated fields. Reordering submits the complete ID array and
 must preserve the current membership. Tab changes retain drafts; Program changes
-discard field editors and close management sheets. Window shutdown cancels Content
-Observation, closes sheets, and stops meter rendering before runtime shutdown.
+discard field editors. Editors update from
+`viewWillLayout()` using AppKit automatic Observation, without observation Tasks
+or an externally invoked `stop()`.
+Audio meters pause themselves when detached or when their window closes.
 
 ### Program selection in the Inspector
 
@@ -272,13 +298,36 @@ including during output. Reordering uses the drag handle and is restricted to
 a single layer from the same table. The table keeps
 cell identity and unconfirmed transform text across ordinary model updates.
 
-Each canvas Editor opens a Manage Video Layers sheet for membership changes.
-The sheet shows existing and available layers as checkboxes, with current
-membership checked. It edits a local draft and applies it in one update.
-Rechecking an existing layer preserves its original order; new layers are appended. Cancel discards the
-draft. Removing a layer does not delete its resource or saved preferences.
-Management is unavailable during output; starting output or changing Programs
-closes the sheet. Changes to the source membership or resource candidates require
-reopening it, and submission revalidates output state and current candidates.
+Each Video Component Inspector has separate Landscape and Portrait membership
+Toggles and displays the selected Program name. Turning a Toggle on appends the
+component to that canvas; turning it off removes the layer without deleting the
+component or its saved preferences. The controls read current membership and
+commit immediately through WorkspaceStoreService. They are unavailable without
+a Program or while output is active. Submission revalidates the Program,
+component, and output state. Content retains ordering, visibility, and transform
+editing; it has no membership management button or sheet.
 WorkspaceDocument allows only permutations of existing video-layer arrays during
 output and retains the latest accepted order as its protected definition.
+
+## Workspace state and cross-layer operations
+
+WorkspaceDocument owns one Observable `WorkspaceStoreService`. It connects UI,
+document, and runtime layers through both observable variables and method calls.
+Simple state changes may assign variables directly; operations that require
+validation or coordinated updates use methods. There is no separate UI Dispatcher.
+The service weakly references `WorkspaceRuntimeActions`, implemented by the window
+controller, and does not assemble capture, rendering, or output resources.
+Disconnected runtime operations that need a result report an explicit error.
+
+Content view controllers receive the service and construct their editors where
+they are used. MasterVolumeEditor and AudioMixEditor have no reference back to
+their parent pane. Each VideoLayersEditor directly owns its table, status,
+Store connection and observation lifetime. There is one view
+controller per canvas editor, with no additional editor controller wrapper. The window
+does not refresh or operate individual editors. Dependencies and child controllers
+are retained in init; view layout and configuration run in loadView. Initial
+rendering uses current state, and observation does not force unloaded views to load.
+Content does not require a shutdown cascade. AppKit owns observation tracking;
+each meter manages its window notifications and drawing lifetime internally.
+Program Preview and runtime shutdown remain explicit, and runtime shutdown
+disconnects the service's runtime actions before releasing resources.

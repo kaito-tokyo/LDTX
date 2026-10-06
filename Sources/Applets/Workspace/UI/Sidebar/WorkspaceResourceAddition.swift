@@ -81,9 +81,9 @@ enum WorkspaceResourceAddition {
 
   static func validationMessage(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    uiState: WorkspaceUIState, audioDiscoveryError: String? = nil
+    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
   ) -> String? {
-    if uiState.isOutputActive { return "Stop output before adding a resource." }
+    if storeService.isOutputActive { return "Stop output before adding a resource." }
     if sheet == .device, case .coreAudioDevice? = draft.physicalDeviceID,
       let audioDiscoveryError
     {
@@ -95,7 +95,7 @@ enum WorkspaceResourceAddition {
       return "Select an available audio device."
     }
     if sheet == .vision {
-      if !uiState.definition.videoComponents.contains(where: {
+      if !storeService.definition.videoComponents.contains(where: {
         (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == draft.videoComponentID
       }) {
         return "Select a video component."
@@ -103,23 +103,25 @@ enum WorkspaceResourceAddition {
     }
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
     if name.isEmpty { return "Enter a name." }
-    if existingNames(uiState.definition).contains(name) { return "This name is already in use." }
+    if existingNames(storeService.definition).contains(name) {
+      return "This name is already in use."
+    }
     return nil
   }
 
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    uiState: WorkspaceUIState, audioDiscoveryError: String? = nil
+    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
   ) throws -> UInt64 {
     if let message = validationMessage(
-      sheet: sheet, draft: draft, devices: devices, uiState: uiState,
+      sheet: sheet, draft: draft, devices: devices, storeService: storeService,
       audioDiscoveryError: audioDiscoveryError)
     {
       throw AdditionError(message: message)
     }
     let id = WorkspaceResourceFactory.nextInternalID()
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
-    var definition = uiState.definition
+    var definition = storeService.definition
     let inspectorKind: WorkspaceInspectorKind
     switch sheet {
     case .device:
@@ -131,12 +133,13 @@ enum WorkspaceResourceAddition {
       inspectorKind = draft.componentKind.inspectorKind
     case .vision:
       definition.visions.append(
-        WorkspaceResourceFactory.makeOcrVision(id: id, name: name, componentID: draft.videoComponentID!)
+        WorkspaceResourceFactory.makeOcrVision(
+          id: id, name: name, componentID: draft.videoComponentID!)
       )
       inspectorKind = .ocrVision
     }
-    uiState.definition = definition
-    uiState.inspectorSelector = .init(kind: inspectorKind, internalID: id)
+    storeService.definition = definition
+    storeService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
     return id
   }
 
@@ -145,7 +148,7 @@ enum WorkspaceResourceAddition {
     var errorDescription: String? { message }
   }
 
-  private static func existingNames(_ definition: WorkspaceUIState.WorkspaceDefinition) -> Set<
+  private static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
     String
   > {
     Set(

@@ -11,40 +11,23 @@ import Observation
 import SwiftUI
 
 public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
-  let contentController: WorkspaceContentViewController
-  let contentPane: WorkspaceContent
-  private let uiState: WorkspaceUIState
-  private var contentObservationTask: Task<Void, Never>?
-  private let dispatcher: any WorkspaceDispatcherProtocol
+  let contentPane: WorkspaceContentPane
+  private let storeService: WorkspaceStoreService
 
   init(
     url: URL,
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
-    dispatcher: any WorkspaceDispatcherProtocol,
-    uiState: WorkspaceUIState,
+    storeService: WorkspaceStoreService,
     documentReference: DocumentReference,
-    previewRenderer: ProgramPairPreviewRenderer,
-    audioPeakMeter: ProgramAudioPeakMeter
+    pairedPreview: ProgramCanvasPairedPreview
   ) {
-    self.uiState = uiState
-    self.dispatcher = dispatcher
-    self.contentPane = WorkspaceContent(
-      uiState: uiState, appletData: appletData,
-      audioPeakMeter: audioPeakMeter)
-
-    let preview = ProgramCanvasPairedPreview(
-      device: previewRenderer.device, delegate: previewRenderer,
-      onSelectLandscape: { uiState.selectedAudioMix = .landscape },
-      onSelectPortrait: { uiState.selectedAudioMix = .portrait })
-    self.contentController = WorkspaceContentViewController(
-      preview: preview, delegate: previewRenderer, editor: contentPane,
-      initialRatio: appletData.state(for: url).contentPreviewHeightRatio,
-      saveRatio: { ratio in
-        appletData.updateState(for: uiState.localStateURL ?? url) {
-          $0.contentPreviewHeightRatio = ratio
-        }
-      })
+    self.storeService = storeService
+    storeService.appletData = appletData
+    storeService.documentReference = documentReference
+    self.contentPane = WorkspaceContentPane(
+      storeService: storeService,
+      pairedPreview: pairedPreview)
 
     super.init(
       contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
@@ -57,16 +40,14 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     self.isReleasedWhenClosed = false
 
     let sidebarView = WorkspaceSidebar(
-      uiState: uiState, deviceRegistry: deviceRegistry, appletData: appletData
+      storeService: storeService, deviceRegistry: deviceRegistry, appletData: appletData
     )
-    .environment(\.workspaceDispatcher, dispatcher)
 
     let inspectorView = WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
-      uiState: uiState,
+      storeService: storeService,
       appletData: appletData
     )
-    .environment(\.workspaceDispatcher, dispatcher)
 
     let sidebarController = NSHostingController(
       rootView: sidebarView.environment(\.documentReference, documentReference))
@@ -77,7 +58,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     inspectorController.sizingOptions = [.minSize]
 
     let splitViewController = PaneSplitViewController(
-      sidebar: sidebarController, content: contentController, inspector: inspectorController,
+      sidebar: sidebarController, content: contentPane, inspector: inspectorController,
       sidebarCanCollapse: true)
 
     self.contentViewController = splitViewController
@@ -94,36 +75,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       display: false)
 
     splitViewController.setInitialWidths(sidebar: 240, content: 480)
-    contentController.view.layoutSubtreeIfNeeded()
-    contentController.restoreInitialDividerPosition()
+    contentPane.configureAfterEstablished()
 
-    contentPane.connect(dispatcher: dispatcher, documentReference: documentReference)
-    let changes = Observations {
-      let documentURL = documentReference.document?.fileURL ?? uiState.localStateURL
-      return (
-        uiState.definition, uiState.preferences, uiState.isOutputActive, uiState.selectedAudioMix,
-        uiState.outputFailureMessage,
-        documentURL.map { appletData.state(for: $0) }
-      )
-    }
-    contentObservationTask = Task { @MainActor [weak self] in
-      for await _ in changes {
-        guard !Task.isCancelled, let self else { return }
-        contentPane.refresh()
-      }
-    }
     self.center()
-  }
-
-  public override func close() {
-    stopContent()
-    super.close()
-  }
-
-  func stopContent() {
-    contentObservationTask?.cancel()
-    contentObservationTask = nil
-    contentPane.stop()
   }
 
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -193,7 +147,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
 
   private func configureOutputItem(_ item: NSToolbarItem) {
     let isStop = item.itemIdentifier.rawValue == "workspace.stopOutput"
-    let isRunning = uiState.recordingState == .recording
+    let isRunning = storeService.recordingState == .recording
     let label = isStop ? "Stop Output" : (isRunning ? "Pause Output" : "Start Output")
     let symbol = isStop ? "stop.fill" : (isRunning ? "pause.fill" : "play.fill")
     item.label = label
@@ -214,41 +168,41 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
 
   public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
     switch item.itemIdentifier.rawValue {
-    case "workspace.stopOutput": uiState.recordingState.canStop
+    case "workspace.stopOutput": storeService.recordingState.canStop
     case "workspace.toggleOutput":
-      uiState.recordingState.canStart || uiState.recordingState == .recording
+      storeService.recordingState.canStart || storeService.recordingState == .recording
     case "workspace.captureScreenshots", "workspace.openScreenshotsFolder":
-      uiState.isOutputActive && uiState.isLocalRecording
+      storeService.isOutputActive && storeService.isLocalRecording
     default: true
     }
   }
 
   @objc private func captureScreenshots(_ sender: Any?) {
-    guard uiState.isOutputActive && uiState.isLocalRecording else { return }
-    do { _ = try dispatcher.captureScreenshots() } catch {
-      uiState.outputFailureMessage = error.localizedDescription
+    guard storeService.isOutputActive && storeService.isLocalRecording else { return }
+    do { _ = try storeService.captureScreenshots() } catch {
+      storeService.outputFailureMessage = error.localizedDescription
     }
   }
 
   @objc private func openScreenshotsFolder(_ sender: Any?) {
-    guard uiState.isOutputActive && uiState.isLocalRecording else { return }
-    dispatcher.openScreenshotsDirectory()
+    guard storeService.isOutputActive && storeService.isLocalRecording else { return }
+    storeService.openScreenshotsDirectory()
   }
 
   @objc private func stopOutput(_ sender: Any?) {
-    guard uiState.recordingState.canStop else { return }
-    Task { await dispatcher.stopOutput() }
+    guard storeService.recordingState.canStop else { return }
+    Task { await storeService.stopOutput() }
   }
 
   @objc private func toggleOutput(_ sender: Any?) {
-    let state = uiState.recordingState
+    let state = storeService.recordingState
     guard state.canStart || state == .recording else { return }
     Task {
       if state == .recording {
-        await dispatcher.pauseOutput()
+        await storeService.pauseOutput()
       } else {
-        do { try await dispatcher.startOutput() } catch {
-          uiState.outputFailureMessage = error.localizedDescription
+        do { try await storeService.startOutput() } catch {
+          storeService.outputFailureMessage = error.localizedDescription
         }
       }
     }

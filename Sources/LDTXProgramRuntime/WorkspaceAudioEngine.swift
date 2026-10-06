@@ -252,7 +252,7 @@ final class AudioEngineSubscription: @unchecked Sendable {
   }
 }
 
-/// Raw subscriber adapter used by existing recording and spectrogram clients.
+/// Raw subscriber adapter used by recording clients.
 final class NativeAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendable {
   private let engine: WorkspaceAudioEngine
   private var subscription: AudioEngineSubscription?

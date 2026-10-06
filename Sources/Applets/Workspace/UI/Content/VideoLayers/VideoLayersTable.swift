@@ -30,11 +30,18 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+  override var intrinsicContentSize: NSSize {
+    NSSize(
+      width: NSView.noIntrinsicMetric,
+      height: layerIDs.reduce(0) { $0 + (rows[$1]?.fittingSize.height ?? rowHeight) })
+  }
+
   func removeAllRows() {
     window?.makeFirstResponder(nil)
     layerIDs = []
     rows.removeAll()
     reloadData()
+    invalidateIntrinsicContentSize()
   }
 
   func update(
@@ -49,6 +56,9 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
       layerIDs.indices.filter { self.rows[layerIDs[$0]] !== rows[layerIDs[$0]] })
     self.layerIDs = layerIDs
     self.rows = rows.filter { layerIDs.contains($0.key) }
+    if previousIDs != layerIDs || !replacedRows.isEmpty {
+      invalidateIntrinsicContentSize()
+    }
 
     guard previousIDs != layerIDs else {
       if !replacedRows.isEmpty {
@@ -161,9 +171,11 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   import SwiftUI
 
   #Preview("Video Layers Table") {
-    let editor = VideoLayersEditor()
-    editor.view = editor.scrollView
-    editor.scrollView.frame = NSRect(x: 0, y: 0, width: 720, height: 320)
+    let editor = VideoLayersEditor(
+      storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
+      target: .landscape)
+    _ = editor.view
+    editor.view.frame = NSRect(x: 0, y: 0, width: 720, height: 560)
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var preferences = Ldtx_Workspace_V4_ProgramPreferences()
     for (index, name) in ["Camera", "Background", "Clock"].enumerated() {

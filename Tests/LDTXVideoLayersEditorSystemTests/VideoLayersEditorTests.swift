@@ -11,19 +11,131 @@ import Testing
 final class VideoLayersEditorTests {
   private var editors: [ObjectIdentifier: VideoLayersEditor] = [:]
 
+  @Test func editorOwnsObservationWithoutLoadingViewUntilUsed() async throws {
+    let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let editor = VideoLayersEditor(storeService: storeService, target: .landscape)
+    #expect(!editor.isViewLoaded)
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 100
+    program.landscapeVideoLayerInternalIds = [1]
+    storeService.definition.programs = [program]
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = editor
+    window.orderFront(nil)
+    defer { window.close() }
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(editor.table.layerIDs == [1])
+    storeService.definition.programs[0].landscapeVideoLayerInternalIds = [1, 2]
+    for _ in 0..<50 {
+      if editor.table.layerIDs == [1, 2] { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(editor.table.layerIDs == [1, 2])
+  }
+
+
+
+  @Test func hiddenVideoTabUsesLatestStateWhenShown() async throws {
+    _ = NSApplication.shared
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 100
+    program.landscapeVideoLayerInternalIds = [1]
+    program.portraitVideoLayerInternalIds = [2]
+    service.definition.programs = [program]
+    let landscape = VideoLayersEditor(storeService: service, target: .landscape)
+    let portrait = VideoLayersEditor(storeService: service, target: .portrait)
+    let tabs = NSTabViewController()
+    tabs.addTabViewItem(NSTabViewItem(viewController: landscape))
+    tabs.addTabViewItem(NSTabViewItem(viewController: portrait))
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = tabs
+    window.orderFront(nil)
+    defer { window.close() }
+    service.definition.programs[0].portraitVideoLayerInternalIds = [2, 3]
+    tabs.selectedTabViewItemIndex = 1
+    for _ in 0..<100 {
+      if portrait.table.layerIDs == [2, 3] { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(portrait.table.layerIDs == [2, 3])
+  }
+
+
+
+  @Test func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    var first = Ldtx_Workspace_V4_ProgramDefinition()
+    first.internalID = 100
+    first.landscapeVideoLayerInternalIds = [20]
+    var second = Ldtx_Workspace_V4_ProgramDefinition()
+    second.internalID = 200
+    service.definition.programs = [first, second]
+    service.definition.videoComponents = [10, 20].map {
+      WorkspaceResourceFactory.makeSolidColor(id: UInt64($0), name: "Color \($0)")
+    }
+    service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerHidden[10] = true
+    let preferences = service.preferences
+    let controls = VideoComponentProgramLayers(storeService: service, componentID: .solidColorFill(10))
+    let landscape = controls.membership(for: 100, target: .landscape)
+    let portrait = controls.membership(for: 100, target: .portrait)
+    #expect(!landscape.wrappedValue && !portrait.wrappedValue)
+    landscape.wrappedValue = true
+    landscape.wrappedValue = true
+    portrait.wrappedValue = true
+    #expect(service.definition.programs[0].landscapeVideoLayerInternalIds == [20, 10])
+    #expect(service.definition.programs[0].portraitVideoLayerInternalIds == [10])
+    landscape.wrappedValue = false
+    #expect(service.definition.programs[0].landscapeVideoLayerInternalIds == [20])
+    #expect(portrait.wrappedValue)
+    #expect(service.preferences == preferences)
+    service.isOutputActive = true
+    portrait.wrappedValue = false
+    #expect(portrait.wrappedValue)
+    service.isOutputActive = false
+    service.definition.programs.swapAt(0, 1)
+    portrait.wrappedValue = false
+    #expect(service.definition.programs[1].portraitVideoLayerInternalIds == [10])
+    let newProgram = controls.membership(for: 200, target: .portrait)
+    newProgram.wrappedValue = true
+    #expect(service.definition.programs[0].portraitVideoLayerInternalIds == [10])
+    service.definition.videoComponents.removeAll { $0.id == .solidColorFill(10) }
+    newProgram.wrappedValue = false
+    #expect(service.definition.programs[0].portraitVideoLayerInternalIds == [10])
+    #expect(throws: WorkspaceSelectionError.self) {
+      try service.setVideoLayerIncluded(true, componentID: 999, programID: 200, target: .landscape)
+    }
+    #expect(throws: WorkspaceSelectionError.self) {
+      try service.setVideoLayerIncluded(true, componentID: 20, programID: 999, target: .landscape)
+    }
+  }
+
+  func makeEditor() -> VideoLayersEditor {
+    let editor = VideoLayersEditor(
+      storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
+      target: .landscape)
+    _ = editor.view
+    return editor
+  }
+
   func makeTable() -> VideoLayersTableView {
-    let editor = VideoLayersEditor()
+    let editor = makeEditor()
     editors[ObjectIdentifier(editor.table)] = editor
     return editor.table
   }
 
   func makeContainer() -> (scrollView: NSScrollView, table: VideoLayersTableView) {
     let table = makeTable()
-    return (editors[ObjectIdentifier(table)]!.scrollView, table)
+    let scrollView = NSScrollView()
+    scrollView.hasVerticalScroller = true
+    scrollView.documentView = table
+    return (scrollView, table)
   }
 
   @Test func previewConstraintsPreserveEditorSize() {
-    let editor = VideoLayersEditor()
+    let editor = makeEditor()
     editor.update(
       definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
       canvasWidth: 1920, canvasHeight: 1080)
@@ -35,10 +147,12 @@ final class VideoLayersEditorTests {
   }
 
   @Test func editorRowsUseAvailableWidth() throws {
-    let editor = VideoLayersEditor()
-    editor.update(
-      definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
-      canvasWidth: 1920, canvasHeight: 1080)
+    let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 100
+    program.landscapeVideoLayerInternalIds = [1, 2]
+    service.definition.programs = [program]
+    let editor = VideoLayersEditor(storeService: service, target: .landscape)
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
       styleMask: [.titled], backing: .buffered, defer: false)
@@ -49,7 +163,10 @@ final class VideoLayersEditorTests {
       editor.table.view(atColumn: 0, row: 0, makeIfNecessary: true)
         as? VideoLayersTableRow)
     row.layoutSubtreeIfNeeded()
-    #expect(editor.scrollView.frame.width >= 690)
+    #expect(editor.table.enclosingScrollView == nil)
+    #expect(editor.table.frame.width >= 690)
+    #expect(editor.table.frame.height >= editor.table.intrinsicContentSize.height - 0.5)
+    #expect(editor.table.rect(ofRow: 1).maxY <= editor.table.bounds.height + 0.5)
     #expect(row.frame.width >= 670)
     #expect(row.rootView.state === row.state)
     #expect(row.rootView.canvasWidth == 1920)
@@ -64,7 +181,7 @@ final class VideoLayersEditorTests {
     setHidden: @escaping (UInt64, Bool) throws -> Void = { _, _ in },
     onError: @escaping (Error) -> Void = { _ in }
   ) {
-    let editor = editors[ObjectIdentifier(table)] ?? VideoLayersEditor()
+    let editor = editors[ObjectIdentifier(table)] ?? makeEditor()
     editors[ObjectIdentifier(table)] = editor
     editor.update(
       definition: .init(), programPreferences: preferences, layerIDs: ids,
@@ -82,7 +199,7 @@ final class VideoLayersEditorTests {
   }
 
   @Test func editorReusesRowsAndRefreshesSaveConnections() throws {
-    let editor = VideoLayersEditor()
+    let editor = makeEditor()
     var saved: [UInt64] = []
     editor.update(
       definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
@@ -117,7 +234,7 @@ final class VideoLayersEditorTests {
   }
 
   @Test func validationErrorsAreAggregatedAtEditor() throws {
-    let editor = VideoLayersEditor()
+    let editor = makeEditor()
     editor.update(
       definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
       canvasWidth: 1920, canvasHeight: 1080)
@@ -160,7 +277,7 @@ final class VideoLayersEditorTests {
     weak var releasedRow: VideoLayersTableRow?
     var state: VideoLayersTableRowState?
     autoreleasepool {
-      let editor = VideoLayersEditor()
+      let editor = makeEditor()
       editor.update(
         definition: .init(), programPreferences: .init(), layerIDs: [1],
         canvasWidth: 1920, canvasHeight: 1080)
@@ -205,7 +322,7 @@ final class VideoLayersEditorTests {
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()
     component.clock = clock
     definition.videoComponents.append(component)
-    let editor = VideoLayersEditor()
+    let editor = makeEditor()
     let table = editor.table
     editor.update(
       definition: definition, programPreferences: .init(), layerIDs: [1, 2, 3], canvasWidth: 1920,
@@ -647,7 +764,7 @@ private final class DropRecordingTable: VideoLayersTableView {
 
 extension VideoLayersEditorTests {
   @Test func preferenceCommitUsesLatestValueAndPreservesInsets() throws {
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
     program.landscapeVideoLayerInternalIds = [1, 2]
@@ -657,10 +774,10 @@ extension VideoLayersEditorTests {
     transform.scaleY = 1
     state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[1] =
       transform
-    let content = WorkspaceContent(
-      uiState: state, appletData: WorkspaceAppletData(), audioPeakMeter: ProgramAudioPeakMeter())
+    let content = VideoLayersEditor(
+      storeService: state, target: .landscape)
     content.refresh()
-    let row = try #require(content.landscape.table.rows[1])
+    let row = try #require(content.table.rows[1])
     state.preferences.landscapeProgramPreferences[1, default: .init()]
       .audioMasterVolumeDecibelTenths = -90
     state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
@@ -711,63 +828,34 @@ extension VideoLayersEditorTests {
     #expect(failures == 1)
   }
 
-  @Test func membershipSheetRetainsDraftOnFailureAndInvalidatesExternalChanges() throws {
-    let options: [WorkspaceSelectionOption<UInt64>] = [
-      .init(id: 1, name: "One"), .init(id: 2, name: "Two"),
-    ]
-    let sheet = VideoLayersManagementSheet(ids: [1], options: options)
-    #expect(sheet.checkboxes[1]?.state == .on)
-    #expect(sheet.checkboxes[2]?.state == .off)
-    #expect(!sheet.applyButton.isEnabled)
-    try #require(sheet.checkboxes[2]).performClick(nil)
-    #expect(sheet.draft.ids == [1, 2])
-    var closed = false
-    sheet.onClose = { closed = true }
-    sheet.commit = { _, _, _ in throw WorkspaceSelectionError(message: "Failed") }
-    sheet.apply()
-    #expect(!closed)
-    #expect(sheet.errorLabel.stringValue == "Failed")
-    #expect(sheet.draft.ids == [1, 2])
-    sheet.update(ids: [1], options: Array(options.prefix(1)), active: false)
-    #expect(!sheet.applyButton.isEnabled)
-    #expect(sheet.checkboxes[2]?.isEnabled == false)
-  }
 
-  @Test func changingProgramDiscardsDraftAndActiveOutputClosesSheet() throws {
+
+  @Test func changingProgramDiscardsTransformDraft() throws {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
     program.landscapeVideoLayerInternalIds = [1, 2, 3]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
-    let state = WorkspaceUIState(definition: definition, preferences: .init())
-    let content = WorkspaceContent(
-      uiState: state, appletData: WorkspaceAppletData(), audioPeakMeter: ProgramAudioPeakMeter())
-    let editor = content.landscape
+    let state = WorkspaceStoreService(definition: definition, preferences: .init())
+    let content = VideoLayersEditor(
+      storeService: state, target: .landscape)
+    let editor = content
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
       backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentViewController = content
     defer {
-      content.stop()
       window.close()
     }
     content.refresh()
     let old = try #require(editor.table.rows[1])
     old.state.strings[0] = "draft"
     old.state.hasUnconfirmedChanges = true
-    editor.manageButton.performClick(nil)
-    #expect(content.videoLayerManager != nil)
-    state.isOutputActive = true
-    content.refresh()
-    #expect(content.videoLayerManager == nil)
-    #expect(!editor.manageButton.isEnabled)
-    state.isOutputActive = false
     state.definition.programs[0].internalID = 2
     content.refresh()
     #expect(editor.table.rows[1] !== old)
     #expect(editor.table.rows[1]?.state.hasUnconfirmedChanges == false)
-    #expect(editor.manageButton.isEnabled)
   }
 
   @Test func audioNumericDraftSurvivesRefreshAndFailure() {

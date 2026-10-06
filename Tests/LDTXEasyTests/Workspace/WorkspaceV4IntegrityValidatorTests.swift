@@ -12,7 +12,7 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     var landscape = Ldtx_Workspace_V4_ProgramPreferences()
     landscape.audioMasterVolumeDecibelTenths = -32
-    landscape.audioChannelGainsDecibelTenths[2] = -61
+    preferences.audioChannelGainsDecibelTenths[2] = -61
     landscape.videoLayerHidden[3] = true
     var portrait = Ldtx_Workspace_V4_ProgramPreferences()
     portrait.audioMasterVolumeDecibelTenths = 17
@@ -26,8 +26,19 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     let decoded = try Ldtx_Workspace_V4_WorkspacePreferencesV4(
       serializedBytes: preferences.serializedData())
     #expect(decoded == preferences)
+    #expect(decoded.audioChannelGainsDecibelTenths[2] == -61)
     #expect(decoded.landscapeProgramPreferences[1] == landscape)
     #expect(decoded.portraitProgramPreferences[1] == portrait)
+  }
+
+  @Test("rejects a Workspace gain referencing a missing audio input")
+  func rejectsDanglingAudioGain() throws {
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.audioChannelGainsDecibelTenths[99] = -60
+    let workspace = WorkspaceV4Bundle(definition: .init(), preferences: preferences)
+    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(99)) {
+      try WorkspaceV4IntegrityValidator.validate(workspace)
+    }
   }
 
   @Test("rejects a Program that references a missing video layer")

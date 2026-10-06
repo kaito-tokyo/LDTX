@@ -94,12 +94,11 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var portraitPreference = Ldtx_Workspace_V4_ProgramPreferences()
     preference.videoLayerTransforms = [11: transform]
     preference.audioMasterVolumeDecibelTenths = -32
-    preference.audioChannelGainsDecibelTenths = [12: -123]
     preference.audioChannelMuted = [12: true]
     portraitPreference.audioMasterVolumeDecibelTenths = -91
-    portraitPreference.audioChannelGainsDecibelTenths = [12: -307]
     portraitPreference.audioChannelMuted = [12: false]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.audioChannelGainsDecibelTenths = [12: -123]
     preferences.landscapeProgramPreferences = [7: preference]
     preferences.portraitProgramPreferences = [7: portraitPreference]
 
@@ -129,7 +128,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         == ProgramPreferences.linearAudioChannelGain(fromDecibels: -9.1))
     #expect(
       portraitGraph.audioPreferences.audioChannelGainsByName["v4-12"]
-        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -30.7))
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12.3))
     #expect(portraitGraph.audioPreferences.audioMutedByInputDeviceName["v4-12"] == false)
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(

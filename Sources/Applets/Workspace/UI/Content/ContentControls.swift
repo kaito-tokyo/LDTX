@@ -36,19 +36,3 @@ func pinContent(_ child: NSView, in parent: NSView, inset: CGFloat = 12) {
     child.bottomAnchor.constraint(equalTo: parent.bottomAnchor, constant: -inset),
   ])
 }
-
-private final class ContentScrollDocument: NSView {
-  override var isFlipped: Bool { true }
-}
-
-@MainActor
-func contentScroll(_ stack: NSStackView) -> NSScrollView {
-  let scroll = NSScrollView()
-  scroll.hasVerticalScroller = true
-  let document = ContentScrollDocument()
-  scroll.documentView = document
-  pinContent(stack, in: document)
-  document.translatesAutoresizingMaskIntoConstraints = false
-  document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
-  return scroll
-}

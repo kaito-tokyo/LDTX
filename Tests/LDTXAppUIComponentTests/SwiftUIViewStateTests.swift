@@ -29,23 +29,24 @@ struct SwiftUIViewStateUnitTestSuite {
   }
 
   @Test func workspaceSidebarUsesPreviewState() {
-    let uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
+    let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
     let sidebar = WorkspaceSidebar(
-      uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData())
+      storeService: storeService, deviceRegistry: DeviceRegistryService(),
+      appletData: WorkspaceAppletData())
 
-    #expect(uiState.definition.displayName == "Workspace Sidebar Preview")
+    #expect(storeService.definition.displayName == "Workspace Sidebar Preview")
     _ = sidebar.body
   }
 
   @Test(arguments: [WorkspaceAddSheet.device, .videoComponent, .vision])
   func workspaceSidebarRejectsAdditionWithoutLiveDocument(sheet: WorkspaceAddSheet) {
-    let uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-    let definition = uiState.definition
-    let selection = uiState.inspectorSelector
+    let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+    let definition = storeService.definition
+    let selection = storeService.inspectorSelector
     let data = WorkspaceAppletData()
     let assignments = data.physicalDeviceIDsByResourceInternalID
     let sidebar = WorkspaceSidebar(
-      uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: data)
+      storeService: storeService, deviceRegistry: DeviceRegistryService(), appletData: data)
     var draft = WorkspaceAddDraft()
     draft.name = "New component"
     draft.componentKind = .solidColor
@@ -57,8 +58,8 @@ struct SwiftUIViewStateUnitTestSuite {
     } catch {
       #expect(error.localizedDescription == "The Workspace document is unavailable.")
     }
-    #expect(uiState.definition == definition)
-    #expect(uiState.inspectorSelector == selection)
+    #expect(storeService.definition == definition)
+    #expect(storeService.inspectorSelector == selection)
     #expect(data.physicalDeviceIDsByResourceInternalID == assignments)
   }
 

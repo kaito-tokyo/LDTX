@@ -6,8 +6,8 @@ import LDTXProtos
 import SwiftUI
 
 struct ConicGradientFillVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
-  let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
+  let storeService: WorkspaceStoreService
+  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
 
   private let component: Ldtx_Workspace_V4_FillConicGradientComponent?
 
@@ -18,10 +18,13 @@ struct ConicGradientFillVideoComponentInspector: View {
   @State private var startColor: Color
   @State private var endColor: Color
 
-  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
-    self.uiState = uiState
+  init(
+    storeService: WorkspaceStoreService,
+    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  ) {
+    self.storeService = storeService
     self.videoComponentID = videoComponentID
-    self.component = uiState.definition.videoComponents
+    self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
         guard case .conicGradientFill(let component) = wrapper.definition else { return nil }
@@ -37,6 +40,7 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
       Section("Conic Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -63,7 +67,7 @@ struct ConicGradientFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(uiState.isOutputActive || component == nil)
+    .disabled(storeService.isOutputActive || component == nil)
     .onChange(of: name) { commitDraft() }
     .onChange(of: centerX) { commitDraft() }
     .onChange(of: centerY) { commitDraft() }
@@ -93,11 +97,11 @@ struct ConicGradientFillVideoComponentInspector: View {
     component.endColor.blue = Float(endNSColor.blueComponent)
     component.endColor.alpha = Float(endNSColor.alphaComponent)
 
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
     else { return }
     definition.videoComponents[index].definition = .conicGradientFill(component)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 
   private var gradient: AngularGradient {
@@ -111,10 +115,10 @@ struct ConicGradientFillVideoComponentInspector: View {
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7))
     ConicGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .conicGradientFill(7)
+      storeService: storeService, videoComponentID: .conicGradientFill(7)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -122,11 +126,11 @@ struct ConicGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7),
       isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .conicGradientFill(7)
+      storeService: storeService, videoComponentID: .conicGradientFill(7)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

@@ -30,11 +30,11 @@ struct WorkspaceDocumentSystemTestSuite {
     let data = WorkspaceAppletData(userDefaults: defaults)
     let document = WorkspaceDocument()
     defer { document.close() }
-    let preferences = document.uiState.preferences
-    let url = try #require(document.uiState.localStateURL)
+    let preferences = document.storeService.preferences
+    let url = try #require(document.storeService.localStateURL)
     data.updateState(for: url) { $0.monitorVolume = -12.5 }
     #expect(data.state(for: url).monitorVolume == -12.5)
-    #expect(document.uiState.preferences == preferences)
+    #expect(document.storeService.preferences == preferences)
     #expect(!document.isDocumentEdited)
   }
 
@@ -49,51 +49,53 @@ struct WorkspaceDocumentSystemTestSuite {
       first.close()
       second.close()
     }
-    first.uiState.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-    first.uiState.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    first.storeService.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    first.storeService.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
     let firstWindow = WorkspaceWindowController(
-      uiState: first.uiState,
+      storeService: first.storeService,
       persistenceCoordinator: first.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(first))
     first.addWindowController(firstWindow)
     let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
     let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
-    second.uiState.definition = first.uiState.definition
+    second.storeService.definition = first.storeService.definition
     let secondWindow = WorkspaceWindowController(
-      uiState: second.uiState,
+      storeService: second.storeService,
       persistenceCoordinator: second.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
     try secondWindow.selectProgram(internalID: a)
     let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
     let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
-    let definition = first.uiState.definition
-    first.uiState.inspectorSelector = .init(kind: .workspacePrograms)
+    let definition = first.storeService.definition
+    first.storeService.inspectorSelector = .init(kind: .workspacePrograms)
     try firstWindow.selectProgram(internalID: b)
     #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
     #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
-    #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
-    #expect(data.state(for: second.uiState.localStateURL!).selectedProgramInternalID == a)
+    #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == b)
+    #expect(data.state(for: second.storeService.localStateURL!).selectedProgramInternalID == a)
     // Content is now the live AppKit controller connected to this document.
-    #expect((firstWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
-    #expect(first.uiState.inspectorSelector == .init(kind: .workspacePrograms))
-    let inspector = WorkspaceProgramsInspector(uiState: first.uiState, appletData: data)
+    #expect(
+      (firstWindow.window as? WorkspaceWindow)?.contentPane.storeService.selectedProgram?
+        .internalID == b)
+    #expect(first.storeService.inspectorSelector == .init(kind: .workspacePrograms))
+    let inspector = WorkspaceProgramsInspector(storeService: first.storeService, appletData: data)
     #expect(!inspector.canSelectProgram)
     #expect(inspector.programSelection.wrappedValue == a)
-    #expect(second.uiState.inspectorSelector == nil)
-    #expect(first.uiState.definition == definition)
+    #expect(second.storeService.inspectorSelector == nil)
+    #expect(first.storeService.definition == definition)
     #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: UInt64.max) }
     for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
       firstWindow.windowRuntime.setRecordingState(state)
       #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: a) }
-      #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == b)
+      #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == b)
     }
     firstWindow.windowRuntime.setRecordingState(.paused)
     try firstWindow.selectProgram(internalID: a)
     first.removeWindowController(firstWindow)
     #expect(firstWindow.document == nil)
     #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: b) }
-    #expect(data.state(for: first.uiState.localStateURL!).selectedProgramInternalID == a)
+    #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == a)
     first.addWindowController(firstWindow)
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -105,17 +107,19 @@ struct WorkspaceDocumentSystemTestSuite {
     let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
     defer { reopened.close() }
     let reopenedWindow = WorkspaceWindowController(
-      uiState: reopened.uiState,
+      storeService: reopened.storeService,
       persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(reopened))
     reopened.addWindowController(reopenedWindow)
-    let reopenedInspector = WorkspaceProgramsInspector(uiState: reopened.uiState, appletData: data)
+    let reopenedInspector = WorkspaceProgramsInspector(
+      storeService: reopened.storeService, appletData: data)
     #expect(data.state(for: url).selectedProgramInternalID == b)
     #expect(!reopenedInspector.canSelectProgram)
     #expect(reopenedInspector.programSelection.wrappedValue == a)
     #expect(
-      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.selectedProgram?.internalID == b)
-    #expect(reopened.uiState.inspectorSelector == nil)
+      (reopenedWindow.window as? WorkspaceWindow)?.contentPane.storeService.selectedProgram?
+        .internalID == b)
+    #expect(reopened.storeService.inspectorSelector == nil)
     await reopenedWindow.shutdown()
     await secondWindow.shutdown()
   }
@@ -131,10 +135,10 @@ struct WorkspaceDocumentSystemTestSuite {
       first.close()
       second.close()
     }
-    first.uiState.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-    first.uiState.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+    first.storeService.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+    first.storeService.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
     let firstWindow = WorkspaceWindowController(
-      uiState: first.uiState,
+      storeService: first.storeService,
       persistenceCoordinator: first.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(first))
     first.addWindowController(firstWindow)
@@ -142,14 +146,18 @@ struct WorkspaceDocumentSystemTestSuite {
     let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
     try firstWindow.windowRuntime.setVideoLayerOrder(
       [input], forProgramInternalID: program, target: .landscape)
-    data.updateState(for: first.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
-    second.uiState.definition = first.uiState.definition
+    data.updateState(for: first.storeService.localStateURL!) {
+      $0.selectedProgramInternalID = program
+    }
+    second.storeService.definition = first.storeService.definition
     let secondWindow = WorkspaceWindowController(
-      uiState: second.uiState,
+      storeService: second.storeService,
       persistenceCoordinator: second.persistenceCoordinator, appletData: data,
       documentReference: DocumentReference(second))
     second.addWindowController(secondWindow)
-    data.updateState(for: second.uiState.localStateURL!) { $0.selectedProgramInternalID = program }
+    data.updateState(for: second.storeService.localStateURL!) {
+      $0.selectedProgramInternalID = program
+    }
     let firstRuntime = try #require(firstWindow.windowRuntime.landscapeRuntime)
     let secondRuntime = try #require(secondWindow.windowRuntime.landscapeRuntime)
     data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
@@ -199,7 +207,7 @@ struct WorkspaceDocumentSystemTestSuite {
     controller.addDocument(document)
     defer { document.close() }
     #expect(document.fileURL == url)
-    #expect(document.uiState.localStateURL == url)
+    #expect(document.storeService.localStateURL == url)
     #expect(document.persistenceCoordinator.url == url)
     let independentlyOpened = try WorkspaceDocument(
       contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
@@ -239,7 +247,7 @@ struct WorkspaceDocumentSystemTestSuite {
       ofType: "tokyo.kaito.ldtx.workspace")
     defer { document.close() }
     #expect(document.fileURL == formal)
-    #expect(document.uiState.definition.displayName == "Formal")
+    #expect(document.storeService.definition.displayName == "Formal")
     #expect(!document.isDocumentEdited)
     #expect(document.autosavedContentsFileURL == nil)
     #expect(throws: (any Error).self) {
@@ -275,16 +283,16 @@ struct WorkspaceDocumentSystemTestSuite {
       second.close()
       dockTile.badgeLabel = originalBadge
     }
-    first.uiState.isOutputActive = true
-    first.uiState.isOutputActive = true
-    second.uiState.isOutputActive = true
+    first.storeService.isOutputActive = true
+    first.storeService.isOutputActive = true
+    second.storeService.isOutputActive = true
     #expect(dockTile.badgeLabel == "REC")
-    first.uiState.isOutputActive = false
+    first.storeService.isOutputActive = false
     #expect(dockTile.badgeLabel == "REC")
-    second.uiState.isOutputActive = false
+    second.storeService.isOutputActive = false
     #expect(dockTile.badgeLabel == nil)
-    first.uiState.isOutputActive = true
-    second.uiState.isOutputActive = true
+    first.storeService.isOutputActive = true
+    second.storeService.isOutputActive = true
     first.close()
     #expect(dockTile.badgeLabel == "REC")
     second.close()
@@ -304,32 +312,32 @@ struct WorkspaceDocumentSystemTestSuite {
       other.close()
     }
     try await save(document, to: url)
-    let savedDefinition = document.uiState.definition
-    let otherDefinition = other.uiState.definition
+    let savedDefinition = document.storeService.definition
+    let otherDefinition = other.storeService.definition
     var draft = WorkspaceAddDraft()
     draft.name = "Camera"
     draft.componentKind = .vfxSource
     let inputID = try WorkspaceResourceAddition.add(
-      sheet: .videoComponent, draft: draft, devices: [], uiState: document.uiState)
+      sheet: .videoComponent, draft: draft, devices: [], storeService: document.storeService)
     draft.name = "Color"
     draft.componentKind = .solidColor
     try WorkspaceResourceAddition.add(
-      sheet: .videoComponent, draft: draft, devices: [], uiState: document.uiState)
+      sheet: .videoComponent, draft: draft, devices: [], storeService: document.storeService)
     draft.name = "OCR"
     draft.videoComponentID = inputID
     try WorkspaceResourceAddition.add(
-      sheet: .vision, draft: draft, devices: [], uiState: document.uiState)
-    #expect(other.uiState.definition == otherDefinition)
+      sheet: .vision, draft: draft, devices: [], storeService: document.storeService)
+    #expect(other.storeService.definition == otherDefinition)
     #expect(document.isDocumentEdited)
     #expect(try WorkspaceBundleReaderV4(at: url).read().definition == savedDefinition)
-    let expected = document.uiState.definition
+    let expected = document.storeService.definition
     try await save(document, to: url, operation: .saveOperation)
     #expect(!document.isDocumentEdited)
     let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
     defer { reopened.close() }
-    #expect(reopened.uiState.definition == expected)
+    #expect(reopened.storeService.definition == expected)
     #expect(
-      reopened.uiState.definition.visions.first?.ocrVision.source
+      reopened.storeService.definition.visions.first?.ocrVision.source
         == .videoComponentInternalID(inputID)
     )
   }
@@ -357,33 +365,34 @@ struct WorkspaceDocumentSystemTestSuite {
     document.finishCreation(success: true)
     let initialWindow = try #require(document.windowControllers.first?.window as? WorkspaceWindow)
     #expect(initialWindow.isVisible)
-    #expect(initialWindow.contentPane.selectedProgram == nil)
+    #expect(initialWindow.contentPane.storeService.selectedProgram == nil)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 101
     program.displayName = "Main"
     program.landscapeVideoLayerInternalIds = [202, 203]
     program.portraitVideoLayerInternalIds = [202, 203]
-    document.uiState.definition.programs = [program]
-    document.uiState.definition.videoComponents = [
+    document.storeService.definition.programs = [program]
+    document.storeService.definition.videoComponents = [
       WorkspaceResourceFactory.makeSolidColor(id: 202, name: "Color"),
       WorkspaceResourceFactory.makeClock(id: 203, name: "Clock"),
     ]
-    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+    document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .audioMasterVolumeDecibelTenths = -80
-    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+    document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .videoLayerHidden[
         202] = true
-    document.uiState.preferences.portraitProgramPreferences[101, default: .init()].videoLayerHidden[
-      203] = true
-    document.uiState.inspectorSelector = .init(kind: .clockVideoComponent, internalID: 203)
-    #expect(initialWindow.contentPane.selectedProgram != nil)
+    document.storeService.preferences.portraitProgramPreferences[101, default: .init()]
+      .videoLayerHidden[
+        203] = true
+    document.storeService.inspectorSelector = .init(kind: .clockVideoComponent, internalID: 203)
+    #expect(initialWindow.contentPane.storeService.selectedProgram != nil)
     #expect(document.isDocumentEdited)
     try await save(document, to: url, operation: .saveOperation)
     #expect(document.fileURL == url)
-    #expect(document.uiState.localStateURL == url)
+    #expect(document.storeService.localStateURL == url)
     #expect(!document.isDocumentEdited)
-    let expectedDefinition = document.uiState.definition
-    let expectedPreferences = document.uiState.preferences
+    let expectedDefinition = document.storeService.definition
+    let expectedPreferences = document.storeService.preferences
     let firstController = try #require(
       document.windowControllers.first as? WorkspaceWindowController)
     await document.shutdown()
@@ -398,14 +407,14 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(window !== initialWindow)
     #expect(window.isVisible)
     #expect(reopened.fileURL == url)
-    #expect(reopened.uiState.localStateURL == url)
-    #expect(reopened.uiState.inspectorSelector == nil)
-    #expect(reopened.uiState.definition == expectedDefinition)
-    #expect(reopened.uiState.preferences == expectedPreferences)
+    #expect(reopened.storeService.localStateURL == url)
+    #expect(reopened.storeService.inspectorSelector == nil)
+    #expect(reopened.storeService.definition == expectedDefinition)
+    #expect(reopened.storeService.preferences == expectedPreferences)
     #expect(!reopened.isDocumentEdited)
-    #expect(window.contentPane.selectedProgram != nil)
+    #expect(window.contentPane.storeService.selectedProgram != nil)
     #expect(
-      window.contentController.preview.metalView.delegate === controller.previewRenderer)
+      controller.pairedPreview.metalView.delegate === controller.previewRenderer)
     #expect(
       controller.previewRenderer !== firstController.previewRenderer
     )
@@ -464,7 +473,7 @@ struct WorkspaceDocumentSystemTestSuite {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let first = root.appendingPathComponent("Show.ldtxworkspace")
     try await save(document, to: first)
-    #expect(document.uiState.definition.displayName == "Show")
+    #expect(document.storeService.definition.displayName == "Show")
     #expect(try WorkspaceBundleReaderV4(at: first).read().definition.displayName == "Show")
     #expect(!document.isDocumentEdited)
     let next = root.appendingPathComponent("Another.ldtxworkspace")
@@ -474,11 +483,11 @@ struct WorkspaceDocumentSystemTestSuite {
     } catch {}
     #expect(document.fileURL == first)
     #expect(!FileManager.default.fileExists(atPath: next.path))
-    #expect(document.uiState.definition.displayName == "Show")
+    #expect(document.storeService.definition.displayName == "Show")
     document.close()
     let reopened = try WorkspaceDocument(contentsOf: first, ofType: "tokyo.kaito.ldtx.workspace")
     defer { reopened.close() }
-    #expect(reopened.uiState.definition.displayName == "Show")
+    #expect(reopened.storeService.definition.displayName == "Show")
   }
 
   @Test func firstSavePreservesExplicitWorkspaceName() async throws {
@@ -486,10 +495,10 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
     defer { document.close() }
-    document.uiState.definition.displayName = "Custom"
+    document.storeService.definition.displayName = "Custom"
     let destination = root.appendingPathComponent("Show.ldtxworkspace")
     try await save(document, to: destination)
-    #expect(document.uiState.definition.displayName == "Custom")
+    #expect(document.storeService.definition.displayName == "Custom")
     #expect(try WorkspaceBundleReaderV4(at: destination).read().definition.displayName == "Custom")
   }
 
@@ -499,7 +508,7 @@ struct WorkspaceDocumentSystemTestSuite {
     let document = WorkspaceDocument()
     let destination = root.appendingPathComponent("Saved.ldtxworkspace")
     #expect(document.fileURL == nil)
-    document.uiState.definition.displayName = "Saved"
+    document.storeService.definition.displayName = "Saved"
     #expect(document.isDocumentEdited)
     try await save(document, to: destination)
     #expect(!document.isDocumentEdited)
@@ -518,17 +527,17 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     let destination = root.appendingPathComponent("Snapshot.ldtxworkspace")
     let document = WorkspaceDocument()
-    document.uiState.definition.displayName = "Snapshot"
+    document.storeService.definition.displayName = "Snapshot"
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       document.save(to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation) {
         error in
         if let error { continuation.resume(throwing: error) } else { continuation.resume() }
       }
-      document.uiState.definition.displayName = "Later edit"
+      document.storeService.definition.displayName = "Later edit"
     }
     #expect(
       try WorkspaceBundleReaderV4(at: destination).read().definition.displayName == "Later edit")
-    #expect(document.uiState.definition.displayName == "Later edit")
+    #expect(document.storeService.definition.displayName == "Later edit")
     #expect(!document.isDocumentEdited)
     document.close()
   }
@@ -539,12 +548,12 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     let destination = root.appendingPathComponent("Snapshot.ldtxworkspace")
     let document = WorkspaceDocument()
-    document.uiState.definition.displayName = "Snapshot"
+    document.storeService.definition.displayName = "Snapshot"
     let token = document.changeCountToken(for: .saveOperation)
     #expect(
       document.canAsynchronouslyWrite(
         to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation))
-    document.uiState.definition.displayName = "Later edit"
+    document.storeService.definition.displayName = "Later edit"
     let writer = BackgroundSnapshotWriter(document: document, destination: destination)
     try await Task.detached { try writer.write() }.value
     document.updateChangeCount(withToken: token, for: .saveOperation)
@@ -561,14 +570,14 @@ struct WorkspaceDocumentSystemTestSuite {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 101
     program.displayName = "Main"
-    document.uiState.definition.programs = [program]
+    document.storeService.definition.programs = [program]
     defer { document.close() }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")
     try await save(document, to: url)
     let definition = try Data(contentsOf: url.appendingPathComponent("definition.pb"))
     let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
-    document.uiState.definition.displayName = "Pending"
-    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+    document.storeService.definition.displayName = "Pending"
+    document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .audioMasterVolumeDecibelTenths = -60
     #expect(!WorkspaceDocument.autosavesInPlace)
     #expect(!WorkspaceDocument.preservesVersions)
@@ -643,7 +652,11 @@ struct WorkspaceDocumentSystemTestSuite {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 101
     program.displayName = "Main"
-    document.uiState.definition.programs = [program]
+    document.storeService.definition.programs = [program]
+    var audio = Ldtx_Workspace_V4_AudioInputDevice()
+    audio.internalID = 102
+    audio.displayName = "Input"
+    document.storeService.definition.audioDevices = [audio]
     defer { document.close() }
     for action in [
       #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
@@ -657,28 +670,30 @@ struct WorkspaceDocumentSystemTestSuite {
     try await save(document, to: url)
     document.writeProbe.withLock { $0 = { throw CocoaError(.fileWriteNoPermission) } }
     defer { document.writeProbe.withLock { $0 = nil } }
-    document.uiState.definition.displayName = "Pending"
+    document.storeService.definition.displayName = "Pending"
     do {
       try await save(document, to: url, operation: .saveOperation)
       Issue.record("Expected partial save failure")
     } catch {}
     #expect(document.isDocumentEdited)
-    #expect(document.uiState.definition.displayName == "Pending")
+    #expect(document.storeService.definition.displayName == "Pending")
     document.writeProbe.withLock { $0 = nil }
     try await save(document, to: url, operation: .saveOperation)
     #expect(!document.isDocumentEdited)
-    document.uiState.isOutputActive = true
-    let fixedDefinition = document.uiState.definition
-    document.uiState.definition.displayName = "Rejected during output"
-    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+    document.storeService.isOutputActive = true
+    let fixedDefinition = document.storeService.definition
+    document.storeService.definition.displayName = "Rejected during output"
+    document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .audioMasterVolumeDecibelTenths = -80
+    #expect(document.storeService.setAudioChannelGain(-12, forAudioInputDeviceInternalID: 102))
     try await save(document, to: url, operation: .saveOperation)
     let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
     #expect(
       savedOutput.preferences.landscapeProgramPreferences[101]?.audioMasterVolumeDecibelTenths
         == -80)
+    #expect(savedOutput.preferences.audioChannelGainsDecibelTenths[102] == -120)
     #expect(savedOutput.definition == fixedDefinition)
-    document.uiState.isOutputActive = false
+    document.storeService.isOutputActive = false
   }
 
   @Test func outputAllowsOnlyLayerPermutationsAndPersistsLatestOrder() async throws {
@@ -686,7 +701,7 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     let document = WorkspaceDocument()
     defer {
-      document.uiState.isOutputActive = false
+      document.storeService.isOutputActive = false
       document.close()
     }
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -694,8 +709,8 @@ struct WorkspaceDocumentSystemTestSuite {
     program.displayName = "Main"
     program.landscapeVideoLayerInternalIds = [1, 2, 3]
     program.portraitVideoLayerInternalIds = [3, 2, 1]
-    document.uiState.definition.programs = [program]
-    document.uiState.definition.videoComponents = [1, 2, 3].map { id in
+    document.storeService.definition.programs = [program]
+    document.storeService.definition.videoComponents = [1, 2, 3].map { id in
       var device = Ldtx_Workspace_V4_VfxSourceComponent()
       device.internalID = UInt64(id)
       device.displayName = "Camera \(id)"
@@ -705,31 +720,31 @@ struct WorkspaceDocumentSystemTestSuite {
     }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")
     try await save(document, to: url)
-    document.uiState.isOutputActive = true
-    document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = [3, 1, 2]
-    document.uiState.definition.programs[0].portraitVideoLayerInternalIds = [1, 3, 2]
+    document.storeService.isOutputActive = true
+    document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [3, 1, 2]
+    document.storeService.definition.programs[0].portraitVideoLayerInternalIds = [1, 3, 2]
     #expect(document.isDocumentEdited)
-    let reordered = document.uiState.definition
+    let reordered = document.storeService.definition
     for rejected: [UInt64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
-      document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = rejected
-      #expect(document.uiState.definition == reordered)
+      document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = rejected
+      #expect(document.storeService.definition == reordered)
     }
     var mixed = reordered
     mixed.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
     mixed.displayName = "Forbidden"
-    document.uiState.definition = mixed
-    #expect(document.uiState.definition == reordered)
-    document.uiState.definition.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
-    let latest = document.uiState.definition
-    document.uiState.definition.programs.removeAll()
-    #expect(document.uiState.definition == latest)
+    document.storeService.definition = mixed
+    #expect(document.storeService.definition == reordered)
+    document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
+    let latest = document.storeService.definition
+    document.storeService.definition.programs.removeAll()
+    #expect(document.storeService.definition == latest)
     try await save(document, to: url, operation: .saveOperation)
     #expect(try WorkspaceBundleReaderV4(at: url).read().definition == latest)
-    document.uiState.isOutputActive = false
+    document.storeService.isOutputActive = false
     let reopened = WorkspaceDocument()
     defer { reopened.close() }
     try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
-    #expect(reopened.uiState.definition == latest)
+    #expect(reopened.storeService.definition == latest)
   }
 
   @Test func editsCanProceedWhileBackgroundSaveIsPaused() async throws {
@@ -739,7 +754,7 @@ struct WorkspaceDocumentSystemTestSuite {
     defer { document.close() }
     let url = root.appendingPathComponent("Workspace.ldtxworkspace")
     try await save(document, to: url)
-    document.uiState.definition.displayName = "Snapshot"
+    document.storeService.definition.displayName = "Snapshot"
     let gate = DispatchSemaphore(value: 0)
     let handle = BackgroundSnapshotWriter(document: document, destination: url)
     defer { document.writeProbe.withLock { $0 = nil } }
@@ -747,7 +762,7 @@ struct WorkspaceDocumentSystemTestSuite {
       probe = {
         DispatchQueue.main.async {
           MainActor.assumeIsolated {
-            handle.document.uiState.definition.displayName = "Later edit"
+            handle.document.storeService.definition.displayName = "Later edit"
             gate.signal()
           }
         }
@@ -758,7 +773,7 @@ struct WorkspaceDocumentSystemTestSuite {
     }
     try await save(document, to: url, operation: .saveOperation)
     document.writeProbe.withLock { $0 = nil }
-    #expect(document.uiState.definition.displayName == "Later edit")
+    #expect(document.storeService.definition.displayName == "Later edit")
     #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Snapshot")
     #expect(document.isDocumentEdited)
   }
@@ -775,15 +790,15 @@ struct WorkspaceDocumentSystemTestSuite {
     try resource.write(to: original.appendingPathComponent("resource.bin"))
     try FileManager.default.moveItem(at: original, to: moved)
     document.presentedItemDidMove(to: moved)
-    for _ in 0..<100 where document.uiState.localStateURL != moved {
+    for _ in 0..<100 where document.storeService.localStateURL != moved {
       try await Task.sleep(for: .milliseconds(10))
     }
     #expect(document.fileURL == moved)
-    #expect(document.uiState.localStateURL == moved)
+    #expect(document.storeService.localStateURL == moved)
     #expect(document.persistenceCoordinator.url == moved)
     let other = try WorkspaceDocument(contentsOf: moved, ofType: "tokyo.kaito.ldtx.workspace")
     other.close()
-    document.uiState.definition.displayName = "After move"
+    document.storeService.definition.displayName = "After move"
     try await save(document, to: moved, operation: .saveOperation)
     #expect(!document.isDocumentEdited)
     #expect(try Data(contentsOf: moved.appendingPathComponent("resource.bin")) == resource)
@@ -819,11 +834,11 @@ struct WorkspaceDocumentSystemTestSuite {
     let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
     document.makeWindowControllers()
     let controller = try #require(document.windowControllers.first as? WorkspaceWindowController)
-    document.uiState.definition.displayName = "Pending"
+    document.storeService.definition.displayName = "Pending"
     // No Program/output is enabled, so this exercises the entry without media I/O.
     try await controller.startOutput()
     #expect(document.isDocumentEdited)
-    #expect(document.uiState.definition.displayName == "Pending")
+    #expect(document.storeService.definition.displayName == "Pending")
     #expect(try Data(contentsOf: url.appendingPathComponent("definition.pb")) == definition)
     #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == preferences)
     await document.shutdown()
@@ -840,7 +855,7 @@ struct WorkspaceDocumentSystemTestSuite {
     document.makeWindowControllers()
     let window = try #require(document.windowControllers.first?.window)
     window.orderFront(nil)
-    document.uiState.definition.displayName = "Pending"
+    document.storeService.definition.displayName = "Pending"
     let probe = WorkspaceCloseProbe()
     document.canClose(
       withDelegate: probe,
@@ -891,21 +906,21 @@ struct WorkspaceDocumentSystemTestSuite {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 101
     program.displayName = "Main"
-    document.uiState.definition.programs = [program]
+    document.storeService.definition.programs = [program]
     document.updateChangeCount(.changeCleared)
-    let original = document.uiState.definition
-    document.uiState.isOutputActive = true
-    document.uiState.definition.displayName = "Rejected"
-    #expect(document.uiState.definition == original)
+    let original = document.storeService.definition
+    document.storeService.isOutputActive = true
+    document.storeService.definition.displayName = "Rejected"
+    #expect(document.storeService.definition == original)
     #expect(!document.isDocumentEdited)
-    document.uiState.preferences.landscapeProgramPreferences[101, default: .init()]
+    document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .audioMasterVolumeDecibelTenths = -60
     #expect(document.isDocumentEdited)
   }
 
   @Test func outputDisablesSaveAsAndRevert() {
     let document = WorkspaceDocument()
-    document.uiState.isOutputActive = true
+    document.storeService.isOutputActive = true
     let saveAs = NSMenuItem(
       title: "Save As", action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "")
     let revert = NSMenuItem(

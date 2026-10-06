@@ -5,9 +5,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
-  let scrollView = NSScrollView()
   let table = VideoLayersTableView()
-  let manageButton = ContentActionButton("Manage Video Layers…")
 
   let errorLabel = NSTextField(wrappingLabelWithString: "")
   private var errors: [UInt64: String] = [:] {
@@ -17,10 +15,16 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     }
   }
 
-  override init(nibName: NSNib.Name? = nil, bundle: Bundle? = nil) {
-    super.init(nibName: nibName, bundle: bundle)
-    scrollView.hasVerticalScroller = true
-    scrollView.documentView = table
+  private let status = NSTextField(wrappingLabelWithString: "")
+  private let storeService: WorkspaceStoreService
+  private let target: WorkspaceCanvasTarget
+  private var displayedProgramID: UInt64?
+  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? { storeService.selectedProgram }
+
+  init(storeService: WorkspaceStoreService, target: WorkspaceCanvasTarget) {
+    self.storeService = storeService
+    self.target = target
+    super.init(nibName: nil, bundle: nil)
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -100,6 +104,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     onCommitLayerOrder: @escaping ([UInt64]) throws -> Void = { _ in },
     onError: @escaping (Error) -> Void = { _ in }
   ) {
+    _ = view
     self.onCommitTransform = onCommitTransform
     self.onSetHidden = onSetHidden
     self.onError = onError
@@ -149,16 +154,74 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
 
   override func loadView() {
     view = NSView()
+    table.setContentHuggingPriority(.required, for: .vertical)
+    table.setContentCompressionResistancePriority(.required, for: .vertical)
     errorLabel.isHidden = errorLabel.stringValue.isEmpty
-    let stack = contentStack([manageButton, errorLabel, scrollView])
+    let stack = contentStack([errorLabel, table, status])
     pinContent(stack, in: view)
+    table.translatesAutoresizingMaskIntoConstraints = false
+    table.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    refresh()
+  }
+
+  override func viewWillLayout() {
+    super.viewWillLayout()
+    refresh()
+  }
+
+  func refresh() {
+    _ = view
+    let id = selectedProgram?.internalID
+    if displayedProgramID != id {
+      table.removeAllRows()
+      displayedProgramID = id
+    }
+    let program = selectedProgram
+    let preference =
+      id.flatMap { storeService.preferences[keyPath: target.preferences][$0] } ?? .init()
+    let layerIDs = program?[keyPath: target.layerIDs] ?? []
+    update(
+      definition: storeService.definition, programPreferences: preference, layerIDs: layerIDs,
+      canvasWidth: Double(target.defaultProfile.width),
+      canvasHeight: Double(target.defaultProfile.height),
+      onCommitTransform: { [weak self] layerID, value in
+        guard let self, let id else {
+          throw WorkspaceSelectionError(message: "No program selected.")
+        }
+        return try storeService.commitVideoLayerTransform(
+          value, layerID: layerID, programID: id, target: target)
+      },
+      onSetHidden: { [weak self] layerID, value in
+        guard let self, let id else {
+          throw WorkspaceSelectionError(message: "No program selected.")
+        }
+        var updated = try storeService.preferences(for: id, target: target)
+        updated.videoLayerHidden[layerID] = value
+        try storeService.commitPreferences(updated, programID: id, target: target)
+      },
+      onCommitLayerOrder: { [weak self] ids in
+        guard let self, let id else {
+          throw WorkspaceSelectionError(message: "No program selected.")
+        }
+        try storeService.commitLayerOrder(ids, programID: id, target: target)
+      },
+      onError: { [weak status] error in
+        status?.textColor = .systemRed
+        status?.stringValue = error.localizedDescription
+        status?.isHidden = false
+      })
+    status.textColor = .secondaryLabelColor
+    status.stringValue =
+      storeService.outputFailureMessage
+      ?? (id == nil ? "No program selected" : layerIDs.isEmpty ? "No video layers" : "")
+    status.isHidden = status.stringValue.isEmpty
   }
 }
 
 #if DEBUG
 
   #Preview("Video Layers Editor", traits: .fixedLayout(width: 720, height: 360)) {
-    let editor = VideoLayersEditor()
+    let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = ["Camera", "Background", "Portrait Source"].enumerated().map {
       index, name in
@@ -177,14 +240,13 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       programPreferences.videoLayerTransforms[id] = transform
     }
     programPreferences.videoLayerHidden[2] = true
-    editor.update(
-      definition: definition, programPreferences: programPreferences, layerIDs: [1, 2],
-      canvasWidth: 1920, canvasHeight: 1080,
-      onCommitTransform: { id, value in
-        programPreferences.videoLayerTransforms[id] = value
-        return value
-      },
-      onSetHidden: { id, value in programPreferences.videoLayerHidden[id] = value })
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 100
+    program.landscapeVideoLayerInternalIds = [1, 2]
+    definition.programs = [program]
+    storeService.definition = definition
+    storeService.preferences.landscapeProgramPreferences[100] = programPreferences
+    let editor = VideoLayersEditor(storeService: storeService, target: .landscape)
     NSLayoutConstraint.activate([
       editor.view.widthAnchor.constraint(equalToConstant: 720),
       editor.view.heightAnchor.constraint(equalToConstant: 360),
@@ -193,10 +255,9 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   }
 
   #Preview("Video Layers Editor — No Program", traits: .fixedLayout(width: 720, height: 360)) {
-    let editor = VideoLayersEditor()
-    editor.update(
-      definition: .init(), programPreferences: .init(), layerIDs: [],
-      canvasWidth: 1920, canvasHeight: 1080)
+    let editor = VideoLayersEditor(
+      storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
+      target: .landscape)
     NSLayoutConstraint.activate([
       editor.view.widthAnchor.constraint(equalToConstant: 720),
       editor.view.heightAnchor.constraint(equalToConstant: 360),

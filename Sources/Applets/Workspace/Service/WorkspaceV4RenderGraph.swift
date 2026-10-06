@@ -79,7 +79,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
     var audioPreferences = ProgramPreferences(
       masterVolume: Self.linearGain(
         Double(preference.audioMasterVolumeDecibelTenths) / 10))
-    let gains = preference.audioChannelGainsDecibelTenths
+    let gains = canvas.audioChannelGainsDecibelTenths
     let mutedAudio = preference.audioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,

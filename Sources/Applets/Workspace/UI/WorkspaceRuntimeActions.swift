@@ -4,9 +4,8 @@
 
 import Foundation
 import LDTXWorkspaceAppletInterface
-import Observation
 
-public protocol WorkspaceDispatcherProtocol: AnyObject, Observable {
+public protocol WorkspaceRuntimeActions: AnyObject {
   @MainActor func synchronizeVision()
   @MainActor func synchronizeAudioMonitor()
   @MainActor func synchronizeCaptureInputs(

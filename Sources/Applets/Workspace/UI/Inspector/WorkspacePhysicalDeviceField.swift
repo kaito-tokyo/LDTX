@@ -6,11 +6,10 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspacePhysicalDeviceField: View {
-  @Environment(\.workspaceDispatcher) private var dispatcher
   let title: String
   let internalID: UInt64
   let isAudio: Bool
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   let appletData: WorkspaceAppletData
   let deviceRegistry: DeviceRegistryService
   var isEditable = true
@@ -31,27 +30,27 @@ struct WorkspacePhysicalDeviceField: View {
       title: title, current: appletData.physicalDeviceID(for: internalID), options: options,
       loaded: deviceRegistry.hasRefreshed,
       loadError: isAudio ? deviceRegistry.errorMessage : nil,
-      clearTitle: "Remove Assignment", isEditable: isEditable && !uiState.isOutputActive,
+      clearTitle: "Remove Assignment", isEditable: isEditable && !storeService.isOutputActive,
       refresh: { deviceRegistry.refresh() },
       commit: { proposed in
         try applySelection(proposed)
-        dispatcher?.synchronizeCaptureInputs(
+        storeService.synchronizeCaptureInputs(
           availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
         ) { _ in }
-        dispatcher?.synchronizeAudioMonitor()
+        storeService.synchronizeAudioMonitor()
       }
     )
     .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
   }
 
   func applySelection(_ proposed: WorkspacePhysicalDeviceID?) throws {
-    guard isEditable, !uiState.isOutputActive else {
+    guard isEditable, !storeService.isOutputActive else {
       throw WorkspaceSelectionError(message: "Stop output before changing an assignment.")
     }
     let exists =
       isAudio
-      ? uiState.definition.audioDevices.contains { $0.internalID == internalID }
-      : uiState.definition.videoComponents.contains {
+      ? storeService.definition.audioDevices.contains { $0.internalID == internalID }
+      : storeService.definition.videoComponents.contains {
         guard case .vfxSource(let source) = $0.definition else { return false }
         return source.internalID == internalID
       }

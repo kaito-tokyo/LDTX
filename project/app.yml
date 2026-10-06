@@ -39,8 +39,6 @@ targets:
           - UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
-      - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
-        buildPhase: resources
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletInterface

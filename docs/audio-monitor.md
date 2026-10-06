@@ -6,7 +6,7 @@
 `LDTXAudioEngine` owns capture, monitoring, timed mixing and PCM output for one
 Workspace. Its C interface is declared in `WorkspaceAudioEngine.h`.
 `WorkspaceAudioEngine` in ProgramRuntime supplies settings and subscriptions;
-recording, streaming and spectrogram clients receive independently owned
+recording and streaming clients receive independently owned
 `CMSampleBuffer` memory. Video capture and Player playback are separate.
 
 ```text

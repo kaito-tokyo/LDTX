@@ -6,8 +6,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct OcrVisionInspector: View {
-  @Environment(\.workspaceDispatcher) private var dispatcher
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   let internalID: UInt64
 
   var body: some View {
@@ -35,7 +34,7 @@ struct OcrVisionInspector: View {
                 message: "The input or Vision is no longer available for editing.")
             }
             sourceBinding.wrappedValue = selected
-            dispatcher?.synchronizeVision()
+            storeService.synchronizeVision()
           })
         Picker("Update Interval", selection: intervalBinding) {
           Text("Manual").tag(0.0)
@@ -78,9 +77,9 @@ struct OcrVisionInspector: View {
         }
       }
       Section("Recognition Result") {
-        if let failure = uiState.visionFailureMessages[internalID] {
+        if let failure = storeService.visionFailureMessages[internalID] {
           Text(failure).foregroundStyle(.red)
-        } else if let result = uiState.visionResults[internalID] {
+        } else if let result = storeService.visionResults[internalID] {
           Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
         } else {
           Text("Waiting for recognition.").foregroundStyle(.secondary)
@@ -105,7 +104,7 @@ struct OcrVisionInspector: View {
   }
 
   private var vision: Ldtx_Workspace_V4_OcrVision? {
-    uiState.definition.visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
+    storeService.definition.visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
       guard case .ocrVision(let vision) = wrapper.definition,
         vision.internalID == internalID
       else { return nil }
@@ -114,10 +113,10 @@ struct OcrVisionInspector: View {
   }
 
   private var videoDevices: [WorkspaceSelectionOption<UInt64>] {
-    VideoLayersManagementSheet.options(in: uiState.definition)
+    storeService.videoComponentOptions
   }
 
-  private var isRecording: Bool { uiState.isOutputActive }
+  private var isRecording: Bool { storeService.isOutputActive }
 
   private func visionBinding<Value>(
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OcrVision, Value>, initial: Value
@@ -244,7 +243,7 @@ struct OcrVisionInspector: View {
   }
 
   private func editVision(_ mutation: (inout Ldtx_Workspace_V4_OcrVision) -> Void) {
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard
       let index = definition.visions.firstIndex(where: { wrapper in
         guard case .ocrVision(let value) = wrapper.definition else { return false }
@@ -253,6 +252,6 @@ struct OcrVisionInspector: View {
     else { return }
     mutation(&value)
     definition.visions[index].definition = .ocrVision(value)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 }

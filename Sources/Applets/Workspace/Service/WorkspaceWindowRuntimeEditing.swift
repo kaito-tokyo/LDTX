@@ -220,15 +220,14 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setAudioChannelGain(
-    _ value: Double, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
-    target: WorkspaceCanvasTarget
+    _ value: Double, forAudioInputDeviceInternalID id: UInt64
   ) throws {
     let tenths = (value * 10).rounded()
     guard tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max) else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
     }
-    try editProgramPreference(programInternalID, target: target) {
-      $0.audioChannelGainsDecibelTenths[id] = Int32(tenths)
+    try editWorkspace { workspace in
+      workspace.preferences.audioChannelGainsDecibelTenths[id] = Int32(tenths)
     }
   }
   public func setAudioChannelMuted(
@@ -329,13 +328,15 @@ extension WorkspaceWindowRuntime {
           removedIDs.contains($0)
         }
       }
+      for removedID in removedIDs {
+        workspace.preferences.audioChannelGainsDecibelTenths.removeValue(forKey: removedID)
+      }
       for target in [WorkspaceCanvasTarget.landscape, .portrait] {
         for programID in workspace.preferences[keyPath: target.preferences].keys {
           guard var pref = workspace.preferences[keyPath: target.preferences][programID] else {
             continue
           }
           for removedID in removedIDs {
-            pref.audioChannelGainsDecibelTenths.removeValue(forKey: removedID)
             pref.audioChannelMuted.removeValue(forKey: removedID)
             pref.videoLayerTransforms.removeValue(forKey: removedID)
             pref.videoLayerHidden.removeValue(forKey: removedID)
