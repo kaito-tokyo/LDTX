@@ -112,7 +112,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
           $0.denominator = 1
         })
     for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
-      #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
+      #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
         try runtime.setMasterVolume(invalid, programInternalID: id, target: .landscape)
       }
     }
@@ -146,7 +146,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
           $0.denominator = 50
         })
     for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
-      #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
+      #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
         try runtime.setAudioChannelGain(invalid, forAudioInputDeviceInternalID: inputID)
       }
     }

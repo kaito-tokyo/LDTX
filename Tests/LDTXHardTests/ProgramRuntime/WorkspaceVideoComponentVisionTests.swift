@@ -15,7 +15,6 @@ import LDTXVision
 import LDTXWorkspaceAppletStore
 import Metal
 import Testing
-import Vision
 
 @Suite(.serialized)
 @MainActor
@@ -57,6 +56,18 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(runtime.definition.programs.isEmpty)
   }
 
+  nonisolated private static var supportsClockOCR: Bool {
+    // macOS 27's TextRecognition models require ANE even when CPU is requested.
+    // Keep the rendering test independent of this hardware-dependent OCR test.
+    if #available(macOS 27.0, *) {
+      return MLComputeDevice.allComputeDevices.contains {
+        if case .neuralEngine = $0 { return true }
+        return false
+      }
+    }
+    return true
+  }
+
   @Test func clockUsesItsOwnLandscapePixelSize() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let registry = LowFrequencyUpdateRegistry()
@@ -72,15 +83,22 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let frame = try await readyFrame(runtime: runtime, vision: vision)
     #expect(frame.image.extent == CGRect(x: 0, y: 0, width: 320, height: 80))
     #expect(runtime.definition.programs.isEmpty)
-    // Revision 3's macOS 27 detector requires ANE even with CPU stage assignments.
-    // Exercise real Clock OCR with revision 2 on hosted CI, which has no ANE backend.
-    let cpu = try #require(
-      MLComputeDevice.allComputeDevices.first {
-        if case .cpu = $0 { return true }
-        return false
-      })
-    let service = VisionOCRService(
-      computeDevice: cpu, requestRevision: VNRecognizeTextRequestRevision2)
+  }
+
+  @Test(.enabled(if: supportsClockOCR))
+  func clockOutputIsRecognized() async throws {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let registry = LowFrequencyUpdateRegistry()
+    defer { registry.shutdown() }
+    let runtime = makeRuntime(capture: capture)
+    runtime.installComponentFrameRenderer(
+      VideoComponentFrameRenderer(
+        captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: registry))
+    defer { runtime.shutdown() }
+    let clock = try runtime.addClock(displayName: "Clock")
+    let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: clock)
+    let vision = try #require(runtime.visionFeatureContext.vision(id))
+    let service = VisionOCRService()
     var recognizedClock = false
     for _ in 0..<10 {
       try await Task.sleep(for: .milliseconds(100))
@@ -89,7 +107,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
         in: current.image,
         configuration: .init(
           prefersAccurateRecognition: false,
-          recognitionLanguages: ["en-US"], usesLanguageCorrection: false), stopToken: .neverStopped)
+          recognitionLanguages: [], usesLanguageCorrection: false), stopToken: .neverStopped)
       #expect(output.elapsedSeconds >= 0)
       recognizedClock = recognizedClock || output.output.contains(":")
     }
