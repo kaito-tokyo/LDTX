@@ -66,8 +66,9 @@ public actor VisionOCRService {
       request.minimumTextHeight = minimumTextHeight
     }
     if let computeDevice {
-      // Device discovery can initialize OCR models using the default ANE backend.
-      // Apply the explicit main-stage device before loading models on hosted runners.
+      // macOS 27's OCR model loader can use ANE despite a main-stage CPU assignment.
+      // The request-wide CPU restriction also covers internal detector initialization.
+      if case .cpu = computeDevice { request.usesCPUOnly = true }
       request.setComputeDevice(computeDevice, for: .main)
       for stage in try request.supportedComputeStageDevices.keys {
         request.setComputeDevice(computeDevice, for: stage)
