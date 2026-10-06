@@ -9,6 +9,31 @@ import Testing
 @Suite
 @MainActor
 struct WorkspaceResourceAdditionUnitTestSuite {
+  @Test func programNamesAreReservedAcrossAllResourceTypes() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.audioDevices = [WorkspaceResourceFactory.makeAudioInput(id: 1, name: "Program")]
+    definition.videoComponents = [WorkspaceResourceFactory.makeVFXSource(id: 2, name: "Program 2")]
+    definition.visions = [
+      .with {
+        $0.ocrVision = .with {
+          $0.internalID = 3
+          $0.displayName = "Program 3"
+        }
+      }
+    ]
+    definition.programs = [
+      .with {
+        $0.internalID = 4
+        $0.displayName = "Program 4"
+      }
+    ]
+    let store = WorkspaceStoreService(definition: definition, preferences: .init())
+    let inspector = WorkspaceProgramsInspector(
+      storeService: store, appletData: WorkspaceAppletData())
+    #expect(inspector.uniqueProgramDisplayName("Program") == "Program 5")
+    #expect(inspector.uniqueProgramDisplayName("Other") == "Other")
+  }
+
   @Test func cameraCannotBeAddedAsAudioDevice() {
     let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")

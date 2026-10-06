@@ -74,8 +74,8 @@ struct WorkspaceProgramsInspector: View {
   }
   private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
 
-  private func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = Set(storeService.definition.programs.map(\.displayName))
+  func uniqueProgramDisplayName(_ base: String) -> String {
+    let names = WorkspaceResourceAddition.existingNames(storeService.definition)
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }

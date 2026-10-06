@@ -770,8 +770,9 @@ void LDTXAudioConfigureMonitor(LDTXWorkspaceAudioEngine *e, const char *uid, con
                                uint32_t count, float master) {
   std::string name = uid ? uid : "";
   std::vector<LDTXAudioRoute> copy;
-  if (count)
-    copy.assign(routes, routes + count);
+  for (uint32_t i = 0; i < count; ++i)
+    if (routes[i].connected)
+      copy.push_back(routes[i]);
   e->sync([=] {
     bool topology = e->outputUID != name || copy.size() != e->monitorRoutes.size();
     if (!topology)

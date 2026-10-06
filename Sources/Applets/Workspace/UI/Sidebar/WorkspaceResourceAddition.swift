@@ -148,7 +148,7 @@ enum WorkspaceResourceAddition {
     var errorDescription: String? { message }
   }
 
-  private static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
+  static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
     String
   > {
     Set(

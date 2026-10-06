@@ -10,6 +10,34 @@
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
+TEST_CASE("disconnected monitor routes do not acquire an output device") {
+  auto *engine = LDTXAudioCreate(true);
+  REQUIRE(engine);
+  std::vector<int32_t> statuses;
+  LDTXAudioSetErrorHandler(
+      engine,
+      [](void *context, const char *source, int32_t status) {
+        if (std::string(source) == "Monitor")
+          static_cast<std::vector<int32_t> *>(context)->push_back(status);
+      },
+      &statuses);
+  const auto input = LDTXAudioAddInput(engine, "monitor-route-test", 2, 48000, 2);
+  LDTXAudioRoute route{input, 1, false};
+  constexpr auto uid = "ldtx-test-nonexistent-monitor-output";
+  LDTXAudioConfigureMonitor(engine, uid, &route, 1, 1);
+  REQUIRE(!statuses.empty());
+  CHECK(statuses.back() == 0);
+
+  route.connected = true;
+  LDTXAudioConfigureMonitor(engine, uid, &route, 1, 1);
+  CHECK(statuses.back() != 0);
+
+  route.connected = false;
+  LDTXAudioConfigureMonitor(engine, uid, &route, 1, 1);
+  CHECK(statuses.back() == 0);
+  LDTXAudioDestroy(engine);
+}
+
 TEST_CASE("system default monitor output") {
   // Opt in on a Mac with an output device; the ordinary CI run stays hardware-free.
   if (!std::getenv("LDTX_TEST_MONITOR_HARDWARE"))
@@ -31,6 +59,10 @@ TEST_CASE("system default monitor output") {
     LDTXAudioConfigureMonitor(engine, uid, &route, 1, 1);
     CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames > 0);
   }
+  route.connected = false;
+  LDTXAudioConfigureMonitor(engine, "", &route, 1, 1);
+  route.connected = true;
+  LDTXAudioConfigureMonitor(engine, "", &route, 1, 1);
   LDTXAudioConfigureMonitor(engine, "", nullptr, 0, 1);
   CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames == 0);
   LDTXAudioDestroy(engine);
