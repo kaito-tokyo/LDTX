@@ -94,7 +94,7 @@ jobs:
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
             -testPlan Default \
-            -configuration CI \
+            -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
             -allowProvisioningUpdates \
@@ -120,7 +120,7 @@ jobs:
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
             -testPlan Default \
-            -configuration CI \
+            -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
             -allowProvisioningUpdates \
@@ -152,7 +152,7 @@ jobs:
               -skipPackagePluginValidation \
               -project LDTX.xcodeproj \
               -scheme "$scheme" \
-              -configuration CI \
+              -configuration Debug \
               -destination 'platform=macOS,arch=arm64' \
               -derivedDataPath .derivedData \
               -allowProvisioningUpdates \
@@ -195,7 +195,7 @@ jobs:
       - name: Run App Automation MCP tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
+          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/Debug/LDTXHelper
         run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
 
       - name: Remove provisioning authentication

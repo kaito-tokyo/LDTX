@@ -6,7 +6,6 @@ name: LDTX
 
 configs:
   Debug: debug
-  CI: debug
   Release: release
   Distribution: release
 

@@ -202,7 +202,7 @@ xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
   -testPlan Default \
-  -configuration CI \
+  -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -212,7 +212,7 @@ xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
   -testPlan Default \
-  -configuration CI \
+  -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
