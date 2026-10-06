@@ -106,7 +106,9 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     _ = view
     let id = storeService.selectedProgram?.internalID
     if programID != id {
-      masterFields.forEach { $0.discard() }
+      for field in masterFields {
+        field.discard()
+      }
       view.window?.makeFirstResponder(nil)
       programID = id
       errorLabel.stringValue = ""

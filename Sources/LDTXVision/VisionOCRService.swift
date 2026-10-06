@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 @preconcurrency import CoreImage
+@preconcurrency import CoreML
 import Foundation
 import LDTXTaskQueue
 @preconcurrency import Vision
@@ -32,7 +33,11 @@ public struct VisionOCRConfiguration: Equatable, Sendable {
 }
 
 public actor VisionOCRService {
-  public init() {}
+  private let computeDevice: MLComputeDevice?
+
+  public init(computeDevice: MLComputeDevice? = nil) {
+    self.computeDevice = computeDevice
+  }
 
   public func recognizeText(
     in image: CIImage,
@@ -59,6 +64,11 @@ public actor VisionOCRService {
     request.customWords = configuration.customWords
     if let minimumTextHeight = configuration.minimumTextHeight {
       request.minimumTextHeight = minimumTextHeight
+    }
+    if let computeDevice {
+      for stage in try request.supportedComputeStageDevices.keys {
+        request.setComputeDevice(computeDevice, for: stage)
+      }
     }
 
     let operation = VisionOCRRequestOperation(image: image, request: request)

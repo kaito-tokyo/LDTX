@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
+import CoreML
 import CoreVideo
 import Foundation
 import LDTXCapture
@@ -58,7 +59,13 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let frame = try await readyFrame(runtime: runtime, vision: vision)
     #expect(frame.image.extent == CGRect(x: 0, y: 0, width: 320, height: 80))
     #expect(runtime.definition.programs.isEmpty)
-    let service = VisionOCRService()
+    // Hosted CI has no Neural Engine backend. Exercise real OCR on the CPU.
+    let cpu = try #require(
+      MLComputeDevice.allComputeDevices.first {
+        if case .cpu = $0 { return true }
+        return false
+      })
+    let service = VisionOCRService(computeDevice: cpu)
     var recognizedClock = false
     for _ in 0..<10 {
       try await Task.sleep(for: .milliseconds(100))
