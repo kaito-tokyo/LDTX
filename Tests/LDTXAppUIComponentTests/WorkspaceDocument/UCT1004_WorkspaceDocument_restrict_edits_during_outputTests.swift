@@ -1,0 +1,132 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+// SPDX-License-Identifier: Apache-2.0
+
+import AppKit
+import Foundation
+import LDTXAppletSupport
+import LDTXProtos
+@testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletService
+@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
+import SwiftProtobuf
+import Testing
+
+extension AppUIComponentTestSuite {
+  @Suite("UCT-1004: restrict-edits-during-output", .serialized)
+  @MainActor
+  struct UCT1004WorkspaceDocumentIntegrationTestSuite {
+    private static var controller: NSDocumentController {
+      UIComponentTestEnvironment.documentController
+    }
+    init() { _ = Self.controller }
+
+    @Test("UCT-1004.1: Output permits only layer permutations and saves the latest order")
+    func outputAllowsOnlyLayerPermutationsAndPersistsLatestOrder() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let document = WorkspaceDocument()
+      defer {
+        document.storeService.isOutputActive = false
+        document.close()
+      }
+      var program = Ldtx_Workspace_V4_ProgramDefinition()
+      program.internalID = 101
+      program.displayName = "Main"
+      program.landscapeVideoLayerInternalIds = [1, 2, 3]
+      program.portraitVideoLayerInternalIds = [3, 2, 1]
+      document.storeService.definition.programs = [program]
+      document.storeService.definition.videoComponents = [1, 2, 3].map { id in
+        var device = Ldtx_Workspace_V4_VfxSourceComponent()
+        device.internalID = UInt64(id)
+        device.displayName = "Camera \(id)"
+        var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+        wrapper.vfxSource = device
+        return wrapper
+      }
+      let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+      try await saveWorkspaceDocument(document, to: url)
+      document.storeService.isOutputActive = true
+      document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [3, 1, 2]
+      document.storeService.definition.programs[0].portraitVideoLayerInternalIds = [1, 3, 2]
+      #expect(document.isDocumentEdited)
+      let reordered = document.storeService.definition
+      for rejected: [UInt64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
+        document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = rejected
+        #expect(document.storeService.definition == reordered)
+      }
+      var mixed = reordered
+      mixed.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
+      mixed.displayName = "Forbidden"
+      document.storeService.definition = mixed
+      #expect(document.storeService.definition == reordered)
+      document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
+      let latest = document.storeService.definition
+      document.storeService.definition.programs.removeAll()
+      #expect(document.storeService.definition == latest)
+      try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
+      #expect(try WorkspaceBundleReaderV4(at: url).read().definition == latest)
+      document.storeService.isOutputActive = false
+      let reopened = WorkspaceDocument()
+      defer { reopened.close() }
+      try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
+      #expect(reopened.storeService.definition == latest)
+    }
+
+    @Test("UCT-1004.2: Starting output does not save pending edits")
+    func startingOutputDoesNotSavePendingModelEdits() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let url = root.appendingPathComponent("Output.ldtxworkspace")
+      let document = WorkspaceDocument()
+      defer { document.close() }
+      try await saveWorkspaceDocument(document, to: url)
+      let definition = try Data(contentsOf: url.appendingPathComponent("definition.pb"))
+      let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
+      document.makeWindowControllers()
+      let controller = try #require(document.windowControllers.first as? WorkspaceWindowController)
+      document.storeService.definition.displayName = "Pending"
+      // No Program/output is enabled, so this exercises the entry without media I/O.
+      try await controller.startOutput()
+      #expect(document.isDocumentEdited)
+      #expect(document.storeService.definition.displayName == "Pending")
+      #expect(try Data(contentsOf: url.appendingPathComponent("definition.pb")) == definition)
+      #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == preferences)
+      await document.shutdown()
+    }
+
+    @Test("UCT-1004.3: Output freezes definition while preferences remain editable")
+    func outputFreezesDefinitionButTracksPreferences() {
+      let document = WorkspaceDocument()
+      var program = Ldtx_Workspace_V4_ProgramDefinition()
+      program.internalID = 101
+      program.displayName = "Main"
+      document.storeService.definition.programs = [program]
+      document.updateChangeCount(.changeCleared)
+      let original = document.storeService.definition
+      document.storeService.isOutputActive = true
+      document.storeService.definition.displayName = "Rejected"
+      #expect(document.storeService.definition == original)
+      #expect(!document.isDocumentEdited)
+      document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
+        .audioMasterVolumeDecibels = .with {
+          $0.numerator = -6
+          $0.denominator = 1
+        }
+      #expect(document.isDocumentEdited)
+    }
+
+    @Test("UCT-1004.4: Output disables Save As and Revert")
+    func outputDisablesSaveAsAndRevert() {
+      let document = WorkspaceDocument()
+      document.storeService.isOutputActive = true
+      let saveAs = NSMenuItem(
+        title: "Save As", action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "")
+      let revert = NSMenuItem(
+        title: "Revert", action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+      #expect(!document.validateUserInterfaceItem(saveAs))
+      #expect(!document.validateUserInterfaceItem(revert))
+    }
+  }
+}

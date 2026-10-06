@@ -29,9 +29,9 @@ private struct ProbeView: View {
 }
 
 extension AppUIComponentTestSuite {
-  @Suite(.serialized)
+  @Suite("UCT-1022: scope-document-environment", .serialized)
   @MainActor
-  struct DocumentEnvironmentIntegrationTestSuite {
+  struct UCT1022DocumentReferenceIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
     private func host(_ reference: DocumentReference?, probe: Probe) async throws -> NSWindow {
@@ -48,7 +48,8 @@ extension AppUIComponentTestSuite {
       return window
     }
 
-    @Test func nestedViewsReadCurrentURLAndDocumentsRemainSeparate() async throws {
+    @Test("UCT-1022.1: Nested views follow their own document URL")
+    func nestedViewsReadCurrentURLAndDocumentsRemainSeparate() async throws {
       let first = NSDocument()
       let second = NSDocument()
       let firstReference = DocumentReference(first)
@@ -77,7 +78,8 @@ extension AppUIComponentTestSuite {
       #expect(secondProbe.readURL() == second.fileURL)
     }
 
-    @Test func hostedViewsDoNotOwnDocument() async throws {
+    @Test("UCT-1022.2: Hosted views do not retain the Document")
+    func hostedViewsDoNotOwnDocument() async throws {
       var document: NSDocument? = NSDocument()
       weak var weakDocument = document
       let reference = DocumentReference(try #require(document))
@@ -92,7 +94,8 @@ extension AppUIComponentTestSuite {
       #expect(window.contentViewController != nil)
     }
 
-    @Test func missingEnvironmentIsSafe() async throws {
+    @Test("UCT-1022.3: A missing Document environment is safe")
+    func missingEnvironmentIsSafe() async throws {
       let probe = Probe()
       let window = try await host(nil, probe: probe)
       defer { window.close() }

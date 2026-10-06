@@ -10,9 +10,9 @@ import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {
-  @Suite(.serialized)
+  @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
-  struct WorkspaceErrorPresentationIntegrationTestSuite {
+  struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
     private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
@@ -49,7 +49,8 @@ extension AppUIComponentTestSuite {
         + view.subviews.map { displayedText(in: $0) }.joined(separator: "\n")
     }
 
-    @Test func errorsQueueOnEditingSheetAndStopAfterShutdown() async throws {
+    @Test("UCT-1015.1: Errors are queued on the editing sheet and stop after shutdown")
+    func errorsQueueOnEditingSheetAndStopAfterShutdown() async throws {
       let (document, controller, window) = makeController()
       let editor = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
@@ -89,7 +90,8 @@ extension AppUIComponentTestSuite {
       #expect(editor.attachedSheet == nil)
     }
 
-    @Test func runtimeFailuresAreScopedDeduplicatedAndCanRecur() async throws {
+    @Test("UCT-1015.2: Runtime failures are scoped and can recur after recovery")
+    func runtimeFailuresAreScopedDeduplicatedAndCanRecur() async throws {
       let (firstDocument, first, firstWindow) = makeController()
       let (secondDocument, second, secondWindow) = makeController()
       defer {
@@ -129,7 +131,8 @@ extension AppUIComponentTestSuite {
       await second.shutdown()
     }
 
-    @Test func closingWindowDiscardsQueuedAndLateErrors() async throws {
+    @Test("UCT-1015.3: Closing a window discards queued and late errors")
+    func closingWindowDiscardsQueuedAndLateErrors() async throws {
       let (document, controller, window) = makeController()
       defer {
         window.close()

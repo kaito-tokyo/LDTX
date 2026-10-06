@@ -12,24 +12,6 @@ import Testing
 struct AppUIComponentTestSuite {
   init() { _ = UIComponentTestEnvironment.documentController }
 
-  @Test func sharedDocumentControllerResolvesBothDocumentFamilies() throws {
-    let controller = UIComponentTestEnvironment.documentController
-    #expect(NSDocumentController.shared === controller)
-    #expect(
-      controller.documentClass(forType: "tokyo.kaito.ldtx.workspace") === WorkspaceDocument.self)
-    #expect(
-      controller.documentClass(forType: RecordPlayerDocument.typeName) === RecordPlayerDocument.self
-    )
-    #expect(
-      controller.documentClass(forType: RecordingPackageInfo.legacyTypeIdentifier)
-        === RecordPlayerDocument.self)
-    #expect(
-      try controller.typeForContents(of: URL(fileURLWithPath: "/tmp/Test.ldtxworkspace"))
-        == "tokyo.kaito.ldtx.workspace")
-    #expect(
-      try controller.typeForContents(of: URL(fileURLWithPath: "/tmp/Test.ldtxrecord"))
-        == RecordPlayerDocument.typeName)
-  }
 }
 
 @MainActor

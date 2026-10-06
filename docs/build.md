@@ -69,6 +69,23 @@ protoc \
 node docs/_BUILD.mjs protos
 ```
 
+**Build the GitHub Pages distribution, including behavior scenarios:**
+
+```sh
+node docs/_BUILD.mjs dist
+```
+
+Write English Gherkin cases in `docs/scenarios/` following the
+[naming and tagging rules](scenarios/README.md).
+The build emits a stable `docs/dist/scenarios/UCT-1000/index.html` URL
+independently of the component and description in the filename.
+
+The HTML embeds escaped source in a `<pre>` inside `<gherkin-scenario>`.
+The Custom Element parses the source in the browser using the fixed
+`@cucumber/gherkin@42.0.1` CDN bundle and renders the behavior description.
+The original source remains readable when JavaScript or the CDN is unavailable.
+These pages describe behavior; they do not execute tests or report test results.
+
 **If `Protos/youtube_output.proto` changes:**
 
 ```sh

@@ -186,6 +186,10 @@ with `GitHubActions.xctestplan`, which runs Easy, Medium, and
 covers SwiftUI bindings and directly constructed AppKit components, Documents,
 Windows, and Sheets under a serialized MainActor parent suite. Its shared
 Document Controller resolves both Workspace and Recording document types.
+Its behavior definitions live in [`scenarios/`](scenarios/README.md): each
+`UCT-1000` through `UCT-1023` Feature has one test file and child suite, and
+each numbered Scenario has one test with the same ID in its display name.
+Shared setup and probes live in the test target's `Support` directory.
 `LDTXAppUITests` runs separately and uses the normal application delegate for
 launch and main-menu smoke tests.
 The embedded XPC service process-boundary test remains in the isolated
