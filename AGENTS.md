@@ -109,12 +109,16 @@ availability. Computational cost alone does not determine the tier.
   execution control, or shared-state coordination needed.
 - **IntegrationTestSuite:** Tests involving multiple components or other
   conditions that require deliberate setup or attention during execution.
-- **SystemTests target:** Tests whose dependencies, shared state, or execution
-  requirements are too entangled to be safely organized as ordinary Easy or
-  Medium tests. Isolate these in SystemTests targets named for the SUT, so each
-  target can be run and coordinated independently. AppKit tests that exercise
-  application or window behavior without UI automation belong in a SystemTests
-  target; UI automation tests belong in a dedicated UI test target.
+- **UIComponentTests target:** Directly constructed UI components and Documents,
+  including their Window and Sheet behavior, belong in the hostless
+  `LDTXAppUIComponentTests` target. Coordinate shared AppKit state through its
+  serialized MainActor parent suite.
+- **UITests target:** Operations on the launched application through UI automation
+  belong in `LDTXAppUITests`. Keep automation focused on launch and main-menu
+  wiring; prefer component tests for document and window behavior.
+- **SystemTests target:** Use a SUT-specific target only when a concrete process
+  isolation requirement prevents safe execution in the shared component target.
+  Window or Document usage alone does not require a separate target.
 - **XpcTests target:** XPC tests are a special case of System tests because
   interprocess communication requires an isolated execution boundary. Use the
   `XpcTests` target name for this execution unit; the name does not need to

@@ -8,6 +8,13 @@ targets:
     sources:
       - Tests/LDTXAppUIComponentTests
     dependencies:
+      - target: LDTXAppletSupport
+      - target: LDTXWorkspaceAppletController
+      - target: LDTXRecordPlayerApplet
+      - target: LDTXRecording
+      - target: LDTXWorkspaceBundleFormat
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
       - target: LDTXWorkspaceAppletUI
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

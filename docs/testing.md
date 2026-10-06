@@ -181,13 +181,13 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
 ```
 
 The pull-request gate generates the Xcode project and runs the `LDTXApp` scheme,
-with `GitHubActions.xctestplan`, which includes Easy and Medium, excluding Hard. The
-SwiftUI View component, XPC, AppKit SystemTests, and UI schemes run separately.
-`LDTXAppUIComponentTests` constructs SwiftUI View values in a hostless test
-runner and checks binding updates and derived component logic without launching
-`LDTX.app`. AppKit window behavior runs in dedicated SUT-specific SystemTests.
-The repository currently has no automated visible-UI tests that launch
-`LDTX.app`.
+with `GitHubActions.xctestplan`, which runs Easy, Medium, and
+`LDTXAppUIComponentTests` once, excluding Hard. The hostless component target
+covers SwiftUI bindings and directly constructed AppKit components, Documents,
+Windows, and Sheets under a serialized MainActor parent suite. Its shared
+Document Controller resolves both Workspace and Recording document types.
+`LDTXAppUITests` runs separately and uses the normal application delegate for
+launch and main-menu smoke tests.
 The embedded XPC service process-boundary test remains in the isolated
 `LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
 `LDTXMediumTests`, and `LDTXHardTests` schemes are also available for

@@ -148,9 +148,7 @@ uses NSDocument's standard document reopening and window restoration. Workspace
 Inspector selection starts at nil and is neither encoded nor restored; the former
 versioned selection key is ignored. AppKit owns frame and pane state.
 
-Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
-`LDTXRecordPlayerDocumentSystemTests` for recording document ownership, marker saving, and close confirmation,
-`LDTXWorkspaceAppletControllerSystemTests` for Workspace window behavior and `LDTXPaneSplitViewControllerSystemTests` for Record Player's shared split behavior. These run in the test runner's AppKit process and do not launch `LDTX.app`. `LDTXAppUIComponentTests` covers hostless SwiftUI `View` value and binding logic. The repository currently has no automated visible-UI tests that launch `LDTX.app`. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
+Run `LDTXAppUIComponentTests` for directly constructed component, document lifecycle, saving, window, sheet, observation, and meter tests. These share a serialized MainActor parent suite and one Document Controller in a hostless AppKit test process. `LDTXAppUITests` launches the normal application for launch and main-menu smoke tests. The embedded XPC process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen and run builds and tests outside the sandbox.
 
 ## Source folders
 
