@@ -11,22 +11,42 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
   func canvasPreferencesRoundTrip() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     var landscape = Ldtx_Workspace_V4_ProgramPreferences()
-    landscape.audioMasterVolumeDecibelTenths = -32
-    preferences.audioChannelGainsDecibelTenths[2] = -61
+    landscape.audioMasterVolumeDecibels = .with {
+      $0.numerator = -16
+      $0.denominator = 5
+    }
+    preferences.audioChannelGainsDecibels[2] = .with {
+      $0.numerator = -61
+      $0.denominator = 10
+    }
     landscape.videoLayerHidden[3] = true
     var portrait = Ldtx_Workspace_V4_ProgramPreferences()
-    portrait.audioMasterVolumeDecibelTenths = 17
+    portrait.audioMasterVolumeDecibels = .with {
+      $0.numerator = 17
+      $0.denominator = 10
+    }
     portrait.audioChannelMuted[2] = true
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = 0.5
-    transform.scaleY = 1
+    transform.scaleXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     portrait.videoLayerTransforms[3] = transform
     preferences.landscapeProgramPreferences[1] = landscape
     preferences.portraitProgramPreferences[1] = portrait
     let decoded = try Ldtx_Workspace_V4_WorkspacePreferencesV4(
       serializedBytes: preferences.serializedData())
     #expect(decoded == preferences)
-    #expect(decoded.audioChannelGainsDecibelTenths[2] == -61)
+    #expect(
+      decoded.audioChannelGainsDecibels[2]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -61
+          $0.denominator = 10
+        })
     #expect(decoded.landscapeProgramPreferences[1] == landscape)
     #expect(decoded.portraitProgramPreferences[1] == portrait)
   }
@@ -34,7 +54,10 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
   @Test("rejects a Workspace gain referencing a missing audio input")
   func rejectsDanglingAudioGain() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    preferences.audioChannelGainsDecibelTenths[99] = -60
+    preferences.audioChannelGainsDecibels[99] = .with {
+      $0.numerator = -6
+      $0.denominator = 1
+    }
     let workspace = WorkspaceV4Bundle(definition: .init(), preferences: preferences)
     #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(99)) {
       try WorkspaceV4IntegrityValidator.validate(workspace)
@@ -196,4 +219,177 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       try WorkspaceV4IntegrityValidator.validate(definition)
     }
   }
+  @Test("collects definition and preferences issues in both canvases")
+  func collectsAllSaveIssues() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.audioDevices = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Main"
+      }
+    ]
+    definition.programs = [
+      .with {
+        $0.internalID = 2
+        $0.displayName = "Main"
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.testPattern = .with {
+          $0.internalID = 3
+          $0.displayName = "Pattern"
+        }
+      }
+    ]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.audioChannelGainsDecibels[99] = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
+    preferences.landscapeProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
+      $0.translationXRational = .with {
+        $0.numerator = 11
+        $0.denominator = 10
+      }
+    }
+    preferences.portraitProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
+      $0.scaleYRational = .with {
+        $0.numerator = -1
+        $0.denominator = 1
+      }
+    }
+    let issues = WorkspaceV4IntegrityValidator.validationIssues(
+      in: WorkspaceV4Bundle(definition: definition, preferences: preferences))
+    #expect(issues.count == 4)
+    #expect(
+      issues.map { $0.error as? WorkspaceV4IntegrityError } == [
+        .duplicateDisplayName("Main"), .missingAudioInputDevice(99),
+        .invalidBasicTransform, .invalidBasicTransform,
+      ])
+    #expect(issues[2].context.contains("Landscape"))
+    #expect(issues[3].context.contains("Portrait"))
+  }
+
+  @Test("retained preferences reference existing components rather than membership")
+  func allowsDetachedLayerPreferences() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Main"
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.testPattern = .with {
+          $0.internalID = 2
+          $0.displayName = "Pattern"
+        }
+      }
+    ]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
+    preferences.portraitProgramPreferences[1, default: .init()].videoLayerTransforms[2] = .with {
+      $0.translationXRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      $0.scaleXRational = .with {
+        $0.numerator = 2
+        $0.denominator = 1
+      }
+    }
+    try WorkspaceV4IntegrityValidator.validate(
+      WorkspaceV4Bundle(definition: definition, preferences: preferences))
+    definition.videoComponents = []
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(2)) {
+      try WorkspaceV4IntegrityValidator.validate(
+        WorkspaceV4Bundle(definition: definition, preferences: preferences))
+    }
+  }
+
+  @Test("transform range validation preserves boundary and identity values")
+  func validatesTransformRanges() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Main"
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.testPattern = .with {
+          $0.internalID = 2
+          $0.displayName = "Pattern"
+        }
+      }
+    ]
+    let cases: [(Ldtx_Workspace_V4_BasicTransform, Bool)] = [
+      (.init(), true),
+      (
+        .with {
+          $0.translationXRational = .with {
+            $0.numerator = 1
+            $0.denominator = 1
+          }
+          $0.translationYRational = .with {
+            $0.numerator = 1
+            $0.denominator = 1
+          }
+          $0.scaleXRational = .with {
+            $0.numerator = 2
+            $0.denominator = 1
+          }
+        }, true
+      ),
+      (
+        .with {
+          $0.translationXRational = .with {
+            $0.numerator = 11
+            $0.denominator = 10
+          }
+        }, false
+      ),
+      (
+        .with {
+          $0.translationYRational = .with {
+            $0.numerator = -1
+            $0.denominator = 10
+          }
+        }, false
+      ),
+      (
+        .with {
+          $0.scaleXRational = .with {
+            $0.numerator = -1
+            $0.denominator = 1
+          }
+        }, false
+      ),
+      (
+        .with {
+          $0.topInsetRational = .with {
+            $0.numerator = 11
+            $0.denominator = 10
+          }
+        }, false
+      ),
+    ]
+    for (transform, valid) in cases {
+      var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[2] =
+        transform
+      let workspace = WorkspaceV4Bundle(definition: definition, preferences: preferences)
+      if valid {
+        try WorkspaceV4IntegrityValidator.validate(workspace)
+      } else {
+        #expect(throws: WorkspaceV4IntegrityError.invalidBasicTransform) {
+          try WorkspaceV4IntegrityValidator.validate(workspace)
+        }
+      }
+    }
+  }
+
 }

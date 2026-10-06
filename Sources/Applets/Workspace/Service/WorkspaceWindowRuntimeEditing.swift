@@ -7,6 +7,7 @@ import LDTXProgram
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
+import SwiftProtobuf
 
 @MainActor
 public final class WorkspaceInternalIDGenerator {
@@ -84,11 +85,23 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.startX = 0
-    component.startY = 0
+    component.startXRational = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
+    component.startYRational = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
     component.startColor = startColor
-    component.endX = 1
-    component.endY = 1
+    component.endXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    component.endYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
@@ -105,10 +118,22 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.innerRadius = 0
-    component.outerRadius = 0.5
+    component.centerXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.centerYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.innerRadiusRational = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
+    component.outerRadiusRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
     component.innerColor = innerColor
     component.outerColor = outerColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -126,8 +151,14 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerX = 0.5
-    component.centerY = 0.5
+    component.centerXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.centerYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
     component.startColor = startColor
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -142,8 +173,14 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = displayName
-    component.width = 320 / 1_920
-    component.height = 80 / 1_080
+    component.widthRational = .with {
+      $0.numerator = 1
+      $0.denominator = 6
+    }
+    component.heightRational = .with {
+      $0.numerator = 2
+      $0.denominator = 27
+    }
     component.foregroundColor = Self.opaqueWhite
     var backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor()
     backgroundColor.alpha = 0.65
@@ -170,11 +207,15 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addOcrVision(
-    displayName: String, videoComponentInternalID: UInt64, intervalSeconds: Double = 5
+    displayName: String, videoComponentInternalID: UInt64,
+    intervalSeconds: Ldtx_Workspace_V4_Rational32 = .with {
+      $0.numerator = 5
+      $0.denominator = 1
+    }
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSeconds = intervalSeconds
+    trigger.intervalSecondsRational = intervalSeconds
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
     var vision = Ldtx_Workspace_V4_OcrVision()
@@ -220,14 +261,13 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setAudioChannelGain(
-    _ value: Double, forAudioInputDeviceInternalID id: UInt64
+    _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: UInt64
   ) throws {
-    let tenths = (value * 10).rounded()
-    guard tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max) else {
+    guard value.double != nil else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
     }
     try editWorkspace { workspace in
-      workspace.preferences.audioChannelGainsDecibelTenths[id] = Int32(tenths)
+      workspace.preferences.audioChannelGainsDecibels[id] = value
     }
   }
   public func setAudioChannelMuted(
@@ -247,16 +287,15 @@ extension WorkspaceWindowRuntime {
     }
   }
   public func setMasterVolume(
-    _ value: Double, programInternalID: UInt64, target: WorkspaceCanvasTarget
+    _ value: Ldtx_Workspace_V4_Rational32, programInternalID: UInt64, target: WorkspaceCanvasTarget
   )
     throws
   {
-    let tenths = (value * 10).rounded()
-    guard tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max) else {
+    guard value.double != nil else {
       throw WorkspaceRuntimeError.invalidAudioMasterVolume
     }
     try editProgramPreference(programInternalID, target: target) {
-      $0.audioMasterVolumeDecibelTenths = Int32(tenths)
+      $0.audioMasterVolumeDecibels = value
     }
   }
 
@@ -329,7 +368,7 @@ extension WorkspaceWindowRuntime {
         }
       }
       for removedID in removedIDs {
-        workspace.preferences.audioChannelGainsDecibelTenths.removeValue(forKey: removedID)
+        workspace.preferences.audioChannelGainsDecibels.removeValue(forKey: removedID)
       }
       for target in [WorkspaceCanvasTarget.landscape, .portrait] {
         for programID in workspace.preferences[keyPath: target.preferences].keys {

@@ -188,7 +188,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
 /// implementation-defined. If the two points coincide, the rendered result is
 /// implementation-defined. This definition does not require a particular CSS
 /// rendering or color interpolation algorithm.
-public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendable {
+public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -196,53 +196,78 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendabl
   /// The Workspace-local identifier for this entity. Its most significant bit
   /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
   /// and bits 14 through 0 are uniformly random.
-  public var internalID: UInt64 = 0
+  public var internalID: UInt64 {
+    get {_storage._internalID}
+    set {_uniqueStorage()._internalID = newValue}
+  }
 
   /// The name of this Video Component shown in the Workspace sidebar.
-  public var displayName: String = String()
+  public var displayName: String {
+    get {_storage._displayName}
+    set {_uniqueStorage()._displayName = newValue}
+  }
 
-  /// The normalized horizontal coordinate of the gradient start point, in
-  /// [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  public var startX: Float = 0
+  public var startXRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._startXRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._startXRational = newValue}
+  }
+  /// Returns true if `startXRational` has been explicitly set.
+  public var hasStartXRational: Bool {_storage._startXRational != nil}
+  /// Clears the value of `startXRational`. Subsequent reads from it will return its default value.
+  public mutating func clearStartXRational() {_uniqueStorage()._startXRational = nil}
 
-  /// The normalized vertical coordinate of the gradient start point, in
-  /// [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  public var startY: Float = 0
+  public var startYRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._startYRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._startYRational = newValue}
+  }
+  /// Returns true if `startYRational` has been explicitly set.
+  public var hasStartYRational: Bool {_storage._startYRational != nil}
+  /// Clears the value of `startYRational`. Subsequent reads from it will return its default value.
+  public mutating func clearStartYRational() {_uniqueStorage()._startYRational = nil}
 
   /// The specified Extended sRGB source color at the gradient start point.
   public var startColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    get {_startColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
-    set {_startColor = newValue}
+    get {_storage._startColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
+    set {_uniqueStorage()._startColor = newValue}
   }
   /// Returns true if `startColor` has been explicitly set.
-  public var hasStartColor: Bool {self._startColor != nil}
+  public var hasStartColor: Bool {_storage._startColor != nil}
   /// Clears the value of `startColor`. Subsequent reads from it will return its default value.
-  public mutating func clearStartColor() {self._startColor = nil}
+  public mutating func clearStartColor() {_uniqueStorage()._startColor = nil}
 
-  /// The normalized horizontal coordinate of the gradient end point, in
-  /// [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  public var endX: Float = 0
+  public var endXRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._endXRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._endXRational = newValue}
+  }
+  /// Returns true if `endXRational` has been explicitly set.
+  public var hasEndXRational: Bool {_storage._endXRational != nil}
+  /// Clears the value of `endXRational`. Subsequent reads from it will return its default value.
+  public mutating func clearEndXRational() {_uniqueStorage()._endXRational = nil}
 
-  /// The normalized vertical coordinate of the gradient end point, in
-  /// [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  public var endY: Float = 0
+  public var endYRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._endYRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._endYRational = newValue}
+  }
+  /// Returns true if `endYRational` has been explicitly set.
+  public var hasEndYRational: Bool {_storage._endYRational != nil}
+  /// Clears the value of `endYRational`. Subsequent reads from it will return its default value.
+  public mutating func clearEndYRational() {_uniqueStorage()._endYRational = nil}
 
   /// The specified Extended sRGB source color at the gradient end point.
   public var endColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    get {_endColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
-    set {_endColor = newValue}
+    get {_storage._endColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
+    set {_uniqueStorage()._endColor = newValue}
   }
   /// Returns true if `endColor` has been explicitly set.
-  public var hasEndColor: Bool {self._endColor != nil}
+  public var hasEndColor: Bool {_storage._endColor != nil}
   /// Clears the value of `endColor`. Subsequent reads from it will return its default value.
-  public mutating func clearEndColor() {self._endColor = nil}
+  public mutating func clearEndColor() {_uniqueStorage()._endColor = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _startColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
-  fileprivate var _endColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// A Video Component with radial-gradient geometry defined in the local
@@ -263,7 +288,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: Sendabl
 /// display color space, alpha handling, compositing, filtering, and pixel
 /// quantization are implementation-defined. This definition does not require a
 /// particular CSS rendering or color interpolation algorithm.
-public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendable {
+public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -271,53 +296,78 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: Sendabl
   /// The Workspace-local identifier for this entity. Its most significant bit
   /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
   /// and bits 14 through 0 are uniformly random.
-  public var internalID: UInt64 = 0
+  public var internalID: UInt64 {
+    get {_storage._internalID}
+    set {_uniqueStorage()._internalID = newValue}
+  }
 
   /// The name of this Video Component shown in the Workspace sidebar.
-  public var displayName: String = String()
+  public var displayName: String {
+    get {_storage._displayName}
+    set {_uniqueStorage()._displayName = newValue}
+  }
 
-  /// The normalized horizontal coordinate of the gradient center, in [0, 1].
-  /// Zero is the Canvas's left edge and one is its right edge.
-  public var centerX: Float = 0
+  public var centerXRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._centerXRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._centerXRational = newValue}
+  }
+  /// Returns true if `centerXRational` has been explicitly set.
+  public var hasCenterXRational: Bool {_storage._centerXRational != nil}
+  /// Clears the value of `centerXRational`. Subsequent reads from it will return its default value.
+  public mutating func clearCenterXRational() {_uniqueStorage()._centerXRational = nil}
 
-  /// The normalized vertical coordinate of the gradient center, in [0, 1].
-  /// Zero is the Canvas's top edge and one is its bottom edge.
-  public var centerY: Float = 0
+  public var centerYRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._centerYRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._centerYRational = newValue}
+  }
+  /// Returns true if `centerYRational` has been explicitly set.
+  public var hasCenterYRational: Bool {_storage._centerYRational != nil}
+  /// Clears the value of `centerYRational`. Subsequent reads from it will return its default value.
+  public mutating func clearCenterYRational() {_uniqueStorage()._centerYRational = nil}
 
-  /// The inner control contour's radius in normalized Canvas coordinates, in
-  /// [0, 1]. It must be less than outer_radius.
-  public var innerRadius: Float = 0
+  public var innerRadiusRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._innerRadiusRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._innerRadiusRational = newValue}
+  }
+  /// Returns true if `innerRadiusRational` has been explicitly set.
+  public var hasInnerRadiusRational: Bool {_storage._innerRadiusRational != nil}
+  /// Clears the value of `innerRadiusRational`. Subsequent reads from it will return its default value.
+  public mutating func clearInnerRadiusRational() {_uniqueStorage()._innerRadiusRational = nil}
 
-  /// The outer control contour's radius in normalized Canvas coordinates, in
-  /// [0, 1]. It must be greater than inner_radius.
-  public var outerRadius: Float = 0
+  public var outerRadiusRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._outerRadiusRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._outerRadiusRational = newValue}
+  }
+  /// Returns true if `outerRadiusRational` has been explicitly set.
+  public var hasOuterRadiusRational: Bool {_storage._outerRadiusRational != nil}
+  /// Clears the value of `outerRadiusRational`. Subsequent reads from it will return its default value.
+  public mutating func clearOuterRadiusRational() {_uniqueStorage()._outerRadiusRational = nil}
 
   /// The specified Extended sRGB source color at the inner control contour.
   public var innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    get {_innerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
-    set {_innerColor = newValue}
+    get {_storage._innerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
+    set {_uniqueStorage()._innerColor = newValue}
   }
   /// Returns true if `innerColor` has been explicitly set.
-  public var hasInnerColor: Bool {self._innerColor != nil}
+  public var hasInnerColor: Bool {_storage._innerColor != nil}
   /// Clears the value of `innerColor`. Subsequent reads from it will return its default value.
-  public mutating func clearInnerColor() {self._innerColor = nil}
+  public mutating func clearInnerColor() {_uniqueStorage()._innerColor = nil}
 
   /// The specified Extended sRGB source color at the outer control contour.
   public var outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    get {_outerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
-    set {_outerColor = newValue}
+    get {_storage._outerColor ?? Ldtx_Workspace_V4_ExtendedSrgbColor()}
+    set {_uniqueStorage()._outerColor = newValue}
   }
   /// Returns true if `outerColor` has been explicitly set.
-  public var hasOuterColor: Bool {self._outerColor != nil}
+  public var hasOuterColor: Bool {_storage._outerColor != nil}
   /// Clears the value of `outerColor`. Subsequent reads from it will return its default value.
-  public mutating func clearOuterColor() {self._outerColor = nil}
+  public mutating func clearOuterColor() {_uniqueStorage()._outerColor = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
-  fileprivate var _outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// A Video Component whose conic-gradient geometry is defined in the local
@@ -364,18 +414,32 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String = String()
 
-  /// The normalized horizontal coordinate of the gradient center, in [0, 1].
-  /// Zero is the Canvas's left edge and one is its right edge.
-  public var centerX: Float = 0
+  public var centerXRational: Ldtx_Workspace_V4_Rational32 {
+    get {_centerXRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_centerXRational = newValue}
+  }
+  /// Returns true if `centerXRational` has been explicitly set.
+  public var hasCenterXRational: Bool {self._centerXRational != nil}
+  /// Clears the value of `centerXRational`. Subsequent reads from it will return its default value.
+  public mutating func clearCenterXRational() {self._centerXRational = nil}
 
-  /// The normalized vertical coordinate of the gradient center, in [0, 1].
-  /// Zero is the Canvas's top edge and one is its bottom edge.
-  public var centerY: Float = 0
+  public var centerYRational: Ldtx_Workspace_V4_Rational32 {
+    get {_centerYRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_centerYRational = newValue}
+  }
+  /// Returns true if `centerYRational` has been explicitly set.
+  public var hasCenterYRational: Bool {self._centerYRational != nil}
+  /// Clears the value of `centerYRational`. Subsequent reads from it will return its default value.
+  public mutating func clearCenterYRational() {self._centerYRational = nil}
 
-  /// A finite start angle in radians, measured clockwise from the positive
-  /// horizontal axis in the normalized Canvas coordinate system. Values that
-  /// differ by an integer multiple of 2 * pi represent the same start ray.
-  public var startAngleRadians: Float = 0
+  public var startAngleRadiansRational: Ldtx_Workspace_V4_Rational32 {
+    get {_startAngleRadiansRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_startAngleRadiansRational = newValue}
+  }
+  /// Returns true if `startAngleRadiansRational` has been explicitly set.
+  public var hasStartAngleRadiansRational: Bool {self._startAngleRadiansRational != nil}
+  /// Clears the value of `startAngleRadiansRational`. Subsequent reads from it will return its default value.
+  public mutating func clearStartAngleRadiansRational() {self._startAngleRadiansRational = nil}
 
   /// The specified Extended sRGB source color on the start ray (t = 0).
   public var startColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
@@ -402,6 +466,9 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
 
   public init() {}
 
+  fileprivate var _centerXRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _centerYRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _startAngleRadiansRational: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _startColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
   fileprivate var _endColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
 }
@@ -468,19 +535,23 @@ public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable 
     set {_uniqueStorage()._displayName = newValue}
   }
 
-  /// The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
-  /// in [0, 1]. This remains the reference for Portrait projection.
-  public var width: Float {
-    get {_storage._width}
-    set {_uniqueStorage()._width = newValue}
+  public var widthRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._widthRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._widthRational = newValue}
   }
+  /// Returns true if `widthRational` has been explicitly set.
+  public var hasWidthRational: Bool {_storage._widthRational != nil}
+  /// Clears the value of `widthRational`. Subsequent reads from it will return its default value.
+  public mutating func clearWidthRational() {_uniqueStorage()._widthRational = nil}
 
-  /// The Clock height normalized to the fixed 1080-pixel Landscape Canvas
-  /// height, in [0, 1]. This remains the reference for Portrait projection.
-  public var height: Float {
-    get {_storage._height}
-    set {_uniqueStorage()._height = newValue}
+  public var heightRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._heightRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._heightRational = newValue}
   }
+  /// Returns true if `heightRational` has been explicitly set.
+  public var hasHeightRational: Bool {_storage._heightRational != nil}
+  /// Clears the value of `heightRational`. Subsequent reads from it will return its default value.
+  public mutating func clearHeightRational() {_uniqueStorage()._heightRational = nil}
 
   /// Whether the rendered Clock includes the date.
   public var showsDate: Bool {
@@ -550,8 +621,14 @@ public nonisolated struct Ldtx_Workspace_V4_ClockTextOutline: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The outline thickness in output pixels.
-  public var thickness: Float = 0
+  public var thicknessRational: Ldtx_Workspace_V4_Rational32 {
+    get {_thicknessRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_thicknessRational = newValue}
+  }
+  /// Returns true if `thicknessRational` has been explicitly set.
+  public var hasThicknessRational: Bool {self._thicknessRational != nil}
+  /// Clears the value of `thicknessRational`. Subsequent reads from it will return its default value.
+  public mutating func clearThicknessRational() {self._thicknessRational = nil}
 
   /// The color of this outline.
   public var color: Ldtx_Workspace_V4_ExtendedSrgbColor {
@@ -567,6 +644,7 @@ public nonisolated struct Ldtx_Workspace_V4_ClockTextOutline: Sendable {
 
   public init() {}
 
+  fileprivate var _thicknessRational: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _color: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
 }
 
@@ -795,68 +873,118 @@ nonisolated extension Ldtx_Workspace_V4_FillSolidColorComponent: SwiftProtobuf.M
 
 nonisolated extension Ldtx_Workspace_V4_FillLinearGradientComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FillLinearGradientComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}start_x\0\u{3}start_y\0\u{3}start_color\0\u{3}end_x\0\u{3}end_y\0\u{3}end_color\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{4}\u{3}start_color\0\u{4}\u{3}end_color\0\u{3}start_x_rational\0\u{3}start_y_rational\0\u{3}end_x_rational\0\u{3}end_y_rational\0\u{b}start_x\0\u{b}start_y\0\u{b}end_x\0\u{b}end_y\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}")
+
+  fileprivate class _StorageClass {
+    var _internalID: UInt64 = 0
+    var _displayName: String = String()
+    var _startXRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _startYRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _startColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+    var _endXRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _endYRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _endColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _internalID = source._internalID
+      _displayName = source._displayName
+      _startXRational = source._startXRational
+      _startYRational = source._startYRational
+      _startColor = source._startColor
+      _endXRational = source._endXRational
+      _endYRational = source._endYRational
+      _endColor = source._endColor
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeSingularFloatField(value: &self.startX) }()
-      case 4: try { try decoder.decodeSingularFloatField(value: &self.startY) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._startColor) }()
-      case 6: try { try decoder.decodeSingularFloatField(value: &self.endX) }()
-      case 7: try { try decoder.decodeSingularFloatField(value: &self.endY) }()
-      case 8: try { try decoder.decodeSingularMessageField(value: &self._endColor) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._startColor) }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._endColor) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._startXRational) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._startYRational) }()
+        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._endXRational) }()
+        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._endYRational) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if self.internalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.internalID, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._internalID != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._internalID, fieldNumber: 1)
+      }
+      if !_storage._displayName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 2)
+      }
+      try { if let v = _storage._startColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+      try { if let v = _storage._endColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+      try { if let v = _storage._startXRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      try { if let v = _storage._startYRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+      try { if let v = _storage._endXRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      } }()
+      try { if let v = _storage._endYRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      } }()
     }
-    if !self.displayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
-    }
-    if self.startX.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.startX, fieldNumber: 3)
-    }
-    if self.startY.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.startY, fieldNumber: 4)
-    }
-    try { if let v = self._startColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
-    if self.endX.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.endX, fieldNumber: 6)
-    }
-    if self.endY.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.endY, fieldNumber: 7)
-    }
-    try { if let v = self._endColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_FillLinearGradientComponent, rhs: Ldtx_Workspace_V4_FillLinearGradientComponent) -> Bool {
-    if lhs.internalID != rhs.internalID {return false}
-    if lhs.displayName != rhs.displayName {return false}
-    if lhs.startX != rhs.startX {return false}
-    if lhs.startY != rhs.startY {return false}
-    if lhs._startColor != rhs._startColor {return false}
-    if lhs.endX != rhs.endX {return false}
-    if lhs.endY != rhs.endY {return false}
-    if lhs._endColor != rhs._endColor {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._internalID != rhs_storage._internalID {return false}
+        if _storage._displayName != rhs_storage._displayName {return false}
+        if _storage._startXRational != rhs_storage._startXRational {return false}
+        if _storage._startYRational != rhs_storage._startYRational {return false}
+        if _storage._startColor != rhs_storage._startColor {return false}
+        if _storage._endXRational != rhs_storage._endXRational {return false}
+        if _storage._endYRational != rhs_storage._endYRational {return false}
+        if _storage._endColor != rhs_storage._endColor {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -864,68 +992,118 @@ nonisolated extension Ldtx_Workspace_V4_FillLinearGradientComponent: SwiftProtob
 
 nonisolated extension Ldtx_Workspace_V4_FillRadialGradientComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FillRadialGradientComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}center_x\0\u{3}center_y\0\u{3}inner_radius\0\u{3}outer_radius\0\u{3}inner_color\0\u{3}outer_color\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{4}\u{5}inner_color\0\u{3}outer_color\0\u{3}center_x_rational\0\u{3}center_y_rational\0\u{3}inner_radius_rational\0\u{3}outer_radius_rational\0\u{b}center_x\0\u{b}center_y\0\u{b}inner_radius\0\u{b}outer_radius\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
+
+  fileprivate class _StorageClass {
+    var _internalID: UInt64 = 0
+    var _displayName: String = String()
+    var _centerXRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _centerYRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _innerRadiusRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _outerRadiusRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+    var _outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _internalID = source._internalID
+      _displayName = source._displayName
+      _centerXRational = source._centerXRational
+      _centerYRational = source._centerYRational
+      _innerRadiusRational = source._innerRadiusRational
+      _outerRadiusRational = source._outerRadiusRational
+      _innerColor = source._innerColor
+      _outerColor = source._outerColor
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeSingularFloatField(value: &self.centerX) }()
-      case 4: try { try decoder.decodeSingularFloatField(value: &self.centerY) }()
-      case 5: try { try decoder.decodeSingularFloatField(value: &self.innerRadius) }()
-      case 6: try { try decoder.decodeSingularFloatField(value: &self.outerRadius) }()
-      case 7: try { try decoder.decodeSingularMessageField(value: &self._innerColor) }()
-      case 8: try { try decoder.decodeSingularMessageField(value: &self._outerColor) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._innerColor) }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._outerColor) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._centerXRational) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._centerYRational) }()
+        case 11: try { try decoder.decodeSingularMessageField(value: &_storage._innerRadiusRational) }()
+        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._outerRadiusRational) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if self.internalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.internalID, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._internalID != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._internalID, fieldNumber: 1)
+      }
+      if !_storage._displayName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 2)
+      }
+      try { if let v = _storage._innerColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+      try { if let v = _storage._outerColor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+      try { if let v = _storage._centerXRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      try { if let v = _storage._centerYRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+      try { if let v = _storage._innerRadiusRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
+      } }()
+      try { if let v = _storage._outerRadiusRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      } }()
     }
-    if !self.displayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
-    }
-    if self.centerX.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.centerX, fieldNumber: 3)
-    }
-    if self.centerY.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.centerY, fieldNumber: 4)
-    }
-    if self.innerRadius.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.innerRadius, fieldNumber: 5)
-    }
-    if self.outerRadius.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.outerRadius, fieldNumber: 6)
-    }
-    try { if let v = self._innerColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
-    } }()
-    try { if let v = self._outerColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_FillRadialGradientComponent, rhs: Ldtx_Workspace_V4_FillRadialGradientComponent) -> Bool {
-    if lhs.internalID != rhs.internalID {return false}
-    if lhs.displayName != rhs.displayName {return false}
-    if lhs.centerX != rhs.centerX {return false}
-    if lhs.centerY != rhs.centerY {return false}
-    if lhs.innerRadius != rhs.innerRadius {return false}
-    if lhs.outerRadius != rhs.outerRadius {return false}
-    if lhs._innerColor != rhs._innerColor {return false}
-    if lhs._outerColor != rhs._outerColor {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._internalID != rhs_storage._internalID {return false}
+        if _storage._displayName != rhs_storage._displayName {return false}
+        if _storage._centerXRational != rhs_storage._centerXRational {return false}
+        if _storage._centerYRational != rhs_storage._centerYRational {return false}
+        if _storage._innerRadiusRational != rhs_storage._innerRadiusRational {return false}
+        if _storage._outerRadiusRational != rhs_storage._outerRadiusRational {return false}
+        if _storage._innerColor != rhs_storage._innerColor {return false}
+        if _storage._outerColor != rhs_storage._outerColor {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -933,7 +1111,7 @@ nonisolated extension Ldtx_Workspace_V4_FillRadialGradientComponent: SwiftProtob
 
 nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FillConicGradientComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}center_x\0\u{3}center_y\0\u{3}start_angle_radians\0\u{3}start_color\0\u{3}end_color\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{4}\u{4}start_color\0\u{3}end_color\0\u{3}center_x_rational\0\u{3}center_y_rational\0\u{3}start_angle_radians_rational\0\u{b}center_x\0\u{b}center_y\0\u{b}start_angle_radians\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -943,11 +1121,11 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeSingularFloatField(value: &self.centerX) }()
-      case 4: try { try decoder.decodeSingularFloatField(value: &self.centerY) }()
-      case 5: try { try decoder.decodeSingularFloatField(value: &self.startAngleRadians) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._startColor) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._endColor) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._centerXRational) }()
+      case 9: try { try decoder.decodeSingularMessageField(value: &self._centerYRational) }()
+      case 10: try { try decoder.decodeSingularMessageField(value: &self._startAngleRadiansRational) }()
       default: break
       }
     }
@@ -964,20 +1142,20 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
     if !self.displayName.isEmpty {
       try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
     }
-    if self.centerX.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.centerX, fieldNumber: 3)
-    }
-    if self.centerY.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.centerY, fieldNumber: 4)
-    }
-    if self.startAngleRadians.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.startAngleRadians, fieldNumber: 5)
-    }
     try { if let v = self._startColor {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
     try { if let v = self._endColor {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._centerXRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
+    try { if let v = self._centerYRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    } }()
+    try { if let v = self._startAngleRadiansRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -985,9 +1163,9 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
   public static func ==(lhs: Ldtx_Workspace_V4_FillConicGradientComponent, rhs: Ldtx_Workspace_V4_FillConicGradientComponent) -> Bool {
     if lhs.internalID != rhs.internalID {return false}
     if lhs.displayName != rhs.displayName {return false}
-    if lhs.centerX != rhs.centerX {return false}
-    if lhs.centerY != rhs.centerY {return false}
-    if lhs.startAngleRadians != rhs.startAngleRadians {return false}
+    if lhs._centerXRational != rhs._centerXRational {return false}
+    if lhs._centerYRational != rhs._centerYRational {return false}
+    if lhs._startAngleRadiansRational != rhs._startAngleRadiansRational {return false}
     if lhs._startColor != rhs._startColor {return false}
     if lhs._endColor != rhs._endColor {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -1072,13 +1250,13 @@ nonisolated extension Ldtx_Workspace_V4_TestPatternComponent: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClockComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{3}shows_date\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}utc_offset_minutes\0\u{3}foreground_color\0\u{3}background_color\0\u{1}outlines\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{4}\u{3}shows_date\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}utc_offset_minutes\0\u{3}foreground_color\0\u{3}background_color\0\u{1}outlines\0\u{3}width_rational\0\u{3}height_rational\0\u{b}width\0\u{b}height\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   fileprivate class _StorageClass {
     var _internalID: UInt64 = 0
     var _displayName: String = String()
-    var _width: Float = 0
-    var _height: Float = 0
+    var _widthRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _heightRational: Ldtx_Workspace_V4_Rational32? = nil
     var _showsDate: Bool = false
     var _showsSeconds: Bool = false
     var _uses24HourTime: Bool = false
@@ -1098,8 +1276,8 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
     init(copying source: _StorageClass) {
       _internalID = source._internalID
       _displayName = source._displayName
-      _width = source._width
-      _height = source._height
+      _widthRational = source._widthRational
+      _heightRational = source._heightRational
       _showsDate = source._showsDate
       _showsSeconds = source._showsSeconds
       _uses24HourTime = source._uses24HourTime
@@ -1127,8 +1305,6 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
         switch fieldNumber {
         case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 3: try { try decoder.decodeSingularFloatField(value: &_storage._width) }()
-        case 4: try { try decoder.decodeSingularFloatField(value: &_storage._height) }()
         case 5: try { try decoder.decodeSingularBoolField(value: &_storage._showsDate) }()
         case 6: try { try decoder.decodeSingularBoolField(value: &_storage._showsSeconds) }()
         case 7: try { try decoder.decodeSingularBoolField(value: &_storage._uses24HourTime) }()
@@ -1136,6 +1312,8 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._foregroundColor) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._backgroundColor) }()
         case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._outlines) }()
+        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._widthRational) }()
+        case 13: try { try decoder.decodeSingularMessageField(value: &_storage._heightRational) }()
         default: break
         }
       }
@@ -1153,12 +1331,6 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
       }
       if !_storage._displayName.isEmpty {
         try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 2)
-      }
-      if _storage._width.bitPattern != 0 {
-        try visitor.visitSingularFloatField(value: _storage._width, fieldNumber: 3)
-      }
-      if _storage._height.bitPattern != 0 {
-        try visitor.visitSingularFloatField(value: _storage._height, fieldNumber: 4)
       }
       if _storage._showsDate != false {
         try visitor.visitSingularBoolField(value: _storage._showsDate, fieldNumber: 5)
@@ -1181,6 +1353,12 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
       if !_storage._outlines.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._outlines, fieldNumber: 11)
       }
+      try { if let v = _storage._widthRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      } }()
+      try { if let v = _storage._heightRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1192,8 +1370,8 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
         let rhs_storage = _args.1
         if _storage._internalID != rhs_storage._internalID {return false}
         if _storage._displayName != rhs_storage._displayName {return false}
-        if _storage._width != rhs_storage._width {return false}
-        if _storage._height != rhs_storage._height {return false}
+        if _storage._widthRational != rhs_storage._widthRational {return false}
+        if _storage._heightRational != rhs_storage._heightRational {return false}
         if _storage._showsDate != rhs_storage._showsDate {return false}
         if _storage._showsSeconds != rhs_storage._showsSeconds {return false}
         if _storage._uses24HourTime != rhs_storage._uses24HourTime {return false}
@@ -1212,7 +1390,7 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
 
 nonisolated extension Ldtx_Workspace_V4_ClockTextOutline: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClockTextOutline"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}thickness\0\u{1}color\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\u{2}color\0\u{3}thickness_rational\0\u{b}thickness\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1220,8 +1398,8 @@ nonisolated extension Ldtx_Workspace_V4_ClockTextOutline: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularFloatField(value: &self.thickness) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._color) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._thicknessRational) }()
       default: break
       }
     }
@@ -1232,17 +1410,17 @@ nonisolated extension Ldtx_Workspace_V4_ClockTextOutline: SwiftProtobuf.Message,
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.thickness.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.thickness, fieldNumber: 1)
-    }
     try { if let v = self._color {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._thicknessRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_ClockTextOutline, rhs: Ldtx_Workspace_V4_ClockTextOutline) -> Bool {
-    if lhs.thickness != rhs.thickness {return false}
+    if lhs._thicknessRational != rhs._thicknessRational {return false}
     if lhs._color != rhs._color {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

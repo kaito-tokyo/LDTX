@@ -197,6 +197,7 @@ public final class WorkspaceDocument: NSDocument {
     default:
       throw CocoaError(.featureUnsupported)
     }
+    try WorkspaceStoreService.validateForSaving(contents.workspace)
     unblockUserInteraction()
     try writeProbe.withLock { $0 }?()
     let coordinator = NSFileCoordinator(filePresenter: self)
@@ -246,6 +247,13 @@ public final class WorkspaceDocument: NSDocument {
     let derivesInitialName = fileURL == nil && initialName == "Untitled"
     let destinationName = url.deletingPathExtension().lastPathComponent
     if derivesInitialName { storeService.definition.displayName = destinationName }
+    do {
+      try storeService.validateForSaving()
+    } catch {
+      if derivesInitialName { storeService.definition.displayName = initialName }
+      completionHandler(error)
+      return
+    }
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
       writingChangeCountToken = nil
       if let error {

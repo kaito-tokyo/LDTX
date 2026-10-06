@@ -12,10 +12,10 @@ struct RadialGradientFillVideoComponentInspector: View {
   private let component: Ldtx_Workspace_V4_FillRadialGradientComponent?
 
   @State private var name: String
-  @State private var centerX: Float
-  @State private var centerY: Float
-  @State private var innerRadius: Float
-  @State private var outerRadius: Float
+  @State private var centerX: Ldtx_Workspace_V4_Rational32
+  @State private var centerY: Ldtx_Workspace_V4_Rational32
+  @State private var innerRadius: Ldtx_Workspace_V4_Rational32
+  @State private var outerRadius: Ldtx_Workspace_V4_Rational32
   @State private var innerColor: Color
   @State private var outerColor: Color
 
@@ -32,10 +32,30 @@ struct RadialGradientFillVideoComponentInspector: View {
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._centerX = State(initialValue: component?.centerX ?? 0.5)
-    self._centerY = State(initialValue: component?.centerY ?? 0.5)
-    self._innerRadius = State(initialValue: component?.innerRadius ?? 0)
-    self._outerRadius = State(initialValue: component?.outerRadius ?? 0.72)
+    self._centerX = State(
+      initialValue: component?.centerXRational
+        ?? .with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
+    self._centerY = State(
+      initialValue: component?.centerYRational
+        ?? .with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
+    self._innerRadius = State(
+      initialValue: component?.innerRadiusRational
+        ?? .with {
+          $0.numerator = 0
+          $0.denominator = 1
+        })
+    self._outerRadius = State(
+      initialValue: component?.outerRadiusRational
+        ?? .with {
+          $0.numerator = 18
+          $0.denominator = 25
+        })
     self._innerColor = State(initialValue: component?.innerColor.asColor() ?? .white)
     self._outerColor = State(initialValue: component?.outerColor.asColor() ?? .black)
   }
@@ -56,16 +76,16 @@ struct RadialGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Center X") {
-          Slider(value: $centerX, in: 0...1)
+          Slider(value: $centerX.double, in: 0...1)
         }
         LabeledContent("Center Y") {
-          Slider(value: $centerY, in: 0...1)
+          Slider(value: $centerY.double, in: 0...1)
         }
         LabeledContent("Inner Radius") {
-          Slider(value: $innerRadius, in: 0...1)
+          Slider(value: $innerRadius.double, in: 0...1)
         }
         LabeledContent("Outer Radius") {
-          Slider(value: $outerRadius, in: 0...1)
+          Slider(value: $outerRadius.double, in: 0...1)
         }
         ColorPicker("Inner Color", selection: $innerColor, supportsOpacity: true)
         ColorPicker("Outer Color", selection: $outerColor, supportsOpacity: true)
@@ -91,10 +111,10 @@ struct RadialGradientFillVideoComponentInspector: View {
     else { return }
 
     component.displayName = name
-    component.centerX = centerX
-    component.centerY = centerY
-    component.innerRadius = innerRadius
-    component.outerRadius = outerRadius
+    component.centerXRational = centerX
+    component.centerYRational = centerY
+    component.innerRadiusRational = innerRadius
+    component.outerRadiusRational = outerRadius
     component.innerColor.red = Float(innerNSColor.redComponent)
     component.innerColor.green = Float(innerNSColor.greenComponent)
     component.innerColor.blue = Float(innerNSColor.blueComponent)
@@ -114,9 +134,9 @@ struct RadialGradientFillVideoComponentInspector: View {
   private var gradient: RadialGradient {
     RadialGradient(
       colors: [innerColor, outerColor],
-      center: UnitPoint(x: Double(centerX), y: Double(centerY)),
-      startRadius: CGFloat(innerRadius) * 96,
-      endRadius: CGFloat(outerRadius) * 96)
+      center: UnitPoint(x: centerX.double, y: centerY.double),
+      startRadius: CGFloat(innerRadius.double) * 96,
+      endRadius: CGFloat(outerRadius.double) * 96)
   }
 }
 

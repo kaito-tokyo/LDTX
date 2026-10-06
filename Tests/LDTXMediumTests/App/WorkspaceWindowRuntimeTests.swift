@@ -29,21 +29,38 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       definition: runtime.definition, preferences: runtime.preferences,
       programInternalID: id, target: .landscape)
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationX = 0.25
-    transform.scaleX = 1
-    transform.scaleY = 1
+    transform.translationXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 4
+    }
+    transform.scaleXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     try runtime.setBasicTransform(
       transform, forVideoLayerInternalID: first,
       programInternalID: id, target: .landscape)
     try runtime.setVideoLayerHidden(
       true, forVideoLayerInternalID: second,
       programInternalID: id, target: .portrait)
-    try runtime.setMasterVolume(-6, programInternalID: id, target: .landscape)
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }, programInternalID: id, target: .landscape)
     #expect(old.preferences.videoLayerTransforms.isEmpty)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.videoLayerTransforms[first] == transform)
     #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -6
+          $0.denominator = 1
+        })
     #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.videoLayerTransforms.isEmpty == true)
@@ -55,44 +72,108 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   func editsIndependentCanvasPreferences() throws {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     let id = try runtime.addProgram(displayName: "Canvas Preferences")
-    try runtime.setMasterVolume(-3.24, programInternalID: id, target: .landscape)
-    try runtime.setMasterVolume(-9, programInternalID: id, target: .portrait)
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -81
+        $0.denominator = 25
+      }, programInternalID: id, target: .landscape)
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -9
+        $0.denominator = 1
+      }, programInternalID: id, target: .portrait)
     #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -32)
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -81
+          $0.denominator = 25
+        })
     #expect(
-      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
-    try runtime.setMasterVolume(-6, programInternalID: id, target: .landscape)
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -9
+          $0.denominator = 1
+        })
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }, programInternalID: id, target: .landscape)
     #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -6
+          $0.denominator = 1
+        })
     #expect(
-      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -90)
-    for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -9
+          $0.denominator = 1
+        })
+    for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
       #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
         try runtime.setMasterVolume(invalid, programInternalID: id, target: .landscape)
       }
     }
     #expect(
-      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibelTenths == -60)
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -6
+          $0.denominator = 1
+        })
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
-    try runtime.setAudioChannelGain(-12.34, forAudioInputDeviceInternalID: inputID)
-    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == -123)
-    try runtime.setAudioChannelGain(1.26, forAudioInputDeviceInternalID: inputID)
-    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
-    for invalid in [Double.nan, .infinity, .greatestFiniteMagnitude] {
+    try runtime.setAudioChannelGain(
+      .with {
+        $0.numerator = -617
+        $0.denominator = 50
+      }, forAudioInputDeviceInternalID: inputID)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -617
+          $0.denominator = 50
+        })
+    try runtime.setAudioChannelGain(
+      .with {
+        $0.numerator = 63
+        $0.denominator = 50
+      }, forAudioInputDeviceInternalID: inputID)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 63
+          $0.denominator = 50
+        })
+    for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
       #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
         try runtime.setAudioChannelGain(invalid, forAudioInputDeviceInternalID: inputID)
       }
     }
-    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 63
+          $0.denominator = 50
+        })
     #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
-      try runtime.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999)
+      try runtime.setAudioChannelGain(
+        .with {
+          $0.numerator = -6
+          $0.denominator = 1
+        }, forAudioInputDeviceInternalID: 999)
     }
     try runtime.removeProgram(internalID: id)
     #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
     #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
-    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == 13)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 63
+          $0.denominator = 50
+        })
     try runtime.removeInputDevice(internalID: inputID)
-    #expect(runtime.preferences.audioChannelGainsDecibelTenths[inputID] == nil)
+    #expect(runtime.preferences.audioChannelGainsDecibels[inputID] == nil)
   }
 
   @Test("resolves a selected single-Canvas V4 RTMPS destination")

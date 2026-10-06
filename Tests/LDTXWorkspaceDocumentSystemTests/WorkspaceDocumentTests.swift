@@ -4,11 +4,13 @@
 import AppKit
 import Foundation
 import LDTXAppletSupport
+import LDTXProtos
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
+import SwiftProtobuf
 import Testing
 
 @MainActor
@@ -22,6 +24,177 @@ struct WorkspaceDocumentSystemTestSuite {
   private static let controller = WorkspaceInitializingDocumentController()
 
   init() { _ = Self.controller }
+
+  @Test func saveValidationAggregatesErrorsWithoutCreatingAPackage() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Invalid.ldtxworkspace")
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    document.storeService.definition.programs = [validationProgram(name: "Pattern")]
+    document.storeService.definition.videoComponents = [validationPattern()]
+    document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      .videoLayerTransforms[2] = validationTransform(
+        x: .with {
+          $0.numerator = 2
+          $0.denominator = 1
+        })
+    document.storeService.preferences.portraitProgramPreferences[1, default: .init()]
+      .videoLayerTransforms[2] = validationTransform(
+        scale: .with {
+          $0.numerator = -1
+          $0.denominator = 1
+        })
+    do {
+      try await save(document, to: url)
+      Issue.record("Expected validation failure")
+    } catch let error as WorkspaceSaveValidationError {
+      #expect(error.messages.count == 3)
+      let alert = NSAlert(error: error)
+      #expect(alert.informativeText.contains("Landscape"))
+      #expect(alert.informativeText.contains("Portrait"))
+      #expect(alert.informativeText.contains("Pattern"))
+    }
+    #expect(document.storeService.definition.displayName == "Untitled")
+    #expect(document.fileURL == nil)
+    #expect(document.isDocumentEdited)
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+  }
+
+  @Test func invalidSavePreservesFilesAndCorrectionRoundTripsDetachedPreferences() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("Validated.ldtxworkspace")
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    document.storeService.definition.programs = [validationProgram(name: "Main")]
+    document.storeService.definition.videoComponents = [validationPattern()]
+    try await save(document, to: url)
+    let before = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
+    document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      .videoLayerTransforms[2] = validationTransform(
+        x: .with {
+          $0.numerator = 2
+          $0.denominator = 1
+        })
+    do {
+      try await save(document, to: url, operation: .saveOperation)
+      Issue.record("Expected validation failure")
+    } catch is WorkspaceSaveValidationError {}
+    #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == before)
+    #expect(document.isDocumentEdited)
+    document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      .videoLayerTransforms[2] = validationTransform(
+        x: .with {
+          $0.numerator = 1
+          $0.denominator = 2
+        },
+        scale: .with {
+          $0.numerator = 1
+          $0.denominator = 1
+        })
+    document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      .videoLayerHidden[2] = true
+    try await save(document, to: url, operation: .saveOperation)
+    let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+    defer { reopened.close() }
+    #expect(reopened.storeService.preferences == document.storeService.preferences)
+    #expect(reopened.storeService.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
+    #expect(!document.isDocumentEdited)
+  }
+
+  @Test func saveActionPresentsOneValidationSheet() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+      styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    document.addWindowController(NSWindowController(window: window))
+    defer {
+      if let sheet = window.attachedSheet { window.endSheet(sheet) }
+      window.orderOut(nil)
+      document.close()
+    }
+    let url = root.appendingPathComponent("ValidationSheet.ldtxworkspace")
+    try await save(document, to: url)
+    document.storeService.preferences.landscapeProgramPreferences[99] = .init()
+    document.storeService.preferences.portraitProgramPreferences[100] = .init()
+    window.orderFront(nil)
+    document.save(nil)
+    for _ in 0..<100 where window.attachedSheet == nil {
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    let sheet = try #require(window.attachedSheet)
+    func text(in view: NSView) -> [String] {
+      (view as? NSTextField).map { [$0.stringValue] } ?? view.subviews.flatMap { text(in: $0) }
+    }
+    let messages = text(in: try #require(sheet.contentView)).joined(separator: "\n")
+    #expect(messages.contains("Landscape"))
+    #expect(messages.contains("Portrait"))
+    #expect(messages.contains("99"))
+    #expect(messages.contains("100"))
+    window.endSheet(sheet)
+    await Task.yield()
+  }
+
+  @Test func backgroundSnapshotValidationPrecedesIO() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let document = WorkspaceDocument()
+    defer { document.close() }
+    let url = root.appendingPathComponent("Invalid.ldtxworkspace")
+    document.storeService.preferences.audioChannelGainsDecibels[99] = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
+    #expect(
+      document.canAsynchronouslyWrite(
+        to: url, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation))
+    document.storeService.preferences.audioChannelGainsDecibels.removeValue(forKey: 99)
+    let writer = BackgroundSnapshotWriter(document: document, destination: url)
+    do {
+      try await Task.detached { try writer.write() }.value
+      Issue.record("Expected snapshot validation failure")
+    } catch let error as WorkspaceSaveValidationError {
+      #expect(error.messages.count == 1)
+      #expect(error.failureReason?.contains("99") == true)
+    }
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+  }
+
+  private func validationProgram(name: String) -> Ldtx_Workspace_V4_ProgramDefinition {
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    program.displayName = name
+    return program
+  }
+
+  private func validationPattern() -> Ldtx_Workspace_V4_VideoComponentWrapper {
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.testPattern.internalID = 2
+    component.testPattern.displayName = "Pattern"
+    return component
+  }
+
+  private func validationTransform(
+    x: Ldtx_Workspace_V4_Rational32 = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    },
+    scale: Ldtx_Workspace_V4_Rational32 = .with {
+      $0.numerator = 0
+      $0.denominator = 1
+    }
+  )
+    -> Ldtx_Workspace_V4_BasicTransform
+  {
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationXRational = x
+    transform.scaleXRational = scale
+    return transform
+  }
 
   @Test func monitorVolumeUsesAppletDataWithoutEditingDocument() throws {
     let suite = "MonitorVolume.\(UUID())"
@@ -377,7 +550,10 @@ struct WorkspaceDocumentSystemTestSuite {
       WorkspaceResourceFactory.makeClock(id: 203, name: "Clock"),
     ]
     document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
-      .audioMasterVolumeDecibelTenths = -80
+      .audioMasterVolumeDecibels = .with {
+        $0.numerator = -8
+        $0.denominator = 1
+      }
     document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
       .videoLayerHidden[
         202] = true
@@ -578,7 +754,10 @@ struct WorkspaceDocumentSystemTestSuite {
     let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
     document.storeService.definition.displayName = "Pending"
     document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
-      .audioMasterVolumeDecibelTenths = -60
+      .audioMasterVolumeDecibels = .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }
     #expect(!WorkspaceDocument.autosavesInPlace)
     #expect(!WorkspaceDocument.preservesVersions)
     #expect(document.autosavingFileType == nil)
@@ -684,14 +863,25 @@ struct WorkspaceDocumentSystemTestSuite {
     let fixedDefinition = document.storeService.definition
     document.storeService.definition.displayName = "Rejected during output"
     document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
-      .audioMasterVolumeDecibelTenths = -80
+      .audioMasterVolumeDecibels = .with {
+        $0.numerator = -8
+        $0.denominator = 1
+      }
     #expect(document.storeService.setAudioChannelGain(-12, forAudioInputDeviceInternalID: 102))
     try await save(document, to: url, operation: .saveOperation)
     let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
     #expect(
-      savedOutput.preferences.landscapeProgramPreferences[101]?.audioMasterVolumeDecibelTenths
-        == -80)
-    #expect(savedOutput.preferences.audioChannelGainsDecibelTenths[102] == -120)
+      savedOutput.preferences.landscapeProgramPreferences[101]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -8
+          $0.denominator = 1
+        })
+    #expect(
+      savedOutput.preferences.audioChannelGainsDecibels[102]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -12
+          $0.denominator = 1
+        })
     #expect(savedOutput.definition == fixedDefinition)
     document.storeService.isOutputActive = false
   }
@@ -914,7 +1104,10 @@ struct WorkspaceDocumentSystemTestSuite {
     #expect(document.storeService.definition == original)
     #expect(!document.isDocumentEdited)
     document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
-      .audioMasterVolumeDecibelTenths = -60
+      .audioMasterVolumeDecibels = .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }
     #expect(document.isDocumentEdited)
   }
 

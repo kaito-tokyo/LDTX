@@ -33,29 +33,34 @@ public struct WorkspaceV4RenderGraph: Sendable {
         var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
-      let topInset = Self.unitInterval(transform.topInset, default: 0)
-      let rightInset = Self.unitInterval(transform.rightInset, default: 0)
-      let bottomInset = Self.unitInterval(transform.bottomInset, default: 0)
-      let leftInset = Self.unitInterval(transform.leftInset, default: 0)
-      let translationX = Self.unitInterval(transform.translationX, default: 0)
-      let translationY = Self.unitInterval(transform.translationY, default: 0)
-      let scaleX = Self.scale(transform.scaleX)
-      let scaleY = Self.scale(transform.scaleY)
+      let topInsetRational = Self.unitInterval(transform.topInsetRational.float, default: 0)
+      let rightInsetRational = Self.unitInterval(
+        transform.rightInsetRational.float, default: 0)
+      let bottomInsetRational = Self.unitInterval(
+        transform.bottomInsetRational.float, default: 0)
+      let leftInsetRational = Self.unitInterval(
+        transform.leftInsetRational.float, default: 0)
+      let translationXRational = Self.unitInterval(
+        transform.translationXRational.float, default: 0)
+      let translationYRational = Self.unitInterval(
+        transform.translationYRational.float, default: 0)
+      let scaleX = transform.hasScaleXRational ? transform.scaleXRational.float : 1
+      let scaleY = transform.hasScaleYRational ? transform.scaleYRational.float : 1
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
-        input.sourceCropTop = topInset * 100
-        input.sourceCropRight = rightInset * 100
-        input.sourceCropBottom = bottomInset * 100
-        input.sourceCropLeft = leftInset * 100
-        input.destinationX = translationX * canvasWidth
-        input.destinationY = translationY * canvasHeight
+        input.sourceCropTop = topInsetRational * 100
+        input.sourceCropRight = rightInsetRational * 100
+        input.sourceCropBottom = bottomInsetRational * 100
+        input.sourceCropLeft = leftInsetRational * 100
+        input.destinationX = translationXRational * canvasWidth
+        input.destinationY = translationYRational * canvasHeight
         input.destinationScaleX = scaleX
         input.destinationScaleY = scaleY
         component = .inputCameraDevice(input)
       }
       if case .clock(var clock) = component {
-        clock.destinationX = translationX
-        clock.destinationY = translationY
+        clock.destinationX = translationXRational
+        clock.destinationY = translationYRational
         clock.destinationWidth *= 1_920 / canvasWidth
         clock.destinationHeight *= 1_080 / canvasHeight
         clock.destinationWidth *= scaleX
@@ -66,8 +71,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
       layerPreferences.append(
         VideoLayerPreference(
           componentName: name,
-          destinationX: translationX,
-          destinationY: translationY,
+          destinationX: translationXRational,
+          destinationY: translationYRational,
           destinationScaleX: scaleX,
           destinationScaleY: scaleY,
           isMuted: hidden[internalID] ?? false
@@ -78,15 +83,16 @@ public struct WorkspaceV4RenderGraph: Sendable {
     self.layerPreferences = layerPreferences
     var audioPreferences = ProgramPreferences(
       masterVolume: Self.linearGain(
-        Double(preference.audioMasterVolumeDecibelTenths) / 10))
-    let gains = canvas.audioChannelGainsDecibelTenths
+        (preference.hasAudioMasterVolumeDecibels ? preference.audioMasterVolumeDecibels.double : 0))
+    )
+    let gains = canvas.audioChannelGainsDecibels
     let mutedAudio = preference.audioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,
         let id = input.inputDeviceID.flatMap({ UInt64($0.dropFirst(3)) })
       else { continue }
       audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(
-        Double(gains[id] ?? 0) / 10)
+        (gains[id]?.double ?? 0))
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
     audioPreferences.videoLayersByProgramName["v4-\(canvas.programInternalID)"] = layerPreferences
@@ -113,7 +119,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
             fill.internalID,
             .fillLinearGradient(
               FillLinearGradientComponent(
-                startX: fill.startX, startY: fill.startY, endX: fill.endX, endY: fill.endY,
+                startX: fill.startXRational.float, startY: fill.startYRational.float,
+                endX: fill.endXRational.float, endY: fill.endYRational.float,
                 startRed: fill.startColor.red, startGreen: fill.startColor.green,
                 startBlue: fill.startColor.blue, startAlpha: fill.startColor.alpha,
                 endRed: fill.endColor.red, endGreen: fill.endColor.green,
@@ -124,8 +131,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
             fill.internalID,
             .fillRadialGradient(
               FillRadialGradientComponent(
-                centerX: fill.centerX, centerY: fill.centerY, innerRadius: fill.innerRadius,
-                outerRadius: fill.outerRadius, innerRed: fill.innerColor.red,
+                centerX: fill.centerXRational.float,
+                centerY: fill.centerYRational.float,
+                innerRadius: fill.innerRadiusRational.float,
+                outerRadius: fill.outerRadiusRational.float, innerRed: fill.innerColor.red,
                 innerGreen: fill.innerColor.green, innerBlue: fill.innerColor.blue,
                 innerAlpha: fill.innerColor.alpha, outerRed: fill.outerColor.red,
                 outerGreen: fill.outerColor.green, outerBlue: fill.outerColor.blue,
@@ -136,8 +145,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
             fill.internalID,
             .fillConicGradient(
               FillConicGradientComponent(
-                centerX: fill.centerX, centerY: fill.centerY,
-                startAngleRadians: fill.startAngleRadians, startRed: fill.startColor.red,
+                centerX: fill.centerXRational.float,
+                centerY: fill.centerYRational.float,
+                startAngleRadians: fill.startAngleRadiansRational.float,
+                startRed: fill.startColor.red,
                 startGreen: fill.startColor.green, startBlue: fill.startColor.blue,
                 startAlpha: fill.startColor.alpha, endRed: fill.endColor.red,
                 endGreen: fill.endColor.green, endBlue: fill.endColor.blue,
@@ -153,7 +164,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
             clock.internalID,
             .clock(
               ClockComponent(
-                destinationWidth: clock.width, destinationHeight: clock.height,
+                destinationWidth: clock.widthRational.float,
+                destinationHeight: clock.heightRational.float,
                 showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
                 foregroundRed: clock.foregroundColor.red,
                 foregroundGreen: clock.foregroundColor.green,
@@ -166,7 +178,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
                 showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
                 utcOffsetMinutes: clock.utcOffsetMinutes,
                 outlines: clock.outlines.map {
-                  ClockTextOutline(thickness: $0.thickness, color: colorString($0.color))
+                  ClockTextOutline(
+                    thickness: $0.thicknessRational.float, color: colorString($0.color))
                 }))
           )
         case .testPattern(let pattern): return (pattern.internalID, .testPattern)
@@ -207,10 +220,6 @@ public struct WorkspaceV4RenderGraph: Sendable {
     return min(max(value, 0), 1)
   }
 
-  private static func scale(_ value: Float) -> Float {
-    guard value.isFinite else { return 1 }
-    return value == 0 ? 1 : min(max(value, 0.01), 100)
-  }
 }
 
 extension WorkspaceV4RenderGraph {

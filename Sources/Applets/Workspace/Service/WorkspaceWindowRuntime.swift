@@ -234,8 +234,11 @@ public final class WorkspaceWindowRuntime {
       width = CVPixelBufferGetWidth(frame.pixelBuffer)
       height = CVPixelBufferGetHeight(frame.pixelBuffer)
     case .clock(let clock):
-      width = max(1, Int((clock.width * 1920).rounded()))
-      height = max(1, Int((clock.height * 1080).rounded()))
+      guard clock.widthRational.double.isFinite, clock.heightRational.double.isFinite else {
+        throw WorkspaceVisionFeatureError.frameUnavailable
+      }
+      width = max(1, Int((clock.widthRational.double * 1920).rounded()))
+      height = max(1, Int((clock.heightRational.double * 1080).rounded()))
     default: break
     }
     guard let renderer = componentFrameRenderer else {
@@ -256,10 +259,10 @@ public final class WorkspaceWindowRuntime {
     return WorkspaceVisionAnalysisFrame(
       image: image.cropped(
         to: CGRect(
-          x: extent.minX + extent.width * CGFloat(region.x),
-          y: extent.minY + extent.height * CGFloat(region.y),
-          width: extent.width * CGFloat(region.width),
-          height: extent.height * CGFloat(region.height))))
+          x: extent.minX + extent.width * CGFloat(region.xRational.double),
+          y: extent.minY + extent.height * CGFloat(region.yRational.double),
+          width: extent.width * CGFloat(region.widthRational.double),
+          height: extent.height * CGFloat(region.heightRational.double))))
   }
 
 }

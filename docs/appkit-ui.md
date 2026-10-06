@@ -331,3 +331,36 @@ Content does not require a shutdown cascade. AppKit owns observation tracking;
 each meter manages its window notifications and drawing lifetime internally.
 Program Preview and runtime shutdown remain explicit, and runtime shutdown
 disconnects the service's runtime actions before releasing resources.
+
+## Validation before saving
+
+WorkspaceStoreService validates the definition and both canvas preference maps
+with WorkspaceV4IntegrityValidator before a document save begins. Validation
+collects independent issues with resource and canvas context into one localized
+error. NSDocument's save error presentation displays the messages together in
+its standard error sheet; editors do not add inline save-validation labels.
+A rejected save retains the edited model and leaves the existing package intact.
+The asynchronous writer validates its captured snapshot again before any I/O.
+
+Transforms and hidden flags may remain for detached layers, as long as their
+Video Components still exist. Their values remain subject to normal validation.
+Workspace Version stays 4 and Workspace Bundle Version stays 4.0.
+
+### Rational32 numeric editing
+
+Workspace V4 stores geometry, OCR parameters, and audio gains as `Rational32`
+values. RGBA remains floating point. Rational32 decimal and fraction parsing
+preserves the entered value; pixel coordinates are normalized using Rational32
+arithmetic and restored without rounding. Audio gains are stored directly in
+decibels, without a tenths multiplier. Missing scales resolve to identity while
+an explicitly stored zero remains zero. Rendering and audio processing use
+`Rational32.float` or `Rational32.double` at their numeric boundaries. Conversion
+uses standard floating-point division: zero divided by zero produces NaN, and
+nonzero values divided by zero produce signed infinity. These are the only custom Rational32 members;
+constants use Protobuf `with`, text parsing and formatting belong to the UI
+FormatStyle and ParseStrategy, and range checks belong to the integrity
+validator.
+
+A persisted Rational32 must have a positive denominator. Saving validates the
+exact Rational32 ranges before writing the Workspace. Workspace Version remains
+4 and Workspace Bundle Version remains 4.0.

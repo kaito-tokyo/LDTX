@@ -12,10 +12,10 @@ struct LinearGradientFillVideoComponentInspector: View {
   private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
 
   @State private var name: String
-  @State private var startX: Float
-  @State private var startY: Float
-  @State private var endX: Float
-  @State private var endY: Float
+  @State private var startX: Ldtx_Workspace_V4_Rational32
+  @State private var startY: Ldtx_Workspace_V4_Rational32
+  @State private var endX: Ldtx_Workspace_V4_Rational32
+  @State private var endY: Ldtx_Workspace_V4_Rational32
   @State private var startColor: Color
   @State private var endColor: Color
 
@@ -32,10 +32,30 @@ struct LinearGradientFillVideoComponentInspector: View {
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._startX = State(initialValue: component?.startX ?? 0)
-    self._startY = State(initialValue: component?.startY ?? 0)
-    self._endX = State(initialValue: component?.endX ?? 1)
-    self._endY = State(initialValue: component?.endY ?? 1)
+    self._startX = State(
+      initialValue: component?.startXRational
+        ?? .with {
+          $0.numerator = 0
+          $0.denominator = 1
+        })
+    self._startY = State(
+      initialValue: component?.startYRational
+        ?? .with {
+          $0.numerator = 0
+          $0.denominator = 1
+        })
+    self._endX = State(
+      initialValue: component?.endXRational
+        ?? .with {
+          $0.numerator = 1
+          $0.denominator = 1
+        })
+    self._endY = State(
+      initialValue: component?.endYRational
+        ?? .with {
+          $0.numerator = 1
+          $0.denominator = 1
+        })
     self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
     self._endColor = State(initialValue: component?.endColor.asColor() ?? .black)
   }
@@ -56,16 +76,16 @@ struct LinearGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Start X") {
-          Slider(value: $startX, in: 0...1)
+          Slider(value: $startX.double, in: 0...1)
         }
         LabeledContent("Start Y") {
-          Slider(value: $startY, in: 0...1)
+          Slider(value: $startY.double, in: 0...1)
         }
         LabeledContent("End X") {
-          Slider(value: $endX, in: 0...1)
+          Slider(value: $endX.double, in: 0...1)
         }
         LabeledContent("End Y") {
-          Slider(value: $endY, in: 0...1)
+          Slider(value: $endY.double, in: 0...1)
         }
         ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
         ColorPicker("End Color", selection: $endColor, supportsOpacity: true)
@@ -91,10 +111,10 @@ struct LinearGradientFillVideoComponentInspector: View {
     else { return }
 
     component.displayName = name
-    component.startX = startX
-    component.startY = startY
-    component.endX = endX
-    component.endY = endY
+    component.startXRational = startX
+    component.startYRational = startY
+    component.endXRational = endX
+    component.endYRational = endY
     component.startColor.red = Float(startNSColor.redComponent)
     component.startColor.green = Float(startNSColor.greenComponent)
     component.startColor.blue = Float(startNSColor.blueComponent)
@@ -114,8 +134,8 @@ struct LinearGradientFillVideoComponentInspector: View {
   private var gradient: LinearGradient {
     LinearGradient(
       colors: [startColor, endColor],
-      startPoint: UnitPoint(x: Double(startX), y: Double(startY)),
-      endPoint: UnitPoint(x: Double(endX), y: Double(endY)))
+      startPoint: UnitPoint(x: startX.double, y: startY.double),
+      endPoint: UnitPoint(x: endX.double, y: endY.double))
   }
 }
 

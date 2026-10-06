@@ -59,7 +59,10 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     }
     let audio = try runtime.addAudioInputDevice(displayName: "Unavailable Audio")
     try runtime.setAudioChannelGain(
-      -12, forAudioInputDeviceInternalID: audio)
+      .with {
+        $0.numerator = -12
+        $0.denominator = 1
+      }, forAudioInputDeviceInternalID: audio)
     try runtime.setAudioChannelMuted(
       true, forAudioInputDeviceInternalID: audio, programInternalID: second, target: .portrait)
     local.selectedProgramInternalID = first

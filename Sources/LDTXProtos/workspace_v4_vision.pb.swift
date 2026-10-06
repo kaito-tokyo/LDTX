@@ -61,21 +61,50 @@ public nonisolated struct Ldtx_Workspace_V4_VisionRegionOfInterest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The horizontal origin, in the range [0, 1].
-  public var x: Float = 0
+  public var xRational: Ldtx_Workspace_V4_Rational32 {
+    get {_xRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_xRational = newValue}
+  }
+  /// Returns true if `xRational` has been explicitly set.
+  public var hasXRational: Bool {self._xRational != nil}
+  /// Clears the value of `xRational`. Subsequent reads from it will return its default value.
+  public mutating func clearXRational() {self._xRational = nil}
 
-  /// The vertical origin, in the range [0, 1].
-  public var y: Float = 0
+  public var yRational: Ldtx_Workspace_V4_Rational32 {
+    get {_yRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_yRational = newValue}
+  }
+  /// Returns true if `yRational` has been explicitly set.
+  public var hasYRational: Bool {self._yRational != nil}
+  /// Clears the value of `yRational`. Subsequent reads from it will return its default value.
+  public mutating func clearYRational() {self._yRational = nil}
 
-  /// The width, in the range [0, 1].
-  public var width: Float = 0
+  public var widthRational: Ldtx_Workspace_V4_Rational32 {
+    get {_widthRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_widthRational = newValue}
+  }
+  /// Returns true if `widthRational` has been explicitly set.
+  public var hasWidthRational: Bool {self._widthRational != nil}
+  /// Clears the value of `widthRational`. Subsequent reads from it will return its default value.
+  public mutating func clearWidthRational() {self._widthRational = nil}
 
-  /// The height, in the range [0, 1].
-  public var height: Float = 0
+  public var heightRational: Ldtx_Workspace_V4_Rational32 {
+    get {_heightRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_heightRational = newValue}
+  }
+  /// Returns true if `heightRational` has been explicitly set.
+  public var hasHeightRational: Bool {self._heightRational != nil}
+  /// Clears the value of `heightRational`. Subsequent reads from it will return its default value.
+  public mutating func clearHeightRational() {self._heightRational = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _xRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _yRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _widthRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _heightRational: Ldtx_Workspace_V4_Rational32? = nil
 }
 
 /// Wraps one concrete Vision trigger definition.
@@ -114,16 +143,24 @@ public nonisolated struct Ldtx_Workspace_V4_IntervalVisionTrigger: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The interval between automatic Vision updates in seconds.
-  public var intervalSeconds: Double = 0
+  public var intervalSecondsRational: Ldtx_Workspace_V4_Rational32 {
+    get {_intervalSecondsRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_intervalSecondsRational = newValue}
+  }
+  /// Returns true if `intervalSecondsRational` has been explicitly set.
+  public var hasIntervalSecondsRational: Bool {self._intervalSecondsRational != nil}
+  /// Clears the value of `intervalSecondsRational`. Subsequent reads from it will return its default value.
+  public mutating func clearIntervalSecondsRational() {self._intervalSecondsRational = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _intervalSecondsRational: Ldtx_Workspace_V4_Rational32? = nil
 }
 
 /// An image-analysis request that recognizes text in an image.
-public nonisolated struct Ldtx_Workspace_V4_OcrVision: Sendable {
+public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -131,60 +168,82 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: Sendable {
   /// The Workspace-local identifier for this entity. Its most significant bit
   /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
   /// and bits 14 through 0 are uniformly random.
-  public var internalID: UInt64 = 0
+  public var internalID: UInt64 {
+    get {_storage._internalID}
+    set {_uniqueStorage()._internalID = newValue}
+  }
 
   /// The name of this Vision shown in the Workspace sidebar.
-  public var displayName: String = String()
+  public var displayName: String {
+    get {_storage._displayName}
+    set {_uniqueStorage()._displayName = newValue}
+  }
 
   /// The conditions that automatically trigger this Vision.
-  public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
+  public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] {
+    get {_storage._triggers}
+    set {_uniqueStorage()._triggers = newValue}
+  }
 
-  public var source: Ldtx_Workspace_V4_OcrVision.OneOf_Source? = nil
+  public var source: OneOf_Source? {
+    get {return _storage._source}
+    set {_uniqueStorage()._source = newValue}
+  }
 
   /// Analyzes the component after effects and before Program placement.
   public var videoComponentInternalID: UInt64 {
     get {
-      if case .videoComponentInternalID(let v)? = source {return v}
+      if case .videoComponentInternalID(let v)? = _storage._source {return v}
       return 0
     }
-    set {source = .videoComponentInternalID(newValue)}
+    set {_uniqueStorage()._source = .videoComponentInternalID(newValue)}
   }
 
   /// The region of the input image in which Vision performs the request.
   public var regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest {
-    get {_regionOfInterest ?? Ldtx_Workspace_V4_VisionRegionOfInterest()}
-    set {_regionOfInterest = newValue}
+    get {_storage._regionOfInterest ?? Ldtx_Workspace_V4_VisionRegionOfInterest()}
+    set {_uniqueStorage()._regionOfInterest = newValue}
   }
   /// Returns true if `regionOfInterest` has been explicitly set.
-  public var hasRegionOfInterest: Bool {self._regionOfInterest != nil}
+  public var hasRegionOfInterest: Bool {_storage._regionOfInterest != nil}
   /// Clears the value of `regionOfInterest`. Subsequent reads from it will return its default value.
-  public mutating func clearRegionOfInterest() {self._regionOfInterest = nil}
+  public mutating func clearRegionOfInterest() {_uniqueStorage()._regionOfInterest = nil}
 
   /// Whether text recognition prioritizes accuracy over speed. False uses the
   /// fast level.
-  public var accurate: Bool = false
+  public var accurate: Bool {
+    get {_storage._accurate}
+    set {_uniqueStorage()._accurate = newValue}
+  }
 
   /// The BCP 47 languages Vision detects, in priority order. An empty list
   /// enables automatic language detection.
-  public var recognitionLanguages: [String] = []
+  public var recognitionLanguages: [String] {
+    get {_storage._recognitionLanguages}
+    set {_uniqueStorage()._recognitionLanguages = newValue}
+  }
 
   /// Whether Vision applies language correction during text recognition.
-  public var usesLanguageCorrection: Bool = false
+  public var usesLanguageCorrection: Bool {
+    get {_storage._usesLanguageCorrection}
+    set {_uniqueStorage()._usesLanguageCorrection = newValue}
+  }
 
   /// The words that supplement Vision's lexicon during word recognition.
   /// Vision uses these only when language correction is enabled.
-  public var customWords: [String] = []
-
-  /// The minimum text height relative to input image height. When absent, the
-  /// Vision Framework default applies.
-  public var minimumTextHeight: Float {
-    get {_minimumTextHeight ?? 0}
-    set {_minimumTextHeight = newValue}
+  public var customWords: [String] {
+    get {_storage._customWords}
+    set {_uniqueStorage()._customWords = newValue}
   }
-  /// Returns true if `minimumTextHeight` has been explicitly set.
-  public var hasMinimumTextHeight: Bool {self._minimumTextHeight != nil}
-  /// Clears the value of `minimumTextHeight`. Subsequent reads from it will return its default value.
-  public mutating func clearMinimumTextHeight() {self._minimumTextHeight = nil}
+
+  public var minimumTextHeightRational: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._minimumTextHeightRational ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._minimumTextHeightRational = newValue}
+  }
+  /// Returns true if `minimumTextHeightRational` has been explicitly set.
+  public var hasMinimumTextHeightRational: Bool {_storage._minimumTextHeightRational != nil}
+  /// Clears the value of `minimumTextHeightRational`. Subsequent reads from it will return its default value.
+  public mutating func clearMinimumTextHeightRational() {_uniqueStorage()._minimumTextHeightRational = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -196,8 +255,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: Sendable {
 
   public init() {}
 
-  fileprivate var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
-  fileprivate var _minimumTextHeight: Float? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -252,7 +310,7 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
 
 nonisolated extension Ldtx_Workspace_V4_VisionRegionOfInterest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRegionOfInterest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}width\0\u{1}height\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{5}x_rational\0\u{3}y_rational\0\u{3}width_rational\0\u{3}height_rational\0\u{b}x\0\u{b}y\0\u{b}width\0\u{b}height\0\u{c}\u{1}\u{1}\u{c}\u{2}\u{1}\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -260,36 +318,40 @@ nonisolated extension Ldtx_Workspace_V4_VisionRegionOfInterest: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularFloatField(value: &self.x) }()
-      case 2: try { try decoder.decodeSingularFloatField(value: &self.y) }()
-      case 3: try { try decoder.decodeSingularFloatField(value: &self.width) }()
-      case 4: try { try decoder.decodeSingularFloatField(value: &self.height) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._xRational) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._yRational) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._widthRational) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._heightRational) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.x.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.x, fieldNumber: 1)
-    }
-    if self.y.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.y, fieldNumber: 2)
-    }
-    if self.width.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.width, fieldNumber: 3)
-    }
-    if self.height.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.height, fieldNumber: 4)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._xRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._yRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._widthRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._heightRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_VisionRegionOfInterest, rhs: Ldtx_Workspace_V4_VisionRegionOfInterest) -> Bool {
-    if lhs.x != rhs.x {return false}
-    if lhs.y != rhs.y {return false}
-    if lhs.width != rhs.width {return false}
-    if lhs.height != rhs.height {return false}
+    if lhs._xRational != rhs._xRational {return false}
+    if lhs._yRational != rhs._yRational {return false}
+    if lhs._widthRational != rhs._widthRational {return false}
+    if lhs._heightRational != rhs._heightRational {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -343,7 +405,7 @@ nonisolated extension Ldtx_Workspace_V4_VisionTriggerWrapper: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IntervalVisionTrigger"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}interval_seconds\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}interval_seconds_rational\0\u{b}interval_seconds\0\u{c}\u{1}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -351,53 +413,7 @@ nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Mes
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularDoubleField(value: &self.intervalSeconds) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.intervalSeconds.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.intervalSeconds, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Ldtx_Workspace_V4_IntervalVisionTrigger, rhs: Ldtx_Workspace_V4_IntervalVisionTrigger) -> Bool {
-    if lhs.intervalSeconds != rhs.intervalSeconds {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".OcrVision"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}triggers\0\u{4}\u{2}region_of_interest\0\u{1}accurate\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0\u{3}video_component_internal_id\0\u{b}input_device_internal_id\0\u{c}\u{4}\u{1}")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.triggers) }()
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._regionOfInterest) }()
-      case 6: try { try decoder.decodeSingularBoolField(value: &self.accurate) }()
-      case 7: try { try decoder.decodeRepeatedStringField(value: &self.recognitionLanguages) }()
-      case 8: try { try decoder.decodeSingularBoolField(value: &self.usesLanguageCorrection) }()
-      case 9: try { try decoder.decodeRepeatedStringField(value: &self.customWords) }()
-      case 10: try { try decoder.decodeSingularFloatField(value: &self._minimumTextHeight) }()
-      case 11: try {
-        var v: UInt64?
-        try decoder.decodeSingularUInt64Field(value: &v)
-        if let v = v {
-          if self.source != nil {try decoder.handleConflictingOneOf()}
-          self.source = .videoComponentInternalID(v)
-        }
-      }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._intervalSecondsRational) }()
       default: break
       }
     }
@@ -408,50 +424,154 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.internalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.internalID, fieldNumber: 1)
-    }
-    if !self.displayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
-    }
-    if !self.triggers.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.triggers, fieldNumber: 3)
-    }
-    try { if let v = self._regionOfInterest {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-    } }()
-    if self.accurate != false {
-      try visitor.visitSingularBoolField(value: self.accurate, fieldNumber: 6)
-    }
-    if !self.recognitionLanguages.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.recognitionLanguages, fieldNumber: 7)
-    }
-    if self.usesLanguageCorrection != false {
-      try visitor.visitSingularBoolField(value: self.usesLanguageCorrection, fieldNumber: 8)
-    }
-    if !self.customWords.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.customWords, fieldNumber: 9)
-    }
-    try { if let v = self._minimumTextHeight {
-      try visitor.visitSingularFloatField(value: v, fieldNumber: 10)
-    } }()
-    try { if case .videoComponentInternalID(let v)? = self.source {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 11)
+    try { if let v = self._intervalSecondsRational {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
+  public static func ==(lhs: Ldtx_Workspace_V4_IntervalVisionTrigger, rhs: Ldtx_Workspace_V4_IntervalVisionTrigger) -> Bool {
+    if lhs._intervalSecondsRational != rhs._intervalSecondsRational {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OcrVision"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}triggers\0\u{4}\u{2}region_of_interest\0\u{1}accurate\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{4}\u{2}video_component_internal_id\0\u{3}minimum_text_height_rational\0\u{b}input_device_internal_id\0\u{b}minimum_text_height\0\u{c}\u{4}\u{1}\u{c}\u{a}\u{1}")
+
+  fileprivate class _StorageClass {
+    var _internalID: UInt64 = 0
+    var _displayName: String = String()
+    var _triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
+    var _source: Ldtx_Workspace_V4_OcrVision.OneOf_Source?
+    var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
+    var _accurate: Bool = false
+    var _recognitionLanguages: [String] = []
+    var _usesLanguageCorrection: Bool = false
+    var _customWords: [String] = []
+    var _minimumTextHeightRational: Ldtx_Workspace_V4_Rational32? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _internalID = source._internalID
+      _displayName = source._displayName
+      _triggers = source._triggers
+      _source = source._source
+      _regionOfInterest = source._regionOfInterest
+      _accurate = source._accurate
+      _recognitionLanguages = source._recognitionLanguages
+      _usesLanguageCorrection = source._usesLanguageCorrection
+      _customWords = source._customWords
+      _minimumTextHeightRational = source._minimumTextHeightRational
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
+        case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._triggers) }()
+        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._regionOfInterest) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._accurate) }()
+        case 7: try { try decoder.decodeRepeatedStringField(value: &_storage._recognitionLanguages) }()
+        case 8: try { try decoder.decodeSingularBoolField(value: &_storage._usesLanguageCorrection) }()
+        case 9: try { try decoder.decodeRepeatedStringField(value: &_storage._customWords) }()
+        case 11: try {
+          var v: UInt64?
+          try decoder.decodeSingularUInt64Field(value: &v)
+          if let v = v {
+            if _storage._source != nil {try decoder.handleConflictingOneOf()}
+            _storage._source = .videoComponentInternalID(v)
+          }
+        }()
+        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._minimumTextHeightRational) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if _storage._internalID != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._internalID, fieldNumber: 1)
+      }
+      if !_storage._displayName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 2)
+      }
+      if !_storage._triggers.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._triggers, fieldNumber: 3)
+      }
+      try { if let v = _storage._regionOfInterest {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      } }()
+      if _storage._accurate != false {
+        try visitor.visitSingularBoolField(value: _storage._accurate, fieldNumber: 6)
+      }
+      if !_storage._recognitionLanguages.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._recognitionLanguages, fieldNumber: 7)
+      }
+      if _storage._usesLanguageCorrection != false {
+        try visitor.visitSingularBoolField(value: _storage._usesLanguageCorrection, fieldNumber: 8)
+      }
+      if !_storage._customWords.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._customWords, fieldNumber: 9)
+      }
+      try { if case .videoComponentInternalID(let v)? = _storage._source {
+        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 11)
+      } }()
+      try { if let v = _storage._minimumTextHeightRational {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
   public static func ==(lhs: Ldtx_Workspace_V4_OcrVision, rhs: Ldtx_Workspace_V4_OcrVision) -> Bool {
-    if lhs.internalID != rhs.internalID {return false}
-    if lhs.displayName != rhs.displayName {return false}
-    if lhs.triggers != rhs.triggers {return false}
-    if lhs.source != rhs.source {return false}
-    if lhs._regionOfInterest != rhs._regionOfInterest {return false}
-    if lhs.accurate != rhs.accurate {return false}
-    if lhs.recognitionLanguages != rhs.recognitionLanguages {return false}
-    if lhs.usesLanguageCorrection != rhs.usesLanguageCorrection {return false}
-    if lhs.customWords != rhs.customWords {return false}
-    if lhs._minimumTextHeight != rhs._minimumTextHeight {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._internalID != rhs_storage._internalID {return false}
+        if _storage._displayName != rhs_storage._displayName {return false}
+        if _storage._triggers != rhs_storage._triggers {return false}
+        if _storage._source != rhs_storage._source {return false}
+        if _storage._regionOfInterest != rhs_storage._regionOfInterest {return false}
+        if _storage._accurate != rhs_storage._accurate {return false}
+        if _storage._recognitionLanguages != rhs_storage._recognitionLanguages {return false}
+        if _storage._usesLanguageCorrection != rhs_storage._usesLanguageCorrection {return false}
+        if _storage._customWords != rhs_storage._customWords {return false}
+        if _storage._minimumTextHeightRational != rhs_storage._minimumTextHeightRational {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

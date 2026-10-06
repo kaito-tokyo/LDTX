@@ -9,6 +9,8 @@ targets:
       - Tests/LDTXVideoLayersEditorSystemTests
     dependencies:
       - target: LDTXWorkspaceAppletUI
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoLayersEditorSystemTests
@@ -37,6 +39,8 @@ targets:
       - Tests/LDTXWorkspaceAppletControllerSystemTests
     dependencies:
       - target: LDTXWorkspaceAppletController
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletControllerSystemTests
@@ -51,6 +55,8 @@ targets:
       - Tests/LDTXWorkspaceDocumentSystemTests
     dependencies:
       - target: LDTXWorkspaceAppletController
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceDocumentSystemTests

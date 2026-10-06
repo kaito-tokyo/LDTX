@@ -12,12 +12,45 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace render graph")
 struct WorkspaceV4RenderGraphUnitTestSuite {
+  @Test func distinguishesMissingAndZeroScale() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.testPattern.internalID = 2
+    definition.videoComponents = [component]
+    var program = Ldtx_Workspace_V4_ProgramDefinition()
+    program.internalID = 1
+    program.landscapeVideoLayerInternalIds = [2]
+    definition.programs = [program]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    func graph() throws -> WorkspaceV4RenderGraph {
+      try WorkspaceV4RenderGraph(
+        definition: definition,
+        canvas:
+          WorkspaceProgramCanvasSnapshot(
+            definition: definition, preferences: preferences,
+            programInternalID: 1, target: .landscape))
+    }
+    #expect(try graph().layerPreferences.first?.destinationScaleX == 1)
+    preferences.landscapeProgramPreferences[1, default: .init()]
+      .videoLayerTransforms[2, default: .init()].scaleXRational = .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }
+    #expect(try graph().layerPreferences.first?.destinationScaleX == 0)
+  }
+
   @Test("clock dimensions preserve the same pixel size on both canvases")
   func preservesClockDimensions() throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
-    clock.width = 320.0 / 1920
-    clock.height = 80.0 / 1080
+    clock.widthRational = .with {
+      $0.numerator = 1
+      $0.denominator = 6
+    }
+    clock.heightRational = .with {
+      $0.numerator = 2
+      $0.denominator = 27
+    }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.clock = clock
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -86,19 +119,42 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.videoComponents = [input]
     definition.audioDevices = [audio]
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationX = 0.25
-    transform.translationY = 0.5
-    transform.scaleX = 0.75
-    transform.scaleY = 0.6
+    transform.translationXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 4
+    }
+    transform.translationYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    transform.scaleXRational = .with {
+      $0.numerator = 3
+      $0.denominator = 4
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 3
+      $0.denominator = 5
+    }
     var preference = Ldtx_Workspace_V4_ProgramPreferences()
     var portraitPreference = Ldtx_Workspace_V4_ProgramPreferences()
     preference.videoLayerTransforms = [11: transform]
-    preference.audioMasterVolumeDecibelTenths = -32
+    preference.audioMasterVolumeDecibels = .with {
+      $0.numerator = -16
+      $0.denominator = 5
+    }
     preference.audioChannelMuted = [12: true]
-    portraitPreference.audioMasterVolumeDecibelTenths = -91
+    portraitPreference.audioMasterVolumeDecibels = .with {
+      $0.numerator = -91
+      $0.denominator = 10
+    }
     portraitPreference.audioChannelMuted = [12: false]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    preferences.audioChannelGainsDecibelTenths = [12: -123]
+    preferences.audioChannelGainsDecibels = [
+      12: .with {
+        $0.numerator = -123
+        $0.denominator = 10
+      }
+    ]
     preferences.landscapeProgramPreferences = [7: preference]
     preferences.portraitProgramPreferences = [7: portraitPreference]
 

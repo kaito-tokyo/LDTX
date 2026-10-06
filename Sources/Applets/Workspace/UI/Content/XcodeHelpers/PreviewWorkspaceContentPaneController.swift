@@ -18,7 +18,10 @@
       secondInput.internalID = 11
       secondInput.displayName = "Game Audio"
       service.definition.audioDevices.append(secondInput)
-      service.preferences.audioChannelGainsDecibelTenths[2] = -60
+      service.preferences.audioChannelGainsDecibels[2] = .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }
       if hasProgram {
         var program = Ldtx_Workspace_V4_ProgramDefinition()
         program.internalID = 100
@@ -28,12 +31,27 @@
         service.definition.programs = [program]
         for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
           var preferences = Ldtx_Workspace_V4_ProgramPreferences()
-          preferences.audioMasterVolumeDecibelTenths = index == 0 ? -30 : -60
+          preferences.audioMasterVolumeDecibels =
+            index == 0
+            ? .with {
+              $0.numerator = -3
+              $0.denominator = 1
+            }
+            : .with {
+              $0.numerator = -6
+              $0.denominator = 1
+            }
           preferences.audioChannelMuted[11] = index == 1
           for id: UInt64 in [3, 4, 8] {
             var transform = Ldtx_Workspace_V4_BasicTransform()
-            transform.scaleX = 1
-            transform.scaleY = 1
+            transform.scaleXRational = .with {
+              $0.numerator = 1
+              $0.denominator = 1
+            }
+            transform.scaleYRational = .with {
+              $0.numerator = 1
+              $0.denominator = 1
+            }
             preferences.videoLayerTransforms[id] = transform
           }
           preferences.videoLayerHidden[8] = true

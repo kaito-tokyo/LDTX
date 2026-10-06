@@ -46,10 +46,22 @@
       var linearGradientFill = Ldtx_Workspace_V4_FillLinearGradientComponent()
       linearGradientFill.internalID = 5
       linearGradientFill.displayName = "Studio Gradient"
-      linearGradientFill.startX = 0
-      linearGradientFill.startY = 0
-      linearGradientFill.endX = 1
-      linearGradientFill.endY = 1
+      linearGradientFill.startXRational = .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }
+      linearGradientFill.startYRational = .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }
+      linearGradientFill.endXRational = .with {
+        $0.numerator = 1
+        $0.denominator = 1
+      }
+      linearGradientFill.endYRational = .with {
+        $0.numerator = 1
+        $0.denominator = 1
+      }
       linearGradientFill.startColor.red = 95.0 / 255.0
       linearGradientFill.startColor.green = 178.0 / 255.0
       linearGradientFill.startColor.blue = 203.0 / 255.0
@@ -64,10 +76,22 @@
       var radialGradientFill = Ldtx_Workspace_V4_FillRadialGradientComponent()
       radialGradientFill.internalID = 6
       radialGradientFill.displayName = "Radial Highlight"
-      radialGradientFill.centerX = 0.5
-      radialGradientFill.centerY = 0.5
-      radialGradientFill.innerRadius = 0
-      radialGradientFill.outerRadius = 0.72
+      radialGradientFill.centerXRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      radialGradientFill.centerYRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      radialGradientFill.innerRadiusRational = .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }
+      radialGradientFill.outerRadiusRational = .with {
+        $0.numerator = 18
+        $0.denominator = 25
+      }
       radialGradientFill.innerColor.red = 95.0 / 255.0
       radialGradientFill.innerColor.green = 178.0 / 255.0
       radialGradientFill.innerColor.blue = 203.0 / 255.0
@@ -82,9 +106,18 @@
       var conicGradientFill = Ldtx_Workspace_V4_FillConicGradientComponent()
       conicGradientFill.internalID = 7
       conicGradientFill.displayName = "Color Wheel"
-      conicGradientFill.centerX = 0.5
-      conicGradientFill.centerY = 0.5
-      conicGradientFill.startAngleRadians = 0
+      conicGradientFill.centerXRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      conicGradientFill.centerYRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      conicGradientFill.startAngleRadiansRational = .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }
       conicGradientFill.startColor.red = 95.0 / 255.0
       conicGradientFill.startColor.green = 178.0 / 255.0
       conicGradientFill.startColor.blue = 203.0 / 255.0
@@ -99,8 +132,14 @@
       var clock = Ldtx_Workspace_V4_ClockComponent()
       clock.internalID = 8
       clock.displayName = "On Air Clock"
-      clock.width = 320.0 / 1_920.0
-      clock.height = 80.0 / 1_080.0
+      clock.widthRational = .with {
+        $0.numerator = 1
+        $0.denominator = 6
+      }
+      clock.heightRational = .with {
+        $0.numerator = 2
+        $0.denominator = 27
+      }
       var clockWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       clockWrapper.clock = clock
 
@@ -115,7 +154,10 @@
       ]
 
       var intervalTrigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-      intervalTrigger.intervalSeconds = 5
+      intervalTrigger.intervalSecondsRational = .with {
+        $0.numerator = 5
+        $0.denominator = 1
+      }
       var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
       triggerWrapper.intervalTrigger = intervalTrigger
       var ocrVision = Ldtx_Workspace_V4_OcrVision()

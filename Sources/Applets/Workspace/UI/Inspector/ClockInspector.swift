@@ -24,8 +24,10 @@ struct ClockInspector: View {
       Section("Clock") {
         TextField("Name", text: componentBinding(\.displayName, initial: component.displayName))
           .disabled(isRecording)
-        numericField("Width", value: floatBinding(\.width, initial: component.width))
-        numericField("Height", value: floatBinding(\.height, initial: component.height))
+        numericField(
+          "Width", value: rationalBinding(\.widthRational, initial: component.widthRational))
+        numericField(
+          "Height", value: rationalBinding(\.heightRational, initial: component.heightRational))
         Toggle("Show Date", isOn: componentBinding(\.showsDate, initial: component.showsDate))
         Toggle(
           "Show Seconds", isOn: componentBinding(\.showsSeconds, initial: component.showsSeconds))
@@ -90,9 +92,10 @@ struct ClockInspector: View {
     )
   }
 
-  private func floatBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Float>, initial: Float
-  ) -> Binding<Float> {
+  private func rationalBinding(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Rational32>,
+    initial: Ldtx_Workspace_V4_Rational32
+  ) -> Binding<Ldtx_Workspace_V4_Rational32> {
     componentBinding(keyPath, initial: initial)
   }
 
@@ -143,6 +146,14 @@ struct ClockInspector: View {
     )
   }
 
+  private func numericField(_ title: String, value: Binding<Ldtx_Workspace_V4_Rational32>)
+    -> some View
+  {
+    LabeledContent(title) {
+      TextField(title, value: value, format: RationalFormatStyle())
+        .multilineTextAlignment(.trailing).frame(width: 90).disabled(isRecording)
+    }
+  }
   private func numericField(_ title: String, value: Binding<Float>) -> some View {
     LabeledContent(title) {
       TextField(title, value: value, format: .number.precision(.fractionLength(3)))

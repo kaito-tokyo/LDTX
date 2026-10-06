@@ -520,6 +520,8 @@ targets:
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletService

@@ -144,12 +144,30 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     switch kind {
     case .vfxSource: #expect(component.vfxSource.internalID == id)
     case .solidColor: #expect(component.solidColorFill.color.alpha == 1)
-    case .linearGradient: #expect(component.linearGradientFill.endX == 1)
-    case .radialGradient: #expect(component.radialGradientFill.outerRadius == 0.5)
-    case .conicGradient: #expect(component.conicGradientFill.centerX == 0.5)
+    case .linearGradient:
+      #expect(
+        component.linearGradientFill.endXRational
+          == Ldtx_Workspace_V4_Rational32.with {
+            $0.numerator = 1
+            $0.denominator = 1
+          })
+    case .radialGradient:
+      #expect(
+        component.radialGradientFill.outerRadiusRational
+          == Ldtx_Workspace_V4_Rational32.with {
+            $0.numerator = 1
+            $0.denominator = 2
+          })
+    case .conicGradient:
+      #expect(
+        component.conicGradientFill.centerXRational
+          == Ldtx_Workspace_V4_Rational32.with {
+            $0.numerator = 1
+            $0.denominator = 2
+          })
     case .clock:
       #expect(component.clock.showsSeconds)
-      #expect(component.clock.width > 0)
+      #expect(component.clock.widthRational.float > 0)
     case .testPattern: #expect(component.testPattern.internalID == id)
     }
     #expect(state.definition.programs == [program])
@@ -168,7 +186,12 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     let vision = try #require(state.definition.visions.first?.ocrVision)
     #expect(vision.source == .videoComponentInternalID(7))
     #expect(vision.videoComponentInternalID == 7)
-    #expect(vision.triggers.first?.intervalTrigger.intervalSeconds == 5)
+    #expect(
+      vision.triggers.first?.intervalTrigger.intervalSecondsRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 5
+          $0.denominator = 1
+        })
     #expect(state.inspectorSelector == .init(kind: .ocrVision, internalID: id))
   }
 }

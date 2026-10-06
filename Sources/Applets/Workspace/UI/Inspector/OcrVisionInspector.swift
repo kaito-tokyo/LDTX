@@ -64,11 +64,11 @@ struct OcrVisionInspector: View {
           .disabled(isRecording)
         Toggle("Minimum Text Height", isOn: minimumTextHeightEnabledBinding)
           .disabled(isRecording)
-        if vision.hasMinimumTextHeight {
+        if vision.hasMinimumTextHeightRational {
           LabeledContent("Minimum Height") {
             TextField(
               "Fraction", value: minimumTextHeightBinding,
-              format: .number.precision(.fractionLength(3))
+              format: RationalFormatStyle()
             )
             .multilineTextAlignment(.trailing)
             .frame(width: 90)
@@ -86,10 +86,12 @@ struct OcrVisionInspector: View {
         }
       }
       Section("Region of Interest") {
-        regionField("X", keyPath: \.x, initial: vision.regionOfInterest.x)
-        regionField("Y", keyPath: \.y, initial: vision.regionOfInterest.y)
-        regionField("Width", keyPath: \.width, initial: vision.regionOfInterest.width)
-        regionField("Height", keyPath: \.height, initial: vision.regionOfInterest.height)
+        regionField("X", keyPath: \.xRational, initial: vision.regionOfInterest.xRational)
+        regionField("Y", keyPath: \.yRational, initial: vision.regionOfInterest.yRational)
+        regionField(
+          "Width", keyPath: \.widthRational, initial: vision.regionOfInterest.widthRational)
+        regionField(
+          "Height", keyPath: \.heightRational, initial: vision.regionOfInterest.heightRational)
         Text("Coordinates are normalized from 0 to 1.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -150,7 +152,7 @@ struct OcrVisionInspector: View {
       get: {
         vision?.triggers.first.flatMap { wrapper in
           guard case .intervalTrigger(let value) = wrapper.definition else { return nil }
-          return value.intervalSeconds
+          return value.intervalSecondsRational.double
         } ?? 0
       },
       set: { interval in
@@ -158,7 +160,8 @@ struct OcrVisionInspector: View {
           value.triggers.removeAll()
           guard interval > 0 else { return }
           var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-          trigger.intervalSeconds = interval
+          trigger.intervalSecondsRational =
+            (try? RationalParseStrategy().parse(String(interval))) ?? .init()
           var wrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
           wrapper.definition = .intervalTrigger(trigger)
           value.triggers.append(wrapper)
@@ -195,31 +198,46 @@ struct OcrVisionInspector: View {
 
   private var minimumTextHeightEnabledBinding: Binding<Bool> {
     Binding(
-      get: { vision?.hasMinimumTextHeight ?? false },
+      get: { vision?.hasMinimumTextHeightRational ?? false },
       set: { enabled in
         editVision { value in
-          if enabled { value.minimumTextHeight = 0.01 } else { value.clearMinimumTextHeight() }
+          if enabled {
+            value.minimumTextHeightRational = .with {
+              $0.numerator = 1
+              $0.denominator = 100
+            }
+          } else {
+            value.clearMinimumTextHeightRational()
+          }
         }
       }
     )
   }
 
-  private var minimumTextHeightBinding: Binding<Float> {
+  private var minimumTextHeightBinding: Binding<Ldtx_Workspace_V4_Rational32> {
     Binding(
-      get: { vision?.minimumTextHeight ?? 0.01 },
-      set: { next in editVision { $0.minimumTextHeight = min(max(next, 0), 1) } }
+      get: {
+        vision?.minimumTextHeightRational
+          ?? .with {
+            $0.numerator = 1
+            $0.denominator = 100
+          }
+      },
+      set: { next in editVision { $0.minimumTextHeightRational = next } }
     )
   }
 
   private func regionField(
     _ title: String,
-    keyPath: WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Float>,
-    initial: Float
+    keyPath: WritableKeyPath<
+      Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32
+    >,
+    initial: Ldtx_Workspace_V4_Rational32
   ) -> some View {
     LabeledContent(title) {
       TextField(
         title, value: regionBinding(keyPath, initial: initial),
-        format: .number.precision(.fractionLength(3))
+        format: RationalFormatStyle()
       )
       .multilineTextAlignment(.trailing)
       .frame(width: 90)
@@ -228,14 +246,16 @@ struct OcrVisionInspector: View {
   }
 
   private func regionBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Float>, initial: Float
-  ) -> Binding<Float> {
+    _ keyPath: WritableKeyPath<
+      Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32
+    >, initial: Ldtx_Workspace_V4_Rational32
+  ) -> Binding<Ldtx_Workspace_V4_Rational32> {
     Binding(
       get: { vision.map { $0.regionOfInterest[keyPath: keyPath] } ?? initial },
       set: { next in
         editVision { value in
           var region = value.regionOfInterest
-          region[keyPath: keyPath] = min(max(next, 0), 1)
+          region[keyPath: keyPath] = next
           value.regionOfInterest = region
         }
       }

@@ -7,10 +7,14 @@ syntax = "proto3";
 
 package ldtx.workspace.v4;
 
+import "workspace_v4_types.proto";
+
 // Contains mutable preferences for one WorkspaceDefinitionV4.
 message WorkspacePreferencesV4 {
-  // Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.
-  map<uint64, sint32> audio_channel_gains_decibel_tenths = 1;
+  // Audio gain in decibels, keyed by Audio Input Device internal_id.
+  reserved 1;
+  reserved "audio_channel_gains_decibel_tenths";
+  map<uint64, Rational32> audio_channel_gains_decibels = 4;
   // Preferences for each Landscape Program, keyed by Program internal_id.
   map<uint64, ProgramPreferences> landscape_program_preferences = 2;
   // Preferences for each Portrait Program, keyed by Program internal_id.
@@ -19,11 +23,13 @@ message WorkspacePreferencesV4 {
 
 // Contains mutable preferences for one Program canvas.
 message ProgramPreferences {
-  // Master volume in tenths of a decibel (-32 represents -3.2 dB).
-  sint32 audio_master_volume_decibel_tenths = 1;
+  // Master volume in decibels.
+  reserved 1;
+  reserved "audio_master_volume_decibel_tenths";
+  Rational32 audio_master_volume_decibels = 5;
   // Whether each Audio Input Device is muted, keyed by internal_id.
   map<uint64, bool> audio_channel_muted = 2;
-  // Video Layer transforms, keyed by Video Input Device or Component internal_id.
+  // Video Layer transforms, keyed by Video Component internal_id.
   map<uint64, BasicTransform> video_layer_transforms = 3;
   // Whether each Video Layer is hidden, keyed by internal_id.
   map<uint64, bool> video_layer_hidden = 4;
@@ -33,24 +39,40 @@ message ProgramPreferences {
 message BasicTransform {
   // The horizontal translation in coordinates normalized to the Canvas that
   // renders this Video Layer, in the range [0, 1].
-  float translation_x = 1;
+  reserved 1;
+  reserved "translation_x";
+  Rational32 translation_x_rational = 9;
   // The vertical translation in coordinates normalized to the Canvas that
   // renders this Video Layer, in the range [0, 1].
-  float translation_y = 2;
-  // The horizontal scale.
-  float scale_x = 3;
-  // The vertical scale.
-  float scale_y = 4;
+  reserved 2;
+  reserved "translation_y";
+  Rational32 translation_y_rational = 10;
+  // The horizontal scale. Absence means identity; zero is an explicit zero scale.
+  reserved 3;
+  reserved "scale_x";
+  Rational32 scale_x_rational = 11;
+  // The vertical scale. Absence means identity; zero is an explicit zero scale.
+  reserved 4;
+  reserved "scale_y";
+  Rational32 scale_y_rational = 12;
   // The top inset as a fraction of this Video Layer's statically defined
   // content height, in the range [0, 1].
-  float top_inset = 5;
+  reserved 5;
+  reserved "top_inset";
+  Rational32 top_inset_rational = 13;
   // The right inset as a fraction of this Video Layer's statically defined
   // content width, in the range [0, 1].
-  float right_inset = 6;
+  reserved 6;
+  reserved "right_inset";
+  Rational32 right_inset_rational = 14;
   // The bottom inset as a fraction of this Video Layer's statically defined
   // content height, in the range [0, 1].
-  float bottom_inset = 7;
+  reserved 7;
+  reserved "bottom_inset";
+  Rational32 bottom_inset_rational = 15;
   // The left inset as a fraction of this Video Layer's statically defined
   // content width, in the range [0, 1].
-  float left_inset = 8;
+  reserved 8;
+  reserved "left_inset";
+  Rational32 left_inset_rational = 16;
 }

@@ -118,7 +118,9 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
       let preferences =
         id.flatMap { try? storeService.preferences(for: $0, target: target) } ?? .init()
-      let value = Double(preferences.audioMasterVolumeDecibelTenths) / 10
+      let value =
+        (preferences.hasAudioMasterVolumeDecibels
+          ? preferences.audioMasterVolumeDecibels.double : 0)
       masters[index].configure(
         label: "", value: ProgramPreferences.linearAudioChannelGain(fromDecibels: value),
         showsValue: false, isEnabled: enabled,
@@ -126,12 +128,17 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
         onPreview: { [weak storeService] gain in
           let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: gain)
           storeService?.updateAudio(target: target) {
-            $0.audioMasterVolumeDecibelTenths = Int32((decibels * 10).rounded())
+            $0.audioMasterVolumeDecibels =
+              (try? RationalParseStrategy().parse(String(decibels))) ?? .init()
           }
         }, onCommit: { _ in })
-      masterFields[index].configure(value: value, enabled: enabled) { [weak storeService] value in
+      masterFields[index].configure(
+        value: preferences.hasAudioMasterVolumeDecibels
+          ? preferences.audioMasterVolumeDecibels : .with { $0.denominator = 1 },
+        enabled: enabled
+      ) { [weak storeService] value in
         storeService?.updateAudio(target: target) {
-          $0.audioMasterVolumeDecibelTenths = Int32((value * 10).rounded())
+          $0.audioMasterVolumeDecibels = value
         } ?? false
       }
       masterFields[index].onInvalid = { [weak self] message in
@@ -151,7 +158,7 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
 final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   private(set) var dirty = false
   private var editing = false
-  private var commitValue: (Double) -> Bool = { _ in false }
+  private var commitValue: (Ldtx_Workspace_V4_Rational32) -> Bool = { _ in false }
   var onInvalid: (String) -> Void = { _ in }
   init() {
     super.init(frame: .zero)
@@ -159,10 +166,13 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
     setAccessibilityLabel("Master volume in dB")
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-  func configure(value: Double, enabled: Bool, commit: @escaping (Double) -> Bool) {
+  func configure(
+    value: Ldtx_Workspace_V4_Rational32, enabled: Bool,
+    commit: @escaping (Ldtx_Workspace_V4_Rational32) -> Bool
+  ) {
     isEnabled = enabled
     commitValue = commit
-    if !dirty && !editing { stringValue = String(format: "%.1f", value) }
+    if !dirty && !editing { stringValue = RationalFormatStyle().format(value) }
   }
   func discard() {
     dirty = false
@@ -181,16 +191,16 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   }
   func commit() {
     guard dirty else { return }
-    guard let value = Double(stringValue), value.isFinite,
+    guard let value = try? RationalParseStrategy().parse(stringValue),
       (ProgramPreferences
         .minimumAudioChannelGainDecibels...ProgramPreferences.maximumAudioChannelGainDecibels)
-        .contains(value)
+        .contains(value.double)
     else {
       toolTip = "Invalid volume."
       onInvalid("Invalid volume.")
       return
     }
-    if commitValue((value * 10).rounded() / 10) {
+    if commitValue(value) {
       dirty = false
       toolTip = nil
     }

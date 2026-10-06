@@ -59,7 +59,8 @@ protoc \
   Protos/workspace_v4_preferences.proto \
   Protos/workspace_v4_vfx.proto \
   Protos/workspace_v4_video_component.proto \
-  Protos/workspace_v4_vision.proto
+  Protos/workspace_v4_vision.proto \
+  Protos/workspace_v4_types.proto
 ```
 
 **Regenerate the Workspace v4 reference:**

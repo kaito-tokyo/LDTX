@@ -134,7 +134,7 @@ private final class AudioInputRow: NSStackView {
     gain.configure(
       label: "",
       value: ProgramPreferences.linearAudioChannelGain(
-        fromDecibels: Double(storeService.preferences.audioChannelGainsDecibelTenths[id] ?? 0) / 10),
+        fromDecibels: (storeService.preferences.audioChannelGainsDecibels[id]?.double ?? 0)),
       isEnabled: true,
       peakProvider: { peakMeter.peak(for: "v4-\(id)") },
       onPreview: { [weak storeService] value in

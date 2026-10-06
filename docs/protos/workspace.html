@@ -573,97 +573,91 @@ and bits 14 through 0 are uniformly random.</td>
           <tbody>
 
             <tr>
-              <td><code>translation_x</code></td>
+              <td><code>translation_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal translation in coordinates normalized to the Canvas that
-renders this Video Layer, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>translation_y</code></td>
+              <td><code>translation_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical translation in coordinates normalized to the Canvas that
-renders this Video Layer, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>scale_x</code></td>
+              <td><code>scale_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal scale.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>scale_y</code></td>
+              <td><code>scale_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical scale.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>top_inset</code></td>
+              <td><code>top_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The top inset as a fraction of this Video Layer's statically defined
-content height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>right_inset</code></td>
+              <td><code>right_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The right inset as a fraction of this Video Layer's statically defined
-content width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>bottom_inset</code></td>
+              <td><code>bottom_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The bottom inset as a fraction of this Video Layer's statically defined
-content height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>left_inset</code></td>
+              <td><code>left_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The left inset as a fraction of this Video Layer's statically defined
-content width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -684,14 +678,14 @@ content width, in the range [0, 1].</td>
           <tbody>
 
             <tr>
-              <td><code>audio_master_volume_decibel_tenths</code></td>
+              <td><code>audio_master_volume_decibels</code></td>
               <td>
 
-                  <code>sint32</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>Master volume in tenths of a decibel (-32 represents -3.2 dB).</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -713,7 +707,7 @@ content width, in the range [0, 1].</td>
 
               </td>
               <td>map</td>
-              <td>Video Layer transforms, keyed by Video Input Device or Component internal_id.</td>
+              <td>Video Layer transforms, keyed by Video Component internal_id.</td>
             </tr>
 
             <tr>
@@ -751,14 +745,14 @@ content width, in the range [0, 1].</td>
           <tbody>
 
             <tr>
-              <td><code>audio_channel_gains_decibel_tenths</code></td>
+              <td><code>audio_channel_gains_decibels</code></td>
               <td>
 
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>sint32</code><code>&gt;</code>
+                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a><code>&gt;</code>
 
               </td>
               <td>map</td>
-              <td>Audio gain in tenths of a decibel, keyed by Audio Input Device internal_id.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -840,27 +834,25 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>width</code></td>
+              <td><code>width_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
-in [0, 1]. This remains the reference for Portrait projection.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>height</code></td>
+              <td><code>height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The Clock height normalized to the fixed 1080-pixel Landscape Canvas
-height, in [0, 1]. This remains the reference for Portrait projection.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -959,14 +951,14 @@ system time zone.</td>
           <tbody>
 
             <tr>
-              <td><code>thickness</code></td>
+              <td><code>thickness_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The outline thickness in output pixels.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1113,40 +1105,36 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>center_x</code></td>
+              <td><code>center_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized horizontal coordinate of the gradient center, in [0, 1].
-Zero is the Canvas's left edge and one is its right edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>center_y</code></td>
+              <td><code>center_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized vertical coordinate of the gradient center, in [0, 1].
-Zero is the Canvas's top edge and one is its bottom edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>start_angle_radians</code></td>
+              <td><code>start_angle_radians_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>A finite start angle in radians, measured clockwise from the positive
-horizontal axis in the normalized Canvas coordinate system. Values that
-differ by an integer multiple of 2 * pi represent the same start ray.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1232,27 +1220,25 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>start_x</code></td>
+              <td><code>start_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized horizontal coordinate of the gradient start point, in
-[0, 1]. Zero is the Canvas's left edge and one is its right edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>start_y</code></td>
+              <td><code>start_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized vertical coordinate of the gradient start point, in
-[0, 1]. Zero is the Canvas's top edge and one is its bottom edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1267,27 +1253,25 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>end_x</code></td>
+              <td><code>end_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized horizontal coordinate of the gradient end point, in
-[0, 1]. Zero is the Canvas's left edge and one is its right edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>end_y</code></td>
+              <td><code>end_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized vertical coordinate of the gradient end point, in
-[0, 1]. Zero is the Canvas's top edge and one is its bottom edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1360,51 +1344,47 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>center_x</code></td>
+              <td><code>center_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized horizontal coordinate of the gradient center, in [0, 1].
-Zero is the Canvas's left edge and one is its right edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>center_y</code></td>
+              <td><code>center_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The normalized vertical coordinate of the gradient center, in [0, 1].
-Zero is the Canvas's top edge and one is its bottom edge.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>inner_radius</code></td>
+              <td><code>inner_radius_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The inner control contour's radius in normalized Canvas coordinates, in
-[0, 1]. It must be less than outer_radius.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>outer_radius</code></td>
+              <td><code>outer_radius_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The outer control contour's radius in normalized Canvas coordinates, in
-[0, 1]. It must be greater than inner_radius.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1839,14 +1819,14 @@ the other fields.</td>
           <tbody>
 
             <tr>
-              <td><code>interval_seconds</code></td>
+              <td><code>interval_seconds_rational</code></td>
               <td>
 
-                  <code>double</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The interval between automatic Vision updates in seconds.</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -1971,15 +1951,14 @@ Vision uses these only when language correction is enabled.</td>
             </tr>
 
             <tr>
-              <td><code>minimum_text_height</code></td>
+              <td><code>minimum_text_height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
-              <td>optional</td>
-              <td>The minimum text height relative to input image height. When absent, the
-Vision Framework default applies.</td>
+              <td></td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -2001,47 +1980,47 @@ lower-left corner.</p>
           <tbody>
 
             <tr>
-              <td><code>x</code></td>
+              <td><code>x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal origin, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>y</code></td>
+              <td><code>y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical origin, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>width</code></td>
+              <td><code>width_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>height</code></td>
+              <td><code>height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -2099,6 +2078,54 @@ the other fields.</td>
               </td>
               <td>oneof <code>definition</code></td>
               <td>The OCR Vision definition. Mutually exclusive with the other fields.</td>
+            </tr>
+
+          </tbody>
+        </table>
+
+      </article>
+
+
+
+
+    </section>
+
+    <section>
+      <h2><code>workspace_v4_types.proto</code></h2>
+      <p>Package <code>ldtx.workspace.v4</code></p>
+
+
+
+      <article>
+        <h3 id="ldtx.workspace.v4.Rational32"><code>Rational32</code></h3>
+
+
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+
+            <tr>
+              <td><code>numerator</code></td>
+              <td>
+
+                  <code>sint32</code>
+
+              </td>
+              <td></td>
+              <td>—</td>
+            </tr>
+
+            <tr>
+              <td><code>denominator</code></td>
+              <td>
+
+                  <code>uint32</code>
+
+              </td>
+              <td></td>
+              <td>—</td>
             </tr>
 
           </tbody>

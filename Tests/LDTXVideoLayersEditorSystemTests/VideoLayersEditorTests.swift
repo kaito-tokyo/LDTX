@@ -347,18 +347,30 @@ final class VideoLayersEditorTests {
     let row = try #require(table.rows[1])
     var preferences = Ldtx_Workspace_V4_ProgramPreferences()
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationX = 0.5
-    transform.scaleX = 1
-    transform.scaleY = 1
+    transform.translationXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    transform.scaleXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     preferences.videoLayerTransforms[1] = transform
     preferences.videoLayerHidden[1] = true
     update(table, preferences: preferences)
     #expect(table.rows[1] === row)
-    #expect(row.state.strings[0] == "960.0")
+    #expect(row.state.strings[0] == "960")
     #expect(row.state.isHidden)
     row.state.isEditing = true
     row.state.strings[0] = "draft"
-    preferences.videoLayerTransforms[1]?.translationX = 0.25
+    preferences.videoLayerTransforms[1]?.translationXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 4
+    }
     preferences.videoLayerHidden[1] = false
     update(table, preferences: preferences)
     #expect(row.state.strings[0] == "draft")
@@ -374,15 +386,47 @@ final class VideoLayersEditorTests {
     row.state.hasUnconfirmedChanges = true
     row.state.onCommit()
     #expect(saved.count == 1)
-    #expect(saved[0].translationX == 0.5)
-    #expect(saved[0].translationY == 0.25)
-    #expect(saved[0].scaleX == 1.5)
+    #expect(
+      saved[0].translationXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
+    #expect(
+      saved[0].translationYRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 4
+        })
+    #expect(
+      saved[0].scaleXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 3
+          $0.denominator = 2
+        })
     row.state.strings[0] = "192"
     row.state.hasUnconfirmedChanges = true
     row.state.onCommit()
     #expect(saved.count == 2)
-    #expect(saved[1].translationX == 0.1)
+    #expect(
+      saved[1].translationXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 10
+        })
     #expect(!row.state.hasUnconfirmedChanges)
+  }
+
+  @Test func exactFractionalPixelsSurviveCommitAndRestore() throws {
+    var saved: Ldtx_Workspace_V4_BasicTransform?
+    let table = makeTable()
+    update(table, commit: { _, value in saved = value })
+    let row = try #require(table.rows[1])
+    row.state.strings = ["100.125", "1/3", "7/9", "1"]
+    row.state.hasUnconfirmedChanges = true
+    row.state.onCommit()
+    #expect(saved != nil)
+    #expect(row.state.strings == ["100.125", "1/3", "7/9", "1"])
   }
 
   @Test func appKitCommitRequestsReadCurrentDraftOnce() throws {
@@ -396,8 +440,13 @@ final class VideoLayersEditorTests {
     row.state.onCommit()
     row.state.onCommit()
     #expect(saved.count == 1)
-    #expect(saved.first?.translationX == 0.5)
-    #expect(row.state.strings[0] == "960.0")
+    #expect(
+      saved.first?.translationXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
+    #expect(row.state.strings[0] == "960")
 
     row.state.strings[0] = "192"
     row.state.hasUnconfirmedChanges = true
@@ -466,7 +515,7 @@ final class VideoLayersEditorTests {
     update(table)
     row.state.onCommit()
     #expect(!row.state.hasUnconfirmedChanges)
-    #expect(row.state.strings[0] == "960.0")
+    #expect(row.state.strings[0] == "960")
   }
 
   @Test func usesStandardRowDragging() throws {
@@ -623,7 +672,12 @@ final class VideoLayersEditorTests {
     secondEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
     RunLoop.current.run(until: Date().addingTimeInterval(0.05))
     #expect(saved.count == 1)
-    #expect(saved.first?.translationX == 0.5)
+    #expect(
+      saved.first?.translationXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
     #expect(!row.state.hasUnconfirmedChanges)
 
     #expect(window.makeFirstResponder(fields[0]))
@@ -772,8 +826,14 @@ extension VideoLayersEditorTests {
     program.landscapeVideoLayerInternalIds = [1, 2]
     state.definition.programs = [program]
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = 1
-    transform.scaleY = 1
+    transform.scaleXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[1] =
       transform
     let content = VideoLayersEditor(
@@ -781,21 +841,42 @@ extension VideoLayersEditorTests {
     content.refresh()
     let row = try #require(content.table.rows[1])
     state.preferences.landscapeProgramPreferences[1, default: .init()]
-      .audioMasterVolumeDecibelTenths = -90
+      .audioMasterVolumeDecibels = .with {
+        $0.numerator = -9
+        $0.denominator = 1
+      }
     state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
       1, default: .init()
-    ].topInset = 0.2
+    ].topInsetRational = .with {
+      $0.numerator = 1
+      $0.denominator = 5
+    }
     state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
     row.state.strings[0] = "960"
     row.state.hasUnconfirmedChanges = true
     row.state.onCommit()
     let live = state.preferences.landscapeProgramPreferences[1] ?? .init()
-    #expect(live.audioMasterVolumeDecibelTenths == -90)
-    #expect(live.videoLayerTransforms[1]?.topInset == 0.2)
-    #expect(live.videoLayerTransforms[1]?.translationX == 0.5)
+    #expect(
+      live.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -9
+          $0.denominator = 1
+        })
+    #expect(
+      live.videoLayerTransforms[1]?.topInsetRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 5
+        })
+    #expect(
+      live.videoLayerTransforms[1]?.translationXRational
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = 1
+          $0.denominator = 2
+        })
     #expect(live.videoLayerHidden[2] == true)
     #expect(state.preferences.portraitProgramPreferences.isEmpty)
-    #expect(row.state.strings[0] == "960.0")
+    #expect(row.state.strings[0] == "960")
   }
 
   @Test func hideCallbacksRestoreStateOnFailure() throws {
@@ -860,17 +941,32 @@ extension VideoLayersEditorTests {
 
   @Test func audioNumericDraftSurvivesRefreshAndFailure() {
     let field = AudioDecibelField()
-    field.configure(value: 0, enabled: true) { _ in false }
+    field.configure(
+      value: .with {
+        $0.numerator = 0
+        $0.denominator = 1
+      }, enabled: true
+    ) { _ in false }
     field.stringValue = "-12.5"
     field.controlTextDidChange(
       Notification(name: NSControl.textDidChangeNotification, object: field))
-    field.configure(value: -4, enabled: true) { _ in false }
+    field.configure(
+      value: .with {
+        $0.numerator = -4
+        $0.denominator = 1
+      }, enabled: true
+    ) { _ in false }
     #expect(field.stringValue == "-12.5")
     field.commit()
     #expect(field.dirty)
     var committed = 0.0
-    field.configure(value: -4, enabled: true) {
-      committed = $0
+    field.configure(
+      value: .with {
+        $0.numerator = -4
+        $0.denominator = 1
+      }, enabled: true
+    ) {
+      committed = $0.double
       return true
     }
     field.commit()

@@ -127,6 +127,18 @@ public final class WorkspaceStoreService {
   public func openScreenshotsDirectory() {
     runtimeActions?.openScreenshotsDirectory()
   }
+
+  public func validateForSaving() throws {
+    try Self.validateForSaving(WorkspaceV4Bundle(definition: definition, preferences: preferences))
+  }
+
+  public nonisolated static func validateForSaving(_ workspace: WorkspaceV4Bundle) throws {
+    let issues = WorkspaceV4IntegrityValidator.validationIssues(in: workspace)
+    guard issues.isEmpty else {
+      throw WorkspaceSaveValidationError(
+        messages: issues.map { "\($0.context): \($0.error.localizedDescription)" })
+    }
+  }
   public var editorFailureMessage: String?
   public var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
     let id = workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
@@ -146,10 +158,26 @@ public final class WorkspaceStoreService {
   ) throws -> Ldtx_Workspace_V4_BasicTransform {
     var updated = try preferences(for: programID, target: target)
     var transform = updated.videoLayerTransforms[layerID] ?? .init()
-    transform.translationX = value.translationX
-    transform.translationY = value.translationY
-    transform.scaleX = value.scaleX
-    transform.scaleY = value.scaleY
+    if value.hasTranslationXRational {
+      transform.translationXRational = value.translationXRational
+    } else {
+      transform.clearTranslationXRational()
+    }
+    if value.hasTranslationYRational {
+      transform.translationYRational = value.translationYRational
+    } else {
+      transform.clearTranslationYRational()
+    }
+    if value.hasScaleXRational {
+      transform.scaleXRational = value.scaleXRational
+    } else {
+      transform.clearScaleXRational()
+    }
+    if value.hasScaleYRational {
+      transform.scaleYRational = value.scaleYRational
+    } else {
+      transform.clearScaleYRational()
+    }
     updated.videoLayerTransforms[layerID] = transform
     try commitPreferences(updated, programID: programID, target: target)
     return transform
@@ -159,14 +187,9 @@ public final class WorkspaceStoreService {
     _ value: Ldtx_Workspace_V4_ProgramPreferences, programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
     _ = try preferences(for: programID, target: target)
-    guard
-      value.videoLayerTransforms.values.allSatisfy({ transform in
-        [
-          transform.translationX, transform.translationY, transform.scaleX, transform.scaleY,
-          transform.topInset, transform.rightInset, transform.bottomInset, transform.leftInset,
-        ].allSatisfy(\.isFinite)
-      })
-    else { throw WorkspaceSelectionError(message: "Invalid transform.") }
+    for transform in value.videoLayerTransforms.values {
+      try WorkspaceV4IntegrityValidator.validateTransform(transform)
+    }
     var candidate = self.preferences
     candidate[keyPath: target.preferences][programID] = value
     self.preferences = candidate
@@ -231,14 +254,14 @@ public final class WorkspaceStoreService {
   public func setAudioChannelGain(_ decibels: Double, forAudioInputDeviceInternalID id: UInt64)
     -> Bool
   {
-    let tenths = (decibels * 10).rounded()
-    guard definition.audioDevices.contains(where: { $0.internalID == id }),
-      tenths.isFinite, tenths >= Double(Int32.min), tenths <= Double(Int32.max)
-    else {
-      editorFailureMessage = "Invalid audio input gain."
+    guard definition.audioDevices.contains(where: { $0.internalID == id }) else { return false }
+    do {
+      preferences.audioChannelGainsDecibels[id] = try RationalParseStrategy().parse(
+        String(decibels))
+    } catch {
+      editorFailureMessage = error.localizedDescription
       return false
     }
-    preferences.audioChannelGainsDecibelTenths[id] = Int32(tenths)
     editorFailureMessage = nil
     updateMixPreferences()
     synchronizeAudioMonitor()
@@ -258,4 +281,14 @@ public final class WorkspaceStoreService {
     self.selectedAudioMix = portrait ? .portrait : .landscape
   }
 
+}
+
+public struct WorkspaceSaveValidationError: LocalizedError, Sendable {
+  public let messages: [String]
+
+  public var errorDescription: String? { "The Workspace could not be saved." }
+  public var failureReason: String? { messages.joined(separator: "\n\n") }
+  public var recoverySuggestion: String? {
+    messages.joined(separator: "\n\n") + "\n\nCorrect these settings and save again."
+  }
 }

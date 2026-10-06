@@ -123,14 +123,23 @@ struct WorkspaceToolbarSystemTestSuite {
     field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
     field.commit()
     #expect(
-      try service.preferences(for: 100, target: .landscape).audioMasterVolumeDecibelTenths == -120)
+      try service.preferences(for: 100, target: .landscape).audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -12
+          $0.denominator = 1
+        })
     #expect(service.selectedAudioMix == .landscape)
-    service.updateAudio(target: .landscape) { $0.audioMasterVolumeDecibelTenths = -60 }
+    service.updateAudio(target: .landscape) {
+      $0.audioMasterVolumeDecibels = .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }
+    }
     for _ in 0..<50 {
-      if field.stringValue == "-6.0" { break }
+      if field.stringValue == "-6" { break }
       try await Task.sleep(for: .milliseconds(10))
     }
-    #expect(field.stringValue == "-6.0")
+    #expect(field.stringValue == "-6")
   }
 
   @Test func audioMixEditsWorkspaceGainWithoutCanvasOrProgramSelection() throws {
@@ -153,10 +162,20 @@ struct WorkspaceToolbarSystemTestSuite {
     #expect(slider.isEnabled)
     slider.doubleValue = -12
     slider.sendAction(try #require(slider.action), to: slider.target)
-    #expect(service.preferences.audioChannelGainsDecibelTenths[10] == -120)
+    #expect(
+      service.preferences.audioChannelGainsDecibels[10]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -12
+          $0.denominator = 1
+        })
     #expect(!service.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
     #expect(!service.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
-    #expect(service.preferences.audioChannelGainsDecibelTenths[10] == -120)
+    #expect(
+      service.preferences.audioChannelGainsDecibels[10]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.numerator = -12
+          $0.denominator = 1
+        })
     #expect(service.selectedAudioMix == .portrait)
   }
 
@@ -313,12 +332,19 @@ struct WorkspaceToolbarSystemTestSuite {
       try content.storeService.setVideoLayerIncluded(
         false, componentID: 30, programID: 100, target: target)
       var preference = try content.storeService.preferences(for: 100, target: target)
-      preference.audioMasterVolumeDecibelTenths = -80
+      preference.audioMasterVolumeDecibels = .with {
+        $0.numerator = -8
+        $0.denominator = 1
+      }
       preference.videoLayerHidden[10] = true
       try content.storeService.commitPreferences(preference, programID: 100, target: target)
       #expect(state.preferences[keyPath: target.preferences][100]?.videoLayerHidden[10] == true)
       #expect(
-        state.preferences[keyPath: target.preferences][100]?.audioMasterVolumeDecibelTenths == -80)
+        state.preferences[keyPath: target.preferences][100]?.audioMasterVolumeDecibels
+          == Ldtx_Workspace_V4_Rational32.with {
+            $0.numerator = -8
+            $0.denominator = 1
+          })
       for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
         state.isOutputActive = value.isOutputActive
         #expect(throws: WorkspaceSelectionError.self) {

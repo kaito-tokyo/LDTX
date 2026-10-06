@@ -35,6 +35,7 @@ function buildProtos(outputDirectory) {
       "Protos/workspace_v4_video_component.proto",
       "Protos/workspace_v4_vfx.proto",
       "Protos/workspace_v4_vision.proto",
+      "Protos/workspace_v4_types.proto",
     ],
     { cwd: repositoryDirectory, stdio: "inherit" },
   );

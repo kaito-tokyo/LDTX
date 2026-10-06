@@ -540,16 +540,17 @@ public final class WorkspaceV4RecordingSession {
 
   private func preferences(_ preference: Ldtx_Workspace_V4_ProgramPreferences) -> ProgramPreferences
   {
-    let gain = Double(preference.audioMasterVolumeDecibelTenths) / 10
+    let gain =
+      (preference.hasAudioMasterVolumeDecibels ? preference.audioMasterVolumeDecibels.double : 0)
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
-    let gains = windowRuntime.preferences.audioChannelGainsDecibelTenths
+    let gains = windowRuntime.preferences.audioChannelGainsDecibels
     let muted = preference.audioChannelMuted
     for inputDeviceInternalID in Set(gains.keys).union(muted.keys) {
       let key = "v4-\(inputDeviceInternalID)"
       preferences.audioChannelGainsByName[key] =
         ProgramPreferences.linearAudioChannelGain(
-          fromDecibels: Double(gains[inputDeviceInternalID] ?? 0) / 10)
+          fromDecibels: (gains[inputDeviceInternalID]?.double ?? 0))
       preferences.audioMutedByInputDeviceName[key] = muted[inputDeviceInternalID] ?? false
     }
     return preferences

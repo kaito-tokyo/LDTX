@@ -7,6 +7,8 @@ syntax = "proto3";
 
 package ldtx.workspace.v4;
 
+import "workspace_v4_types.proto";
+
 // Wraps one concrete Vision definition.
 message VisionWrapper {
   oneof definition {
@@ -19,13 +21,21 @@ message VisionWrapper {
 // lower-left corner.
 message VisionRegionOfInterest {
   // The horizontal origin, in the range [0, 1].
-  float x = 1;
+  reserved 1;
+  reserved "x";
+  Rational32 x_rational = 5;
   // The vertical origin, in the range [0, 1].
-  float y = 2;
+  reserved 2;
+  reserved "y";
+  Rational32 y_rational = 6;
   // The width, in the range [0, 1].
-  float width = 3;
+  reserved 3;
+  reserved "width";
+  Rational32 width_rational = 7;
   // The height, in the range [0, 1].
-  float height = 4;
+  reserved 4;
+  reserved "height";
+  Rational32 height_rational = 8;
 }
 
 // Wraps one concrete Vision trigger definition.
@@ -40,7 +50,9 @@ message VisionTriggerWrapper {
 // A Vision trigger that invokes Vision at a regular interval.
 message IntervalVisionTrigger {
   // The interval between automatic Vision updates in seconds.
-  double interval_seconds = 1;
+  reserved 1;
+  reserved "interval_seconds";
+  Rational32 interval_seconds_rational = 2;
 }
 
 // An image-analysis request that recognizes text in an image.
@@ -74,5 +86,7 @@ message OcrVision {
   repeated string custom_words = 9;
   // The minimum text height relative to input image height. When absent, the
   // Vision Framework default applies.
-  optional float minimum_text_height = 10;
+  reserved 10;
+  reserved "minimum_text_height";
+  Rational32 minimum_text_height_rational = 12;
 }

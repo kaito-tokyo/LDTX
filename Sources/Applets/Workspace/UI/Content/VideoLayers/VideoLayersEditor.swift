@@ -47,30 +47,21 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     guard row.state.hasUnconfirmedChanges,
       let id = try? internalID(for: row)
     else { return }
-    let values = row.state.strings.map { Double($0) }
-    let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
-    let invalid = values.indices.filter { values[$0]?.isFinite != true }
-    guard invalid.isEmpty else {
-      errors[id] =
-        "\(row.state.name): Invalid number (\(invalid.map { labels[$0] }.joined(separator: ", ")))."
-      return
-    }
-    let numbers = [
-      Float(values[0]! / row.rootView.canvasWidth), Float(values[1]! / row.rootView.canvasHeight),
-      Float(values[2]!), Float(values[3]!),
-    ]
-    let overflow = numbers.indices.filter { !numbers[$0].isFinite }
-    guard overflow.isEmpty else {
-      errors[id] =
-        "\(row.state.name): Invalid number (\(overflow.map { labels[$0] }.joined(separator: ", ")))."
-      return
-    }
     do {
+      let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
+      let divisors = [UInt64(row.rootView.canvasWidth), UInt64(row.rootView.canvasHeight), 1, 1]
+      let values = try row.state.strings.enumerated().map { index, text in
+        do { return try RationalParseStrategy(divisor: divisors[index]).parse(text) } catch {
+          throw WorkspaceSelectionError(
+            message:
+              "Invalid number (\(labels[index])): \(error.localizedDescription)")
+        }
+      }
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.translationX = numbers[0]
-      transform.translationY = numbers[1]
-      transform.scaleX = numbers[2]
-      transform.scaleY = numbers[3]
+      transform.translationXRational = values[0]
+      transform.translationYRational = values[1]
+      transform.scaleXRational = values[2]
+      transform.scaleYRational = values[3]
       let saved = try onCommitTransform(id, transform)
       row.state.hasUnconfirmedChanges = false
       row.state.display(
@@ -235,8 +226,14 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
     for id: UInt64 in [1, 2] {
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.scaleX = 1
-      transform.scaleY = 1
+      transform.scaleXRational = .with {
+        $0.numerator = 1
+        $0.denominator = 1
+      }
+      transform.scaleYRational = .with {
+        $0.numerator = 1
+        $0.denominator = 1
+      }
       programPreferences.videoLayerTransforms[id] = transform
     }
     programPreferences.videoLayerHidden[2] = true

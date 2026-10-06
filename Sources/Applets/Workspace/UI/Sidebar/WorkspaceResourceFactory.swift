@@ -42,8 +42,14 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = name
-    component.width = 320 / 1_920
-    component.height = 80 / 1_080
+    component.widthRational = .with {
+      $0.numerator = 1
+      $0.denominator = 6
+    }
+    component.heightRational = .with {
+      $0.numerator = 2
+      $0.denominator = 27
+    }
     component.foregroundColor = opaqueWhite
     var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
     background.alpha = 0.65
@@ -62,8 +68,14 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     component.startColor = gradientStartColor
-    component.endX = 1
-    component.endY = 1
+    component.endXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    component.endYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
     component.endColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
@@ -76,9 +88,18 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.outerRadius = 0.5
+    component.centerXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.centerYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.outerRadiusRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
     component.innerColor = gradientStartColor
     component.outerColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -91,8 +112,14 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerX = 0.5
-    component.centerY = 0.5
+    component.centerXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
+    component.centerYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 2
+    }
     component.startColor = gradientStartColor
     component.endColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -113,7 +140,10 @@ enum WorkspaceResourceFactory {
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSeconds = 5
+    trigger.intervalSecondsRational = .with {
+      $0.numerator = 5
+      $0.denominator = 1
+    }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
     var vision = Ldtx_Workspace_V4_OcrVision()

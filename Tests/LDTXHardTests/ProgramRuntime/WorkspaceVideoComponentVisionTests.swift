@@ -34,10 +34,22 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let full = try await runtime.visionFeatureContext.frameForVision(vision)
     #expect(full.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
     vision.regionOfInterest = .with {
-      $0.x = 0.25
-      $0.y = 0.5
-      $0.width = 0.5
-      $0.height = 0.25
+      $0.xRational = .with {
+        $0.numerator = 1
+        $0.denominator = 4
+      }
+      $0.yRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      $0.widthRational = .with {
+        $0.numerator = 1
+        $0.denominator = 2
+      }
+      $0.heightRational = .with {
+        $0.numerator = 1
+        $0.denominator = 4
+      }
     }
     let cropped = try await runtime.visionFeatureContext.frameForVision(vision)
     #expect(cropped.image.extent == CGRect(x: 480, y: 540, width: 960, height: 270))
