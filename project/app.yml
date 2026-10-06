@@ -220,7 +220,7 @@ targets:
         basedOnDependencyAnalysis: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX)
         PRODUCT_NAME: LDTX
         PRODUCT_MODULE_NAME: LDTXApp
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"

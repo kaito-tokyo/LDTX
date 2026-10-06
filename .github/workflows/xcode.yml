@@ -112,6 +112,7 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             CODE_SIGN_IDENTITY="Apple Development" \
             DEVELOPMENT_TEAM=4HMJS6J4MZ \
+            LDTX_BUNDLE_ID_SUFFIX= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
@@ -138,6 +139,7 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             CODE_SIGN_IDENTITY="Apple Development" \
             DEVELOPMENT_TEAM=4HMJS6J4MZ \
+            LDTX_BUNDLE_ID_SUFFIX= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
@@ -170,6 +172,7 @@ jobs:
               CODE_SIGN_STYLE=Automatic \
               CODE_SIGN_IDENTITY="Apple Development" \
               DEVELOPMENT_TEAM=4HMJS6J4MZ \
+              LDTX_BUNDLE_ID_SUFFIX= \
               COMPILER_INDEX_STORE_ENABLE=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
               test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions

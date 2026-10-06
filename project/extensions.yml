@@ -33,7 +33,7 @@ targets:
         com.apple.security.files.user-selected.read-only: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local.QuickLookPreview
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX).QuickLookPreview
         PRODUCT_NAME: LDTXQuickLookPreview
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
@@ -72,7 +72,7 @@ targets:
         com.apple.security.files.user-selected.read-only: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local.QuickLookThumbnail
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX).QuickLookThumbnail
         PRODUCT_NAME: LDTXQuickLookThumbnail
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
