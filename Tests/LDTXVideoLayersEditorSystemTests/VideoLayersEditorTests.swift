@@ -10,6 +10,7 @@ import Testing
 @MainActor
 final class VideoLayersEditorTests {
   private var editors: [ObjectIdentifier: VideoLayersEditor] = [:]
+  private var reportedErrors: [String] = []
 
   @Test func editorOwnsObservationWithoutLoadingViewUntilUsed() async throws {
     let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
@@ -192,7 +193,11 @@ final class VideoLayersEditorTests {
         try commit(id, value)
         return value
       },
-      onSetHidden: setHidden, onCommitLayerOrder: order, onError: onError)
+      onSetHidden: setHidden, onCommitLayerOrder: order,
+      onError: { [self] error in
+        reportedErrors.append(error.localizedDescription)
+        onError(error)
+      })
     if editor.table !== table {
       table.update(
         layerIDs: ids, rows: editor.table.rows,
@@ -235,11 +240,12 @@ final class VideoLayersEditorTests {
     #expect(!row.state.hasUnconfirmedChanges)
   }
 
-  @Test func validationErrorsAreAggregatedAtEditor() throws {
+  @Test func validationErrorsAreReportedAndDraftsSurvive() throws {
     let editor = makeEditor()
     editor.update(
       definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
-      canvasWidth: 1920, canvasHeight: 1080)
+      canvasWidth: 1920, canvasHeight: 1080,
+      onError: { [self] in reportedErrors.append($0.localizedDescription) })
     let first = try #require(editor.table.rows[1])
     let second = try #require(editor.table.rows[2])
     first.state.name = "Camera"
@@ -250,18 +256,15 @@ final class VideoLayersEditorTests {
     second.state.hasUnconfirmedChanges = true
     first.state.onCommit()
     second.state.onCommit()
-    #expect(editor.errorLabel.stringValue.contains("Camera: Invalid number (Pos X)"))
-    #expect(editor.errorLabel.stringValue.contains("Background: Invalid number (Scale Y)"))
-    #expect(!editor.errorLabel.isHidden)
+    #expect(reportedErrors[0].contains("Invalid number (Pos X)"))
+    #expect(reportedErrors[1].contains("Invalid number (Scale Y)"))
     #expect(first.state.strings[0] == "bad")
     first.state.strings[0] = "960"
     first.state.onCommit()
-    #expect(!editor.errorLabel.stringValue.contains("Camera:"))
-    #expect(editor.errorLabel.stringValue.contains("Background:"))
+    #expect(reportedErrors.count == 2)
     second.state.strings[3] = "1"
     second.state.onCommit()
-    #expect(editor.errorLabel.stringValue.isEmpty)
-    #expect(editor.errorLabel.isHidden)
+    #expect(reportedErrors.count == 2)
 
     second.state.strings[3] = "-"
     second.state.hasUnconfirmedChanges = true
@@ -270,7 +273,7 @@ final class VideoLayersEditorTests {
     editor.update(
       definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
       canvasWidth: 1920, canvasHeight: 1080)
-    #expect(editor.errorLabel.stringValue.isEmpty)
+    #expect(reportedErrors.count == 3)
   }
 
   @Test func editorAndTableReleaseWiredRows() {
@@ -492,7 +495,7 @@ final class VideoLayersEditorTests {
     #expect(table.rows[1] === row)
     #expect(row.state.strings[2] == value)
     #expect(
-      editors[ObjectIdentifier(table)]?.errorLabel.stringValue.contains("Invalid number") == true)
+      reportedErrors.contains { $0.contains("Invalid number") })
     #expect(commits == 0)
   }
 
@@ -509,7 +512,7 @@ final class VideoLayersEditorTests {
     row.state.hasUnconfirmedChanges = true
     row.state.onCommit()
     #expect(
-      editors[ObjectIdentifier(table)]?.errorLabel.stringValue.contains("Save failed.") == true)
+      reportedErrors.contains { $0.contains("Save failed.") })
     #expect(row.state.hasUnconfirmedChanges)
     #expect(row.state.strings[0] == "960.000")
     update(table)

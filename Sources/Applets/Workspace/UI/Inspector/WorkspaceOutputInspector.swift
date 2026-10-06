@@ -53,12 +53,10 @@ struct WorkspaceOutputInspector: View {
           WorkspaceV4StreamKeyManager(
             configurations: appletData.youtubeStreamKeyConfigurations,
             load: { try appletData.loadYouTubeStreamKeyConfigurations() },
-            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) }
+            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) },
+            reportError: { storeService.reportError($0) }
           )
         }
-      if let streamKeyLoadError {
-        Text(streamKeyLoadError).foregroundStyle(.red)
-      }
     }
     .disabled(storeService.isOutputActive)
     .onAppear {
@@ -67,6 +65,7 @@ struct WorkspaceOutputInspector: View {
         streamKeyLoadError = nil
       } catch {
         streamKeyLoadError = error.localizedDescription
+        storeService.reportError(error)
       }
     }
 
@@ -173,6 +172,7 @@ struct WorkspaceOutputInspector: View {
       loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
       isEditable: !storeService.isOutputActive && workspaceURL != nil,
       refresh: refreshStreamKeys,
+      reportError: { storeService.reportError($0) },
       commit: { selected in
         guard !storeService.isOutputActive, workspaceURL != nil else {
           throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
@@ -190,7 +190,10 @@ struct WorkspaceOutputInspector: View {
     do {
       _ = try appletData.loadYouTubeStreamKeyConfigurations()
       streamKeyLoadError = nil
-    } catch { streamKeyLoadError = error.localizedDescription }
+    } catch {
+      streamKeyLoadError = error.localizedDescription
+      storeService.reportError(error)
+    }
   }
 
   private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {

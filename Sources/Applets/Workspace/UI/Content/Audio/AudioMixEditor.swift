@@ -13,14 +13,12 @@ final class AudioMixEditor: NSViewController {
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-  let errorLabel = NSTextField(labelWithString: "")
   let outputErrorLabel = NSTextField(wrappingLabelWithString: "")
   private let channels = contentStack([])
   private var rows: [UInt64: AudioInputRow] = [:]
 
   override func loadView() {
     view = NSView()
-    errorLabel.textColor = .systemRed
     outputErrorLabel.textColor = .systemRed
     func heading(_ title: String) -> NSTextField {
       let label = NSTextField(labelWithString: title)
@@ -35,7 +33,7 @@ final class AudioMixEditor: NSViewController {
     let bottomSeparator = divider()
     let stack = contentStack([
       heading("Audio Mix"), channels,
-      errorLabel, outputErrorLabel, bottomSeparator,
+      outputErrorLabel, bottomSeparator,
     ])
     pinContent(stack, in: view)
     for child in [channels, bottomSeparator] {
@@ -52,7 +50,6 @@ final class AudioMixEditor: NSViewController {
   func refresh() {
     let peakMeter = storeService.audioPeakMeter
     _ = view
-    errorLabel.stringValue = storeService.editorFailureMessage ?? ""
     outputErrorLabel.stringValue = storeService.outputFailureMessage ?? ""
     outputErrorLabel.isHidden = storeService.outputFailureMessage == nil
     let inputs = storeService.definition.audioDevices

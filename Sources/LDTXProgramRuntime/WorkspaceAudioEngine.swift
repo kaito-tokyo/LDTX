@@ -12,9 +12,15 @@ import os
 public final class WorkspaceAudioEngine: @unchecked Sendable {
   public static let outputDevicePreferenceKey = "tokyo.kaito.ldtx.monitor-output-device-uid"
   public static let statusDidChange = Notification.Name("LDTXAudioEngine.statusDidChange")
-  private static let failures = OSAllocatedUnfairLock(initialState: [UUID: [String: String]]())
+  private static let failures = OSAllocatedUnfairLock(initialState: [UUID: [String: Int32]]())
   public static var failureMessages: [String] {
-    failures.withLock { $0.values.flatMap { $0.values }.sorted() }
+    failures.withLock {
+      $0.values.flatMap { $0.map { "\($0.key): Core Audio error \($0.value)" } }.sorted()
+    }
+  }
+  public var statusIdentifier: UUID { id }
+  public var currentFailures: [String: Int32] {
+    Self.failures.withLock { $0[id] ?? [:] }
   }
   let native: OpaquePointer
   private let lock = NSRecursiveLock()
@@ -54,12 +60,15 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
         guard let context, let sourcePointer = source else { return }
         let errors = Unmanaged<Errors>.fromOpaque(context).takeUnretainedValue()
         let source = String(cString: sourcePointer)
-        WorkspaceAudioEngine.failures.withLock { values in
+        let snapshot = WorkspaceAudioEngine.failures.withLock { values in
           var current = values[errors.id] ?? [:]
-          current[source] = status == 0 ? nil : "\(source): Core Audio error \(status)"
+          current[source] = status == 0 ? nil : status
           values[errors.id] = current
+          return current
         }
-        NotificationCenter.default.post(name: WorkspaceAudioEngine.statusDidChange, object: nil)
+        NotificationCenter.default.post(
+          name: WorkspaceAudioEngine.statusDidChange, object: errors.id,
+          userInfo: ["failures": snapshot])
       }, Unmanaged.passUnretained(errors).toOpaque())
     if hardwareEnabled {
       observer = NotificationCenter.default.addObserver(

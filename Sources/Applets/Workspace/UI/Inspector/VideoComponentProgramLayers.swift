@@ -8,7 +8,6 @@ import SwiftUI
 struct VideoComponentProgramLayers: View {
   let storeService: WorkspaceStoreService
   let componentID: WorkspaceStoreService.VideoComponentWrapper.ID
-  @State private var errorMessage: String?
 
   private var internalID: UInt64? {
     guard
@@ -28,10 +27,8 @@ struct VideoComponentProgramLayers: View {
         Toggle("Landscape", isOn: .constant(false)).disabled(true)
         Toggle("Portrait", isOn: .constant(false)).disabled(true)
       }
-      if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
     }
     .disabled(storeService.isOutputActive || internalID == nil)
-    .onChange(of: storeService.selectedProgram?.internalID) { errorMessage = nil }
   }
 
   func membership(for programID: UInt64, target: WorkspaceCanvasTarget) -> Binding<Bool> {
@@ -52,8 +49,7 @@ struct VideoComponentProgramLayers: View {
           }
           try storeService.setVideoLayerIncluded(
             value, componentID: id, programID: programID, target: target)
-          errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        } catch { storeService.reportError(error) }
       })
   }
 }

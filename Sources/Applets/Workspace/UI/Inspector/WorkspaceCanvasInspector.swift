@@ -37,6 +37,7 @@ struct WorkspaceCanvasInspector: View {
         options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
         emptyLabel: "Automatic", clearTitle: "Use Automatic Timing",
         isEditable: !storeService.isOutputActive,
+        reportError: { storeService.reportError($0) },
         commit: { selected in
           guard !storeService.isOutputActive,
             selected == nil || videoDevices.contains(where: { $0.internalID == selected })

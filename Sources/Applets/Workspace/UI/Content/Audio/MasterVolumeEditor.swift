@@ -19,7 +19,6 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
   private let monitorVolume = NSSlider(
     value: 0, minValue: ProgramPreferences.minimumAudioChannelGainDecibels,
     maxValue: ProgramPreferences.maximumAudioChannelGainDecibels, target: nil, action: nil)
-  private let errorLabel = NSTextField(labelWithString: "")
   private var programID: UInt64?
 
   override func loadView() {
@@ -51,13 +50,12 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     monitorVolume.target = self
     monitorVolume.action = #selector(monitorChanged)
     monitorVolume.isContinuous = true
-    errorLabel.textColor = .systemRed
     let heading = NSTextField(labelWithString: "Master Volumes")
     heading.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
     let separator = NSBox()
     separator.boxType = .separator
     let monitorRow = contentStack([monitorDevice, monitorVolume], vertical: false)
-    let stack = contentStack([heading, grid, monitorRow, errorLabel, separator])
+    let stack = contentStack([heading, grid, monitorRow, separator])
     pinContent(stack, in: view)
     for child in [grid, monitorRow, separator] {
       child.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -73,11 +71,14 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     monitorDevice.removeAllItems()
     monitorDevice.addItem(withTitle: "System Default")
     monitorDevice.lastItem?.representedObject = ""
-    if let devices = try? availableMonitorDevices() {
+    do {
+      let devices = try availableMonitorDevices()
       for device in devices {
         monitorDevice.addItem(withTitle: device.name)
         monitorDevice.lastItem?.representedObject = device.uid
       }
+    } catch {
+      Task { @MainActor [weak storeService] in storeService?.reportError(error) }
     }
     if let item = monitorDevice.itemArray.first(where: {
       $0.representedObject as? String == selected
@@ -111,9 +112,7 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
       }
       view.window?.makeFirstResponder(nil)
       programID = id
-      errorLabel.stringValue = ""
     }
-    errorLabel.stringValue = storeService.editorFailureMessage ?? ""
     let enabled = id != nil
     for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
       let preferences =
@@ -141,8 +140,8 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
           $0.audioMasterVolumeDecibels = value
         } ?? false
       }
-      masterFields[index].onInvalid = { [weak self] message in
-        self?.errorLabel.stringValue = message
+      masterFields[index].onInvalid = { [weak storeService] message in
+        storeService?.reportError(WorkspaceSelectionError(message: message))
       }
     }
     monitorVolume.doubleValue = storeService.localState.monitorVolume ?? 0

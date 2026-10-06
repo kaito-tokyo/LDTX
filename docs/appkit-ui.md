@@ -252,7 +252,7 @@ Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys sh
 
 The Editor vertically arranges MasterVolumeEditor, AudioMixEditor, and the
 Landscape/Portrait Video Layers tabs. Each canvas has an NSTableView sized to
-show all its rows and error/empty-state labels.
+show all its rows and empty-state labels.
 VideoLayersEditor has no internal scroll view; the Content pane scrolls all
 editors together.
 Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
@@ -280,8 +280,8 @@ has no reserved row, horizontal scrolling, or custom layout sizing.
 The Program candidates are static entries in the Workspace definition. The
 Picker uses matching optional `UInt64` selection and tag values and reads the
 resolved Program directly from model state. Its setter uses the existing
-dispatcher; failed changes retain the model selection and display the error in
-the Inspector. No independent selection state is kept. With an empty Program
+dispatcher; failed changes retain the model selection and report the error through
+the Workspace standard error sheet. No independent selection state is kept. With an empty Program
 array, the Inspector displays "No Program" instead of constructing a Picker.
 The empty Content preview remains visible. Resolving a stale saved ID does not
 rewrite it. Sidebar initially remains unselected.
@@ -364,3 +364,36 @@ validator.
 A persisted Rational32 must have a positive denominator. Saving validates the
 exact Rational32 ranges before writing the Workspace. Workspace Version remains
 4 and Workspace Bundle Version remains 4.0.
+
+## Workspace operation errors
+
+`WorkspaceStoreService.reportError(_:)` passes operation errors unchanged to an
+Observation-ignored closure installed by the owning WorkspaceWindowController.
+Editors and Inspectors report failed commits through this boundary and retain
+unconfirmed input and open editing sheets. Pre-submit validation and candidate
+availability remain in the editing UI. Output-session failures and continuous
+OCR diagnostics retain their existing state and display paths.
+
+The Window Controller presents errors using AppKit `presentError`, targeting
+the Workspace Window or its active editing sheet. It queues further errors
+until the current presentation completes, and discards pending notifications
+when the Window closes or shutdown begins. The callback captures the controller
+weakly; UI components do not own the presentation lifecycle. Its `willPresentError`
+customization applies only to the queued error's domain and code, combines the
+failure reason with the recovery suggestion for AppKit's informative text, and
+preserves the NSError domain, code, and other userInfo (including recovery metadata).
+
+Native audio status notifications include an engine identifier and a failure
+snapshot. The controller reads its own engine's initial monitor state, then
+forwards subsequent notifications asynchronously to the main actor. An unchanged
+monitor failure is reported once; recovery permits a later recurrence to be
+reported again. Restart completions report orchestration errors, while native
+hardware errors arrive through status notifications rather than that completion.
+Capture synchronization similarly reports newly failed camera IDs together,
+retains assignments, and clears failure state on successful retry. Device
+enumeration retains its availability state and reports new failures.
+
+Save validation continues to throw its aggregated LocalizedError through
+NSDocument's save completion. It does not also call `reportError`, preventing
+duplicate presentation. Error descriptions, failure reasons, and recovery
+suggestions remain available to AppKit's standard error presentation.

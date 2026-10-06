@@ -31,6 +31,8 @@ struct WorkspaceDocumentSystemTestSuite {
     let url = root.appendingPathComponent("Invalid.ldtxworkspace")
     let document = WorkspaceDocument()
     defer { document.close() }
+    var reportedErrors: [Error] = []
+    document.storeService.errorHandler = { reportedErrors.append($0) }
     document.storeService.definition.programs = [validationProgram(name: "Pattern")]
     document.storeService.definition.videoComponents = [validationPattern()]
     document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
@@ -55,6 +57,7 @@ struct WorkspaceDocumentSystemTestSuite {
       #expect(alert.informativeText.contains("Portrait"))
       #expect(alert.informativeText.contains("Pattern"))
     }
+    #expect(reportedErrors.isEmpty)
     #expect(document.storeService.definition.displayName == "Untitled")
     #expect(document.fileURL == nil)
     #expect(document.isDocumentEdited)

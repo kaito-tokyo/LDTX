@@ -40,6 +40,102 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
 
+  private var pendingErrors: [Error] = []
+  private var presentedError: NSError?
+  private var errorPresentationClosed = false
+  private var audioStatusObserver: NSObjectProtocol?
+  private var monitorFailureStatus: Int32?
+  private var captureFailureIDs: Set<String> = []
+
+  func reportError(_ error: Error) {
+    guard !errorPresentationClosed, shutdownTask == nil else { return }
+    pendingErrors.append(error)
+    presentNextError()
+  }
+
+  private func presentNextError() {
+    guard !errorPresentationClosed, presentedError == nil, !pendingErrors.isEmpty,
+      var host = window
+    else { return }
+    while let sheet = host.attachedSheet { host = sheet }
+    let error = pendingErrors.removeFirst()
+    presentedError = error as NSError
+    presentError(
+      error, modalFor: host, delegate: self,
+      didPresent: #selector(errorDidPresent(_:contextInfo:)), contextInfo: nil)
+  }
+
+  public override func willPresentError(_ error: Error) -> Error {
+    let error = super.willPresentError(error) as NSError
+    guard let presentedError,
+      error.domain == presentedError.domain, error.code == presentedError.code,
+      let reason = error.localizedFailureReason
+    else { return error }
+    var info = error.userInfo
+    info[NSLocalizedRecoverySuggestionErrorKey] =
+      [reason, error.localizedRecoverySuggestion].compactMap { $0 }.joined(separator: "\n\n")
+    return NSError(domain: error.domain, code: error.code, userInfo: info)
+  }
+
+  @objc private func errorDidPresent(_ didRecover: Bool, contextInfo: UnsafeMutableRawPointer?) {
+    presentedError = nil
+    Task { @MainActor [weak self] in self?.presentNextError() }
+  }
+
+  private func closeErrorPresentation() {
+    errorPresentationClosed = true
+    pendingErrors.removeAll()
+    storeService.errorHandler = nil
+    if let audioStatusObserver {
+      NotificationCenter.default.removeObserver(audioStatusObserver)
+      self.audioStatusObserver = nil
+    }
+  }
+
+  public func windowWillClose(_ notification: Notification) {
+    closeErrorPresentation()
+  }
+
+  func updateMonitorFailure(_ status: Int32?) {
+    guard !errorPresentationClosed, shutdownTask == nil else { return }
+    defer { monitorFailureStatus = status }
+    guard let status, status != monitorFailureStatus else { return }
+    reportError(
+      NSError(
+        domain: NSOSStatusErrorDomain, code: Int(status),
+        userInfo: [
+          NSLocalizedDescriptionKey: "Audio monitoring failed.",
+          NSLocalizedFailureReasonErrorKey: "Core Audio error \(status).",
+          NSLocalizedRecoverySuggestionErrorKey:
+            "Check the monitor output device and its connection, then retry monitoring.",
+        ]))
+  }
+
+  func updateCaptureFailures(_ failures: Set<String>) {
+    guard !errorPresentationClosed, shutdownTask == nil else { return }
+    let newlyFailed = failures.subtracting(captureFailureIDs)
+    captureFailureIDs = failures
+    guard !newlyFailed.isEmpty else { return }
+    let descriptions = newlyFailed.sorted().map { uid in
+      let names = storeService.definition.videoComponents.compactMap { component -> String? in
+        guard case .vfxSource(let source) = component.definition,
+          appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
+        else { return nil }
+        return component.displayName
+      }
+      return names.isEmpty ? uid : names.joined(separator: ", ") + " (" + uid + ")"
+    }
+    reportError(
+      NSError(
+        domain: "tokyo.kaito.ldtx.WorkspaceCapture", code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey: "Camera capture could not be started.",
+          NSLocalizedFailureReasonErrorKey: descriptions.joined(separator: "\n"),
+          NSLocalizedRecoverySuggestionErrorKey:
+            "Check camera connections and permissions, then retry the assignment.",
+        ]))
+  }
+
   public init(
     storeService: WorkspaceStoreService,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
@@ -115,9 +211,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       onSelectLandscape: { storeService.selectedAudioMix = .landscape },
       onSelectPortrait: { storeService.selectedAudioMix = .portrait })
     self.pairedPreview = pairedPreview
+    let deviceRegistry = DeviceRegistryService()
+    deviceRegistry.errorHandler = { [weak storeService] error in storeService?.reportError(error) }
     let window = WorkspaceWindow(
       url: url,
-      deviceRegistry: DeviceRegistryService(),
+      deviceRegistry: deviceRegistry,
       appletData: appletData,
       storeService: storeService, documentReference: documentReference,
       pairedPreview: pairedPreview)
@@ -129,6 +227,18 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     super.init(window: window)
 
+    storeService.errorHandler = { [weak self] error in self?.reportError(error) }
+    let engine = captureSessionCoordinator.audioEngine
+    let engineID = engine.statusIdentifier
+    audioStatusObserver = NotificationCenter.default.addObserver(
+      forName: WorkspaceAudioEngine.statusDidChange, object: nil, queue: nil
+    ) { [weak self] notification in
+      guard notification.object as? UUID == engineID,
+        let failures = notification.userInfo?["failures"] as? [String: Int32]
+      else { return }
+      Task { @MainActor [weak self] in self?.updateMonitorFailure(failures["Monitor"]) }
+    }
+    updateMonitorFailure(engine.currentFailures["Monitor"])
     previewRenderer.start()
     storeService.runtimeActions = self
     storeService.synchronizeAudioMonitor()
@@ -214,6 +324,10 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
 
+  isolated deinit {
+    if let audioStatusObserver { NotificationCenter.default.removeObserver(audioStatusObserver) }
+  }
+
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
@@ -259,6 +373,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       await shutdownTask.value
       return
     }
+    closeErrorPresentation()
     let task = Task { @MainActor in
       storeService.runtimeActions = nil
       pairedPreview.stop()
@@ -348,7 +463,11 @@ extension WorkspaceWindowController {
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
     windowRuntime.synchronizeCaptureInputs(
-      availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
+      availableCameraIDs: availableCameraIDs,
+      completionHandler: { [weak self] failures in
+        Task { @MainActor [weak self] in self?.updateCaptureFailures(failures) }
+        completionHandler(failures)
+      })
   }
 
   public func synchronizeAudioMonitor() {
@@ -395,6 +514,10 @@ extension WorkspaceWindowController {
       inputPassthroughChannelKeys: monitoredKeys,
       shouldRemainRunning: { true },
       failureHandler: { _ in },
-      errorHandler: { _ in })
+      errorHandler: { [weak self] error in
+        guard let self else { return }
+        // Restart completion reports orchestration errors; hardware errors arrive via status.
+        reportError(error)
+      })
   }
 }

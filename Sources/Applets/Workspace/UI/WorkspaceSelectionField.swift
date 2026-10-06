@@ -42,6 +42,7 @@ struct WorkspaceSelectionField<ID: Hashable>: View {
   var clearTitle: String? = nil
   var isEditable = true
   var refresh: () -> Void = {}
+  var reportError: ((Error) -> Void)? = nil
   let commit: (ID?) throws -> Void
   @State private var showingSheet = false
 
@@ -63,7 +64,7 @@ struct WorkspaceSelectionField<ID: Hashable>: View {
       WorkspaceSelectionSheet(
         title: title, options: options, loadError: loadError,
         clearTitle: clearTitle, isEditable: isEditable, refresh: refresh,
-        commit: commit, cancel: { showingSheet = false })
+        reportError: reportError, commit: commit, cancel: { showingSheet = false })
     }
   }
 }
@@ -75,6 +76,7 @@ struct WorkspaceSelectionSheet<ID: Hashable>: View {
   let clearTitle: String?
   let isEditable: Bool
   let refresh: () -> Void
+  var reportError: ((Error) -> Void)? = nil
   let commit: (ID?) throws -> Void
   let cancel: () -> Void
   var currentDescription: String? = nil
@@ -141,7 +143,9 @@ struct WorkspaceSelectionSheet<ID: Hashable>: View {
     do {
       try commit(proposed)
       cancel()
-    } catch { failure = error.localizedDescription }
+    } catch {
+      if let reportError { reportError(error) } else { failure = error.localizedDescription }
+    }
   }
 }
 

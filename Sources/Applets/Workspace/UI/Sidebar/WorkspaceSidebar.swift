@@ -14,7 +14,6 @@ public struct WorkspaceSidebar: View {
   @Environment(\.documentReference) private var documentReference
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
-  @State private var additionError: String?
 
   public init(
     storeService: WorkspaceStoreService,
@@ -142,7 +141,6 @@ public struct WorkspaceSidebar: View {
       }
     }
     .listStyle(.sidebar)
-    .onChange(of: draft) { _, _ in additionError = nil }
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
@@ -152,11 +150,9 @@ public struct WorkspaceSidebar: View {
           : WorkspaceResourceAddition.validationMessage(
             sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
             audioDiscoveryError: deviceRegistry.errorMessage),
-        errorMessage: additionError,
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
-          additionError = nil
         }, deviceDiscoveryMessage: deviceRegistry.errorMessage)
     }
   }
@@ -175,17 +171,15 @@ public struct WorkspaceSidebar: View {
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
-    additionError = nil
     addSheet = sheet
   }
 
   private func submitResource(_ sheet: WorkspaceAddSheet) {
     do {
       try addResource(sheet, draft: draft)
-      additionError = nil
       addSheet = nil
     } catch {
-      additionError = error.localizedDescription
+      storeService.reportError(error)
     }
   }
 
@@ -193,7 +187,10 @@ public struct WorkspaceSidebar: View {
     guard documentReference?.document != nil else {
       throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
     }
-    if sheet == .device { deviceRegistry.refresh() }
+    if sheet == .device {
+      deviceRegistry.refresh(reportErrors: false)
+      if let error = deviceRegistry.error { throw error }
+    }
     let id = try WorkspaceResourceAddition.add(
       sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
       audioDiscoveryError: deviceRegistry.errorMessage)

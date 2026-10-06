@@ -139,7 +139,11 @@ public final class WorkspaceStoreService {
         messages: issues.map { "\($0.context): \($0.error.localizedDescription)" })
     }
   }
-  public var editorFailureMessage: String?
+  @ObservationIgnored public var errorHandler: ((Error) -> Void)?
+
+  public func reportError(_ error: Error) {
+    errorHandler?(error)
+  }
   public var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
     let id = workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
     return definition.programs.first { $0.internalID == id } ?? definition.programs.first
@@ -238,15 +242,17 @@ public final class WorkspaceStoreService {
   public func updateAudio(
     target: WorkspaceCanvasTarget, mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void
   ) -> Bool {
-    guard let id = selectedProgram?.internalID else { return false }
+    guard let id = selectedProgram?.internalID else {
+      reportError(WorkspaceSelectionError(message: "No Program is selected."))
+      return false
+    }
     do {
       var updated = try preferences(for: id, target: target)
       mutation(&updated)
       try commitPreferences(updated, programID: id, target: target)
-      editorFailureMessage = nil
       return true
     } catch {
-      editorFailureMessage = error.localizedDescription
+      reportError(error)
       return false
     }
   }
@@ -254,15 +260,17 @@ public final class WorkspaceStoreService {
   public func setAudioChannelGain(_ decibels: Double, forAudioInputDeviceInternalID id: UInt64)
     -> Bool
   {
-    guard definition.audioDevices.contains(where: { $0.internalID == id }) else { return false }
+    guard definition.audioDevices.contains(where: { $0.internalID == id }) else {
+      reportError(WorkspaceSelectionError(message: "The audio device is no longer available."))
+      return false
+    }
     do {
       preferences.audioChannelGainsDecibels[id] = try RationalParseStrategy().parse(
         String(decibels))
     } catch {
-      editorFailureMessage = error.localizedDescription
+      reportError(error)
       return false
     }
-    editorFailureMessage = nil
     updateMixPreferences()
     synchronizeAudioMonitor()
     return true

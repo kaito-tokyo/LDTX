@@ -29,7 +29,6 @@ struct WorkspaceProgramsInspector: View {
   @Environment(\.documentReference) private var documentReference
   let storeService: WorkspaceStoreService
   @Bindable var appletData: WorkspaceAppletData
-  @State private var errorMessage: String?
 
   private var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
@@ -46,9 +45,6 @@ struct WorkspaceProgramsInspector: View {
       .disabled(!canSelectProgram)
       Button("Add Program") { addProgram() }
         .disabled(storeService.isOutputActive)
-      if let errorMessage {
-        Text(errorMessage).foregroundStyle(.red)
-      }
     }
     .formStyle(.grouped)
   }
@@ -69,7 +65,6 @@ struct WorkspaceProgramsInspector: View {
         storeService.updateProgramRuntimes()
       }
     }
-    errorMessage = nil
     storeService.synchronizeAudioMonitor()
   }
   private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
@@ -95,8 +90,7 @@ struct WorkspaceProgramsInspector: View {
         guard let id, workspaceURL != nil else { return }
         do {
           try storeService.selectProgram(internalID: id)
-          errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+        } catch { storeService.reportError(error) }
       })
   }
 }

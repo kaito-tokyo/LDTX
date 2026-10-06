@@ -32,6 +32,7 @@ struct WorkspacePhysicalDeviceField: View {
       loadError: isAudio ? deviceRegistry.errorMessage : nil,
       clearTitle: "Remove Assignment", isEditable: isEditable && !storeService.isOutputActive,
       refresh: { deviceRegistry.refresh() },
+      reportError: { storeService.reportError($0) },
       commit: { proposed in
         try applySelection(proposed)
         storeService.synchronizeCaptureInputs(
@@ -55,9 +56,9 @@ struct WorkspacePhysicalDeviceField: View {
         return source.internalID == internalID
       }
     guard exists else { throw WorkspaceSelectionError(message: "This resource no longer exists.") }
-    if proposed != nil { deviceRegistry.refresh() }
-    if proposed != nil, isAudio, let error = deviceRegistry.errorMessage {
-      throw WorkspaceSelectionError(message: error)
+    if proposed != nil { deviceRegistry.refresh(reportErrors: false) }
+    if proposed != nil, isAudio, let error = deviceRegistry.error {
+      throw error
     }
     guard proposed == nil || options.contains(where: { $0.id == proposed }) else {
       throw WorkspaceSelectionError(message: "The selected device is unavailable.")

@@ -10,7 +10,6 @@ struct WorkspaceAddResourceSheet: View {
   let devices: [WorkspaceAddDeviceOption]
   let videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper]
   let validationMessage: String?
-  let errorMessage: String?
   let submit: () -> Void
   let cancel: () -> Void
   var refresh: () -> Void = {}
@@ -80,20 +79,20 @@ struct WorkspaceAddResourceSheet: View {
         TextField("Name", text: $draft.name, prompt: Text(selectedDeviceName))
           .focused($nameFocused)
           .accessibilityIdentifier("addResourceNameField")
-          .onSubmit { if validationMessage == nil && errorMessage == nil { submit() } }
+          .onSubmit { if validationMessage == nil { submit() } }
       }
       .formStyle(.grouped)
       if sheet == .vision {
         Text("Recognize text locally with Apple Vision.").font(.caption).foregroundStyle(.secondary)
       }
-      if let message = errorMessage ?? validationMessage {
+      if let message = validationMessage {
         Text(message).font(.caption).foregroundStyle(.red)
       }
       HStack {
         Spacer()
         Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
         Button("Add", action: submit).keyboardShortcut(.defaultAction)
-          .disabled(validationMessage != nil || errorMessage != nil)
+          .disabled(validationMessage != nil)
           .accessibilityIdentifier("confirmAddResourceButton")
       }
     }

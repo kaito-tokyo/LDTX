@@ -23,21 +23,26 @@ public enum DeviceRegistryServiceError: Error, LocalizedError {
 public final class DeviceRegistryService {
   public private(set) var cameras: [CameraCaptureSource] = []
   public private(set) var audioInputDevices: [AudioInputDevice] = []
-  public private(set) var errorMessage: String?
+  public private(set) var error: (any Error)?
+  public var errorMessage: String? { error?.localizedDescription }
+
+  @ObservationIgnored public var errorHandler: ((Error) -> Void)?
 
   public private(set) var hasRefreshed = false
 
   public init() {}
 
-  public func refresh() {
+  public func refresh(reportErrors: Bool = true) {
     defer { hasRefreshed = true }
     cameras = CaptureSessionManager().availableCameras()
     do {
       audioInputDevices = try CoreAudioInputDeviceEnumerator.availableDevices()
-      errorMessage = nil
+      error = nil
     } catch {
       audioInputDevices = []
-      errorMessage = error.localizedDescription
+      let previousMessage = errorMessage
+      self.error = error
+      if reportErrors, previousMessage != errorMessage { errorHandler?(error) }
     }
   }
 }

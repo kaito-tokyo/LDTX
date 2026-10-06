@@ -84,7 +84,7 @@ struct WorkspaceToolbarSystemTestSuite {
     let service = WorkspaceStoreService(definition: .init(), preferences: .init())
     let content = AudioMixEditor(storeService: service)
     #expect(!content.isViewLoaded)
-    service.editorFailureMessage = "Initial failure"
+    service.outputFailureMessage = "Initial failure"
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
       backing: .buffered, defer: false)
@@ -93,13 +93,13 @@ struct WorkspaceToolbarSystemTestSuite {
     window.orderFront(nil)
     defer { window.close() }
     window.contentView?.layoutSubtreeIfNeeded()
-    #expect(content.errorLabel.stringValue == "Initial failure")
-    service.editorFailureMessage = "Updated failure"
+    #expect(content.outputErrorLabel.stringValue == "Initial failure")
+    service.outputFailureMessage = "Updated failure"
     for _ in 0..<50 {
-      if content.errorLabel.stringValue == "Updated failure" { break }
+      if content.outputErrorLabel.stringValue == "Updated failure" { break }
       try await Task.sleep(for: .milliseconds(10))
     }
-    #expect(content.errorLabel.stringValue == "Updated failure")
+    #expect(content.outputErrorLabel.stringValue == "Updated failure")
   }
 
   @Test func masterEditorObservesAndEditsVolumesIndependently() async throws {

@@ -7,14 +7,6 @@ import SwiftUI
 final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   let table = VideoLayersTableView()
 
-  let errorLabel = NSTextField(wrappingLabelWithString: "")
-  private var errors: [UInt64: String] = [:] {
-    didSet {
-      errorLabel.stringValue = table.layerIDs.compactMap { errors[$0] }.joined(separator: "\n")
-      errorLabel.isHidden = errorLabel.stringValue.isEmpty
-    }
-  }
-
   private let status = NSTextField(wrappingLabelWithString: "")
   private let storeService: WorkspaceStoreService
   private let target: WorkspaceCanvasTarget
@@ -66,9 +58,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       row.state.hasUnconfirmedChanges = false
       row.state.display(
         saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
-      errors.removeValue(forKey: id)
     } catch {
-      errors[id] = "\(row.state.name): \(error.localizedDescription)"
+      onError(error)
     }
   }
 
@@ -77,9 +68,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     do {
       try onSetHidden(id, hidden)
       row.state.isHidden = hidden
-      if !row.state.hasUnconfirmedChanges { errors.removeValue(forKey: id) }
     } catch {
-      errors[id] = "\(row.state.name): \(error.localizedDescription)"
       onError(error)
     }
   }
@@ -105,7 +94,6 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         names[id] = component.displayName
       }
     }
-    errors = errors.filter { layerIDs.contains($0.key) && table.rows[$0.key] != nil }
     var rows: [UInt64: VideoLayersTableRow] = [:]
     for id in layerIDs {
       let row: VideoLayersTableRow
@@ -114,7 +102,6 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       {
         row = existing
       } else {
-        errors.removeValue(forKey: id)
         row = VideoLayersTableRow(
           rootView: VideoLayersTableRowContent(
             state: VideoLayersTableRowState(),
@@ -147,8 +134,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     view = NSView()
     table.setContentHuggingPriority(.required, for: .vertical)
     table.setContentCompressionResistancePriority(.required, for: .vertical)
-    errorLabel.isHidden = errorLabel.stringValue.isEmpty
-    let stack = contentStack([errorLabel, table, status])
+    let stack = contentStack([table, status])
     pinContent(stack, in: view)
     table.translatesAutoresizingMaskIntoConstraints = false
     table.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -196,10 +182,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         }
         try storeService.commitLayerOrder(ids, programID: id, target: target)
       },
-      onError: { [weak status] error in
-        status?.textColor = .systemRed
-        status?.stringValue = error.localizedDescription
-        status?.isHidden = false
+      onError: { [weak storeService] error in
+        storeService?.reportError(error)
       })
     status.textColor = .secondaryLabelColor
     status.stringValue =

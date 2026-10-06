@@ -26,6 +26,7 @@ struct OcrVisionInspector: View {
           title: "Video Component", current: sourceBinding.wrappedValue,
           options: videoDevices,
           clearTitle: "Remove Assignment", isEditable: !isRecording,
+          reportError: { storeService.reportError($0) },
           commit: { selected in
             guard !isRecording, self.vision != nil,
               selected == nil || videoDevices.contains(where: { $0.id == selected })
