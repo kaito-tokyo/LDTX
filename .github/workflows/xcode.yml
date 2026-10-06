@@ -97,14 +97,14 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Development" \
-            PROVISIONING_PROFILE= \
-            LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
-            DEVELOPMENT_TEAM=4HMJS6J4MZ \
+            CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
+
+      - name: Sign test products
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: python3 scripts/sign-xcode-ci-products.py .derivedData/Build/Products/Debug
 
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -117,11 +117,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Development" \
-            PROVISIONING_PROFILE= \
-            LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
-            DEVELOPMENT_TEAM=4HMJS6J4MZ \
+            CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
@@ -143,14 +139,21 @@ jobs:
               -configuration Debug \
               -destination 'platform=macOS,arch=arm64' \
               -derivedDataPath .derivedData \
-              CODE_SIGN_STYLE=Manual \
-              CODE_SIGN_IDENTITY="Apple Development" \
-              PROVISIONING_PROFILE= \
-              LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
-              DEVELOPMENT_TEAM=4HMJS6J4MZ \
+              CODE_SIGNING_ALLOWED=NO \
               COMPILER_INDEX_STORE_ENABLE=NO \
+              -resultBundlePath "$RUNNER_TEMP/$scheme-build.xcresult" \
+              build-for-testing 2>&1 | tee "$RUNNER_TEMP/$scheme-build.log" | xcbeautify --renderer github-actions
+            python3 scripts/sign-xcode-ci-products.py .derivedData/Build/Products/Debug
+            xcodebuild \
+              -skipPackagePluginValidation \
+              -project LDTX.xcodeproj \
+              -scheme "$scheme" \
+              -configuration Debug \
+              -destination 'platform=macOS,arch=arm64' \
+              -derivedDataPath .derivedData \
+              CODE_SIGNING_ALLOWED=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
-              test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
+              test-without-building 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
           done
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
