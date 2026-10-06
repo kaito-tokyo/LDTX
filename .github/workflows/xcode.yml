@@ -14,13 +14,9 @@ jobs:
   golden_gate:
     runs-on: xcode-27
     timeout-minutes: 180
-    environment: apple-development
 
     permissions:
       contents: read
-
-    env:
-      LDTX_APP_PROVISIONING_PROFILE_UUID: ${{ secrets.MACOS_PROVISIONING_PROFILE_UUID }}
 
     steps:
       - name: Checkout
@@ -28,25 +24,6 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
-
-      - name: Print SIP status
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: csrutil status
-
-      - name: Set up Apple Development signing
-        uses: kaito-tokyo/setup-apple-codesigning@v1.0.0
-        with:
-          MACOS_SIGNING_CERT: ${{ secrets.MACOS_SIGNING_CERT }}
-          MACOS_SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
-
-      - name: Install app provisioning profile
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
-        run: |
-          profile_dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
-          mkdir -p "$profile_dir"
-          base64 --decode <<<"${MACOS_PROVISIONING_PROFILE_BASE64:?}" >"$profile_dir/${LDTX_APP_PROVISIONING_PROFILE_UUID:?}.provisionprofile"
 
       - name: Print xcbeautify version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -93,18 +70,18 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan Default \
+            -testPlan GitHubActions \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
-
-      - name: Sign test products
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: python3 scripts/sign-xcode-ci-products.py .derivedData/Build/Products/Debug
 
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -113,11 +90,15 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan Default \
+            -testPlan GitHubActions \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
@@ -139,21 +120,14 @@ jobs:
               -configuration Debug \
               -destination 'platform=macOS,arch=arm64' \
               -derivedDataPath .derivedData \
-              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY=- \
+              PROVISIONING_PROFILE= \
+              PROVISIONING_PROFILE_SPECIFIER= \
+              CODE_SIGN_ENTITLEMENTS= \
               COMPILER_INDEX_STORE_ENABLE=NO \
-              -resultBundlePath "$RUNNER_TEMP/$scheme-build.xcresult" \
-              build-for-testing 2>&1 | tee "$RUNNER_TEMP/$scheme-build.log" | xcbeautify --renderer github-actions
-            python3 scripts/sign-xcode-ci-products.py .derivedData/Build/Products/Debug
-            xcodebuild \
-              -skipPackagePluginValidation \
-              -project LDTX.xcodeproj \
-              -scheme "$scheme" \
-              -configuration Debug \
-              -destination 'platform=macOS,arch=arm64' \
-              -derivedDataPath .derivedData \
-              CODE_SIGNING_ALLOWED=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
-              test-without-building 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
+              test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
           done
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
@@ -185,14 +159,6 @@ jobs:
         env:
           LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/Debug/LDTXHelper
         run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
-
-      - name: Remove app provisioning profile
-        if: always()
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          if [[ -n "${LDTX_APP_PROVISIONING_PROFILE_UUID:-}" ]]; then
-            rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$LDTX_APP_PROVISIONING_PROFILE_UUID.provisionprofile"
-          fi
 
       - name: Upload Xcode diagnostics
         if: always()

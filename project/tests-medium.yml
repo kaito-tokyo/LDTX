@@ -9,6 +9,12 @@ targets:
     sources:
       - Tests/LDTXMediumTests
     dependencies:
+      - target: LDTXVideoRendering
+      - target: LDTXVideoComposition
+      - target: LDTXTaskQueue
+      - target: LDTXInternalProtocols
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXAudioEngine
       - target: LDTXDash
       - target: LDTXWorkspaceAppletUI
       - target: LDTXRecordPlayerApplet

@@ -181,7 +181,7 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
 ```
 
 The pull-request gate generates the Xcode project and runs the `LDTXApp` scheme,
-which includes the XcodeGen-managed Easy, Medium, and Hard targets. The
+with `GitHubActions.xctestplan`, which includes Easy and Medium, excluding Hard. The
 SwiftUI View component, XPC, AppKit SystemTests, and UI schemes run separately.
 `LDTXAppUIComponentTests` constructs SwiftUI View values in a hostless test
 runner and checks binding updates and derived component logic without launching
@@ -198,7 +198,8 @@ intentionally separate from the GitHub test gate. This repository does not use
 GitHub's merge queue.
 
 For XcodeGen-managed tests, `AGENTS.md` is the authoritative classification
-policy. Easy, Medium, and Hard classify execution cost and resource needs;
+policy. Easy covers pure logic, Medium covers GHA-compatible external resources and
+media processing, and Hard covers tests requiring Xcode Cloud;
 suite names describe Unit or Integration scope. SystemTests and XpcTests are
 isolated target boundaries for a specific SUT, not aliases for serialized
 Swift Testing suites. SwiftPM- and CMake-managed tests remain under their own
@@ -220,3 +221,24 @@ execution measurement timed the Easy Suite filter in `.github/workflows/swift.ym
 it ran 567 tests. Repeat this measurement on a clean CI cache before changing
 the package structure: at this baseline the build dominates the selected-test
 latency, but one local result alone does not establish a split boundary.
+
+### Xcode Cloud OCR tests
+
+A separate PR Test workflow named `On pull request - HardTests` can be configured in
+Xcode Cloud for pull requests targeting `main`. Select the `LDTXApp` scheme,
+Debug configuration, macOS 27, and the `XcodeCloud` test plan. Leave signing to
+Xcode Cloud and keep the existing release Archive workflows unchanged.
+`ci_scripts/ci_post_clone.sh` generates the project before the test action.
+The Hard target is hosted by `LDTXApp` so its OCR uses the app's inference
+entitlement. Missing inference support is a test failure, not a skipped success.
+The local command for the same test plan is:
+
+```sh
+xcodebuild -project LDTX.xcodeproj -scheme LDTXApp -testPlan XcodeCloud \
+  -configuration Debug -destination 'platform=macOS,arch=arm64' test
+```
+
+GitHub Actions uses ad-hoc signing and clears provisioning profiles and custom
+entitlements for its test builds. Production app entitlements remain unchanged.
+No Apple Development certificate or provisioning-profile secrets are consumed
+by the GHA test workflow. Existing secrets are retained for human-managed cleanup.

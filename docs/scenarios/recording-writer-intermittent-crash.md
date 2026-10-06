@@ -37,7 +37,7 @@ was used instead.
 
 ## Production lifecycle coverage
 
-The stress coverage in `AudioSideStreamSegmentPipelineHardTests` exercises
+The stress coverage in `AudioSideStreamSegmentPipelineIntegrationTestSuite` exercises
 production recording components:
 
 - `concurrentRecordingRemuxLifecycleStress`

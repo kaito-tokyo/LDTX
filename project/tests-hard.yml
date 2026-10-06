@@ -9,32 +9,20 @@ targets:
     sources:
       - Tests/LDTXHardTests
     dependencies:
-      - target: LDTXWorkspaceAppletUI
-      - target: LDTXAudioEngine
-      - target: LDTXBackgroundSegmentation
+      - target: LDTXApp
       - target: LDTXCapture
-      - target: LDTXDash
-      - target: LDTXDiagnostics
       - target: LDTXInternalProtocols
-      - target: LDTXMP4
-      - target: LDTXProgram
-      - target: LDTXProtos
-      - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
-      - target: LDTXRecording
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceAppletStore
+      - target: LDTXProtos
+      - target: LDTXVision
       - target: LDTXWorkspaceAppletService
-      - target: LDTXWorkspaceAppletController
-      - target: LDTXYouTubeAuth
-      - package: AppAuth-iOS
-        product: AppAuth
+      - target: LDTXWorkspaceAppletStore
       - package: SwiftProtobuf
         product: SwiftProtobuf
     settings:
       base:
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
+        BUNDLE_LOADER: "$(TEST_HOST)"
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         CLANG_CXX_LANGUAGE_STANDARD: c++20

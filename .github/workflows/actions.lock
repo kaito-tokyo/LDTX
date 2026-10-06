@@ -24,7 +24,6 @@ workflows:
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.1'
-        - 'kaito-tokyo/setup-apple-codesigning@v1.0.0'
 dependencies:
     'actions/attest@v4.2.2':
         ref: 'v4.2.2'
@@ -68,8 +67,3 @@ dependencies:
         repo_id: 496012378
         uses:
             - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
-    'kaito-tokyo/setup-apple-codesigning@v1.0.0':
-        ref: 'v1.0.0'
-        commit: 'sha1-b9f7d7c6819fe6f6bb44694b75963918dcbddd27'
-        owner_id: 160049919
-        repo_id: 1283411538
