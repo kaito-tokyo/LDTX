@@ -33,15 +33,12 @@ targets:
         com.apple.security.files.user-selected.read-only: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX).QuickLookPreview
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
         PRODUCT_NAME: LDTXQuickLookPreview
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-      configs:
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookPreview
   LDTXQuickLookThumbnail:
     type: app-extension
     platform: macOS
@@ -72,12 +69,9 @@ targets:
         com.apple.security.files.user-selected.read-only: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX).QuickLookThumbnail
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookThumbnail
         PRODUCT_NAME: LDTXQuickLookThumbnail
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-      configs:
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.QuickLookThumbnail

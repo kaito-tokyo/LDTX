@@ -19,6 +19,9 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      LDTX_APP_PROVISIONING_PROFILE_UUID: ${{ secrets.MACOS_PROVISIONING_PROFILE_UUID }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -35,6 +38,15 @@ jobs:
         with:
           MACOS_SIGNING_CERT: ${{ secrets.MACOS_SIGNING_CERT }}
           MACOS_SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
+
+      - name: Install app provisioning profile
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          profile_dir="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$profile_dir"
+          base64 --decode <<<"${MACOS_PROVISIONING_PROFILE_BASE64:?}" >"$profile_dir/${LDTX_APP_PROVISIONING_PROFILE_UUID:?}.provisionprofile"
 
       - name: Print xcbeautify version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -88,9 +100,8 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Development" \
             PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
+            LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
             DEVELOPMENT_TEAM=4HMJS6J4MZ \
-            LDTX_BUNDLE_ID_SUFFIX= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
@@ -109,9 +120,8 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Development" \
             PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
+            LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
             DEVELOPMENT_TEAM=4HMJS6J4MZ \
-            LDTX_BUNDLE_ID_SUFFIX= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
@@ -136,9 +146,8 @@ jobs:
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="Apple Development" \
               PROVISIONING_PROFILE= \
-              PROVISIONING_PROFILE_SPECIFIER= \
+              LDTX_APP_PROVISIONING_PROFILE_UUID="$LDTX_APP_PROVISIONING_PROFILE_UUID" \
               DEVELOPMENT_TEAM=4HMJS6J4MZ \
-              LDTX_BUNDLE_ID_SUFFIX= \
               COMPILER_INDEX_STORE_ENABLE=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
               test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
@@ -173,6 +182,14 @@ jobs:
         env:
           LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/Debug/LDTXHelper
         run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
+
+      - name: Remove app provisioning profile
+        if: always()
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          if [[ -n "${LDTX_APP_PROVISIONING_PROFILE_UUID:-}" ]]; then
+            rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$LDTX_APP_PROVISIONING_PROFILE_UUID.provisionprofile"
+          fi
 
       - name: Upload Xcode diagnostics
         if: always()

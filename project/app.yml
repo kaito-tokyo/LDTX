@@ -220,7 +220,7 @@ targets:
         basedOnDependencyAnalysis: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX$(LDTX_BUNDLE_ID_SUFFIX)
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
         PRODUCT_NAME: LDTX
         PRODUCT_MODULE_NAME: LDTXApp
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
@@ -230,6 +230,7 @@ targets:
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
         INFOPLIST_FILE: Sources/LDTXApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
+        PROVISIONING_PROFILE_SPECIFIER: "$(LDTX_APP_PROVISIONING_PROFILE_UUID)"
         DEAD_CODE_STRIPPING: "YES"
         DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
         DEFINES_MODULE: "YES"
@@ -241,8 +242,6 @@ targets:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
 
 schemes:
   LDTXWorkspaceAppletUI:

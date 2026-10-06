@@ -206,6 +206,7 @@ public struct WorkspaceSidebar: View {
 
 }
 
+#if DEBUG
 #Preview("Workspace Sidebar") {
   @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
   WorkspaceSidebar(
@@ -214,3 +215,4 @@ public struct WorkspaceSidebar: View {
   )
   .frame(width: 260, height: 640)
 }
+#endif
