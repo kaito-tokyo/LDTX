@@ -14,6 +14,7 @@ jobs:
   golden_gate:
     runs-on: xcode-27
     timeout-minutes: 180
+    environment: apple-development
 
     permissions:
       contents: read
@@ -24,6 +25,25 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+      - name: Set up Apple Development signing
+        uses: kaito-tokyo/setup-apple-codesigning@v1.0.0
+        with:
+          MACOS_SIGNING_CERT: ${{ secrets.MACOS_SIGNING_CERT }}
+          MACOS_SIGNING_CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
+
+      - name: Prepare provisioning authentication
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+        run: |
+          : "${APP_STORE_CONNECT_KEY_BASE64:?Set APP_STORE_CONNECT_KEY_BASE64 in apple-development}"
+          : "${APP_STORE_CONNECT_KEY_ID:?Set APP_STORE_CONNECT_KEY_ID in apple-development}"
+          : "${APP_STORE_CONNECT_ISSUER:?Set APP_STORE_CONNECT_ISSUER in apple-development}"
+          umask 077
+          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8"
 
       - name: Print xcbeautify version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -65,6 +85,9 @@ jobs:
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
         run: |
           xcodebuild \
             -skipPackagePluginValidation \
@@ -74,16 +97,23 @@ jobs:
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            DEVELOPMENT_TEAM= \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            DEVELOPMENT_TEAM=4HMJS6J4MZ \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
         run: |
           xcodebuild \
             -skipPackagePluginValidation \
@@ -93,16 +123,23 @@ jobs:
             -configuration CI \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            DEVELOPMENT_TEAM= \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            DEVELOPMENT_TEAM=4HMJS6J4MZ \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
       - name: Test App UI component, XPC, and system schemes
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
         run: |
           for scheme in \
             LDTXAppUIComponentTests \
@@ -118,10 +155,14 @@ jobs:
               -configuration CI \
               -destination 'platform=macOS,arch=arm64' \
               -derivedDataPath .derivedData \
-              CODE_SIGN_STYLE=Manual \
-              CODE_SIGN_IDENTITY=- \
-              DEVELOPMENT_TEAM= \
-              AD_HOC_CODE_SIGNING_ALLOWED=YES \
+              -allowProvisioningUpdates \
+              -allowProvisioningDeviceRegistration \
+              -authenticationKeyPath "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8" \
+              -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+              -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER" \
+              CODE_SIGN_STYLE=Automatic \
+              CODE_SIGN_IDENTITY="Apple Development" \
+              DEVELOPMENT_TEAM=4HMJS6J4MZ \
               COMPILER_INDEX_STORE_ENABLE=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
               test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
@@ -156,6 +197,11 @@ jobs:
         env:
           LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
         run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
+
+      - name: Remove provisioning authentication
+        if: always()
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: rm -f "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8"
 
       - name: Upload Xcode diagnostics
         if: always()
