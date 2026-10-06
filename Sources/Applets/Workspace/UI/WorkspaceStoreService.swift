@@ -186,7 +186,8 @@ public final class WorkspaceStoreService {
   var videoComponentOptions: [WorkspaceSelectionOption<UInt64>] {
     definition.videoComponents.compactMap { component in
       guard let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component),
-        let name = component.displayName else { return nil }
+        let name = component.displayName
+      else { return nil }
       return .init(id: id, name: name)
     }
   }

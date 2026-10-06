@@ -130,7 +130,8 @@
             MTLSize(width: Int(rect.width), height: Int(rect.height), depth: 1),
             threadsPerThreadgroup: MTLSize(
               width: pipeline.threadExecutionWidth,
-              height: max(1, pipeline.maxTotalThreadsPerThreadgroup / pipeline.threadExecutionWidth),
+              height: max(
+                1, pipeline.maxTotalThreadsPerThreadgroup / pipeline.threadExecutionWidth),
               depth: 1))
         }
         encoder.endEncoding()

@@ -237,12 +237,14 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
 
   override func viewWillMove(toWindow newWindow: NSWindow?) {
     if let window {
-      NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+      NotificationCenter.default.removeObserver(
+        self, name: NSWindow.willCloseNotification, object: window)
     }
     super.viewWillMove(toWindow: newWindow)
     isPaused = true
     if let newWindow {
-      NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(windowWillClose(_:)),
         name: NSWindow.willCloseNotification, object: newWindow)
     }
   }

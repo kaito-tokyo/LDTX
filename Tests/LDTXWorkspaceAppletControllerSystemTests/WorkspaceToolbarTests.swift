@@ -17,11 +17,17 @@ import Testing
 struct WorkspaceToolbarSystemTestSuite {
   @Test func meterOwnsDrawingLifetimeAndEditorsReleaseWithoutStop() async throws {
     _ = NSApplication.shared
-    let first = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
-    let second = NSWindow(contentRect: first.frame, styleMask: [.titled], backing: .buffered, defer: false)
+    let first = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled],
+      backing: .buffered, defer: false)
+    let second = NSWindow(
+      contentRect: first.frame, styleMask: [.titled], backing: .buffered, defer: false)
     first.isReleasedWhenClosed = false
     second.isReleasedWhenClosed = false
-    defer { first.close(); second.close() }
+    defer {
+      first.close()
+      second.close()
+    }
     var meter: AudioPeakMeterMTKView? = AudioPeakMeterMTKView()
     weak var releasedMeter = meter
     #expect(try #require(meter).isPaused)
@@ -79,7 +85,9 @@ struct WorkspaceToolbarSystemTestSuite {
     let content = AudioMixEditor(storeService: service)
     #expect(!content.isViewLoaded)
     service.editorFailureMessage = "Initial failure"
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentViewController = content
     window.orderFront(nil)
@@ -102,7 +110,9 @@ struct WorkspaceToolbarSystemTestSuite {
     service.definition.programs = [program]
     let editor = MasterVolumeEditor(storeService: service)
     #expect(!editor.isViewLoaded)
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentViewController = editor
     window.orderFront(nil)
@@ -292,14 +302,16 @@ struct WorkspaceToolbarSystemTestSuite {
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
       let content = first.contentPane
       for id: UInt64 in [10, 20, 30] {
-        try content.storeService.setVideoLayerIncluded(true, componentID: id, programID: 100, target: target)
+        try content.storeService.setVideoLayerIncluded(
+          true, componentID: id, programID: 100, target: target)
       }
       try content.storeService.commitLayerOrder([30, 10, 20], programID: 100, target: target)
       #expect(state.definition.programs[0][keyPath: target.layerIDs] == [30, 10, 20])
       #expect(throws: WorkspaceSelectionError.self) {
         try content.storeService.commitLayerOrder([10], programID: 100, target: target)
       }
-      try content.storeService.setVideoLayerIncluded(false, componentID: 30, programID: 100, target: target)
+      try content.storeService.setVideoLayerIncluded(
+        false, componentID: 30, programID: 100, target: target)
       var preference = try content.storeService.preferences(for: 100, target: target)
       preference.audioMasterVolumeDecibelTenths = -80
       preference.videoLayerHidden[10] = true
@@ -310,13 +322,15 @@ struct WorkspaceToolbarSystemTestSuite {
       for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
         state.isOutputActive = value.isOutputActive
         #expect(throws: WorkspaceSelectionError.self) {
-          try content.storeService.setVideoLayerIncluded(false, componentID: 20, programID: 100, target: target)
+          try content.storeService.setVideoLayerIncluded(
+            false, componentID: 20, programID: 100, target: target)
         }
         try content.storeService.commitLayerOrder([20, 10], programID: 100, target: target)
         try content.storeService.commitLayerOrder([10, 20], programID: 100, target: target)
       }
       state.isOutputActive = false
-      try content.storeService.setVideoLayerIncluded(false, componentID: 20, programID: 100, target: target)
+      try content.storeService.setVideoLayerIncluded(
+        false, componentID: 20, programID: 100, target: target)
     }
     #expect(state.definition.programs[0].landscapeVideoLayerInternalIds == [10])
     #expect(state.definition.programs[0].portraitVideoLayerInternalIds == [10])

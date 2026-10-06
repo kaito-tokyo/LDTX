@@ -16,10 +16,13 @@ TEST_CASE("system default monitor output") {
     return;
   auto *engine = LDTXAudioCreate(true);
   REQUIRE(engine);
-  LDTXAudioSetErrorHandler(engine, [](void *, const char *source, int32_t status) {
-    if (status)
-      std::cerr << source << ": Core Audio error " << status << '\n';
-  }, nullptr);
+  LDTXAudioSetErrorHandler(
+      engine,
+      [](void *, const char *source, int32_t status) {
+        if (status)
+          std::cerr << source << ": Core Audio error " << status << '\n';
+      },
+      nullptr);
   auto input = LDTXAudioAddInput(engine, "monitor-silence", 2, 48000, 2);
   LDTXAudioRoute route{input, 1, true};
   LDTXAudioConfigureMonitor(engine, "", &route, 1, 1);

@@ -19,7 +19,9 @@ final class VideoLayersEditorTests {
     program.internalID = 100
     program.landscapeVideoLayerInternalIds = [1]
     storeService.definition.programs = [program]
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentViewController = editor
     window.orderFront(nil)
@@ -34,8 +36,6 @@ final class VideoLayersEditorTests {
     #expect(editor.table.layerIDs == [1, 2])
   }
 
-
-
   @Test func hiddenVideoTabUsesLatestStateWhenShown() async throws {
     _ = NSApplication.shared
     let service = WorkspaceStoreService(definition: .init(), preferences: .init())
@@ -49,7 +49,9 @@ final class VideoLayersEditorTests {
     let tabs = NSTabViewController()
     tabs.addTabViewItem(NSTabViewItem(viewController: landscape))
     tabs.addTabViewItem(NSTabViewItem(viewController: portrait))
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 720, height: 400), styleMask: [.titled],
+      backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.contentViewController = tabs
     window.orderFront(nil)
@@ -63,8 +65,6 @@ final class VideoLayersEditorTests {
     #expect(portrait.table.layerIDs == [2, 3])
   }
 
-
-
   @Test func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {
     let service = WorkspaceStoreService(definition: .init(), preferences: .init())
     var first = Ldtx_Workspace_V4_ProgramDefinition()
@@ -76,9 +76,11 @@ final class VideoLayersEditorTests {
     service.definition.videoComponents = [10, 20].map {
       WorkspaceResourceFactory.makeSolidColor(id: UInt64($0), name: "Color \($0)")
     }
-    service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerHidden[10] = true
+    service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerHidden[10] =
+      true
     let preferences = service.preferences
-    let controls = VideoComponentProgramLayers(storeService: service, componentID: .solidColorFill(10))
+    let controls = VideoComponentProgramLayers(
+      storeService: service, componentID: .solidColorFill(10))
     let landscape = controls.membership(for: 100, target: .landscape)
     let portrait = controls.membership(for: 100, target: .portrait)
     #expect(!landscape.wrappedValue && !portrait.wrappedValue)
@@ -827,8 +829,6 @@ extension VideoLayersEditorTests {
     #expect(table.layerIDs == [1, 2, 3])
     #expect(failures == 1)
   }
-
-
 
   @Test func changingProgramDiscardsTransformDraft() throws {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
