@@ -45,6 +45,13 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AppleDevelopmentAuthKey.p8"
 
+      - name: Set a short provisioning device name
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          sudo scutil --set ComputerName LDTX-CI
+          sudo scutil --set LocalHostName LDTX-CI
+          sudo scutil --set HostName LDTX-CI
+
       - name: Print xcbeautify version
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcbeautify --version
