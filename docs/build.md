@@ -20,25 +20,10 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Sources/LDTXProgram/persistence.pb.swift`            | `Protos/persistence.proto`                        |
-| `Sources/LDTXProgram/program.pb.swift`                | `Protos/program.proto`                            |
-| `Sources/LDTXProtos/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
 | `Sources/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/LDTXProtos/youtube_output.pb.swift`      | `Protos/youtube_output.proto`                     |
 | `Sources/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
-
-**If a Program schema under `Protos/` changes:**
-
-```sh
-protoc \
-  --proto_path=Protos \
-  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
-  --swift_opt=Visibility=Public \
-  --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXProgram \
-  Protos/program.proto \
-  Protos/persistence.proto
-```
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
 `Protos/envelope.proto` defines the separate persistence envelopes. They are
@@ -48,11 +33,9 @@ documented at `docs/protos/workspace.html`.
 protoc \
   --proto_path=Protos \
   --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
-  --swift_opt=ProtoPathModuleMappings=Protos/module_mappings.asciipb \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
   --swift_out=Sources/LDTXProtos \
-  Protos/app_settings.proto \
   Protos/envelope.proto \
   Protos/workspace_v4_definition.proto \
   Protos/workspace_v4_input_device.proto \
@@ -94,7 +77,7 @@ protoc \
   --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXYouTubeOutputProtocol \
+  --swift_out=Sources/LDTXProtos \
   Protos/youtube_output.proto
 ```
 

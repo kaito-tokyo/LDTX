@@ -1,8 +1,0 @@
-mapping {
-  module_name: "LDTXProgram"
-  proto_file_path: "program.proto"
-}
-mapping {
-  module_name: "LDTXProgram"
-  proto_file_path: "persistence.proto"
-}

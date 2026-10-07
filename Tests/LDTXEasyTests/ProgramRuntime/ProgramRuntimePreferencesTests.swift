@@ -25,6 +25,32 @@ struct ProgramRuntimePreferencesUnitTestSuite {
     #expect(state.opaqueRevisionID == firstRevision + 1)
   }
 
+  @Test func sharedProgramStatePreservesRuntimeValuesWithoutSerialization() throws {
+    var configuration = runtimeConfiguration(componentName: "Clock")
+    var clock = ClockComponent(
+      destinationX: 0.3, destinationY: 0.4,
+      destinationWidth: 0.5, destinationHeight: 0.6,
+      showsSeconds: false, uses24HourTime: false
+    )
+    clock.outlines = [
+      ClockTextOutline(thickness: 1, color: "#000000"),
+      ClockTextOutline(thickness: 2, color: "#ffffff"),
+      ClockTextOutline(thickness: 3, color: "#ff0000"),
+    ]
+    configuration.composite.steps = [
+      CompositeProgramStep(id: "Clock", component: .clock(clock)),
+      CompositeProgramStep(id: "Clock", component: .testPattern),
+    ]
+    configuration.audioChannels = [ProgramAudioChannel(component: .silentAudio)]
+    configuration.outputProfile = configuration.outputProfile.withVideoBitRate(12_345_678)
+    let state = ProgramRuntimeState(configuration: configuration)
+    let stored = try #require(state.read { $0 })
+    #expect(stored.composite.steps == [configuration.composite.steps[0]])
+    #expect(stored.composite.audioChannels == configuration.audioChannels)
+    #expect(stored.audioChannels == configuration.audioChannels)
+    #expect(stored.outputProfile == configuration.outputProfile)
+  }
+
   @Test func outputConsumptionDoesNotFreezeOrReplaceTheSharedProgram() throws {
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),

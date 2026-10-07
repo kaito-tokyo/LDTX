@@ -170,87 +170,14 @@ extension CompositeProgramDefinition {
 
 /// The single shared mutable Program state used by preview and output consumers.
 ///
-/// The value stored here is the runtime projection of the protobuf-backed Program
+/// The value stored here is the runtime configuration projected from the Workspace
 /// definition. Consumers borrow or copy it only while holding the OS allocated
 /// unfair lock; they do not maintain independent preview/output mailboxes.
 public final class ProgramRuntimeState: @unchecked Sendable {
-  private struct RuntimeContext: Sendable {
-    var canvasWidth: Int
-    var canvasHeight: Int
-    var outputWidth: Int
-    var outputHeight: Int
-    var frameRate: Int
-    var timeSeconds: Float
-    var cameraIDsByInputKey: [String: String]
-    var inputDeviceNamesByInputKey: [String: String]
-    var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
-    var backgroundRemovalInputKeys: Set<String>
-    var videoLayerProgramName: String
-    var videoPTSMasterCameraID: String?
-
-    init(configuration: ProgramRuntimeConfiguration) {
-      canvasWidth = configuration.canvasWidth
-      canvasHeight = configuration.canvasHeight
-      outputWidth = configuration.outputWidth
-      outputHeight = configuration.outputHeight
-      frameRate = configuration.frameRate
-      timeSeconds = configuration.timeSeconds
-      cameraIDsByInputKey = configuration.cameraIDsByInputKey
-      inputDeviceNamesByInputKey = configuration.inputDeviceNamesByInputKey
-      cameraInputColorOverrides = configuration.cameraInputColorOverrides
-      backgroundRemovalInputKeys = configuration.backgroundRemovalInputKeys
-      videoLayerProgramName = configuration.videoLayerProgramName
-      videoPTSMasterCameraID = configuration.videoPTSMasterCameraID
-    }
-
-    func makeConfiguration(
-      composite: CompositeProgramDefinition
-    ) -> ProgramRuntimeConfiguration {
-      return ProgramRuntimeConfiguration(
-        composite: composite,
-        audioChannels: composite.audioChannels,
-        canvasWidth: canvasWidth,
-        canvasHeight: canvasHeight,
-        outputWidth: outputWidth,
-        outputHeight: outputHeight,
-        frameRate: frameRate,
-        timeSeconds: timeSeconds,
-        videoPTSMasterCameraID: videoPTSMasterCameraID,
-        cameraIDsByInputKey: cameraIDsByInputKey,
-        inputDeviceNamesByInputKey: inputDeviceNamesByInputKey,
-        cameraInputColorOverrides: cameraInputColorOverrides,
-        backgroundRemovalInputKeys: backgroundRemovalInputKeys,
-        videoLayerProgramName: videoLayerProgramName
-      )
-    }
-  }
-
-  /// The protobuf representation remains the persisted source of truth, but
-  /// is never exposed as mutable shared runtime state. The configuration is
-  /// decoded once while replacing the revisioned value, not by every frame
-  /// reader.
-  private struct ProgramValue: Sendable {
-    let message: Ldtx_Program_V1_Program
-    let configuration: ProgramRuntimeConfiguration
-
-    init(configuration: ProgramRuntimeConfiguration) {
-      var programDefinition = configuration.composite
-      programDefinition.audioChannels = configuration.audioChannels
-      let message = ProgramPersistenceCodec.encodeProgram(programDefinition)
-      var composite = ProgramPersistenceCodec.decodeProgram(message)
-      composite.restoreRuntimeDestinations(from: configuration.composite)
-
-      self.message = message
-      self.configuration = RuntimeContext(configuration: configuration)
-        .makeConfiguration(composite: composite)
-    }
-
-  }
-
   private struct Storage: Sendable, ProgramRevisioned {
     /// Retains a stable revision before the first Program is installed.
     var opaqueRevisionID = OpaqueRevisionIDs.initial()
-    var program: ProgramValue?
+    var configuration: ProgramRuntimeConfiguration?
   }
 
   private let storage = OSAllocatedUnfairLock(initialState: Storage())
@@ -263,18 +190,18 @@ public final class ProgramRuntimeState: @unchecked Sendable {
 
   public func replace(with configuration: ProgramRuntimeConfiguration) {
     storage.withLock {
-      guard $0.program?.configuration.hasEquivalentInputPipeline(to: configuration) != true else {
+      guard $0.configuration?.hasEquivalentInputPipeline(to: configuration) != true else {
         return
       }
-      $0.program = ProgramValue(configuration: configuration)
+      $0.configuration = configuration.normalizingProgramSteps()
       $0.advanceRevision()
     }
   }
 
   public func clear() {
     storage.withLock {
-      guard $0.program != nil else { return }
-      $0.program = nil
+      guard $0.configuration != nil else { return }
+      $0.configuration = nil
       $0.advanceRevision()
     }
   }
@@ -283,7 +210,7 @@ public final class ProgramRuntimeState: @unchecked Sendable {
     _ body: @Sendable (ProgramRuntimeConfiguration?) throws -> T
   ) rethrows -> T {
     let configuration = storage.withLock { state in
-      state.program?.configuration
+      state.configuration
     }
     return try body(configuration)
   }
@@ -293,27 +220,25 @@ public final class ProgramRuntimeState: @unchecked Sendable {
   }
 }
 
-extension CompositeProgramDefinition {
-  fileprivate mutating func restoreRuntimeDestinations(from source: CompositeProgramDefinition) {
-    let sourceByName = Dictionary(
-      source.steps.map { ($0.name, $0.component) },
-      uniquingKeysWith: { first, _ in first })
-    for index in steps.indices {
-      guard let sourceComponent = sourceByName[steps[index].name] else { continue }
-      switch (steps[index].component, sourceComponent) {
-      case (.inputCameraDevice(var component), .inputCameraDevice(let source)):
-        component.destination = source.destination
-        steps[index].component = .inputCameraDevice(component)
-      case (.clock(var component), .clock(let source)):
-        component.destinationX = source.destinationX
-        component.destinationY = source.destinationY
-        component.destinationWidth = source.destinationWidth
-        component.destinationHeight = source.destinationHeight
-        steps[index].component = .clock(component)
-      default:
-        continue
+extension ProgramRuntimeConfiguration {
+  fileprivate func normalizingProgramSteps() -> Self {
+    var configuration = self
+    configuration.composite.audioChannels = audioChannels
+    var seenNames = Set<String>()
+    var discardedNames: [String] = []
+    configuration.composite.steps = composite.steps.filter { step in
+      guard seenNames.insert(step.name).inserted else {
+        discardedNames.append(step.name)
+        return false
       }
+      return true
     }
+    if !discardedNames.isEmpty {
+      programPreviewLogger.warning(
+        "Discarded duplicate Program Steps during runtime update discardedStepNames=\(discardedNames.joined(separator: ","), privacy: .public) discardedCount=\(discardedNames.count, privacy: .public)"
+      )
+    }
+    return configuration
   }
 }
 

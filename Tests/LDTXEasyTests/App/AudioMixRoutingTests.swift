@@ -33,12 +33,10 @@ struct AudioMixRoutingUnitTestSuite {
   @Test func audioMixSettingsRoundTrip() throws {
     var source = ProgramPreferences(masterVolume: 0.5, monitorVolume: 0.25)
     source.setAudioMuted(true, inputDeviceName: "Mic")
-    let protobuf = try ProgramPersistenceCodec.encodeProgramPreferences(source)
-    #expect(try ProgramPersistenceCodec.decodeProgramPreferences(from: protobuf) == source)
     #expect(
       try JSONDecoder().decode(ProgramPreferences.self, from: JSONEncoder().encode(source))
         == source)
-    let defaults = try ProgramPersistenceCodec.decodeProgramPreferences(from: Data())
+    let defaults = ProgramPreferences()
     #expect(defaults.masterVolume == 1)
     #expect(defaults.monitorVolume == 1)
   }
