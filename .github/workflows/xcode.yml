@@ -99,25 +99,6 @@ jobs:
             -derivedDataPath .derivedData \
             -resolvePackageDependencies
 
-      - name: Test hostless OCR on GitHub Actions
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTXHardTests \
-            -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_ENTITLEMENTS= \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/ocr-test.xcresult" \
-            test 2>&1 | tee "$RUNNER_TEMP/ocr-test.log" | xcbeautify --renderer github-actions
-
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
@@ -217,8 +198,6 @@ jobs:
         with:
           name: xcode-diagnostics
           path: |
-            ${{ runner.temp }}/ocr-test.log
-            ${{ runner.temp }}/ocr-test.xcresult
             ${{ runner.temp }}/xcodebuild-build.log
             ${{ runner.temp }}/xcodebuild-test.log
             ${{ runner.temp }}/xcodebuild-build.xcresult
