@@ -202,8 +202,9 @@ intentionally separate from the GitHub test gate. This repository does not use
 GitHub's merge queue.
 
 For XcodeGen-managed tests, `AGENTS.md` is the authoritative classification
-policy. Easy covers pure logic, Medium covers GHA-compatible external resources and
-media processing, and Hard covers tests requiring Xcode Cloud;
+policy. Easy covers pure logic, Medium covers macOS APIs such as CoreGraphics,
+CoreAudio, and AudioToolbox, and Hard covers Vision, VideoToolbox, CoreML, Metal,
+and AVFoundation. CI availability does not determine the tier;
 suite names describe Unit or Integration scope. SystemTests and XpcTests are
 isolated target boundaries for a specific SUT, not aliases for serialized
 Swift Testing suites. SwiftPM- and CMake-managed tests remain under their own
@@ -226,20 +227,20 @@ it ran 567 tests. Repeat this measurement on a clean CI cache before changing
 the package structure: at this baseline the build dominates the selected-test
 latency, but one local result alone does not establish a split boundary.
 
-### Xcode Cloud UI tests
+### Xcode Cloud framework tests
 
 A separate PR Test workflow named `On pull request - HardTests` can be configured in
-Xcode Cloud for pull requests targeting `main`. Select the `LDTXApp` scheme,
+Xcode Cloud for pull requests targeting `main`. Select the `LDTXHardTests` scheme,
 Debug configuration, macOS 27, and the `XcodeCloud` test plan. Leave signing to
 Xcode Cloud and keep the existing release Archive workflows unchanged.
 `ci_scripts/ci_post_clone.sh` generates the project before the test action.
-The Hard target is a UI-testing bundle that launches `LDTXApp` through
-`XCUIApplication` and verifies launch and File-menu wiring. It does not load
-unit tests into the application or run the former direct-runtime OCR test.
+HardTests is a hostless unit-test bundle exercising the frameworks listed in
+`AGENTS.md`. It neither uses XCUI nor launches an application host.
+UI automation belongs only in `LDTXAppUITests`; only XpcTests may use `TEST_HOST`.
 The local command for the same test plan is:
 
 ```sh
-xcodebuild -project LDTX.xcodeproj -scheme LDTXApp -testPlan XcodeCloud \
+xcodebuild -project LDTX.xcodeproj -scheme LDTXHardTests -testPlan XcodeCloud \
   -configuration Debug -destination 'platform=macOS,arch=arm64' test
 ```
 

@@ -102,7 +102,8 @@ in CI separately from its classification.
 - **EasyTests target:** Pure logic tests without platform-framework execution
   dependencies.
 - **MediumTests target:** Tests that depend on macOS APIs, including
-  **CoreGraphics**, **CoreAudio**, and **AudioToolbox**, unless they exercise a
+  **CoreGraphics**, **CoreAudio**, **AudioToolbox**, **CoreMedia**, **CoreVideo**,
+  and **CoreImage**, plus non-View **SwiftUI** value APIs, unless they exercise a
   framework listed under HardTests.
 - **HardTests target:** Tests that exercise **Vision**, **VideoToolbox**,
   **CoreML**, **Metal**, or **AVFoundation**. Medium and Hard tests may have the
