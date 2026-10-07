@@ -23,6 +23,27 @@ import Testing
     #expect(timeline.audioPresentationStart(for: "video track.mp4") == nil)
   }
 
+  @Test(arguments: [
+    (Int64(9_007_199_254_740_993), Int64(9_007_199_254_740_992), Int64(1), Int64(1_000_000_000)),
+    (Int64.max, Int64.min, Int64.max, Int64(2_000_000_000)),
+    (Int64.min, Int64.max, Int64.max, Int64(-2_000_000_000)),
+  ])
+  func preservesLargeTimestampDifferences(
+    firstTime: Int64, offset: Int64, timescale: Int64, expectedNanoseconds: Int64
+  ) throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    try """
+    <MPD><Period><AdaptationSet><Representation>
+    <SegmentList timescale="\(timescale)" presentationTimeOffset="\(offset)">
+    <Initialization sourceURL="video.mp4"/>
+    <SegmentTimeline><S t="\(firstTime)" d="1"/></SegmentTimeline>
+    </SegmentList></Representation></AdaptationSet></Period></MPD>
+    """.write(to: url, atomically: true, encoding: .utf8)
+    let timeline = try RecordingDASHManifestTimeline(contentsOf: url)
+    #expect(timeline.presentationStart(for: "video.mp4") == expectedNanoseconds)
+  }
+
   @Test func rejectsMalformedXML() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }

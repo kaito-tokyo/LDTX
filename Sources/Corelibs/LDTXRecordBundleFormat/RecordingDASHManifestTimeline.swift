@@ -90,8 +90,17 @@ private final class RecordingDASHParserDelegate: NSObject, XMLParserDelegate {
 
   private func storeIfComplete() {
     guard timescale > 0, let mediaPath, let firstPresentationTime else { return }
-    let mediaStart =
-      (Double(firstPresentationTime) - Double(presentationTimeOffset)) / Double(timescale)
+    let (difference, overflow) = firstPresentationTime.subtractingReportingOverflow(
+      presentationTimeOffset)
+    let ticks: Double
+    if !overflow {
+      ticks = Double(difference)
+    } else if firstPresentationTime > presentationTimeOffset {
+      ticks = Double(UInt64(bitPattern: difference))
+    } else {
+      ticks = -Double(UInt64(bitPattern: presentationTimeOffset &- firstPresentationTime))
+    }
+    let mediaStart = ticks / Double(timescale)
     let nanoseconds = ((periodStart + mediaStart) * 1_000_000_000).rounded()
     guard nanoseconds.isFinite, nanoseconds >= Double(Int64.min), nanoseconds < Double(Int64.max)
     else {
