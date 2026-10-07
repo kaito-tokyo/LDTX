@@ -21,3 +21,5 @@ Feature: Manage Programs
     Then the existing runtime removes that Program and both canvas preferences
     And the other Program remains available
     And deletion during output or of a missing Program is rejected
+    And successful deletion marks the Document edited while rejected deletion does not
+    And saving and reopening preserves the deletion

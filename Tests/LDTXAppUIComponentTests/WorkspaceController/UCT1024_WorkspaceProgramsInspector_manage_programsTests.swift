@@ -72,18 +72,36 @@ extension AppUIComponentTestSuite {
       ]
       service.preferences.landscapeProgramPreferences[101] = .init()
       service.preferences.portraitProgramPreferences[101] = .init()
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let url = root.appendingPathComponent("DeletedProgram.ldtxworkspace")
+      try await saveWorkspaceDocument(document, to: url)
+      document.updateChangeCount(.changeCleared)
+      #expect(!document.isDocumentEdited)
       let controller = WorkspaceWindowController(
         storeService: service, persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
       service.isOutputActive = true
       #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
       #expect(service.definition.programs.count == 2)
+      #expect(!document.isDocumentEdited)
       service.isOutputActive = false
       try service.removeProgram(internalID: 101)
       #expect(service.definition.programs.map(\.internalID) == [100])
       #expect(service.preferences.landscapeProgramPreferences[101] == nil)
       #expect(service.preferences.portraitProgramPreferences[101] == nil)
+      #expect(document.isDocumentEdited)
+      document.updateChangeCount(.changeCleared)
       #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
+      #expect(!document.isDocumentEdited)
+      try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
+      let reopened = WorkspaceDocument()
+      defer { reopened.close() }
+      try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
+      #expect(reopened.storeService.definition.programs.map(\.internalID) == [100])
+      #expect(reopened.storeService.preferences.landscapeProgramPreferences[101] == nil)
+      #expect(reopened.storeService.preferences.portraitProgramPreferences[101] == nil)
       await controller.shutdown()
       controller.window?.close()
       document.close()

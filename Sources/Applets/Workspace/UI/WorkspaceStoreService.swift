@@ -171,6 +171,7 @@ public final class WorkspaceStoreService {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }
     try runtimeActions.removeProgram(internalID: internalID)
+    documentContentsDidChange?()
   }
 
   public func selectProgram(internalID: UInt64) throws {
