@@ -72,16 +72,16 @@ struct LinearGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Start X") {
-          Slider(value: $startX.double, in: 0...1)
+          Slider(value: $startX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Start Y") {
-          Slider(value: $startY.double, in: 0...1)
+          Slider(value: $startY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("End X") {
-          Slider(value: $endX.double, in: 0...1)
+          Slider(value: $endX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("End Y") {
-          Slider(value: $endY.double, in: 0...1)
+          Slider(value: $endY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
         ColorPicker("End Color", selection: $endColor, supportsOpacity: true)

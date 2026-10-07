@@ -3,6 +3,7 @@
 
 import LDTXProtos
 @testable import LDTXWorkspaceAppletUI
+import SwiftUI
 import Testing
 
 @Suite("Rational numeric editing")
@@ -30,4 +31,22 @@ struct RationalFormatStyleUnitTestSuite {
       #expect(throws: RationalInputError.self) { try RationalParseStrategy().parse(input) }
     }
   }
+  @Test func continuousSlidersUseExplicitPrecision() throws {
+    var value = Ldtx_Workspace_V4_Rational32()
+    let binding = Binding(get: { value }, set: { value = $0 }).sliderValue(denominator: 1_000_000)
+    for input in [0.123456789, Double.pi, 2 * Double.pi] {
+      binding.wrappedValue = input
+      #expect(abs(value.double - input) <= 0.0000005)
+      #expect(value.denominator == 1_000_000)
+    }
+    let previous = value
+    for input in [Double.nan, .infinity, Double.greatestFiniteMagnitude] {
+      binding.wrappedValue = input
+      #expect(value == previous)
+    }
+    let gain = try RationalSliderEncoding.encode(-11.899999999999999, denominator: 10)
+    #expect(gain.numerator == -119)
+    #expect(gain.denominator == 10)
+  }
+
 }

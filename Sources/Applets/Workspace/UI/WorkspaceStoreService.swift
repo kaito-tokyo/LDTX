@@ -249,8 +249,8 @@ public final class WorkspaceStoreService {
       return false
     }
     do {
-      preferences.audioChannelGainsDecibels[id] = try RationalParseStrategy().parse(
-        String(decibels))
+      preferences.audioChannelGainsDecibels[id] = try RationalSliderEncoding.encode(
+        decibels, denominator: 10)
     } catch {
       reportError(error)
       return false

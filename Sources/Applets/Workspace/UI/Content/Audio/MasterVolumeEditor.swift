@@ -126,9 +126,11 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
         peakProvider: { peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
         onPreview: { [weak storeService] gain in
           let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: gain)
+          guard let value = try? RationalSliderEncoding.encode(decibels, denominator: 10) else {
+            return
+          }
           storeService?.updateAudio(target: target) {
-            $0.audioMasterVolumeDecibels =
-              (try? RationalParseStrategy().parse(String(decibels))) ?? .init()
+            $0.audioMasterVolumeDecibels = value
           }
         }, onCommit: { _ in })
       masterFields[index].configure(

@@ -66,13 +66,14 @@ struct ConicGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Center X") {
-          Slider(value: $centerX.double, in: 0...1)
+          Slider(value: $centerX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Center Y") {
-          Slider(value: $centerY.double, in: 0...1)
+          Slider(value: $centerY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Start Angle") {
-          Slider(value: $startAngleRadians.double, in: 0...(Double.pi * 2))
+          Slider(
+            value: $startAngleRadians.sliderValue(denominator: 1_000_000), in: 0...(Double.pi * 2))
         }
         ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
         ColorPicker("End Color", selection: $endColor, supportsOpacity: true)

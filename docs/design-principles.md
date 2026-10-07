@@ -97,3 +97,8 @@ the relevant design or feature documentation instead.
   fields: translation and insets default to zero, while scale defaults to one.
 - Decimal editing uses `decimal` and `set(decimal:)`. Float and Double have no
   generic setters; each caller owns its quantization and encoding policy.
+
+- Continuous sliders use an explicit encoding precision instead of parsing the
+  full decimal expansion of a Double. Gradient sliders use a denominator of
+  1,000,000; audio gain sliders use 10 (0.1 dB). Unrepresentable input preserves
+  the last value rather than replacing it with an empty Rational.

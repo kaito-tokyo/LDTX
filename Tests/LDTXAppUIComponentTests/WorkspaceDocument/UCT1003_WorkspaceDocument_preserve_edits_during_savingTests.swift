@@ -144,8 +144,7 @@ extension AppUIComponentTestSuite {
       #expect(
         savedOutput.preferences.audioChannelGainsDecibels[102]
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -12
-            $0.denominator = 1
+            $0.set(num: -120, den: 10)
           })
       #expect(savedOutput.definition == fixedDefinition)
       document.storeService.isOutputActive = false

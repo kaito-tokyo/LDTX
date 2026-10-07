@@ -117,12 +117,25 @@ struct RationalParseStrategy: ParseStrategy {
   }
 }
 
+enum RationalSliderEncoding {
+  static func encode(_ value: Double, denominator: UInt32) throws -> Ldtx_Workspace_V4_Rational32 {
+    guard denominator > 0, value.isFinite,
+      let numerator = Int32(exactly: (value * Double(denominator)).rounded())
+    else { throw RationalInputError.overflow }
+    var result = Ldtx_Workspace_V4_Rational32()
+    result.set(num: numerator, den: denominator)
+    return result
+  }
+}
+
 extension Binding where Value == Ldtx_Workspace_V4_Rational32 {
-  var double: Binding<Double> {
+  func sliderValue(denominator: UInt32) -> Binding<Double> {
     Binding<Double>(
       get: { wrappedValue.double },
       set: {
-        if let value = try? RationalParseStrategy().parse(String($0)) { wrappedValue = value }
+        if let value = try? RationalSliderEncoding.encode($0, denominator: denominator) {
+          wrappedValue = value
+        }
       })
   }
 }

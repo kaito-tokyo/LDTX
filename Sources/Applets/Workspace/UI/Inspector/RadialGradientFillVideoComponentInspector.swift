@@ -72,16 +72,16 @@ struct RadialGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Center X") {
-          Slider(value: $centerX.double, in: 0...1)
+          Slider(value: $centerX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Center Y") {
-          Slider(value: $centerY.double, in: 0...1)
+          Slider(value: $centerY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Inner Radius") {
-          Slider(value: $innerRadius.double, in: 0...1)
+          Slider(value: $innerRadius.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Outer Radius") {
-          Slider(value: $outerRadius.double, in: 0...1)
+          Slider(value: $outerRadius.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         ColorPicker("Inner Color", selection: $innerColor, supportsOpacity: true)
         ColorPicker("Outer Color", selection: $outerColor, supportsOpacity: true)

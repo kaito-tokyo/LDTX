@@ -45,16 +45,14 @@ extension AppUIComponentTestSuite {
       #expect(
         service.preferences.audioChannelGainsDecibels[10]
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -12
-            $0.denominator = 1
+            $0.set(num: -120, den: 10)
           })
       #expect(!service.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
       #expect(!service.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
       #expect(
         service.preferences.audioChannelGainsDecibels[10]
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -12
-            $0.denominator = 1
+            $0.set(num: -120, den: 10)
           })
       #expect(service.selectedAudioMix == .portrait)
     }
