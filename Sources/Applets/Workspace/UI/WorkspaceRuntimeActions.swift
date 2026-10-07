@@ -11,6 +11,7 @@ public protocol WorkspaceRuntimeActions: AnyObject {
   @MainActor func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void)
+  @MainActor func removeProgram(internalID: UInt64) throws
   @MainActor func selectProgram(internalID: UInt64) throws
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws

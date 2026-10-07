@@ -115,3 +115,8 @@ The running **Output Session** uses that runtime configuration; editing is locke
 - **Video Track:** The exactly-one visual-composition **Output Track** in a **Program**. Its editor is **Video Layers**.
 - **Workspace:** A saved `.ldtxworkspace` bundle containing reusable resources, **Programs**, and their **Preferences**.
 - **Workspace Definition:** The persisted reusable-resource and **Program** structure in `WorkspaceDefinitionV4`.
+
+Programs can be renamed or deleted from the Programs Inspector. Rename uses a
+name draft and validates uniqueness across all Workspace resources. Delete
+requires confirmation and removes that Program's Landscape and Portrait
+preferences. Both operations are unavailable during output.

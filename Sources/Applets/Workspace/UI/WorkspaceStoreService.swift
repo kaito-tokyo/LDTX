@@ -87,6 +87,35 @@ public final class WorkspaceStoreService {
       availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
   }
 
+  public func renameProgram(internalID: UInt64, name: String) throws {
+    guard !isOutputActive else {
+      throw WorkspaceSelectionError(message: "Programs cannot be edited during output.")
+    }
+    guard let index = definition.programs.firstIndex(where: { $0.internalID == internalID }) else {
+      throw WorkspaceSelectionError(message: "The Program is no longer available.")
+    }
+    let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    var otherResources = definition
+    otherResources.programs.remove(at: index)
+    guard !candidate.isEmpty,
+      !WorkspaceResourceAddition.existingNames(otherResources).contains(candidate)
+    else {
+      throw WorkspaceSelectionError(message: "Enter a unique, nonempty Program name.")
+    }
+    definition.programs[index].displayName = candidate
+    updateProgramRuntimes()
+  }
+
+  public func removeProgram(internalID: UInt64) throws {
+    guard !isOutputActive else {
+      throw WorkspaceSelectionError(message: "Programs cannot be deleted during output.")
+    }
+    guard let runtimeActions else {
+      throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
+    }
+    try runtimeActions.removeProgram(internalID: internalID)
+  }
+
   public func selectProgram(internalID: UInt64) throws {
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")

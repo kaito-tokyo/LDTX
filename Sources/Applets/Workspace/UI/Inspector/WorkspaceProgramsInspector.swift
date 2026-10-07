@@ -30,6 +30,15 @@ struct WorkspaceProgramsInspector: View {
   let storeService: WorkspaceStoreService
   @Bindable var appletData: WorkspaceAppletData
 
+  private struct ActionTarget: Identifiable {
+    let id: UInt64
+    let name: String
+  }
+  @State private var renameTarget: ActionTarget?
+  @State private var nameDraft = ""
+  @State private var deleteTarget: ActionTarget?
+  @State private var showsDeleteConfirmation = false
+
   private var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
     return document.fileURL ?? storeService.localStateURL
@@ -43,10 +52,51 @@ struct WorkspaceProgramsInspector: View {
         programs: storeService.definition.programs, selection: programSelection
       )
       .disabled(!canSelectProgram)
+      ForEach(storeService.definition.programs, id: \.internalID) { program in
+        HStack {
+          Text(program.displayName)
+          Spacer()
+          Button("Rename…") {
+            nameDraft = program.displayName
+            renameTarget = ActionTarget(id: program.internalID, name: program.displayName)
+          }
+          Button("Delete…", role: .destructive) {
+            deleteTarget = ActionTarget(id: program.internalID, name: program.displayName)
+            showsDeleteConfirmation = true
+          }
+        }
+        .disabled(storeService.isOutputActive)
+      }
       Button("Add Program") { addProgram() }
         .disabled(storeService.isOutputActive)
     }
     .formStyle(.grouped)
+    .sheet(item: $renameTarget) { target in
+      ItemNameDialog(
+        name: $nameDraft, title: "Rename Program", fieldTitle: "Name", submitTitle: "Rename",
+        isNameAvailable: { name in
+          var definition = storeService.definition
+          definition.programs.removeAll { $0.internalID == target.id }
+          return !WorkspaceResourceAddition.existingNames(definition).contains(name)
+        },
+        submit: { name in
+          do {
+            try storeService.renameProgram(internalID: target.id, name: name)
+            renameTarget = nil
+          } catch { storeService.reportError(error) }
+        }, cancel: { renameTarget = nil })
+    }
+    .alert("Delete Program?", isPresented: $showsDeleteConfirmation, presenting: deleteTarget) {
+      target in
+      Button("Delete", role: .destructive) {
+        do { try storeService.removeProgram(internalID: target.id) } catch {
+          storeService.reportError(error)
+        }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: { target in
+      Text("Delete “\(target.name)” and its saved preferences? This cannot be undone.")
+    }
   }
 
   private func addProgram() {

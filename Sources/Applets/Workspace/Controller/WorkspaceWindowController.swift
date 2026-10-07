@@ -331,6 +331,20 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
+  public func removeProgram(internalID: UInt64) throws {
+    guard shutdownTask == nil, !storeService.isOutputActive else {
+      throw NSError(
+        domain: "WorkspaceProgramDeletion", code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey: "Programs cannot be deleted during output or shutdown."
+        ])
+    }
+    try windowRuntime.removeProgram(internalID: internalID)
+    synchronizeDeviceAssignments()
+    synchronizeVision()
+    synchronizeAudioMonitor()
+  }
+
   public func selectProgram(internalID: UInt64) throws {
     guard let document = document as? NSDocument else {
       throw NSError(
