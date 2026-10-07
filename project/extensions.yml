@@ -7,13 +7,16 @@ targets:
     type: app-extension
     platform: macOS
     sources:
-      - Sources/LDTXQuickLookPreview
+      - Sources/Extensions/QuickLookPreview
     dependencies:
       - target: LDTXRecording
         embed: true
         codeSign: true
+      - target: LDTXRecordBundleFormat
+        embed: true
+        codeSign: true
     info:
-      path: Sources/LDTXQuickLookPreview/Info.plist
+      path: Sources/Extensions/QuickLookPreview/Info.plist
       properties:
         CFBundleDisplayName: LDTX Recording Preview
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -27,7 +30,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.quicklook.preview
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewProvider
     entitlements:
-      path: Sources/LDTXQuickLookPreview/LDTXQuickLookPreview.entitlements
+      path: Sources/Extensions/QuickLookPreview/LDTXQuickLookPreview.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-only: true
@@ -43,13 +46,16 @@ targets:
     type: app-extension
     platform: macOS
     sources:
-      - Sources/LDTXQuickLookThumbnail
+      - Sources/Extensions/QuickLookThumbnail
     dependencies:
       - target: LDTXRecording
         embed: true
         codeSign: true
+      - target: LDTXRecordBundleFormat
+        embed: true
+        codeSign: true
     info:
-      path: Sources/LDTXQuickLookThumbnail/Info.plist
+      path: Sources/Extensions/QuickLookThumbnail/Info.plist
       properties:
         CFBundleDisplayName: LDTX Recording Thumbnail
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -63,7 +69,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider
     entitlements:
-      path: Sources/LDTXQuickLookThumbnail/LDTXQuickLookThumbnail.entitlements
+      path: Sources/Extensions/QuickLookThumbnail/LDTXQuickLookThumbnail.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-only: true

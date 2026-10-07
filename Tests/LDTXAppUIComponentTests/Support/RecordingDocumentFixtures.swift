@@ -4,6 +4,7 @@
 import AVFoundation
 import AppKit
 import LDTXAppletSupport
+import LDTXRecordBundleFormat
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXWorkspaceAppletController

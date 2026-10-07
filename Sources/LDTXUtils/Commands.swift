@@ -5,6 +5,7 @@
 import ArgumentParser
 import Foundation
 import LDTXProtos
+import LDTXRecordBundleFormat
 import LDTXRecording
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
@@ -246,7 +247,7 @@ public struct RecordCommand: AsyncParsableCommand {
   public static let configuration = CommandConfiguration(
     commandName: "record",
     abstract: "Inspect, verify, and remux .ldtxrecord packages.",
-    subcommands: [Inspect.self, Verify.self, Remux.self, Seal.self, VerifyShield.self]
+    subcommands: [Inspect.self, Verify.self, Remux.self]
   )
 
   public init() {}
@@ -275,32 +276,6 @@ public struct RecordCommand: AsyncParsableCommand {
     }
   }
 
-  struct Seal: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-      abstract: "Seal a finalized package with Recording Shield v1.")
-    @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    mutating func run() async throws {
-      let url = URL(fileURLWithPath: path).standardizedFileURL
-      let statement = try RecordingShieldSealer().seal(packageAt: url)
-      print(
-        "Sealed \(statement.subject.count) files: \(url.appendingPathComponent(RecordingShieldProfile.manifestFileName).path)"
-      )
-    }
-  }
-
-  struct VerifyShield: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-      commandName: "verify-shield", abstract: "Verify Recording Shield integrity.")
-    @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    mutating func run() async throws {
-      let result = RecordingShieldVerifier().verify(
-        packageAt: URL(fileURLWithPath: path).standardizedFileURL)
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      print(String(decoding: try encoder.encode(result), as: UTF8.self))
-      if result.status != .valid { throw ExitCode.failure }
-    }
-  }
 }
 
 struct RecordingInspectionValue: Encodable {

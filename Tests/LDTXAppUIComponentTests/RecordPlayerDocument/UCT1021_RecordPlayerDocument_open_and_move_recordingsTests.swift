@@ -4,6 +4,7 @@
 import AVFoundation
 import AppKit
 import LDTXAppletSupport
+import LDTXRecordBundleFormat
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXWorkspaceAppletController
@@ -156,10 +157,12 @@ extension AppUIComponentTestSuite {
           "Saved", "Pending",
         ])
       try document.createMarker(note: "Keep", at: CMTime(seconds: 2, preferredTimescale: 1000))
-      try Data().write(to: moved.appendingPathComponent(".shield.json"))
+      let markerDirectory = moved.appendingPathComponent("Markers")
+      try? FileManager.default.removeItem(at: markerDirectory)
+      try Data().write(to: markerDirectory)
       do {
         try await saveRecordingTestDocument(document, to: moved)
-        Issue.record("Expected active recording save failure")
+        Issue.record("Expected invalid marker directory save failure")
       } catch {}
       #expect(document.isDocumentEdited)
       #expect(document.markers.map(\.note) == ["Saved", "Pending", "Keep"])

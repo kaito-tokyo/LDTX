@@ -20,6 +20,9 @@ has no dependency on a local Swift package. SwiftPM builds the same sources
 independently. On Linux, the root package includes only Corelibs and their tests;
 on macOS, it also includes the existing CLI targets.
 
+Recording bundle IO and DASH parsing live in `LDTXRecordBundleFormat`;
+AVFoundation media operations remain in `LDTXRecording`.
+
 Tests live in `Tests/Corelibs/<module>Tests`. XcodeGen and SwiftPM both
 include them in the `LDTXCorelibsTests` target.
 
@@ -46,13 +49,15 @@ The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
 `golden_gate` job. Pull requests run Corelibs tests only on Linux. Pushes to
 `main` also run Corelibs tests on macOS. The macOS job selects the `pr` test
 plan for pull requests and the `push-main` plan for pushes to `main`. Both plans
-include Easy, Medium, Hard, UI component, UI automation, and XPC tests; only
+include Easy, Medium, Hard, Output, UI component, UI automation, and XPC tests; only
 `push-main` includes Corelibs tests.
 
 ## Xcode Cloud tests
 
 Select the shared `LDTXApp` scheme and `LDTXTests` plan for the Xcode Cloud
-test workflow, using `Debug`. The plan includes Easy, Medium, and Hard tests.
+test workflow, using `Debug`. The plan includes Easy, Medium, Hard, and Output tests.
+The macOS-only `LDTXOutputTests` scheme runs output configuration, media delivery,
+and recording/streaming service tests in one hostless bundle.
 The dedicated `LDTXHardTests` scheme runs only HardTests directly. HardTests is a
 hostless unit-test bundle for Vision, VideoToolbox, CoreML, Metal, and
 AVFoundation tests.

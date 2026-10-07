@@ -196,7 +196,10 @@ launch and main-menu smoke tests.
 The embedded XPC service process-boundary test remains in the isolated
 `LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
 `LDTXMediumTests`, and `LDTXHardTests` schemes are also available for
-tier-specific runs. The same
+tier-specific runs. The macOS-only, hostless `LDTXOutputTests` target and scheme
+collect output configuration, media delivery, recording/streaming session, and
+output protocol tests across those framework tiers. All app test plans include
+this target; XPC process isolation stays in `LDTXAppXpcTests`. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
 tests. Full-app archive validation is owned by the release workflow and is
 intentionally separate from the GitHub test gate. This repository does not use
@@ -249,3 +252,13 @@ GitHub Actions uses ad-hoc signing and clears provisioning profiles and custom
 entitlements for its test builds. Production app entitlements remain unchanged.
 No Apple Development certificate or provisioning-profile secrets are consumed
 by the GHA test workflow. Existing secrets are retained for human-managed cleanup.
+
+Output suites share the serialized `OutputTestSuite` parent to coordinate
+media-session startup and callbacks while preserving individual Unit and
+Integration suite names. This remains a hostless unit-test target.
+
+OutputTests also includes DASH upload and local-file pipelines, recording-track
+creation, MP4 encoding, and output timing helpers. The AVAssetWriter lifecycle
+parent and its audio/video child suites remain grouped under `OutputTestSuite`.
+Recording playback/verification and marker editing keep their existing targets;
+Corelibs bundle-format tests keep their cross-platform target.

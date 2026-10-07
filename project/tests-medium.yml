@@ -27,6 +27,7 @@ targets:
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXWorkspaceAppletStore

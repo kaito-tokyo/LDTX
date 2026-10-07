@@ -8,6 +8,7 @@ targets:
     sources:
       - Tests/Corelibs
     dependencies:
+      - target: LDTXRecordBundleFormat
       - target: LDTXProtos
       - target: LDTXProgram
       - target: LDTXWorkspaceBundleFormat

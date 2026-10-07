@@ -111,12 +111,21 @@ in CI separately from its classification.
   Run this hostless unit-test target directly in Xcode Cloud; do not add XCUI
   automation.
 
-For these three tiers, classify the APIs exercised by the test and its SUT,
+For tests outside OutputTests, classify the APIs exercised by the test and its SUT,
 not merely import statements or unrelated transitive dependencies. A test
 that exercises both Medium and Hard frameworks belongs in HardTests. For an
 unlisted framework, make an explicit project decision and update these lists
 rather than inferring its tier from hardware use or CI behavior.
 
+- **OutputTests target:** Output configuration, recording and streaming output
+  sessions, media delivery, output timing/encoding, and output protocol tests
+  belong in the macOS-only,
+  hostless `LDTXOutputTests` target regardless of the Easy, Medium, or Hard
+  frameworks they exercise. Group them under the serialized OutputTestSuite
+  parent, including the AVAssetWriter lifecycle parent and its child suites.
+  Playback/verification and marker editing keep their respective framework or
+  component targets. Corelibs bundle IO remains in CorelibsTests. Keep XPC
+  process isolation tests in XpcTests.
 - **CorelibsTests target:** Shared Linux-compatible module tests under
   `Tests/Corelibs` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
   This target may contain deterministic unit tests and filesystem integration

@@ -154,10 +154,10 @@ struct OutputOrchestrationDetailPane: View {
         }
         Section("Recording Integrity") {
           Button(action: verifyRecording) {
-            Label("Verify Recording…", systemImage: "checkmark.shield")
+            Label("Verify Recording…", systemImage: "checkmark.circle")
           }
           .disabled(windowState.isOperationLocked)
-          .accessibilityIdentifier("verifyRecordingShieldButton")
+          .accessibilityIdentifier("verifyRecordingButton")
         }
       }
       .formStyle(.grouped)

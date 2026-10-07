@@ -32,6 +32,7 @@ targets:
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
@@ -139,6 +140,7 @@ targets:
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
@@ -303,11 +305,24 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objc
+  LDTXRecordBundleFormat:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Corelibs/LDTXRecordBundleFormat
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordBundleFormat
+        PRODUCT_MODULE_NAME: LDTXRecordBundleFormat
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXRecording:
     type: framework
     platform: macOS
     sources:
       - Sources/LDTXRecording
+    dependencies:
+      - target: LDTXRecordBundleFormat
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecording
@@ -441,6 +456,7 @@ targets:
       - target: LDTXProgram
       - target: LDTXProgramRendering
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
@@ -517,6 +533,7 @@ targets:
       - target: LDTXProgram
       - target: LDTXProgramRuntime
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXVision
       - target: LDTXYouTube
@@ -563,6 +580,7 @@ targets:
       - target: LDTXMP4
       - target: LDTXYouTube
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXYouTubeRTMPS
     settings:

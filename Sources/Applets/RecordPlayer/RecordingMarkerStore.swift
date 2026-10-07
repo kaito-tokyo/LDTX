@@ -200,11 +200,6 @@ public struct RecordingMarkerStore: Sendable {
       writingItemAt: recordingDirectoryURL, options: [], error: &coordinationError
     ) { url in
       result = Result {
-        guard
-          !FileManager.default.fileExists(atPath: url.appendingPathComponent(".shield.json").path)
-        else {
-          throw RecordingMarkerError.recordingInProgress
-        }
         return try operation(Self(recordingDirectoryURL: url))
       }
     }
@@ -290,7 +285,6 @@ public struct RecordingMarkerStore: Sendable {
 }
 
 public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
-  case recordingInProgress
   case unsupportedOperation
   case invalidTime
   case emptyNote
@@ -301,8 +295,6 @@ public enum RecordingMarkerError: Error, LocalizedError, Equatable, Sendable {
 
   public var errorDescription: String? {
     switch self {
-    case .recordingInProgress:
-      "Markers cannot be saved while the recording is being written."
     case .unsupportedOperation:
       "Recording documents support saving markers in the original recording only."
     case .invalidTime:

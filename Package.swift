@@ -7,6 +7,7 @@
 import PackageDescription
 
 var targets: [Target] = [
+  .target(name: "LDTXRecordBundleFormat", path: "Sources/Corelibs/LDTXRecordBundleFormat"),
   .target(
     name: "LDTXProgram",
     dependencies: [
@@ -30,7 +31,9 @@ var targets: [Target] = [
   ),
   .testTarget(
     name: "LDTXCorelibsTests",
-    dependencies: ["LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat"],
+    dependencies: [
+      "LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat", "LDTXRecordBundleFormat",
+    ],
     path: "Tests/Corelibs"
   ),
 ]
@@ -77,12 +80,14 @@ var dependencies: [Package.Dependency] = [
     ),
     .target(
       name: "LDTXRecording",
+      dependencies: ["LDTXRecordBundleFormat"],
       path: "Sources/LDTXRecording"
     ),
     .target(
       name: "LDTXUtils",
       dependencies: [
         "LDTXRecording",
+        "LDTXRecordBundleFormat",
         "LDTXWorkspaceBundleFormat",
         "LDTXProtos",
         "LDTXWorkspaceAppletModel",

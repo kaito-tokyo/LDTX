@@ -23,6 +23,7 @@ targets:
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXRecording
+      - target: LDTXRecordBundleFormat
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerApplet
@@ -166,6 +167,8 @@ targets:
       - target: LDTXTaskQueue
         embed: true
       - target: LDTXRecording
+        embed: true
+      - target: LDTXRecordBundleFormat
         embed: true
       - target: LDTXVideoComposition
         embed: true
