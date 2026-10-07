@@ -26,9 +26,11 @@ struct ApplicationSettingsStoreIntegrationTestSuite {
       ApplicationOutputPreferences().screenshotsDirectory
         == FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
           "Pictures", isDirectory: true))
-    let data = try #require(defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey))
+    let data = try #require(
+      defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey))
     #expect(data.starts(with: Data("bplist".utf8)))
-    #expect(try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
+    #expect(
+      try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
   }
 
   @Test func applicationSettingsStoreDoesNotReadAnotherUserDefaultsSuite() {
