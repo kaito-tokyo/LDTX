@@ -100,8 +100,14 @@ the relevant design or feature documentation instead.
 
 - Continuous sliders use an explicit encoding precision instead of parsing the
   full decimal expansion of a Double. Gradient sliders use a denominator of
-  1,000,000; audio gain sliders use 10 (0.1 dB). Unrepresentable input preserves
-  the last value rather than replacing it with an empty Rational.
+  1,000,000. Unrepresentable input preserves the last value rather than
+  replacing it with an empty Rational.
+- Every decibel-valued Rational32 uses a fixed denominator of 10, including
+  channel gains, master volumes, and monitor volumes. The numerator represents
+  tenths of a decibel. Quantize committed values to 0.1 dB and do not reduce the
+  fraction: zero is stored as `0/10`, and -11.9 dB as `-119/10`.
+- Reject non-finite or unrepresentable decibel edits before changing the model,
+  preserving the previous value and the invalid editing draft.
 
 ## Invalid edits prevent leaving their screen
 
