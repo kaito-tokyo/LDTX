@@ -349,7 +349,7 @@ extension AppUIComponentTestSuite {
       let window = makeWorkspaceTestWindow(storeService: state, dispatcher: dispatcher)
       defer { window.close() }
       for (id, expected) in [
-        ("workspace.captureScreenshots", "screenshot"),
+        ("workspace.captureScreenshots", "screenshot")
       ] {
         let item = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
         let action = try #require(item.action)

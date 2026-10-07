@@ -81,7 +81,19 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
       Issue.record("Recording did not start: \(state)")
       return
     }
-    let package = try #require(session.screenshotsDirectory?.deletingLastPathComponent())
+    func recordingPackages() throws -> [URL] {
+      try FileManager.default.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: nil
+      ).filter { $0.pathExtension == "ldtxrecord" }
+    }
+    var startedPackages = try recordingPackages()
+    let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+    while startedPackages.isEmpty && ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+      startedPackages = try recordingPackages()
+    }
+    #expect(startedPackages.count == 1)
+    let package = try #require(startedPackages.first)
     try await Task.sleep(for: .milliseconds(350))
     local.selectedProgramInternalID = second
     runtime.updateRuntimes()
@@ -97,7 +109,7 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     }
     try await Task.sleep(for: .milliseconds(350))
     #expect(session.state == .recording)
-    #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
+    #expect(try recordingPackages() == [package])
     #expect(runtime.landscapeRuntime === landscape)
     #expect(runtime.portraitRuntime === portrait)
     if preserveFailure {
@@ -105,20 +117,17 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
       #expect(throws: (any Error).self) { try session.reconfigureProgramOutput() }
       #expect(session.state == .stopping)
       #expect(!session.state.canStart)
-      #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
+      #expect(try recordingPackages() == [package])
       await session.start()
       #expect(session.state == .stopping)
-      #expect(session.screenshotsDirectory?.deletingLastPathComponent() == package)
+      #expect(try recordingPackages() == [package])
       await session.stop()
       #expect(session.state == .failed("The selected Program audio could not be applied."))
     } else {
       await session.stop()
       #expect(session.state == .idle)
     }
-    let packages = try FileManager.default.contentsOfDirectory(
-      at: directory, includingPropertiesForKeys: nil
-    )
-    .filter { $0.pathExtension == "ldtxrecord" }
+    let packages = try recordingPackages()
     #expect(packages.map { $0.resolvingSymlinksInPath() } == [package.resolvingSymlinksInPath()])
     #expect(
       FileManager.default.fileExists(
