@@ -140,7 +140,8 @@ public struct ProgramRuntimeConfiguration: Sendable {
 
 extension ProgramRuntimeConfiguration {
   func hasEquivalentInputPipeline(to other: Self) -> Bool {
-    canvasWidth == other.canvasWidth && canvasHeight == other.canvasHeight
+    outputProfile == other.outputProfile
+      && canvasWidth == other.canvasWidth && canvasHeight == other.canvasHeight
       && outputWidth == other.outputWidth && outputHeight == other.outputHeight
       && frameRate == other.frameRate && videoPTSMasterCameraID == other.videoPTSMasterCameraID
       && cameraIDsByInputKey == other.cameraIDsByInputKey

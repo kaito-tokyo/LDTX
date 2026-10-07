@@ -51,6 +51,25 @@ struct ProgramRuntimePreferencesUnitTestSuite {
     #expect(stored.outputProfile == configuration.outputProfile)
   }
 
+  @Test func outputProfileOnlyUpdatesReplaceTheRuntimeConfiguration() throws {
+    let runtime = ProgramRuntime(
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+    )
+    var configuration = runtimeConfiguration(componentName: "Camera")
+    runtime.updateProgram(configuration)
+    let revision = runtime.programState.opaqueRevisionID
+
+    configuration.outputProfile = configuration.outputProfile.withVideoBitRate(12_345_678)
+    runtime.updateProgram(configuration)
+
+    let stored = try #require(runtime.programState.read { $0 })
+    #expect(stored.outputProfile == configuration.outputProfile)
+    #expect(runtime.programState.opaqueRevisionID == revision + 1)
+    runtime.updateProgram(configuration)
+    #expect(runtime.programState.opaqueRevisionID == revision + 1)
+  }
+
   @Test func outputConsumptionDoesNotFreezeOrReplaceTheSharedProgram() throws {
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
