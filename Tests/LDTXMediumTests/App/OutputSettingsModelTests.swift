@@ -26,7 +26,11 @@ struct ApplicationSettingsStoreIntegrationTestSuite {
       ApplicationOutputPreferences().screenshotsDirectory
         == FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
           "Pictures", isDirectory: true))
-    #expect(defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey) != nil)
+    let data = try #require(
+      defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey))
+    #expect(data.starts(with: Data("bplist".utf8)))
+    #expect(
+      try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
   }
 
   @Test func applicationSettingsStoreDoesNotReadAnotherUserDefaultsSuite() {
@@ -46,22 +50,19 @@ struct ApplicationSettingsStoreIntegrationTestSuite {
         == ApplicationOutputPreferences())
   }
 
-  @Test func applicationSettingsStoreMigratesLegacyUserDefaultsValue() throws {
-    let suiteName = "LDTXTests.ApplicationSettingsStore.migration.\(UUID().uuidString)"
+  @Test func applicationSettingsStoreIgnoresOldProtobufValues() throws {
+    let suiteName = "LDTXTests.ApplicationSettingsStore.oldFormat.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    var legacy = Ldtx_App_V1_LegacyOutputSettings()
-    legacy.recording.isEnabled = true
-    legacy.recording.baseDirectoryPath = "/tmp/legacy-recordings"
+    let path = Array("/tmp/old-recordings".utf8)
     defaults.set(
-      try legacy.serializedData(),
-      forKey: ApplicationSettingsStore.legacyOutputSettingsKey)
-
-    let preferences = ApplicationSettingsStore(userDefaults: defaults)
-      .loadApplicationOutputPreferences()
-
-    #expect(preferences.defaultOutputFolderPath == "/tmp/legacy-recordings")
-    #expect(defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey) != nil)
+      Data([UInt8(0x0a), UInt8(path.count)] + path),
+      forKey: "tokyo.kaito.ldtx.application-output-preferences.v1")
+    let store = ApplicationSettingsStore(userDefaults: defaults)
+    #expect(store.loadApplicationOutputPreferences() == ApplicationOutputPreferences())
+    let expected = ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/new-recordings")
+    store.saveApplicationOutputPreferences(expected)
+    #expect(store.loadApplicationOutputPreferences() == expected)
   }
 
   @Test func applicationSettingsStoreIgnoresCorruptUserDefaultsValue() {

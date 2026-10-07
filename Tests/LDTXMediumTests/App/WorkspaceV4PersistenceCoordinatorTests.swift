@@ -127,11 +127,11 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let oldKey = "tokyo.kaito.ldtx.workspace-local-state.v1"
     let newKey = "tokyo.kaito.ldtx.workspace-local-state.v2"
-    var oldStore = Ldtx_App_V1_WorkspaceLocalStateStore()
-    var oldState = Ldtx_App_V1_WorkspaceLocalState()
-    oldState.selectedProgramInternalID = 42
-    oldStore.statesByWorkspacePath["/tmp/Workspace.ldtxworkspace"] = oldState
-    defaults.set(try oldStore.serializedData(), forKey: oldKey)
+    // Protobuf fixture: one path-keyed state with selected Program ID 42.
+    let path = Array("/tmp/Workspace.ldtxworkspace".utf8)
+    let entry = [UInt8(0x0a), UInt8(path.count)] + path + [0x12, 0x02, 0x08, 0x2a]
+    let oldData = Data([UInt8(0x0a), UInt8(entry.count)] + entry)
+    defaults.set(oldData, forKey: oldKey)
 
     let url = URL(fileURLWithPath: "/tmp/Workspace.ldtxworkspace")
     let appletData = WorkspaceAppletData(userDefaults: defaults)

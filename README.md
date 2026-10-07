@@ -33,7 +33,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
-| LDTXProgram                | Program definitions and protobuf-backed persistence codecs.        |
+| LDTXProgram                | Program runtime definitions, output profiles, and clock backgrounds.        |
 | LDTXProtos                 | SwiftProtobuf messages, Workspace bundle values, and Workspace integrity validation. |
 | LDTXWorkspaceBundleFormat  | `.ldtxworkspace` package IO and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |

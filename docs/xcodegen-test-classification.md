@@ -41,8 +41,6 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `AudioChannelTimelineUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/MediaTiming/AudioChannelTimelineTests.swift` |
 | Easy | `AudioFramePTSClockUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/MediaTiming/AudioFramePTSClockTests.swift` |
 | Easy | `ProgramComponentPersistenceUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramComponentPersistenceTests.swift` |
-| Easy | `ProgramDefinitionPersistenceUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramPersistenceCodecTests.swift` |
-| Easy | `ProgramPreferencesPersistenceUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramPreferencesPersistenceTests.swift` |
 | Easy | `ProgramPreferencesUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramPreferencesTests.swift` |
 | Easy | `DASHStreamContinuityUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/ProgramRuntime/DASHStreamContinuityTests.swift` |
 | Easy | `ProgramAudioInputPassthroughUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/ProgramRuntime/ProgramAudioInputPassthroughTests.swift` |
