@@ -33,13 +33,18 @@ Feature: Commit transform drafts
   Scenario: Commits normalized numbers on submit
     Given a layer row contains pixel positions and scale drafts
     When the user submits those values
-    Then positions normalize against 1920 by 1080 and scales persist as rational values
+    Then integer positions persist with unreduced denominators of 1920 for X and 1080 for Y
+    And decimal scales persist with a power-of-ten denominator
 
   @UCT-1006.6
-  Scenario: Exact fractional pixels survive commit and restore
-    Given a row contains decimal and fractional pixel and scale values
-    When the draft is committed and restored
-    Then the exact entered rational values remain representable in the fields
+  Scenario: Positions require integer pixels while scales preserve decimals
+    Given a row contains decimal, fractional, or out-of-range pixel positions
+    When the user submits the draft
+    Then no transform is committed and the draft remains available
+    When the user submits a fractional or unrepresentable scale
+    Then no transform is committed and the draft remains available
+    When the user submits valid integer positions and a decimal scale
+    Then integer positions and the exact decimal scale are committed and restored
 
   @UCT-1006.7
   Scenario: App kit commit requests read current draft once

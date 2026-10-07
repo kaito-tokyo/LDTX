@@ -49,6 +49,7 @@ struct RationalFormatStyle: ParseableFormatStyle {
 
 struct RationalParseStrategy: ParseStrategy {
   var divisor: UInt64 = 1
+  var preservesDecimalDenominator = false
   func parse(_ text: String) throws -> Ldtx_Workspace_V4_Rational32 {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     if text.contains("/") {
@@ -96,6 +97,15 @@ struct RationalParseStrategy: ParseStrategy {
     }
     let scaled = d.multipliedReportingOverflow(by: UInt128(divisor))
     guard !scaled.overflow else { throw RationalInputError.overflow }
+    if preservesDecimalDenominator {
+      guard let numerator = Int32(exactly: n),
+        let denominator = UInt32(exactly: scaled.partialValue)
+      else { throw RationalInputError.overflow }
+      return .with {
+        $0.numerator = numerator
+        $0.denominator = denominator
+      }
+    }
     return try Self.reduced(n, scaled.partialValue)
   }
 

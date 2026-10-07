@@ -38,7 +38,7 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   @ObservationIgnored var onSetHidden: (Bool) -> Void = { _ in }
   var name = ""
   var isHidden = false
-  var strings = ["0.0", "0.0", "0.0", "0.0"]
+  var strings = ["0", "0", "1", "1"]
   var hasUnconfirmedChanges = false
   var isEditing = false
 
@@ -51,15 +51,21 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
       $0.denominator = 1
     }
     strings = [
-      RationalFormatStyle(multiplier: UInt64(canvasWidth)).format(
-        transform.hasTranslationXRational ? transform.translationXRational : zero),
-      RationalFormatStyle(multiplier: UInt64(canvasHeight)).format(
-        transform.hasTranslationYRational ? transform.translationYRational : zero),
+      pixelPosition(
+        transform.hasTranslationXRational ? transform.translationXRational : zero, size: 1920),
+      pixelPosition(
+        transform.hasTranslationYRational ? transform.translationYRational : zero, size: 1080),
       RationalFormatStyle().format(
         transform.hasScaleXRational ? transform.scaleXRational : identity),
       RationalFormatStyle().format(
         transform.hasScaleYRational ? transform.scaleYRational : identity),
     ]
+  }
+
+  private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32, size: Double) -> String {
+    let pixels = (value.double * size).rounded()
+    guard let integer = Int32(exactly: pixels) else { return "0" }
+    return String(integer)
   }
 
 }

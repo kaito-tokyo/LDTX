@@ -41,9 +41,26 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     else { return }
     do {
       let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
-      let divisors = [UInt64(row.rootView.canvasWidth), UInt64(row.rootView.canvasHeight), 1, 1]
       let values = try row.state.strings.enumerated().map { index, text in
-        do { return try RationalParseStrategy(divisor: divisors[index]).parse(text) } catch {
+        do {
+          if index < 2 {
+            let size: UInt32 = index == 0 ? 1920 : 1080
+            guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              pixels >= 0, UInt32(pixels) <= size
+            else {
+              throw WorkspaceSelectionError(
+                message: "Enter an integer pixel position from 0 to \(size).")
+            }
+            return Ldtx_Workspace_V4_Rational32.with {
+              $0.numerator = pixels
+              $0.denominator = size
+            }
+          }
+          guard !text.contains("/") else {
+            throw WorkspaceSelectionError(message: "Enter a decimal scale.")
+          }
+          return try RationalParseStrategy(preservesDecimalDenominator: true).parse(text)
+        } catch {
           throw WorkspaceSelectionError(
             message:
               "Invalid number (\(labels[index])): \(error.localizedDescription)")
@@ -159,8 +176,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     let layerIDs = program?[keyPath: target.layerIDs] ?? []
     update(
       definition: storeService.definition, programPreferences: preference, layerIDs: layerIDs,
-      canvasWidth: Double(target.defaultProfile.width),
-      canvasHeight: Double(target.defaultProfile.height),
+      canvasWidth: 1920,
+      canvasHeight: 1080,
       onCommitTransform: { [weak self] layerID, value in
         guard let self, let id else {
           throw WorkspaceSelectionError(message: "No program selected.")

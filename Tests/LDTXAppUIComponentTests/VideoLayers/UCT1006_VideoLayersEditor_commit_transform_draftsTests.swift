@@ -141,20 +141,20 @@ extension AppUIComponentTestSuite {
       #expect(
         saved[0].translationXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 2
+            $0.numerator = 960
+            $0.denominator = 1920
           })
       #expect(
         saved[0].translationYRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 4
+            $0.numerator = 270
+            $0.denominator = 1080
           })
       #expect(
         saved[0].scaleXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 3
-            $0.denominator = 2
+            $0.numerator = 15
+            $0.denominator = 10
           })
       row.state.strings[0] = "192"
       row.state.hasUnconfirmedChanges = true
@@ -163,24 +163,47 @@ extension AppUIComponentTestSuite {
       #expect(
         saved[1].translationXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 10
+            $0.numerator = 192
+            $0.denominator = 1920
           })
       #expect(!row.state.hasUnconfirmedChanges)
     }
 
-    @Test("UCT-1006.6: Exact fractional pixels survive commit and restore")
-    func exactFractionalPixelsSurviveCommitAndRestore() throws {
+    @Test("UCT-1006.6: Positions require integer pixels while scales preserve decimals")
+    func positionsRequireIntegerPixelsWhileScalesPreserveDecimals() throws {
       let fixture = VideoLayersTestFixture()
       var saved: Ldtx_Workspace_V4_BasicTransform?
       let table = fixture.makeTable()
       fixture.update(table, commit: { _, value in saved = value })
       let row = try #require(table.rows[1])
-      row.state.strings = ["100.125", "1/3", "7/9", "1"]
-      row.state.hasUnconfirmedChanges = true
+      for positions in [
+        ["100.125", "0"], ["0", "1/3"], ["-1", "0"], ["1921", "0"], ["0", "1081"],
+      ] {
+        row.state.strings = positions + ["1.25", "1"]
+        row.state.hasUnconfirmedChanges = true
+        row.state.onCommit()
+        #expect(saved == nil)
+        #expect(row.state.hasUnconfirmedChanges)
+        #expect(Array(row.state.strings.prefix(2)) == positions)
+      }
+      for scale in ["7/9", "0.12345678901", "2147483648"] {
+        row.state.strings = ["100", "1", scale, "1"]
+        row.state.hasUnconfirmedChanges = true
+        row.state.onCommit()
+        #expect(saved == nil)
+        #expect(row.state.hasUnconfirmedChanges)
+        #expect(row.state.strings[2] == scale)
+      }
+      row.state.strings = ["100", "1", "1.25", "1"]
       row.state.onCommit()
-      #expect(saved != nil)
-      #expect(row.state.strings == ["100.125", "1/3", "7/9", "1"])
+      let transform = try #require(saved)
+      #expect(transform.translationXRational.numerator == 100)
+      #expect(transform.translationXRational.denominator == 1920)
+      #expect(transform.translationYRational.numerator == 1)
+      #expect(transform.translationYRational.denominator == 1080)
+      #expect(transform.scaleXRational.numerator == 125)
+      #expect(transform.scaleXRational.denominator == 100)
+      #expect(row.state.strings == ["100", "1", "1.25", "1"])
     }
 
     @Test("UCT-1006.7: App kit commit requests read current draft once")
@@ -199,8 +222,8 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 2
+            $0.numerator = 960
+            $0.denominator = 1920
           })
       #expect(row.state.strings[0] == "960")
 
@@ -266,13 +289,13 @@ extension AppUIComponentTestSuite {
             domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Save failed."])
         })
       let row = try #require(table.rows[1])
-      row.state.strings[0] = "960.000"
+      row.state.strings[0] = "960"
       row.state.hasUnconfirmedChanges = true
       row.state.onCommit()
       #expect(
         fixture.reportedErrors.contains { $0.contains("Save failed.") })
       #expect(row.state.hasUnconfirmedChanges)
-      #expect(row.state.strings[0] == "960.000")
+      #expect(row.state.strings[0] == "960")
       fixture.update(table)
       row.state.onCommit()
       #expect(!row.state.hasUnconfirmedChanges)
@@ -349,8 +372,8 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 2
+            $0.numerator = 960
+            $0.denominator = 1920
           })
       #expect(!row.state.hasUnconfirmedChanges)
 
@@ -443,8 +466,8 @@ extension AppUIComponentTestSuite {
       #expect(
         live.videoLayerTransforms[1]?.translationXRational
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 2
+            $0.numerator = 960
+            $0.denominator = 1920
           })
       #expect(live.videoLayerHidden[2] == true)
       #expect(state.preferences.portraitProgramPreferences.isEmpty)

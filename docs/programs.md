@@ -61,6 +61,8 @@ A **Video Layer** adds one **Video Component** to the **Program**'s **Video Trac
 
 **Video Layer** positions use a fixed logical coordinate space of **1920 × 1080**. The X and Y values displayed in the editor always use this space; changing a **Program** **Canvas Size** does not change their meaning or rewrite saved positions.
 
+X and Y accept only integer logical pixels, with X in 0...1920 and Y in 0...1080. Decimal and fractional pixel input is rejected. Positions are stored as Rational32 values with the pixel count as numerator and an unreduced denominator of 1920 for X or 1080 for Y. Scale fields accept decimal input and store its digits as the numerator with a power-of-ten denominator, without reduction. Fractions and values that exceed Rational32 limits are rejected while preserving the draft. Display may omit trailing zeros.
+
 X and Y are logical coordinates, not **Canvas Size** pixels. At runtime, the placement is normalized from the **1920 × 1080** space and mapped to the active canvas. For example, X=960 and Y=540 remain the center position for a **1280 × 720** canvas. This identical coordinate contract applies to every layer type that supports placement, including **VFX Source** and **Clock**.
 
 Scale is the only layer sizing control. Width and height are intentionally not independent layer settings. **VFX Source** and **Clock** layers support X, Y, and Scale. Full-canvas components such as fills, gradients, and test patterns do not expose placement controls.
