@@ -15,7 +15,9 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceVideoComponentVisionIntegrationTestSuite {
-  @Test
+  @Test(
+    .disabled(
+      "Pending RecognizeTextRequest migration: https://github.com/kaito-tokyo/LDTX/issues/325"))
   func clockOutputIsRecognized() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let registry = LowFrequencyUpdateRegistry()
