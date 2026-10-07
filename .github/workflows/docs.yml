@@ -5,21 +5,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: PR Check
+name: Docs CI
 
 on:
   pull_request:
 
-concurrency:
-  group: pr-check-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  actions:
-    uses: ./.github/workflows/actions.yml
-    permissions:
-      contents: read
-
   docs-build:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -38,13 +29,3 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         working-directory: docs
         run: node _BUILD.mjs dist
-
-  tools:
-    uses: ./.github/workflows/tools.yml
-    permissions:
-      contents: read
-
-  xcode:
-    uses: ./.github/workflows/xcode.yml
-    permissions:
-      contents: read

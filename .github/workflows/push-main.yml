@@ -22,6 +22,11 @@ jobs:
     permissions:
       contents: read
 
+  swift:
+    uses: ./.github/workflows/swift.yml
+    permissions:
+      contents: read
+
   docs-deploy:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -55,13 +60,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1
-
-  tools:
-    uses: ./.github/workflows/tools.yml
-    permissions:
-      contents: read
-
-  xcode:
-    uses: ./.github/workflows/xcode.yml
-    permissions:
-      contents: read

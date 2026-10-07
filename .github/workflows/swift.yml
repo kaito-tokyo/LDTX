@@ -5,9 +5,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Xcode
+name: Swift CI
 
 on:
+  pull_request:
   workflow_call:
 
 jobs:
@@ -46,6 +47,25 @@ jobs:
       - name: Build and test Corelibs
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
+
+  test-release-crash-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test release crash analysis
+        shell: bash --noprofile --norc -euo pipefail {0}
+        run: |
+          python3 -m unittest scripts/test_symbolicate_release_crash.py
+          python3 -m unittest scripts/test_applet_isolation.py
 
   golden_gate:
     runs-on: xcode-27
