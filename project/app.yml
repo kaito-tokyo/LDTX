@@ -238,27 +238,12 @@ targets:
         ENABLE_HARDENED_RUNTIME: "YES"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
       configs:
-        CloudTest:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTXCloudTest.entitlements
-          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
 
 schemes:
-  LDTXCloudTests:
-    build:
-      targets:
-        LDTXApp: all
-        LDTXHelper: all
-    test:
-      config: CloudTest
-      testPlans:
-        - path: XcodeCloud.xctestplan
-          defaultPlan: true
-    archive:
-      config: Distribution
   LDTXWorkspaceAppletUI:
     build:
       targets:

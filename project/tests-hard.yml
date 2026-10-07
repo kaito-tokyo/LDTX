@@ -4,26 +4,34 @@
 
 targets:
   LDTXHardTests:
-    type: bundle.ui-testing
+    type: bundle.unit-test
     platform: macOS
     sources:
       - Tests/LDTXHardTests
     dependencies:
-      - target: LDTXApp
+      - target: LDTXCapture
+      - target: LDTXInternalProtocols
+      - target: LDTXProgramRuntime
+      - target: LDTXProtos
+      - target: LDTXVision
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletStore
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
-        TEST_TARGET_NAME: LDTXApp
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXHardTests
 
 schemes:
   LDTXHardTests:
     build:
       targets:
-        LDTXApp: all
         LDTXHardTests: all
     test:
       config: Debug
-      targets:
-        - LDTXHardTests
+      testPlans:
+        - path: XcodeCloud.xctestplan
+          defaultPlan: true

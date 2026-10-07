@@ -11,8 +11,8 @@
     "performanceAntipatternCheckerEnabled": true,
     "targetForVariableExpansion": {
       "containerPath": "container:LDTX.xcodeproj",
-      "identifier": "16CE68CFDAE2FF4C61149EB2",
-      "name": "LDTXApp"
+      "identifier": "28E249F7B2FC5647692B89E8",
+      "name": "LDTXHardTests"
     }
   },
   "testTargets": [

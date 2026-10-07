@@ -127,21 +127,21 @@ SPDX-License-Identifier: Apache-2.0
 | UI automation | `AppLaunchUITests` | Integration | normal launch and main-menu access | `Tests/LDTXAppUITests/AppLaunchUITests.swift` |
 | Medium | `WorkspaceVideoComponentVisionIntegrationTestSuite` | Integration | component rendering, ROI, controlled capture sources | `Tests/LDTXMediumTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift` |
 | Medium | `WorkspaceProgramSwitchingIntegrationTestSuite` | Integration | filesystem, recording lifecycle | `Tests/LDTXMediumTests/Workspace/WorkspaceProgramSwitchingTests.swift` |
-| Hard | `WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized` | Integration | app-hosted Vision OCR with inference entitlement | `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift` |
+| Hard | `WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized` | Integration | hostless Vision OCR in Xcode Cloud | `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift` |
 
 ## Execution-boundary targets
 
 - `LDTXAppUIComponentTests` is a hostless bundle for SwiftUI state, Video Layers, split views, document environments, Workspace controllers, Workspace Documents, and Recording Documents. All child suites initialize one shared Document Controller and run under `AppUIComponentTestSuite`, serialized on MainActor.
 - `LDTXAppUITests` is an independent UI automation target for normal application launch and main-menu smoke tests.
-- `LDTXAppXpcTests` remains a separate app-hosted target for testing the embedded XPC process boundary.
+- `LDTXAppXpcTests` is the exception that uses an application host to test its embedded XPC process boundary.
 - Application termination coordination remains a headless Easy integration suite.
 
 ## Xcode Cloud boundary
 
 `WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized`
 remains in `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift`.
-It runs without a hardware-based skip in `LDTXApp`, whose normal signature and
-profile authorize background inference. The component rendering, ROI, effects,
+It runs directly in the hostless `LDTXHardTests` bundle without a hardware-based
+skip or application host. HardTests contains no XCUI automation. The component rendering, ROI, effects,
 and unavailable-source cases are Medium. `GitHubActions.xctestplan` runs the GHA
 coverage; `Default.xctestplan` retains the same targets for local use, and
 `XcodeCloud.xctestplan` runs only HardTests.
