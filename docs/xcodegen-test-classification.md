@@ -14,6 +14,7 @@ SPDX-License-Identifier: Apache-2.0
 - GHA-compatible Metal, AVFoundation encoding, media processing, runtime media, and Keychain suites are Medium. Hard contains only the real Clock OCR test, which requires the Xcode Cloud environment.
 - Other deterministic state/value tests remain Easy. Controlled fake-based component interaction remains Easy Integration when it has no external resource.
 - The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. Direct AppKit window/controller and Document tests share the hostless `LDTXAppUIComponentTests` target and its serialized MainActor parent suite.
+- Shared Corelibs suites run in `LDTXCorelibsTests` under both XcodeGen and SwiftPM. Their sources live in `Tests/Corelibs/<module>Tests`.
 - Suite naming expresses Unit or Integration scope. `.serialized` remains on the AVAssetWriter lifecycle parent and media/runtime suites where their own cases need ordered execution; it does not imply System classification.
 
 ## Suite inventory
@@ -40,8 +41,8 @@ SPDX-License-Identifier: Apache-2.0
 | Easy | `MP4TimingBoxUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/MP4/MP4TimingBoxTests.swift` |
 | Easy | `AudioChannelTimelineUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/MediaTiming/AudioChannelTimelineTests.swift` |
 | Easy | `AudioFramePTSClockUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/MediaTiming/AudioFramePTSClockTests.swift` |
-| Easy | `ProgramComponentPersistenceUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramComponentPersistenceTests.swift` |
-| Easy | `ProgramPreferencesUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/Program/ProgramPreferencesTests.swift` |
+| `LDTXCorelibsTests` | `ProgramComponentPersistenceUnitTestSuite` | Unit | none detected by source scan | `Tests/Corelibs/LDTXProgramTests/ProgramComponentPersistenceTests.swift` |
+| `LDTXCorelibsTests` | `ProgramPreferencesUnitTestSuite` | Unit | none detected by source scan | `Tests/Corelibs/LDTXProgramTests/ProgramPreferencesTests.swift` |
 | Easy | `DASHStreamContinuityUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/ProgramRuntime/DASHStreamContinuityTests.swift` |
 | Easy | `ProgramAudioInputPassthroughUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/ProgramRuntime/ProgramAudioInputPassthroughTests.swift` |
 | Easy | `ProgramAudioMonitorMixerIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXEasyTests/ProgramRuntime/ProgramAudioMonitorMixerTests.swift` |
@@ -82,7 +83,7 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `RecordingDiagnosticsEventLogIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingDiagnosticsEventLogTests.swift` |
 | Medium | `RecordingPackageIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingPackageTests.swift` |
 | Medium | `RecordingShieldIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingShieldTests.swift` |
-| Medium | `WorkspaceBundleFormatIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/Workspace/WorkspaceBundleFormatTests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceBundleFormatIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/Corelibs/LDTXWorkspaceBundleFormatTests/WorkspaceBundleFormatTests.swift` |
 | Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | Integration | loopback/socket | `Tests/LDTXMediumTests/YouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |
 | Medium | `BackgroundRemovalInferenceGateIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXMediumTests/BackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
 | Medium | `AVAssetWriterLifecycleIntegrationTestSuite` | Integration | AVAssetWriter lifecycle and shared segment delegate (parent suite; inherited by child suites) | `Tests/LDTXMediumTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
