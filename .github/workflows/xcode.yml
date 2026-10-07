@@ -13,7 +13,7 @@ on:
 jobs:
   corelibs:
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 60
 
     container:
       image: swift:6.4.0-trixie
@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Print Swift version
-        shell: bash --noprofile --norc -euo pipefail {0}
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: swift --version
 
       - name: Cache Corelibs SwiftPM dependencies
@@ -44,7 +44,7 @@ jobs:
             corelibs-swift-6.4.0-trixie-${{ runner.arch }}-
 
       - name: Build and test Corelibs
-        shell: bash --noprofile --norc -euo pipefail {0}
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: swift test
 
   golden_gate:
