@@ -10,9 +10,6 @@ workflows:
     '.github/workflows/docs.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/configure-pages@v6.0.0'
-    '.github/workflows/pr-check.yml':
-        - 'actions/checkout@v7.0.1'
-        - 'actions/configure-pages@v6.0.0'
     '.github/workflows/push-main.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/configure-pages@v6.0.0'
