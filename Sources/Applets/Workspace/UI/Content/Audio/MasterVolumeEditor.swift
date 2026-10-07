@@ -34,11 +34,17 @@ final class MasterVolumeEditor: NSViewController {
         image: NSImage(
           systemSymbolName: index == 0 ? "rectangle" : "rectangle.portrait",
           accessibilityDescription: name)!)
+      icon.symbolConfiguration = .init(pointSize: 16, weight: .regular)
+      icon.imageScaling = .scaleProportionallyDown
+      icon.widthAnchor.constraint(equalToConstant: 20).isActive = true
+      icon.heightAnchor.constraint(equalToConstant: 20).isActive = true
       icon.setAccessibilityLabel(name + " Volume")
       masterFields[index].widthAnchor.constraint(equalToConstant: 50).isActive = true
       return [icon, masters[index], masterFields[index], NSTextField(labelWithString: "dB")]
     }
     let grid = NSGridView(views: masterRows)
+    grid.yPlacement = .center
+    grid.rowAlignment = .none
     grid.columnSpacing = 8
     grid.rowSpacing = 12
     grid.column(at: 0).width = 20
