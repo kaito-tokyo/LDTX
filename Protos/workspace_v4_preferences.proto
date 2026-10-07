@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace mutable preferences.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
@@ -11,68 +10,54 @@ import "workspace_v4_types.proto";
 
 // Contains mutable preferences for one WorkspaceDefinitionV4.
 message WorkspacePreferencesV4 {
-  // Audio gain in decibels, keyed by Audio Input Device internal_id.
-  reserved 1;
-  reserved "audio_channel_gains_decibel_tenths";
-  map<uint64, Rational32> audio_channel_gains_decibels = 4;
-  // Preferences for each Landscape Program, keyed by Program internal_id.
+  // Audio gain in decibels, keyed by each Audio Input Device's LDTXWorkspaceID.
+  map<uint64, Rational32> audio_channel_gains_decibels = 1;
+  // Preferences for each Landscape Program, keyed by the Program's LDTXWorkspaceID.
   map<uint64, ProgramPreferences> landscape_program_preferences = 2;
-  // Preferences for each Portrait Program, keyed by Program internal_id.
+  // Preferences for each Portrait Program, keyed by the Program's LDTXWorkspaceID.
   map<uint64, ProgramPreferences> portrait_program_preferences = 3;
 }
 
 // Contains mutable preferences for one Program canvas.
 message ProgramPreferences {
   // Master volume in decibels.
-  reserved 1;
-  reserved "audio_master_volume_decibel_tenths";
-  Rational32 audio_master_volume_decibels = 5;
-  // Whether each Audio Input Device is muted, keyed by internal_id.
+  Rational32 audio_master_volume_decibels = 1;
+  // Whether each Audio Input Device is muted, keyed by its LDTXWorkspaceID.
   map<uint64, bool> audio_channel_muted = 2;
-  // Video Layer transforms, keyed by Video Component internal_id.
-  map<uint64, BasicTransform> video_layer_transforms = 3;
-  // Whether each Video Layer is hidden, keyed by internal_id.
-  map<uint64, bool> video_layer_hidden = 4;
+  // The Video Component LDTXWorkspaceIDs in back-to-front compositing order
+  // for this Program canvas. The first entry is the backmost Video Layer;
+  // the last entry is the frontmost Video Layer.
+  repeated uint64 video_layer_internal_ids = 3;
+  // Video Layer transforms, keyed by each Video Component's LDTXWorkspaceID.
+  map<uint64, BasicTransform> video_layer_transforms = 4;
+  // Whether each Video Layer is hidden, keyed by its Video Component's LDTXWorkspaceID.
+  map<uint64, bool> video_layer_hidden = 5;
 }
 
 // The basic transform applied to a Video Layer, which is a Video Component.
 message BasicTransform {
-  // The horizontal translation in coordinates normalized to the Canvas that
-  // renders this Video Layer, in the range [0, 1].
-  reserved 1;
-  reserved "translation_x";
-  Rational32 translation_x_rational = 9;
-  // The vertical translation in coordinates normalized to the Canvas that
-  // renders this Video Layer, in the range [0, 1].
-  reserved 2;
-  reserved "translation_y";
-  Rational32 translation_y_rational = 10;
-  // The horizontal scale. Absence means identity; zero is an explicit zero scale.
-  reserved 3;
-  reserved "scale_x";
-  Rational32 scale_x_rational = 11;
-  // The vertical scale. Absence means identity; zero is an explicit zero scale.
-  reserved 4;
-  reserved "scale_y";
-  Rational32 scale_y_rational = 12;
+  // The horizontal translation, normalized by the target Canvas width,
+  // in [0, 1]. Positive values move the Video Layer rightward.
+  Rational32 translation_x = 1;
+  // The vertical translation, normalized by the target Canvas height,
+  // in [0, 1]. Positive values move the Video Layer downward.
+  Rational32 translation_y = 2;
+  // The horizontal size as a dimensionless multiple of the target Canvas width,
+  // with no range restriction. Zero specifies zero width.
+  Rational32 scale_x = 3;
+  // The vertical size as a dimensionless multiple of the target Canvas height,
+  // with no range restriction. Zero specifies zero height.
+  Rational32 scale_y = 4;
   // The top inset as a fraction of this Video Layer's statically defined
   // content height, in the range [0, 1].
-  reserved 5;
-  reserved "top_inset";
-  Rational32 top_inset_rational = 13;
+  Rational32 top_inset = 5;
   // The right inset as a fraction of this Video Layer's statically defined
   // content width, in the range [0, 1].
-  reserved 6;
-  reserved "right_inset";
-  Rational32 right_inset_rational = 14;
+  Rational32 right_inset = 6;
   // The bottom inset as a fraction of this Video Layer's statically defined
   // content height, in the range [0, 1].
-  reserved 7;
-  reserved "bottom_inset";
-  Rational32 bottom_inset_rational = 15;
+  Rational32 bottom_inset = 7;
   // The left inset as a fraction of this Video Layer's statically defined
   // content width, in the range [0, 1].
-  reserved 8;
-  reserved "left_inset";
-  Rational32 left_inset_rational = 16;
+  Rational32 left_inset = 8;
 }

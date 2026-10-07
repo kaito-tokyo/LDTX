@@ -12,6 +12,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// DO NOT EDIT: All the definitions in this file are strictly specified.
+
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -29,13 +31,81 @@ public nonisolated struct Ldtx_Workspace_V4_Rational32: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var numerator: Int32 = 0
+  public var numerator: Int32 {
+    get {_numerator ?? 0}
+    set {_numerator = newValue}
+  }
+  /// Returns true if `numerator` has been explicitly set.
+  public var hasNumerator: Bool {self._numerator != nil}
+  /// Clears the value of `numerator`. Subsequent reads from it will return its default value.
+  public mutating func clearNumerator() {self._numerator = nil}
 
-  public var denominator: UInt32 = 0
+  public var denominator: UInt32 {
+    get {_denominator ?? 1}
+    set {_denominator = newValue}
+  }
+  /// Returns true if `denominator` has been explicitly set.
+  public var hasDenominator: Bool {self._denominator != nil}
+  /// Clears the value of `denominator`. Subsequent reads from it will return its default value.
+  public mutating func clearDenominator() {self._denominator = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _numerator: Int32? = nil
+  fileprivate var _denominator: UInt32? = nil
+}
+
+public nonisolated struct Ldtx_Workspace_V4_Color: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var red: Float {
+    get {_red ?? 0}
+    set {_red = newValue}
+  }
+  /// Returns true if `red` has been explicitly set.
+  public var hasRed: Bool {self._red != nil}
+  /// Clears the value of `red`. Subsequent reads from it will return its default value.
+  public mutating func clearRed() {self._red = nil}
+
+  public var green: Float {
+    get {_green ?? 0}
+    set {_green = newValue}
+  }
+  /// Returns true if `green` has been explicitly set.
+  public var hasGreen: Bool {self._green != nil}
+  /// Clears the value of `green`. Subsequent reads from it will return its default value.
+  public mutating func clearGreen() {self._green = nil}
+
+  public var blue: Float {
+    get {_blue ?? 0}
+    set {_blue = newValue}
+  }
+  /// Returns true if `blue` has been explicitly set.
+  public var hasBlue: Bool {self._blue != nil}
+  /// Clears the value of `blue`. Subsequent reads from it will return its default value.
+  public mutating func clearBlue() {self._blue = nil}
+
+  public var alpha: Float {
+    get {_alpha ?? 0}
+    set {_alpha = newValue}
+  }
+  /// Returns true if `alpha` has been explicitly set.
+  public var hasAlpha: Bool {self._alpha != nil}
+  /// Clears the value of `alpha`. Subsequent reads from it will return its default value.
+  public mutating func clearAlpha() {self._alpha = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _red: Float? = nil
+  fileprivate var _green: Float? = nil
+  fileprivate var _blue: Float? = nil
+  fileprivate var _alpha: Float? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -52,26 +122,79 @@ nonisolated extension Ldtx_Workspace_V4_Rational32: SwiftProtobuf.Message, Swift
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularSInt32Field(value: &self.numerator) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.denominator) }()
+      case 1: try { try decoder.decodeSingularSInt32Field(value: &self._numerator) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self._denominator) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.numerator != 0 {
-      try visitor.visitSingularSInt32Field(value: self.numerator, fieldNumber: 1)
-    }
-    if self.denominator != 0 {
-      try visitor.visitSingularUInt32Field(value: self.denominator, fieldNumber: 2)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._numerator {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._denominator {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_Rational32, rhs: Ldtx_Workspace_V4_Rational32) -> Bool {
-    if lhs.numerator != rhs.numerator {return false}
-    if lhs.denominator != rhs.denominator {return false}
+    if lhs._numerator != rhs._numerator {return false}
+    if lhs._denominator != rhs._denominator {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V4_Color: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Color"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}red\0\u{1}green\0\u{1}blue\0\u{1}alpha\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularFloatField(value: &self._red) }()
+      case 2: try { try decoder.decodeSingularFloatField(value: &self._green) }()
+      case 3: try { try decoder.decodeSingularFloatField(value: &self._blue) }()
+      case 4: try { try decoder.decodeSingularFloatField(value: &self._alpha) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._red {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._green {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._blue {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._alpha {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V4_Color, rhs: Ldtx_Workspace_V4_Color) -> Bool {
+    if lhs._red != rhs._red {return false}
+    if lhs._green != rhs._green {return false}
+    if lhs._blue != rhs._blue {return false}
+    if lhs._alpha != rhs._alpha {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -231,12 +231,14 @@ struct CommandsSystemTestSuite {
       )
       try infoData.write(to: invalid.appendingPathComponent("Info.plist"))
       var definitionEnvelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-      definitionEnvelope.externalID = "0198f4b4-1fa3-7000-8000-000000000001"
+      definitionEnvelope.externalIDAsUUID = try #require(
+        UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001"))
       definitionEnvelope.workspaceDefinitionV4 = definition
       try definitionEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("definition.pb"))
       var preferencesEnvelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-      preferencesEnvelope.externalID = "0198f4b4-1fa3-7000-8000-000000000002"
+      preferencesEnvelope.externalIDAsUUID = try #require(
+        UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002"))
       preferencesEnvelope.workspacePreferencesV4 = Ldtx_Workspace_V4_WorkspacePreferencesV4()
       try preferencesEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("preferences.pb"))

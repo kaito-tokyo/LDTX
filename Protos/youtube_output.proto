@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.youtube_output.v1;
 
@@ -28,14 +28,14 @@ message Bootstrap {
   int64 availability_start_time_milliseconds = 4;
   int32 timescale = 5;
   reserved 6;
-  reserved "segment_duration_seconds";
+  reserved segment_duration_seconds;
   int32 start_number = 7;
   string media_template = 8;
   Representation representation = 9;
   string configuration_fingerprint = 10;
-  optional bytes initialization_segment = 11;
+  bytes initialization_segment = 11;
   string persistence_identifier = 12;
-  optional double next_media_time_seconds = 13;
+  double next_media_time_seconds = 13;
   int32 shared_video_slot_count = 14;
   int32 shared_video_slot_size = 15;
 }
@@ -51,23 +51,23 @@ message FinishRequest { Context context = 1; }
 
 message Reply {
   Context context = 1;
-  optional uint64 sequence = 2;
-  optional int32 next_media_segment_number = 3;
-  optional bytes initialization_segment = 4;
-  optional string configuration_fingerprint = 5;
-  optional string event_description = 6;
-  optional string error_description = 7;
-  optional int64 availability_start_time_milliseconds = 8;
+  uint64 sequence = 2;
+  int32 next_media_segment_number = 3;
+  bytes initialization_segment = 4;
+  string configuration_fingerprint = 5;
+  string event_description = 6;
+  string error_description = 7;
+  int64 availability_start_time_milliseconds = 8;
 }
 
 message ResetRequest {
   Context context = 1;
   string reason = 2;
-  optional int32 next_media_segment_number = 3;
-  optional bytes initialization_segment = 4;
-  optional string configuration_fingerprint = 5;
-  optional int64 availability_start_time_milliseconds = 6;
-  optional double next_media_time_seconds = 7;
+  int32 next_media_segment_number = 3;
+  bytes initialization_segment = 4;
+  string configuration_fingerprint = 5;
+  int64 availability_start_time_milliseconds = 6;
+  double next_media_time_seconds = 7;
 }
 
 message MediaTime {
@@ -84,11 +84,11 @@ message H264Format {
 
 message H264AccessUnit {
   MediaTime presentation_time = 1;
-  optional MediaTime decode_time = 2;
+  MediaTime decode_time = 2;
   MediaTime duration = 3;
   bool key_frame = 4;
   bytes avcc_data = 5;
-  optional SharedMemorySlice shared_memory = 6;
+  SharedMemorySlice shared_memory = 6;
 }
 
 enum PCMSampleFormat {
@@ -110,7 +110,7 @@ message MediaBatch {
   uint32 protocol_version = 1;
   Context context = 2;
   uint64 sequence = 3;
-  optional H264Format video_format = 4;
+  H264Format video_format = 4;
   repeated H264AccessUnit video = 5;
   repeated PCMBuffer audio = 6;
 }

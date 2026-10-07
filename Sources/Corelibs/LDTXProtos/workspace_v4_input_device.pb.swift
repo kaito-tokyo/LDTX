@@ -12,8 +12,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/// Version 4 Workspace Input Device definitions.
-
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -32,17 +30,32 @@ public nonisolated struct Ldtx_Workspace_V4_AudioInputDevice: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The Workspace-local identifier for this entity. Its most significant bit
-  /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  /// and bits 14 through 0 are uniformly random.
-  public var internalID: UInt64 = 0
+  /// An LDTXWorkspaceID for this entity.
+  public var internalID: UInt64 {
+    get {_internalID ?? 0}
+    set {_internalID = newValue}
+  }
+  /// Returns true if `internalID` has been explicitly set.
+  public var hasInternalID: Bool {self._internalID != nil}
+  /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
+  public mutating func clearInternalID() {self._internalID = nil}
 
   /// The name of this Input Device shown in the Workspace sidebar.
-  public var displayName: String = String()
+  public var displayName: String {
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
+  }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {self._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {self._displayName = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _displayName: String? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -59,26 +72,30 @@ nonisolated extension Ldtx_Workspace_V4_AudioInputDevice: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.internalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.internalID, fieldNumber: 1)
-    }
-    if !self.displayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._internalID {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_AudioInputDevice, rhs: Ldtx_Workspace_V4_AudioInputDevice) -> Bool {
-    if lhs.internalID != rhs.internalID {return false}
-    if lhs.displayName != rhs.displayName {return false}
+    if lhs._internalID != rhs._internalID {return false}
+    if lhs._displayName != rhs._displayName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

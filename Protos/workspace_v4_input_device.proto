@@ -2,16 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace Input Device definitions.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
 // An audio Input Device available in a Workspace.
 message AudioInputDevice {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
+  // An LDTXWorkspaceID for this entity.
   uint64 internal_id = 1;
   // The name of this Input Device shown in the Workspace sidebar.
   string display_name = 2;

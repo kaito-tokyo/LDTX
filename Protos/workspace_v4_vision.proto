@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace Vision definitions.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
@@ -11,36 +10,31 @@ import "workspace_v4_types.proto";
 
 // Wraps one concrete Vision definition.
 message VisionWrapper {
-  oneof definition {
+  oneof vision {
     // The OCR Vision definition. Mutually exclusive with the other fields.
     OcrVision ocr_vision = 1;
   }
 }
 
-// A normalized rectangle in the input image. Its origin is relative to the
-// lower-left corner.
+// The rectangular region of the input image analyzed by Vision.
 message VisionRegionOfInterest {
-  // The horizontal origin, in the range [0, 1].
-  reserved 1;
-  reserved "x";
-  Rational32 x_rational = 5;
-  // The vertical origin, in the range [0, 1].
-  reserved 2;
-  reserved "y";
-  Rational32 y_rational = 6;
-  // The width, in the range [0, 1].
-  reserved 3;
-  reserved "width";
-  Rational32 width_rational = 7;
-  // The height, in the range [0, 1].
-  reserved 4;
-  reserved "height";
-  Rational32 height_rational = 8;
+  // The left edge, measured rightward from the target image's left edge
+  // and normalized by its width, in [0, 1].
+  // Must satisfy x + width <= 1.
+  Rational32 x = 1;
+  // The bottom edge, measured upward from the target image's bottom edge
+  // and normalized by its height, in [0, 1].
+  // Must satisfy y + height <= 1.
+  Rational32 y = 2;
+  // The width, normalized by the target image width, in (0, 1].
+  Rational32 width = 3;
+  // The height, normalized by the target image height, in (0, 1].
+  Rational32 height = 4;
 }
 
 // Wraps one concrete Vision trigger definition.
 message VisionTriggerWrapper {
-  oneof definition {
+  oneof trigger {
     // The interval-based Vision trigger definition. Mutually exclusive with
     // the other fields.
     IntervalVisionTrigger interval_trigger = 1;
@@ -50,43 +44,29 @@ message VisionTriggerWrapper {
 // A Vision trigger that invokes Vision at a regular interval.
 message IntervalVisionTrigger {
   // The interval between automatic Vision updates in seconds.
-  reserved 1;
-  reserved "interval_seconds";
-  Rational32 interval_seconds_rational = 2;
+  Rational32 interval_seconds = 2;
 }
 
 // An image-analysis request that recognizes text in an image.
 message OcrVision {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
+  // An LDTXWorkspaceID for this entity.
   uint64 internal_id = 1;
   // The name of this Vision shown in the Workspace sidebar.
   string display_name = 2;
-  // The conditions that automatically trigger this Vision.
-  repeated VisionTriggerWrapper triggers = 3;
-  reserved 4;
-  reserved "input_device_internal_id";
-  oneof source {
-    // Analyzes the component after effects and before Program placement.
-    uint64 video_component_internal_id = 11;
-  }
+  // The LDTXWorkspaceID of the Video Component analyzed after effects and
+  // before Program placement.
+  uint64 video_component_internal_id = 3;
   // The region of the input image in which Vision performs the request.
-  VisionRegionOfInterest region_of_interest = 5;
-  // Whether text recognition prioritizes accuracy over speed. False uses the
-  // fast level.
-  bool accurate = 6;
-  // The BCP 47 languages Vision detects, in priority order. An empty list
-  // enables automatic language detection.
-  repeated string recognition_languages = 7;
+  VisionRegionOfInterest region_of_interest = 4;
+  // The conditions that automatically trigger this Vision.
+  repeated VisionTriggerWrapper triggers = 5;
+  // The BCP 47 languages Vision detects, in priority order.
+  repeated string recognition_languages = 6;
   // Whether Vision applies language correction during text recognition.
-  bool uses_language_correction = 8;
+  bool uses_language_correction = 7;
   // The words that supplement Vision's lexicon during word recognition.
   // Vision uses these only when language correction is enabled.
-  repeated string custom_words = 9;
-  // The minimum text height relative to input image height. When absent, the
-  // Vision Framework default applies.
-  reserved 10;
-  reserved "minimum_text_height";
-  Rational32 minimum_text_height_rational = 12;
+  repeated string custom_words = 8;
+  // The minimum text height, normalized by the target image height, in [0, 1].
+  Rational32 minimum_text_height = 9;
 }

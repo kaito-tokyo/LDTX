@@ -43,7 +43,7 @@ public struct WorkspaceBundleWriterV4 {
     externalID: UUID
   ) throws -> UUID {
     var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-    envelope.externalID = externalID.uuidString.lowercased()
+    envelope.externalIDAsUUID = externalID
     envelope.workspaceDefinitionV4 = definition
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
@@ -57,7 +57,7 @@ public struct WorkspaceBundleWriterV4 {
     externalID: UUID
   ) throws -> UUID {
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-    envelope.externalID = externalID.uuidString.lowercased()
+    envelope.externalIDAsUUID = externalID
     envelope.workspacePreferencesV4 = preferences
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true

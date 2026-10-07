@@ -13,14 +13,10 @@ public enum WorkspaceDocumentPackage {
   ) throws {
     try WorkspaceV4IntegrityValidator.validate(workspace)
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-    definition.externalID =
-      workspace.definitionExternalID
-      ?? WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+    definition.externalIDAsUUID = try envelopeIdentifier(workspace.definitionExternalID)
     definition.workspaceDefinitionV4 = workspace.definition
     var preferences = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-    preferences.externalID =
-      workspace.preferencesExternalID
-      ?? WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+    preferences.externalIDAsUUID = try envelopeIdentifier(workspace.preferencesExternalID)
     preferences.workspacePreferencesV4 = workspace.preferences
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
@@ -41,4 +37,15 @@ public enum WorkspaceDocumentPackage {
     try preferencesData.write(
       to: destination.appendingPathComponent("preferences.pb"), options: .atomic)
   }
+
+  private static func envelopeIdentifier(_ identifier: String?) throws -> UUID {
+    guard let identifier else {
+      return WorkspaceBundleWriterV4.makeExternalID()
+    }
+    guard let uuid = UUID(uuidString: identifier) else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
+    return uuid
+  }
+
 }

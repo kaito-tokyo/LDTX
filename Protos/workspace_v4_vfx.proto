@@ -2,14 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace Video Effect definitions.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
 // Wraps one concrete Video Effect definition.
 message VideoEffectWrapper {
-  oneof definition {
+  oneof video_effect {
     // The custom Video Effect definition. Mutually exclusive with the other
     // fields.
     CustomVideoEffect custom = 1;
