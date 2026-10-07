@@ -196,7 +196,10 @@ launch and main-menu smoke tests.
 The embedded XPC service process-boundary test remains in the isolated
 `LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
 `LDTXMediumTests`, and `LDTXHardTests` schemes are also available for
-tier-specific runs. The same
+tier-specific runs. The macOS-only, hostless `LDTXOutputTests` target and scheme
+collect output configuration, media delivery, recording/streaming session, and
+output protocol tests across those framework tiers. All app test plans include
+this target; XPC process isolation stays in `LDTXAppXpcTests`. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
 tests. Full-app archive validation is owned by the release workflow and is
 intentionally separate from the GitHub test gate. This repository does not use

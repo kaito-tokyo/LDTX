@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  LDTXOutputTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXOutputTests
+    dependencies:
+      - target: LDTXCapture
+      - target: LDTXDash
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXProgramRuntime
+      - target: LDTXRecordBundleFormat
+      - target: LDTXRecording
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletStore
+      - target: LDTXWorkspaceAppletUI
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXOutputTests
+
+schemes:
+  LDTXOutputTests:
+    build:
+      targets:
+        LDTXOutputTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXOutputTests

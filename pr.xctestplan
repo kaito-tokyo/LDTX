@@ -15,6 +15,13 @@
     {
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "C7741D6E32696FBB1F22F09E",
+        "name" : "LDTXOutputTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "232F5D19ADE07649B5F9404D",
         "name" : "LDTXAppUIComponentTests"
       }
