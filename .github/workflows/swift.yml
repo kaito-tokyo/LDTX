@@ -10,6 +10,11 @@ name: Swift CI
 on:
   pull_request:
   workflow_call:
+    inputs:
+      test-plan:
+        type: string
+        description: The test plan to run
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -78,6 +83,9 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      LDTX_TEST_PLAN: ${{ inputs.test-plan || 'pr' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -130,7 +138,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan LDTXTests \
+            -testPlan "$LDTX_TEST_PLAN" \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -146,12 +154,11 @@ jobs:
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          # Temporarily exclude real OCR: Vision returns .unknownError on the GHA runner.
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan LDTXTests \
+            -testPlan "$LDTX_TEST_PLAN" \
             -skip-testing:LDTXHardTests/WorkspaceClockOCRIntegrationTestSuite \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
@@ -164,49 +171,6 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
-
-      - name: Test Corelibs on macOS
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTXCorelibsTests \
-            -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_ENTITLEMENTS= \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/corelibs-test.xcresult" \
-            test 2>&1 | tee "$RUNNER_TEMP/corelibs-test.log" | xcbeautify --renderer github-actions
-
-      - name: Test UI automation and XPC schemes
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          for scheme in \
-            LDTXAppUITests \
-            LDTXAppXpcTests; do
-            xcodebuild \
-              -skipPackagePluginValidation \
-              -project LDTX.xcodeproj \
-              -scheme "$scheme" \
-              -configuration Debug \
-              -destination 'platform=macOS,arch=arm64' \
-              -derivedDataPath .derivedData \
-              CODE_SIGN_STYLE=Manual \
-              CODE_SIGN_IDENTITY=- \
-              PROVISIONING_PROFILE= \
-              PROVISIONING_PROFILE_SPECIFIER= \
-              CODE_SIGN_ENTITLEMENTS= \
-              COMPILER_INDEX_STORE_ENABLE=NO \
-              -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
-              test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
-          done
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -248,6 +212,4 @@ jobs:
             ${{ runner.temp }}/xcodebuild-test.log
             ${{ runner.temp }}/xcodebuild-build.xcresult
             ${{ runner.temp }}/xcodebuild-test.xcresult
-            ${{ runner.temp }}/corelibs-test.log
-            ${{ runner.temp }}/corelibs-test.xcresult
           if-no-files-found: warn
