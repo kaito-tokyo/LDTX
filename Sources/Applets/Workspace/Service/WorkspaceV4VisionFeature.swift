@@ -81,8 +81,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         let frame = try await context.frameForVision(vision)
         let result = try await ocrService.recognizeText(
           in: frame.image,
-          configuration: Self.ocrConfiguration(for: vision),
-          stopToken: .neverStopped
+          configuration: Self.ocrConfiguration(for: vision)
         )
         guard !Task.isCancelled, context.vision(internalID) == vision else { return }
         self.resultsByVisionInternalID[internalID] = result.output
@@ -100,7 +99,6 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
 
   static func ocrConfiguration(for vision: Ldtx_Workspace_V4_OcrVision) -> VisionOCRConfiguration {
     VisionOCRConfiguration(
-      prefersAccurateRecognition: vision.accurate,
       recognitionLanguages: vision.recognitionLanguages,
       usesLanguageCorrection: vision.usesLanguageCorrection,
       customWords: vision.customWords,

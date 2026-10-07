@@ -24,7 +24,6 @@ struct WorkspaceV4VisionFeatureUnitTestSuite {
 
     let configuration = WorkspaceV4VisionFeature.ocrConfiguration(for: vision)
 
-    #expect(!configuration.prefersAccurateRecognition)
     #expect(configuration.recognitionLanguages == ["ja-JP"])
     #expect(configuration.usesLanguageCorrection)
     #expect(configuration.customWords == ["Unite"])

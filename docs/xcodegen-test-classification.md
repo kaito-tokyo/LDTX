@@ -140,8 +140,6 @@ SPDX-License-Identifier: Apache-2.0
 
 `WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized`
 remains in `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift`.
-It is temporarily disabled pending the
-[`RecognizeTextRequest` migration](https://github.com/kaito-tokyo/LDTX/issues/325).
 It runs directly in the hostless `LDTXHardTests` bundle without a hardware-based
 skip or application host. HardTests contains no XCUI automation. The component rendering, ROI, effects,
 and unavailable-source cases are Medium. `GitHubActions.xctestplan` runs the GHA

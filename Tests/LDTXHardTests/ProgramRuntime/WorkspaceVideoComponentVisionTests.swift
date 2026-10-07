@@ -15,9 +15,7 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceVideoComponentVisionIntegrationTestSuite {
-  @Test(
-    .disabled(
-      "Pending RecognizeTextRequest migration: https://github.com/kaito-tokyo/LDTX/issues/325"))
+  @Test
   func clockOutputIsRecognized() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let registry = LowFrequencyUpdateRegistry()
@@ -38,8 +36,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
       let output = try await service.recognizeText(
         in: current.image,
         configuration: .init(
-          prefersAccurateRecognition: false,
-          recognitionLanguages: [], usesLanguageCorrection: false), stopToken: .neverStopped)
+          recognitionLanguages: [], usesLanguageCorrection: false))
       #expect(output.elapsedSeconds >= 0)
       recognizedClock = recognizedClock || output.output.contains(":")
     }
