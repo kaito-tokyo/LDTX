@@ -8,6 +8,8 @@ targets:
     sources:
       - Tests/LDTXAppUIComponentTests
     dependencies:
+      - target: LDTXSettingsApplet
+      - target: LDTXProgramRuntime
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletController
       - target: LDTXRecordPlayerApplet

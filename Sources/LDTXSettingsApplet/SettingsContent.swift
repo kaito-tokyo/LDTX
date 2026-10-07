@@ -6,13 +6,15 @@ import SwiftUI
 
 struct SettingsContent<Account: SettingsAccountProviding>: View {
   @ObservedObject private var account: Account
+  private let monitorSettings: MonitorDeviceSettingsModel
 
-  init(account: Account) {
+  init(account: Account, monitorSettings: MonitorDeviceSettingsModel) {
     self.account = account
+    self.monitorSettings = monitorSettings
   }
 
   public var body: some View {
-    SettingsView {
+    SettingsView(monitorSettings: monitorSettings) {
       YouTubeAccountSettingsView(
         oauthStatus: account.oauthStatus,
         authorizationStatus: account.authorizationStatus,

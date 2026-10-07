@@ -246,7 +246,16 @@ and stops the renderer before shutting down the runtimes.
 
 Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Explicit user selection and resource-addition selection remain window-local.
 
-Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Assignment removal and use of the default monitor device are explicit actions. Fixed enumerations retain their existing controls.
+Physical assignments, VFX/OCR inputs, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
+
+Monitor output selection is application-wide and belongs to SettingsApplet's
+Audio tab. The current device is displayed separately from an initially
+unselected candidate list. Selecting a candidate rechecks availability and
+immediately persists it, without Apply or Cancel. System Default is an explicit candidate.
+Device changes refresh the candidates without
+rewriting the saved assignment. Discovery errors use the Settings Window's
+presentError path, with repeated failures suppressed until recovery. Workspace
+editors expose monitor volume and input routing, not output-device selection.
 
 ### Video layer editing belongs to Content
 
@@ -256,7 +265,7 @@ show all its rows and empty-state labels.
 VideoLayersEditor has no internal scroll view; the Content pane scrolls all
 editors together.
 Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
-and monitor output controls. AudioMixEditor owns one Workspace-wide gain per input, independent Landscape/Portrait
+and monitor volume controls. AudioMixEditor owns one Workspace-wide gain per input, independent Landscape/Portrait
 mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
 Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 

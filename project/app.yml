@@ -72,6 +72,7 @@ targets:
     sources:
       - Sources/LDTXSettingsApplet
     dependencies:
+      - target: LDTXProgramRuntime
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXYouTube

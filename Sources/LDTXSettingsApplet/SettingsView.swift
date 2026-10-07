@@ -10,6 +10,7 @@ import SwiftUI
 public struct SettingsView<AccountContent: View>: View {
   private let accountContent: AccountContent
   private let settingsStore: ApplicationSettingsStore
+  private let monitorSettings: MonitorDeviceSettingsModel
   @State private var outputPreferences = ApplicationOutputPreferences()
 
   public init(
@@ -18,11 +19,24 @@ public struct SettingsView<AccountContent: View>: View {
   ) {
     self.accountContent = accountContent()
     self.settingsStore = ApplicationSettingsStore(userDefaults: userDefaults)
+    self.monitorSettings = MonitorDeviceSettingsModel(defaults: userDefaults)
+  }
+
+  init(
+    monitorSettings: MonitorDeviceSettingsModel,
+    @ViewBuilder accountContent: () -> AccountContent
+  ) {
+    self.accountContent = accountContent()
+    self.settingsStore = ApplicationSettingsStore(userDefaults: .standard)
+    self.monitorSettings = monitorSettings
   }
 
   public var body: some View {
     TabView {
       Tab("Account", systemImage: "person.crop.circle") { accountContent }
+      Tab("Audio", systemImage: "speaker.wave.2") {
+        MonitorDeviceSettingsView(model: monitorSettings)
+      }
       Tab("Output", systemImage: "folder") {
         Form {
           Section("Default Output Folder") {

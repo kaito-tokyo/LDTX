@@ -3,8 +3,7 @@
 import AppKit
 import LDTXWorkspaceAppletInterface
 
-final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
-  private let monitorDevice = NSPopUpButton()
+final class MasterVolumeEditor: NSViewController {
   private let storeService: WorkspaceStoreService
 
   init(storeService: WorkspaceStoreService) {
@@ -43,10 +42,6 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     for master in masters {
       master.widthAnchor.constraint(equalTo: grid.widthAnchor, constant: -114).isActive = true
     }
-    monitorDevice.target = self
-    monitorDevice.action = #selector(monitorDeviceChanged)
-    monitorDevice.menu?.delegate = self
-    refreshMonitorDevices()
     monitorVolume.target = self
     monitorVolume.action = #selector(monitorChanged)
     monitorVolume.isContinuous = true
@@ -54,47 +49,14 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
     heading.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
     let separator = NSBox()
     separator.boxType = .separator
-    let monitorRow = contentStack([monitorDevice, monitorVolume], vertical: false)
+    let monitorRow = contentStack(
+      [NSTextField(labelWithString: "Monitor Volume"), monitorVolume], vertical: false)
     let stack = contentStack([heading, grid, monitorRow, separator])
     pinContent(stack, in: view)
     for child in [grid, monitorRow, separator] {
       child.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
     refresh()
-  }
-
-  func menuWillOpen(_ menu: NSMenu) { refreshMonitorDevices() }
-
-  private func refreshMonitorDevices() {
-    let selected =
-      UserDefaults.standard.string(forKey: WorkspaceAudioEngine.outputDevicePreferenceKey) ?? ""
-    monitorDevice.removeAllItems()
-    monitorDevice.addItem(withTitle: "System Default")
-    monitorDevice.lastItem?.representedObject = ""
-    do {
-      let devices = try availableMonitorDevices()
-      for device in devices {
-        monitorDevice.addItem(withTitle: device.name)
-        monitorDevice.lastItem?.representedObject = device.uid
-      }
-    } catch {
-      Task { @MainActor [weak storeService] in storeService?.reportError(error) }
-    }
-    if let item = monitorDevice.itemArray.first(where: {
-      $0.representedObject as? String == selected
-    }) {
-      monitorDevice.select(item)
-    } else {
-      monitorDevice.addItem(withTitle: "Unavailable")
-      monitorDevice.lastItem?.representedObject = selected
-      monitorDevice.lastItem?.isEnabled = false
-      monitorDevice.select(monitorDevice.lastItem)
-    }
-  }
-
-  @objc private func monitorDeviceChanged() {
-    guard let uid = monitorDevice.selectedItem?.representedObject as? String else { return }
-    UserDefaults.standard.set(uid, forKey: WorkspaceAudioEngine.outputDevicePreferenceKey)
   }
 
   override func viewWillLayout() {
