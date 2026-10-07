@@ -5,9 +5,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: Actions
+name: Actions CI
 
 on:
+  pull_request:
   workflow_call:
 
 jobs:
