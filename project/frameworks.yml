@@ -248,7 +248,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXProgram
+      - Sources/Corelibs/LDTXProgram
     dependencies:
       - target: LDTXProtos
       - package: SwiftProtobuf
@@ -264,7 +264,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXProtos
+      - Sources/Corelibs/LDTXProtos
     dependencies:
       - package: SwiftProtobuf
         product: SwiftProtobuf
@@ -279,7 +279,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXWorkspaceBundleFormat
+      - Sources/Corelibs/LDTXWorkspaceBundleFormat
     dependencies:
       - target: LDTXProtos
       - package: SwiftProtobuf

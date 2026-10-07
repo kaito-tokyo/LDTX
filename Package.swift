@@ -6,30 +6,44 @@
 
 import PackageDescription
 
-let package = Package(
-  name: "ldtx-cli",
-  platforms: [.macOS("26.0")],
-  products: [
-    .executable(name: "ldtx", targets: ["ldtx"])
-  ],
-  dependencies: [
-    .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
-    .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
-  ],
-  targets: [
-    .target(
-      name: "LDTXProgram",
-      dependencies: [
-        "LDTXProtos",
-        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-      ],
-      path: "Sources/LDTXProgram"
-    ),
-    .target(
-      name: "LDTXProtos",
-      dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
-      path: "Sources/LDTXProtos"
-    ),
+var targets: [Target] = [
+  .target(
+    name: "LDTXProgram",
+    dependencies: [
+      "LDTXProtos",
+      .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+    ],
+    path: "Sources/Corelibs/LDTXProgram"
+  ),
+  .target(
+    name: "LDTXProtos",
+    dependencies: [.product(name: "SwiftProtobuf", package: "swift-protobuf")],
+    path: "Sources/Corelibs/LDTXProtos"
+  ),
+  .target(
+    name: "LDTXWorkspaceBundleFormat",
+    dependencies: [
+      "LDTXProtos",
+      .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+    ],
+    path: "Sources/Corelibs/LDTXWorkspaceBundleFormat"
+  ),
+  .testTarget(
+    name: "LDTXCorelibsTests",
+    dependencies: ["LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat"],
+    path: "Tests/Corelibs"
+  ),
+]
+
+var products: [Product] = []
+var dependencies: [Package.Dependency] = [
+  .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
+  .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
+]
+
+#if os(macOS)
+  products.append(.executable(name: "ldtx", targets: ["ldtx"]))
+  targets += [
     .target(
       name: "LDTXWorkspaceAppletModel",
       dependencies: [
@@ -38,14 +52,6 @@ let package = Package(
         .product(name: "SwiftProtobuf", package: "swift-protobuf"),
       ],
       path: "Sources/Applets/Workspace/Model"
-    ),
-    .target(
-      name: "LDTXWorkspaceBundleFormat",
-      dependencies: [
-        "LDTXProtos",
-        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-      ],
-      path: "Sources/LDTXWorkspaceBundleFormat"
     ),
     .target(
       name: "LDTXWorkspaceAppletStore",
@@ -109,4 +115,12 @@ let package = Package(
       path: "Tests/LDTXUtilsTests"
     ),
   ]
+#endif
+
+let package = Package(
+  name: "ldtx-cli",
+  platforms: [.macOS("26.0")],
+  products: products,
+  dependencies: dependencies,
+  targets: targets
 )

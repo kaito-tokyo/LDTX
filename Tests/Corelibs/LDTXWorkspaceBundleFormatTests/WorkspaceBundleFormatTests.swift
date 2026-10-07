@@ -53,7 +53,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let infoData = try Data(contentsOf: packageURL.appendingPathComponent("Info.plist"))
     let info = try #require(
       PropertyListSerialization.propertyList(
-        from: infoData, options: 0, format: nil)
+        from: infoData, options: .init(), format: nil)
         as? [String: Any])
     #expect(info["CFBundlePackageType"] as? String == "BNDL")
     #expect(info["LDTXWorkspaceVersion"] as? Int == 4)

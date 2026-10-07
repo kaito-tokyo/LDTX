@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "5F19D9FB-25FB-41A5-9EC8-222838ECD875",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "AF349AA2C58E469BDBEFD99B",
+        "name" : "LDTXCorelibsTests"
+      }
+    }
+  ],
+  "version" : 1
+}

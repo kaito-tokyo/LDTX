@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  LDTXCorelibsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/Corelibs
+    dependencies:
+      - target: LDTXProtos
+      - target: LDTXProgram
+      - target: LDTXWorkspaceBundleFormat
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCorelibsTests
+
+schemes:
+  LDTXCorelibsTests:
+    build:
+      targets:
+        LDTXCorelibsTests: all
+    test:
+      config: Debug
+      targets:
+        - LDTXCorelibsTests
