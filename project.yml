@@ -6,6 +6,7 @@ name: LDTX
 
 configs:
   Debug: debug
+  CloudTest: debug
   Release: release
   Distribution: release
 

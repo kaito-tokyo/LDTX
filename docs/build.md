@@ -45,6 +45,33 @@ for local debugging by omitting `-debug-info-format none`.
 The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
 `golden_gate` job.
 
+## Xcode Cloud UI tests
+
+Select the shared `LDTXCloudTests` scheme for the Xcode Cloud test workflow.
+In its Test action, use the scheme's `CloudTest` configuration with the
+`XcodeCloud` test plan. Keep archive workflows on `LDTXApp` with `Distribution`.
+
+`CloudTest` uses debug build settings and a separate entitlement file containing
+only camera and audio-input access. It omits iCloud, Keychain access groups, and
+continued-processing entitlements that require a provisioning profile. Xcode
+Cloud's macOS Test action can produce an ad hoc signed app without that profile;
+restricted entitlements then prevent the app from launching. See
+[Apple DTS's explanation](https://developer.apple.com/forums/thread/724812).
+The launch and File-menu smoke test does not exercise those capabilities.
+
+Run the same test configuration locally with:
+
+```sh
+xcodegen generate
+xcodebuild \
+  -project LDTX.xcodeproj \
+  -scheme LDTXCloudTests \
+  -testPlan XcodeCloud \
+  -destination platform=macOS \
+  -derivedDataPath .derivedData \
+  test
+```
+
 ## Generated Files
 
 Prefer changing the source of truth, then regenerate the generated output with
@@ -257,7 +284,8 @@ xcodebuild \
 GitHub Actions is the pull-request merge gate: Swift package tests run in
 parallel with the hosted `LDTX` integration test. The `LDTX`
 application, Vision, and Quick Look archive are built and signed by Xcode
-Cloud, which is the release build authority and does not run tests.
+Cloud, which is the release build authority. Its separate Test action runs the
+UI smoke test using `LDTXCloudTests`.
 
 ```sh
 reuse --no-multiprocessing lint
