@@ -15,28 +15,41 @@ public struct WorkspaceInspectorContainer: View {
   @Environment(\.documentReference) private var documentReference
   private var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? uiState.localStateURL
+    return document.fileURL ?? storeService.localStateURL
   }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
-  @Bindable var uiState: WorkspaceUIState
+  @Bindable var storeService: WorkspaceStoreService
 
   public init(
     deviceRegistry: DeviceRegistryService,
-    uiState: WorkspaceUIState,
+    storeService: WorkspaceStoreService,
     appletData: WorkspaceAppletData
   ) {
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
-    self._uiState = Bindable(wrappedValue: uiState)
+    self._storeService = Bindable(wrappedValue: storeService)
   }
 
   public var body: some View {
-    if let selector = uiState.inspectorSelector {
+    if let selector = storeService.inspectorSelector {
       inspector(for: selector)
         .id(selector)
     } else {
-      emptyInspector
+      ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Inspector")
+            .font(.headline)
+          Text("Select an item in the Sidebar to view and edit its settings.")
+          Text(
+            "Select Programs to add or choose a Program, Canvas to configure frame rate and bit rate, or Output to configure recording and streaming."
+          )
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
   }
 
@@ -46,29 +59,20 @@ public struct WorkspaceInspectorContainer: View {
     case .invalid:
       emptyInspector
     case .workspacePrograms:
-      WorkspaceProgramsInspector(uiState: uiState, appletData: appletData)
+      WorkspaceProgramsInspector(storeService: storeService, appletData: appletData)
     case .workspaceCanvas:
-      WorkspaceCanvasInspector(uiState: uiState)
+      WorkspaceCanvasInspector(storeService: storeService)
     case .workspaceOutput:
       if workspaceURL != nil {
         WorkspaceOutputInspector(
-          uiState: uiState, appletData: appletData)
+          storeService: storeService, appletData: appletData)
       } else {
         unavailablePreviewInspector
       }
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          uiState: uiState, internalID: internalID,
-          deviceRegistry: deviceRegistry,
-          appletData: appletData)
-      } else {
-        emptyInspector
-      }
-    case .videoInputDevice:
-      if let internalID = selector.internalID {
-        VideoInputDeviceInspector(
-          uiState: uiState, internalID: internalID,
+          storeService: storeService, internalID: internalID,
           deviceRegistry: deviceRegistry,
           appletData: appletData)
       } else {
@@ -77,14 +81,15 @@ public struct WorkspaceInspectorContainer: View {
     case .vfxVideoComponent:
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
-          uiState: uiState, internalID: internalID)
+          storeService: storeService, internalID: internalID,
+          deviceRegistry: deviceRegistry, appletData: appletData)
       } else {
         emptyInspector
       }
     case .solidColorFillVideoComponent:
       if let internalID = selector.internalID {
         SolidColorFillVideoComponentInspector(
-          uiState: uiState,
+          storeService: storeService,
           videoComponentID: .solidColorFill(internalID))
       } else {
         emptyInspector
@@ -92,7 +97,7 @@ public struct WorkspaceInspectorContainer: View {
     case .linearGradientFillVideoComponent:
       if let internalID = selector.internalID {
         LinearGradientFillVideoComponentInspector(
-          uiState: uiState,
+          storeService: storeService,
           videoComponentID: .linearGradientFill(internalID))
       } else {
         emptyInspector
@@ -100,7 +105,7 @@ public struct WorkspaceInspectorContainer: View {
     case .radialGradientFillVideoComponent:
       if let internalID = selector.internalID {
         RadialGradientFillVideoComponentInspector(
-          uiState: uiState,
+          storeService: storeService,
           videoComponentID: .radialGradientFill(internalID))
       } else {
         emptyInspector
@@ -108,7 +113,7 @@ public struct WorkspaceInspectorContainer: View {
     case .conicGradientFillVideoComponent:
       if let internalID = selector.internalID {
         ConicGradientFillVideoComponentInspector(
-          uiState: uiState,
+          storeService: storeService,
           videoComponentID: .conicGradientFill(internalID))
       } else {
         emptyInspector
@@ -116,21 +121,21 @@ public struct WorkspaceInspectorContainer: View {
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(
-          uiState: uiState, internalID: internalID)
+          storeService: storeService, internalID: internalID)
       } else {
         emptyInspector
       }
     case .testPatternVideoComponent:
       if let internalID = selector.internalID {
         TestPatternInspector(
-          uiState: uiState, internalID: internalID)
+          storeService: storeService, internalID: internalID)
       } else {
         emptyInspector
       }
     case .ocrVision:
       if let internalID = selector.internalID {
         OcrVisionInspector(
-          uiState: uiState, internalID: internalID)
+          storeService: storeService, internalID: internalID)
       } else {
         emptyInspector
       }
@@ -151,19 +156,21 @@ public struct WorkspaceInspectorContainer: View {
 
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
+        storeService: storeService, deviceRegistry: DeviceRegistryService(),
+        appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
 
       Divider()
 
       WorkspaceInspectorContainer(
-        deviceRegistry: DeviceRegistryService(), uiState: uiState, appletData: WorkspaceAppletData()
+        deviceRegistry: DeviceRegistryService(), storeService: storeService,
+        appletData: WorkspaceAppletData()
       )
       .padding(16)
       .frame(width: 260)

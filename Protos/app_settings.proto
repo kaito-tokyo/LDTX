@@ -10,6 +10,7 @@ package ldtx.app.v1;
 // Workspace package. They are persisted in AppStorage as one protobuf value.
 message ApplicationOutputPreferences {
   optional string default_output_folder_path = 1;
+  optional string screenshots_folder_path = 2;
 }
 
 // Legacy application output settings retained only to migrate the default
@@ -36,16 +37,16 @@ message WorkspaceLocalStateStore {
 message WorkspaceLocalState {
   // The selected Program internal ID. When absent, no Program is selected.
   optional uint64 selected_program_internal_id = 1;
-  // Physical device IDs for Video Input Devices, keyed by their internal IDs.
-  map<uint64, string> video_input_device_physical_ids = 2;
+  reserved 2;
+  reserved "video_input_device_physical_ids";
+  // Physical camera IDs keyed by VFX Source internal IDs.
+  map<uint64, string> vfx_source_physical_ids = 8;
   // Physical device IDs for Audio Input Devices, keyed by their internal IDs.
   map<uint64, string> audio_input_device_physical_ids = 3;
   // Audio Input Device internal IDs routed to the local monitor output.
   repeated uint64 monitor_audio_input_device_internal_ids = 4;
-  // Whether each Program synchronizes the Landscape mix to Portrait, keyed by
-  // Program internal ID.
-  map<uint64, bool> synchronizes_landscape_mix_to_portrait_by_program_internal_id
-      = 5;
+  reserved 5;
+  reserved "synchronizes_landscape_mix_to_portrait_by_program_internal_id";
   // Saved Stream Key configuration ID selected for Landscape RTMPS output.
   optional string landscape_youtube_live_stream_id = 6;
   // Saved Stream Key configuration ID selected for Portrait RTMPS output.

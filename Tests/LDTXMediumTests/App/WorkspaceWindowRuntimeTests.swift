@@ -17,6 +17,158 @@ import Testing
 @MainActor
 @Suite("Workspace window runtime")
 struct WorkspaceWindowRuntimeIntegrationTestSuite {
+  @Test("canvas updates preserve current values after reading an old snapshot")
+  func preservesCurrentCanvasValues() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let id = try runtime.addProgram(displayName: "Independent")
+    let first = try runtime.addVFXSource(displayName: "First")
+    let second = try runtime.addVFXSource(displayName: "Second")
+    try runtime.setVideoLayerOrder([first, second], forProgramInternalID: id, target: .landscape)
+    try runtime.setVideoLayerOrder([second, first], forProgramInternalID: id, target: .portrait)
+    let old = try WorkspaceProgramCanvasSnapshot(
+      definition: runtime.definition, preferences: runtime.preferences,
+      programInternalID: id, target: .landscape)
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 4
+    }
+    transform.scaleXRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    transform.scaleYRational = .with {
+      $0.numerator = 1
+      $0.denominator = 1
+    }
+    try runtime.setBasicTransform(
+      transform, forVideoLayerInternalID: first,
+      programInternalID: id, target: .landscape)
+    try runtime.setVideoLayerHidden(
+      true, forVideoLayerInternalID: second,
+      programInternalID: id, target: .portrait)
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }, programInternalID: id, target: .landscape)
+    #expect(old.preferences.videoLayerTransforms.isEmpty)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.videoLayerTransforms[first] == transform)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -60, den: 10)
+        })
+    #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.videoLayerTransforms.isEmpty == true)
+    #expect(runtime.definition.programs.first?.landscapeVideoLayerInternalIds == [first, second])
+    #expect(runtime.definition.programs.first?.portraitVideoLayerInternalIds == [second, first])
+  }
+
+  @Test("edits and removes independent canvas preferences")
+  func editsIndependentCanvasPreferences() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let id = try runtime.addProgram(displayName: "Canvas Preferences")
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -81
+        $0.denominator = 25
+      }, programInternalID: id, target: .landscape)
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -9
+        $0.denominator = 1
+      }, programInternalID: id, target: .portrait)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -32, den: 10)
+        })
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -90, den: 10)
+        })
+    try runtime.setMasterVolume(
+      .with {
+        $0.numerator = -6
+        $0.denominator = 1
+      }, programInternalID: id, target: .landscape)
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -60, den: 10)
+        })
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -90, den: 10)
+        })
+    let invalidValues: [Ldtx_Workspace_V4_Rational32] = [
+      .with { $0.set(num: 1, den: 0) }, .with { $0.set(num: Int32.max, den: 1) },
+    ]
+    for invalid in invalidValues {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
+        try runtime.setMasterVolume(invalid, programInternalID: id, target: .landscape)
+      }
+    }
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -60, den: 10)
+        })
+    let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
+    try runtime.setAudioChannelGain(
+      .with {
+        $0.numerator = -617
+        $0.denominator = 50
+      }, forAudioInputDeviceInternalID: inputID)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: -123, den: 10)
+        })
+    try runtime.setAudioChannelGain(
+      .with {
+        $0.numerator = 63
+        $0.denominator = 50
+      }, forAudioInputDeviceInternalID: inputID)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: 13, den: 10)
+        })
+    for invalid in invalidValues {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
+        try runtime.setAudioChannelGain(invalid, forAudioInputDeviceInternalID: inputID)
+      }
+    }
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: 13, den: 10)
+        })
+    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
+      try runtime.setAudioChannelGain(
+        .with {
+          $0.numerator = -6
+          $0.denominator = 1
+        }, forAudioInputDeviceInternalID: 999)
+    }
+    try runtime.removeProgram(internalID: id)
+    #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
+    #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
+    #expect(
+      runtime.preferences.audioChannelGainsDecibels[inputID]
+        == Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: 13, den: 10)
+        })
+    try runtime.removeInputDevice(internalID: inputID)
+    #expect(runtime.preferences.audioChannelGainsDecibels[inputID] == nil)
+  }
+
   @Test("resolves a selected single-Canvas V4 RTMPS destination")
   func resolvesSingleCanvasRTMPSDestination() throws {
     var output = Ldtx_Workspace_V4_OutputConfiguration()
@@ -65,16 +217,16 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 42
     vision.displayName = "OCR"
-    vision.source = .inputDeviceInternalID(1)
-    var videoInput = Ldtx_Workspace_V4_VideoInputDevice()
+    vision.source = .videoComponentInternalID(1)
+    var videoInput = Ldtx_Workspace_V4_VfxSourceComponent()
     videoInput.internalID = 1
     videoInput.displayName = "Camera"
-    var inputWrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    inputWrapper.videoDevice = videoInput
+    var inputWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    inputWrapper.vfxSource = videoInput
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
     try runtime.editDefinition {
-      $0.inputDevices = [inputWrapper]
+      $0.videoComponents = [inputWrapper]
       $0.visions = [wrapper]
     }
 
@@ -93,7 +245,6 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     try WorkspaceDocumentPackage.write(runtime.workspace, to: packageURL, createsPackage: true)
     runtime.persistenceCoordinator.setDocumentURL(packageURL)
     #expect(runtime.url == packageURL)
-    #expect(runtime.isDirty)
 
     let reopened = try makeRuntime(capture: capture)
     try reopened.persistenceCoordinator.open(at: packageURL)
@@ -114,8 +265,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    runtime.installRuntime(landscape, role: .landscape)
-    runtime.installRuntime(portrait, role: .portrait)
+    runtime.installRuntimes(landscape: landscape, portrait: portrait)
     runtime.selectedProgramInternalID = programID
 
     #expect(landscape.programState.read { $0?.videoLayerProgramName } == "v4-\(programID)")
@@ -145,35 +295,40 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let appletData = WorkspaceAppletData(userDefaults: defaults)
     let url = URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) }, url: url)
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: coordinator, captureSessionCoordinator: capture,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: { appletData.state(for: url) },
       selectProgram: { internalID in
         appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       })
-    let videoInputID = try windowRuntime.addVideoInputDevice(displayName: "Camera")
+    let videoComponentID = try windowRuntime.addVFXSource(displayName: "Camera")
     let programID = try windowRuntime.addProgram(displayName: "Main")
     try windowRuntime.setVideoLayerOrder(
-      [videoInputID], forProgramInternalID: programID, role: .landscape)
+      [videoComponentID], forProgramInternalID: programID, target: .landscape)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
-    windowRuntime.installRuntime(programRuntime, role: .landscape)
+    windowRuntime.installRuntimes(
+      landscape: programRuntime,
+      portrait: ProgramRuntime(
+        captureSessionCoordinator: capture,
+        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
+        scheduler: ManualProgramRuntimeScheduler()))
     windowRuntime.selectedProgramInternalID = programID
 
-    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)
+    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoComponentID)
     windowRuntime.updateRuntimes()
 
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
       programRuntime.programState.read { $0?.cameraIDsByInputKey }
-        == ["v4-\(videoInputID)": "camera-id"])
+        == ["v4-\(videoComponentID)": "camera-id"])
   }
 
   @Test("uses local state at the document-provided URL")
@@ -189,26 +344,26 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let originalURL = URL(
       fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace")
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) },
       url: originalURL)
     let runtime = WorkspaceWindowRuntime(
       persistence: coordinator,
       captureSessionCoordinator: capture,
-      physicalDeviceIDs: { appletData.physicalDeviceIDsByInputDeviceInternalID },
+      physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: { coordinator.url.map { appletData.state(for: $0) } ?? .init() })
-    let videoInputID = try runtime.addVideoInputDevice(displayName: "Camera")
-    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoInputID)
+    let videoComponentID = try runtime.addVFXSource(displayName: "Camera")
+    appletData.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "camera-id"), for: videoComponentID)
 
     let destination = rootURL.appendingPathComponent("Unite.ldtxworkspace")
     appletData.copyState(from: originalURL, to: destination)
     runtime.persistenceCoordinator.setDocumentURL(destination)
 
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
     #expect(
-      appletData.physicalDeviceID(for: videoInputID)
+      appletData.physicalDeviceID(for: videoComponentID)
         == .avCaptureDevice(uniqueID: "camera-id"))
   }
 
@@ -338,19 +493,38 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(transitions == [pausing ? .pausing : .stopping, .failed("Encoder shutdown failed")])
   }
 
+  @Test func referencedComponentsRequireExplicitReferenceRemoval() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let source = try runtime.addVFXSource(displayName: "Camera")
+    let program = try runtime.addProgram(displayName: "Main")
+    try runtime.setVideoLayerOrder([source], forProgramInternalID: program, target: .landscape)
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.setVideoLayerOrder([], forProgramInternalID: program, target: .landscape)
+    let vision = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: source)
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.removeVision(internalID: vision)
+    try runtime.editDefinition { $0.canvasConfiguration.ptsMasterVfxSourceInternalID = source }
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    try runtime.editDefinition { $0.canvasConfiguration.clearPtsMasterVfxSourceInternalID() }
+    try runtime.removeVideoComponent(internalID: source)
+    #expect(runtime.definition.videoComponents.isEmpty)
+  }
+
   private final class WorkspaceBox {
     var workspace: WorkspaceV4Bundle
-    var saved: WorkspaceV4Bundle
     init(_ workspace: WorkspaceV4Bundle) {
       self.workspace = workspace
-      self.saved = workspace
     }
-    var isDirty: Bool { workspace != saved }
     func replace(_ value: WorkspaceV4Bundle) throws {
       try WorkspaceV4IntegrityValidator.validate(value)
       workspace = value
     }
-    func markSaved() { saved = workspace }
   }
 
   private func makeRuntime(
@@ -359,7 +533,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     var localState = WorkspaceLocalState()
     let coordinator = WorkspaceV4PersistenceCoordinator(
-      workspaceSnapshot: { box.workspace }, workspaceIsDirty: { box.isDirty },
+      workspaceSnapshot: { box.workspace },
       replaceWorkspace: { try box.replace($0) },
       url: URL(fileURLWithPath: "/tmp/WorkspaceWindowRuntimeTests-\(UUID()).ldtxworkspace"))
     return WorkspaceWindowRuntime(

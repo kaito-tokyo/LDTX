@@ -64,16 +64,16 @@ import Testing
   @Test @MainActor func resourceDraftsAndSidebarStartUnselected() {
     let draft = WorkspaceAddDraft()
     #expect(draft.physicalDeviceID == nil)
-    #expect(draft.videoInputID == nil)
-    let state = WorkspaceUIState(definition: .init(), preferences: .init())
+    #expect(draft.videoComponentID == nil)
+    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     #expect(state.inspectorSelector == nil)
     let before = state.definition
     #expect(
       WorkspaceResourceAddition.validationMessage(
-        sheet: .device, draft: draft, devices: [], uiState: state) != nil)
+        sheet: .device, draft: draft, devices: [], storeService: state) != nil)
     #expect(
       WorkspaceResourceAddition.validationMessage(
-        sheet: .vision, draft: draft, devices: [], uiState: state) != nil)
+        sheet: .vision, draft: draft, devices: [], storeService: state) != nil)
     #expect(state.definition == before)
   }
 }

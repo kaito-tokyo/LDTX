@@ -10,9 +10,9 @@ struct WorkspaceOutputInspector: View {
   @Environment(\.documentReference) private var documentReference
   private var workspaceURL: URL? {
     guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? uiState.localStateURL
+    return document.fileURL ?? storeService.localStateURL
   }
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   @Bindable var appletData: WorkspaceAppletData
   @State private var isShowingStreamKeyManager = false
   @State private var streamKeyLoadError: String?
@@ -37,7 +37,7 @@ struct WorkspaceOutputInspector: View {
         }
       }
       if !isAvailableIngestMode(
-        uiState.definition.outputConfiguration.resolvedYouTubeIngestMode)
+        storeService.definition.outputConfiguration.resolvedYouTubeIngestMode)
       {
         Text("This YouTube ingest mode is not available yet.")
           .foregroundStyle(.secondary)
@@ -53,20 +53,19 @@ struct WorkspaceOutputInspector: View {
           WorkspaceV4StreamKeyManager(
             configurations: appletData.youtubeStreamKeyConfigurations,
             load: { try appletData.loadYouTubeStreamKeyConfigurations() },
-            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) }
+            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) },
+            reportError: { storeService.reportError($0) }
           )
         }
-      if let streamKeyLoadError {
-        Text(streamKeyLoadError).foregroundStyle(.red)
-      }
     }
-    .disabled(uiState.isOutputActive)
+    .disabled(storeService.isOutputActive)
     .onAppear {
       do {
         _ = try appletData.loadYouTubeStreamKeyConfigurations()
         streamKeyLoadError = nil
       } catch {
         streamKeyLoadError = error.localizedDescription
+        storeService.reportError(error)
       }
     }
 
@@ -80,22 +79,22 @@ struct WorkspaceOutputInspector: View {
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
   ) -> Binding<Bool> {
     Binding(
-      get: { uiState.definition.outputConfiguration[keyPath: keyPath] },
+      get: { storeService.definition.outputConfiguration[keyPath: keyPath] },
       set: { value in
-        var definition = uiState.definition
+        var definition = storeService.definition
         definition.outputConfiguration[keyPath: keyPath] = value
-        uiState.definition = definition
+        storeService.definition = definition
       }
     )
   }
 
   private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
     Binding(
-      get: { uiState.definition.outputConfiguration.resolvedYouTubeIngestMode },
+      get: { storeService.definition.outputConfiguration.resolvedYouTubeIngestMode },
       set: { value in
-        var definition = uiState.definition
+        var definition = storeService.definition
         definition.outputConfiguration.youtubeIngestMode = value
-        uiState.definition = definition
+        storeService.definition = definition
       }
     )
   }
@@ -103,30 +102,30 @@ struct WorkspaceOutputInspector: View {
   private var outputFolderPathBinding: Binding<String> {
     Binding(
       get: {
-        let output = uiState.definition.outputConfiguration
+        let output = storeService.definition.outputConfiguration
         return output.hasOutputFolderPath ? output.outputFolderPath : ""
       },
       set: { path in
-        var definition = uiState.definition
+        var definition = storeService.definition
         if path.isEmpty {
           definition.outputConfiguration.clearOutputFolderPath()
         } else {
           definition.outputConfiguration.outputFolderPath = path
         }
-        uiState.definition = definition
+        storeService.definition = definition
       }
     )
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch uiState.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch storeService.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch uiState.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch storeService.definition.outputConfiguration.resolvedYouTubeIngestMode {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }
@@ -171,10 +170,11 @@ struct WorkspaceOutputInspector: View {
       title: title, current: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue,
       options: appletData.youtubeStreamKeyConfigurations.map { .init(id: $0.id, name: $0.name) },
       loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
-      isEditable: !uiState.isOutputActive && workspaceURL != nil,
+      isEditable: !storeService.isOutputActive && workspaceURL != nil,
       refresh: refreshStreamKeys,
+      reportError: { storeService.reportError($0) },
       commit: { selected in
-        guard !uiState.isOutputActive, workspaceURL != nil else {
+        guard !storeService.isOutputActive, workspaceURL != nil else {
           throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
         }
         if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
@@ -190,7 +190,10 @@ struct WorkspaceOutputInspector: View {
     do {
       _ = try appletData.loadYouTubeStreamKeyConfigurations()
       streamKeyLoadError = nil
-    } catch { streamKeyLoadError = error.localizedDescription }
+    } catch {
+      streamKeyLoadError = error.localizedDescription
+      storeService.reportError(error)
+    }
   }
 
   private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {

@@ -16,18 +16,15 @@ import Observation
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
-  private let workspaceIsDirty: () -> Bool
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
   public init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
-    workspaceIsDirty: @escaping () -> Bool,
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
     url: URL? = nil
   ) {
     self.workspaceSnapshot = workspaceSnapshot
-    self.workspaceIsDirty = workspaceIsDirty
     self.replaceWorkspace = replaceWorkspace
     self.url = url
   }
@@ -43,7 +40,6 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
-  var isDirty: Bool { workspaceIsDirty() }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)
@@ -68,33 +64,30 @@ public final class WorkspaceV4PersistenceCoordinator {
   /// Device assignments are app-local and never become Workspace data.
   func runtimeProjection(
     programInternalID: UInt64,
-    role: ProgramCanvasRole,
+    target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
+    let canvas = try WorkspaceProgramCanvasSnapshot(
+      definition: currentWorkspace.definition, preferences: currentWorkspace.preferences,
+      programInternalID: programInternalID, target: target)
     return try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: currentWorkspace.definition,
-      preferences: currentWorkspace.preferences,
-      localState: localState,
-      physicalDeviceIDs: physicalDeviceIDs,
-      programInternalID: programInternalID,
-      role: role,
-      timeSeconds: timeSeconds
-    )
+      definition: currentWorkspace.definition, canvas: canvas,
+      physicalDeviceIDs: physicalDeviceIDs, timeSeconds: timeSeconds)
   }
 
   /// Installs one V4 Program directly into a shared preview or output runtime.
   func applyRuntime(
     _ runtime: ProgramRuntime,
     programInternalID: UInt64,
-    role: ProgramCanvasRole,
+    target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
     physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws {
     let projection = try runtimeProjection(
-      programInternalID: programInternalID, role: role, localState: localState,
+      programInternalID: programInternalID, target: target, localState: localState,
       physicalDeviceIDs: physicalDeviceIDs,
       timeSeconds: timeSeconds)
     runtime.updateProgram(projection.configuration)

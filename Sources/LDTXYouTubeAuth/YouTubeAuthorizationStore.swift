@@ -27,12 +27,26 @@ public struct YouTubeAuthorizationStore {
   public static let defaultService = "tokyo.kaito.ldtx.youtube-auth"
 
   private let service: String
+  #if !LDTX_DISTRIBUTION
+    private var file: YouTubeAuthFile?
+
+    init(file: YouTubeAuthFile) {
+      self.init()
+      self.file = file
+    }
+  #endif
 
   public init(service: String = Self.defaultService) {
     self.service = service
   }
 
   func load(clientID: String) throws -> OIDAuthState? {
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        guard let data = try file.read().authorizations[clientID] else { return nil }
+        return try decode(data)
+      }
+    #endif
     guard let keychainData = try loadFromKeychain(clientID: clientID) else {
       return nil
     }
@@ -41,10 +55,22 @@ public struct YouTubeAuthorizationStore {
 
   func save(_ authState: OIDAuthState, clientID: String) throws {
     let data = try encode(authState)
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        try file.update { $0.authorizations[clientID] = data }
+        return
+      }
+    #endif
     try saveToKeychain(data, clientID: clientID)
   }
 
   public func delete(clientID: String) throws {
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        try file.update { $0.authorizations.removeValue(forKey: clientID) }
+        return
+      }
+    #endif
     try deleteFromKeychain(clientID: clientID)
   }
 

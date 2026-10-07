@@ -4,58 +4,66 @@ SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Scenarios
+# UI Component Behavior Scenarios
 
-This directory contains local UI verification scenarios for LDTX.
-They are written for Computer-use assisted execution and are not CI gates.
+Write behavior descriptions in English using Gherkin. Each file contains one
+Feature and its Scenarios. These descriptions document expected behavior;
+they do not execute tests or report test results.
 
-## How to Read These Files
+## Corresponding component tests
 
-Each scenario is one Markdown file with YAML frontmatter followed by a test
-case style body. The structure is intentionally close to common test case
-descriptions found in software testing bodies of knowledge and standards:
-identifier, purpose, priority, preconditions, procedure, expected result, and
-postconditions.
+Each Feature corresponds to exactly one test file and one child suite in
+`Tests/LDTXAppUIComponentTests`. Each Scenario corresponds to exactly one test.
+Include the Feature ID in the suite's display name and the Scenario ID in the
+test's display name, for example `@Suite("UCT-1000: Workspace close confirmation")`
+and `@Test("UCT-1000.1: Cancel closing preserves unsaved changes")`.
 
-Use the frontmatter first to decide whether a scenario should be run:
+Organize tests around these behaviors rather than preserving old test-file
+boundaries. Shared fixtures and helpers belong in separate support files;
+they must not introduce additional behavior tests without a corresponding
+Scenario. Keep the serialized MainActor parent suite for shared AppKit state.
 
-- `id`: Stable scenario identifier for reports and handoffs.
-- `status`: `active`, `draft`, or `retired`.
-- `priority`: `p0`, `p1`, or `p2`; lower numbers are more important.
-- `risk`: Main product risk covered by the scenario.
-- `feature`: Product area under verification.
-- `test_level`: Usually `system` for app UI scenarios.
-- `test_type`: Functional category such as `smoke`, `regression`, or `error-handling`.
-- `execution`: Expected executor, usually `computer-use`.
-- `automation`: `manual`, `assisted`, or `automated`.
-- `run_when`: Change signals that make the scenario relevant.
-- `requires`: Environment, data, or app state needed before execution.
-- `tags`: Searchable labels for selecting related scenarios.
+## Filenames
 
-Then read the body as the executable test case:
+Use `UCT-1000_PrimaryComponent_description.feature`, for example:
 
-- `Objective`: What behavior the scenario proves.
-- `Preconditions`: State required before step 1.
-- `Test Data`: Named data values used during execution.
-- `Procedure`: Ordered user-visible actions.
-- `Expected Results`: Observable outcomes that must hold.
-- `Postconditions`: State that may remain after the scenario.
-- `Notes`: Practical guidance for Computer-use or human execution.
+```text
+UCT-1000_WorkspaceDocument_close-with-unsaved-changes.feature
+```
 
-## Execution Guidance
+The three parts are separated by underscores:
 
-Run `p0` scenarios when the changed code affects the scenario's `feature`,
-`risk`, or `tags`. Run `p1` scenarios when touching nearby UI flows. Run `p2`
-scenarios before releases or when the scenario has recently failed.
+- Feature ID: start at `UCT-1000`, retain assigned IDs, and never reuse retired IDs.
+- Primary component: exactly one component name, such as `WorkspaceDocument`.
+- Description: a short English description in lowercase kebab-case.
 
-Prefer a clean workspace state for every scenario. When possible, launch LDTX
-with UI testing state isolation enabled so scenario results do not depend on
-previous local app state.
+## Tags
 
-Recording Preview error scenarios use the `LDTX_RECORDING_PREVIEW_FIXTURE`
-UserDefaults argument to open a deterministic Preview automatically. The
-fixture is read only by Debug builds and must not be used for normal playback
-verification. Launch the built executable directly with the fixture value
-named by the scenario and pass `-ApplePersistenceIgnoreState YES` so a previous
-scenario's windows are not restored. Terminate LDTX before starting the next
-fixture.
+Place exactly two tags above the Feature: its case ID and the primary component
+name from the filename.
+
+Place one case ID above each Scenario, using the Feature ID followed by a dot
+and a consecutive number starting at 1: `@UCT-1000.1`, `@UCT-1000.2`, and so on.
+Do not use duplicate numbers, gaps, or leading zeros.
+
+Scenarios may also have as many tags as needed for other involved components.
+Do not repeat the primary component tag on a Scenario; it is inherited from
+the Feature. Case ID tags belong only on Features and Scenarios.
+
+```gherkin
+@UCT-1000 @WorkspaceDocument
+Feature: Workspace close confirmation with unsaved changes
+
+  @UCT-1000.1 @WorkspaceWindowController
+  Scenario: Cancel closing preserves unsaved changes
+    Given a Workspace is open with unsaved changes
+    When the user closes the Workspace and selects Cancel in the confirmation sheet
+    Then the Workspace remains open
+    And its unsaved changes are preserved
+```
+
+These conventions are maintained through authoring and review, without build-time
+validation. See the [build guide](../build.md) for HTML generation.
+
+Rendered case tags link to HTML anchors. For example, the first Scenario is
+available at `scenarios/UCT-1000/#UCT-1000.1`.

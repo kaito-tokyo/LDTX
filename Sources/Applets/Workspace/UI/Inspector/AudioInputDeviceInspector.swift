@@ -9,8 +9,7 @@ import SwiftUI
 
 struct AudioInputDeviceInspector: View {
   @Environment(\.documentReference) private var documentReference
-  @Environment(\.workspaceDispatcher) private var workspaceDispatcher
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   let internalID: UInt64
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
@@ -27,11 +26,11 @@ struct AudioInputDeviceInspector: View {
     if device != nil {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
-          .disabled(uiState.isOutputActive)
+          .disabled(storeService.isOutputActive)
         if documentReference?.document != nil {
           WorkspacePhysicalDeviceField(
             title: "Physical Device", internalID: internalID, isAudio: true,
-            uiState: uiState, appletData: appletData, deviceRegistry: deviceRegistry)
+            storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry)
         }
       }
     } else {
@@ -41,12 +40,7 @@ struct AudioInputDeviceInspector: View {
   }
 
   private var device: Ldtx_Workspace_V4_AudioInputDevice? {
-    uiState.definition.inputDevices.compactMap { wrapper -> Ldtx_Workspace_V4_AudioInputDevice? in
-      guard case .audioDevice(let device) = wrapper.definition,
-        device.internalID == internalID
-      else { return nil }
-      return device
-    }.first
+    storeService.definition.audioDevices.first { $0.internalID == internalID }
   }
 
   private var nameBinding: Binding<String> {
@@ -54,9 +48,7 @@ struct AudioInputDeviceInspector: View {
       get: { device?.displayName ?? "" },
       set: { name in
         updateInputDevice { wrapper in
-          guard case .audioDevice(var value) = wrapper.definition else { return }
-          value.displayName = name
-          wrapper.definition = .audioDevice(value)
+          wrapper.displayName = name
         }
       }
     )
@@ -68,18 +60,13 @@ struct AudioInputDeviceInspector: View {
         .foregroundStyle(.secondary)
     }
   }
-  private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_InputDeviceWrapper) -> Void) {
-    var definition = uiState.definition
+  private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_AudioInputDevice) -> Void) {
+    var definition = storeService.definition
     guard
-      let index = definition.inputDevices.firstIndex(where: { wrapper in
-        switch wrapper.id {
-        case .audioDevice(let id), .videoDevice(let id): id == internalID
-        case .invalid: false
-        }
-      })
+      let index = definition.audioDevices.firstIndex(where: { $0.internalID == internalID })
     else { return }
-    mutation(&definition.inputDevices[index])
-    uiState.definition = definition
+    mutation(&definition.audioDevices[index])
+    storeService.definition = definition
   }
 
 }

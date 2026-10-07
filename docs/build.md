@@ -22,9 +22,9 @@ the commands below.
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
 | `Sources/LDTXProgram/persistence.pb.swift`            | `Protos/persistence.proto`                        |
 | `Sources/LDTXProgram/program.pb.swift`                | `Protos/program.proto`                            |
-| `Sources/Applets/Workspace/Model/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
-| `Sources/Applets/Workspace/Model/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Sources/Applets/Workspace/Model/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Sources/LDTXProtos/app_settings.pb.swift`         | `Protos/app_settings.proto`                       |
+| `Sources/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 **If a Program schema under `Protos/` changes:**
@@ -51,7 +51,7 @@ protoc \
   --swift_opt=ProtoPathModuleMappings=Protos/module_mappings.asciipb \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/Applets/Workspace/Model \
+  --swift_out=Sources/LDTXProtos \
   Protos/app_settings.proto \
   Protos/envelope.proto \
   Protos/workspace_v4_definition.proto \
@@ -59,7 +59,8 @@ protoc \
   Protos/workspace_v4_preferences.proto \
   Protos/workspace_v4_vfx.proto \
   Protos/workspace_v4_video_component.proto \
-  Protos/workspace_v4_vision.proto
+  Protos/workspace_v4_vision.proto \
+  Protos/workspace_v4_types.proto
 ```
 
 **Regenerate the Workspace v4 reference:**
@@ -67,6 +68,23 @@ protoc \
 ```sh
 node docs/_BUILD.mjs protos
 ```
+
+**Build the GitHub Pages distribution, including behavior scenarios:**
+
+```sh
+node docs/_BUILD.mjs dist
+```
+
+Write English Gherkin cases in `docs/scenarios/` following the
+[naming and tagging rules](scenarios/README.md).
+The build emits a stable `docs/dist/scenarios/UCT-1000/index.html` URL
+independently of the component and description in the filename.
+
+The HTML embeds escaped source in a `<pre>` inside `<gherkin-scenario>`.
+The Custom Element parses the source in the browser using the fixed
+`@cucumber/gherkin@42.0.1` CDN bundle and renders the behavior description.
+The original source remains readable when JavaScript or the CDN is unavailable.
+These pages describe behavior; they do not execute tests or report test results.
 
 **If `Protos/youtube_output.proto` changes:**
 
@@ -201,7 +219,7 @@ xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
   -testPlan Default \
-  -configuration CI \
+  -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \
@@ -211,7 +229,7 @@ xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
   -testPlan Default \
-  -configuration CI \
+  -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   COMPILER_INDEX_STORE_ENABLE=NO \

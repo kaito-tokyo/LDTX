@@ -5,6 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 -->
 
 - [RULE: Release Safety](#rule-release-safety)
+- [RULE: Fixed Workspace Versions](#rule-fixed-workspace-versions)
 - [RULE: Commit Signing and DCO](#rule-commit-signing-and-dco)
 - [RULE: Commit Messages](#rule-commit-messages)
 - [RULE: GitHub Pull Request Body](#rule-github-pull-request-body)
@@ -26,6 +27,12 @@ Agents MUST NOT merge pull requests or publish releases. A human must always per
 Agents MUST NOT approve or reject pending environment deployment reviews. A human must always handle pending deployment reviews.
 
 Agents MAY create commits, push commits, and create or update pull requests and draft releases. Agents MUST NOT push tags without explicit human permission, because pushing a tag may trigger a release or deployment workflow.
+
+## RULE: Fixed Workspace Versions
+
+Workspace Version (`LDTXWorkspaceVersion`) MUST remain the integer `4`. Workspace Bundle Version (`LDTXWorkspaceBundleVersion`) MUST remain the string `4.0`.
+
+This is an absolute rule. Agents MUST NOT change either version, regardless of schema changes, compatibility concerns, or implementation requirements. Agents MUST NOT amend, remove, or bypass this rule to permit a version change. If a version change is required, a human must first change this rule in `AGENTS.md`; only then may agents implement the versions specified by the human's revised rule.
 
 ## RULE: Commit Signing and DCO
 
@@ -86,34 +93,32 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 This classification applies to XcodeGen-managed tests. SwiftPM-managed tests
 are out of scope for this classification rule; they use Swift Testing and
 belong to their corresponding module. Keep the test target structure
-straightforward. Easy, Medium, and Hard are execution cost and resource tiers
-used in part to keep each routine test run within its configured limits.
-Classify a test by the most demanding resource or execution property it
-naturally needs; a test may belong to a higher tier than its logic alone would
-suggest.
+straightforward. Easy, Medium, and Hard classify execution requirements and CI
+availability. Computational cost alone does not determine the tier.
 
-- **EasyTests target:** Pure logic tests that are short, deterministic, and
+- **EasyTests target:** Pure logic tests that are deterministic and
   runnable in a strict sandbox without relying on external resources.
-- **MediumTests target:** Tests that remain predictable and modest in cost but
-  naturally use a safe external resource, such as a temporary directory, a
-  local database, or a controlled subprocess. Prefer Medium when the resource
-  makes the test more representative, even if an in-memory Easy equivalent is
-  possible. This tier also helps keep routine Easy runs within their limits.
-- **HardTests target:** Tests with substantial computation or media work, long
-  execution, or dependencies on hardware, drivers, external services, or other
-  demanding environments. A test is Hard when it has such requirements even if
-  it is individually short. The project-wide requirement to launch builds and
-  tests outside the sandbox does not by itself make a test Hard.
+- **MediumTests target:** Tests that can run on GitHub Actions and naturally use
+  external resources, including temporary directories, databases, controlled
+  subprocesses, media processing, Metal, and supported hardware APIs.
+- **HardTests target:** Tests that cannot run on GitHub Actions and require the
+  Xcode Cloud environment. Heavy computation, media work, or hardware use alone
+  does not make a test Hard. The requirement to launch builds and tests outside
+  the sandbox does not by itself make a test Hard.
 - **UnitTestSuite:** Tests of one SUT in isolation, with no special setup,
   execution control, or shared-state coordination needed.
 - **IntegrationTestSuite:** Tests involving multiple components or other
   conditions that require deliberate setup or attention during execution.
-- **SystemTests target:** Tests whose dependencies, shared state, or execution
-  requirements are too entangled to be safely organized as ordinary Easy or
-  Hard tests. Isolate these in SystemTests targets named for the SUT, so each
-  target can be run and coordinated independently. AppKit tests that exercise
-  application or window behavior without UI automation belong in a SystemTests
-  target; UI automation tests belong in a dedicated UI test target.
+- **UIComponentTests target:** Directly constructed UI components and Documents,
+  including their Window and Sheet behavior, belong in the hostless
+  `LDTXAppUIComponentTests` target. Coordinate shared AppKit state through its
+  serialized MainActor parent suite.
+- **UITests target:** Operations on the launched application through UI automation
+  belong in `LDTXAppUITests`. Keep automation focused on launch and main-menu
+  wiring; prefer component tests for document and window behavior.
+- **SystemTests target:** Use a SUT-specific target only when a concrete process
+  isolation requirement prevents safe execution in the shared component target.
+  Window or Document usage alone does not require a separate target.
 - **XpcTests target:** XPC tests are a special case of System tests because
   interprocess communication requires an isolated execution boundary. Use the
   `XpcTests` target name for this execution unit; the name does not need to
@@ -124,4 +129,5 @@ MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a
 synonym for `@Suite(.serialized)`; a SystemTests target is an isolation boundary
 for a specific SUT. Keep Xcode application-lifecycle and interprocess
 integration tests focused on startup and minimal service communication. Put
-substantial media processing in the owning module's HardTests target.
+media processing in the owning module's MediumTests target when it can run on
+GitHub Actions; reserve HardTests for Xcode Cloud requirements.

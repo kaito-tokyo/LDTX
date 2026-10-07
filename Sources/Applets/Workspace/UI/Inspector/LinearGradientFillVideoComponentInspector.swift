@@ -6,39 +6,59 @@ import LDTXProtos
 import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
-  let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
+  let storeService: WorkspaceStoreService
+  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
 
   private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
 
   @State private var name: String
-  @State private var startX: Float
-  @State private var startY: Float
-  @State private var endX: Float
-  @State private var endY: Float
+  @State private var startX: Ldtx_Workspace_V4_Rational32
+  @State private var startY: Ldtx_Workspace_V4_Rational32
+  @State private var endX: Ldtx_Workspace_V4_Rational32
+  @State private var endY: Ldtx_Workspace_V4_Rational32
   @State private var startColor: Color
   @State private var endColor: Color
 
-  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
-    self.uiState = uiState
+  init(
+    storeService: WorkspaceStoreService,
+    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  ) {
+    self.storeService = storeService
     self.videoComponentID = videoComponentID
-    self.component = uiState.definition.videoComponents
+    self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
         guard case .linearGradientFill(let component) = wrapper.definition else { return nil }
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._startX = State(initialValue: component?.startX ?? 0)
-    self._startY = State(initialValue: component?.startY ?? 0)
-    self._endX = State(initialValue: component?.endX ?? 1)
-    self._endY = State(initialValue: component?.endY ?? 1)
+    self._startX = State(
+      initialValue: component?.startXRational
+        ?? .with {
+          $0.set(num: 0, den: 1)
+        })
+    self._startY = State(
+      initialValue: component?.startYRational
+        ?? .with {
+          $0.set(num: 0, den: 1)
+        })
+    self._endX = State(
+      initialValue: component?.endXRational
+        ?? .with {
+          $0.set(num: 1, den: 1)
+        })
+    self._endY = State(
+      initialValue: component?.endYRational
+        ?? .with {
+          $0.set(num: 1, den: 1)
+        })
     self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
     self._endColor = State(initialValue: component?.endColor.asColor() ?? .black)
   }
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
       Section("Linear Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -52,23 +72,23 @@ struct LinearGradientFillVideoComponentInspector: View {
 
         TextField("Name", text: $name)
         LabeledContent("Start X") {
-          Slider(value: $startX, in: 0...1)
+          Slider(value: $startX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Start Y") {
-          Slider(value: $startY, in: 0...1)
+          Slider(value: $startY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("End X") {
-          Slider(value: $endX, in: 0...1)
+          Slider(value: $endX.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("End Y") {
-          Slider(value: $endY, in: 0...1)
+          Slider(value: $endY.sliderValue(denominator: 1_000_000), in: 0...1)
         }
         ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
         ColorPicker("End Color", selection: $endColor, supportsOpacity: true)
       }
     }
     .formStyle(.grouped)
-    .disabled(uiState.isOutputActive || component == nil)
+    .disabled(storeService.isOutputActive || component == nil)
     .onChange(of: name) { commitDraft() }
     .onChange(of: startX) { commitDraft() }
     .onChange(of: startY) { commitDraft() }
@@ -87,10 +107,10 @@ struct LinearGradientFillVideoComponentInspector: View {
     else { return }
 
     component.displayName = name
-    component.startX = startX
-    component.startY = startY
-    component.endX = endX
-    component.endY = endY
+    component.startXRational = startX
+    component.startYRational = startY
+    component.endXRational = endX
+    component.endYRational = endY
     component.startColor.red = Float(startNSColor.redComponent)
     component.startColor.green = Float(startNSColor.greenComponent)
     component.startColor.blue = Float(startNSColor.blueComponent)
@@ -100,27 +120,27 @@ struct LinearGradientFillVideoComponentInspector: View {
     component.endColor.blue = Float(endNSColor.blueComponent)
     component.endColor.alpha = Float(endNSColor.alphaComponent)
 
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
     else { return }
     definition.videoComponents[index].definition = .linearGradientFill(component)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 
   private var gradient: LinearGradient {
     LinearGradient(
       colors: [startColor, endColor],
-      startPoint: UnitPoint(x: Double(startX), y: Double(startY)),
-      endPoint: UnitPoint(x: Double(endX), y: Double(endY)))
+      startPoint: UnitPoint(x: startX.double, y: startY.double),
+      endPoint: UnitPoint(x: endX.double, y: endY.double))
   }
 }
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: .linearGradientFill(5)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -128,11 +148,11 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5),
       isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: .linearGradientFill(5)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -140,10 +160,10 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Invalid") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .linearGradientFill(404)
+      storeService: storeService, videoComponentID: .linearGradientFill(404)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

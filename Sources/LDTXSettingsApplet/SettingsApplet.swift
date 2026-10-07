@@ -33,7 +33,7 @@ protocol SettingsAuthorizationProviding {
 }
 
 @MainActor
-private struct KeychainSettingsAuthorizationProvider: SettingsAuthorizationProviding {
+private struct StoredSettingsAuthorizationProvider: SettingsAuthorizationProviding {
   let service: YouTubeAuthorizationService
 
   func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
@@ -113,11 +113,8 @@ enum SettingsAuthorizationServiceFactory {
     guard !isUnitTesting, !isUITesting else {
       return TestModeSettingsAuthorizationProvider()
     }
-    return KeychainSettingsAuthorizationProvider(
-      service: YouTubeAuthorizationService(
-        authorizationStore: YouTubeAuthorizationStore(),
-        oauthClientStore: OAuthClientConfigurationStore()
-      ))
+    return StoredSettingsAuthorizationProvider(
+      service: YouTubeAuthorizationService())
   }
 }
 
@@ -196,7 +193,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       do {
         let accessToken = try await authorizationService.authorize(configuration: configuration)
         let status = await channelAuthorizationStatus(
-          accessToken: accessToken, authorizedStatus: "Authorized (Keychain)")
+          accessToken: accessToken, authorizedStatus: "Authorized")
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
         else { return }
@@ -217,7 +214,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       let loaded = try authorizationService.loadOAuthClient(data: Data(contentsOf: url))
       authorizationRestoreGeneration &+= 1
       configuration = loaded
-      oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID)) (Keychain)"
+      oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID))"
       authorizationStatus = "Not authorized"
       return true
     } catch {
@@ -271,11 +268,12 @@ public final class SettingsApplet: NSWindowController, NSWindowDelegate {
   }
 
   private let account: SettingsAccountModel
+  private let monitorSettings = MonitorDeviceSettingsModel()
 
   public init() {
     let authorizationService = SettingsAuthorizationServiceFactory.make()
     account = SettingsAccountModel(authorizationService: authorizationService)
-    let content = SettingsContent(account: account)
+    let content = SettingsContent(account: account, monitorSettings: monitorSettings)
     let window = NSWindow(contentViewController: NSHostingController(rootView: content))
     window.title = "Settings"
     window.setContentSize(NSSize(width: 600, height: 480))
@@ -283,6 +281,10 @@ public final class SettingsApplet: NSWindowController, NSWindowDelegate {
     window.isReleasedWhenClosed = false
     super.init(window: window)
     window.delegate = self
+    monitorSettings.reportError = { [weak self] error in
+      guard let self, let window = self.window, window.isVisible else { return }
+      presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
+    }
   }
 
   @available(*, unavailable)

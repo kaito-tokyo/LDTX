@@ -37,12 +37,12 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     for vision in ocrVisions {
       for trigger in vision.triggers {
         guard case .intervalTrigger(let interval)? = trigger.definition,
-          interval.intervalSeconds > 0
+          interval.intervalSecondsRational.double > 0
         else { continue }
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(
-          deadline: .now() + interval.intervalSeconds,
-          repeating: interval.intervalSeconds
+          deadline: .now() + interval.intervalSecondsRational.double,
+          repeating: interval.intervalSecondsRational.double
         )
         timer.setEventHandler { [weak self] in self?.submit(vision.internalID, context: context) }
         timer.resume()
@@ -78,7 +78,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         }
       }
       do {
-        let frame = try context.frameForVision(vision)
+        let frame = try await context.frameForVision(vision)
         let result = try await ocrService.recognizeText(
           in: frame.image,
           configuration: Self.ocrConfiguration(for: vision),
@@ -92,6 +92,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         return
       } catch {
         guard !Task.isCancelled else { return }
+        self.resultsByVisionInternalID.removeValue(forKey: internalID)
         context.reportFailure(internalID, error)
       }
     }
@@ -103,7 +104,8 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       recognitionLanguages: vision.recognitionLanguages,
       usesLanguageCorrection: vision.usesLanguageCorrection,
       customWords: vision.customWords,
-      minimumTextHeight: vision.hasMinimumTextHeight ? vision.minimumTextHeight : nil
+      minimumTextHeight: vision.hasMinimumTextHeightRational
+        ? vision.minimumTextHeightRational.float : nil
     )
   }
 }

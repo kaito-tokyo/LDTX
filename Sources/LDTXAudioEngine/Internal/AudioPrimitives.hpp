@@ -110,6 +110,19 @@ inline AudioDeviceID deviceForUID(const char *uid) {
     throw StatusError(kAudioHardwareBadDeviceError);
   return id;
 }
+// An empty monitor UID means the system default, as displayed by the picker.
+inline AudioDeviceID monitorDeviceForUID(const char *uid) {
+  if (uid && *uid)
+    return deviceForUID(uid);
+  AudioObjectPropertyAddress address{kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  AudioDeviceID device = kAudioObjectUnknown;
+  UInt32 size = sizeof(device);
+  check(AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &device));
+  if (device == kAudioObjectUnknown)
+    throw StatusError(kAudioHardwareBadDeviceError);
+  return device;
+}
 inline uint32_t deviceFrames(AudioDeviceID id) {
   AudioObjectPropertyAddress a{kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal,
                                kAudioObjectPropertyElementMain};

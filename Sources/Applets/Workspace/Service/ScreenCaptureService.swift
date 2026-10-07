@@ -7,6 +7,7 @@ import CoreVideo
 import Foundation
 import ImageIO
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletModel
 import UniformTypeIdentifiers
 
 public final class ScreenCaptureService: @unchecked Sendable {
@@ -40,26 +41,46 @@ public final class ScreenCaptureService: @unchecked Sendable {
     capturedAt: Date,
     recordingPackageDirectory: URL
   ) throws -> ScreenCaptureSetResult {
+    guard !sources.isEmpty else { throw ScreenCaptureError.frameUnavailable }
+    return try captureSet(
+      sources: sources, capturedAt: capturedAt,
+      outputDirectories: [prepareScreenshotsDirectory(in: recordingPackageDirectory)])
+  }
+
+  public func captureSet(
+    sources: [ScreenCaptureSource], capturedAt: Date, outputDirectories: [URL]
+  ) throws -> ScreenCaptureSetResult {
     guard !sources.isEmpty else {
       throw ScreenCaptureError.frameUnavailable
     }
-    let screenshotsDirectory = try prepareScreenshotsDirectory(
-      in: recordingPackageDirectory)
+    guard let screenshotsDirectory = outputDirectories.first else {
+      throw ScreenCaptureError.frameUnavailable
+    }
+    var directories: [URL] = []
+    for directory in outputDirectories.map(\.standardizedFileURL)
+    where !directories.contains(directory) {
+      directories.append(directory)
+    }
+    for directory in directories {
+      try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
 
     let timestamp = SessionRecordService.makeTimestamp(date: capturedAt)
     var outputURLs: [URL] = []
+    var screenshots: [WorkspaceScreenshot] = []
     do {
       for source in sources {
-        let outputURL = uniqueOutputURL(
-          in: screenshotsDirectory,
-          name: source.name,
-          timestamp: timestamp)
-        try jpegData(
-          from: source.pixelBuffer,
-          sourceName: source.name,
-          capturedAt: capturedAt
-        ).write(to: outputURL, options: .atomic)
-        outputURLs.append(outputURL)
+        let data = try jpegData(
+          from: source.pixelBuffer, sourceName: source.name, capturedAt: capturedAt)
+        for directory in directories {
+          let outputURL = uniqueOutputURL(
+            in: directory,
+            name: source.name,
+            timestamp: timestamp)
+          try data.write(to: outputURL, options: .atomic)
+          outputURLs.append(outputURL)
+          screenshots.append(.init(url: outputURL, programCanvas: source.programCanvas))
+        }
       }
     } catch {
       for outputURL in outputURLs {
@@ -70,7 +91,7 @@ public final class ScreenCaptureService: @unchecked Sendable {
     return ScreenCaptureSetResult(
       directory: screenshotsDirectory,
       capturedAt: capturedAt,
-      outputURLs: outputURLs)
+      screenshots: screenshots)
   }
 
   func prepareScreenshotsDirectory(in recordingPackageDirectory: URL) throws -> URL {
@@ -315,17 +336,23 @@ public final class ScreenCaptureService: @unchecked Sendable {
 public struct ScreenCaptureSource: @unchecked Sendable {
   public let name: String
   public let pixelBuffer: CVPixelBuffer
+  public let programCanvas: WorkspaceScreenshot.ProgramCanvas?
 
-  public init(name: String, pixelBuffer: CVPixelBuffer) {
+  public init(
+    name: String, pixelBuffer: CVPixelBuffer,
+    programCanvas: WorkspaceScreenshot.ProgramCanvas? = nil
+  ) {
     self.name = name
     self.pixelBuffer = pixelBuffer
+    self.programCanvas = programCanvas
   }
 }
 
 public struct ScreenCaptureSetResult: Sendable {
   public let directory: URL
   public let capturedAt: Date
-  public let outputURLs: [URL]
+  public let screenshots: [WorkspaceScreenshot]
+  public var outputURLs: [URL] { screenshots.map(\.url) }
 }
 
 public enum ScreenCaptureError: LocalizedError {

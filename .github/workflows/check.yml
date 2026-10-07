@@ -87,19 +87,3 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           reuse --no-multiprocessing lint
-
-  accept-check-ci:
-    needs:
-      - check-clang-format
-      - check-swift-format
-      - check-reuse
-    if: always()
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    permissions: {}
-    steps:
-      - name: Check workflow results
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"

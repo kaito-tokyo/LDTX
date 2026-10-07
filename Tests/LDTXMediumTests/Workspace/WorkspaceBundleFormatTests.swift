@@ -155,47 +155,31 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Reader validates that the bundle version is a string")
-  func readerRequiresStringBundleVersion() throws {
+  @Test("Reader ignores the bundle version value", arguments: ["4.0", "4.1", "99.0"])
+  func readerIgnoresBundleVersion(bundleVersion: String) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
-    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    let infoData = try PropertyListSerialization.data(
-      fromPropertyList: [
-        "CFBundlePackageType": "BNDL",
-        "LDTXWorkspaceVersion": 4,
-        "LDTXWorkspaceBundleVersion": 4.0,
-      ],
-      format: .xml,
-      options: 0
-    )
-    try infoData.write(to: packageURL.appendingPathComponent("Info.plist"))
-
-    guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
-      Issue.record("Expected V4 selection from the logical Workspace version")
-      return
-    }
-    #expect(throws: CocoaError.self) {
-      try reader.read()
-    }
+    let workspace = makeWorkspace()
+    var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
+    try writeWorkspace(workspace, using: &writer)
+    try writeFormatInfo(to: packageURL, bundleVersion: bundleVersion)
+    #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
-  @Test("Reader rejects a bundle version it does not implement")
-  func readerRejectsUnsupportedBundleVersion() throws {
+  @Test("Reader ignores missing and non-string bundle versions", arguments: [false, true])
+  func readerIgnoresUnusableBundleVersion(includeValue: Bool) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
-    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    try writeFormatInfo(to: packageURL, bundleVersion: "4.1")
-
-    guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
-      Issue.record("Expected V4 selection from the logical Workspace version")
-      return
-    }
-    #expect(throws: CocoaError.self) {
-      try reader.read()
-    }
+    let workspace = makeWorkspace()
+    var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
+    try writeWorkspace(workspace, using: &writer)
+    var info: [String: Any] = ["CFBundlePackageType": "BNDL", "LDTXWorkspaceVersion": 4]
+    if includeValue { info["LDTXWorkspaceBundleVersion"] = 4.0 }
+    let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+    try data.write(to: packageURL.appendingPathComponent("Info.plist"))
+    #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
   @Test("requires a declared format version")
@@ -262,6 +246,30 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"
+    definition.audioDevices = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Microphone"
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.vfxSource = .with {
+          $0.internalID = 2
+          $0.displayName = "Camera"
+        }
+      }
+    ]
+    definition.visions = [
+      .with {
+        $0.ocrVision = .with {
+          $0.internalID = 3
+          $0.displayName = "OCR"
+          $0.videoComponentInternalID = 2
+        }
+      }
+    ]
+    definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 2
     return WorkspaceV4Bundle(
       definitionExternalID: "0198f4b4-1fa3-7000-8000-000000000001",
       preferencesExternalID: "0198f4b4-1fa3-7000-8000-000000000002",

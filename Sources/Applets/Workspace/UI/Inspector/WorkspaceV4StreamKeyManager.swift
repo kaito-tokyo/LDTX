@@ -12,16 +12,18 @@ struct WorkspaceV4StreamKeyManager: View {
   @State private var drafts: [YouTubeRTMPSStreamKeyConfiguration]
   let load: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   let save: ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void
-  @State private var errorMessage: String?
+  let reportError: (Error) -> Void
 
   init(
     configurations: [YouTubeRTMPSStreamKeyConfiguration],
     load: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration],
-    save: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void
+    save: @escaping ([YouTubeRTMPSStreamKeyConfiguration]) throws -> Void,
+    reportError: @escaping (Error) -> Void
   ) {
     _drafts = State(initialValue: configurations)
     self.load = load
     self.save = save
+    self.reportError = reportError
   }
 
   var body: some View {
@@ -39,7 +41,6 @@ struct WorkspaceV4StreamKeyManager: View {
             }
           }
         }
-        if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
       }
       .formStyle(.grouped)
       .navigationTitle("Manage Stream Keys")
@@ -50,7 +51,7 @@ struct WorkspaceV4StreamKeyManager: View {
             do {
               try save(drafts)
               dismiss()
-            } catch { errorMessage = "The stream key configurations could not be saved." }
+            } catch { reportError(error) }
           }
         }
       }
@@ -58,7 +59,7 @@ struct WorkspaceV4StreamKeyManager: View {
     .frame(minWidth: 520, minHeight: 360)
     .onAppear {
       do { drafts = try load() } catch {
-        errorMessage = "The stream key configurations could not be loaded."
+        reportError(error)
       }
     }
   }

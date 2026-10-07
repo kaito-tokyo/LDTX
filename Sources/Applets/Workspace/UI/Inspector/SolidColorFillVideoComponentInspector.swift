@@ -6,18 +6,21 @@ import LDTXProtos
 import SwiftUI
 
 struct SolidColorFillVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
-  let videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID
+  let storeService: WorkspaceStoreService
+  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
 
   private let component: Ldtx_Workspace_V4_FillSolidColorComponent?
 
   @State private var name: String
   @State private var color: Color
 
-  init(uiState: WorkspaceUIState, videoComponentID: WorkspaceUIState.VideoComponentWrapper.ID) {
-    self.uiState = uiState
+  init(
+    storeService: WorkspaceStoreService,
+    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  ) {
+    self.storeService = storeService
     self.videoComponentID = videoComponentID
-    self.component = uiState.definition.videoComponents
+    self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
         guard case .solidColorFill(let component) = wrapper.definition else { return nil }
@@ -30,6 +33,7 @@ struct SolidColorFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
       Section("Solid Color Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -47,7 +51,7 @@ struct SolidColorFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(uiState.isOutputActive || component == nil)
+    .disabled(storeService.isOutputActive || component == nil)
     .onChange(of: name) { commitDraft() }
     .onChange(of: color) { commitDraft() }
     .onSubmit { commitDraft() }
@@ -65,20 +69,20 @@ struct SolidColorFillVideoComponentInspector: View {
     component.color.blue = Float(nsColor.blueComponent)
     component.color.alpha = Float(nsColor.alphaComponent)
 
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
     else { return }
     definition.videoComponents[index].definition = .solidColorFill(component)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 }
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .solidColorFill(4)
+      storeService: storeService, videoComponentID: .solidColorFill(4)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -86,11 +90,11 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4),
       isOutputActive: true)
     SolidColorFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .solidColorFill(4)
+      storeService: storeService, videoComponentID: .solidColorFill(4)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -98,10 +102,10 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   #Preview("Invalid") {
-    @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      uiState: uiState, videoComponentID: .solidColorFill(404)
+      storeService: storeService, videoComponentID: .solidColorFill(404)
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

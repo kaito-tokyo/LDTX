@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 @preconcurrency import CoreImage
+@preconcurrency import CoreML
 import Foundation
 import LDTXTaskQueue
 @preconcurrency import Vision
@@ -32,7 +33,11 @@ public struct VisionOCRConfiguration: Equatable, Sendable {
 }
 
 public actor VisionOCRService {
-  public init() {}
+  private let computeDevice: MLComputeDevice?
+
+  public init(computeDevice: MLComputeDevice? = nil) {
+    self.computeDevice = computeDevice
+  }
 
   public func recognizeText(
     in image: CIImage,
@@ -43,7 +48,13 @@ public actor VisionOCRService {
     try Task.checkCancellation()
     let startedAt = ContinuousClock.now
     let request = VNRecognizeTextRequest()
-    request.recognitionLevel = configuration.prefersAccurateRecognition ? .accurate : .fast
+    // macOS 27's Fast backend traps inside TextRecognition when language correction
+    // is disabled. Accurate preserves uncorrected recognition and automatic languages.
+    var usesAccurateRecognition = configuration.prefersAccurateRecognition
+    if #available(macOS 27.0, *), !configuration.usesLanguageCorrection {
+      usesAccurateRecognition = true
+    }
+    request.recognitionLevel = usesAccurateRecognition ? .accurate : .fast
     if !configuration.recognitionLanguages.isEmpty {
       request.recognitionLanguages = configuration.recognitionLanguages
     } else {
@@ -53,6 +64,11 @@ public actor VisionOCRService {
     request.customWords = configuration.customWords
     if let minimumTextHeight = configuration.minimumTextHeight {
       request.minimumTextHeight = minimumTextHeight
+    }
+    if let computeDevice {
+      for stage in try request.supportedComputeStageDevices.keys {
+        request.setComputeDevice(computeDevice, for: stage)
+      }
     }
 
     let operation = VisionOCRRequestOperation(image: image, request: request)

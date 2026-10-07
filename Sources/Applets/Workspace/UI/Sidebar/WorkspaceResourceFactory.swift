@@ -5,31 +5,19 @@ import Foundation
 import LDTXProtos
 
 enum WorkspaceResourceFactory {
-  static func makeVideoInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_InputDeviceWrapper {
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
-    device.internalID = id
-    device.displayName = name
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
-    return wrapper
-  }
-
-  static func makeAudioInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_InputDeviceWrapper {
+  static func makeAudioInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = name
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.audioDevice = device
-    return wrapper
+    return device
   }
 
-  static func makeVFXSource(id: UInt64, name: String, inputID: UInt64)
+  static func makeVFXSource(id: UInt64, name: String)
     -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
     component.displayName = name
-    component.inputDeviceInternalID = inputID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
     return wrapper
@@ -54,8 +42,12 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = name
-    component.width = 320 / 1_920
-    component.height = 80 / 1_080
+    component.widthRational = .with {
+      $0.set(num: 1, den: 6)
+    }
+    component.heightRational = .with {
+      $0.set(num: 2, den: 27)
+    }
     component.foregroundColor = opaqueWhite
     var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
     background.alpha = 0.65
@@ -74,8 +66,12 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     component.startColor = gradientStartColor
-    component.endX = 1
-    component.endY = 1
+    component.endXRational = .with {
+      $0.set(num: 1, den: 1)
+    }
+    component.endYRational = .with {
+      $0.set(num: 1, den: 1)
+    }
     component.endColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
@@ -88,9 +84,15 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.outerRadius = 0.5
+    component.centerXRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.centerYRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.outerRadiusRational = .with {
+      $0.set(num: 1, den: 2)
+    }
     component.innerColor = gradientStartColor
     component.outerColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -103,8 +105,12 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerX = 0.5
-    component.centerY = 0.5
+    component.centerXRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.centerYRational = .with {
+      $0.set(num: 1, den: 2)
+    }
     component.startColor = gradientStartColor
     component.endColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -121,18 +127,20 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeOcrVision(id: UInt64, name: String, inputID: UInt64)
+  static func makeOcrVision(id: UInt64, name: String, componentID: UInt64)
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSeconds = 5
+    trigger.intervalSecondsRational = .with {
+      $0.set(num: 5, den: 1)
+    }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = name
-    vision.inputDeviceInternalID = inputID
-    vision.source = .inputDeviceInternalID(inputID)
+    vision.videoComponentInternalID = componentID
+    vision.source = .videoComponentInternalID(componentID)
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision

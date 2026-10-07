@@ -39,8 +39,6 @@ targets:
           - UI
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
-      - path: Resources/LDTX/Metal/AudioInputSpectrogram.metal
-        buildPhase: resources
     dependencies:
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletInterface
@@ -74,6 +72,7 @@ targets:
     sources:
       - Sources/LDTXSettingsApplet
     dependencies:
+      - target: LDTXProgramRuntime
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXYouTube
@@ -222,7 +221,7 @@ targets:
         basedOnDependencyAnalysis: false
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.local
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
         PRODUCT_NAME: LDTX
         PRODUCT_MODULE_NAME: LDTXApp
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
@@ -241,13 +240,8 @@ targets:
       configs:
         Debug:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        CI:
-          CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX_CI.entitlements
-          EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
-        Distribution:
-          PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
 
 schemes:
   LDTXWorkspaceAppletUI:
@@ -266,5 +260,7 @@ schemes:
       testPlans:
         - path: Default.xctestplan
           defaultPlan: true
+        - path: GitHubActions.xctestplan
+        - path: XcodeCloud.xctestplan
     archive:
       config: Distribution

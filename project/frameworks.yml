@@ -415,6 +415,9 @@ targets:
         PRODUCT_MODULE_NAME: LDTXYouTubeAuth
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
+      configs:
+        Distribution:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LDTX_DISTRIBUTION"
   LDTXProgramRuntime:
     type: framework
     platform: macOS
@@ -520,6 +523,8 @@ targets:
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletService

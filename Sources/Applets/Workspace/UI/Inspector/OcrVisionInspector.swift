@@ -6,8 +6,7 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct OcrVisionInspector: View {
-  @Environment(\.workspaceDispatcher) private var dispatcher
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   let internalID: UInt64
 
   var body: some View {
@@ -24,18 +23,19 @@ struct OcrVisionInspector: View {
         TextField("Name", text: visionBinding(\.displayName, initial: vision.displayName))
           .disabled(isRecording)
         WorkspaceSelectionField(
-          title: "Video Input", current: sourceBinding.wrappedValue,
-          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
+          title: "Video Component", current: sourceBinding.wrappedValue,
+          options: videoDevices,
           clearTitle: "Remove Assignment", isEditable: !isRecording,
+          reportError: { storeService.reportError($0) },
           commit: { selected in
             guard !isRecording, self.vision != nil,
-              selected == nil || videoDevices.contains(where: { $0.internalID == selected })
+              selected == nil || videoDevices.contains(where: { $0.id == selected })
             else {
               throw WorkspaceSelectionError(
                 message: "The input or Vision is no longer available for editing.")
             }
             sourceBinding.wrappedValue = selected
-            dispatcher?.synchronizeVision()
+            storeService.synchronizeVision()
           })
         Picker("Update Interval", selection: intervalBinding) {
           Text("Manual").tag(0.0)
@@ -50,6 +50,10 @@ struct OcrVisionInspector: View {
           Text("Accurate").tag(true)
         }
         .disabled(isRecording)
+        if #available(macOS 27.0, *), !vision.accurate, !vision.usesLanguageCorrection {
+          Text("Fast recognition without language correction uses Accurate on this macOS version.")
+            .font(.caption).foregroundStyle(.secondary)
+        }
         Toggle(
           "Language Correction",
           isOn: visionBinding(\.usesLanguageCorrection, initial: vision.usesLanguageCorrection)
@@ -61,11 +65,11 @@ struct OcrVisionInspector: View {
           .disabled(isRecording)
         Toggle("Minimum Text Height", isOn: minimumTextHeightEnabledBinding)
           .disabled(isRecording)
-        if vision.hasMinimumTextHeight {
+        if vision.hasMinimumTextHeightRational {
           LabeledContent("Minimum Height") {
             TextField(
               "Fraction", value: minimumTextHeightBinding,
-              format: .number.precision(.fractionLength(3))
+              format: RationalFormatStyle()
             )
             .multilineTextAlignment(.trailing)
             .frame(width: 90)
@@ -73,11 +77,26 @@ struct OcrVisionInspector: View {
           .disabled(isRecording)
         }
       }
+      Section("Recognition Result") {
+        if let failure = storeService.visionFailureMessages[internalID] {
+          Text(failure).foregroundStyle(.red)
+        } else if let result = storeService.visionResults[internalID] {
+          Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
+        } else {
+          Text("Waiting for recognition.").foregroundStyle(.secondary)
+        }
+      }
       Section("Region of Interest") {
-        regionField("X", keyPath: \.x, initial: vision.regionOfInterest.x)
-        regionField("Y", keyPath: \.y, initial: vision.regionOfInterest.y)
-        regionField("Width", keyPath: \.width, initial: vision.regionOfInterest.width)
-        regionField("Height", keyPath: \.height, initial: vision.regionOfInterest.height)
+        regionField("X", keyPath: \.xRational, initial: vision.regionOfInterest.xRational)
+        regionField("Y", keyPath: \.yRational, initial: vision.regionOfInterest.yRational)
+        regionField(
+          "Width", keyPath: \.widthRational,
+          initial: vision.hasRegionOfInterest
+            ? vision.regionOfInterest.widthRational : .with { $0.set(num: 1, den: 1) })
+        regionField(
+          "Height", keyPath: \.heightRational,
+          initial: vision.hasRegionOfInterest
+            ? vision.regionOfInterest.heightRational : .with { $0.set(num: 1, den: 1) })
         Text("Coordinates are normalized from 0 to 1.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -92,7 +111,7 @@ struct OcrVisionInspector: View {
   }
 
   private var vision: Ldtx_Workspace_V4_OcrVision? {
-    uiState.definition.visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
+    storeService.definition.visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
       guard case .ocrVision(let vision) = wrapper.definition,
         vision.internalID == internalID
       else { return nil }
@@ -100,14 +119,11 @@ struct OcrVisionInspector: View {
     }.first
   }
 
-  private var videoDevices: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { wrapper in
-      guard case .videoDevice(let device) = wrapper.definition else { return nil }
-      return device
-    }
+  private var videoDevices: [WorkspaceSelectionOption<UInt64>] {
+    storeService.videoComponentOptions
   }
 
-  private var isRecording: Bool { uiState.isOutputActive }
+  private var isRecording: Bool { storeService.isOutputActive }
 
   private func visionBinding<Value>(
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OcrVision, Value>, initial: Value
@@ -121,12 +137,16 @@ struct OcrVisionInspector: View {
   private var sourceBinding: Binding<UInt64?> {
     Binding(
       get: {
-        if case .inputDeviceInternalID(let value)? = vision?.source { return value }
+        if case .videoComponentInternalID(let value)? = vision?.source { return value }
         return nil
       },
       set: { internalID in
         editVision { value in
-          if let internalID { value.inputDeviceInternalID = internalID } else { value.source = nil }
+          if let internalID {
+            value.videoComponentInternalID = internalID
+          } else {
+            value.source = nil
+          }
         }
       }
     )
@@ -137,7 +157,7 @@ struct OcrVisionInspector: View {
       get: {
         vision?.triggers.first.flatMap { wrapper in
           guard case .intervalTrigger(let value) = wrapper.definition else { return nil }
-          return value.intervalSeconds
+          return value.intervalSecondsRational.double
         } ?? 0
       },
       set: { interval in
@@ -145,7 +165,8 @@ struct OcrVisionInspector: View {
           value.triggers.removeAll()
           guard interval > 0 else { return }
           var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-          trigger.intervalSeconds = interval
+          trigger.intervalSecondsRational =
+            (try? RationalParseStrategy().parse(String(interval))) ?? .init()
           var wrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
           wrapper.definition = .intervalTrigger(trigger)
           value.triggers.append(wrapper)
@@ -182,31 +203,49 @@ struct OcrVisionInspector: View {
 
   private var minimumTextHeightEnabledBinding: Binding<Bool> {
     Binding(
-      get: { vision?.hasMinimumTextHeight ?? false },
+      get: { vision?.hasMinimumTextHeightRational ?? false },
       set: { enabled in
         editVision { value in
-          if enabled { value.minimumTextHeight = 0.01 } else { value.clearMinimumTextHeight() }
+          if enabled {
+            value.minimumTextHeightRational = .with {
+              $0.set(num: 1, den: 100)
+            }
+          } else {
+            value.clearMinimumTextHeightRational()
+          }
         }
       }
     )
   }
 
-  private var minimumTextHeightBinding: Binding<Float> {
+  private var minimumTextHeightBinding: Binding<Ldtx_Workspace_V4_Rational32> {
     Binding(
-      get: { vision?.minimumTextHeight ?? 0.01 },
-      set: { next in editVision { $0.minimumTextHeight = min(max(next, 0), 1) } }
+      get: {
+        vision?.minimumTextHeightRational
+          ?? .with {
+            $0.set(num: 1, den: 100)
+          }
+      },
+      set: { next in editVision { $0.minimumTextHeightRational = next } }
     )
   }
 
   private func regionField(
     _ title: String,
-    keyPath: WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Float>,
-    initial: Float
+    keyPath: WritableKeyPath<
+      Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32
+    >,
+    initial: Ldtx_Workspace_V4_Rational32
   ) -> some View {
     LabeledContent(title) {
       TextField(
-        title, value: regionBinding(keyPath, initial: initial),
-        format: .number.precision(.fractionLength(3))
+        title,
+        text: Binding(
+          get: {
+            storeService.ocrRegionDrafts[internalID]?[title]
+              ?? RationalFormatStyle().format(initial)
+          },
+          set: { storeService.editOcrRegion(internalID: internalID, field: title, text: $0) })
       )
       .multilineTextAlignment(.trailing)
       .frame(width: 90)
@@ -214,23 +253,8 @@ struct OcrVisionInspector: View {
     }
   }
 
-  private func regionBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Float>, initial: Float
-  ) -> Binding<Float> {
-    Binding(
-      get: { vision.map { $0.regionOfInterest[keyPath: keyPath] } ?? initial },
-      set: { next in
-        editVision { value in
-          var region = value.regionOfInterest
-          region[keyPath: keyPath] = min(max(next, 0), 1)
-          value.regionOfInterest = region
-        }
-      }
-    )
-  }
-
   private func editVision(_ mutation: (inout Ldtx_Workspace_V4_OcrVision) -> Void) {
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard
       let index = definition.visions.firstIndex(where: { wrapper in
         guard case .ocrVision(let value) = wrapper.definition else { return false }
@@ -239,6 +263,6 @@ struct OcrVisionInspector: View {
     else { return }
     mutation(&value)
     definition.visions[index].definition = .ocrVision(value)
-    uiState.definition = definition
+    storeService.definition = definition
   }
 }

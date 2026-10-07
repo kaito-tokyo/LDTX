@@ -52,11 +52,9 @@ targets:
       - Sources/LDTXHelper
     dependencies:
       - target: LDTXUtils
-        embed: true
-        codeSign: true
+        embed: false
       - target: LDTXAppHelper
-        embed: true
-        codeSign: true
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.Helper

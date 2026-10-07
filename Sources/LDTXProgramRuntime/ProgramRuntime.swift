@@ -482,7 +482,7 @@ public final class ProgramRuntime: @unchecked Sendable {
   }
 }
 
-func compositeApplyingVideoLayerMutes(
+func compositeApplyingVideoLayerVisibility(
   _ composite: CompositeProgramDefinition,
   preferences: ProgramPreferences,
   programName: String
@@ -490,14 +490,11 @@ func compositeApplyingVideoLayerMutes(
   var result = composite
   result.steps.removeAll { step in
     guard
-      preferences.isVideoLayerMuted(
+      preferences.isVideoLayerHidden(
         componentName: step.name,
         programName: programName
       )
     else { return false }
-    if case .inputCameraDevice = step.component {
-      return false
-    }
     return true
   }
   return result
@@ -662,7 +659,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     let canvasWidth = max(configuration.canvasWidth, 1)
     let canvasHeight = max(configuration.canvasHeight, 1)
     let preferences = programPreferencesState.read { $0 }
-    let renderComposite = compositeApplyingVideoLayerMutes(
+    let renderComposite = compositeApplyingVideoLayerVisibility(
       configuration.composite,
       preferences: preferences,
       programName: configuration.videoLayerProgramName
@@ -680,8 +677,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
       try prepareSize(width: outputWidth, height: outputHeight)
       let compositor = try makeCompositor(width: outputWidth, height: outputHeight)
       let (presentationTime, isPreparingRenderResources, videoPipelineID) = refreshSources(
-        configuration: configuration,
-        preferences: preferences
+        configuration: configuration
       )
       reusableComponentCommands.removeAll(keepingCapacity: true)
       renderComposite.appendComponentCommands(
@@ -707,7 +703,11 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         frameID: frameID,
         pixelBuffer: outputPixelBuffer,
         presentationTime: presentationTime,
-        isPreparingRenderResources: isPreparingRenderResources,
+        isPreparingRenderResources: isPreparingRenderResources
+          || renderComposite.steps.contains {
+            guard case .clock = $0.component else { return false }
+            return clockOverlayRegistry?.retainedTexture(forStepNamed: $0.name) == nil
+          },
         videoPipelineID: videoPipelineID
       )
     } catch {
@@ -797,8 +797,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
   }
 
   private func refreshSources(
-    configuration: ProgramRuntimeConfiguration,
-    preferences: ProgramPreferences
+    configuration: ProgramRuntimeConfiguration
   ) -> (
     presentationTime: CMTime?,
     isPreparingRenderResources: Bool,
@@ -849,13 +848,9 @@ final class ActiveProgramRenderer: @unchecked Sendable {
               pixelBuffer: input.frame.pixelBuffer,
               textureCache: inputTextureCache
             ) {
-              let muted = preferences.isVideoLayerMuted(
-                componentName: key,
-                programName: configuration.videoLayerProgramName
-              )
               reusableSourcesByInputKey[key] = textures.makeSource(
                 from: input,
-                contentKind: muted ? .dummy : .captured
+                contentKind: .captured
               )
             } else {
               isPreparingRenderResources = true

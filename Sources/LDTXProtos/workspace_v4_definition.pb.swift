@@ -139,10 +139,10 @@ public nonisolated struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: @unchecked Se
   /// Clears the value of `outputConfiguration`. Subsequent reads from it will return its default value.
   public mutating func clearOutputConfiguration() {_uniqueStorage()._outputConfiguration = nil}
 
-  /// Represents Input Devices in the Workspace sidebar.
-  public var inputDevices: [Ldtx_Workspace_V4_InputDeviceWrapper] {
-    get {_storage._inputDevices}
-    set {_uniqueStorage()._inputDevices = newValue}
+  /// Represents Audio devices in the Workspace sidebar.
+  public var audioDevices: [Ldtx_Workspace_V4_AudioInputDevice] {
+    get {_storage._audioDevices}
+    set {_uniqueStorage()._audioDevices = newValue}
   }
 
   /// Represents Video Components in the Workspace sidebar.
@@ -164,8 +164,7 @@ public nonisolated struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: @unchecked Se
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// Defines the Video Layer order for one Program. A Video Layer is either a
-/// Video Input Device or a Video Component.
+/// Defines the Video Component order for one Program.
 public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -179,11 +178,11 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
   /// The name of this Program shown on the selector.
   public var displayName: String = String()
 
-  /// The Video Input Device or Video Component internal IDs in Landscape Video
+  /// The Video Component internal IDs in Landscape Video
   /// Layer order.
   public var landscapeVideoLayerInternalIds: [UInt64] = []
 
-  /// The Video Input Device or Video Component internal IDs in Portrait Video
+  /// The Video Component internal IDs in Portrait Video
   /// Layer order.
   public var portraitVideoLayerInternalIds: [UInt64] = []
 
@@ -213,22 +212,21 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
   /// The target video bit rate for the Portrait Canvas in bits per second.
   public var portraitVideoBitRate: UInt32 = 0
 
-  /// The Video Input Device internal ID used as the master clock for video
-  /// presentation timestamps. When absent, the runtime default applies.
-  public var ptsMasterVideoInputDeviceInternalID: UInt64 {
-    get {_ptsMasterVideoInputDeviceInternalID ?? 0}
-    set {_ptsMasterVideoInputDeviceInternalID = newValue}
+  /// The VFX Source used as the master clock for video presentation timestamps.
+  public var ptsMasterVfxSourceInternalID: UInt64 {
+    get {_ptsMasterVfxSourceInternalID ?? 0}
+    set {_ptsMasterVfxSourceInternalID = newValue}
   }
-  /// Returns true if `ptsMasterVideoInputDeviceInternalID` has been explicitly set.
-  public var hasPtsMasterVideoInputDeviceInternalID: Bool {self._ptsMasterVideoInputDeviceInternalID != nil}
-  /// Clears the value of `ptsMasterVideoInputDeviceInternalID`. Subsequent reads from it will return its default value.
-  public mutating func clearPtsMasterVideoInputDeviceInternalID() {self._ptsMasterVideoInputDeviceInternalID = nil}
+  /// Returns true if `ptsMasterVfxSourceInternalID` has been explicitly set.
+  public var hasPtsMasterVfxSourceInternalID: Bool {self._ptsMasterVfxSourceInternalID != nil}
+  /// Clears the value of `ptsMasterVfxSourceInternalID`. Subsequent reads from it will return its default value.
+  public mutating func clearPtsMasterVfxSourceInternalID() {self._ptsMasterVfxSourceInternalID = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _ptsMasterVideoInputDeviceInternalID: UInt64? = nil
+  fileprivate var _ptsMasterVfxSourceInternalID: UInt64? = nil
 }
 
 /// Represents Output in the Workspace sidebar.
@@ -280,14 +278,14 @@ nonisolated extension Ldtx_Workspace_V4_YouTubeIngestMode: SwiftProtobuf._ProtoN
 
 nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceDefinitionV4"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{1}programs\0\u{3}canvas_configuration\0\u{3}output_configuration\0\u{3}input_devices\0\u{3}video_components\0\u{1}visions\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{1}programs\0\u{3}canvas_configuration\0\u{3}output_configuration\0\u{4}\u{2}video_components\0\u{1}visions\0\u{3}audio_devices\0\u{b}input_devices\0\u{c}\u{5}\u{1}")
 
   fileprivate class _StorageClass {
     var _displayName: String = String()
     var _programs: [Ldtx_Workspace_V4_ProgramDefinition] = []
     var _canvasConfiguration: Ldtx_Workspace_V4_CanvasConfiguration? = nil
     var _outputConfiguration: Ldtx_Workspace_V4_OutputConfiguration? = nil
-    var _inputDevices: [Ldtx_Workspace_V4_InputDeviceWrapper] = []
+    var _audioDevices: [Ldtx_Workspace_V4_AudioInputDevice] = []
     var _videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper] = []
     var _visions: [Ldtx_Workspace_V4_VisionWrapper] = []
 
@@ -304,7 +302,7 @@ nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Mes
       _programs = source._programs
       _canvasConfiguration = source._canvasConfiguration
       _outputConfiguration = source._outputConfiguration
-      _inputDevices = source._inputDevices
+      _audioDevices = source._audioDevices
       _videoComponents = source._videoComponents
       _visions = source._visions
     }
@@ -329,9 +327,9 @@ nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Mes
         case 2: try { try decoder.decodeRepeatedMessageField(value: &_storage._programs) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._canvasConfiguration) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._outputConfiguration) }()
-        case 5: try { try decoder.decodeRepeatedMessageField(value: &_storage._inputDevices) }()
         case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._videoComponents) }()
         case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._visions) }()
+        case 8: try { try decoder.decodeRepeatedMessageField(value: &_storage._audioDevices) }()
         default: break
         }
       }
@@ -356,14 +354,14 @@ nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Mes
       try { if let v = _storage._outputConfiguration {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       } }()
-      if !_storage._inputDevices.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._inputDevices, fieldNumber: 5)
-      }
       if !_storage._videoComponents.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._videoComponents, fieldNumber: 6)
       }
       if !_storage._visions.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._visions, fieldNumber: 7)
+      }
+      if !_storage._audioDevices.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._audioDevices, fieldNumber: 8)
       }
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -378,7 +376,7 @@ nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Mes
         if _storage._programs != rhs_storage._programs {return false}
         if _storage._canvasConfiguration != rhs_storage._canvasConfiguration {return false}
         if _storage._outputConfiguration != rhs_storage._outputConfiguration {return false}
-        if _storage._inputDevices != rhs_storage._inputDevices {return false}
+        if _storage._audioDevices != rhs_storage._audioDevices {return false}
         if _storage._videoComponents != rhs_storage._videoComponents {return false}
         if _storage._visions != rhs_storage._visions {return false}
         return true
@@ -437,7 +435,7 @@ nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CanvasConfiguration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_profile_id\0\u{3}portrait_profile_id\0\u{3}frame_rate\0\u{3}landscape_video_bit_rate\0\u{3}portrait_video_bit_rate\0\u{3}pts_master_video_input_device_internal_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_profile_id\0\u{3}portrait_profile_id\0\u{3}frame_rate\0\u{3}landscape_video_bit_rate\0\u{3}portrait_video_bit_rate\0\u{4}\u{2}pts_master_vfx_source_internal_id\0\u{b}pts_master_video_input_device_internal_id\0\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -450,7 +448,7 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.frameRate) }()
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.landscapeVideoBitRate) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.portraitVideoBitRate) }()
-      case 6: try { try decoder.decodeSingularUInt64Field(value: &self._ptsMasterVideoInputDeviceInternalID) }()
+      case 7: try { try decoder.decodeSingularUInt64Field(value: &self._ptsMasterVfxSourceInternalID) }()
       default: break
       }
     }
@@ -476,8 +474,8 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
     if self.portraitVideoBitRate != 0 {
       try visitor.visitSingularUInt32Field(value: self.portraitVideoBitRate, fieldNumber: 5)
     }
-    try { if let v = self._ptsMasterVideoInputDeviceInternalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
+    try { if let v = self._ptsMasterVfxSourceInternalID {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 7)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -488,7 +486,7 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
     if lhs.frameRate != rhs.frameRate {return false}
     if lhs.landscapeVideoBitRate != rhs.landscapeVideoBitRate {return false}
     if lhs.portraitVideoBitRate != rhs.portraitVideoBitRate {return false}
-    if lhs._ptsMasterVideoInputDeviceInternalID != rhs._ptsMasterVideoInputDeviceInternalID {return false}
+    if lhs._ptsMasterVfxSourceInternalID != rhs._ptsMasterVfxSourceInternalID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

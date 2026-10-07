@@ -12,7 +12,7 @@ import os
 @MainActor
 @objc(WorkspaceDocument)
 public final class WorkspaceDocument: NSDocument {
-  public let uiState = WorkspaceUIState(definition: .init(), preferences: .init())
+  public let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
   public let appletData = WorkspaceAppletData.shared
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID().uuidString)")!
   private struct SaveSnapshot: Sendable {
@@ -20,12 +20,10 @@ public final class WorkspaceDocument: NSDocument {
     let formalURL: URL?
   }
   private nonisolated let writingSnapshot = OSAllocatedUnfairLock<SaveSnapshot?>(initialState: nil)
-  private var definitionExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
-    .lowercased()
   private var preferencesExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
     .lowercased()
   private var isReading = false
-  private var outputDefinition: WorkspaceUIState.WorkspaceDefinition?
+  private var outputDefinition: WorkspaceStoreService.WorkspaceDefinition?
   private var closeCallbacks: [WorkspaceCloseCallback] = []
   private var saveCallbacks: [WorkspaceSaveCallback] = []
   private var hasShutDown = false
@@ -33,37 +31,63 @@ public final class WorkspaceDocument: NSDocument {
 
   public lazy var persistenceCoordinator = WorkspaceV4PersistenceCoordinator(
     workspaceSnapshot: { [unowned self] in snapshot },
-    workspaceIsDirty: { [unowned self] in isDocumentEdited },
     replaceWorkspace: { [unowned self] workspace in try replaceContents(workspace) },
     url: fileURL)
 
   private var snapshot: WorkspaceV4Bundle {
     WorkspaceV4Bundle(
-      definitionExternalID: definitionExternalID,
+      definitionExternalID: storeService.externalID,
       preferencesExternalID: preferencesExternalID,
-      definition: uiState.definition, preferences: uiState.preferences)
+      definition: storeService.definition, preferences: storeService.preferences)
   }
 
   public override init() {
     super.init()
     fileType = "tokyo.kaito.ldtx.workspace"
-    uiState.definition.displayName = "Untitled"
-    uiState.localStateURL = transientURL
-    uiState.documentContentsDidChange = { [weak self] in
+    storeService.externalID = WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+    storeService.definition.displayName = "Untitled"
+    storeService.localStateURL = transientURL
+    storeService.documentContentsDidChange = { [weak self] in
       guard let self, !isReading else { return }
-      if let outputDefinition, uiState.definition != outputDefinition {
-        isReading = true
-        uiState.definition = outputDefinition
-        isReading = false
-        return
+      if let outputDefinition, storeService.definition != outputDefinition {
+        guard Self.isVideoLayerReordering(storeService.definition, of: outputDefinition) else {
+          isReading = true
+          storeService.definition = outputDefinition
+          isReading = false
+          return
+        }
+        self.outputDefinition = storeService.definition
       }
       updateChangeCount(.changeDone)
     }
-    uiState.documentOutputStateDidChange = { [weak self] in
+    storeService.documentOutputStateDidChange = { [weak self] in
       guard let self else { return }
-      outputDefinition = uiState.isOutputActive ? uiState.definition : nil
+      outputDefinition = storeService.isOutputActive ? storeService.definition : nil
       Self.updateRecordingDockBadge()
     }
+  }
+
+  private static func isVideoLayerReordering(
+    _ candidate: WorkspaceStoreService.WorkspaceDefinition,
+    of baseline: WorkspaceStoreService.WorkspaceDefinition
+  ) -> Bool {
+    guard candidate.programs.count == baseline.programs.count else { return false }
+    var normalized = candidate
+    for index in baseline.programs.indices {
+      let before = baseline.programs[index]
+      let after = candidate.programs[index]
+      guard
+        before.landscapeVideoLayerInternalIds.sorted()
+          == after.landscapeVideoLayerInternalIds.sorted(),
+        before.portraitVideoLayerInternalIds.sorted()
+          == after.portraitVideoLayerInternalIds.sorted()
+      else { return false }
+      normalized.programs[index].landscapeVideoLayerInternalIds =
+        before.landscapeVideoLayerInternalIds
+      normalized.programs[index].portraitVideoLayerInternalIds =
+        before.portraitVideoLayerInternalIds
+    }
+    return normalized == baseline
   }
 
   /// Restores only the formal package; legacy recovery contents are not adopted.
@@ -76,7 +100,7 @@ public final class WorkspaceDocument: NSDocument {
 
   static func updateRecordingDockBadge() {
     let isOutputActive = NSDocumentController.shared.documents.contains {
-      ($0 as? WorkspaceDocument)?.uiState.isOutputActive == true
+      ($0 as? WorkspaceDocument)?.storeService.isOutputActive == true
     }
     NSApplication.shared.dockTile.badgeLabel = isOutputActive ? "REC" : nil
   }
@@ -89,18 +113,18 @@ public final class WorkspaceDocument: NSDocument {
     guard windowControllers.isEmpty else { return }
     appletData.registerTransientState(at: transientURL)
     let windowController = WorkspaceWindowController(
-      uiState: uiState, persistenceCoordinator: persistenceCoordinator,
+      storeService: storeService, persistenceCoordinator: persistenceCoordinator,
       appletData: appletData, documentReference: DocumentReference(self))
     addWindowController(windowController)
   }
 
   public override nonisolated func read(from url: URL, ofType typeName: String) throws {
     try MainActor.assumeIsolated {
-      guard !uiState.isOutputActive else { throw CocoaError(.userCancelled) }
+      guard !storeService.isOutputActive else { throw CocoaError(.userCancelled) }
       let workspace = try WorkspaceBundleReaderV4(at: url).read()
       try WorkspaceV4IntegrityValidator.validate(workspace)
       try replaceContents(workspace)
-      uiState.localStateURL = url
+      storeService.localStateURL = url
       persistenceCoordinator.setDocumentURL(url)
     }
   }
@@ -108,9 +132,9 @@ public final class WorkspaceDocument: NSDocument {
   private func replaceContents(_ workspace: WorkspaceV4Bundle) throws {
     isReading = true
     defer { isReading = false }
-    uiState.definition = workspace.definition
-    uiState.preferences = workspace.preferences
-    definitionExternalID = workspace.definitionExternalID
+    storeService.definition = workspace.definition
+    storeService.preferences = workspace.preferences
+    storeService.externalID = workspace.definitionExternalID
     preferencesExternalID = workspace.preferencesExternalID
   }
 
@@ -173,6 +197,7 @@ public final class WorkspaceDocument: NSDocument {
     default:
       throw CocoaError(.featureUnsupported)
     }
+    try WorkspaceStoreService.validateForSaving(contents.workspace)
     unblockUserInteraction()
     try writeProbe.withLock { $0 }?()
     let coordinator = NSFileCoordinator(filePresenter: self)
@@ -218,16 +243,24 @@ public final class WorkspaceDocument: NSDocument {
       completionHandler(CocoaError(.featureUnsupported))
       return
     }
-    let initialName = uiState.definition.displayName
+    let initialName = storeService.definition.displayName
     let derivesInitialName = fileURL == nil && initialName == "Untitled"
     let destinationName = url.deletingPathExtension().lastPathComponent
-    if derivesInitialName { uiState.definition.displayName = destinationName }
+    if derivesInitialName { storeService.definition.displayName = destinationName }
+    do {
+      try storeService.validateForSaving()
+    } catch {
+      if derivesInitialName { storeService.definition.displayName = initialName }
+      completionHandler(error)
+      return
+    }
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
       writingChangeCountToken = nil
       if let error {
-        if derivesInitialName && fileURL == nil && uiState.definition.displayName == destinationName
+        if derivesInitialName && fileURL == nil
+          && storeService.definition.displayName == destinationName
         {
-          uiState.definition.displayName = initialName
+          storeService.definition.displayName = initialName
         }
         completionHandler(error)
         return
@@ -238,17 +271,18 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   private func adoptDocumentURL(_ url: URL) {
-    if let previous = uiState.localStateURL, previous != url {
+    if let previous = storeService.localStateURL, previous != url {
       appletData.copyState(from: previous, to: url)
     }
-    uiState.localStateURL = url
+    storeService.localStateURL = url
     persistenceCoordinator.setDocumentURL(url)
   }
 
   public override nonisolated func presentedItemDidMove(to newURL: URL) {
     super.presentedItemDidMove(to: newURL)
     Task { @MainActor [self] in
-      guard !hasShutDown, uiState.localStateURL?.standardizedFileURL != newURL.standardizedFileURL
+      guard !hasShutDown,
+        storeService.localStateURL?.standardizedFileURL != newURL.standardizedFileURL
       else { return }
       adoptDocumentURL(newURL)
     }
@@ -266,7 +300,7 @@ public final class WorkspaceDocument: NSDocument {
   }
 
   private func moveUsingAppKit(to url: URL, completionHandler: ((Error?) -> Void)?) {
-    guard !uiState.isOutputActive else {
+    guard !storeService.isOutputActive else {
       completionHandler?(CocoaError(.userCancelled))
       return
     }
@@ -310,6 +344,11 @@ public final class WorkspaceDocument: NSDocument {
       delegate: delegate as AnyObject, selector: shouldCloseSelector, context: contextInfo
     ) { [weak self] callback in self?.closeCallbacks.removeAll { $0 === callback } }
     closeCallbacks.append(callback)
+    do { try storeService.validateInspectorEdits() } catch {
+      storeService.reportError(error)
+      callback.reviewed(self, shouldClose: false, contextInfo: nil)
+      return
+    }
     super.canClose(
       withDelegate: callback,
       shouldClose: #selector(WorkspaceCloseCallback.reviewed(_:shouldClose:contextInfo:)),
@@ -357,7 +396,7 @@ public final class WorkspaceDocument: NSDocument {
     {
       return false
     }
-    if uiState.isOutputActive
+    if storeService.isOutputActive
       && (item.action == #selector(revertToSaved(_:))
         || item.action == #selector(move(_:)) || item.action == #selector(rename(_:)))
     {

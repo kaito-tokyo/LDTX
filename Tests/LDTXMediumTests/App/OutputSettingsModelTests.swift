@@ -15,11 +15,17 @@ struct ApplicationSettingsStoreIntegrationTestSuite {
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let store = ApplicationSettingsStore(userDefaults: defaults)
-    let expected = ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/recordings")
+    let expected = ApplicationOutputPreferences(
+      defaultOutputFolderPath: "/tmp/recordings", screenshotsFolderPath: "/tmp/pictures")
 
     store.saveApplicationOutputPreferences(expected)
 
     #expect(store.loadApplicationOutputPreferences() == expected)
+    #expect(expected.screenshotsDirectory.path == "/tmp/pictures")
+    #expect(
+      ApplicationOutputPreferences().screenshotsDirectory
+        == FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+          "Pictures", isDirectory: true))
     #expect(defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey) != nil)
   }
 

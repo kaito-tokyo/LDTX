@@ -138,7 +138,7 @@ extension ProgramPreferences {
     proto.monitorVolume = monitorVolume
     proto.audioSyncEnabled = isAudioSyncEnabled
     proto.audioChannelGainsByName = audioChannelGainsByName
-    proto.videoMutedByInputDeviceName = videoMutedByInputDeviceName
+    proto.videoHiddenByInputDeviceName = videoHiddenByInputDeviceName
     proto.audioMutedByInputDeviceName = audioMutedByInputDeviceName
     proto.videoLayersByProgramName = videoLayersByProgramName.mapValues { layers in
       var list = Ldtx_Program_Persistence_V1_VideoLayerPreferences()
@@ -151,7 +151,7 @@ extension ProgramPreferences {
           scaleX: layer.destinationScaleX,
           scaleY: layer.destinationScaleY
         )
-        protoLayer.muted = layer.isMuted
+        protoLayer.hidden = layer.isHidden
         return protoLayer
       }
       return list
@@ -300,7 +300,7 @@ extension Ldtx_Program_Persistence_V1_ProgramPreferences {
       monitorVolume: hasMonitorVolume ? monitorVolume : 1,
       isAudioSyncEnabled: hasAudioSyncEnabled ? audioSyncEnabled : true,
       audioChannelGainsByName: audioChannelGainsByName,
-      videoMutedByInputDeviceName: videoMutedByInputDeviceName,
+      videoHiddenByInputDeviceName: videoHiddenByInputDeviceName,
       audioMutedByInputDeviceName: audioMutedByInputDeviceName,
       videoLayersByProgramName: videoLayersByProgramName.mapValues { list in
         list.layers.map {
@@ -312,7 +312,7 @@ extension Ldtx_Program_Persistence_V1_ProgramPreferences {
               ? $0.destination.scaleX : $0.destination.scale,
             destinationScaleY: $0.destination.hasScaleY
               ? $0.destination.scaleY : $0.destination.scale,
-            isMuted: $0.muted
+            isHidden: $0.hidden
           )
         }
       }

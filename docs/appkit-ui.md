@@ -44,7 +44,7 @@ its window controller. All SwiftUI pane roots receive that same box through the
 documentReference environment value. The box weakly references NSDocument; views
 and hosting controllers do not extend the document's lifetime. UI actions query
 NSDocument.fileURL when they run, including Binding getters and setters. Workspace
-local settings use uiState.localStateURL only as the transient key while fileURL
+local settings use storeService.localStateURL only as the transient key while fileURL
 is nil. Missing environments and released documents disable document-dependent
 settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
@@ -60,8 +60,25 @@ Workspace automatically. Physical-device assignments remain app-local. Content
 has no duplicate input, component, or Vision creation controls; its Add Video
 Layer menus place existing resources into the selected Program.
 
-WorkspaceWindow uses PaneSplitViewController with an NSHostingController
-for each pane. Record Player lives under Sources/Applets/RecordPlayer in the
+The Content pane implementation is organized by feature under
+`Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
+WorkspaceContentPane is an NSViewController containing the configured AppKit preview
+and the editors in a vertical NSSplitView. It does not subclass NSSplitViewController.
+MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
+Layers and Portrait Video Layers tabs, which use VideoLayersEditor controllers.
+Each editor owns its Observation task and reads the shared WorkspaceStoreService.
+The editor stack is the vertical NSScrollView's document view directly. Its
+flipped coordinates keep the controls at the top, and its width tracks the
+viewport without an intermediate container. Reducing the lower pane height scrolls the controls rather
+than requiring the pane to fit all editors at once.
+Output and canvas settings, including their supporting types and helpers, live
+under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
+owned by the video and audio input Inspectors, which share
+WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
+
+WorkspaceWindow uses PaneSplitViewController with hosted SwiftUI sidebar and
+Inspector panes and an AppKit WorkspaceContentPane in the center.
+Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
 in-memory marker edits. It registers a
@@ -118,7 +135,8 @@ lifetime.
 
 Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
 
-The Program preview's single `MTKView` belongs to the Content pane. A
+WorkspaceWindowController constructs and retains the Program preview's single
+`MTKView`, then passes the configured preview to the Content view controller. A
 `ProgramPairPreviewRenderer` supplied as its delegate reads the latest
 `ProgramFrame` from the Landscape and Portrait runtimes and draws the 16:9 and
 9:16 images at equal height into the drawable. The four-pixel gap is transparent
@@ -130,9 +148,7 @@ uses NSDocument's standard document reopening and window restoration. Workspace
 Inspector selection starts at nil and is neither encoded nor restored; the former
 versioned selection key is ignored. AppKit owns frame and pane state.
 
-Run `LDTXWorkspaceDocumentSystemTests` for document lifecycle and saving,
-`LDTXRecordPlayerDocumentSystemTests` for recording document ownership, marker saving, and close confirmation,
-`LDTXWorkspaceAppletControllerSystemTests` for Workspace window behavior and `LDTXPaneSplitViewControllerSystemTests` for Record Player's shared split behavior. These run in the test runner's AppKit process and do not launch `LDTX.app`. `LDTXAppUIComponentTests` covers hostless SwiftUI `View` value and binding logic. The repository currently has no automated visible-UI tests that launch `LDTX.app`. The embedded XPC service process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen. Use a worktree-specific DerivedData directory and run signed builds and tests outside the sandbox as required by AGENTS.md.
+Run `LDTXAppUIComponentTests` for directly constructed component, document lifecycle, saving, window, sheet, observation, and meter tests. These share a serialized MainActor parent suite and one Document Controller in a hostless AppKit test process. `LDTXAppUITests` launches the normal application for launch and main-menu smoke tests. The embedded XPC process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen and run builds and tests outside the sandbox.
 
 ## Source folders
 
@@ -183,8 +199,10 @@ UI bindings access the assignment API without a document URL. Runtime projection
 and recording sessions receive an explicit assignment provider or snapshot. Each
 window observes shared changes and updates program runtimes, physical captures,
 and audio monitoring, cancelling its observer during shutdown. Program selection,
-monitor selection, mix synchronization and YouTube selection remain path-keyed;
-relocation cleanup for those fields is a separate change.
+monitor selection and YouTube selection remain path-keyed;
+relocation cleanup for those fields is a separate change. Landscape and Portrait
+master volumes and audio mute settings are independent. There is no mix
+synchronization setting between the canvases.
 
 The Workspace toolbar marks Stop and Start/Pause as navigational items, in that
 order, so AppKit places them before the standard document title. The window uses
@@ -196,39 +214,106 @@ creates a new output session. Stop from paused returns to idle. Transition state
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
-The Workspace Content pane displays a fixed Landscape and Portrait preview above
-its scrollable editor. The window passes the same Program runtimes used by its
-output session to the Content pane. The pair keeps its aspect ratio, has 20-point
-horizontal margins, and uses at most 45 percent of the Content height. Without a
-valid Program, the preview region displays a placeholder. Preview presentation
-does not create capture sessions or change the Workspace definition.
+The Workspace Content pane uses an AppKit horizontal split above its AppKit
+tabbed editor. `WorkspaceWindowController` owns the
+`ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
+output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
+centers a fixed 16:9 plus 9:16 pair with 12-point padding, and shows black when
+frames are absent. It uses a standard `MTKView` with automatic drawable resizing.
+Xcode previews use a dedicated delegate under `Content/XcodeHelpers` to draw
+black canvases separated by a gray gap. Those previews pause the timed draw loop
+and redraw on display invalidation without starting Program runtimes.
+Preview clicks and accessibility actions update the window's transient
+`isPortraitAudio` selection without changing document contents.
+
+`configureAfterEstablished()` is a custom lifecycle hook called once after the
+pane is attached to the window and the parent sizes are established. It calls
+`layoutSubtreeIfNeeded()` before configuring size-dependent behavior.
+The pane uses `setPosition` to
+set the initial preview height to 280 points, then assigns `autosaveName` so
+AppKit can restore saved divider configuration over that default. The pane does
+not seed the layout by assigning view frames. Its higher holding priority
+keeps its height when resizing the window, with the editor taking the size change
+first. The content split uses AppKit default divider limits and collapse behavior.
+`NSSplitView.autosaveName`, keyed by the definition envelope external
+ID, lets AppKit save and restore divider configuration in application preferences.
+`WorkspaceStoreService.externalID` holds that ID, and `WorkspaceContentPane`
+constructs the autosave name internally. Divider
+configuration is not stored in Workspace-local state. Shutdown pauses the MTKView, detaches its delegate,
+and stops the renderer before shutting down the runtimes.
 
 ### Dynamic reference selection
 
 Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Explicit user selection and resource-addition selection remain window-local.
 
-Physical assignments, VFX/OCR inputs, monitor output devices, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Assignment removal and use of the default monitor device are explicit actions. Fixed enumerations retain their existing controls.
+Physical assignments, VFX/OCR inputs, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
+
+Monitor output selection is application-wide and belongs to SettingsApplet's
+Audio tab. The current device is displayed separately from an initially
+unselected candidate list. Selecting a candidate rechecks availability and
+immediately persists it, without Apply or Cancel. System Default is an explicit candidate.
+Device changes refresh the candidates without
+rewriting the saved assignment. Discovery errors use the Settings Window's
+presentError path, with repeated failures suppressed until recovery. Workspace
+editors expose monitor volume and input routing, not output-device selection.
+Monitoring uses Workspace audio devices and their shared gains independently of
+Program selection. It remains available with no Programs; Program master volume
+and mute settings affect output meters, not monitor routing.
+
+Screenshot capture results appear in a transient NSPopover anchored to the
+screenshot toolbar item. Successful captures show the saved Program image count
+and the Landscape file icon and name; Portrait and VFX Source images remain saved but
+are excluded from the popover. Clicking a file opens it in its default application;
+dragging it provides a file URL for Finder or other destinations. Quick Look
+generates the file icon asynchronously with `iconMode` enabled; the standard file
+icon remains visible until a representation is available. Capture
+failures show the error without modifying the output session's failure state.
+Subsequent captures replace the message. Window closure closes the popover;
+ordinary interaction dismissal is managed by AppKit.
+The NSHostingController uses `.preferredContentSize` sizing, allowing SwiftUI's
+ideal content size to size the popover without manually laying out or resizing
+the hosting view. See Apple's [Use SwiftUI with AppKit](https://developer.apple.com/videos/play/wwdc2022/10075/).
+
+SettingsApplet's Output tab configures the application-wide screenshots folder,
+defaulting to ~/Pictures. Captures save there regardless of recording state and
+also save identical images in the active local recording's Screenshots folder.
+The toolbar folder action opens the global folder; the result counts images,
+not duplicate copies. Recording and screenshots folder settings are independent.
 
 ### Video layer editing belongs to Content
 
-The Workspace Content scroll area begins with Landscape and Portrait video layer lists below the fixed preview. Layer addition, ordering, removal, mute, and transform controls live there. Sidebar selects Workspace settings and resources; it has no Video Layers entry or corresponding Inspector. Layer editing does not change Sidebar selection.
+The Editor vertically arranges MasterVolumeEditor, AudioMixEditor, and the
+Landscape/Portrait Video Layers tabs. Each canvas has an NSTableView sized to
+show all its rows and empty-state labels.
+VideoLayersEditor has no internal scroll view; the Content pane scrolls all
+editors together.
+Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
+and monitor volume controls. AudioMixEditor owns one Workspace-wide gain per input, independent Landscape/Portrait
+mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
+Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
-The Video Layers group uses a standard SwiftUI DisclosureGroup to collapse both
-canvas lists together. It starts expanded and keeps its disclosure state local
-to the Content view, without saving it in the Workspace.
+The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
+AppKit controls retain their default selection, background, and focus behavior.
+Each layer operation copies the latest ProgramPreferences and submits the complete
+value, preserving unrelated fields. Reordering submits the complete ID array and
+must preserve the current membership. Tab changes retain drafts; Program changes
+discard field editors. Editors update from
+`viewWillLayout()` using AppKit automatic Observation, without observation Tasks
+or an externally invoked `stop()`.
+Audio meters pause themselves when detached or when their window closes.
 
 ### Program selection in the Inspector
 
 The first entry in Sidebar's WORKSPACE section is Programs. Selecting it opens
 an Inspector containing a standard vertical SwiftUI radio-group Picker.
-Content contains only the fixed previews and scrollable editor; Program selection
+Content contains only the fixed previews and tabbed editor; Program selection
 has no reserved row, horizontal scrolling, or custom layout sizing.
 
 The Program candidates are static entries in the Workspace definition. The
 Picker uses matching optional `UInt64` selection and tag values and reads the
 resolved Program directly from model state. Its setter uses the existing
-dispatcher; failed changes retain the model selection and display the error in
-the Inspector. No independent selection state is kept. With an empty Program
+dispatcher; failed changes retain the model selection and report the error through
+the Workspace standard error sheet. No independent selection state is kept. With an empty Program
 array, the Inspector displays "No Program" instead of constructing a Picker.
 The empty Content preview remains visible. Resolving a stale saved ID does not
 rewrite it. Sidebar initially remains unselected.
@@ -239,3 +324,129 @@ Program changes are allowed during output, but not during start, pause, or stop.
 Both existing runtimes and output audio mixes receive the selected Program's
 configuration and preferences. Recording packages and publishing sessions stay
 open across the change; output failures follow the normal finalization path.
+
+Video layer tables always allow ordering, visibility, and transform editing,
+including during output. Reordering uses the drag handle and is restricted to
+a single layer from the same table. The table keeps
+cell identity and unconfirmed transform text across ordinary model updates.
+
+Each Video Component Inspector has separate Landscape and Portrait membership
+Toggles and displays the selected Program name. Turning a Toggle on appends the
+component to that canvas; turning it off removes the layer without deleting the
+component or its saved preferences. The controls read current membership and
+commit immediately through WorkspaceStoreService. They are unavailable without
+a Program or while output is active. Submission revalidates the Program,
+component, and output state. Content retains ordering, visibility, and transform
+editing; it has no membership management button or sheet.
+WorkspaceDocument allows only permutations of existing video-layer arrays during
+output and retains the latest accepted order as its protected definition.
+
+## Workspace state and cross-layer operations
+
+WorkspaceDocument owns one Observable `WorkspaceStoreService`. It connects UI,
+document, and runtime layers through both observable variables and method calls.
+Simple state changes may assign variables directly; operations that require
+validation or coordinated updates use methods. There is no separate UI Dispatcher.
+The service weakly references `WorkspaceRuntimeActions`, implemented by the window
+controller, and does not assemble capture, rendering, or output resources.
+Disconnected runtime operations that need a result report an explicit error.
+
+Content view controllers receive the service and construct their editors where
+they are used. MasterVolumeEditor and AudioMixEditor have no reference back to
+their parent pane. Each VideoLayersEditor directly owns its table, status,
+Store connection and observation lifetime. There is one view
+controller per canvas editor, with no additional editor controller wrapper. The window
+does not refresh or operate individual editors. Dependencies and child controllers
+are retained in init; view layout and configuration run in loadView. Initial
+rendering uses current state, and observation does not force unloaded views to load.
+Content does not require a shutdown cascade. AppKit owns observation tracking;
+each meter manages its window notifications and drawing lifetime internally.
+Program Preview and runtime shutdown remain explicit, and runtime shutdown
+disconnects the service's runtime actions before releasing resources.
+
+## Validation before saving
+
+WorkspaceStoreService validates the definition and both canvas preference maps
+with WorkspaceV4IntegrityValidator before a document save begins. Validation
+collects independent issues with resource and canvas context into one localized
+error. NSDocument's save error presentation displays the messages together in
+its standard error sheet; editors do not add inline save-validation labels.
+A rejected save retains the edited model and leaves the existing package intact.
+The asynchronous writer validates its captured snapshot again before any I/O.
+
+Transforms and hidden flags may remain for detached layers, as long as their
+Video Components still exist. Their values remain subject to normal validation.
+Workspace Version stays 4 and Workspace Bundle Version stays 4.0.
+
+### Rational32 numeric editing
+
+Workspace V4 stores geometry, OCR parameters, and audio gains as `Rational32`
+values. RGBA remains floating point. Rational32 decimal and fraction parsing
+preserves the entered value; pixel coordinates are normalized using Rational32
+arithmetic and restored without rounding. Audio gains are stored directly in
+decibels, without a tenths multiplier. Missing scales resolve to identity while
+an explicitly stored zero remains zero. Rendering and audio processing use
+`Rational32.float` or `Rational32.double` at their numeric boundaries. Conversion
+uses standard floating-point division: zero divided by zero produces NaN, and
+nonzero values divided by zero produce signed infinity. These are the only custom Rational32 members;
+constants use Protobuf `with`, text parsing and formatting belong to the UI
+FormatStyle and ParseStrategy, and range checks belong to the integrity
+validator.
+
+A persisted Rational32 must have a positive denominator. Saving validates the
+exact Rational32 ranges before writing the Workspace. Workspace Version remains
+4 and Workspace Bundle Version remains 4.0.
+
+## Workspace operation errors
+
+`WorkspaceStoreService.reportError(_:)` passes operation errors unchanged to an
+Observation-ignored closure installed by the owning WorkspaceWindowController.
+Editors and Inspectors report failed commits through this boundary and retain
+unconfirmed input and open editing sheets. Pre-submit validation and candidate
+availability remain in the editing UI. Output-session failures and continuous
+OCR diagnostics retain their existing state and display paths.
+
+The Window Controller presents errors using AppKit `presentError`, targeting
+the Workspace Window or its active editing sheet. It queues further errors
+until the current presentation completes, and discards pending notifications
+when the Window closes or shutdown begins. The callback captures the controller
+weakly; UI components do not own the presentation lifecycle. Its `willPresentError`
+customization applies only to the queued error's domain and code, combines the
+failure reason with the recovery suggestion for AppKit's informative text, and
+preserves the NSError domain, code, and other userInfo (including recovery metadata).
+
+Native audio status notifications include an engine identifier and a failure
+snapshot. The controller reads its own engine's initial monitor state, then
+forwards subsequent notifications asynchronously to the main actor. An unchanged
+monitor failure is reported once; recovery permits a later recurrence to be
+reported again. Restart completions report orchestration errors, while native
+hardware errors arrive through status notifications rather than that completion.
+Capture synchronization similarly reports newly failed camera IDs together,
+retains assignments, and clears failure state on successful retry. Device
+enumeration retains its availability state and reports new failures.
+
+Save validation continues to throw its aggregated LocalizedError through
+NSDocument's save completion. It does not also call `reportError`, preventing
+duplicate presentation. Error descriptions, failure reasons, and recovery
+suggestions remain available to AppKit's standard error presentation.
+
+## Local YouTube authorization storage
+
+Debug and Release builds check
+`~/Library/Application Support/<application bundle identifier>/.YouTubeAuth`
+once at application startup. If the file exists, Settings and Workspace use it
+for both the OAuth client and AppAuth authorization state. Otherwise they use
+Keychain. Distribution builds compile out file storage and always use Keychain.
+Changing the file's presence requires restarting the application. Invalid or
+removed files produce errors rather than falling back to Keychain.
+
+To enable local file storage, create the application's Application Support
+directory and an empty `.YouTubeAuth` file (or one containing `{}`) before
+launching LDTX. Set the directory permissions to `0700` and file permissions to
+`0600`. Import the
+Desktop OAuth client JSON through the existing Account controls and authorize
+normally. No storage-selection UI is added. The file uses a JSON envelope with
+base64 `oauthClientJSON` and an `authorizations` dictionary keyed by client ID;
+authorization values are base64 secure archives of AppAuth state. Writes are
+atomic and set file permissions to `0600`. This development file contains
+credentials, including refresh tokens, and is not encrypted by this mechanism.

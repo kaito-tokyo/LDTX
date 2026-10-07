@@ -17,7 +17,10 @@ struct WorkspaceV4VisionFeatureUnitTestSuite {
     vision.recognitionLanguages = ["ja-JP"]
     vision.usesLanguageCorrection = true
     vision.customWords = ["Unite"]
-    vision.minimumTextHeight = 0.2
+    vision.minimumTextHeightRational = .with {
+      $0.numerator = 1
+      $0.denominator = 5
+    }
 
     let configuration = WorkspaceV4VisionFeature.ocrConfiguration(for: vision)
 

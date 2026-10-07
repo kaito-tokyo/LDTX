@@ -48,20 +48,3 @@ jobs:
     uses: ./.github/workflows/xcode.yml
     permissions:
       contents: read
-
-  accept-pr-check:
-    if: always()
-    needs:
-      - actions
-      - docs-build
-      - tools
-      - xcode
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions: {}
-    steps:
-      - name: Check workflow results
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: jq -e 'all(.[]; .result == "success")' <<< "${NEEDS:?}"

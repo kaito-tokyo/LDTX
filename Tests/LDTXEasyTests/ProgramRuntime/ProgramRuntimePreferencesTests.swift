@@ -53,14 +53,14 @@ struct ProgramRuntimePreferencesUnitTestSuite {
     )
 
     first.updateProgramPreferences(
-      ProgramPreferences(videoMutedByInputDeviceName: ["Camera": true])
+      ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
     )
 
     #expect(first.programPreferencesState === second.programPreferencesState)
-    #expect(second.programPreferencesState.read { $0.isVideoMuted(inputDeviceName: "Camera") })
+    #expect(second.programPreferencesState.read { $0.isVideoHidden(inputDeviceName: "Camera") })
   }
 
-  @Test func muteUpdatesDoNotRebuildTheVideoInputPipeline() throws {
+  @Test func visibilityUpdatesDoNotRebuildTheVideoInputPipeline() throws {
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
       lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
@@ -68,17 +68,17 @@ struct ProgramRuntimePreferencesUnitTestSuite {
     let initialPipelineID = try #require(renderer.videoPipelineIDForTesting)
 
     renderer.updateProgramPreferences(
-      ProgramPreferences(videoMutedByInputDeviceName: ["Camera": true])
+      ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
     )
     #expect(renderer.videoPipelineIDForTesting == initialPipelineID)
 
     renderer.updateProgramPreferences(
-      ProgramPreferences(videoMutedByInputDeviceName: ["Camera": false])
+      ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": false])
     )
     #expect(renderer.videoPipelineIDForTesting == initialPipelineID)
   }
 
-  @Test func videoLayerMutesRetainCameraInputsAndRemoveOtherComponents() {
+  @Test func hiddenLayersAreRemovedFromCompositionIncludingCameraInputs() {
     let composite = CompositeProgramDefinition(steps: [
       CompositeProgramStep(id: "Camera", component: .inputCameraDevice(InputDeviceComponent())),
       CompositeProgramStep(id: "Solid", component: .fillSolidColor(FillSolidColorComponent())),
@@ -91,26 +91,26 @@ struct ProgramRuntimePreferencesUnitTestSuite {
       CompositeProgramStep(id: "Clock", component: .clock(ClockComponent())),
       CompositeProgramStep(id: "Pattern", component: .testPattern),
     ])
-    let mutedLayers = composite.steps.map {
-      VideoLayerPreference(componentName: $0.name, isMuted: true)
+    let hiddenLayers = composite.steps.map {
+      VideoLayerPreference(componentName: $0.name, isHidden: true)
     }
     let preferences = ProgramPreferences(videoLayersByProgramName: [
-      "Main": mutedLayers,
-      "Other": [VideoLayerPreference(componentName: "Camera", isMuted: false)],
+      "Main": hiddenLayers,
+      "Other": [VideoLayerPreference(componentName: "Camera", isHidden: false)],
     ])
 
-    let main = compositeApplyingVideoLayerMutes(
+    let main = compositeApplyingVideoLayerVisibility(
       composite,
       preferences: preferences,
       programName: "Main"
     )
-    let other = compositeApplyingVideoLayerMutes(
+    let other = compositeApplyingVideoLayerVisibility(
       composite,
       preferences: preferences,
       programName: "Other"
     )
 
-    #expect(main.steps.map { $0.name } == ["Camera"])
+    #expect(main.steps.isEmpty)
     #expect(other.steps == composite.steps)
   }
 

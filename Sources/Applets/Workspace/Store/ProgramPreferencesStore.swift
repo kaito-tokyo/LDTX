@@ -39,13 +39,13 @@ struct ProgramPreferencesStore: RevisionedStore {
     advanceRevision()
   }
 
-  func isVideoMuted(inputDeviceName: String) -> Bool {
-    value.isVideoMuted(inputDeviceName: inputDeviceName)
+  func isVideoHidden(inputDeviceName: String) -> Bool {
+    value.isVideoHidden(inputDeviceName: inputDeviceName)
   }
 
-  mutating func setVideoMuted(_ muted: Bool, inputDeviceName: String) {
+  mutating func setVideoHidden(_ hidden: Bool, inputDeviceName: String) {
     var next = value
-    next.setVideoMuted(muted, inputDeviceName: inputDeviceName)
+    next.setVideoHidden(hidden, inputDeviceName: inputDeviceName)
     guard next != value else { return }
     value = next
     advanceRevision()

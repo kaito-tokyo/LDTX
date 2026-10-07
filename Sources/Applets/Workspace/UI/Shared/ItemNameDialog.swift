@@ -8,6 +8,7 @@ struct ItemNameDialog: View {
   @Binding var name: String
   let title: String
   let fieldTitle: String
+  var submitTitle = "Add"
   let isNameAvailable: (String) -> Bool
   let submit: (String) -> Void
   let cancel: () -> Void
@@ -35,7 +36,7 @@ struct ItemNameDialog: View {
       HStack {
         Spacer()
         Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
-        Button("Add") { submit(candidate) }
+        Button(submitTitle) { submit(candidate) }
           .keyboardShortcut(.defaultAction)
           .disabled(!canSubmit)
       }

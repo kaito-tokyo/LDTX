@@ -38,12 +38,13 @@ A loaded `.ldtxworkspace` is represented by its Workspace v4 model and runtime s
 
 A **Program Definition** is the source code for the **Program**'s render graph: its **Output Track** topology, selected reusable resources, and fixed composition structure. The application compiles it into the runtime pipeline. Changing a **Program Definition** can require that pipeline to be rebuilt, so it is intentionally not the surface for frequent operational changes. This boundary is a performance property, not merely a storage convention.
 
-**Preferences** are the operational parameters supplied to that already-defined pipeline, such as **Video Layer** order and placement, audio gains, and mute state. They can change without redefining the pipeline's structure.
+**Preferences** are the operational parameters supplied to that already-defined pipeline, such as **Video Layer** order and placement, video visibility, audio gains, and audio mute state. They can change without redefining the pipeline's structure.
 
 | State | Owner | Examples |
 | --- | --- | --- |
 | **Output Track** topology and reusable **Workspace resources** | **WorkspaceDefinitionV4** | **Program** name, **Canvas Size**, **Video Component** appearance, audio configuration |
-| Per-**Program** arrangement and operational **Preferences** | **WorkspacePreferencesV4** | **Video Layer** order, X/Y/Scale, audio gains, mute state |
+| Workspace-wide audio **Preferences** | **WorkspacePreferencesV4** | One gain per Audio Input Device, shared by all Programs and canvases |
+| Per-**Program** canvas **Preferences** | **ProgramPreferences** | X/Y/Scale, layer visibility, master volume, and audio input mute state |
 
 **Preferences** never define a new **Video Component**. They refer to an existing **Video Component** by name.
 
@@ -59,6 +60,8 @@ A **Video Layer** adds one **Video Component** to the **Program**'s **Video Trac
 ### Coordinates and Scale
 
 **Video Layer** positions use a fixed logical coordinate space of **1920 × 1080**. The X and Y values displayed in the editor always use this space; changing a **Program** **Canvas Size** does not change their meaning or rewrite saved positions.
+
+X and Y accept only integer logical pixels, with X in 0...1920 and Y in 0...1080. Decimal and fractional pixel input is rejected. Positions are stored as Rational32 values with the pixel count as numerator and an unreduced denominator of 1920 for X or 1080 for Y. Scale fields accept decimal input and store its digits as the numerator with a power-of-ten denominator, without reduction. Fractions and values that exceed Rational32 limits are rejected while preserving the draft. Display may omit trailing zeros.
 
 X and Y are logical coordinates, not **Canvas Size** pixels. At runtime, the placement is normalized from the **1920 × 1080** space and mapped to the active canvas. For example, X=960 and Y=540 remain the center position for a **1280 × 720** canvas. This identical coordinate contract applies to every layer type that supports placement, including **VFX Source** and **Clock**.
 
@@ -112,3 +115,8 @@ The running **Output Session** uses that runtime configuration; editing is locke
 - **Video Track:** The exactly-one visual-composition **Output Track** in a **Program**. Its editor is **Video Layers**.
 - **Workspace:** A saved `.ldtxworkspace` bundle containing reusable resources, **Programs**, and their **Preferences**.
 - **Workspace Definition:** The persisted reusable-resource and **Program** structure in `WorkspaceDefinitionV4`.
+
+Programs can be renamed or deleted from the Programs Inspector. Rename uses a
+name draft and validates uniqueness across all Workspace resources. Delete
+requires confirmation and removes that Program's Landscape and Portrait
+preferences. Both operations are unavailable during output.

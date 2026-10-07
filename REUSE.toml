@@ -13,7 +13,7 @@ path = [
   ".github/workflows/actions.lock",
   ".swift-format",
   ".swift-version",
-  ".vscode/settings.json",
+  ".vscode/launch.json",
   ".vscode/settings.json",
   "**/module_mappings.asciipb",
   "compile_flags.txt",
@@ -23,6 +23,8 @@ path = [
   "Resources/**/*.json",
   "Resources/Shared/About/Credits.rtf",
   "Default.xctestplan",
+  "XcodeCloud.xctestplan",
+  "GitHubActions.xctestplan",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"

@@ -28,9 +28,12 @@ version-specific Reader or a cause-free failure case. The selected
 `WorkspaceBundleReaderV4` uses
 `WorkspaceBundleValidatorV4` before decoding either protobuf document. The
 validator requires `CFBundlePackageType` to be `BNDL`,
-`LDTXWorkspaceVersion` to be integer `4`, and `LDTXWorkspaceBundleVersion` to
-be a string, then returns the bundle-version string for the Reader to interpret.
-`WorkspaceBundleReaderV4` currently accepts the exact physical version `4.0`.
+`LDTXWorkspaceVersion` to be integer `4`. The Reader ignores
+`LDTXWorkspaceBundleVersion`, including unknown, missing, and non-string values.
+New bundles retain the string `4.0` unless a fundamental, incompatible change
+requires a new bundle format. Protobuf model changes alone do not require a
+bundle-version change. Logical format validation and reference integrity checks
+still apply.
 The `.v4` case wraps `WorkspaceBundleReaderV4`, which is initialized with the
 package URL and reads that package with `read()`. Create a Reader for each read operation; it does not
 represent reusable Workspace state. Missing or unsupported packages are
@@ -77,3 +80,28 @@ envelopes. The application opens v4 packages through the owning
 `WorkspaceWindowRuntime`, directly from the v4 protobuf documents. It persists the
 Workspace definition and mutable preferences directly through the two v4
 envelopes.
+
+## Audio devices, VFX Sources, and OCR
+
+The Workspace model stores audio inputs in `audio_devices`. Video inputs are
+VFX Source Video Components; physical camera assignments are app-local and keyed
+by the VFX Source internal ID. Sources may remain unassigned. Multiple Sources
+can share a camera while applying their own effects. Programs reference only
+Video Components, and the optional PTS master references a VFX Source.
+
+OCR Visions reference `video_component_internal_id` and analyze the component
+after effects, before Program cropping, placement, visibility, and compositing.
+Camera components use their input resolution, Clock uses its Landscape-based
+size, and other generated components use 1920 by 1080 pixels. The ROI is applied
+to that component image. OCR does not require a selected Program or active output.
+A referenced component cannot be deleted until its Program, OCR, and PTS
+references are removed.
+
+No migration or compatibility adapter is provided for removed model fields.
+The bundle-version value is not a compatibility gate.
+Removed protobuf fields are reserved, and their numbers are not reused.
+
+On macOS 27, Fast recognition with language correction disabled uses Accurate
+recognition to avoid a reproduced TextRecognition framework crash. The saved
+recognition preferences remain unchanged, and the Inspector displays this
+behavior. Recognition results and failures appear in the OCR Inspector.

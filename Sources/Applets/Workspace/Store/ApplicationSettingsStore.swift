@@ -84,6 +84,7 @@ extension ApplicationOutputPreferences {
   fileprivate var protoMessage: Ldtx_App_V1_ApplicationOutputPreferences {
     var proto = Ldtx_App_V1_ApplicationOutputPreferences()
     if let defaultOutputFolderPath { proto.defaultOutputFolderPath = defaultOutputFolderPath }
+    if let screenshotsFolderPath { proto.screenshotsFolderPath = screenshotsFolderPath }
     return proto
   }
 }
@@ -91,7 +92,8 @@ extension ApplicationOutputPreferences {
 extension Ldtx_App_V1_ApplicationOutputPreferences {
   fileprivate var domainModel: ApplicationOutputPreferences {
     ApplicationOutputPreferences(
-      defaultOutputFolderPath: hasDefaultOutputFolderPath ? defaultOutputFolderPath : nil
+      defaultOutputFolderPath: hasDefaultOutputFolderPath ? defaultOutputFolderPath : nil,
+      screenshotsFolderPath: hasScreenshotsFolderPath ? screenshotsFolderPath : nil
     )
   }
 }

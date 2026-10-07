@@ -11,7 +11,7 @@ on:
   workflow_call:
 
 jobs:
-  tahoe:
+  golden_gate:
     runs-on: xcode-27
     timeout-minutes: 180
 
@@ -70,14 +70,15 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan Default \
-            -configuration CI \
+            -testPlan GitHubActions \
+            -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY=- \
-            DEVELOPMENT_TEAM= \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
@@ -89,39 +90,37 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan Default \
-            -configuration CI \
+            -testPlan GitHubActions \
+            -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY=- \
-            DEVELOPMENT_TEAM= \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
-      - name: Test App UI component, XPC, and system schemes
+      - name: Test UI automation and XPC schemes
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           for scheme in \
-            LDTXAppUIComponentTests \
-            LDTXAppXpcTests \
-            LDTXPaneSplitViewControllerSystemTests \
-            LDTXDocumentEnvironmentSystemTests \
-            LDTXWorkspaceDocumentSystemTests \
-            LDTXRecordPlayerDocumentSystemTests; do
+            LDTXAppUITests \
+            LDTXAppXpcTests; do
             xcodebuild \
               -skipPackagePluginValidation \
               -project LDTX.xcodeproj \
               -scheme "$scheme" \
-              -configuration CI \
+              -configuration Debug \
               -destination 'platform=macOS,arch=arm64' \
               -derivedDataPath .derivedData \
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY=- \
-              DEVELOPMENT_TEAM= \
-              AD_HOC_CODE_SIGNING_ALLOWED=YES \
+              PROVISIONING_PROFILE= \
+              PROVISIONING_PROFILE_SPECIFIER= \
+              CODE_SIGN_ENTITLEMENTS= \
               COMPILER_INDEX_STORE_ENABLE=NO \
               -resultBundlePath "$RUNNER_TEMP/$scheme.xcresult" \
               test 2>&1 | tee "$RUNNER_TEMP/$scheme.log" | xcbeautify --renderer github-actions
@@ -154,7 +153,7 @@ jobs:
       - name: Run App Automation MCP tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/CI/LDTXHelper
+          LDTX_HELPER_EXECUTABLE: .derivedData/Build/Products/Debug/LDTXHelper
         run: Tests/LDTXAppAutomationMCPTests/run-tests.sh
 
       - name: Upload Xcode diagnostics

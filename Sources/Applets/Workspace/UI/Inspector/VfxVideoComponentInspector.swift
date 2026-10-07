@@ -2,15 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {
-  let uiState: WorkspaceUIState
+  let storeService: WorkspaceStoreService
   let internalID: UInt64
+  let deviceRegistry: DeviceRegistryService
+  let appletData: WorkspaceAppletData
 
   var body: some View {
     Form {
+      VideoComponentProgramLayers(storeService: storeService, componentID: .vfxSource(internalID))
       formContent
     }
     .formStyle(.grouped)
@@ -18,35 +22,21 @@ struct VfxVideoComponentInspector: View {
 
   @ViewBuilder
   private var formContent: some View {
-    Section("VFX Video Component") {
+    Section("VFX Source") {
       if let component {
         TextField("Name", text: nameBinding)
-          .disabled(uiState.isOutputActive)
-        WorkspaceSelectionField(
-          title: "Input Device", current: component.inputDeviceInternalID,
-          options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
-          isEditable: !uiState.isOutputActive,
-          commit: { selected in
-            guard !uiState.isOutputActive, self.component != nil,
-              let selected, videoDevices.contains(where: { $0.internalID == selected })
-            else {
-              throw WorkspaceSelectionError(
-                message: "Select an available input while output is stopped.")
-            }
-            updateVideoComponent { wrapper in
-              guard case .vfxSource(var value) = wrapper.definition else { return }
-              value.inputDeviceInternalID = selected
-              wrapper.definition = .vfxSource(value)
-            }
-          })
+          .disabled(storeService.isOutputActive)
+        WorkspacePhysicalDeviceField(
+          title: "Physical Device", internalID: internalID, isAudio: false,
+          storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry)
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
-          .disabled(uiState.isOutputActive)
+          .disabled(storeService.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
           Text("MediaPipe Landscape").tag(
             Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.mediapipeLandscape)
           Text("Unspecified").tag(Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.unspecified)
         }
-        .disabled(uiState.isOutputActive || !hasBackgroundRemoval)
+        .disabled(storeService.isOutputActive || !hasBackgroundRemoval)
         Text("Effects: \(component.effects.count)")
           .foregroundStyle(.secondary)
       } else {
@@ -58,19 +48,12 @@ struct VfxVideoComponentInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_VfxSourceComponent? {
-    uiState.definition.videoComponents.compactMap { wrapper in
+    storeService.definition.videoComponents.compactMap { wrapper in
       guard case .vfxSource(let component) = wrapper.definition,
         component.internalID == internalID
       else { return nil }
       return component
     }.first
-  }
-
-  private var videoDevices: [Ldtx_Workspace_V4_VideoInputDevice] {
-    uiState.definition.inputDevices.compactMap { wrapper in
-      guard case .videoDevice(let device) = wrapper.definition else { return nil }
-      return device
-    }
   }
 
   private var nameBinding: Binding<String> {
@@ -143,7 +126,7 @@ struct VfxVideoComponentInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = uiState.definition
+    var definition = storeService.definition
     guard
       let index = definition.videoComponents.firstIndex(where: { wrapper in
         switch wrapper.id {
@@ -156,7 +139,7 @@ struct VfxVideoComponentInspector: View {
       })
     else { return }
     mutation(&definition.videoComponents[index])
-    uiState.definition = definition
+    storeService.definition = definition
   }
 
 }

@@ -8,32 +8,30 @@ import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  @Bindable var uiState: WorkspaceUIState
+  @Bindable var storeService: WorkspaceStoreService
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
   @Environment(\.documentReference) private var documentReference
-  @Environment(\.workspaceDispatcher) private var dispatcher
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
-  @State private var additionError: String?
 
   public init(
-    uiState: WorkspaceUIState,
+    storeService: WorkspaceStoreService,
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData
   ) {
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
-    self._uiState = Bindable(wrappedValue: uiState)
+    self._storeService = Bindable(wrappedValue: storeService)
   }
 
   public var body: some View {
-    let inputDevices = uiState.definition.inputDevices
-    let videoComponents = uiState.definition.videoComponents
-    let visions = uiState.definition.visions
+    let inputDevices = storeService.definition.audioDevices
+    let videoComponents = storeService.definition.videoComponents
+    let visions = storeService.definition.visions
 
     VStack {
-      List(selection: $uiState.inspectorSelector) {
+      List(selection: $storeService.inspectorSelector) {
         Section {
           Label("Programs", systemImage: "rectangle.stack")
             .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
@@ -47,31 +45,20 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(inputDevices) { device in
-            switch device.definition {
-            case .audioDevice(let audioDevice):
-              Label(audioDevice.displayName, systemImage: "waveform")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .audioInputDevice, internalID: audioDevice.internalID))
-            case .videoDevice(let videoDevice):
-              Label(videoDevice.displayName, systemImage: "video")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .videoInputDevice, internalID: videoDevice.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
-            }
+            Label(device.displayName, systemImage: "waveform")
+              .tag(
+                WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID))
           }
 
           Button {
             beginAdding(.device)
           } label: {
-            Label("Add device...", systemImage: "plus")
+            Label("Add audio device...", systemImage: "plus")
               .frame(maxWidth: .infinity, alignment: .leading)
           }
           .disabled(!canAddResource)
         } header: {
-          Text("INPUT DEVICES")
+          Text("AUDIO DEVICES")
         }
 
         Section {
@@ -154,38 +141,29 @@ public struct WorkspaceSidebar: View {
       }
     }
     .listStyle(.sidebar)
-    .onChange(of: draft) { _, _ in additionError = nil }
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoInputs: uiState.definition.inputDevices.compactMap {
-          if case .videoDevice(let device) = $0.definition { return device }
-          return nil
-        },
+        videoComponents: storeService.definition.videoComponents,
         validationMessage: documentReference?.document == nil
           ? "The Workspace document is unavailable."
           : WorkspaceResourceAddition.validationMessage(
-            sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+            sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
             audioDiscoveryError: deviceRegistry.errorMessage),
-        errorMessage: additionError,
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
-          additionError = nil
         }, deviceDiscoveryMessage: deviceRegistry.errorMessage)
     }
   }
 
   private var deviceOptions: [WorkspaceAddDeviceOption] {
-    deviceRegistry.cameras.map {
-      .init(id: .avCaptureDevice(uniqueID: $0.id), name: $0.name)
+    deviceRegistry.audioInputDevices.map {
+      .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
     }
-      + deviceRegistry.audioInputDevices.map {
-        .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
-      }
   }
 
-  var canAddResource: Bool { documentReference?.document != nil && !uiState.isOutputActive }
+  var canAddResource: Bool { documentReference?.document != nil && !storeService.isOutputActive }
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
@@ -193,17 +171,15 @@ public struct WorkspaceSidebar: View {
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
-    additionError = nil
     addSheet = sheet
   }
 
   private func submitResource(_ sheet: WorkspaceAddSheet) {
     do {
       try addResource(sheet, draft: draft)
-      additionError = nil
       addSheet = nil
     } catch {
-      additionError = error.localizedDescription
+      storeService.reportError(error)
     }
   }
 
@@ -211,26 +187,32 @@ public struct WorkspaceSidebar: View {
     guard documentReference?.document != nil else {
       throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
     }
-    if sheet == .device { deviceRegistry.refresh() }
+    if sheet == .device {
+      deviceRegistry.refresh(reportErrors: false)
+      if let error = deviceRegistry.error { throw error }
+    }
     let id = try WorkspaceResourceAddition.add(
-      sheet: sheet, draft: draft, devices: deviceOptions, uiState: uiState,
+      sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-      dispatcher?.synchronizeCaptureInputs(
+      storeService.synchronizeCaptureInputs(
         availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
       ) { _ in }
-      dispatcher?.synchronizeAudioMonitor()
+      storeService.synchronizeAudioMonitor()
     }
-    if sheet == .vision { dispatcher?.synchronizeVision() }
+    if sheet == .vision { storeService.synchronizeVision() }
   }
 
 }
 
-#Preview("Workspace Sidebar") {
-  @Previewable @State var uiState = WorkspaceSidebarPreviewFixtures.makeUIState()
-  WorkspaceSidebar(
-    uiState: uiState, deviceRegistry: DeviceRegistryService(), appletData: WorkspaceAppletData()
-  )
-  .frame(width: 260, height: 640)
-}
+#if DEBUG
+  #Preview("Workspace Sidebar") {
+    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+    WorkspaceSidebar(
+      storeService: storeService, deviceRegistry: DeviceRegistryService(),
+      appletData: WorkspaceAppletData()
+    )
+    .frame(width: 260, height: 640)
+  }
+#endif

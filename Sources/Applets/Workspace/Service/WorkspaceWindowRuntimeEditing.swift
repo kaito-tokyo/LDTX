@@ -7,6 +7,7 @@ import LDTXProgram
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
+import SwiftProtobuf
 
 @MainActor
 public final class WorkspaceInternalIDGenerator {
@@ -29,26 +30,12 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addVideoInputDevice(displayName: String) throws -> UInt64 {
-    let id = internalIDGenerator.next()
-    var device = Ldtx_Workspace_V4_VideoInputDevice()
-    device.internalID = id
-    device.displayName = displayName
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.videoDevice = device
-    try editWorkspace { $0.definition.inputDevices.append(wrapper) }
-    return id
-  }
-
-  @discardableResult
   public func addAudioInputDevice(displayName: String) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = displayName
-    var wrapper = Ldtx_Workspace_V4_InputDeviceWrapper()
-    wrapper.audioDevice = device
-    try editWorkspace { $0.definition.inputDevices.append(wrapper) }
+    try editWorkspace { $0.definition.audioDevices.append(device) }
     return id
   }
 
@@ -63,12 +50,11 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addVFXSource(displayName: String, inputDeviceInternalID: UInt64) throws -> UInt64 {
+  public func addVFXSource(displayName: String) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
     component.displayName = displayName
-    component.inputDeviceInternalID = inputDeviceInternalID
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.vfxSource = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -99,11 +85,19 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.startX = 0
-    component.startY = 0
+    component.startXRational = .with {
+      $0.set(num: 0, den: 1)
+    }
+    component.startYRational = .with {
+      $0.set(num: 0, den: 1)
+    }
     component.startColor = startColor
-    component.endX = 1
-    component.endY = 1
+    component.endXRational = .with {
+      $0.set(num: 1, den: 1)
+    }
+    component.endYRational = .with {
+      $0.set(num: 1, den: 1)
+    }
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
@@ -120,10 +114,18 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerX = 0.5
-    component.centerY = 0.5
-    component.innerRadius = 0
-    component.outerRadius = 0.5
+    component.centerXRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.centerYRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.innerRadiusRational = .with {
+      $0.set(num: 0, den: 1)
+    }
+    component.outerRadiusRational = .with {
+      $0.set(num: 1, den: 2)
+    }
     component.innerColor = innerColor
     component.outerColor = outerColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -141,8 +143,12 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerX = 0.5
-    component.centerY = 0.5
+    component.centerXRational = .with {
+      $0.set(num: 1, den: 2)
+    }
+    component.centerYRational = .with {
+      $0.set(num: 1, den: 2)
+    }
     component.startColor = startColor
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -157,8 +163,12 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = displayName
-    component.width = 320 / 1_920
-    component.height = 80 / 1_080
+    component.widthRational = .with {
+      $0.set(num: 1, den: 6)
+    }
+    component.heightRational = .with {
+      $0.set(num: 2, den: 27)
+    }
     component.foregroundColor = Self.opaqueWhite
     var backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor()
     backgroundColor.alpha = 0.65
@@ -185,18 +195,21 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addOcrVision(
-    displayName: String, inputDeviceInternalID: UInt64, intervalSeconds: Double = 5
+    displayName: String, videoComponentInternalID: UInt64,
+    intervalSeconds: Ldtx_Workspace_V4_Rational32 = .with {
+      $0.set(num: 5, den: 1)
+    }
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSeconds = intervalSeconds
+    trigger.intervalSecondsRational = intervalSeconds
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = displayName
-    vision.inputDeviceInternalID = inputDeviceInternalID
-    vision.source = .inputDeviceInternalID(inputDeviceInternalID)
+    vision.videoComponentInternalID = videoComponentInternalID
+    vision.source = .videoComponentInternalID(videoComponentInternalID)
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
@@ -215,87 +228,69 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setVideoLayerOrder(
-    _ ids: [UInt64], forProgramInternalID programID: UInt64, role: ProgramCanvasRole
+    _ ids: [UInt64], forProgramInternalID programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
     try editWorkspace { workspace in
       guard
         let index = workspace.definition.programs.firstIndex(where: { $0.internalID == programID })
       else { throw WorkspaceRuntimeError.missingProgram(programID) }
-      switch role {
-      case .landscape: workspace.definition.programs[index].landscapeVideoLayerInternalIds = ids
-      case .portrait: workspace.definition.programs[index].portraitVideoLayerInternalIds = ids
-      }
+      workspace.definition.programs[index][keyPath: target.layerIDs] = ids
     }
   }
 
   public func setBasicTransform(
     _ transform: Ldtx_Workspace_V4_BasicTransform, forVideoLayerInternalID id: UInt64,
-    programInternalID: UInt64, role: ProgramCanvasRole
+    programInternalID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
-    try editWorkspace { workspace in
-      guard workspace.definition.programs.contains(where: { $0.internalID == programInternalID })
-      else { throw WorkspaceRuntimeError.missingProgram(programInternalID) }
-      var pref = workspace.preferences.programPreferences[programInternalID] ?? .init()
-      switch role {
-      case .landscape: pref.landscapeVideoLayerTransforms[id] = transform
-      case .portrait: pref.portraitVideoLayerTransforms[id] = transform
-      }
-      workspace.preferences.programPreferences[programInternalID] = pref
+    try editProgramPreference(programInternalID, target: target) {
+      $0.videoLayerTransforms[id] = transform
     }
   }
 
   public func setAudioChannelGain(
-    _ value: Double, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: UInt64
   ) throws {
-    try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeAudioChannelGains[id] = value
-      case .portrait: $0.portraitAudioChannelGains[id] = value
-      }
+    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
+      throw WorkspaceRuntimeError.invalidAudioChannelGain
+    }
+    try editWorkspace { workspace in
+      workspace.preferences.audioChannelGainsDecibels[id] = value
     }
   }
   public func setAudioChannelMuted(
     _ value: Bool, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    target: WorkspaceCanvasTarget
   ) throws {
-    try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeAudioChannelMuted[id] = value
-      case .portrait: $0.portraitAudioChannelMuted[id] = value
-      }
+    try editProgramPreference(programInternalID, target: target) {
+      $0.audioChannelMuted[id] = value
     }
   }
-  public func setVideoLayerMuted(
+  public func setVideoLayerHidden(
     _ value: Bool, forVideoLayerInternalID id: UInt64, programInternalID: UInt64,
-    role: ProgramCanvasRole
+    target: WorkspaceCanvasTarget
   ) throws {
-    try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeVideoLayerMuted[id] = value
-      case .portrait: $0.portraitVideoLayerMuted[id] = value
-      }
+    try editProgramPreference(programInternalID, target: target) {
+      $0.videoLayerHidden[id] = value
     }
   }
-  public func setMasterVolume(_ value: Double, programInternalID: UInt64, role: ProgramCanvasRole)
+  public func setMasterVolume(
+    _ value: Ldtx_Workspace_V4_Rational32, programInternalID: UInt64, target: WorkspaceCanvasTarget
+  )
     throws
   {
-    try editProgramPreference(programInternalID) {
-      switch role {
-      case .landscape: $0.landscapeMasterVolume = value
-      case .portrait: $0.portraitMasterVolume = value
-      }
+    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
+      throw WorkspaceRuntimeError.invalidAudioMasterVolume
+    }
+    try editProgramPreference(programInternalID, target: target) {
+      $0.audioMasterVolumeDecibels = value
     }
   }
-  public func setMonitorVolume(_ value: Double) throws {
-    try editWorkspace { $0.preferences.monitorVolume = value }
-  }
 
-  public func runtimeProjection(programInternalID: UInt64, role: ProgramCanvasRole) throws
+  public func runtimeProjection(programInternalID: UInt64, target: WorkspaceCanvasTarget) throws
     -> WorkspaceV4RuntimeProjection
   {
     try persistenceCoordinator.runtimeProjection(
-      programInternalID: programInternalID, role: role,
+      programInternalID: programInternalID, target: target,
       localState: appletLocalState, physicalDeviceIDs: physicalDeviceIDs)
   }
 
@@ -311,9 +306,21 @@ extension WorkspaceWindowRuntime {
   private enum ResourceKind { case component, vision, input }
   private func removeResource(_ id: UInt64, kind: ResourceKind) throws {
     try editWorkspace { workspace in
-      var removedIDs = [id]
+      let removedIDs = [id]
       switch kind {
       case .component:
+        let definition = workspace.definition
+        let usedByProgram = definition.programs.contains {
+          $0.landscapeVideoLayerInternalIds.contains(id)
+            || $0.portraitVideoLayerInternalIds.contains(id)
+        }
+        let usedByVision = definition.visions.contains {
+          guard case .ocrVision(let vision) = $0.definition else { return false }
+          return vision.source == .videoComponentInternalID(id)
+        }
+        guard !usedByProgram, !usedByVision,
+          definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id
+        else { throw WorkspaceRuntimeError.resourceInUse(id) }
         let before = workspace.definition.videoComponents.count
         workspace.definition.videoComponents.removeAll {
           (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == id
@@ -330,34 +337,14 @@ extension WorkspaceWindowRuntime {
           throw WorkspaceRuntimeError.missingResource(id)
         }
       case .input:
-        let before = workspace.definition.inputDevices.count
-        workspace.definition.inputDevices.removeAll {
-          (try? WorkspaceV4IntegrityValidator.inputDeviceID($0)) == id
+        let before = workspace.definition.audioDevices.count
+        workspace.definition.audioDevices.removeAll {
+          $0.internalID == id
         }
-        guard before != workspace.definition.inputDevices.count else {
+        guard before != workspace.definition.audioDevices.count else {
           throw WorkspaceRuntimeError.missingResource(id)
         }
-        let dependentVFXIDs = Set(
-          workspace.definition.videoComponents.compactMap { wrapper -> UInt64? in
-            guard case .vfxSource(let source)? = wrapper.definition,
-              source.inputDeviceInternalID == id
-            else { return nil }
-            return source.internalID
-          })
-        removedIDs.append(contentsOf: dependentVFXIDs)
-        workspace.definition.videoComponents.removeAll { wrapper in
-          guard case .vfxSource(let source)? = wrapper.definition else { return false }
-          return source.inputDeviceInternalID == id
-        }
-        workspace.definition.visions.removeAll { wrapper in
-          guard case .ocrVision(let vision)? = wrapper.definition,
-            case .inputDeviceInternalID(let sourceID)? = vision.source
-          else { return false }
-          return sourceID == id
-        }
-        if workspace.definition.canvasConfiguration.ptsMasterVideoInputDeviceInternalID == id {
-          workspace.definition.canvasConfiguration.clearPtsMasterVideoInputDeviceInternalID()
-        }
+
       }
       for index in workspace.definition.programs.indices {
         workspace.definition.programs[index].landscapeVideoLayerInternalIds.removeAll {
@@ -367,33 +354,36 @@ extension WorkspaceWindowRuntime {
           removedIDs.contains($0)
         }
       }
-      for programID in workspace.preferences.programPreferences.keys {
-        guard var pref = workspace.preferences.programPreferences[programID] else { continue }
-        for removedID in removedIDs {
-          pref.landscapeAudioChannelGains.removeValue(forKey: removedID)
-          pref.portraitAudioChannelGains.removeValue(forKey: removedID)
-          pref.landscapeAudioChannelMuted.removeValue(forKey: removedID)
-          pref.portraitAudioChannelMuted.removeValue(forKey: removedID)
-          pref.landscapeVideoLayerTransforms.removeValue(forKey: removedID)
-          pref.portraitVideoLayerTransforms.removeValue(forKey: removedID)
-          pref.landscapeVideoLayerMuted.removeValue(forKey: removedID)
-          pref.portraitVideoLayerMuted.removeValue(forKey: removedID)
+      for removedID in removedIDs {
+        workspace.preferences.audioChannelGainsDecibels.removeValue(forKey: removedID)
+      }
+      for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+        for programID in workspace.preferences[keyPath: target.preferences].keys {
+          guard var pref = workspace.preferences[keyPath: target.preferences][programID] else {
+            continue
+          }
+          for removedID in removedIDs {
+            pref.audioChannelMuted.removeValue(forKey: removedID)
+            pref.videoLayerTransforms.removeValue(forKey: removedID)
+            pref.videoLayerHidden.removeValue(forKey: removedID)
+          }
+          workspace.preferences[keyPath: target.preferences][programID] = pref
         }
-        workspace.preferences.programPreferences[programID] = pref
       }
     }
   }
 
   private func editProgramPreference(
-    _ id: UInt64, _ mutation: (inout Ldtx_Workspace_V4_ProgramPreference) -> Void
+    _ id: UInt64, target: WorkspaceCanvasTarget,
+    _ mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void
   ) throws {
     try editWorkspace { workspace in
       guard workspace.definition.programs.contains(where: { $0.internalID == id }) else {
         throw WorkspaceRuntimeError.missingProgram(id)
       }
-      var preference = workspace.preferences.programPreferences[id] ?? .init()
+      var preference = workspace.preferences[keyPath: target.preferences][id] ?? .init()
       mutation(&preference)
-      workspace.preferences.programPreferences[id] = preference
+      workspace.preferences[keyPath: target.preferences][id] = preference
     }
   }
 }

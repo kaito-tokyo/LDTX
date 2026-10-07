@@ -8,6 +8,7 @@ import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
 import LDTXWorkspaceAppletController
+import LDTXYouTubeAuth
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
@@ -20,6 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private var didPresentDiagnosticsSchemaFailure = false
 
   override init() {
+    if let bundleIdentifier = Bundle.main.bundleIdentifier,
+      let directory = FileManager.default.urls(
+        for: .applicationSupportDirectory, in: .userDomainMask
+      ).first
+    {
+      YouTubeAuthorizationService.configureApplicationStorage(
+        applicationSupportDirectory: directory, bundleIdentifier: bundleIdentifier)
+    }
     super.init()
     settingsClosingObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.willCloseNotification, object: nil, queue: .main

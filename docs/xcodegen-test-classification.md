@@ -6,15 +6,15 @@ SPDX-License-Identifier: Apache-2.0
 
 # XcodeGen test classification audit
 
-`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites. SwiftUI View-value tests, AppKit SystemTests, UI automation, XPC tests, SwiftPM tests, and CMake tests have separate execution boundaries. Resource labels below are source-scan signals for review, not automatic tier decisions.
+`AGENTS.md` is the classification source of truth. This inventory covers XcodeGen-managed Swift Testing suites. SwiftUI View-value and direct AppKit tests share the UI component target. UI automation, XPC tests, SwiftPM tests, and CMake tests keep separate execution boundaries. Resource labels below are source-scan signals for review, not automatic tier decisions.
 
 ## Classification decisions in this change
 
 - Lightweight tests that exercise temporary filesystem packages, SQLite, diagnostic log files, local DASH files, or an AppAuth loopback listener are assigned to `LDTXMediumTests`. The `ActiveProgramOutputSessionIntegrationTestSuite` is also Medium because it creates temporary recording packages and exercises the file-backed recording lifecycle with controlled media.
-- GPU, AVFoundation encoding, substantial media processing, and runtime media suites remain Hard. They are not moved to Medium just because they also use temporary output files.
-- Other deterministic state/value tests remain Easy. Controlled fake-based component interaction remains Easy Integration when it has no demanding external resource.
-- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. AppKit window/controller tests are isolated in SUT-specific SystemTests and do not use `LDTX.app` as their test host.
-- Suite naming expresses Unit or Integration scope. `.serialized` remains on the AVAssetWriter lifecycle parent and two Hard media/runtime suites where their own cases need ordered execution; it does not imply System classification.
+- GHA-compatible Metal, AVFoundation encoding, media processing, runtime media, and Keychain suites are Medium. Hard contains only the real Clock OCR test, which requires the Xcode Cloud environment.
+- Other deterministic state/value tests remain Easy. Controlled fake-based component interaction remains Easy Integration when it has no external resource.
+- The former shared `LDTXSystemTestSuite` serialized suites were not System isolation targets. Their cases are now ordinary Integration suites. The AVAssetWriter tests keep a SUT-specific serialized Integration parent because they share the process-wide lifecycle gate and segment delegate; the production gate coordinates writer transitions. The remaining formerly grouped tests use controlled fakes and need no shared serialized parent. Direct AppKit window/controller and Document tests share the hostless `LDTXAppUIComponentTests` target and its serialized MainActor parent suite.
+- Suite naming expresses Unit or Integration scope. `.serialized` remains on the AVAssetWriter lifecycle parent and media/runtime suites where their own cases need ordered execution; it does not imply System classification.
 
 ## Suite inventory
 
@@ -86,18 +86,18 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `RecordingShieldIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/Recording/RecordingShieldTests.swift` |
 | Medium | `WorkspaceBundleFormatIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/Workspace/WorkspaceBundleFormatTests.swift` |
 | Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | Integration | loopback/socket | `Tests/LDTXMediumTests/YouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |
-| Hard | `BackgroundRemovalInferenceGateIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXHardTests/BackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
-| Hard | `AVAssetWriterLifecycleIntegrationTestSuite` | Integration | AVAssetWriter lifecycle and shared segment delegate (parent suite; inherited by child suites) | `Tests/LDTXHardTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
-| Hard | `AudioSideStreamSegmentPipelineIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXHardTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
-| Hard | `H264VideoEncoderIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXHardTests/Integration/H264VideoEncoderTests.swift` |
-| Hard | `ProgramRenderingOrderIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXHardTests/Program/ProgramRenderingOrderTests.swift` |
-| Hard | `ClockOverlayRuntimeIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXHardTests/ProgramRuntime/ClockOverlayRuntimeTests.swift` |
-| Hard | `ManualCapturePipelineIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXHardTests/ProgramRuntime/ManualCapturePipelineTests.swift` |
-| Hard | `VideoInputPreprocessingIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXHardTests/ProgramRuntime/VideoInputPreprocessingTests.swift` |
-| Hard | `YouTubeOutputMediaSampleConverterIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXHardTests/ProgramRuntime/YouTubeOutputMediaSampleConverterTests.swift` |
-| Hard | `YouTubeRTMPSWorkspaceServiceIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXHardTests/ProgramRuntime/YouTubeRTMPSWorkspaceServiceTests.swift` |
-| Hard | `VideoCompositorIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXHardTests/VideoRendering/VideoCompositorTests.swift` |
-| Hard | `YouTubeAuthorizationServiceIntegrationTestSuite` | Integration | none detected by source scan | `Tests/LDTXHardTests/YouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
+| Medium | `BackgroundRemovalInferenceGateIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXMediumTests/BackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
+| Medium | `AVAssetWriterLifecycleIntegrationTestSuite` | Integration | AVAssetWriter lifecycle and shared segment delegate (parent suite; inherited by child suites) | `Tests/LDTXMediumTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
+| Medium | `AudioSideStreamSegmentPipelineIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXMediumTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
+| Medium | `H264VideoEncoderIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXMediumTests/Integration/H264VideoEncoderTests.swift` |
+| Medium | `ProgramRenderingOrderIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXMediumTests/Program/ProgramRenderingOrderTests.swift` |
+| Medium | `ClockOverlayRuntimeIntegrationTestSuite` | Integration | filesystem, media/framework, controlled concurrency | `Tests/LDTXMediumTests/ProgramRuntime/ClockOverlayRuntimeTests.swift` |
+| Medium | `ManualCapturePipelineIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXMediumTests/ProgramRuntime/ManualCapturePipelineTests.swift` |
+| Medium | `VideoInputPreprocessingIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXMediumTests/ProgramRuntime/VideoInputPreprocessingTests.swift` |
+| Medium | `YouTubeOutputMediaSampleConverterIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXMediumTests/ProgramRuntime/YouTubeOutputMediaSampleConverterTests.swift` |
+| Medium | `YouTubeRTMPSWorkspaceServiceIntegrationTestSuite` | Integration | media/framework, controlled concurrency | `Tests/LDTXMediumTests/ProgramRuntime/YouTubeRTMPSWorkspaceServiceTests.swift` |
+| Medium | `VideoCompositorIntegrationTestSuite` | Integration | media/framework | `Tests/LDTXMediumTests/VideoRendering/VideoCompositorTests.swift` |
+| Medium | `YouTubeAuthorizationServiceIntegrationTestSuite` | Integration | none detected by source scan | `Tests/LDTXMediumTests/YouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
 | Easy | `WorkspaceV4VisionFeatureUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/WorkspaceV4VisionFeatureTests.swift` |
 | Easy | `AudioMixRoutingUnitTestSuite` | Unit | media/framework | `Tests/LDTXEasyTests/App/AudioMixRoutingTests.swift` |
 | Easy | `ProgramPairPreviewRegionsUnitTestSuite` | Unit | none detected by source scan | `Tests/LDTXEasyTests/App/ProgramPairPreviewRegionsTests.swift` |
@@ -115,14 +115,34 @@ SPDX-License-Identifier: Apache-2.0
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | Integration | filesystem | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `WorkspaceWindowRuntimeIntegrationTestSuite` | Integration | filesystem, media/framework | `Tests/LDTXMediumTests/App/WorkspaceWindowRuntimeTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | Integration | filesystem, controlled concurrency | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
-| Hard | `ProgramPairPreviewRendererIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXHardTests/VideoRendering/ProgramPairPreviewRendererTests.swift` |
+| Medium | `ProgramPairPreviewRendererIntegrationTestSuite` | Integration | media/framework, Metal | `Tests/LDTXMediumTests/VideoRendering/ProgramPairPreviewRendererTests.swift` |
 | App UI component | `SwiftUIViewStateUnitTestSuite` | Unit | SwiftUI View values, bindings, and derived state | `Tests/LDTXAppUIComponentTests/SwiftUIViewStateTests.swift` |
-| System | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXPaneSplitViewControllerSystemTests/PaneSplitViewControllerTests.swift` |
-| System | `WorkspaceWindowSystemTestSuite` | Integration | AppKit window restoration and split state | `Tests/LDTXWorkspaceAppletControllerSystemTests/WorkspaceWindowTests.swift` |
+| App UI component | `PaneSplitViewControllerUnitTestSuite` | Unit | AppKit window and split constraints | `Tests/LDTXAppUIComponentTests/SplitView/PaneSplitViewControllerTests.swift` |
+| App UI component | `WorkspaceToolbarIntegrationTestSuite` | Integration | AppKit window restoration and split state | `Tests/LDTXAppUIComponentTests/WorkspaceController/WorkspaceToolbarTests.swift` |
+| App UI component | `VideoLayersEditorIntegrationTestSuite` | Integration | layer editor, selection, sheets, observation, and meters | `Tests/LDTXAppUIComponentTests/VideoLayers/VideoLayersEditorTests.swift` |
+| App UI component | `DocumentEnvironmentIntegrationTestSuite` | Integration | hosted document references and ownership | `Tests/LDTXAppUIComponentTests/DocumentEnvironment/DocumentEnvironmentTests.swift` |
+| App UI component | `WorkspaceErrorPresentationIntegrationTestSuite` | Integration | error sheets and queue lifetime | `Tests/LDTXAppUIComponentTests/WorkspaceController/WorkspaceErrorPresentationTests.swift` |
+| App UI component | `WorkspaceOutputStateUnitTestSuite` | Unit | output state predicates | `Tests/LDTXAppUIComponentTests/WorkspaceController/WorkspaceOutputStateTests.swift` |
+| App UI component | `WorkspaceDocumentIntegrationTestSuite` | Integration | open, save, close, and restoration | `Tests/LDTXAppUIComponentTests/WorkspaceDocument/WorkspaceDocumentTests.swift` |
+| App UI component | `RecordPlayerDocumentIntegrationTestSuite` | Integration | recording ownership, marker saving, and close confirmation | `Tests/LDTXAppUIComponentTests/RecordPlayerDocument/RecordPlayerDocumentTests.swift` |
+| UI automation | `AppLaunchUITests` | Integration | normal launch and main-menu access | `Tests/LDTXAppUITests/AppLaunchUITests.swift` |
+| Medium | `WorkspaceVideoComponentVisionIntegrationTestSuite` | Integration | component rendering, ROI, controlled capture sources | `Tests/LDTXMediumTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift` |
+| Medium | `WorkspaceProgramSwitchingIntegrationTestSuite` | Integration | filesystem, recording lifecycle | `Tests/LDTXMediumTests/Workspace/WorkspaceProgramSwitchingTests.swift` |
+| Hard | `WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized` | Integration | app-hosted Vision OCR with inference entitlement | `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift` |
+
 ## Execution-boundary targets
 
-- `LDTXAppUIComponentTests` is a hostless unit-test bundle. The test runner constructs SwiftUI `View` values, mutates their bindings through component operations, and checks their derived logical state without launching `LDTX.app`.
-- `LDTXPaneSplitViewControllerSystemTests` isolates AppKit split-view behavior without using `LDTX.app` as the test host.
-- `LDTXWorkspaceAppletControllerSystemTests` isolates Workspace window composition and restoration without using `LDTX.app` as the test host.
+- `LDTXAppUIComponentTests` is a hostless bundle for SwiftUI state, Video Layers, split views, document environments, Workspace controllers, Workspace Documents, and Recording Documents. All child suites initialize one shared Document Controller and run under `AppUIComponentTestSuite`, serialized on MainActor.
+- `LDTXAppUITests` is an independent UI automation target for normal application launch and main-menu smoke tests.
 - `LDTXAppXpcTests` remains a separate app-hosted target for testing the embedded XPC process boundary.
 - Application termination coordination remains a headless Easy integration suite.
+
+## Xcode Cloud boundary
+
+`WorkspaceVideoComponentVisionIntegrationTestSuite.clockOutputIsRecognized`
+remains in `Tests/LDTXHardTests/ProgramRuntime/WorkspaceVideoComponentVisionTests.swift`.
+It runs without a hardware-based skip in `LDTXApp`, whose normal signature and
+profile authorize background inference. The component rendering, ROI, effects,
+and unavailable-source cases are Medium. `GitHubActions.xctestplan` runs the GHA
+coverage; `Default.xctestplan` retains the same targets for local use, and
+`XcodeCloud.xctestplan` runs only HardTests.

@@ -1,0 +1,46 @@
+{
+  "configurations" : [
+    {
+      "id" : "D1464D48-2085-4FBC-94B0-723CDFBAFDAF",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:LDTX.xcodeproj",
+      "identifier" : "16CE68CFDAE2FF4C61149EB2",
+      "name" : "LDTXApp"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "F0FE96F7BA9CE58358994991",
+        "name" : "LDTXEasyTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "D85952E78C783A63C94E13CB",
+        "name" : "LDTXMediumTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "232F5D19ADE07649B5F9404D",
+        "name" : "LDTXAppUIComponentTests"
+      }
+    }
+  ],
+  "version" : 1
+}

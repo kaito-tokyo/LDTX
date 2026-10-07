@@ -180,15 +180,14 @@ and a concrete WorkspacePreferences.</p>
             </tr>
 
             <tr>
-              <td><code>pts_master_video_input_device_internal_id</code></td>
+              <td><code>pts_master_vfx_source_internal_id</code></td>
               <td>
 
                   <code>uint64</code>
 
               </td>
               <td>optional</td>
-              <td>The Video Input Device internal ID used as the master clock for video
-presentation timestamps. When absent, the runtime default applies.</td>
+              <td>The VFX Source used as the master clock for video presentation timestamps.</td>
             </tr>
 
           </tbody>
@@ -286,8 +285,7 @@ output folder applies.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></h3>
-        <p>Defines the Video Layer order for one Program. A Video Layer is either a
-Video Input Device or a Video Component.</p>
+        <p>Defines the Video Component order for one Program.</p>
 
         <table>
           <thead>
@@ -327,7 +325,7 @@ and bits 14 through 0 are uniformly random.</td>
 
               </td>
               <td>repeated</td>
-              <td>The Video Input Device or Video Component internal IDs in Landscape Video
+              <td>The Video Component internal IDs in Landscape Video
 Layer order.</td>
             </tr>
 
@@ -339,7 +337,7 @@ Layer order.</td>
 
               </td>
               <td>repeated</td>
-              <td>The Video Input Device or Video Component internal IDs in Portrait Video
+              <td>The Video Component internal IDs in Portrait Video
 Layer order.</td>
             </tr>
 
@@ -405,14 +403,14 @@ Layer order.</td>
             </tr>
 
             <tr>
-              <td><code>input_devices</code></td>
+              <td><code>audio_devices</code></td>
               <td>
 
-                  <a href="#ldtx.workspace.v4.InputDeviceWrapper"><code>InputDeviceWrapper</code></a>
+                  <a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a>
 
               </td>
               <td>repeated</td>
-              <td>Represents Input Devices in the Workspace sidebar.</td>
+              <td>Represents Audio devices in the Workspace sidebar.</td>
             </tr>
 
             <tr>
@@ -555,88 +553,6 @@ and bits 14 through 0 are uniformly random.</td>
 
 
 
-      <article>
-        <h3 id="ldtx.workspace.v4.InputDeviceWrapper"><code>InputDeviceWrapper</code></h3>
-        <p>Wraps one concrete Input Device definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>video_device</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VideoInputDevice"><code>VideoInputDevice</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The Video Input Device definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>audio_device</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The Audio Input Device definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VideoInputDevice"><code>VideoInputDevice</code></h3>
-        <p>A video Input Device available in a Workspace.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Input Device shown in the Workspace sidebar.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
 
     </section>
 
@@ -648,8 +564,7 @@ and bits 14 through 0 are uniformly random.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></h3>
-        <p>The basic transform applied to a Video Layer, which is a Video Input Device
-or a Video Component.</p>
+        <p>The basic transform applied to a Video Layer, which is a Video Component.</p>
 
         <table>
           <thead>
@@ -658,97 +573,91 @@ or a Video Component.</p>
           <tbody>
 
             <tr>
-              <td><code>translation_x</code></td>
+              <td><code>translation_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal translation in coordinates normalized to the Canvas that
-renders this Video Layer, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>translation_y</code></td>
+              <td><code>translation_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical translation in coordinates normalized to the Canvas that
-renders this Video Layer, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>scale_x</code></td>
+              <td><code>scale_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal scale.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>scale_y</code></td>
+              <td><code>scale_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical scale.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>top_inset</code></td>
+              <td><code>top_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The top inset as a fraction of this Video Layer's statically defined
-content height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>right_inset</code></td>
+              <td><code>right_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The right inset as a fraction of this Video Layer's statically defined
-content width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>bottom_inset</code></td>
+              <td><code>bottom_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The bottom inset as a fraction of this Video Layer's statically defined
-content height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>left_inset</code></td>
+              <td><code>left_inset_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The left inset as a fraction of this Video Layer's statically defined
-content width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -759,8 +668,8 @@ content width, in the range [0, 1].</td>
 
 
       <article>
-        <h3 id="ldtx.workspace.v4.ProgramPreference"><code>ProgramPreference</code></h3>
-        <p>Contains mutable preferences for one Program.</p>
+        <h3 id="ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></h3>
+        <p>Contains mutable preferences for one Program canvas.</p>
 
         <table>
           <thead>
@@ -769,137 +678,53 @@ content width, in the range [0, 1].</td>
           <tbody>
 
             <tr>
-              <td><code>landscape_audio_channel_gains</code></td>
+              <td><code>audio_master_volume_decibels</code></td>
               <td>
 
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>double</code><code>&gt;</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
-              <td>map</td>
-              <td>The Landscape audio gain in decibels for each Audio Input Device, keyed by
-Input Device internal_id.</td>
+              <td></td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>landscape_audio_channel_muted</code></td>
+              <td><code>audio_channel_muted</code></td>
               <td>
 
                   <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
 
               </td>
               <td>map</td>
-              <td>Whether each Landscape Audio Input Device is muted, keyed by Input Device
-internal_id.</td>
+              <td>Whether each Audio Input Device is muted, keyed by internal_id.</td>
             </tr>
 
             <tr>
-              <td><code>landscape_video_layer_transforms</code></td>
+              <td><code>video_layer_transforms</code></td>
               <td>
 
                   <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></a><code>&gt;</code>
 
               </td>
               <td>map</td>
-              <td>The transforms for Landscape Video Layers, keyed by Video Input Device or
-Video Component internal_id.</td>
+              <td>Video Layer transforms, keyed by Video Component internal_id.</td>
             </tr>
 
             <tr>
-              <td><code>landscape_video_layer_muted</code></td>
+              <td><code>video_layer_hidden</code></td>
               <td>
 
                   <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
 
               </td>
               <td>map</td>
-              <td>Whether each Landscape Video Layer is muted, keyed by Video Input Device
-or Video Component internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_audio_channel_gains</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>double</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>The Portrait audio gain in decibels for each Audio Input Device, keyed by
-Input Device internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_audio_channel_muted</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Whether each Portrait Audio Input Device is muted, keyed by Input Device
-internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_video_layer_transforms</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></a><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>The transforms for Portrait Video Layers, keyed by Video Input Device or
-Video Component internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_video_layer_muted</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Whether each Portrait Video Layer is muted, keyed by Video Input Device or
-Video Component internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>landscape_master_volume</code></td>
-              <td>
-
-                  <code>double</code>
-
-              </td>
-              <td></td>
-              <td>The Landscape master volume in decibels.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_master_volume</code></td>
-              <td>
-
-                  <code>double</code>
-
-              </td>
-              <td></td>
-              <td>The Portrait master volume in decibels.</td>
+              <td>Whether each Video Layer is hidden, keyed by internal_id.</td>
             </tr>
 
           </tbody>
         </table>
 
       </article>
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -920,32 +745,46 @@ Video Component internal_id.</td>
           <tbody>
 
             <tr>
-              <td><code>program_preferences</code></td>
+              <td><code>audio_channel_gains_decibels</code></td>
               <td>
 
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreference"><code>ProgramPreference</code></a><code>&gt;</code>
+                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a><code>&gt;</code>
 
               </td>
               <td>map</td>
-              <td>Mutable preferences for Programs in this Workspace, keyed by Program
-internal_id.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>monitor_volume</code></td>
+              <td><code>landscape_program_preferences</code></td>
               <td>
 
-                  <code>double</code>
+                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code>
 
               </td>
-              <td></td>
-              <td>The Workspace-wide monitor volume in decibels.</td>
+              <td>map</td>
+              <td>Preferences for each Landscape Program, keyed by Program internal_id.</td>
+            </tr>
+
+            <tr>
+              <td><code>portrait_program_preferences</code></td>
+              <td>
+
+                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code>
+
+              </td>
+              <td>map</td>
+              <td>Preferences for each Portrait Program, keyed by Program internal_id.</td>
             </tr>
 
           </tbody>
         </table>
 
       </article>
+
+
+
+
 
 
 
@@ -995,25 +834,25 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>width</code></td>
+              <td><code>width_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The Clock width normalized to the Landscape Canvas width, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>height</code></td>
+              <td><code>height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The Clock height normalized to the Landscape Canvas height, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1112,14 +951,14 @@ system time zone.</td>
           <tbody>
 
             <tr>
-              <td><code>thickness</code></td>
+              <td><code>thickness_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The outline thickness in output pixels.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1203,7 +1042,37 @@ system time zone.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.FillConicGradientComponent"><code>FillConicGradientComponent</code></h3>
-        <p>A Video Component that renders a CSS conic-gradient fill.</p>
+        <p>A Video Component whose conic-gradient geometry is defined in the local
+coordinate system of the Canvas that renders this Fill. The Canvas origin is
+its top-left corner; x increases to the right and y increases downward. For
+a Canvas of positive width W and height H, a point (x, y) has normalized
+coordinates (u, v) = (x / W, y / H). The gradient center is
+c = (center_x, center_y) in these normalized coordinates. At every Canvas
+point other than c, define dx = u - center_x, dy = v - center_y, and
+angle = atan2(dy, dx), in radians, using the conventional atan2(y, x)
+function. Thus zero radians points right and positive angles proceed
+clockwise because the Canvas y-axis points downward. The x and y axes are
+normalized independently, so angles are measured in normalized Canvas
+space, not in pixel space; on a non-square Canvas this can change angular
+spacing compared with pixel-space angles. Define
+q = (angle - start_angle_radians) / (2*pi) and t = q - floor(q), where pi
+is the mathematical constant and floor returns the greatest integer not
+greater than its argument. Thus t is in [0, 1), increases clockwise from
+the start ray, and is periodic in start_angle_radians with period 2*pi.
+Every point on the same ray from c has the same t.
+
+start_color is the specified Extended sRGB source color on the start ray
+(t = 0). end_color is the specified Extended sRGB source color in the limit
+as t approaches 1 from below. The start ray itself uses start_color; if the
+endpoint colors differ, the angular wrap creates a seam on that ray. These
+two endpoint colors and the geometry above are required. The source color at
+intermediate angular positions, including its interpolation space and
+progression, conversion to an output or display color space, alpha handling,
+compositing, filtering, and pixel quantization are implementation-defined.
+The result at the exact center c is implementation-defined because its
+angular position is undefined. This definition does not require the angle
+convention or rendering behavior of CSS conic-gradient(), SwiftUI
+AngularGradient, or any other particular API.</p>
 
         <table>
           <thead>
@@ -1236,38 +1105,36 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>center_x</code></td>
+              <td><code>center_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal coordinate of the gradient center, expressed as a fraction
-of the width of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>center_y</code></td>
+              <td><code>center_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical coordinate of the gradient center, expressed as a fraction
-of the height of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>start_angle_radians</code></td>
+              <td><code>start_angle_radians_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The gradient start angle in radians.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1278,7 +1145,7 @@ of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
               </td>
               <td></td>
-              <td>The color at the gradient start angle.</td>
+              <td>The specified Extended sRGB source color on the start ray (t = 0).</td>
             </tr>
 
             <tr>
@@ -1289,7 +1156,8 @@ of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
               </td>
               <td></td>
-              <td>The color at the gradient end angle.</td>
+              <td>The specified Extended sRGB source color in the limit as t approaches 1
+from below, immediately before the angular wrap to the start ray.</td>
             </tr>
 
           </tbody>
@@ -1301,7 +1169,25 @@ of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.FillLinearGradientComponent"><code>FillLinearGradientComponent</code></h3>
-        <p>A Video Component that renders a CSS linear-gradient fill.</p>
+        <p>A Video Component with linear-gradient control points defined in the local
+coordinate system of the Canvas that renders this Fill. The Canvas origin is
+its top-left corner, x increases to the right, and y increases downward. For
+a Canvas with positive width W and height H, a point (x, y) has normalized
+coordinates (u, v) = (x / W, y / H). The start and end points are
+(start_x, start_y) and (end_x, end_y) in these normalized coordinates. If
+the points differ, the directed gradient axis extends from the start point
+to the end point. For a normalized Canvas point p, let s be the start
+point and e the end point; its gradient position is the scalar projection
+t = dot(p - s, e - s) / dot(e - s, e - s). Thus t is zero at s, one at e,
+and is equal for points on the same line perpendicular to the gradient axis.
+For 2D vectors a and b, dot(a, b) = a.x * b.x + a.y * b.y.
+start_color and end_color are the specified Extended sRGB source colors at
+their respective control points. Source colors at other positions,
+including interpolation, conversion to an output or display color space,
+alpha handling, compositing, filtering, and pixel quantization, are
+implementation-defined. If the two points coincide, the rendered result is
+implementation-defined. This definition does not require a particular CSS
+rendering or color interpolation algorithm.</p>
 
         <table>
           <thead>
@@ -1334,27 +1220,25 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>start_x</code></td>
+              <td><code>start_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal coordinate of the gradient start point, expressed as a
-fraction of the width of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>start_y</code></td>
+              <td><code>start_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical coordinate of the gradient start point, expressed as a
-fraction of the height of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1365,31 +1249,29 @@ fraction of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
               </td>
               <td></td>
-              <td>The color at the gradient start point.</td>
+              <td>The specified Extended sRGB source color at the gradient start point.</td>
             </tr>
 
             <tr>
-              <td><code>end_x</code></td>
+              <td><code>end_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal coordinate of the gradient end point, expressed as a
-fraction of the width of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>end_y</code></td>
+              <td><code>end_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical coordinate of the gradient end point, expressed as a
-fraction of the height of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1400,7 +1282,7 @@ fraction of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
               </td>
               <td></td>
-              <td>The color at the gradient end point.</td>
+              <td>The specified Extended sRGB source color at the gradient end point.</td>
             </tr>
 
           </tbody>
@@ -1412,7 +1294,24 @@ fraction of the height of the Canvas that renders this Fill, in [0, 1].</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.FillRadialGradientComponent"><code>FillRadialGradientComponent</code></h3>
-        <p>A Video Component that renders a CSS radial-gradient fill.</p>
+        <p>A Video Component with radial-gradient geometry defined in the local
+coordinate system of the Canvas that renders this Fill. The Canvas origin is
+its top-left corner, x increases to the right, and y increases downward. For
+a Canvas with positive width W and height H, a point (x, y) has normalized
+coordinates (u, v) = (x / W, y / H). Let c be the center
+(center_x, center_y), and let d = sqrt((u - center_x)^2 +
+(v - center_y)^2). The inner and outer control contours are the sets of
+points where d equals inner_radius and outer_radius. Thus a radius r defines
+an ellipse centered at c with horizontal radius r * W and vertical radius
+r * H.
+
+inner_color and outer_color are the specified Extended sRGB source colors
+on their respective control contours. Source colors at all other Canvas
+points, including inside, between, and outside the contours, are
+implementation-defined. Color interpolation, conversion to an output or
+display color space, alpha handling, compositing, filtering, and pixel
+quantization are implementation-defined. This definition does not require a
+particular CSS rendering or color interpolation algorithm.</p>
 
         <table>
           <thead>
@@ -1445,51 +1344,47 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>center_x</code></td>
+              <td><code>center_x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal coordinate of the gradient center, expressed as a fraction
-of the width of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>center_y</code></td>
+              <td><code>center_y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical coordinate of the gradient center, expressed as a fraction
-of the height of the Canvas that renders this Fill, in [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>inner_radius</code></td>
+              <td><code>inner_radius_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The inner radius parameter is in [0, 1] and must be less than
-outer_radius.</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>outer_radius</code></td>
+              <td><code>outer_radius_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The outer radius parameter is in [0, 1] and must be greater than
-inner_radius.</td>
+              <td>—</td>
             </tr>
 
             <tr>
@@ -1500,7 +1395,7 @@ inner_radius.</td>
 
               </td>
               <td></td>
-              <td>The color at the inner radius.</td>
+              <td>The specified Extended sRGB source color at the inner control contour.</td>
             </tr>
 
             <tr>
@@ -1511,7 +1406,7 @@ inner_radius.</td>
 
               </td>
               <td></td>
-              <td>The color at the outer radius.</td>
+              <td>The specified Extended sRGB source color at the outer control contour.</td>
             </tr>
 
           </tbody>
@@ -1523,7 +1418,11 @@ inner_radius.</td>
 
       <article>
         <h3 id="ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></h3>
-        <p>A Video Component that renders a CSS solid-color fill.</p>
+        <p>A Video Component that fills the entire Canvas with one uniform source
+color. The Extended sRGB source color at every Canvas point is the value of
+the color field. Conversion from Extended sRGB to an output or display color
+space, alpha compositing, filtering, and pixel quantization are
+implementation-defined.</p>
 
         <table>
           <thead>
@@ -1563,7 +1462,7 @@ and bits 14 through 0 are uniformly random.</td>
 
               </td>
               <td></td>
-              <td>The color of this fill.</td>
+              <td>The uniform source color of this fill, represented by ExtendedSrgbColor.</td>
             </tr>
 
           </tbody>
@@ -1649,18 +1548,6 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>input_device_internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Video Input Device that provides this VFX Source's input video. This
-must not reference a Video Component or an Audio Input Device.</td>
-            </tr>
-
-            <tr>
               <td><code>effects</code></td>
               <td>
 
@@ -1668,7 +1555,8 @@ must not reference a Video Component or an Audio Input Device.</td>
 
               </td>
               <td>repeated</td>
-              <td>The VFX effects applied to the input video, in evaluation order.</td>
+              <td>Physical camera assignment is app-local and keyed by internal_id.
+The VFX effects applied to the input video, in evaluation order.</td>
             </tr>
 
           </tbody>
@@ -1931,14 +1819,14 @@ the other fields.</td>
           <tbody>
 
             <tr>
-              <td><code>interval_seconds</code></td>
+              <td><code>interval_seconds_rational</code></td>
               <td>
 
-                  <code>double</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The interval between automatic Vision updates in seconds.</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -1994,14 +1882,14 @@ and bits 14 through 0 are uniformly random.</td>
             </tr>
 
             <tr>
-              <td><code>input_device_internal_id</code></td>
+              <td><code>video_component_internal_id</code></td>
               <td>
 
                   <code>uint64</code>
 
               </td>
               <td>oneof <code>source</code></td>
-              <td>Uses this Input Device as input.</td>
+              <td>Analyzes the component after effects and before Program placement.</td>
             </tr>
 
             <tr>
@@ -2063,15 +1951,14 @@ Vision uses these only when language correction is enabled.</td>
             </tr>
 
             <tr>
-              <td><code>minimum_text_height</code></td>
+              <td><code>minimum_text_height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
-              <td>optional</td>
-              <td>The minimum text height relative to input image height. When absent, the
-Vision Framework default applies.</td>
+              <td></td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -2093,47 +1980,47 @@ lower-left corner.</p>
           <tbody>
 
             <tr>
-              <td><code>x</code></td>
+              <td><code>x_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The horizontal origin, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>y</code></td>
+              <td><code>y_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The vertical origin, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>width</code></td>
+              <td><code>width_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The width, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
             <tr>
-              <td><code>height</code></td>
+              <td><code>height_rational</code></td>
               <td>
 
-                  <code>float</code>
+                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
 
               </td>
               <td></td>
-              <td>The height, in the range [0, 1].</td>
+              <td>—</td>
             </tr>
 
           </tbody>
@@ -2191,6 +2078,54 @@ the other fields.</td>
               </td>
               <td>oneof <code>definition</code></td>
               <td>The OCR Vision definition. Mutually exclusive with the other fields.</td>
+            </tr>
+
+          </tbody>
+        </table>
+
+      </article>
+
+
+
+
+    </section>
+
+    <section>
+      <h2><code>workspace_v4_types.proto</code></h2>
+      <p>Package <code>ldtx.workspace.v4</code></p>
+
+
+
+      <article>
+        <h3 id="ldtx.workspace.v4.Rational32"><code>Rational32</code></h3>
+
+
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+
+            <tr>
+              <td><code>numerator</code></td>
+              <td>
+
+                  <code>sint32</code>
+
+              </td>
+              <td></td>
+              <td>—</td>
+            </tr>
+
+            <tr>
+              <td><code>denominator</code></td>
+              <td>
+
+                  <code>uint32</code>
+
+              </td>
+              <td></td>
+              <td>—</td>
             </tr>
 
           </tbody>

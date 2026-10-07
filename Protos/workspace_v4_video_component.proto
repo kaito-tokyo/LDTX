@@ -7,6 +7,8 @@ syntax = "proto3";
 
 package ldtx.workspace.v4;
 
+import "workspace_v4_types.proto";
+
 import "workspace_v4_vfx.proto";
 
 // Wraps one concrete Video Component definition.
@@ -80,18 +82,26 @@ message FillLinearGradientComponent {
   string display_name = 2;
   // The normalized horizontal coordinate of the gradient start point, in
   // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  float start_x = 3;
+  reserved 3;
+  reserved "start_x";
+  Rational32 start_x_rational = 9;
   // The normalized vertical coordinate of the gradient start point, in
   // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  float start_y = 4;
+  reserved 4;
+  reserved "start_y";
+  Rational32 start_y_rational = 10;
   // The specified Extended sRGB source color at the gradient start point.
   ExtendedSrgbColor start_color = 5;
   // The normalized horizontal coordinate of the gradient end point, in
   // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  float end_x = 6;
+  reserved 6;
+  reserved "end_x";
+  Rational32 end_x_rational = 11;
   // The normalized vertical coordinate of the gradient end point, in
   // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  float end_y = 7;
+  reserved 7;
+  reserved "end_y";
+  Rational32 end_y_rational = 12;
   // The specified Extended sRGB source color at the gradient end point.
   ExtendedSrgbColor end_color = 8;
 }
@@ -123,16 +133,24 @@ message FillRadialGradientComponent {
   string display_name = 2;
   // The normalized horizontal coordinate of the gradient center, in [0, 1].
   // Zero is the Canvas's left edge and one is its right edge.
-  float center_x = 3;
+  reserved 3;
+  reserved "center_x";
+  Rational32 center_x_rational = 9;
   // The normalized vertical coordinate of the gradient center, in [0, 1].
   // Zero is the Canvas's top edge and one is its bottom edge.
-  float center_y = 4;
+  reserved 4;
+  reserved "center_y";
+  Rational32 center_y_rational = 10;
   // The inner control contour's radius in normalized Canvas coordinates, in
   // [0, 1]. It must be less than outer_radius.
-  float inner_radius = 5;
+  reserved 5;
+  reserved "inner_radius";
+  Rational32 inner_radius_rational = 11;
   // The outer control contour's radius in normalized Canvas coordinates, in
   // [0, 1]. It must be greater than inner_radius.
-  float outer_radius = 6;
+  reserved 6;
+  reserved "outer_radius";
+  Rational32 outer_radius_rational = 12;
   // The specified Extended sRGB source color at the inner control contour.
   ExtendedSrgbColor inner_color = 7;
   // The specified Extended sRGB source color at the outer control contour.
@@ -179,14 +197,20 @@ message FillConicGradientComponent {
   string display_name = 2;
   // The normalized horizontal coordinate of the gradient center, in [0, 1].
   // Zero is the Canvas's left edge and one is its right edge.
-  float center_x = 3;
+  reserved 3;
+  reserved "center_x";
+  Rational32 center_x_rational = 8;
   // The normalized vertical coordinate of the gradient center, in [0, 1].
   // Zero is the Canvas's top edge and one is its bottom edge.
-  float center_y = 4;
+  reserved 4;
+  reserved "center_y";
+  Rational32 center_y_rational = 9;
   // A finite start angle in radians, measured clockwise from the positive
   // horizontal axis in the normalized Canvas coordinate system. Values that
   // differ by an integer multiple of 2 * pi represent the same start ray.
-  float start_angle_radians = 5;
+  reserved 5;
+  reserved "start_angle_radians";
+  Rational32 start_angle_radians_rational = 10;
   // The specified Extended sRGB source color on the start ray (t = 0).
   ExtendedSrgbColor start_color = 6;
   // The specified Extended sRGB source color in the limit as t approaches 1
@@ -202,9 +226,9 @@ message VfxSourceComponent {
   uint64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The Video Input Device that provides this VFX Source's input video. This
-  // must not reference a Video Component or an Audio Input Device.
-  uint64 input_device_internal_id = 3;
+  reserved 3;
+  reserved "input_device_internal_id";
+  // Physical camera assignment is app-local and keyed by internal_id.
   // The VFX effects applied to the input video, in evaluation order.
   repeated VideoEffectWrapper effects = 4;
 }
@@ -229,10 +253,14 @@ message ClockComponent {
   string display_name = 2;
   // The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
   // in [0, 1]. This remains the reference for Portrait projection.
-  float width = 3;
+  reserved 3;
+  reserved "width";
+  Rational32 width_rational = 12;
   // The Clock height normalized to the fixed 1080-pixel Landscape Canvas
   // height, in [0, 1]. This remains the reference for Portrait projection.
-  float height = 4;
+  reserved 4;
+  reserved "height";
+  Rational32 height_rational = 13;
   // Whether the rendered Clock includes the date.
   bool shows_date = 5;
   // Whether the rendered time includes seconds.
@@ -253,7 +281,9 @@ message ClockComponent {
 // A text outline rendered by a Clock.
 message ClockTextOutline {
   // The outline thickness in output pixels.
-  float thickness = 1;
+  reserved 1;
+  reserved "thickness";
+  Rational32 thickness_rational = 3;
   // The color of this outline.
   ExtendedSrgbColor color = 2;
 }
