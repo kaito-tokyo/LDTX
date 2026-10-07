@@ -257,6 +257,26 @@ rewriting the saved assignment. Discovery errors use the Settings Window's
 presentError path, with repeated failures suppressed until recovery. Workspace
 editors expose monitor volume and input routing, not output-device selection.
 
+Screenshot capture results appear in a transient NSPopover anchored to the
+screenshot toolbar item. Successful captures show the saved Program image count
+and the Landscape file icon and name; Portrait and VFX Source images remain saved but
+are excluded from the popover. Clicking a file opens it in its default application;
+dragging it provides a file URL for Finder or other destinations. Quick Look
+generates the file icon asynchronously with `iconMode` enabled; the standard file
+icon remains visible until a representation is available. Capture
+failures show the error without modifying the output session's failure state.
+Subsequent captures replace the message. Window closure closes the popover;
+ordinary interaction dismissal is managed by AppKit.
+The NSHostingController uses `.preferredContentSize` sizing, allowing SwiftUI's
+ideal content size to size the popover without manually laying out or resizing
+the hosting view. See Apple's [Use SwiftUI with AppKit](https://developer.apple.com/videos/play/wwdc2022/10075/).
+
+SettingsApplet's Output tab configures the application-wide screenshots folder,
+defaulting to ~/Pictures. Captures save there regardless of recording state and
+also save identical images in the active local recording's Screenshots folder.
+The toolbar folder action opens the global folder; the result counts images,
+not duplicate copies. Recording and screenshots folder settings are independent.
+
 ### Video layer editing belongs to Content
 
 The Editor vertically arranges MasterVolumeEditor, AudioMixEditor, and the
@@ -406,3 +426,24 @@ Save validation continues to throw its aggregated LocalizedError through
 NSDocument's save completion. It does not also call `reportError`, preventing
 duplicate presentation. Error descriptions, failure reasons, and recovery
 suggestions remain available to AppKit's standard error presentation.
+
+## Local YouTube authorization storage
+
+Debug and Release builds check
+`~/Library/Application Support/<application bundle identifier>/.YouTubeAuth`
+once at application startup. If the file exists, Settings and Workspace use it
+for both the OAuth client and AppAuth authorization state. Otherwise they use
+Keychain. Distribution builds compile out file storage and always use Keychain.
+Changing the file's presence requires restarting the application. Invalid or
+removed files produce errors rather than falling back to Keychain.
+
+To enable local file storage, create the application's Application Support
+directory and an empty `.YouTubeAuth` file (or one containing `{}`) before
+launching LDTX. Set the directory permissions to `0700` and file permissions to
+`0600`. Import the
+Desktop OAuth client JSON through the existing Account controls and authorize
+normally. No storage-selection UI is added. The file uses a JSON envelope with
+base64 `oauthClientJSON` and an `authorizations` dictionary keyed by client ID;
+authorization values are base64 secure archives of AppAuth state. Writes are
+atomic and set file permissions to `0600`. This development file contains
+credentials, including refresh tokens, and is not encrypted by this mechanism.
