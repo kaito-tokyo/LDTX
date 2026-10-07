@@ -102,3 +102,13 @@ the relevant design or feature documentation instead.
   full decimal expansion of a Double. Gradient sliders use a denominator of
   1,000,000; audio gain sliders use 10 (0.1 dB). Unrepresentable input preserves
   the last value rather than replacing it with an empty Rational.
+
+## Invalid edits prevent leaving their screen
+
+- A screen containing invalid edited values cannot be left. Attempted navigation
+  must report the validation error and preserve the current screen and draft.
+- Validate at multiple layers. Ordinary edits that were allowed to leave their
+  screen must not become latent validation failures discovered only on save.
+- OCR ROI text remains a draft until the whole rectangle is valid. Inspector
+  selection, Program changes, output start, save, and document close must respect
+  pending invalid edits.

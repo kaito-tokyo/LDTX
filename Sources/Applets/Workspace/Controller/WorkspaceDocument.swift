@@ -344,6 +344,11 @@ public final class WorkspaceDocument: NSDocument {
       delegate: delegate as AnyObject, selector: shouldCloseSelector, context: contextInfo
     ) { [weak self] callback in self?.closeCallbacks.removeAll { $0 === callback } }
     closeCallbacks.append(callback)
+    do { try storeService.validateInspectorEdits() } catch {
+      storeService.reportError(error)
+      callback.reviewed(self, shouldClose: false, contextInfo: nil)
+      return
+    }
     super.canClose(
       withDelegate: callback,
       shouldClose: #selector(WorkspaceCloseCallback.reviewed(_:shouldClose:contextInfo:)),

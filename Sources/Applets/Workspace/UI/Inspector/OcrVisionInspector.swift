@@ -90,9 +90,13 @@ struct OcrVisionInspector: View {
         regionField("X", keyPath: \.xRational, initial: vision.regionOfInterest.xRational)
         regionField("Y", keyPath: \.yRational, initial: vision.regionOfInterest.yRational)
         regionField(
-          "Width", keyPath: \.widthRational, initial: vision.regionOfInterest.widthRational)
+          "Width", keyPath: \.widthRational,
+          initial: vision.hasRegionOfInterest
+            ? vision.regionOfInterest.widthRational : .with { $0.set(num: 1, den: 1) })
         regionField(
-          "Height", keyPath: \.heightRational, initial: vision.regionOfInterest.heightRational)
+          "Height", keyPath: \.heightRational,
+          initial: vision.hasRegionOfInterest
+            ? vision.regionOfInterest.heightRational : .with { $0.set(num: 1, den: 1) })
         Text("Coordinates are normalized from 0 to 1.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -235,30 +239,18 @@ struct OcrVisionInspector: View {
   ) -> some View {
     LabeledContent(title) {
       TextField(
-        title, value: regionBinding(keyPath, initial: initial),
-        format: RationalFormatStyle()
+        title,
+        text: Binding(
+          get: {
+            storeService.ocrRegionDrafts[internalID]?[title]
+              ?? RationalFormatStyle().format(initial)
+          },
+          set: { storeService.editOcrRegion(internalID: internalID, field: title, text: $0) })
       )
       .multilineTextAlignment(.trailing)
       .frame(width: 90)
       .disabled(isRecording)
     }
-  }
-
-  private func regionBinding(
-    _ keyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32
-    >, initial: Ldtx_Workspace_V4_Rational32
-  ) -> Binding<Ldtx_Workspace_V4_Rational32> {
-    Binding(
-      get: { vision.map { $0.regionOfInterest[keyPath: keyPath] } ?? initial },
-      set: { next in
-        editVision { value in
-          var region = value.regionOfInterest
-          region[keyPath: keyPath] = next
-          value.regionOfInterest = region
-        }
-      }
-    )
   }
 
   private func editVision(_ mutation: (inout Ldtx_Workspace_V4_OcrVision) -> Void) {

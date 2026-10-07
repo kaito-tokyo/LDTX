@@ -30,7 +30,64 @@ public final class WorkspaceStoreService {
 
   public var selectedAudioMix: ProgramAudioPeakMeter.Master = .landscape
 
-  public var inspectorSelector: WorkspaceInspectorSelector?
+  private var storedInspectorSelector: WorkspaceInspectorSelector?
+  public var inspectorSelector: WorkspaceInspectorSelector? {
+    get { storedInspectorSelector }
+    set {
+      guard newValue != storedInspectorSelector else { return }
+      do {
+        try validateInspectorEdits()
+        storedInspectorSelector = newValue
+        ocrRegionDrafts.removeAll()
+      } catch { reportError(error) }
+    }
+  }
+  var ocrRegionDrafts: [UInt64: [String: String]] = [:]
+  private var inspectorEditErrors: [UInt64: String] = [:]
+
+  public func validateInspectorEdits() throws {
+    if let message = inspectorEditErrors.sorted(by: { $0.key < $1.key }).first?.value {
+      throw WorkspaceSelectionError(message: message)
+    }
+  }
+
+  func editOcrRegion(internalID: UInt64, field: String, text: String) {
+    guard !isOutputActive else { return }
+    ocrRegionDrafts[internalID, default: [:]][field] = text
+    do {
+      guard
+        let index = definition.visions.firstIndex(where: { $0.ocrVision.internalID == internalID }),
+        case .ocrVision(var vision) = definition.visions[index].definition
+      else { throw WorkspaceSelectionError(message: "The OCR Vision is no longer available.") }
+      var region =
+        vision.hasRegionOfInterest
+        ? vision.regionOfInterest
+        : .with {
+          $0.widthRational = .with { $0.set(num: 1, den: 1) }
+          $0.heightRational = .with { $0.set(num: 1, den: 1) }
+        }
+      let fields:
+        [(
+          String,
+          WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32>
+        )] = [
+          ("X", \.xRational), ("Y", \.yRational), ("Width", \.widthRational),
+          ("Height", \.heightRational),
+        ]
+      for (name, path) in fields {
+        if let text = ocrRegionDrafts[internalID]?[name] {
+          region[keyPath: path] = try RationalParseStrategy().parse(text)
+        }
+      }
+      try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
+      vision.regionOfInterest = region
+      definition.visions[index].definition = .ocrVision(vision)
+      inspectorEditErrors.removeValue(forKey: internalID)
+    } catch {
+      inspectorEditErrors[internalID] =
+        "Correct the OCR ROI before leaving this Inspector. " + error.localizedDescription
+    }
+  }
 
   @ObservationIgnored public var documentOutputStateDidChange: (() -> Void)?
   public var isOutputActive = false {
@@ -117,6 +174,7 @@ public final class WorkspaceStoreService {
   }
 
   public func selectProgram(internalID: UInt64) throws {
+    try validateInspectorEdits()
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }
@@ -128,6 +186,7 @@ public final class WorkspaceStoreService {
   }
 
   public func startOutput() async throws {
+    try validateInspectorEdits()
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }
@@ -158,6 +217,7 @@ public final class WorkspaceStoreService {
   }
 
   public func validateForSaving() throws {
+    try validateInspectorEdits()
     try Self.validateForSaving(WorkspaceV4Bundle(definition: definition, preferences: preferences))
   }
 

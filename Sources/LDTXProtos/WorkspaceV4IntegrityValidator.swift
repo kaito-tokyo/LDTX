@@ -317,6 +317,25 @@ public enum WorkspaceV4IntegrityValidator {
     }
   }
 
+  public static func validateRegionOfInterest(_ region: Ldtx_Workspace_V4_VisionRegionOfInterest)
+    throws
+  {
+    try validateRationals(
+      [
+        region.hasXRational ? region.xRational : nil,
+        region.hasYRational ? region.yRational : nil,
+        region.hasWidthRational ? region.widthRational : nil,
+        region.hasHeightRational ? region.heightRational : nil,
+      ].compactMap { $0 })
+    guard unitInterval(region.xRational),
+      unitInterval(region.yRational),
+      unitInterval(region.widthRational, positive: true),
+      unitInterval(region.heightRational, positive: true),
+      fitsUnitInterval(region.xRational, region.widthRational),
+      fitsUnitInterval(region.yRational, region.heightRational)
+    else { throw WorkspaceV4IntegrityError.invalidVisionRegionOfInterest }
+  }
+
   private static func isValidInternalID(_ value: UInt64) -> Bool {
     value != 0 && value & (UInt64(1) << 63) == 0
   }
@@ -356,21 +375,7 @@ public enum WorkspaceV4IntegrityValidator {
       }
     }
     if vision.hasRegionOfInterest {
-      let region = vision.regionOfInterest
-      try validateRationals(
-        [
-          region.hasXRational ? region.xRational : nil,
-          region.hasYRational ? region.yRational : nil,
-          region.hasWidthRational ? region.widthRational : nil,
-          region.hasHeightRational ? region.heightRational : nil,
-        ].compactMap { $0 })
-      guard unitInterval(region.xRational),
-        unitInterval(region.yRational),
-        unitInterval(region.widthRational, positive: true),
-        unitInterval(region.heightRational, positive: true),
-        fitsUnitInterval(region.xRational, region.widthRational),
-        fitsUnitInterval(region.yRational, region.heightRational)
-      else { throw WorkspaceV4IntegrityError.invalidVisionRegionOfInterest }
+      try validateRegionOfInterest(vision.regionOfInterest)
     }
     if vision.hasMinimumTextHeightRational {
       guard unitInterval(vision.minimumTextHeightRational)
