@@ -126,7 +126,7 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
         peakProvider: { peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
         onPreview: { [weak storeService] gain in
           let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: gain)
-          guard let value = try? RationalSliderEncoding.encode(decibels, denominator: 10) else {
+          guard let value = try? Rational32DecibelEncoding.encode(decibels) else {
             return
           }
           storeService?.updateAudio(target: target) {
@@ -135,7 +135,7 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
         }, onCommit: { _ in })
       masterFields[index].configure(
         value: preferences.hasAudioMasterVolumeDecibels
-          ? preferences.audioMasterVolumeDecibels : .with { $0.set(num: 0, den: 1) },
+          ? preferences.audioMasterVolumeDecibels : .with { $0.set(num: 0, den: 10) },
         enabled: enabled
       ) { [weak storeService] value in
         storeService?.updateAudio(target: target) {
@@ -192,7 +192,8 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   }
   func commit() {
     guard dirty else { return }
-    guard let value = try? RationalParseStrategy().parse(stringValue),
+    guard let parsed = try? RationalParseStrategy().parse(stringValue),
+      let value = try? Rational32DecibelEncoding.encode(parsed.double),
       (ProgramPreferences
         .minimumAudioChannelGainDecibels...ProgramPreferences.maximumAudioChannelGainDecibels)
         .contains(value.double)

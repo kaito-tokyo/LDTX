@@ -12,6 +12,17 @@ public enum Rational32EncodingError: Error, LocalizedError {
   }
 }
 
+public enum Rational32DecibelEncoding {
+  public static func encode(_ decibels: Double) throws -> Ldtx_Workspace_V4_Rational32 {
+    guard decibels.isFinite,
+      let numerator = Int32(exactly: (decibels * 10).rounded())
+    else { throw Rational32EncodingError.unrepresentableDecimal }
+    var result = Ldtx_Workspace_V4_Rational32()
+    result.set(num: numerator, den: 10)
+    return result
+  }
+}
+
 extension Ldtx_Workspace_V4_Rational32 {
   public var float: Float { Float(double) }
 

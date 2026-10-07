@@ -58,8 +58,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -6
-          $0.denominator = 1
+          $0.set(num: -60, den: 10)
         })
     #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
     #expect(
@@ -85,14 +84,12 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -81
-          $0.denominator = 25
+          $0.set(num: -32, den: 10)
         })
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -9
-          $0.denominator = 1
+          $0.set(num: -90, den: 10)
         })
     try runtime.setMasterVolume(
       .with {
@@ -102,25 +99,25 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -6
-          $0.denominator = 1
+          $0.set(num: -60, den: 10)
         })
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -9
-          $0.denominator = 1
+          $0.set(num: -90, den: 10)
         })
-    for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
-      #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
+    let invalidValues: [Ldtx_Workspace_V4_Rational32] = [
+      .with { $0.set(num: 1, den: 0) }, .with { $0.set(num: Int32.max, den: 1) },
+    ]
+    for invalid in invalidValues {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioMasterVolume) {
         try runtime.setMasterVolume(invalid, programInternalID: id, target: .landscape)
       }
     }
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -6
-          $0.denominator = 1
+          $0.set(num: -60, den: 10)
         })
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
     try runtime.setAudioChannelGain(
@@ -131,8 +128,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -617
-          $0.denominator = 50
+          $0.set(num: -123, den: 10)
         })
     try runtime.setAudioChannelGain(
       .with {
@@ -142,19 +138,17 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = 63
-          $0.denominator = 50
+          $0.set(num: 13, den: 10)
         })
-    for invalid in [Ldtx_Workspace_V4_Rational32(), .with { $0.numerator = 1 }] {
-      #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
+    for invalid in invalidValues {
+      #expect(throws: WorkspaceRuntimeError.invalidAudioChannelGain) {
         try runtime.setAudioChannelGain(invalid, forAudioInputDeviceInternalID: inputID)
       }
     }
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = 63
-          $0.denominator = 50
+          $0.set(num: 13, den: 10)
         })
     #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
       try runtime.setAudioChannelGain(
@@ -169,8 +163,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = 63
-          $0.denominator = 50
+          $0.set(num: 13, den: 10)
         })
     try runtime.removeInputDevice(internalID: inputID)
     #expect(runtime.preferences.audioChannelGainsDecibels[inputID] == nil)

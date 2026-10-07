@@ -39,14 +39,13 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       window.contentView?.layoutSubtreeIfNeeded()
       let field = editor.masterFields[0]
-      field.stringValue = "-12.0"
+      field.stringValue = "-12.04"
       field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
       field.commit()
       #expect(
         try service.preferences(for: 100, target: .landscape).audioMasterVolumeDecibels
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -12
-            $0.denominator = 1
+            $0.set(num: -120, den: 10)
           })
       #expect(service.selectedAudioMix == .landscape)
       service.updateAudio(target: .landscape) {
@@ -60,6 +59,12 @@ extension AppUIComponentTestSuite {
         try await Task.sleep(for: .milliseconds(10))
       }
       #expect(field.stringValue == "-6")
+      let previous = service.preferences
+      #expect(
+        !service.updateAudio(target: .landscape) {
+          $0.audioMasterVolumeDecibels = .with { $0.set(num: 1, den: 0) }
+        })
+      #expect(service.preferences == previous)
     }
 
     @Test("UCT-1011.2: Monitor volume remains local without marking the Workspace edited")
@@ -74,6 +79,14 @@ extension AppUIComponentTestSuite {
       let url = try #require(document.storeService.localStateURL)
       data.updateState(for: url) { $0.monitorVolume = -12.5 }
       #expect(data.state(for: url).monitorVolume == -12.5)
+      #expect(document.storeService.preferences == preferences)
+      #expect(!document.isDocumentEdited)
+      document.storeService.documentReference = DocumentReference(document)
+      document.storeService.appletData = data
+      document.storeService.updateMonitor { $0.monitorVolume = -11.899999999999999 }
+      #expect(document.storeService.localState.monitorVolume == -11.9)
+      document.storeService.updateMonitor { $0.monitorVolume = .infinity }
+      #expect(document.storeService.localState.monitorVolume == -11.9)
       #expect(document.storeService.preferences == preferences)
       #expect(!document.isDocumentEdited)
     }

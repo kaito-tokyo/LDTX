@@ -250,7 +250,7 @@ extension WorkspaceWindowRuntime {
   public func setAudioChannelGain(
     _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: UInt64
   ) throws {
-    guard value.double != nil else {
+    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
     }
     try editWorkspace { workspace in
@@ -278,7 +278,7 @@ extension WorkspaceWindowRuntime {
   )
     throws
   {
-    guard value.double != nil else {
+    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
       throw WorkspaceRuntimeError.invalidAudioMasterVolume
     }
     try editProgramPreference(programInternalID, target: target) {

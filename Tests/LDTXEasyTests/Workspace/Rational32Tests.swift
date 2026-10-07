@@ -7,6 +7,20 @@ import Testing
 
 @Suite("Rational32")
 struct Rational32UnitTestSuite {
+  @Test func decibelsUseFixedTenthsAndRejectInvalidValues() throws {
+    for (input, numerator) in [(0.0, 0), (-11.899999999999999, -119), (1.26, 13)] {
+      let value = try Rational32DecibelEncoding.encode(input)
+      #expect(value.numerator == Int32(numerator))
+      #expect(value.denominator == 10)
+    }
+    for input in [Double.nan, .infinity, -.infinity, Double(Int32.max), Double(Int32.min)] {
+      #expect(throws: Rational32EncodingError.self) {
+        try Rational32DecibelEncoding.encode(input)
+      }
+    }
+    let zero = try Rational32DecibelEncoding.encode(Ldtx_Workspace_V4_Rational32().double)
+    #expect(zero.numerator == 0 && zero.denominator == 10)
+  }
   @Test func convertsValidValues() {
     let value = Ldtx_Workspace_V4_Rational32.with {
       $0.numerator = -1

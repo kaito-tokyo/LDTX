@@ -267,6 +267,11 @@ public final class WorkspaceStoreService {
     for transform in value.videoLayerTransforms.values {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }
+    var value = value
+    if value.hasAudioMasterVolumeDecibels {
+      value.audioMasterVolumeDecibels = try Rational32DecibelEncoding.encode(
+        value.audioMasterVolumeDecibels.double)
+    }
     var candidate = self.preferences
     candidate[keyPath: target.preferences][programID] = value
     self.preferences = candidate
@@ -338,8 +343,7 @@ public final class WorkspaceStoreService {
       return false
     }
     do {
-      preferences.audioChannelGainsDecibels[id] = try RationalSliderEncoding.encode(
-        decibels, denominator: 10)
+      preferences.audioChannelGainsDecibels[id] = try Rational32DecibelEncoding.encode(decibels)
     } catch {
       reportError(error)
       return false
@@ -355,7 +359,17 @@ public final class WorkspaceStoreService {
   public var canMonitor: Bool { workspaceURL != nil }
   public func updateMonitor(_ mutation: (inout WorkspaceLocalState) -> Void) {
     guard let workspaceURL else { return }
-    appletData.updateState(for: workspaceURL, mutation)
+    var updated = localState
+    mutation(&updated)
+    do {
+      if let volume = updated.monitorVolume {
+        updated.monitorVolume = try Rational32DecibelEncoding.encode(volume).double
+      }
+    } catch {
+      reportError(error)
+      return
+    }
+    appletData.updateState(for: workspaceURL) { $0 = updated }
     self.synchronizeAudioMonitor()
   }
   public func selectAudioMix(_ portrait: Bool) {
