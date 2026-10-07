@@ -205,12 +205,13 @@ public nonisolated struct Ldtx_Program_Persistence_V1_ProgramPreferences: Sendab
   public var hasMonitorVolume: Bool {self._monitorVolume != nil}
   /// Clears the value of `monitorVolume`. Subsequent reads from it will return its default value.
   public mutating func clearMonitorVolume() {self._monitorVolume = nil}
+
   public var audioSyncEnabled: Bool { get {_audioSyncEnabled ?? true} set {_audioSyncEnabled = newValue} }
   public var hasAudioSyncEnabled: Bool { _audioSyncEnabled != nil }
 
   public var audioChannelGainsByName: Dictionary<String,Double> = [:]
 
-  public var videoMutedByInputDeviceName: Dictionary<String,Bool> = [:]
+  public var videoHiddenByInputDeviceName: Dictionary<String,Bool> = [:]
 
   public var audioMutedByInputDeviceName: Dictionary<String,Bool> = [:]
 
@@ -253,7 +254,7 @@ public nonisolated struct Ldtx_Program_Persistence_V1_VideoLayerPreference: Send
   /// Clears the value of `destination`. Subsequent reads from it will return its default value.
   public mutating func clearDestination() {self._destination = nil}
 
-  public var muted: Bool = false
+  public var hidden: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -400,7 +401,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_SavedProgramDefinitionRecord: 
 
 nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_muted_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0\u{3}master_volume\0\u{3}monitor_volume\0\u{4}\u{2}audio_sync_enabled\0\u{b}advanced_audio_routing\0\u{c}\u{7}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}audio_channel_gains_by_name\0\u{3}video_hidden_by_input_device_name\0\u{3}audio_muted_by_input_device_name\0\u{3}video_layers_by_program_name\0\u{3}master_volume\0\u{3}monitor_volume\0\u{4}\u{2}audio_sync_enabled\0\u{b}advanced_audio_routing\0\u{c}\u{7}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -409,7 +410,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: &self.audioChannelGainsByName) }()
-      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.videoMutedByInputDeviceName) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.videoHiddenByInputDeviceName) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: &self.audioMutedByInputDeviceName) }()
       case 4: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,Ldtx_Program_Persistence_V1_VideoLayerPreferences>.self, value: &self.videoLayersByProgramName) }()
       case 5: try { try decoder.decodeSingularDoubleField(value: &self._masterVolume) }()
@@ -428,8 +429,8 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if !self.audioChannelGainsByName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: self.audioChannelGainsByName, fieldNumber: 1)
     }
-    if !self.videoMutedByInputDeviceName.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.videoMutedByInputDeviceName, fieldNumber: 2)
+    if !self.videoHiddenByInputDeviceName.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.videoHiddenByInputDeviceName, fieldNumber: 2)
     }
     if !self.audioMutedByInputDeviceName.isEmpty {
       try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufBool>.self, value: self.audioMutedByInputDeviceName, fieldNumber: 3)
@@ -443,7 +444,9 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     try { if let v = self._monitorVolume {
       try visitor.visitSingularDoubleField(value: v, fieldNumber: 6)
     } }()
-    try { if let v = self._audioSyncEnabled { try visitor.visitSingularBoolField(value: v, fieldNumber: 8) } }()
+    try { if let v = self._audioSyncEnabled {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -452,7 +455,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_ProgramPreferences: SwiftProto
     if lhs._monitorVolume != rhs._monitorVolume {return false}
     if lhs._audioSyncEnabled != rhs._audioSyncEnabled {return false}
     if lhs.audioChannelGainsByName != rhs.audioChannelGainsByName {return false}
-    if lhs.videoMutedByInputDeviceName != rhs.videoMutedByInputDeviceName {return false}
+    if lhs.videoHiddenByInputDeviceName != rhs.videoHiddenByInputDeviceName {return false}
     if lhs.audioMutedByInputDeviceName != rhs.audioMutedByInputDeviceName {return false}
     if lhs.videoLayersByProgramName != rhs.videoLayersByProgramName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -492,7 +495,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreferences: SwiftPr
 
 nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoLayerPreference"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}component_name\0\u{1}destination\0\u{1}muted\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}component_name\0\u{1}destination\0\u{1}hidden\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -502,7 +505,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftPro
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.componentName) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._destination) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.muted) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.hidden) }()
       default: break
       }
     }
@@ -519,8 +522,8 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftPro
     try { if let v = self._destination {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.muted != false {
-      try visitor.visitSingularBoolField(value: self.muted, fieldNumber: 3)
+    if self.hidden != false {
+      try visitor.visitSingularBoolField(value: self.hidden, fieldNumber: 3)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -528,7 +531,7 @@ nonisolated extension Ldtx_Program_Persistence_V1_VideoLayerPreference: SwiftPro
   public static func ==(lhs: Ldtx_Program_Persistence_V1_VideoLayerPreference, rhs: Ldtx_Program_Persistence_V1_VideoLayerPreference) -> Bool {
     if lhs.componentName != rhs.componentName {return false}
     if lhs._destination != rhs._destination {return false}
-    if lhs.muted != rhs.muted {return false}
+    if lhs.hidden != rhs.hidden {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

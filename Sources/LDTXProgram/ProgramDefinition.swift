@@ -158,14 +158,14 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   public var monitorVolume: Double
   public var isAudioSyncEnabled: Bool
   public var audioChannelGainsByName: [String: Double]
-  public var videoMutedByInputDeviceName: [String: Bool]
+  public var videoHiddenByInputDeviceName: [String: Bool]
   public var audioMutedByInputDeviceName: [String: Bool]
   public var videoLayersByProgramName: [String: [VideoLayerPreference]]
 
   enum CodingKeys: String, CodingKey {
     case masterVolume, monitorVolume, isAudioSyncEnabled
     case audioChannelGainsByName
-    case videoMutedByInputDeviceName
+    case videoHiddenByInputDeviceName
     case audioMutedByInputDeviceName
     case videoLayersByProgramName
   }
@@ -175,7 +175,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     monitorVolume: Double = 1,
     isAudioSyncEnabled: Bool = true,
     audioChannelGainsByName: [String: Double] = [:],
-    videoMutedByInputDeviceName: [String: Bool] = [:],
+    videoHiddenByInputDeviceName: [String: Bool] = [:],
     audioMutedByInputDeviceName: [String: Bool] = [:],
     videoLayersByProgramName: [String: [VideoLayerPreference]] = [:]
   ) {
@@ -183,7 +183,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     self.monitorVolume = monitorVolume
     self.isAudioSyncEnabled = isAudioSyncEnabled
     self.audioChannelGainsByName = audioChannelGainsByName
-    self.videoMutedByInputDeviceName = videoMutedByInputDeviceName
+    self.videoHiddenByInputDeviceName = videoHiddenByInputDeviceName
     self.audioMutedByInputDeviceName = audioMutedByInputDeviceName
     self.videoLayersByProgramName = videoLayersByProgramName
   }
@@ -196,8 +196,8 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
       try container.decodeIfPresent(Bool.self, forKey: .isAudioSyncEnabled) ?? true
     audioChannelGainsByName =
       try container.decodeIfPresent([String: Double].self, forKey: .audioChannelGainsByName) ?? [:]
-    videoMutedByInputDeviceName =
-      try container.decodeIfPresent([String: Bool].self, forKey: .videoMutedByInputDeviceName)
+    videoHiddenByInputDeviceName =
+      try container.decodeIfPresent([String: Bool].self, forKey: .videoHiddenByInputDeviceName)
       ?? [:]
     audioMutedByInputDeviceName =
       try container.decodeIfPresent([String: Bool].self, forKey: .audioMutedByInputDeviceName)
@@ -215,17 +215,17 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     try container.encode(monitorVolume, forKey: .monitorVolume)
     try container.encode(isAudioSyncEnabled, forKey: .isAudioSyncEnabled)
     try container.encode(audioChannelGainsByName, forKey: .audioChannelGainsByName)
-    try container.encode(videoMutedByInputDeviceName, forKey: .videoMutedByInputDeviceName)
+    try container.encode(videoHiddenByInputDeviceName, forKey: .videoHiddenByInputDeviceName)
     try container.encode(audioMutedByInputDeviceName, forKey: .audioMutedByInputDeviceName)
     try container.encode(videoLayersByProgramName, forKey: .videoLayersByProgramName)
   }
 
-  public func isVideoMuted(inputDeviceName: String) -> Bool {
-    videoMutedByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] ?? false
+  public func isVideoHidden(inputDeviceName: String) -> Bool {
+    videoHiddenByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] ?? false
   }
 
-  public mutating func setVideoMuted(_ muted: Bool, inputDeviceName: String) {
-    videoMutedByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] = muted
+  public mutating func setVideoHidden(_ hidden: Bool, inputDeviceName: String) {
+    videoHiddenByInputDeviceName[Self.preferenceKey(forName: inputDeviceName)] = hidden
   }
 
   public func isAudioMuted(inputDeviceName: String) -> Bool {
@@ -240,11 +240,11 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     let oldKey = Self.preferenceKey(forName: oldName)
     let newKey = Self.preferenceKey(forName: newName)
     guard oldKey != newKey else { return }
-    if let value = videoMutedByInputDeviceName.removeValue(forKey: oldKey) {
-      if videoMutedByInputDeviceName[newKey] != nil {
-        videoMutedByInputDeviceName.removeAll()
+    if let value = videoHiddenByInputDeviceName.removeValue(forKey: oldKey) {
+      if videoHiddenByInputDeviceName[newKey] != nil {
+        videoHiddenByInputDeviceName.removeAll()
       } else {
-        videoMutedByInputDeviceName[newKey] = value
+        videoHiddenByInputDeviceName[newKey] = value
       }
     }
     if let value = audioMutedByInputDeviceName.removeValue(forKey: oldKey) {
@@ -261,7 +261,7 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
   }
 
   public mutating func removeInputDevice(named name: String) {
-    videoMutedByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
+    videoHiddenByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
     audioMutedByInputDeviceName.removeValue(forKey: Self.preferenceKey(forName: name))
     removeVideoComponentReference(named: name)
   }
@@ -289,10 +289,10 @@ public struct ProgramPreferences: Codable, Equatable, Sendable {
     videoLayersByProgramName[name] = layers
   }
 
-  public func isVideoLayerMuted(componentName: String, programName: String) -> Bool {
+  public func isVideoLayerHidden(componentName: String, programName: String) -> Bool {
     videoLayers(forProgramNamed: programName)
       .first(where: { $0.componentName == componentName })?
-      .isMuted ?? false
+      .isHidden ?? false
   }
 
   public mutating func renameVideoComponentReference(from oldName: String, to newName: String) {
@@ -421,7 +421,7 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
   public var destinationScaleY: Float
   /// A Program-layer property. Muting keeps capture and timing active while
   /// replacing only this layer's rendered content with dummy video.
-  public var isMuted: Bool
+  public var isHidden: Bool
 
   public var id: String { componentName }
 
@@ -432,7 +432,7 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     case destinationScale
     case destinationScaleX
     case destinationScaleY
-    case isMuted
+    case isHidden
   }
 
   public init(
@@ -440,14 +440,14 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     destinationX: Float,
     destinationY: Float,
     destinationScale: Float,
-    isMuted: Bool
+    isHidden: Bool
   ) {
     self.componentName = componentName
     self.destinationX = destinationX
     self.destinationY = destinationY
     destinationScaleX = destinationScale
     destinationScaleY = destinationScale
-    self.isMuted = isMuted
+    self.isHidden = isHidden
   }
 
   public init(
@@ -462,7 +462,7 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
       destinationY: destinationY,
       destinationScaleX: destinationScale,
       destinationScaleY: destinationScale,
-      isMuted: false
+      isHidden: false
     )
   }
 
@@ -472,24 +472,24 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     destinationY: Float = 0,
     destinationScaleX: Float,
     destinationScaleY: Float,
-    isMuted: Bool = false
+    isHidden: Bool = false
   ) {
     self.componentName = componentName
     self.destinationX = destinationX
     self.destinationY = destinationY
     self.destinationScaleX = destinationScaleX
     self.destinationScaleY = destinationScaleY
-    self.isMuted = isMuted
+    self.isHidden = isHidden
   }
 
-  public init(componentName: String, isMuted: Bool) {
+  public init(componentName: String, isHidden: Bool) {
     self.init(
       componentName: componentName,
       destinationX: 0,
       destinationY: 0,
       destinationScaleX: 1,
       destinationScaleY: 1,
-      isMuted: isMuted
+      isHidden: isHidden
     )
   }
 
@@ -511,7 +511,7 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
       try container.decodeIfPresent(Float.self, forKey: .destinationScaleX) ?? legacyScale
     destinationScaleY =
       try container.decodeIfPresent(Float.self, forKey: .destinationScaleY) ?? legacyScale
-    isMuted = try container.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
+    isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -521,7 +521,7 @@ public struct VideoLayerPreference: Codable, Equatable, Sendable, Identifiable {
     try container.encode(destinationY, forKey: .destinationY)
     try container.encode(destinationScaleX, forKey: .destinationScaleX)
     try container.encode(destinationScaleY, forKey: .destinationScaleY)
-    try container.encode(isMuted, forKey: .isMuted)
+    try container.encode(isHidden, forKey: .isHidden)
   }
 }
 
@@ -1848,7 +1848,7 @@ public enum ProgramInputDeviceKind: String, CaseIterable, Codable, Equatable, Se
   case video
   case audio
 
-  public var supportsProgramVideoMute: Bool {
+  public var supportsProgramVideoVisibility: Bool {
     self == .video
   }
 }

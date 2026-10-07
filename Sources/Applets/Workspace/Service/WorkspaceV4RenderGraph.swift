@@ -75,7 +75,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
           destinationY: translationYRational,
           destinationScaleX: scaleX,
           destinationScaleY: scaleY,
-          isMuted: hidden[internalID] ?? false
+          isHidden: hidden[internalID] ?? false
         ))
     }
     let audioChannels = Self.audioChannels(definition)

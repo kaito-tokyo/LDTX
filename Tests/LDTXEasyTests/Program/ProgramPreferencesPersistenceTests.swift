@@ -17,7 +17,7 @@ struct ProgramPreferencesPersistenceUnitTestSuite {
         composite.audioChannelKey(for: firstChannel): 0.75,
         composite.audioChannelKey(for: secondChannel): 0.25,
       ],
-      videoMutedByInputDeviceName: ["Camera%201": true]
+      videoHiddenByInputDeviceName: ["Camera%201": true]
     )
 
     let data = try ProgramPersistenceCodec.encodeProgramPreferences(preferences)

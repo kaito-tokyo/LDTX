@@ -112,3 +112,12 @@ the relevant design or feature documentation instead.
 - OCR ROI text remains a draft until the whole rectangle is valid. Inspector
   selection, Program changes, output start, save, and document close must respect
   pending invalid edits.
+
+## Video visibility terminology
+
+Use Hidden and Visibility for video layers and components, including model APIs,
+persistence fields, rendering, and tests. Reserve Mute and Muted for audio.
+
+Hidden video layers are excluded from Program composition, including VFX Sources.
+Do not replace hidden layers with dummy images. Visibility does not stop capture
+or change the configured PTS master.

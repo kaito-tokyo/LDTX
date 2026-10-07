@@ -18,21 +18,21 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(!ProgramComponentDefinition.testPattern.isFill)
   }
 
-  @Test func videoLayerMuteIsScopedToTheProgramLayer() {
+  @Test func videoLayerVisibilityIsScopedToTheProgramLayer() {
     let preferences = ProgramPreferences(videoLayersByProgramName: [
-      "Program A": [VideoLayerPreference(componentName: "Camera", isMuted: true)],
-      "Program B": [VideoLayerPreference(componentName: "Camera", isMuted: false)],
+      "Program A": [VideoLayerPreference(componentName: "Camera", isHidden: true)],
+      "Program B": [VideoLayerPreference(componentName: "Camera", isHidden: false)],
     ])
 
-    #expect(preferences.isVideoLayerMuted(componentName: "Camera", programName: "Program A"))
-    #expect(!preferences.isVideoLayerMuted(componentName: "Camera", programName: "Program B"))
-    #expect(!preferences.isVideoLayerMuted(componentName: "Missing", programName: "Program A"))
+    #expect(preferences.isVideoLayerHidden(componentName: "Camera", programName: "Program A"))
+    #expect(!preferences.isVideoLayerHidden(componentName: "Camera", programName: "Program B"))
+    #expect(!preferences.isVideoLayerHidden(componentName: "Missing", programName: "Program A"))
   }
 
   @Test func inputDeviceRenameAndRemovalUpdateDirectVideoLayers() {
     var preferences = ProgramPreferences(videoLayersByProgramName: [
       "Program": [
-        VideoLayerPreference(componentName: "Camera A", isMuted: true),
+        VideoLayerPreference(componentName: "Camera A", isHidden: true),
         VideoLayerPreference(componentName: "Title"),
       ]
     ])
@@ -42,7 +42,7 @@ struct ProgramPreferencesUnitTestSuite {
       preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == [
         "Camera B", "Title",
       ])
-    #expect(preferences.isVideoLayerMuted(componentName: "Camera B", programName: "Program"))
+    #expect(preferences.isVideoLayerHidden(componentName: "Camera B", programName: "Program"))
 
     preferences.removeInputDevice(named: "Camera B")
     #expect(preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == ["Title"])
@@ -83,30 +83,30 @@ struct ProgramPreferencesUnitTestSuite {
   private let firstID = "First"
   private let secondID = "Second"
 
-  @Test func onlyVideoInputsSupportProgramVideoMute() {
-    #expect(ProgramInputDeviceKind.video.supportsProgramVideoMute)
-    #expect(!ProgramInputDeviceKind.audio.supportsProgramVideoMute)
-    #expect(!ProgramInputDeviceKind.unspecified.supportsProgramVideoMute)
+  @Test func onlyVideoInputsSupportProgramVideoVisibility() {
+    #expect(ProgramInputDeviceKind.video.supportsProgramVideoVisibility)
+    #expect(!ProgramInputDeviceKind.audio.supportsProgramVideoVisibility)
+    #expect(!ProgramInputDeviceKind.unspecified.supportsProgramVideoVisibility)
   }
 
-  @Test func videoMuteUsesCanonicalPercentEncodedInputDeviceName() {
+  @Test func videoVisibilityUsesCanonicalPercentEncodedInputDeviceName() {
     var preferences = ProgramPreferences()
 
-    preferences.setVideoMuted(true, inputDeviceName: "Camera 端末/%")
+    preferences.setVideoHidden(true, inputDeviceName: "Camera 端末/%")
 
-    #expect(preferences.videoMutedByInputDeviceName == ["Camera%20%E7%AB%AF%E6%9C%AB%2F%25": true])
-    #expect(preferences.isVideoMuted(inputDeviceName: "Camera 端末/%"))
+    #expect(preferences.videoHiddenByInputDeviceName == ["Camera%20%E7%AB%AF%E6%9C%AB%2F%25": true])
+    #expect(preferences.isVideoHidden(inputDeviceName: "Camera 端末/%"))
   }
 
-  @Test func explicitUnmuteIsStoredAndRenameMovesTheEntry() {
+  @Test func explicitVisibilityIsStoredAndRenameMovesTheEntry() {
     var preferences = ProgramPreferences()
-    preferences.setVideoMuted(false, inputDeviceName: "Camera A")
+    preferences.setVideoHidden(false, inputDeviceName: "Camera A")
 
     preferences.renameInputDevice(from: "Camera A", to: "Camera B")
 
-    #expect(preferences.videoMutedByInputDeviceName == ["Camera%20B": false])
-    #expect(!preferences.isVideoMuted(inputDeviceName: "Camera A"))
-    #expect(!preferences.isVideoMuted(inputDeviceName: "Camera B"))
+    #expect(preferences.videoHiddenByInputDeviceName == ["Camera%20B": false])
+    #expect(!preferences.isVideoHidden(inputDeviceName: "Camera A"))
+    #expect(!preferences.isVideoHidden(inputDeviceName: "Camera B"))
   }
 
   @Test func renameWithConflictingAudioMuteKeysClearsAudioMutePreferences() {

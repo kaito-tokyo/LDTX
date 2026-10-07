@@ -38,13 +38,13 @@ A loaded `.ldtxworkspace` is represented by its Workspace v4 model and runtime s
 
 A **Program Definition** is the source code for the **Program**'s render graph: its **Output Track** topology, selected reusable resources, and fixed composition structure. The application compiles it into the runtime pipeline. Changing a **Program Definition** can require that pipeline to be rebuilt, so it is intentionally not the surface for frequent operational changes. This boundary is a performance property, not merely a storage convention.
 
-**Preferences** are the operational parameters supplied to that already-defined pipeline, such as **Video Layer** order and placement, audio gains, and mute state. They can change without redefining the pipeline's structure.
+**Preferences** are the operational parameters supplied to that already-defined pipeline, such as **Video Layer** order and placement, video visibility, audio gains, and audio mute state. They can change without redefining the pipeline's structure.
 
 | State | Owner | Examples |
 | --- | --- | --- |
 | **Output Track** topology and reusable **Workspace resources** | **WorkspaceDefinitionV4** | **Program** name, **Canvas Size**, **Video Component** appearance, audio configuration |
 | Workspace-wide audio **Preferences** | **WorkspacePreferencesV4** | One gain per Audio Input Device, shared by all Programs and canvases |
-| Per-**Program** canvas **Preferences** | **ProgramPreferences** | X/Y/Scale, layer visibility, master volume, and input mute state |
+| Per-**Program** canvas **Preferences** | **ProgramPreferences** | X/Y/Scale, layer visibility, master volume, and audio input mute state |
 
 **Preferences** never define a new **Video Component**. They refer to an existing **Video Component** by name.
 

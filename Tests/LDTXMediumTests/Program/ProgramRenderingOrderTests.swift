@@ -107,23 +107,23 @@ struct ProgramRenderingOrderIntegrationTestSuite {
     #expect(top.color == SIMD4<Float>(1, 0, 0, 1))
   }
 
-  @Test func mutedCameraWithoutBackgroundRemovalProducesOpaqueBlack() throws {
+  @Test func hiddenCameraWithoutBackgroundRemovalProducesOpaqueBlack() throws {
     let source = try makeDummySource(hasAlphaMask: false)
     let command = try #require(cameraCommand(source: source))
 
     guard case .solidColor(let fill) = command else {
-      Issue.record("Expected a muted camera to produce a solid-color command.")
+      Issue.record("Expected a hidden camera to produce a solid-color command.")
       return
     }
     #expect(fill.color == SIMD4<Float>(0, 0, 0, 1))
   }
 
-  @Test func mutedCameraWithBackgroundRemovalProducesTransparentBlack() throws {
+  @Test func hiddenCameraWithBackgroundRemovalProducesTransparentBlack() throws {
     let source = try makeDummySource(hasAlphaMask: true)
     let command = try #require(cameraCommand(source: source))
 
     guard case .solidColor(let fill) = command else {
-      Issue.record("Expected a muted background-removed camera to produce a solid-color command.")
+      Issue.record("Expected a hidden background-removed camera to produce a solid-color command.")
       return
     }
     #expect(fill.color == SIMD4<Float>(0, 0, 0, 0))
@@ -134,7 +134,7 @@ struct ProgramRenderingOrderIntegrationTestSuite {
     let command = try #require(cameraCommand(source: source))
 
     guard case .cameraInput = command else {
-      Issue.record("Expected an unmuted camera to keep the normal camera-input command.")
+      Issue.record("Expected an visible camera to keep the normal camera-input command.")
       return
     }
   }

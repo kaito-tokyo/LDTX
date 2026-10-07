@@ -11,10 +11,10 @@ import Testing
 struct ProgramPreferencesStoreUnitTestSuite {
   @Test func noOpDoesNotAdvanceRevision() {
     var store = ProgramPreferencesStore()
-    store.setVideoMuted(false, inputDeviceName: "Camera")
+    store.setVideoHidden(false, inputDeviceName: "Camera")
     let revision = store.revision
 
-    store.setVideoMuted(false, inputDeviceName: "Camera")
+    store.setVideoHidden(false, inputDeviceName: "Camera")
 
     #expect(store.revision == revision)
   }
@@ -22,15 +22,15 @@ struct ProgramPreferencesStoreUnitTestSuite {
   @Test func logicalChangeAdvancesRevisionOnce() {
     var store = ProgramPreferencesStore()
 
-    store.setVideoMuted(true, inputDeviceName: "Camera")
+    store.setVideoHidden(true, inputDeviceName: "Camera")
 
     #expect(store.revision == 1)
-    #expect(store.isVideoMuted(inputDeviceName: "Camera"))
+    #expect(store.isVideoHidden(inputDeviceName: "Camera"))
   }
 
   @Test func replacementIsNoOpWhenEqual() {
     var store = ProgramPreferencesStore()
-    let preferences = ProgramPreferences(videoMutedByInputDeviceName: ["Camera": true])
+    let preferences = ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
     store.replace(with: preferences)
     let revision = store.revision
 
@@ -45,34 +45,34 @@ struct ProgramPreferencesStoreUnitTestSuite {
     store.replace(
       with: ProgramPreferences(
         audioChannelGainsByName: ["Commentary": 0.5],
-        videoMutedByInputDeviceName: ["Camera": true]
+        videoHiddenByInputDeviceName: ["Camera": true]
       ))
 
     #expect(store.revision == 1)
     #expect(store.value.audioChannelGainsByName == ["Commentary": 0.5])
-    #expect(store.isVideoMuted(inputDeviceName: "Camera"))
+    #expect(store.isVideoHidden(inputDeviceName: "Camera"))
   }
 
   @Test func inputDeviceRenameIsOneLogicalTransaction() {
     var store = ProgramPreferencesStore(
-      value: ProgramPreferences(videoMutedByInputDeviceName: ["Camera%20A": true])
+      value: ProgramPreferences(videoHiddenByInputDeviceName: ["Camera%20A": true])
     )
 
     store.renameInputDevice(from: "Camera A", to: "Camera B")
 
     #expect(store.revision == 1)
-    #expect(!store.isVideoMuted(inputDeviceName: "Camera A"))
-    #expect(store.isVideoMuted(inputDeviceName: "Camera B"))
+    #expect(!store.isVideoHidden(inputDeviceName: "Camera A"))
+    #expect(store.isVideoHidden(inputDeviceName: "Camera B"))
   }
 
   @Test func inputDeviceRemovalIsOneLogicalTransactionAndNoOpWhenRepeated() {
     var store = ProgramPreferencesStore(
-      value: ProgramPreferences(videoMutedByInputDeviceName: ["Camera": true])
+      value: ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
     )
 
     store.removeInputDevice(named: "Camera")
     #expect(store.revision == 1)
-    #expect(!store.isVideoMuted(inputDeviceName: "Camera"))
+    #expect(!store.isVideoHidden(inputDeviceName: "Camera"))
 
     store.removeInputDevice(named: "Camera")
     #expect(store.revision == 1)

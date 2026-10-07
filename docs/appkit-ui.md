@@ -199,8 +199,10 @@ UI bindings access the assignment API without a document URL. Runtime projection
 and recording sessions receive an explicit assignment provider or snapshot. Each
 window observes shared changes and updates program runtimes, physical captures,
 and audio monitoring, cancelling its observer during shutdown. Program selection,
-monitor selection, mix synchronization and YouTube selection remain path-keyed;
-relocation cleanup for those fields is a separate change.
+monitor selection and YouTube selection remain path-keyed;
+relocation cleanup for those fields is a separate change. Landscape and Portrait
+master volumes and audio mute settings are independent. There is no mix
+synchronization setting between the canvases.
 
 The Workspace toolbar marks Stop and Start/Pause as navigational items, in that
 order, so AppKit places them before the standard document title. The window uses

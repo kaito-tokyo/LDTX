@@ -156,7 +156,7 @@ struct ManualCapturePipelineIntegrationTestSuite {
     }
   }
 
-  @Test func runtimeMuteChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
+  @Test func runtimeVisibilityChangesOnlyCompositionAndPreservesPTSAndPipeline() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
     let failures: Set<String> = await withCheckedContinuation { continuation in
@@ -203,30 +203,34 @@ struct ManualCapturePipelineIntegrationTestSuite {
     )
     renderer.beginSession(1)
 
-    let unmuted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
+    let visible = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
     renderer.updateProgramPreferences(
-      ProgramPreferences(videoMutedByInputDeviceName: ["Virtual%20camera": true])
+      ProgramPreferences(videoLayersByProgramName: [
+        configuration.videoLayerProgramName: [
+          VideoLayerPreference(componentName: cameraStep.name, isHidden: true)
+        ]
+      ])
     )
-    let mutedSample = try unwrap(service.emitVideo(frameIndex: 8))
-    let mutedCapturedPixelBuffer = try unwrap(CMSampleBufferGetImageBuffer(mutedSample))
-    let muted = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
-    let capturedDuringMute = try unwrap(
+    let hiddenSample = try unwrap(service.emitVideo(frameIndex: 8))
+    let hiddenCapturedPixelBuffer = try unwrap(CMSampleBufferGetImageBuffer(hiddenSample))
+    let hidden = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
+    let capturedWhileHidden = try unwrap(
       coordinator.latestFrame(forCameraID: "virtual-camera")
     )
     renderer.updateProgramPreferences(ProgramPreferences())
     let finalSample = try unwrap(service.emitVideo(frameIndex: 9))
-    let unmutedAgain = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
+    let visibleAgain = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
 
-    assertEqual(unmuted.presentationTime, firstSample.presentationTimeStamp)
-    assertEqual(muted.presentationTime, mutedSample.presentationTimeStamp)
-    assertEqual(unmutedAgain.presentationTime, finalSample.presentationTimeStamp)
-    assertEqual(unmuted.videoPipelineID, muted.videoPipelineID)
-    assertEqual(muted.videoPipelineID, unmutedAgain.videoPipelineID)
-    assertTrue(capturedDuringMute.pixelBuffer === mutedCapturedPixelBuffer)
-    assertEqual(capturedDuringMute.sourcePresentationTime, mutedSample.presentationTimeStamp)
-    assertEqual(capturedDuringMute.sequenceNumber, 2)
-    assertNotEqual(lumaHash(unmuted.pixelBuffer), lumaHash(muted.pixelBuffer))
-    assertNotEqual(lumaHash(muted.pixelBuffer), lumaHash(unmutedAgain.pixelBuffer))
+    assertEqual(visible.presentationTime, firstSample.presentationTimeStamp)
+    assertEqual(hidden.presentationTime, hiddenSample.presentationTimeStamp)
+    assertEqual(visibleAgain.presentationTime, finalSample.presentationTimeStamp)
+    assertEqual(visible.videoPipelineID, hidden.videoPipelineID)
+    assertEqual(hidden.videoPipelineID, visibleAgain.videoPipelineID)
+    assertTrue(capturedWhileHidden.pixelBuffer === hiddenCapturedPixelBuffer)
+    assertEqual(capturedWhileHidden.sourcePresentationTime, hiddenSample.presentationTimeStamp)
+    assertEqual(capturedWhileHidden.sequenceNumber, 2)
+    assertNotEqual(lumaHash(visible.pixelBuffer), lumaHash(hidden.pixelBuffer))
+    assertNotEqual(lumaHash(hidden.pixelBuffer), lumaHash(visibleAgain.pixelBuffer))
 
     renderer.endSession(1)
     await withCheckedContinuation { continuation in

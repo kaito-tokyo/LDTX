@@ -143,10 +143,6 @@ public nonisolated struct Ldtx_App_V1_WorkspaceLocalState: Sendable {
   /// Audio Input Device internal IDs routed to the local monitor output.
   public var monitorAudioInputDeviceInternalIds: [UInt64] = []
 
-  /// Whether each Program synchronizes the Landscape mix to Portrait, keyed by
-  /// Program internal ID.
-  public var synchronizesLandscapeMixToPortraitByProgramInternalID: Dictionary<UInt64,Bool> = [:]
-
   /// Saved Stream Key configuration ID selected for Landscape RTMPS output.
   public var landscapeYoutubeLiveStreamID: String {
     get {_landscapeYoutubeLiveStreamID ?? String()}
@@ -349,7 +345,7 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalStateStore: SwiftProtobuf.Messag
 
 nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceLocalState"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}selected_program_internal_id\0\u{4}\u{2}audio_input_device_physical_ids\0\u{3}monitor_audio_input_device_internal_ids\0\u{3}synchronizes_landscape_mix_to_portrait_by_program_internal_id\0\u{3}landscape_youtube_live_stream_id\0\u{3}portrait_youtube_live_stream_id\0\u{3}vfx_source_physical_ids\0\u{b}video_input_device_physical_ids\0\u{c}\u{2}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}selected_program_internal_id\0\u{4}\u{2}audio_input_device_physical_ids\0\u{3}monitor_audio_input_device_internal_ids\0\u{4}\u{2}landscape_youtube_live_stream_id\0\u{3}portrait_youtube_live_stream_id\0\u{3}vfx_source_physical_ids\0\u{b}video_input_device_physical_ids\0\u{b}synchronizes_landscape_mix_to_portrait_by_program_internal_id\0\u{c}\u{2}\u{1}\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -360,7 +356,6 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
       case 1: try { try decoder.decodeSingularUInt64Field(value: &self._selectedProgramInternalID) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: &self.audioInputDevicePhysicalIds) }()
       case 4: try { try decoder.decodeRepeatedUInt64Field(value: &self.monitorAudioInputDeviceInternalIds) }()
-      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: &self.synchronizesLandscapeMixToPortraitByProgramInternalID) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self._landscapeYoutubeLiveStreamID) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._portraitYoutubeLiveStreamID) }()
       case 8: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufString>.self, value: &self.vfxSourcePhysicalIds) }()
@@ -383,9 +378,6 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
     if !self.monitorAudioInputDeviceInternalIds.isEmpty {
       try visitor.visitPackedUInt64Field(value: self.monitorAudioInputDeviceInternalIds, fieldNumber: 4)
     }
-    if !self.synchronizesLandscapeMixToPortraitByProgramInternalID.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufUInt64,SwiftProtobuf.ProtobufBool>.self, value: self.synchronizesLandscapeMixToPortraitByProgramInternalID, fieldNumber: 5)
-    }
     try { if let v = self._landscapeYoutubeLiveStreamID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 6)
     } }()
@@ -403,7 +395,6 @@ nonisolated extension Ldtx_App_V1_WorkspaceLocalState: SwiftProtobuf.Message, Sw
     if lhs.vfxSourcePhysicalIds != rhs.vfxSourcePhysicalIds {return false}
     if lhs.audioInputDevicePhysicalIds != rhs.audioInputDevicePhysicalIds {return false}
     if lhs.monitorAudioInputDeviceInternalIds != rhs.monitorAudioInputDeviceInternalIds {return false}
-    if lhs.synchronizesLandscapeMixToPortraitByProgramInternalID != rhs.synchronizesLandscapeMixToPortraitByProgramInternalID {return false}
     if lhs._landscapeYoutubeLiveStreamID != rhs._landscapeYoutubeLiveStreamID {return false}
     if lhs._portraitYoutubeLiveStreamID != rhs._portraitYoutubeLiveStreamID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
