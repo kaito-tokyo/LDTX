@@ -106,7 +106,7 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan GitHubActions \
+            -testPlan LDTXTests \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -122,11 +122,13 @@ jobs:
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
+          # Temporarily exclude real OCR: Vision returns .unknownError on the GHA runner.
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan GitHubActions \
+            -testPlan LDTXTests \
+            -skip-testing:LDTXHardTests/WorkspaceClockOCRIntegrationTestSuite \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \

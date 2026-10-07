@@ -3,27 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 @preconcurrency import CoreImage
-@preconcurrency import CoreML
 import Foundation
-import LDTXTaskQueue
-@preconcurrency import Vision
+import Vision
 
 /// The OCR request settings independent of any persisted Workspace format.
 public struct VisionOCRConfiguration: Equatable, Sendable {
-  public var prefersAccurateRecognition: Bool
   public var recognitionLanguages: [String]
   public var usesLanguageCorrection: Bool
   public var customWords: [String]
   public var minimumTextHeight: Float?
 
   public init(
-    prefersAccurateRecognition: Bool,
     recognitionLanguages: [String],
     usesLanguageCorrection: Bool,
     customWords: [String] = [],
     minimumTextHeight: Float? = nil
   ) {
-    self.prefersAccurateRecognition = prefersAccurateRecognition
     self.recognitionLanguages = recognitionLanguages
     self.usesLanguageCorrection = usesLanguageCorrection
     self.customWords = customWords
@@ -32,57 +27,20 @@ public struct VisionOCRConfiguration: Equatable, Sendable {
 
 }
 
-public actor VisionOCRService {
-  private let computeDevice: MLComputeDevice?
-
-  public init(computeDevice: MLComputeDevice? = nil) {
-    self.computeDevice = computeDevice
-  }
+public struct VisionOCRService: Sendable {
+  public init() {}
 
   public func recognizeText(
     in image: CIImage,
-    configuration: VisionOCRConfiguration,
-    stopToken: StopToken
+    configuration: VisionOCRConfiguration
   ) async throws -> VisionAnalysis {
-    try stopToken.check()
     try Task.checkCancellation()
     let startedAt = ContinuousClock.now
-    let request = VNRecognizeTextRequest()
-    // macOS 27's Fast backend traps inside TextRecognition when language correction
-    // is disabled. Accurate preserves uncorrected recognition and automatic languages.
-    var usesAccurateRecognition = configuration.prefersAccurateRecognition
-    if #available(macOS 27.0, *), !configuration.usesLanguageCorrection {
-      usesAccurateRecognition = true
-    }
-    request.recognitionLevel = usesAccurateRecognition ? .accurate : .fast
-    if !configuration.recognitionLanguages.isEmpty {
-      request.recognitionLanguages = configuration.recognitionLanguages
-    } else {
-      request.automaticallyDetectsLanguage = true
-    }
-    request.usesLanguageCorrection = configuration.usesLanguageCorrection
-    request.customWords = configuration.customWords
-    if let minimumTextHeight = configuration.minimumTextHeight {
-      request.minimumTextHeight = minimumTextHeight
-    }
-    if let computeDevice {
-      for stage in try request.supportedComputeStageDevices.keys {
-        request.setComputeDevice(computeDevice, for: stage)
-      }
-    }
-
-    let operation = VisionOCRRequestOperation(image: image, request: request)
-    try await withTaskCancellationHandler {
-      try await Task.detached { [operation] in
-        try stopToken.check()
-        try operation.perform()
-        try stopToken.check()
-      }.value
-    } onCancel: {
-      operation.cancel()
-    }
-    try stopToken.check()
-    let output = (request.results ?? [])
+    let request = makeRequest(configuration: configuration)
+    let observations = try await request.perform(on: image)
+    try Task.checkCancellation()
+    let output =
+      observations
       .compactMap { $0.topCandidates(1).first?.string }
       .joined(separator: "\n")
     let elapsed = ContinuousClock.now - startedAt
@@ -92,22 +50,21 @@ public actor VisionOCRService {
         + Double(elapsed.components.attoseconds) / 1e18
     )
   }
-}
 
-private final class VisionOCRRequestOperation: @unchecked Sendable {
-  private let handler: VNImageRequestHandler
-  private let request: VNRecognizeTextRequest
-
-  init(image: CIImage, request: VNRecognizeTextRequest) {
-    handler = VNImageRequestHandler(ciImage: image)
-    self.request = request
-  }
-
-  func perform() throws {
-    try handler.perform([request])
-  }
-
-  func cancel() {
-    request.cancel()
+  func makeRequest(configuration: VisionOCRConfiguration) -> RecognizeTextRequest {
+    var request = RecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.automaticallyDetectsLanguage = configuration.recognitionLanguages.isEmpty
+    if !configuration.recognitionLanguages.isEmpty {
+      request.recognitionLanguages = configuration.recognitionLanguages.map {
+        Locale.Language(identifier: $0)
+      }
+    }
+    request.usesLanguageCorrection = configuration.usesLanguageCorrection
+    request.customWords = configuration.customWords
+    if let minimumTextHeight = configuration.minimumTextHeight {
+      request.minimumTextHeightFraction = minimumTextHeight
+    }
+    return request
   }
 }

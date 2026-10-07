@@ -47,9 +47,11 @@ The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
 
 ## Xcode Cloud tests
 
-Select the shared `LDTXHardTests` scheme for the Xcode Cloud test workflow.
-Its Test action uses `Debug` and the `XcodeCloud` test plan. HardTests is a
-hostless unit-test bundle containing only the real Clock OCR integration test.
+Select the shared `LDTXApp` scheme and `LDTXTests` plan for the Xcode Cloud
+test workflow, using `Debug`. The plan includes Easy, Medium, and Hard tests.
+The dedicated `LDTXHardTests` scheme runs only HardTests directly. HardTests is a
+hostless unit-test bundle for Vision, VideoToolbox, CoreML, Metal, and
+AVFoundation tests.
 It does not launch `LDTXApp` or use XCUI automation. Keep archive workflows on
 `LDTXApp` with `Distribution`.
 
@@ -282,7 +284,7 @@ GitHub Actions is the pull-request merge gate: Swift package tests run in
 parallel with the hosted `LDTX` integration test. The `LDTX`
 application, Vision, and Quick Look archive are built and signed by Xcode
 Cloud, which is the release build authority. Its separate Test action runs the
-hostless OCR test using `LDTXHardTests`.
+hostless framework tests using `LDTXHardTests`.
 
 ```sh
 reuse --no-multiprocessing lint

@@ -260,7 +260,6 @@ schemes:
       testPlans:
         - path: Default.xctestplan
           defaultPlan: true
-        - path: GitHubActions.xctestplan
-        - path: XcodeCloud.xctestplan
+        - path: LDTXTests.xctestplan
     archive:
       config: Distribution

@@ -16,6 +16,20 @@ targets:
       - target: LDTXVision
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletStore
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXDash
+      - target: LDTXMP4
+      - target: LDTXProgram
+      - target: LDTXProgramRendering
+      - target: LDTXRecording
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletUI
+      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXYouTubeOutputProtocol
+      - target: LDTXYouTubeRTMPS
       - package: SwiftProtobuf
         product: SwiftProtobuf
     settings:
@@ -32,6 +46,5 @@ schemes:
         LDTXHardTests: all
     test:
       config: Debug
-      testPlans:
-        - path: XcodeCloud.xctestplan
-          defaultPlan: true
+      targets:
+        - LDTXHardTests

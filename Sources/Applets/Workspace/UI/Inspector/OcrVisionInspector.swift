@@ -45,15 +45,7 @@ struct OcrVisionInspector: View {
           Text("Every 30 Seconds").tag(30.0)
         }
         .disabled(isRecording)
-        Picker("Recognition", selection: visionBinding(\.accurate, initial: vision.accurate)) {
-          Text("Fast").tag(false)
-          Text("Accurate").tag(true)
-        }
-        .disabled(isRecording)
-        if #available(macOS 27.0, *), !vision.accurate, !vision.usesLanguageCorrection {
-          Text("Fast recognition without language correction uses Accurate on this macOS version.")
-            .font(.caption).foregroundStyle(.secondary)
-        }
+        LabeledContent("Recognition", value: "Accurate")
         Toggle(
           "Language Correction",
           isOn: visionBinding(\.usesLanguageCorrection, initial: vision.usesLanguageCorrection)

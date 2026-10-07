@@ -22,14 +22,6 @@
       "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
-        "identifier" : "AF349AA2C58E469BDBEFD99B",
-        "name" : "LDTXCorelibsTests"
-      }
-    },
-    {
-      "parallelizable" : false,
-      "target" : {
-        "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "F0FE96F7BA9CE58358994991",
         "name" : "LDTXEasyTests"
       }
@@ -43,10 +35,11 @@
       }
     },
     {
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
-        "identifier" : "232F5D19ADE07649B5F9404D",
-        "name" : "LDTXAppUIComponentTests"
+        "identifier" : "28E249F7B2FC5647692B89E8",
+        "name" : "LDTXHardTests"
       }
     }
   ],

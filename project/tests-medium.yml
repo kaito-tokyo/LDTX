@@ -33,6 +33,10 @@ targets:
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletController
       - target: LDTXYouTubeAuth
+      - target: LDTXMediaTiming
+      - target: LDTXVision
+      - target: LDTXYouTube
+      - target: LDTXYouTubeOutputProtocol
       - package: AppAuth-iOS
         product: AppAuth
       - package: SwiftProtobuf
