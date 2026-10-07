@@ -113,9 +113,14 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     self.onSetHidden = onSetHidden
     self.onError = onError
     var names: [UInt64: String] = [:]
+    var placementSupport: [UInt64: Bool] = [:]
     for component in definition.videoComponents {
       if let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component), names[id] == nil {
         names[id] = component.displayName
+        switch component.definition {
+        case .vfxSource, .clock: placementSupport[id] = true
+        default: placementSupport[id] = false
+        }
       }
     }
     var rows: [UInt64: VideoLayersTableRow] = [:]
@@ -141,6 +146,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       }
       row.delegate = self
       row.state.name = names[id] ?? "Missing Video Layer"
+      row.state.supportsPlacement = placementSupport[id] ?? false
       row.state.isHidden = programPreferences.videoLayerHidden[id] ?? false
       if !row.state.hasUnconfirmedChanges && !row.state.isEditing {
         row.state.display(

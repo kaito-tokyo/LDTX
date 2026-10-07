@@ -93,3 +93,10 @@ Feature: Commit transform drafts
     Given a transform row is open while unrelated live preferences change
     When its position draft is committed
     Then the latest master gain, hidden flags, and crop insets are retained
+
+  @UCT-1006.15
+  Scenario: Only VFX Sources and Clocks expose placement fields
+    Given Video Layers contain VFX Sources, Clocks, fills, gradients, and test patterns
+    When the Editor displays the layers
+    Then only VFX Sources and Clocks expose position and scale fields
+    And full-canvas layers retain their visibility controls without placement fields

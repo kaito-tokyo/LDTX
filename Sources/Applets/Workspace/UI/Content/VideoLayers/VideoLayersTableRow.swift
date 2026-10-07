@@ -38,6 +38,7 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   @ObservationIgnored var onSetHidden: (Bool) -> Void = { _ in }
   var name = ""
   var isHidden = false
+  var supportsPlacement = true
   var strings = ["0", "0", "1", "1"]
   var hasUnconfirmedChanges = false
   var isEditing = false
@@ -87,19 +88,21 @@ struct VideoLayersTableRowContent: View {
           "Hide", isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0) })
         )
         .toggleStyle(.checkbox)
-        ForEach(0..<4) { index in
-          Text(["Pos X", "Pos Y", "Scale X", "Scale Y"][index])
-          TextField(
-            ["Pos X", "Pos Y", "Scale X", "Scale Y"][index],
-            text: Binding(
-              get: { state.strings[index] },
-              set: {
-                guard state.strings[index] != $0 else { return }
-                state.strings[index] = $0
-                state.hasUnconfirmedChanges = true
-              })
-          )
-          .focused($focusedField, equals: index)
+        if state.supportsPlacement {
+          ForEach(0..<4) { index in
+            Text(["Pos X", "Pos Y", "Scale X", "Scale Y"][index])
+            TextField(
+              ["Pos X", "Pos Y", "Scale X", "Scale Y"][index],
+              text: Binding(
+                get: { state.strings[index] },
+                set: {
+                  guard state.strings[index] != $0 else { return }
+                  state.strings[index] = $0
+                  state.hasUnconfirmedChanges = true
+                })
+            )
+            .focused($focusedField, equals: index)
+          }
         }
       }
     }

@@ -473,5 +473,42 @@ extension AppUIComponentTestSuite {
       #expect(row.state.strings[0] == "960")
     }
 
+    @Test("UCT-1006.15: Only VFX Sources and Clocks expose placement fields")
+    func placementFieldsFollowComponentType() throws {
+      let fixture = VideoLayersTestFixture()
+      let editor = fixture.makeEditor()
+      let components: [Ldtx_Workspace_V4_VideoComponentWrapper] = [
+        .with { $0.vfxSource.internalID = 1 },
+        .with { $0.clock.internalID = 2 },
+        .with { $0.solidColorFill.internalID = 3 },
+        .with { $0.linearGradientFill.internalID = 4 },
+        .with { $0.radialGradientFill.internalID = 5 },
+        .with { $0.conicGradientFill.internalID = 6 },
+        .with { $0.testPattern.internalID = 7 },
+      ]
+      editor.update(
+        definition: .with { $0.videoComponents = components },
+        programPreferences: .init(), layerIDs: Array(1...7),
+        canvasWidth: 1920, canvasHeight: 1080)
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+        styleMask: [.titled], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      let container = NSView(frame: window.contentLayoutRect)
+      window.contentView = container
+      defer { window.close() }
+      window.displayIfNeeded()
+      for id in UInt64(1)...7 {
+        let row = try #require(editor.table.rows[id])
+        row.frame = NSRect(x: 0, y: 0, width: 1000, height: 80)
+        container.addSubview(row)
+        row.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        #expect(row.state.supportsPlacement == (id <= 2))
+        #expect(fixture.nativeFields(in: row).count == (id <= 2 ? 4 : 0))
+        row.removeFromSuperview()
+      }
+    }
+
   }
 }

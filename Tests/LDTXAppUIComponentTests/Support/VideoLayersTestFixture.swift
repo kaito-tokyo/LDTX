@@ -44,7 +44,11 @@ final class VideoLayersTestFixture {
     let editor = editors[ObjectIdentifier(table)] ?? makeEditor()
     editors[ObjectIdentifier(table)] = editor
     editor.update(
-      definition: .init(), programPreferences: preferences, layerIDs: ids,
+      definition: .with { definition in
+        definition.videoComponents = ids.map { id in
+          .with { $0.vfxSource.internalID = id }
+        }
+      }, programPreferences: preferences, layerIDs: ids,
       canvasWidth: 1920, canvasHeight: 1080,
       onCommitTransform: { id, value in
         try commit(id, value)
