@@ -226,15 +226,16 @@ it ran 567 tests. Repeat this measurement on a clean CI cache before changing
 the package structure: at this baseline the build dominates the selected-test
 latency, but one local result alone does not establish a split boundary.
 
-### Xcode Cloud OCR tests
+### Xcode Cloud UI tests
 
 A separate PR Test workflow named `On pull request - HardTests` can be configured in
 Xcode Cloud for pull requests targeting `main`. Select the `LDTXApp` scheme,
 Debug configuration, macOS 27, and the `XcodeCloud` test plan. Leave signing to
 Xcode Cloud and keep the existing release Archive workflows unchanged.
 `ci_scripts/ci_post_clone.sh` generates the project before the test action.
-The Hard target is hosted by `LDTXApp` so its OCR uses the app's inference
-entitlement. Missing inference support is a test failure, not a skipped success.
+The Hard target is a UI-testing bundle that launches `LDTXApp` through
+`XCUIApplication` and verifies launch and File-menu wiring. It does not load
+unit tests into the application or run the former direct-runtime OCR test.
 The local command for the same test plan is:
 
 ```sh
