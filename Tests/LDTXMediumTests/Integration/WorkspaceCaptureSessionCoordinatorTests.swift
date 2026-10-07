@@ -64,7 +64,12 @@ struct WorkspaceCaptureSessionCoordinatorIntegrationTestSuite {
   {
     let deadline = DispatchTime.now() + timeout
     for expectation in expectations {
-      #expect(await Task.detached { expectation.wait(until: deadline) }.value)
+      let fulfilled = await withCheckedContinuation { continuation in
+        DispatchQueue.global().async {
+          continuation.resume(returning: expectation.wait(until: deadline))
+        }
+      }
+      #expect(fulfilled)
     }
   }
 

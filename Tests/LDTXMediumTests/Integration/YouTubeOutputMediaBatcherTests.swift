@@ -112,9 +112,11 @@ struct YouTubeOutputMediaBatcherIntegrationTestSuite {
   }
 
   private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
-    await Task.detached {
-      waitForSemaphore(semaphore, timeout: timeout)
-    }.value
+    await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        continuation.resume(returning: waitForSemaphore(semaphore, timeout: timeout))
+      }
+    }
   }
 }
 

@@ -167,6 +167,7 @@ targets:
       - target: LDTXTaskQueue
         embed: true
       - target: LDTXRecording
+        embed: true
       - target: LDTXRecordBundleFormat
         embed: true
       - target: LDTXVideoComposition
