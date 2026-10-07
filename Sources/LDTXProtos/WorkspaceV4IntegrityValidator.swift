@@ -197,7 +197,7 @@ public enum WorkspaceV4IntegrityValidator {
   }
 
   private static func validateRationals(_ values: [Ldtx_Workspace_V4_Rational32]) throws {
-    guard values.allSatisfy({ $0.denominator > 0 }) else {
+    guard values.allSatisfy({ $0.denominator > 0 || $0.numerator == 0 }) else {
       throw WorkspaceV4IntegrityError.invalidRational
     }
   }
@@ -349,8 +349,7 @@ public enum WorkspaceV4IntegrityValidator {
         !lessThan(
           interval.intervalSecondsRational,
           .with {
-            $0.numerator = 1
-            $0.denominator = 10
+            $0.set(num: 1, den: 10)
           })
       else {
         throw WorkspaceV4IntegrityError.invalidVisionInterval
@@ -402,14 +401,14 @@ public enum WorkspaceV4IntegrityValidator {
   public static func validateTransform(_ transform: Ldtx_Workspace_V4_BasicTransform) throws {
     try validateRationals(
       [
-        transform.hasTranslationXRational ? transform.translationXRational : nil,
-        transform.hasTranslationYRational ? transform.translationYRational : nil,
-        transform.hasScaleXRational ? transform.scaleXRational : nil,
-        transform.hasScaleYRational ? transform.scaleYRational : nil,
-        transform.hasTopInsetRational ? transform.topInsetRational : nil,
-        transform.hasRightInsetRational ? transform.rightInsetRational : nil,
-        transform.hasBottomInsetRational ? transform.bottomInsetRational : nil,
-        transform.hasLeftInsetRational ? transform.leftInsetRational : nil,
+        transform.translationX,
+        transform.translationY,
+        transform.scaleX,
+        transform.scaleY,
+        transform.topInset,
+        transform.rightInset,
+        transform.bottomInset,
+        transform.leftInset,
       ].compactMap { $0 })
     guard
       [

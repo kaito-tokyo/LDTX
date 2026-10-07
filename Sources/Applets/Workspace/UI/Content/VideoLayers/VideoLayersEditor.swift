@@ -51,15 +51,22 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
               throw WorkspaceSelectionError(
                 message: "Enter an integer pixel position from 0 to \(size).")
             }
-            return Ldtx_Workspace_V4_Rational32.with {
-              $0.numerator = pixels
-              $0.denominator = size
-            }
+            var value = Ldtx_Workspace_V4_Rational32()
+            value.set(num: pixels, den: size)
+            return value
           }
           guard !text.contains("/") else {
             throw WorkspaceSelectionError(message: "Enter a decimal scale.")
           }
-          return try RationalParseStrategy(preservesDecimalDenominator: true).parse(text)
+          guard
+            let decimal = Decimal(
+              string: text.trimmingCharacters(in: .whitespacesAndNewlines),
+              locale: Locale(identifier: "en_US_POSIX")),
+            (try? RationalParseStrategy().parse(text)) != nil
+          else { throw RationalInputError.invalidNumber }
+          var value = Ldtx_Workspace_V4_Rational32()
+          try value.set(decimal: decimal)
+          return value
         } catch {
           throw WorkspaceSelectionError(
             message:
@@ -67,10 +74,10 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         }
       }
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.translationXRational = values[0]
-      transform.translationYRational = values[1]
-      transform.scaleXRational = values[2]
-      transform.scaleYRational = values[3]
+      transform.translationX = values[0]
+      transform.translationY = values[1]
+      transform.scaleX = values[2]
+      transform.scaleY = values[3]
       let saved = try onCommitTransform(id, transform)
       row.state.hasUnconfirmedChanges = false
       row.state.display(
@@ -228,12 +235,10 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     for id: UInt64 in [1, 2] {
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleXRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       transform.scaleYRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       programPreferences.videoLayerTransforms[id] = transform
     }

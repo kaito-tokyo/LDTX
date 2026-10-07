@@ -43,12 +43,10 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     component.widthRational = .with {
-      $0.numerator = 1
-      $0.denominator = 6
+      $0.set(num: 1, den: 6)
     }
     component.heightRational = .with {
-      $0.numerator = 2
-      $0.denominator = 27
+      $0.set(num: 2, den: 27)
     }
     component.foregroundColor = opaqueWhite
     var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
@@ -69,12 +67,10 @@ enum WorkspaceResourceFactory {
     component.displayName = name
     component.startColor = gradientStartColor
     component.endXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.set(num: 1, den: 1)
     }
     component.endYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.set(num: 1, den: 1)
     }
     component.endColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -89,16 +85,13 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     component.centerXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.centerYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.outerRadiusRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.innerColor = gradientStartColor
     component.outerColor = gradientEndColor
@@ -113,12 +106,10 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     component.centerXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.centerYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.startColor = gradientStartColor
     component.endColor = gradientEndColor
@@ -141,8 +132,7 @@ enum WorkspaceResourceFactory {
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
     trigger.intervalSecondsRational = .with {
-      $0.numerator = 5
-      $0.denominator = 1
+      $0.set(num: 5, den: 1)
     }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger

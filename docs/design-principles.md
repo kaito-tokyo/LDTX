@@ -80,3 +80,20 @@ the relevant design or feature documentation instead.
   Workspace definition. Its selection control may display the currently
   resolved Program, including a restored selection. This does not change the
   unselected-draft policy for dynamic resource editing sheets.
+
+## Rational values and optional transforms
+
+- Construct or update Rational32 values through `set(num:den:)` or
+  `set(decimal:)`; application code must not assign numerator or denominator
+  directly. Generated protobuf code is exempt.
+- `set(num:den:)` preserves the supplied representation without validation or
+  reduction. `set(decimal:)` encodes a representable Decimal exactly with a
+  power-of-ten denominator; an encoding overflow leaves the prior value intact.
+- Read through `float`, `double`, or `decimal`. All three interpret `0/0` as
+  zero without mutating the stored representation. Other zero denominators
+  follow the numeric type's division rules.
+- BasicTransform's optional accessors preserve protobuf presence. Setting an
+  accessor to nil clears the field. Runtime defaults apply only to absent
+  fields: translation and insets default to zero, while scale defaults to one.
+- Decimal editing uses `decimal` and `set(decimal:)`. Float and Double have no
+  generic setters; each caller owns its quantization and encoding policy.

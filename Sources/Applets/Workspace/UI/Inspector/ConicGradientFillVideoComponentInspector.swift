@@ -34,20 +34,17 @@ struct ConicGradientFillVideoComponentInspector: View {
     self._centerX = State(
       initialValue: component?.centerXRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 2
+          $0.set(num: 1, den: 2)
         })
     self._centerY = State(
       initialValue: component?.centerYRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 2
+          $0.set(num: 1, den: 2)
         })
     self._startAngleRadians = State(
       initialValue: component?.startAngleRadiansRational
         ?? .with {
-          $0.numerator = 0
-          $0.denominator = 1
+          $0.set(num: 0, den: 1)
         })
     self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
     self._endColor = State(initialValue: component?.endColor.asColor() ?? .white)

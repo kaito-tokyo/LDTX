@@ -33,19 +33,19 @@ public struct WorkspaceV4RenderGraph: Sendable {
         var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
-      let topInsetRational = Self.unitInterval(transform.topInsetRational.float, default: 0)
+      let topInsetRational = Self.unitInterval(transform.topInset?.float ?? 0, default: 0)
       let rightInsetRational = Self.unitInterval(
-        transform.rightInsetRational.float, default: 0)
+        transform.rightInset?.float ?? 0, default: 0)
       let bottomInsetRational = Self.unitInterval(
-        transform.bottomInsetRational.float, default: 0)
+        transform.bottomInset?.float ?? 0, default: 0)
       let leftInsetRational = Self.unitInterval(
-        transform.leftInsetRational.float, default: 0)
+        transform.leftInset?.float ?? 0, default: 0)
       let translationXRational = Self.unitInterval(
-        transform.translationXRational.float, default: 0)
+        transform.translationX?.float ?? 0, default: 0)
       let translationYRational = Self.unitInterval(
-        transform.translationYRational.float, default: 0)
-      let scaleX = transform.hasScaleXRational ? transform.scaleXRational.float : 1
-      let scaleY = transform.hasScaleYRational ? transform.scaleYRational.float : 1
+        transform.translationY?.float ?? 0, default: 0)
+      let scaleX = transform.scaleX?.float ?? 1
+      let scaleY = transform.scaleY?.float ?? 1
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
         input.sourceCropTop = topInsetRational * 100

@@ -21,6 +21,7 @@ struct RationalFormatStyle: ParseableFormatStyle {
   var multiplier: UInt64 = 1
   var parseStrategy: RationalParseStrategy { RationalParseStrategy(divisor: multiplier) }
   func format(_ value: Ldtx_Workspace_V4_Rational32) -> String {
+    if value.numerator == 0 && value.denominator == 0 { return "0" }
     guard value.denominator > 0 else { return "" }
     var magnitude = Int128(value.numerator).magnitude * UInt128(multiplier)
     var denominator = UInt128(value.denominator)
@@ -49,7 +50,6 @@ struct RationalFormatStyle: ParseableFormatStyle {
 
 struct RationalParseStrategy: ParseStrategy {
   var divisor: UInt64 = 1
-  var preservesDecimalDenominator = false
   func parse(_ text: String) throws -> Ldtx_Workspace_V4_Rational32 {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     if text.contains("/") {
@@ -81,7 +81,7 @@ struct RationalParseStrategy: ParseStrategy {
     else { throw RationalInputError.invalidNumber }
     var n = negative ? -magnitude : magnitude
     if n == 0 {
-      return .with { $0.denominator = 1 }
+      return .with { $0.set(num: 0, den: 1) }
     }
     let places = (parts.count == 2 ? parts[1].count : 0) - exponent
     guard (-38...38).contains(places) else { throw RationalInputError.overflow }
@@ -97,15 +97,6 @@ struct RationalParseStrategy: ParseStrategy {
     }
     let scaled = d.multipliedReportingOverflow(by: UInt128(divisor))
     guard !scaled.overflow else { throw RationalInputError.overflow }
-    if preservesDecimalDenominator {
-      guard let numerator = Int32(exactly: n),
-        let denominator = UInt32(exactly: scaled.partialValue)
-      else { throw RationalInputError.overflow }
-      return .with {
-        $0.numerator = numerator
-        $0.denominator = denominator
-      }
-    }
     return try Self.reduced(n, scaled.partialValue)
   }
 
@@ -113,7 +104,7 @@ struct RationalParseStrategy: ParseStrategy {
     -> Ldtx_Workspace_V4_Rational32
   {
     guard denominator > 0 else { throw RationalInputError.zeroDenominator }
-    if numerator == 0 { return .with { $0.denominator = 1 } }
+    if numerator == 0 { return .with { $0.set(num: 0, den: 1) } }
     var a = numerator.magnitude
     var b = denominator
     while b != 0 { (a, b) = (b, a % b) }
@@ -121,8 +112,7 @@ struct RationalParseStrategy: ParseStrategy {
       let d = UInt32(exactly: denominator / a)
     else { throw RationalInputError.overflow }
     var result = Ldtx_Workspace_V4_Rational32()
-    result.numerator = n
-    result.denominator = d
+    result.set(num: n, den: d)
     return result
   }
 }

@@ -86,21 +86,17 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     component.startXRational = .with {
-      $0.numerator = 0
-      $0.denominator = 1
+      $0.set(num: 0, den: 1)
     }
     component.startYRational = .with {
-      $0.numerator = 0
-      $0.denominator = 1
+      $0.set(num: 0, den: 1)
     }
     component.startColor = startColor
     component.endXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.set(num: 1, den: 1)
     }
     component.endYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.set(num: 1, den: 1)
     }
     component.endColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -119,20 +115,16 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     component.centerXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.centerYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.innerRadiusRational = .with {
-      $0.numerator = 0
-      $0.denominator = 1
+      $0.set(num: 0, den: 1)
     }
     component.outerRadiusRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.innerColor = innerColor
     component.outerColor = outerColor
@@ -152,12 +144,10 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     component.centerXRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.centerYRational = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.set(num: 1, den: 2)
     }
     component.startColor = startColor
     component.endColor = endColor
@@ -174,12 +164,10 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     component.widthRational = .with {
-      $0.numerator = 1
-      $0.denominator = 6
+      $0.set(num: 1, den: 6)
     }
     component.heightRational = .with {
-      $0.numerator = 2
-      $0.denominator = 27
+      $0.set(num: 2, den: 27)
     }
     component.foregroundColor = Self.opaqueWhite
     var backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor()
@@ -209,8 +197,7 @@ extension WorkspaceWindowRuntime {
   public func addOcrVision(
     displayName: String, videoComponentInternalID: UInt64,
     intervalSeconds: Ldtx_Workspace_V4_Rational32 = .with {
-      $0.numerator = 5
-      $0.denominator = 1
+      $0.set(num: 5, den: 1)
     }
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()

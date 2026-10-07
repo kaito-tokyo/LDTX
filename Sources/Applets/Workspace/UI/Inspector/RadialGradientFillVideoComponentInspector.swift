@@ -35,26 +35,22 @@ struct RadialGradientFillVideoComponentInspector: View {
     self._centerX = State(
       initialValue: component?.centerXRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 2
+          $0.set(num: 1, den: 2)
         })
     self._centerY = State(
       initialValue: component?.centerYRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 2
+          $0.set(num: 1, den: 2)
         })
     self._innerRadius = State(
       initialValue: component?.innerRadiusRational
         ?? .with {
-          $0.numerator = 0
-          $0.denominator = 1
+          $0.set(num: 0, den: 1)
         })
     self._outerRadius = State(
       initialValue: component?.outerRadiusRational
         ?? .with {
-          $0.numerator = 18
-          $0.denominator = 25
+          $0.set(num: 18, den: 25)
         })
     self._innerColor = State(initialValue: component?.innerColor.asColor() ?? .white)
     self._outerColor = State(initialValue: component?.outerColor.asColor() ?? .black)

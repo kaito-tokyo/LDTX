@@ -162,26 +162,10 @@ public final class WorkspaceStoreService {
   ) throws -> Ldtx_Workspace_V4_BasicTransform {
     var updated = try preferences(for: programID, target: target)
     var transform = updated.videoLayerTransforms[layerID] ?? .init()
-    if value.hasTranslationXRational {
-      transform.translationXRational = value.translationXRational
-    } else {
-      transform.clearTranslationXRational()
-    }
-    if value.hasTranslationYRational {
-      transform.translationYRational = value.translationYRational
-    } else {
-      transform.clearTranslationYRational()
-    }
-    if value.hasScaleXRational {
-      transform.scaleXRational = value.scaleXRational
-    } else {
-      transform.clearScaleXRational()
-    }
-    if value.hasScaleYRational {
-      transform.scaleYRational = value.scaleYRational
-    } else {
-      transform.clearScaleYRational()
-    }
+    transform.translationX = value.translationX
+    transform.translationY = value.translationY
+    transform.scaleX = value.scaleX
+    transform.scaleY = value.scaleY
     updated.videoLayerTransforms[layerID] = transform
     try commitPreferences(updated, programID: programID, target: target)
     return transform

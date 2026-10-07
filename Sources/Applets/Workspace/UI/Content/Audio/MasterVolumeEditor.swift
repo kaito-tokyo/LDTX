@@ -133,7 +133,7 @@ final class MasterVolumeEditor: NSViewController, NSMenuDelegate {
         }, onCommit: { _ in })
       masterFields[index].configure(
         value: preferences.hasAudioMasterVolumeDecibels
-          ? preferences.audioMasterVolumeDecibels : .with { $0.denominator = 1 },
+          ? preferences.audioMasterVolumeDecibels : .with { $0.set(num: 0, den: 1) },
         enabled: enabled
       ) { [weak storeService] value in
         storeService?.updateAudio(target: target) {

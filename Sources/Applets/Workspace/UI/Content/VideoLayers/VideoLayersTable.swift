@@ -188,12 +188,10 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
       definition.videoComponents.append(wrapper)
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleXRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       transform.scaleYRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       preferences.videoLayerTransforms[id] = transform
     }

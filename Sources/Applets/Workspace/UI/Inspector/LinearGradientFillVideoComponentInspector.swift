@@ -35,26 +35,22 @@ struct LinearGradientFillVideoComponentInspector: View {
     self._startX = State(
       initialValue: component?.startXRational
         ?? .with {
-          $0.numerator = 0
-          $0.denominator = 1
+          $0.set(num: 0, den: 1)
         })
     self._startY = State(
       initialValue: component?.startYRational
         ?? .with {
-          $0.numerator = 0
-          $0.denominator = 1
+          $0.set(num: 0, den: 1)
         })
     self._endX = State(
       initialValue: component?.endXRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 1
+          $0.set(num: 1, den: 1)
         })
     self._endY = State(
       initialValue: component?.endYRational
         ?? .with {
-          $0.numerator = 1
-          $0.denominator = 1
+          $0.set(num: 1, den: 1)
         })
     self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
     self._endColor = State(initialValue: component?.endColor.asColor() ?? .black)

@@ -47,20 +47,16 @@
       linearGradientFill.internalID = 5
       linearGradientFill.displayName = "Studio Gradient"
       linearGradientFill.startXRational = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.set(num: 0, den: 1)
       }
       linearGradientFill.startYRational = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.set(num: 0, den: 1)
       }
       linearGradientFill.endXRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       linearGradientFill.endYRational = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.set(num: 1, den: 1)
       }
       linearGradientFill.startColor.red = 95.0 / 255.0
       linearGradientFill.startColor.green = 178.0 / 255.0
@@ -77,20 +73,16 @@
       radialGradientFill.internalID = 6
       radialGradientFill.displayName = "Radial Highlight"
       radialGradientFill.centerXRational = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.set(num: 1, den: 2)
       }
       radialGradientFill.centerYRational = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.set(num: 1, den: 2)
       }
       radialGradientFill.innerRadiusRational = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.set(num: 0, den: 1)
       }
       radialGradientFill.outerRadiusRational = .with {
-        $0.numerator = 18
-        $0.denominator = 25
+        $0.set(num: 18, den: 25)
       }
       radialGradientFill.innerColor.red = 95.0 / 255.0
       radialGradientFill.innerColor.green = 178.0 / 255.0
@@ -107,16 +99,13 @@
       conicGradientFill.internalID = 7
       conicGradientFill.displayName = "Color Wheel"
       conicGradientFill.centerXRational = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.set(num: 1, den: 2)
       }
       conicGradientFill.centerYRational = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.set(num: 1, den: 2)
       }
       conicGradientFill.startAngleRadiansRational = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.set(num: 0, den: 1)
       }
       conicGradientFill.startColor.red = 95.0 / 255.0
       conicGradientFill.startColor.green = 178.0 / 255.0
@@ -133,12 +122,10 @@
       clock.internalID = 8
       clock.displayName = "On Air Clock"
       clock.widthRational = .with {
-        $0.numerator = 1
-        $0.denominator = 6
+        $0.set(num: 1, den: 6)
       }
       clock.heightRational = .with {
-        $0.numerator = 2
-        $0.denominator = 27
+        $0.set(num: 2, den: 27)
       }
       var clockWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       clockWrapper.clock = clock
@@ -155,8 +142,7 @@
 
       var intervalTrigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
       intervalTrigger.intervalSecondsRational = .with {
-        $0.numerator = 5
-        $0.denominator = 1
+        $0.set(num: 5, den: 1)
       }
       var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
       triggerWrapper.intervalTrigger = intervalTrigger

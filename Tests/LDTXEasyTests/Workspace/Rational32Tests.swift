@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import Testing
 
@@ -22,8 +23,9 @@ struct Rational32UnitTestSuite {
     let negative = Ldtx_Workspace_V4_Rational32.with { $0.numerator = -1 }
     #expect(negative.float == -.infinity)
     #expect(negative.double == -.infinity)
-    #expect(Ldtx_Workspace_V4_Rational32().float.isNaN)
-    #expect(Ldtx_Workspace_V4_Rational32().double.isNaN)
+    #expect(Ldtx_Workspace_V4_Rational32().float == 0)
+    #expect(Ldtx_Workspace_V4_Rational32().double == 0)
+    #expect(Ldtx_Workspace_V4_Rational32().decimal == 0)
   }
 
   @Test func convertsZeroAndExtremeValues() {
@@ -40,7 +42,7 @@ struct Rational32UnitTestSuite {
 
   @Test func invalidStoredDenominator() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleYRational = .init()
+    transform.scaleYRational = .with { $0.set(num: 1, den: 0) }
     #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }
@@ -80,4 +82,48 @@ struct Rational32UnitTestSuite {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }
   }
+  @Test func decimalRoundTripAndEncodingLimits() throws {
+    var value = Ldtx_Workspace_V4_Rational32()
+    for text in ["1.25", "-1.2", "0", "1000", "0.000000001", "-2147483648"] {
+      let decimal = try #require(Decimal(string: text))
+      try value.set(decimal: decimal)
+      #expect(value.decimal == decimal)
+      #expect(value.denominator > 0)
+    }
+    try value.set(decimal: Decimal(string: "1.25")!)
+    #expect(value.numerator == 125)
+    #expect(value.denominator == 100)
+    let original = value
+    for text in ["2147483648", "0.0000000001", "123456789012345678901234567890"] {
+      #expect(throws: Rational32EncodingError.self) {
+        try value.set(decimal: Decimal(string: text)!)
+      }
+      #expect(value == original)
+    }
+    value.set(num: 0, den: 0)
+    #expect(value.numerator == 0 && value.denominator == 0)
+    #expect(value.decimal == 0)
+    #expect(try Ldtx_Workspace_V4_Rational32(serializedBytes: value.serializedData()) == value)
+  }
+
+  @Test func transformOptionalsPreservePresence() throws {
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    let paths: [WritableKeyPath<Ldtx_Workspace_V4_BasicTransform, Ldtx_Workspace_V4_Rational32?>] =
+      [
+        \.translationX, \.translationY, \.scaleX, \.scaleY,
+        \.topInset, \.rightInset, \.bottomInset, \.leftInset,
+      ]
+    for path in paths {
+      #expect(transform[keyPath: path] == nil)
+      transform[keyPath: path] = .init()
+      #expect(transform[keyPath: path]?.double == 0)
+      let decoded = try Ldtx_Workspace_V4_BasicTransform(
+        serializedBytes: transform.serializedData())
+      #expect(decoded[keyPath: path] != nil)
+      try WorkspaceV4IntegrityValidator.validateTransform(decoded)
+      transform[keyPath: path] = nil
+      #expect(transform[keyPath: path] == nil)
+    }
+  }
+
 }

@@ -204,8 +204,7 @@ struct OcrVisionInspector: View {
         editVision { value in
           if enabled {
             value.minimumTextHeightRational = .with {
-              $0.numerator = 1
-              $0.denominator = 100
+              $0.set(num: 1, den: 100)
             }
           } else {
             value.clearMinimumTextHeightRational()
@@ -220,8 +219,7 @@ struct OcrVisionInspector: View {
       get: {
         vision?.minimumTextHeightRational
           ?? .with {
-            $0.numerator = 1
-            $0.denominator = 100
+            $0.set(num: 1, den: 100)
           }
       },
       set: { next in editVision { $0.minimumTextHeightRational = next } }

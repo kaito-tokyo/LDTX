@@ -19,8 +19,7 @@
       secondInput.displayName = "Game Audio"
       service.definition.audioDevices.append(secondInput)
       service.preferences.audioChannelGainsDecibels[2] = .with {
-        $0.numerator = -6
-        $0.denominator = 1
+        $0.set(num: -6, den: 1)
       }
       if hasProgram {
         var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -34,23 +33,19 @@
           preferences.audioMasterVolumeDecibels =
             index == 0
             ? .with {
-              $0.numerator = -3
-              $0.denominator = 1
+              $0.set(num: -3, den: 1)
             }
             : .with {
-              $0.numerator = -6
-              $0.denominator = 1
+              $0.set(num: -6, den: 1)
             }
           preferences.audioChannelMuted[11] = index == 1
           for id: UInt64 in [3, 4, 8] {
             var transform = Ldtx_Workspace_V4_BasicTransform()
             transform.scaleXRational = .with {
-              $0.numerator = 1
-              $0.denominator = 1
+              $0.set(num: 1, den: 1)
             }
             transform.scaleYRational = .with {
-              $0.numerator = 1
-              $0.denominator = 1
+              $0.set(num: 1, den: 1)
             }
             preferences.videoLayerTransforms[id] = transform
           }
