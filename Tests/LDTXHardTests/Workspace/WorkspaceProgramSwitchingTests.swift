@@ -28,9 +28,8 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     definition.canvasConfiguration.portraitVideoBitRate = 1_000_000
     definition.outputConfiguration.recordsLandscape = true
     definition.outputConfiguration.recordsPortrait = true
-    definition.outputConfiguration.outputFolderPath = directory.path
     var workspace = WorkspaceV4Bundle(definition: definition, preferences: .init())
-    var local = WorkspaceLocalState()
+    var local = WorkspaceLocalState(recordingFolderPath: directory.path)
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { workspace },
       replaceWorkspace: { workspace = $0 },

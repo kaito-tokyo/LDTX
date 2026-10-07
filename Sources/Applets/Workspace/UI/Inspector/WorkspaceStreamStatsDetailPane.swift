@@ -360,7 +360,7 @@ struct OutputOrchestrationDetailPane: View {
   }
 }
 
-private struct RecordingCustomFieldsEditor: View {
+struct RecordingCustomFieldsEditor: View {
   private enum Field: Hashable {
     case key(UUID)
     case value(UUID)

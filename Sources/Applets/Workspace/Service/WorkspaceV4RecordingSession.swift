@@ -105,7 +105,7 @@ public final class WorkspaceV4RecordingSession {
 
     state = .starting
     sleepInhibitor.start()
-    let baseDirectory = outputDirectory(for: output)
+    let baseDirectory = outputDirectory()
     let runsLandscape =
       output.recordsLandscape
       || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .portraitRtmps)
@@ -604,9 +604,9 @@ public final class WorkspaceV4RecordingSession {
       })
   }
 
-  private func outputDirectory(for output: Ldtx_Workspace_V4_OutputConfiguration) -> URL {
-    if output.hasOutputFolderPath, !output.outputFolderPath.isEmpty {
-      return URL(fileURLWithPath: output.outputFolderPath, isDirectory: true)
+  private func outputDirectory() -> URL {
+    if let path = localStateProvider().recordingFolderPath, !path.isEmpty {
+      return URL(fileURLWithPath: path, isDirectory: true)
     }
     if let path = applicationOutputPreferences.defaultOutputFolderPath,
       !path.isEmpty

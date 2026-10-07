@@ -5,6 +5,7 @@
 import LDTXAppletSupport
 import LDTXWorkspaceAppletInterface
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct WorkspaceOutputInspector: View {
   @Environment(\.documentReference) private var documentReference
@@ -12,109 +13,102 @@ struct WorkspaceOutputInspector: View {
     guard let document = documentReference?.document else { return nil }
     return document.fileURL ?? storeService.localStateURL
   }
-  let storeService: WorkspaceStoreService
+  @Bindable var storeService: WorkspaceStoreService
   @Bindable var appletData: WorkspaceAppletData
+  @State private var isChoosingRecordingFolder = false
   @State private var isShowingStreamKeyManager = false
   @State private var streamKeyLoadError: String?
 
   var body: some View {
     Form {
-      formContent
+      Section("Output") {
+        LabeledContent(
+          "Recording Folder", value: localState.recordingFolderPath ?? "Application default")
+        Button("Choose Folder…") { isChoosingRecordingFolder = true }
+          .disabled(workspaceURL == nil)
+        if localState.recordingFolderPath != nil {
+          Button("Use Application Default") {
+            guard let workspaceURL else { return }
+            appletData.updateState(for: workspaceURL) { $0.recordingFolderPath = nil }
+          }
+          .disabled(workspaceURL == nil)
+        }
+        Toggle("Record Landscape", isOn: $storeService.definition.outputConfiguration.recordsLandscape)
+        Toggle("Record Portrait", isOn: $storeService.definition.outputConfiguration.recordsPortrait)
+        if storeService.definition.outputConfiguration.recordsLandscape
+          || storeService.definition.outputConfiguration.recordsPortrait
+        {
+          RecordingCustomFieldsEditor(
+            fields: storeService.definition.outputConfiguration.recordingCustomFields,
+            canEdit: !storeService.isOutputActive
+          ) { fields in
+            guard !storeService.isOutputActive else { return }
+            storeService.definition.outputConfiguration.recordingCustomFields = fields
+          }
+        }
+        Toggle("Stream to YouTube", isOn: $storeService.definition.outputConfiguration.streamsToYoutube)
+        Picker(
+          "YouTube Ingest",
+          selection: $storeService.definition.outputConfiguration.resolvedYouTubeIngestMode
+        ) {
+          ForEach(
+            [Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps, .portraitRtmps, .dualRtmps],
+            id: \.rawValue
+          ) { mode in
+            Text(ingestModeLabel(mode)).tag(mode)
+          }
+        }
+        if !isAvailableIngestMode(
+          storeService.definition.outputConfiguration.resolvedYouTubeIngestMode)
+        {
+          Text("This YouTube ingest mode is not available yet.")
+            .foregroundStyle(.secondary)
+        }
+        if usesLandscapeRTMPS {
+          streamKeyPicker("Landscape Stream Key", keyPath: \.landscapeYouTubeLiveStreamID)
+        }
+        if usesPortraitRTMPS {
+          streamKeyPicker("Portrait Stream Key", keyPath: \.portraitYouTubeLiveStreamID)
+        }
+        Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
+          .popover(isPresented: $isShowingStreamKeyManager) {
+            WorkspaceV4StreamKeyManager(
+              configurations: appletData.youtubeStreamKeyConfigurations,
+              load: { try appletData.loadYouTubeStreamKeyConfigurations() },
+              save: { try appletData.saveYouTubeStreamKeyConfigurations($0) },
+              reportError: { storeService.reportError($0) }
+            )
+          }
+      }
+      .disabled(storeService.isOutputActive)
+      .onAppear {
+        do {
+          _ = try appletData.loadYouTubeStreamKeyConfigurations()
+          streamKeyLoadError = nil
+        } catch {
+          streamKeyLoadError = error.localizedDescription
+          storeService.reportError(error)
+        }
+      }
     }
     .formStyle(.grouped)
-  }
-
-  @ViewBuilder
-  private var formContent: some View {
-    Section("Output") {
-      TextField("Recording Folder", text: outputFolderPathBinding)
-      Toggle("Record Landscape", isOn: outputBinding(\.recordsLandscape))
-      Toggle("Record Portrait", isOn: outputBinding(\.recordsPortrait))
-      Toggle("Stream to YouTube", isOn: outputBinding(\.streamsToYoutube))
-      Picker("YouTube Ingest", selection: ingestModeBinding) {
-        ForEach(ingestModes, id: \.rawValue) { mode in
-          Text(ingestModeLabel(mode)).tag(mode)
-        }
-      }
-      if !isAvailableIngestMode(
-        storeService.definition.outputConfiguration.resolvedYouTubeIngestMode)
-      {
-        Text("This YouTube ingest mode is not available yet.")
-          .foregroundStyle(.secondary)
-      }
-      if usesLandscapeRTMPS {
-        streamKeyPicker("Landscape Stream Key", selection: landscapeStreamKeyBinding)
-      }
-      if usesPortraitRTMPS {
-        streamKeyPicker("Portrait Stream Key", selection: portraitStreamKeyBinding)
-      }
-      Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
-        .popover(isPresented: $isShowingStreamKeyManager) {
-          WorkspaceV4StreamKeyManager(
-            configurations: appletData.youtubeStreamKeyConfigurations,
-            load: { try appletData.loadYouTubeStreamKeyConfigurations() },
-            save: { try appletData.saveYouTubeStreamKeyConfigurations($0) },
-            reportError: { storeService.reportError($0) }
-          )
-        }
-    }
-    .disabled(storeService.isOutputActive)
-    .onAppear {
+    .fileImporter(
+      isPresented: $isChoosingRecordingFolder,
+      allowedContentTypes: [.folder]
+    ) { result in
       do {
-        _ = try appletData.loadYouTubeStreamKeyConfigurations()
-        streamKeyLoadError = nil
+        let url = try result.get()
+        guard !storeService.isOutputActive, let workspaceURL else { return }
+        appletData.updateState(for: workspaceURL) {
+          $0.recordingFolderPath = url.standardizedFileURL.path
+        }
       } catch {
-        streamKeyLoadError = error.localizedDescription
         storeService.reportError(error)
       }
     }
-
-  }
-
-  private var ingestModes: [Ldtx_Workspace_V4_YouTubeIngestMode] {
-    [.landscapeRtmps, .portraitRtmps, .dualRtmps]
-  }
-
-  private func outputBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_OutputConfiguration, Bool>
-  ) -> Binding<Bool> {
-    Binding(
-      get: { storeService.definition.outputConfiguration[keyPath: keyPath] },
-      set: { value in
-        var definition = storeService.definition
-        definition.outputConfiguration[keyPath: keyPath] = value
-        storeService.definition = definition
-      }
-    )
-  }
-
-  private var ingestModeBinding: Binding<Ldtx_Workspace_V4_YouTubeIngestMode> {
-    Binding(
-      get: { storeService.definition.outputConfiguration.resolvedYouTubeIngestMode },
-      set: { value in
-        var definition = storeService.definition
-        definition.outputConfiguration.youtubeIngestMode = value
-        storeService.definition = definition
-      }
-    )
-  }
-
-  private var outputFolderPathBinding: Binding<String> {
-    Binding(
-      get: {
-        let output = storeService.definition.outputConfiguration
-        return output.hasOutputFolderPath ? output.outputFolderPath : ""
-      },
-      set: { path in
-        var definition = storeService.definition
-        if path.isEmpty {
-          definition.outputConfiguration.clearOutputFolderPath()
-        } else {
-          definition.outputConfiguration.outputFolderPath = path
-        }
-        storeService.definition = definition
-      }
-    )
+    .fileDialogDefaultDirectory(
+      localState.recordingFolderPath.map { URL(fileURLWithPath: $0, isDirectory: true) })
+    .fileDialogConfirmationLabel("Choose")
   }
 
   private var usesLandscapeRTMPS: Bool {
@@ -138,43 +132,23 @@ struct WorkspaceOutputInspector: View {
     }
   }
 
-  private var landscapeStreamKeyBinding: Binding<String> {
-    Binding(
-      get: { localState.landscapeYouTubeLiveStreamID ?? "" },
-      set: { streamID in
-        guard let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) {
-          $0.landscapeYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
-        }
-      })
-  }
-
-  private var portraitStreamKeyBinding: Binding<String> {
-    Binding(
-      get: { localState.portraitYouTubeLiveStreamID ?? "" },
-      set: { streamID in
-        guard let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) {
-          $0.portraitYouTubeLiveStreamID = streamID.isEmpty ? nil : streamID
-        }
-      })
-  }
-
   private var localState: WorkspaceLocalState {
     guard let workspaceURL else { return .init() }
     return appletData.state(for: workspaceURL)
   }
 
-  private func streamKeyPicker(_ title: String, selection: Binding<String>) -> some View {
+  private func streamKeyPicker(
+    _ title: String, keyPath: WritableKeyPath<WorkspaceLocalState, String?>
+  ) -> some View {
     WorkspaceSelectionField(
-      title: title, current: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue,
+      title: title, current: localState[keyPath: keyPath],
       options: appletData.youtubeStreamKeyConfigurations.map { .init(id: $0.id, name: $0.name) },
       loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
       isEditable: !storeService.isOutputActive && workspaceURL != nil,
       refresh: refreshStreamKeys,
       reportError: { storeService.reportError($0) },
       commit: { selected in
-        guard !storeService.isOutputActive, workspaceURL != nil else {
+        guard !storeService.isOutputActive, let workspaceURL else {
           throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
         }
         if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
@@ -182,7 +156,9 @@ struct WorkspaceOutputInspector: View {
           selected == nil
             || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
         else { throw WorkspaceSelectionError(message: "The selected stream key no longer exists.") }
-        selection.wrappedValue = selected ?? ""
+        appletData.updateState(for: workspaceURL) {
+          $0[keyPath: keyPath] = selected
+        }
       })
   }
 
@@ -209,3 +185,49 @@ struct WorkspaceOutputInspector: View {
     }
   }
 }
+
+#if DEBUG
+  import Security
+
+  @MainActor
+  private enum WorkspaceOutputInspectorPreviewFixtures {
+    static func makeStore(isOutputActive: Bool = false) -> WorkspaceStoreService {
+      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+      definition.outputConfiguration.recordsLandscape = true
+      definition.outputConfiguration.recordsPortrait = true
+      definition.outputConfiguration.youtubeIngestMode = .dualRtmps
+      definition.outputConfiguration.recordingCustomFields = [
+        "game": "Pokémon UNITE",
+        "player": "Preview Player",
+      ]
+      return WorkspaceStoreService(
+        definition: definition, preferences: .init(), isOutputActive: isOutputActive)
+    }
+
+    static func makeAppletData() -> WorkspaceAppletData {
+      WorkspaceAppletData(
+        userDefaults: UserDefaults(suiteName: "WorkspaceOutputInspectorPreview.\(UUID())")!,
+        keychainClient: WorkspaceAppletKeychainClient(
+          copyMatching: { _, _ in errSecItemNotFound },
+          update: { _, _ in errSecSuccess },
+          add: { _, _ in errSecSuccess }))
+    }
+  }
+
+  #Preview("Output Settings") {
+    @Previewable @State var storeService = WorkspaceOutputInspectorPreviewFixtures.makeStore()
+    @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
+
+    WorkspaceOutputInspector(storeService: storeService, appletData: appletData)
+      .frame(width: 480, height: 640)
+  }
+
+  #Preview("Output Active") {
+    @Previewable @State var storeService = WorkspaceOutputInspectorPreviewFixtures.makeStore(
+      isOutputActive: true)
+    @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
+
+    WorkspaceOutputInspector(storeService: storeService, appletData: appletData)
+      .frame(width: 480, height: 640)
+  }
+#endif

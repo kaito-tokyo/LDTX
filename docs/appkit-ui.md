@@ -341,6 +341,11 @@ editing; it has no membership management button or sheet.
 WorkspaceDocument allows only permutations of existing video-layer arrays during
 output and retains the latest accepted order as its protected definition.
 
+Recording folder overrides are stored per Workspace in `WorkspaceAppletData` local
+state. They are selected with SwiftUI `fileImporter` and are not part of the
+Workspace definition. Recording uses the local override, then the application
+default folder, then the built-in default.
+
 ## Workspace state and cross-layer operations
 
 WorkspaceDocument owns one Observable `WorkspaceStoreService`. It connects UI,

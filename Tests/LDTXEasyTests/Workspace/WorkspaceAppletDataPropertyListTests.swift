@@ -11,6 +11,19 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  @Test func persistsRecordingFolderInAppletData() throws {
+    let suiteName = "RecordingFolderTest.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let workspaceURL = URL(fileURLWithPath: "/tmp/RecordingFolderTest.ldtxworkspace")
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    appletData.updateState(for: workspaceURL) { $0.recordingFolderPath = "/tmp/recordings" }
+    let restored = WorkspaceAppletData(userDefaults: defaults)
+    #expect(restored.state(for: workspaceURL).recordingFolderPath == "/tmp/recordings")
+    restored.updateState(for: workspaceURL) { $0.recordingFolderPath = nil }
+    #expect(WorkspaceAppletData(userDefaults: defaults).state(for: workspaceURL).recordingFolderPath == nil)
+  }
+
   @Test func persistsMonitorVolumeWithLocalState() throws {
     let state = WorkspaceLocalState(monitorVolume: -12.5)
     let data = try PropertyListEncoder().encode(state)

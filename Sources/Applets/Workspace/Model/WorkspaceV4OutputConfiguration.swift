@@ -10,6 +10,7 @@ extension Ldtx_Workspace_V4_OutputConfiguration {
   /// older or manually authored documents valid and defaults to Landscape
   /// RTMPS, which is the Version 4 default output mode.
   public var resolvedYouTubeIngestMode: Ldtx_Workspace_V4_YouTubeIngestMode {
-    youtubeIngestMode == .unspecified ? .landscapeRtmps : youtubeIngestMode
+    get { youtubeIngestMode == .unspecified ? .landscapeRtmps : youtubeIngestMode }
+    set { youtubeIngestMode = newValue }
   }
 }
