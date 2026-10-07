@@ -1,0 +1,59 @@
+{
+  "configurations" : [
+    {
+      "id" : "9343E263-9E95-40D7-A71B-EAF176212173",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "232F5D19ADE07649B5F9404D",
+        "name" : "LDTXAppUIComponentTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "F0FE96F7BA9CE58358994991",
+        "name" : "LDTXEasyTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "258A6CFD02CAAFCCAA7DAAF6",
+        "name" : "LDTXAppXpcTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "15340823757700E8DC6965C3",
+        "name" : "LDTXAppUITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "28E249F7B2FC5647692B89E8",
+        "name" : "LDTXHardTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "D85952E78C783A63C94E13CB",
+        "name" : "LDTXMediumTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -165,6 +165,26 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
+      - name: Test Corelibs on macOS
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTXCorelibsTests \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath .derivedData \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            CODE_SIGN_ENTITLEMENTS= \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            -resultBundlePath "$RUNNER_TEMP/corelibs-test.xcresult" \
+            test 2>&1 | tee "$RUNNER_TEMP/corelibs-test.log" | xcbeautify --renderer github-actions
+
       - name: Test UI automation and XPC schemes
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
@@ -228,4 +248,6 @@ jobs:
             ${{ runner.temp }}/xcodebuild-test.log
             ${{ runner.temp }}/xcodebuild-build.xcresult
             ${{ runner.temp }}/xcodebuild-test.xcresult
+            ${{ runner.temp }}/corelibs-test.log
+            ${{ runner.temp }}/corelibs-test.xcresult
           if-no-files-found: warn

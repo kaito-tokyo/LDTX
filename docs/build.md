@@ -43,7 +43,8 @@ parallelism to the runner CPU count. Debug-info generation remains available
 for local debugging by omitting `-debug-info-format none`.
 
 The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
-`golden_gate` job.
+`golden_gate` job. Pull requests run Corelibs tests only on Linux. Pushes to
+`main` also run the `LDTXCorelibsTests` Xcode scheme in the macOS job.
 
 ## Xcode Cloud tests
 
