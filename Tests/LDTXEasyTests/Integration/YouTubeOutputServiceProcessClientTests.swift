@@ -42,7 +42,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     assertNil(boundary.connection)
   }
 
-  @Test func interruptionSignalsWorkspaceWithoutInvalidatingConnection() throws {
+  @Test func interruptionSignalsWorkspaceWithoutInvalidatingConnection() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -56,11 +56,11 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       readyHandler: {
         ready.fulfill()
       })
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let connection = try unwrap(harness.connection(at: 0))
     connection.interrupt()
-    wait(for: [restartRequested], timeout: 1)
+    await waitAsync(for: [restartRequested], timeout: 1)
 
     assertEqual(reasons.withLock { $0 }, ["XPC connection interrupted"])
     assertEqual(harness.connectionCount, 1)
@@ -68,7 +68,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     sink.abort {}
   }
 
-  @Test func workspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() throws {
+  @Test func workspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let checkpointCommitted = expectation(description: "checkpoint committed")
@@ -86,7 +86,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         restartRequested.fulfill()
       },
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let connection = try unwrap(harness.connection(at: 0))
     connection.requestReset(
@@ -99,7 +99,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         availabilityStartTime: harness.availabilityStartTime,
         nextMediaTimeSeconds: 154.25))
 
-    wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
+    await waitAsync(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
     assertEqual(harness.connectionCount, 1)
     assertEqual(reasons.withLock { $0 }, ["fresh media processor required"])
     assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
@@ -115,7 +115,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         nextMediaTimeSeconds: 176.5))
     let deadline = Date().addingTimeInterval(1)
     while checkpoints.withLock({ $0.last?.nextMediaSegmentNumber }) != 88, Date() < deadline {
-      RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      try? await Task.sleep(for: .milliseconds(1))
     }
     assertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 88)
     assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 176.5)
@@ -123,7 +123,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     sink.abort {}
   }
 
-  @Test func mediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() throws {
+  @Test func mediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let reserved = expectation(description: "reservation checkpoint")
@@ -138,7 +138,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         }
       },
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let request = YouTubeOutputResetRequest(
       context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
@@ -154,13 +154,14 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       assertEqual(reply?.nextMediaSegmentNumber, 77)
       acknowledged.fulfill()
     }
-    wait(for: [reserved, acknowledged], timeout: 1)
+    await waitAsync(for: [reserved, acknowledged], timeout: 1)
     connection.commitMediaCheckpoint(request)
-    wait(for: [delivered], timeout: 1)
+    await waitAsync(for: [delivered], timeout: 1)
     sink.abort {}
   }
 
-  @Test func serviceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision() throws {
+  @Test func serviceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision() async throws
+  {
     let harness = YouTubeOutputConnectionHarness()
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -178,7 +179,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       readyHandler: {
         firstReady.fulfill()
       })
-    wait(for: [firstReady], timeout: 1)
+    await waitAsync(for: [firstReady], timeout: 1)
 
     let firstConnection = try unwrap(harness.connection(at: 0))
     firstConnection.requestReset(
@@ -187,7 +188,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         reason: "stale",
         nextMediaSegmentNumber: 100,
         configurationFingerprint: harness.fingerprint))
-    assertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
+    assertFalse(await harness.waitForConnectionCount(2, timeout: 0.05))
 
     firstConnection.requestReset(
       YouTubeOutputResetRequest(
@@ -197,13 +198,13 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         initializationSegment: Data([7, 7]),
         configurationFingerprint: harness.fingerprint,
         availabilityStartTime: Date(timeIntervalSince1970: 123)))
-    wait(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
+    await waitAsync(for: [checkpointCommitted, restartRequested], timeout: 1, enforceOrder: true)
     assertEqual(reasons.withLock { $0 }, ["processor reset"])
     assertFalse(firstConnection.isInvalidated)
     sink.abort {}
   }
 
-  @Test func configurationMismatchIsReportedWithoutRequestingRestart() throws {
+  @Test func configurationMismatchIsReportedWithoutRequestingRestart() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let failed = expectation(description: "configuration mismatch")
@@ -217,18 +218,18 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         }
         failed.fulfill()
       })
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     try unwrap(harness.connection(at: 0)).requestReset(
       YouTubeOutputResetRequest(
         context: YouTubeOutputContext(sessionID: harness.sessionID, revision: 0),
         reason: "corrupted checkpoint",
         configurationFingerprint: "different-fingerprint"))
-    wait(for: [failed], timeout: 1)
+    await waitAsync(for: [failed], timeout: 1)
     sink.abort {}
   }
 
-  @Test func bootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() {
+  @Test func bootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() async {
     let harness = YouTubeOutputConnectionHarness(bootstrapFingerprint: "different-fingerprint")
     let failed = expectation(description: "configuration mismatch")
     let sink = makeSink(
@@ -242,11 +243,11 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         failed.fulfill()
       })
 
-    wait(for: [failed], timeout: 1)
+    await waitAsync(for: [failed], timeout: 1)
     sink.abort {}
   }
 
-  @Test func mediaConfigurationMismatchIsReportedWithoutRequestingRestart() {
+  @Test func mediaConfigurationMismatchIsReportedWithoutRequestingRestart() async {
     let harness = YouTubeOutputConnectionHarness(mediaFingerprint: "different-fingerprint")
     let ready = expectation(description: "ready")
     let failed = expectation(description: "configuration mismatch")
@@ -261,7 +262,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         }
         failed.fulfill()
       })
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     sink.uploadMediaBatch(keyFrameBatch()) { result in
       guard case .failure(OutputServiceProcessError.configurationMismatch) = result else {
@@ -270,11 +271,11 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       mediaFailed.fulfill()
     }
 
-    wait(for: [mediaFailed, failed], timeout: 1)
+    await waitAsync(for: [mediaFailed, failed], timeout: 1)
     sink.abort {}
   }
 
-  @Test func interruptionKeepsInFlightStorageUntilConnectionIsInvalidated() throws {
+  @Test func interruptionKeepsInFlightStorageUntilConnectionIsInvalidated() async throws {
     let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
     let firstReady = expectation(description: "first ready")
     let restartRequested = expectation(description: "workspace restart requested")
@@ -282,7 +283,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       harness: harness,
       restartHandler: { _ in restartRequested.fulfill() },
       readyHandler: firstReady.fulfill)
-    wait(for: [firstReady], timeout: 1)
+    await waitAsync(for: [firstReady], timeout: 1)
 
     let completed = expectation(description: "in-flight completed")
     let completionCount = LockedValue(0)
@@ -292,23 +293,23 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       completed.fulfill()
     }
     let firstConnection = try unwrap(harness.connection(at: 0))
-    assertTrue(firstConnection.waitForPendingMedia(timeout: 1))
+    assertTrue(await firstConnection.waitForPendingMedia(timeout: 1))
 
     firstConnection.interrupt()
-    wait(for: [restartRequested], timeout: 1)
+    await waitAsync(for: [restartRequested], timeout: 1)
     assertEqual(completionCount.withLock { $0 }, 0)
     assertFalse(firstConnection.isInvalidated)
 
     sink.abort {}
-    wait(for: [completed], timeout: 1)
+    await waitAsync(for: [completed], timeout: 1)
     assertTrue(firstConnection.isInvalidated)
     firstConnection.completePendingMedia()
-    RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+    try? await Task.sleep(for: .milliseconds(20))
 
     assertEqual(completionCount.withLock { $0 }, 1)
   }
 
-  @Test func bootstrapFailureSignalsWorkspaceOnce() {
+  @Test func bootstrapFailureSignalsWorkspaceOnce() async {
     let harness = YouTubeOutputConnectionHarness(bootstrapSucceeds: false)
     let restartRequested = expectation(description: "workspace restart requested")
     let sink = makeSink(
@@ -316,19 +317,19 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       restartHandler: { _ in restartRequested.fulfill() },
       readyHandler: { fail("service should not become ready") })
 
-    wait(for: [restartRequested], timeout: 1)
+    await waitAsync(for: [restartRequested], timeout: 1)
     assertEqual(harness.bootstraps.map(\.context.revision), [0])
     sink.abort {}
   }
 
-  @Test func resetAfterFinishDoesNotReconnect() throws {
+  @Test func resetAfterFinishDoesNotReconnect() async throws {
     let harness = YouTubeOutputConnectionHarness()
     let ready = expectation(description: "ready")
     let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
     let connection = try unwrap(harness.connection(at: 0))
 
-    finish(sink)
+    await finish(sink)
     connection.interrupt()
     connection.requestReset(
       YouTubeOutputResetRequest(
@@ -336,11 +337,11 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         reason: "late reset",
         configurationFingerprint: harness.fingerprint))
 
-    assertFalse(harness.waitForConnectionCount(2, timeout: 0.05))
+    assertFalse(await harness.waitForConnectionCount(2, timeout: 0.05))
     assertEqual(harness.connectionCount, 1)
   }
 
-  @Test func finishPublishesFinalCheckpoint() {
+  @Test func finishPublishesFinalCheckpoint() async {
     let harness = YouTubeOutputConnectionHarness(finishNextMediaSegmentNumber: 88)
     let ready = expectation(description: "ready")
     let checkpoint = expectation(description: "final checkpoint")
@@ -350,17 +351,17 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
         if $0.nextMediaSegmentNumber == 88 { checkpoint.fulfill() }
       },
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
     sink.finish { result in
       if case .failure(let error) = result { fail("unexpected finish failure: \(error)") }
       finished.fulfill()
     }
-    wait(for: [checkpoint, finished], timeout: 1)
+    await waitAsync(for: [checkpoint, finished], timeout: 1)
   }
 
-  @Test func finishAcceptsFinalMediaReservationForActiveContext() throws {
+  @Test func finishAcceptsFinalMediaReservationForActiveContext() async throws {
     let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
     let ready = expectation(description: "ready")
     let reserved = expectation(description: "final reservation checkpoint")
@@ -373,7 +374,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       },
       finishTimeout: .milliseconds(200),
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let finishTimedOut = expectation(description: "held finish times out")
     sink.finish { result in
@@ -411,35 +412,35 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       staleRejected.fulfill()
     }
 
-    wait(for: [reserved, acknowledged, staleRejected, finishTimedOut], timeout: 1)
+    await waitAsync(for: [reserved, acknowledged, staleRejected, finishTimedOut], timeout: 1)
     assertEqual(checkpoints.withLock { $0.last?.nextMediaSegmentNumber }, 77)
     assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
   }
 
-  @Test func finishReportsServiceFailure() {
+  @Test func finishReportsServiceFailure() async {
     let harness = YouTubeOutputConnectionHarness(finishError: "final upload failed")
     let ready = expectation(description: "ready")
     let sink = makeSink(
       harness: harness,
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
     sink.finish { result in
       guard case .failure = result else { return fail("finish unexpectedly succeeded") }
       finished.fulfill()
     }
-    wait(for: [finished], timeout: 1)
+    await waitAsync(for: [finished], timeout: 1)
   }
 
-  @Test func finishTimeoutReportsFailureBeforeCompleting() {
+  @Test func finishTimeoutReportsFailureBeforeCompleting() async {
     let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
     let ready = expectation(description: "ready")
     let sink = makeSink(
       harness: harness,
       finishTimeout: .milliseconds(10),
       readyHandler: ready.fulfill)
-    wait(for: [ready], timeout: 1)
+    await waitAsync(for: [ready], timeout: 1)
 
     let finished = expectation(description: "finished")
     sink.finish { result in
@@ -448,7 +449,7 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       }
       finished.fulfill()
     }
-    wait(for: [finished], timeout: 1)
+    await waitAsync(for: [finished], timeout: 1)
   }
 
   private func makeSink(
@@ -491,31 +492,31 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
       ])
   }
 
-  private func finish(_ sink: YouTubeOutputServiceProcessConnection) {
+  private func finish(_ sink: YouTubeOutputServiceProcessConnection) async {
     let finished = expectation(description: "finished")
     sink.finish { result in
       if case .failure(let error) = result { fail("unexpected finish failure: \(error)") }
       finished.fulfill()
     }
-    wait(for: [finished], timeout: 1)
+    await waitAsync(for: [finished], timeout: 1)
   }
 
   private func expectation(description: String) -> TestExpectation {
     TestExpectation(description: description)
   }
 
-  private func wait(
-    for expectations: [TestExpectation],
-    timeout: TimeInterval,
-    enforceOrder: Bool = false
-  ) {
-    let deadline = Date().addingTimeInterval(timeout)
+  private func waitAsync(
+    for expectations: [TestExpectation], timeout: TimeInterval, enforceOrder: Bool = false
+  ) async {
+    let deadline = DispatchTime.now() + timeout
     var lastFulfillmentOrder = 0
     for expectation in expectations {
-      while !expectation.wait() && Date() < deadline {
-        RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      let fulfilled = await withCheckedContinuation { continuation in
+        DispatchQueue.global().async {
+          continuation.resume(returning: expectation.wait(until: deadline))
+        }
       }
-      guard expectation.fulfillmentOrder != 0 else {
+      if !fulfilled {
         Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
         return
       }
@@ -526,15 +527,6 @@ struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     }
   }
 
-  private func waitAsync(for expectations: [TestExpectation], timeout: TimeInterval) async {
-    let deadline = DispatchTime.now() + timeout
-    for expectation in expectations {
-      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
-      if !fulfilled {
-        Issue.record(TestFailure("Timed out waiting for \(expectation.description)"))
-      }
-    }
-  }
 }
 
 private final class TestExpectation: @unchecked Sendable {
@@ -675,11 +667,11 @@ private final class YouTubeOutputConnectionHarness: @unchecked Sendable {
     storage.withLock { $0.connections.indices.contains(index) ? $0.connections[index] : nil }
   }
 
-  func waitForConnectionCount(_ count: Int, timeout: TimeInterval) -> Bool {
+  func waitForConnectionCount(_ count: Int, timeout: TimeInterval) async -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
     repeat {
       if connectionCount >= count { return true }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      try? await Task.sleep(for: .milliseconds(1))
     } while Date() < deadline
     return connectionCount >= count
   }
@@ -776,8 +768,8 @@ private final class FakeYouTubeOutputConnection: YouTubeOutputXPCConnection, @un
     client.serviceCommitsMediaCheckpoint(data)
   }
 
-  func waitForPendingMedia(timeout: TimeInterval) -> Bool {
-    service.waitForPendingMedia(timeout: timeout)
+  func waitForPendingMedia(timeout: TimeInterval) async -> Bool {
+    await service.waitForPendingMedia(timeout: timeout)
   }
 
   func completePendingMedia() {
@@ -836,11 +828,11 @@ private final class FakeYouTubeOutput: NSObject, LDTXYouTubeOutputServiceProcess
     reply(finishHandler(request) ?? Data())
   }
 
-  func waitForPendingMedia(timeout: TimeInterval) -> Bool {
+  func waitForPendingMedia(timeout: TimeInterval) async -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
     repeat {
       if pendingMedia.withLock({ !$0.isEmpty }) { return true }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+      try? await Task.sleep(for: .milliseconds(1))
     } while Date() < deadline
     return pendingMedia.withLock { !$0.isEmpty }
   }

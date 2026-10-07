@@ -451,7 +451,11 @@ struct YouTubeOutputWorkspaceServiceIntegrationTestSuite {
   private func fulfillment(of expectations: [TestExpectation], timeout: TimeInterval) async {
     let deadline = DispatchTime.now() + timeout
     for expectation in expectations {
-      let fulfilled = await Task.detached { expectation.wait(until: deadline) }.value
+      let fulfilled = await withCheckedContinuation { continuation in
+        DispatchQueue.global().async {
+          continuation.resume(returning: expectation.wait(until: deadline))
+        }
+      }
       if expectation.isInverted {
         if fulfilled {
           Issue.record(TestFailure("Unexpected fulfillment: \(expectation.description)"))

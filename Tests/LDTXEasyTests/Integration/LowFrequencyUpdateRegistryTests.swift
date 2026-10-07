@@ -39,7 +39,7 @@ struct LowFrequencyUpdateRegistryIntegrationTestSuite {
     #expect(registry.registrationCountForTesting == 0)
   }
 
-  @Test func externalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() {
+  @Test func externalCancellationWaitsForRunningCallbackAndPreventsFutureCallbacks() async {
     let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let callback = LockedCounter()
     let callbackStarted = DispatchSemaphore(value: 0)
@@ -56,17 +56,17 @@ struct LowFrequencyUpdateRegistryIntegrationTestSuite {
       registry.notifySubscribersForTesting()
       notificationFinished.signal()
     }
-    #expect(callbackStarted.wait(timeout: .now() + 2) == .success)
+    #expect(await waitForNotificationSemaphore(callbackStarted, timeout: 2) == .success)
 
     DispatchQueue.global().async {
       registration.cancel()
       cancellationFinished.signal()
     }
-    #expect(cancellationFinished.wait(timeout: .now() + 0.05) == .timedOut)
+    #expect(await waitForNotificationSemaphore(cancellationFinished, timeout: 0.05) == .timedOut)
 
     allowCallbackToFinish.signal()
-    #expect(notificationFinished.wait(timeout: .now() + 2) == .success)
-    #expect(cancellationFinished.wait(timeout: .now() + 2) == .success)
+    #expect(await waitForNotificationSemaphore(notificationFinished, timeout: 2) == .success)
+    #expect(await waitForNotificationSemaphore(cancellationFinished, timeout: 2) == .success)
 
     registry.notifySubscribersForTesting()
     #expect(callback.value == 1)
@@ -109,5 +109,15 @@ private final class RegistrationHolder: @unchecked Sendable {
   var registration: LowFrequencyUpdateRegistration? {
     get { lock.withLock { storedRegistration } }
     set { lock.withLock { storedRegistration = newValue } }
+  }
+}
+
+private func waitForNotificationSemaphore(
+  _ semaphore: DispatchSemaphore, timeout: TimeInterval
+) async -> DispatchTimeoutResult {
+  await withCheckedContinuation { continuation in
+    DispatchQueue.global().async {
+      continuation.resume(returning: semaphore.wait(timeout: .now() + timeout))
+    }
   }
 }

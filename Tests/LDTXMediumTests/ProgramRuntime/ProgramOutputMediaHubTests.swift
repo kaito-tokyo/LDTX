@@ -200,7 +200,11 @@ struct ProgramOutputMediaHubIntegrationTestSuite {
   }
 
   private func waits(for semaphore: DispatchSemaphore, timeout: TimeInterval) async -> Bool {
-    await Task.detached { waitForMediaHubSemaphore(semaphore, timeout: timeout) }.value
+    await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        continuation.resume(returning: waitForMediaHubSemaphore(semaphore, timeout: timeout))
+      }
+    }
   }
 }
 
