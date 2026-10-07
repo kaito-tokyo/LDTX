@@ -486,14 +486,10 @@ extension WorkspaceWindowController {
 
   public func synchronizeAudioMonitor() {
     let localState = storeService.localStateURL.map { appletData.state(for: $0) } ?? .init()
-    guard
-      let programInternalID = localState.selectedProgramInternalID
-        ?? windowRuntime.definition.programs.first?.internalID,
-      let projection = try? windowRuntime.runtimeProjection(
-        programInternalID: programInternalID, target: .landscape)
-    else {
-      Task { await audioCoordinator.stopAndReset() }
-      return
+    let audioChannels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
+    let programInternalID = storeService.selectedProgram?.internalID
+    let projection = programInternalID.flatMap {
+      try? windowRuntime.runtimeProjection(programInternalID: $0, target: .landscape)
     }
     let audioDeviceIDs = Dictionary(
       uniqueKeysWithValues: windowRuntime.definition.audioDevices.compactMap {
@@ -511,18 +507,19 @@ extension WorkspaceWindowController {
         else { return nil }
         return "v4-\(input.internalID)"
       })
-    let portraitProjection = try? windowRuntime.runtimeProjection(
-      programInternalID: programInternalID, target: .portrait)
+    let portraitProjection = programInternalID.flatMap {
+      try? windowRuntime.runtimeProjection(programInternalID: $0, target: .portrait)
+    }
     audioCoordinator.peakMeter.updateMasterGains(
-      landscapeChannels: projection.configuration.audioChannels,
+      landscapeChannels: audioChannels,
       portraitChannels: portraitProjection?.configuration.audioChannels ?? [],
-      landscape: projection.preferences,
+      landscape: projection?.preferences ?? .init(),
       portrait: portraitProjection?.preferences ?? .init())
-    var preferences = projection.preferences
-    preferences.masterVolume = ProgramPreferences.linearAudioChannelGain(
-      fromDecibels: localState.monitorVolume ?? 0)
+    let preferences = WorkspaceV4RenderGraph.monitorPreferences(
+      definition: windowRuntime.definition, preferences: storeService.preferences,
+      volumeDecibels: localState.monitorVolume ?? 0)
     _ = audioCoordinator.restart(
-      audioChannels: projection.configuration.audioChannels,
+      audioChannels: audioChannels,
       inputAudioDeviceMappings: audioDeviceIDs,
       programPreferences: preferences,
       inputPassthroughChannelKeys: monitoredKeys,

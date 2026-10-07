@@ -12,6 +12,28 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace render graph")
 struct WorkspaceV4RenderGraphUnitTestSuite {
+  @Test func monitorConfigurationDoesNotRequirePrograms() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.audioDevices = [.with { $0.internalID = 7 }]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.audioChannelGainsDecibels[7] = .with { $0.set(num: -120, den: 10) }
+    preferences.landscapeProgramPreferences[99] = .with {
+      $0.audioChannelMuted[7] = true
+      $0.audioMasterVolumeDecibels = .with { $0.set(num: -600, den: 10) }
+    }
+    let channels = WorkspaceV4RenderGraph.audioChannels(definition)
+    #expect(channels.map(\.name) == ["v4-7"])
+    let monitor = WorkspaceV4RenderGraph.monitorPreferences(
+      definition: definition, preferences: preferences, volumeDecibels: -6)
+    #expect(
+      monitor.audioChannelGainsByName["v4-7"]
+        == ProgramPreferences.linearAudioChannelGain(fromDecibels: -12))
+    #expect(monitor.masterVolume == ProgramPreferences.linearAudioChannelGain(fromDecibels: -6))
+    #expect(monitor.audioMutedByInputDeviceName.isEmpty)
+    definition.programs = [.with { $0.internalID = 100 }]
+    #expect(WorkspaceV4RenderGraph.audioChannels(definition).map(\.name) == channels.map(\.name))
+  }
+
   @Test func distinguishesMissingAndZeroScale() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()

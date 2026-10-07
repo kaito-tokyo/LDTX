@@ -256,6 +256,9 @@ Device changes refresh the candidates without
 rewriting the saved assignment. Discovery errors use the Settings Window's
 presentError path, with repeated failures suppressed until recovery. Workspace
 editors expose monitor volume and input routing, not output-device selection.
+Monitoring uses Workspace audio devices and their shared gains independently of
+Program selection. It remains available with no Programs; Program master volume
+and mute settings affect output meters, not monitor routing.
 
 Screenshot capture results appear in a transient NSPopover anchored to the
 screenshot toolbar item. Successful captures show the saved Program image count

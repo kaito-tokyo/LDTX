@@ -187,7 +187,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
       })
   }
 
-  private static func audioChannels(
+  public static func audioChannels(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   ) -> [ProgramAudioChannel] {
     definition.audioDevices.compactMap {
@@ -198,6 +198,19 @@ public struct WorkspaceV4RenderGraph: Sendable {
           InputAudioDeviceComponent(inputDeviceID: "v4-\(device.internalID)"))
       )
     }
+  }
+
+  public static func monitorPreferences(
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
+    volumeDecibels: Double
+  ) -> ProgramPreferences {
+    var result = ProgramPreferences(masterVolume: linearGain(volumeDecibels))
+    for device in definition.audioDevices {
+      result.audioChannelGainsByName["v4-\(device.internalID)"] =
+        linearGain(preferences.audioChannelGainsDecibels[device.internalID]?.double ?? 0)
+    }
+    return result
   }
 
   private static func linearGain(_ decibels: Double) -> Double {
