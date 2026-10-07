@@ -45,7 +45,7 @@ jobs:
 
       - name: Build and test Corelibs
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: swift test
+        run: swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
 
   golden_gate:
     runs-on: xcode-27
@@ -184,7 +184,7 @@ jobs:
       - name: Run CLI tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          swift test --filter LDTXUtilsTests
+          swift test --disable-index-store -debug-info-format none --jobs "$(sysctl -n hw.logicalcpu)" --filter LDTXUtilsTests
 
       - name: Run App Automation MCP tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

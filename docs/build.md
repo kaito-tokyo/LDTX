@@ -34,9 +34,13 @@ docker run --rm \
     cp -R /workspace/Sources/Corelibs /tmp/package/Sources/
     cp -R /workspace/Tests/Corelibs /tmp/package/Tests/
     cd /tmp/package
-    swift test
+    swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
   '
 ```
+
+CI disables indexing and debug-info generation for SwiftPM tests and sets build
+parallelism to the runner CPU count. Debug-info generation remains available
+for local debugging by omitting `-debug-info-format none`.
 
 The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
 `golden_gate` job.
