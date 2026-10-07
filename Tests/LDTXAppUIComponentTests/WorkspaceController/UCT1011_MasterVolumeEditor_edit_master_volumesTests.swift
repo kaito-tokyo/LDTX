@@ -21,6 +21,24 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
+    @Test("UCT-1011.3: Invalid volume drafts block navigation until corrected")
+    func invalidVolumeBlocksNavigation() throws {
+      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let editor = MasterVolumeEditor(storeService: store)
+      _ = editor.view
+      let original = store.preferences
+      for field in editor.masterFields {
+        field.stringValue = "invalid"
+        field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+        #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
+        #expect(throws: (any Error).self) { try store.validateForSaving() }
+        #expect(field.stringValue == "invalid" && field.dirty)
+        #expect(store.preferences == original)
+        field.stringValue = "-12"
+        try store.validateInspectorEdits()
+      }
+    }
+
     @Test("UCT-1011.1: Master volume edits and model updates are reflected independently")
     func masterEditorObservesAndEditsVolumesIndependently() async throws {
       _ = NSApplication.shared

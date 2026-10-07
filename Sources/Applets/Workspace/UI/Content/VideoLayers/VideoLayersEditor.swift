@@ -17,6 +17,12 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     self.storeService = storeService
     self.target = target
     super.init(nibName: nil, bundle: nil)
+    storeService.registerContentEditValidator { [weak self] in
+      guard let self else { return }
+      for row in table.rows.values where row.state.hasUnconfirmedChanges {
+        _ = try validatedTransform(for: row)
+      }
+    }
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -40,44 +46,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       let id = try? internalID(for: row)
     else { return }
     do {
-      let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
-      let values = try row.state.strings.enumerated().map { index, text in
-        do {
-          if index < 2 {
-            let size: UInt32 = index == 0 ? 1920 : 1080
-            guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
-              pixels >= 0, UInt32(pixels) <= size
-            else {
-              throw WorkspaceSelectionError(
-                message: "Enter an integer pixel position from 0 to \(size).")
-            }
-            var value = Ldtx_Workspace_V4_Rational32()
-            value.set(num: pixels, den: size)
-            return value
-          }
-          guard !text.contains("/") else {
-            throw WorkspaceSelectionError(message: "Enter a decimal scale.")
-          }
-          guard
-            let decimal = Decimal(
-              string: text.trimmingCharacters(in: .whitespacesAndNewlines),
-              locale: Locale(identifier: "en_US_POSIX")),
-            (try? RationalParseStrategy().parse(text)) != nil
-          else { throw RationalInputError.invalidNumber }
-          var value = Ldtx_Workspace_V4_Rational32()
-          try value.set(decimal: decimal)
-          return value
-        } catch {
-          throw WorkspaceSelectionError(
-            message:
-              "Invalid number (\(labels[index])): \(error.localizedDescription)")
-        }
-      }
-      var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.translationX = values[0]
-      transform.translationY = values[1]
-      transform.scaleX = values[2]
-      transform.scaleY = values[3]
+      let transform = try validatedTransform(for: row)
       let saved = try onCommitTransform(id, transform)
       row.state.hasUnconfirmedChanges = false
       row.state.display(
@@ -85,6 +54,53 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     } catch {
       onError(error)
     }
+  }
+
+  private func validatedTransform(for row: VideoLayersTableRow) throws
+    -> Ldtx_Workspace_V4_BasicTransform
+  {
+    let labels = ["Pos X", "Pos Y", "Scale X", "Scale Y"]
+    let values = try row.state.strings.enumerated().map { index, text in
+      do {
+        if index < 2 {
+          let size: UInt32 = index == 0 ? 1920 : 1080
+          guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+            pixels >= 0, UInt32(pixels) <= size
+          else {
+            throw WorkspaceSelectionError(
+              message: "Enter an integer pixel position from 0 to \(size).")
+          }
+          var value = Ldtx_Workspace_V4_Rational32()
+          value.set(num: pixels, den: size)
+          return value
+        }
+        guard !text.contains("/") else {
+          throw WorkspaceSelectionError(message: "Enter a decimal scale.")
+        }
+        guard
+          let decimal = Decimal(
+            string: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            locale: Locale(identifier: "en_US_POSIX")),
+          (try? RationalParseStrategy().parse(text)) != nil
+        else { throw RationalInputError.invalidNumber }
+        var value = Ldtx_Workspace_V4_Rational32()
+        try value.set(decimal: decimal)
+        guard value.numerator >= 0 else {
+          throw WorkspaceSelectionError(message: "Scale must be nonnegative.")
+        }
+        return value
+      } catch {
+        throw WorkspaceSelectionError(
+          message:
+            "Invalid number (\(labels[index])): \(error.localizedDescription)")
+      }
+    }
+    var transform = Ldtx_Workspace_V4_BasicTransform()
+    transform.translationX = values[0]
+    transform.translationY = values[1]
+    transform.scaleX = values[2]
+    transform.scaleY = values[3]
+    return transform
   }
 
   func videoLayersTableRow(_ row: VideoLayersTableRow, setHidden hidden: Bool) {

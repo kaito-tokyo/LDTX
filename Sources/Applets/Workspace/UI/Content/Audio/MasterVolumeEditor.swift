@@ -9,6 +9,11 @@ final class MasterVolumeEditor: NSViewController {
   init(storeService: WorkspaceStoreService) {
     self.storeService = storeService
     super.init(nibName: nil, bundle: nil)
+    storeService.registerContentEditValidator { [weak self] in
+      for field in self?.masterFields ?? [] {
+        if field.dirty { _ = try field.validatedValue() }
+      }
+    }
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -154,19 +159,28 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   }
   func commit() {
     guard dirty else { return }
-    guard let parsed = try? RationalParseStrategy().parse(stringValue),
-      let value = try? Rational32DecibelEncoding.encode(parsed.double),
-      (ProgramPreferences
-        .minimumAudioChannelGainDecibels...ProgramPreferences.maximumAudioChannelGainDecibels)
-        .contains(value.double)
-    else {
-      toolTip = "Invalid volume."
-      onInvalid("Invalid volume.")
+    let value: Ldtx_Workspace_V4_Rational32
+    do {
+      value = try validatedValue()
+    } catch {
+      toolTip = error.localizedDescription
+      onInvalid(error.localizedDescription)
       return
     }
     if commitValue(value) {
       dirty = false
       toolTip = nil
     }
+  }
+  func validatedValue() throws -> Ldtx_Workspace_V4_Rational32 {
+    guard let parsed = try? RationalParseStrategy().parse(stringValue),
+      let value = try? Rational32DecibelEncoding.encode(parsed.double),
+      (ProgramPreferences
+        .minimumAudioChannelGainDecibels...ProgramPreferences.maximumAudioChannelGainDecibels)
+        .contains(value.double)
+    else {
+      throw WorkspaceSelectionError(message: "Invalid volume.")
+    }
+    return value
   }
 }

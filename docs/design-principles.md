@@ -118,6 +118,10 @@ the relevant design or feature documentation instead.
 - OCR ROI text remains a draft until the whole rectangle is valid. Inspector
   selection, Program changes, output start, save, and document close must respect
   pending invalid edits.
+- Content Editors register weakly captured draft validators with the Workspace
+  store. Master-volume and layer-transform drafts participate in the same
+  navigation, output-start, save, and close validation as OCR ROI drafts.
+  Validation checks the current text without committing or discarding it.
 
 ## Video visibility terminology
 

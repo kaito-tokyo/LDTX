@@ -44,8 +44,14 @@ public final class WorkspaceStoreService {
   }
   var ocrRegionDrafts: [UInt64: [String: String]] = [:]
   private var inspectorEditErrors: [UInt64: String] = [:]
+  @ObservationIgnored private var contentEditValidators: [() throws -> Void] = []
+
+  func registerContentEditValidator(_ validate: @escaping () throws -> Void) {
+    contentEditValidators.append(validate)
+  }
 
   public func validateInspectorEdits() throws {
+    for validate in contentEditValidators { try validate() }
     if let message = inspectorEditErrors.sorted(by: { $0.key < $1.key }).first?.value {
       throw WorkspaceSelectionError(message: message)
     }

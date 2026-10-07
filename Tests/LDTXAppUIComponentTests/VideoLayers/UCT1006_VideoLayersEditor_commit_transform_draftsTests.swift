@@ -473,6 +473,28 @@ extension AppUIComponentTestSuite {
       #expect(row.state.strings[0] == "960")
     }
 
+    @Test("UCT-1006.16: Invalid transform drafts block navigation until corrected")
+    func invalidTransformBlocksNavigation() throws {
+      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let editor = VideoLayersEditor(storeService: store, target: .landscape)
+      editor.update(
+        definition: .with { $0.videoComponents = [.with { $0.vfxSource.internalID = 1 }] },
+        programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
+      let row = try #require(editor.table.rows[1])
+      let original = store.preferences
+      for strings in [["bad", "0", "1", "1"], ["0", "0", "-1", "1"]] {
+        row.state.strings = strings
+        row.state.hasUnconfirmedChanges = true
+        #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
+        #expect(throws: (any Error).self) { try store.validateForSaving() }
+        #expect(row.state.strings == strings)
+        #expect(store.preferences == original)
+      }
+      row.state.strings = ["0", "0", "1", "1"]
+      try store.validateInspectorEdits()
+      #expect(store.preferences == original)
+    }
+
     @Test("UCT-1006.15: Only VFX Sources and Clocks expose placement fields")
     func placementFieldsFollowComponentType() throws {
       let fixture = VideoLayersTestFixture()
