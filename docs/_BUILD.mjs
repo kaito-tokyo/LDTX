@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -15,6 +16,8 @@ import {
 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { tmpdir } from "node:os";
+import { renderProtobufReference } from "./_lib/protobuf-reference.mjs";
 
 const docsDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryDirectory = path.dirname(docsDirectory);
@@ -73,31 +76,33 @@ function buildScenarios(outputDirectory) {
 function buildProtos(outputDirectory) {
   mkdirSync(outputDirectory, { recursive: true });
 
-  const result = spawnSync(
-    "protoc",
-    [
-      "--proto_path=Protos",
-      `--doc_out=${path.relative(repositoryDirectory, outputDirectory)}`,
-      "--doc_opt=docs/_lib/workspace.tmpl,workspace.html",
-      "Protos/envelope.proto",
-      "Protos/workspace_v4_definition.proto",
-      "Protos/workspace_v4_input_device.proto",
-      "Protos/workspace_v4_preferences.proto",
-      "Protos/workspace_v4_video_component.proto",
-      "Protos/workspace_v4_vfx.proto",
-      "Protos/workspace_v4_vision.proto",
-      "Protos/workspace_v4_types.proto",
-    ],
-    { cwd: repositoryDirectory, stdio: "inherit" },
-  );
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  const temporaryDirectory = mkdtempSync(path.join(tmpdir(), "ldtx-proto-docs-"));
+  try {
+    const descriptorPath = path.join(temporaryDirectory, "workspace.pb");
+    const result = spawnSync(
+      "npx",
+      [
+        "--yes",
+        "protoc@36.0.0",
+        "--proto_path=Protos",
+        "--include_source_info",
+        `--descriptor_set_out=${descriptorPath}`,
+        ...readdirSync(path.join(repositoryDirectory, "Protos"))
+          .filter((name) => name === "envelope.proto" || /^workspace_v4_.*\.proto$/.test(name))
+          .sort()
+          .map((name) => `Protos/${name}`),
+      ],
+      { cwd: repositoryDirectory, stdio: "inherit" },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`protoc failed with status ${result.status}`);
+    writeFileSync(
+      path.join(outputDirectory, "workspace.html"),
+      renderProtobufReference(readFileSync(descriptorPath)),
+    );
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
   }
-
-  const outputPath = path.join(outputDirectory, "workspace.html");
-  const output = readFileSync(outputPath, "utf8");
-  writeFileSync(outputPath, output.replace(/[ \t]+$/gm, ""));
 }
 
 switch (command) {

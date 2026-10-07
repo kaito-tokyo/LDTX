@@ -5,2138 +5,379 @@ SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 SPDX-License-Identifier: Apache-2.0
 -->
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LDTX Workspace Protobuf Reference</title>
-    <style>
-      table { border-collapse: collapse; }
-      table, th, td { border: 1px solid; }
-    </style>
-  </head>
-  <body>
-    <h1>LDTX Workspace Protobuf Reference</h1>
-    <p>Schema reference for the persisted Workspace format.</p>
-
-
-    <section>
-      <h2><code>envelope.proto</code></h2>
-      <p>Package <code>ldtx.envelope</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.envelope.WorkspaceDefinitionEnvelope"><code>WorkspaceDefinitionEnvelope</code></h3>
-        <p>The persistence envelope for a WorkspaceDefinition. Contains an external_id
-and a concrete WorkspaceDefinition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>external_id</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The UUIDv7 identifier for this persisted document.</td>
-            </tr>
-
-            <tr>
-              <td><code>workspace_definition_v4</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.WorkspaceDefinitionV4"><code>WorkspaceDefinitionV4</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The Version 4 WorkspaceDefinition.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.envelope.WorkspacePreferencesEnvelope"><code>WorkspacePreferencesEnvelope</code></h3>
-        <p>The persistence envelope for WorkspacePreferences. Contains an external_id
-and a concrete WorkspacePreferences.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>external_id</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The UUIDv7 identifier for this persisted document.</td>
-            </tr>
-
-            <tr>
-              <td><code>workspace_preferences_v4</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.WorkspacePreferencesV4"><code>WorkspacePreferencesV4</code></a>
-
-              </td>
-              <td>oneof <code>preferences</code></td>
-              <td>The Version 4 WorkspacePreferences.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_definition.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.CanvasConfiguration"><code>CanvasConfiguration</code></h3>
-        <p>Represents Canvas in the Workspace sidebar.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>landscape_profile_id</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The profile identifier selected for the Landscape Canvas.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_profile_id</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The profile identifier selected for the Portrait Canvas.</td>
-            </tr>
-
-            <tr>
-              <td><code>frame_rate</code></td>
-              <td>
-
-                  <code>uint32</code>
-
-              </td>
-              <td></td>
-              <td>The output frame rate in frames per second.</td>
-            </tr>
-
-            <tr>
-              <td><code>landscape_video_bit_rate</code></td>
-              <td>
-
-                  <code>uint32</code>
-
-              </td>
-              <td></td>
-              <td>The target video bit rate for the Landscape Canvas in bits per second.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_video_bit_rate</code></td>
-              <td>
-
-                  <code>uint32</code>
-
-              </td>
-              <td></td>
-              <td>The target video bit rate for the Portrait Canvas in bits per second.</td>
-            </tr>
-
-            <tr>
-              <td><code>pts_master_vfx_source_internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td>optional</td>
-              <td>The VFX Source used as the master clock for video presentation timestamps.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.OutputConfiguration"><code>OutputConfiguration</code></h3>
-        <p>Represents Output in the Workspace sidebar.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>records_landscape</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether the Landscape output is recorded.</td>
-            </tr>
-
-            <tr>
-              <td><code>records_portrait</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether the Portrait output is recorded.</td>
-            </tr>
-
-            <tr>
-              <td><code>streams_to_youtube</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether output is streamed to YouTube.</td>
-            </tr>
-
-            <tr>
-              <td><code>youtube_ingest_mode</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.YouTubeIngestMode"><code>YouTubeIngestMode</code></a>
-
-              </td>
-              <td></td>
-              <td>The layout and protocol used for YouTube ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>output_folder_path</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td>optional</td>
-              <td>The folder where recordings are written. When absent, the runtime default
-output folder applies.</td>
-            </tr>
-
-            <tr>
-              <td><code>recording_custom_fields</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>string</code><code>, </code><code>string</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Additional fields written with recordings, keyed by their field names.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></h3>
-        <p>Defines the Video Component order for one Program.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Program shown on the selector.</td>
-            </tr>
-
-            <tr>
-              <td><code>landscape_video_layer_internal_ids</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td>repeated</td>
-              <td>The Video Component internal IDs in Landscape Video
-Layer order.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_video_layer_internal_ids</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td>repeated</td>
-              <td>The Video Component internal IDs in Portrait Video
-Layer order.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.WorkspaceDefinitionV4"><code>WorkspaceDefinitionV4</code></h3>
-        <p>Version 4 WorkspaceDefinition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The title of this Workspace.</td>
-            </tr>
-
-            <tr>
-              <td><code>programs</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>Contains the Video Layers for each Program in this Workspace.</td>
-            </tr>
-
-            <tr>
-              <td><code>canvas_configuration</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.CanvasConfiguration"><code>CanvasConfiguration</code></a>
-
-              </td>
-              <td></td>
-              <td>Represents Canvas in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>output_configuration</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.OutputConfiguration"><code>OutputConfiguration</code></a>
-
-              </td>
-              <td></td>
-              <td>Represents Output in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>audio_devices</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>Represents Audio devices in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>video_components</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VideoComponentWrapper"><code>VideoComponentWrapper</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>Represents Video Components in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>visions</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VisionWrapper"><code>VisionWrapper</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>Represents Visions in the Workspace sidebar.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.YouTubeIngestMode"><code>YouTubeIngestMode</code></h3>
-        <p>The layout and protocol used for YouTube ingest.</p>
-        <table>
-          <thead>
-            <tr><th>Value</th><th>Number</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_UNSPECIFIED</code></td>
-              <td>0</td>
-              <td>No YouTube ingest mode is specified. The runtime uses Landscape RTMPS.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_RTMPS</code></td>
-              <td>1</td>
-              <td>Sends the Landscape output using RTMPS ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_PORTRAIT_RTMPS</code></td>
-              <td>2</td>
-              <td>Sends the Portrait output using RTMPS ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_DUAL_RTMPS</code></td>
-              <td>3</td>
-              <td>Sends Landscape and Portrait as separate RTMPS streams.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_HLS</code></td>
-              <td>4</td>
-              <td>Sends the Landscape output using HLS ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_PORTRAIT_HLS</code></td>
-              <td>5</td>
-              <td>Sends the Portrait output using HLS ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_DASH</code></td>
-              <td>6</td>
-              <td>Sends the Landscape output using DASH ingest.</td>
-            </tr>
-
-            <tr>
-              <td><code>YOUTUBE_INGEST_MODE_PORTRAIT_DASH</code></td>
-              <td>7</td>
-              <td>Sends the Portrait output using DASH ingest.</td>
-            </tr>
-
-          </tbody>
-        </table>
-      </article>
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_input_device.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></h3>
-        <p>An audio Input Device available in a Workspace.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Input Device shown in the Workspace sidebar.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_preferences.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></h3>
-        <p>The basic transform applied to a Video Layer, which is a Video Component.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>translation_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>translation_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>scale_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>scale_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>top_inset_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>right_inset_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>bottom_inset_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>left_inset_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></h3>
-        <p>Contains mutable preferences for one Program canvas.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>audio_master_volume_decibels</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>audio_channel_muted</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Whether each Audio Input Device is muted, keyed by internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>video_layer_transforms</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></a><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Video Layer transforms, keyed by Video Component internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>video_layer_hidden</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Whether each Video Layer is hidden, keyed by internal_id.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-
-
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.WorkspacePreferencesV4"><code>WorkspacePreferencesV4</code></h3>
-        <p>Contains mutable preferences for one WorkspaceDefinitionV4.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>audio_channel_gains_decibels</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>landscape_program_preferences</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Preferences for each Landscape Program, keyed by Program internal_id.</td>
-            </tr>
-
-            <tr>
-              <td><code>portrait_program_preferences</code></td>
-              <td>
-
-                  <code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code>
-
-              </td>
-              <td>map</td>
-              <td>Preferences for each Portrait Program, keyed by Program internal_id.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-
-
-
-
-
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_video_component.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></h3>
-        <p>A Video Component that renders the current date and time.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>width_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>height_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>shows_date</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether the rendered Clock includes the date.</td>
-            </tr>
-
-            <tr>
-              <td><code>shows_seconds</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether the rendered time includes seconds.</td>
-            </tr>
-
-            <tr>
-              <td><code>uses_24_hour_time</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether the rendered time uses a 24-hour clock.</td>
-            </tr>
-
-            <tr>
-              <td><code>utc_offset_minutes</code></td>
-              <td>
-
-                  <code>sint32</code>
-
-              </td>
-              <td>optional</td>
-              <td>The fixed offset from UTC in minutes. When absent, the Clock uses the
-system time zone.</td>
-            </tr>
-
-            <tr>
-              <td><code>foreground_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The color of the rendered date and time text.</td>
-            </tr>
-
-            <tr>
-              <td><code>background_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The background color of this Clock.</td>
-            </tr>
-
-            <tr>
-              <td><code>outlines</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ClockTextOutline"><code>ClockTextOutline</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>The text outlines rendered around the Clock text, in order.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.ClockTextOutline"><code>ClockTextOutline</code></h3>
-        <p>A text outline rendered by a Clock.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>thickness_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The color of this outline.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></h3>
-        <p>A color represented in the extended sRGB color space.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>red</code></td>
-              <td>
-
-                  <code>float</code>
-
-              </td>
-              <td></td>
-              <td>The red component in the extended sRGB color space.</td>
-            </tr>
-
-            <tr>
-              <td><code>green</code></td>
-              <td>
-
-                  <code>float</code>
-
-              </td>
-              <td></td>
-              <td>The green component in the extended sRGB color space.</td>
-            </tr>
-
-            <tr>
-              <td><code>blue</code></td>
-              <td>
-
-                  <code>float</code>
-
-              </td>
-              <td></td>
-              <td>The blue component in the extended sRGB color space.</td>
-            </tr>
-
-            <tr>
-              <td><code>alpha</code></td>
-              <td>
-
-                  <code>float</code>
-
-              </td>
-              <td></td>
-              <td>The straight alpha component, in the range [0, 1].</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.FillConicGradientComponent"><code>FillConicGradientComponent</code></h3>
-        <p>A Video Component whose conic-gradient geometry is defined in the local
-coordinate system of the Canvas that renders this Fill. The Canvas origin is
-its top-left corner; x increases to the right and y increases downward. For
-a Canvas of positive width W and height H, a point (x, y) has normalized
-coordinates (u, v) = (x / W, y / H). The gradient center is
-c = (center_x, center_y) in these normalized coordinates. At every Canvas
-point other than c, define dx = u - center_x, dy = v - center_y, and
-angle = atan2(dy, dx), in radians, using the conventional atan2(y, x)
-function. Thus zero radians points right and positive angles proceed
-clockwise because the Canvas y-axis points downward. The x and y axes are
-normalized independently, so angles are measured in normalized Canvas
-space, not in pixel space; on a non-square Canvas this can change angular
-spacing compared with pixel-space angles. Define
-q = (angle - start_angle_radians) / (2*pi) and t = q - floor(q), where pi
-is the mathematical constant and floor returns the greatest integer not
-greater than its argument. Thus t is in [0, 1), increases clockwise from
-the start ray, and is periodic in start_angle_radians with period 2*pi.
-Every point on the same ray from c has the same t.
-
-start_color is the specified Extended sRGB source color on the start ray
-(t = 0). end_color is the specified Extended sRGB source color in the limit
-as t approaches 1 from below. The start ray itself uses start_color; if the
-endpoint colors differ, the angular wrap creates a seam on that ray. These
-two endpoint colors and the geometry above are required. The source color at
-intermediate angular positions, including its interpolation space and
-progression, conversion to an output or display color space, alpha handling,
-compositing, filtering, and pixel quantization are implementation-defined.
-The result at the exact center c is implementation-defined because its
-angular position is undefined. This definition does not require the angle
-convention or rendering behavior of CSS conic-gradient(), SwiftUI
-AngularGradient, or any other particular API.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>center_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>center_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>start_angle_radians_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>start_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color on the start ray (t = 0).</td>
-            </tr>
-
-            <tr>
-              <td><code>end_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color in the limit as t approaches 1
-from below, immediately before the angular wrap to the start ray.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.FillLinearGradientComponent"><code>FillLinearGradientComponent</code></h3>
-        <p>A Video Component with linear-gradient control points defined in the local
-coordinate system of the Canvas that renders this Fill. The Canvas origin is
-its top-left corner, x increases to the right, and y increases downward. For
-a Canvas with positive width W and height H, a point (x, y) has normalized
-coordinates (u, v) = (x / W, y / H). The start and end points are
-(start_x, start_y) and (end_x, end_y) in these normalized coordinates. If
-the points differ, the directed gradient axis extends from the start point
-to the end point. For a normalized Canvas point p, let s be the start
-point and e the end point; its gradient position is the scalar projection
-t = dot(p - s, e - s) / dot(e - s, e - s). Thus t is zero at s, one at e,
-and is equal for points on the same line perpendicular to the gradient axis.
-For 2D vectors a and b, dot(a, b) = a.x * b.x + a.y * b.y.
-start_color and end_color are the specified Extended sRGB source colors at
-their respective control points. Source colors at other positions,
-including interpolation, conversion to an output or display color space,
-alpha handling, compositing, filtering, and pixel quantization, are
-implementation-defined. If the two points coincide, the rendered result is
-implementation-defined. This definition does not require a particular CSS
-rendering or color interpolation algorithm.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>start_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>start_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>start_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color at the gradient start point.</td>
-            </tr>
-
-            <tr>
-              <td><code>end_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>end_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>end_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color at the gradient end point.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.FillRadialGradientComponent"><code>FillRadialGradientComponent</code></h3>
-        <p>A Video Component with radial-gradient geometry defined in the local
-coordinate system of the Canvas that renders this Fill. The Canvas origin is
-its top-left corner, x increases to the right, and y increases downward. For
-a Canvas with positive width W and height H, a point (x, y) has normalized
-coordinates (u, v) = (x / W, y / H). Let c be the center
-(center_x, center_y), and let d = sqrt((u - center_x)^2 +
-(v - center_y)^2). The inner and outer control contours are the sets of
-points where d equals inner_radius and outer_radius. Thus a radius r defines
-an ellipse centered at c with horizontal radius r * W and vertical radius
-r * H.
-
-inner_color and outer_color are the specified Extended sRGB source colors
-on their respective control contours. Source colors at all other Canvas
-points, including inside, between, and outside the contours, are
-implementation-defined. Color interpolation, conversion to an output or
-display color space, alpha handling, compositing, filtering, and pixel
-quantization are implementation-defined. This definition does not require a
-particular CSS rendering or color interpolation algorithm.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>center_x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>center_y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>inner_radius_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>outer_radius_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>inner_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color at the inner control contour.</td>
-            </tr>
-
-            <tr>
-              <td><code>outer_color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The specified Extended sRGB source color at the outer control contour.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></h3>
-        <p>A Video Component that fills the entire Canvas with one uniform source
-color. The Extended sRGB source color at every Canvas point is the value of
-the color field. Conversion from Extended sRGB to an output or display color
-space, alpha compositing, filtering, and pixel quantization are
-implementation-defined.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>color</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ExtendedSrgbColor"><code>ExtendedSrgbColor</code></a>
-
-              </td>
-              <td></td>
-              <td>The uniform source color of this fill, represented by ExtendedSrgbColor.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.TestPatternComponent"><code>TestPatternComponent</code></h3>
-        <p>A Video Component that renders a test pattern.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VfxSourceComponent"><code>VfxSourceComponent</code></h3>
-        <p>A Video Component that applies Video Effects to video from an Input Device.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Video Component shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>effects</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VideoEffectWrapper"><code>VideoEffectWrapper</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>Physical camera assignment is app-local and keyed by internal_id.
-The VFX effects applied to the input video, in evaluation order.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VideoComponentWrapper"><code>VideoComponentWrapper</code></h3>
-        <p>Wraps one concrete Video Component definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>solid_color_fill</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The solid-color fill Video Component definition. Mutually exclusive with
-the other fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>linear_gradient_fill</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.FillLinearGradientComponent"><code>FillLinearGradientComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The linear-gradient fill Video Component definition. Mutually exclusive
-with the other fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>radial_gradient_fill</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.FillRadialGradientComponent"><code>FillRadialGradientComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The radial-gradient fill Video Component definition. Mutually exclusive
-with the other fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>conic_gradient_fill</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.FillConicGradientComponent"><code>FillConicGradientComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The conic-gradient fill Video Component definition. Mutually exclusive
-with the other fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>vfx_source</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VfxSourceComponent"><code>VfxSourceComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The VFX Source Video Component definition. Mutually exclusive with the
-other fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>clock</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The clock Video Component definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>test_pattern</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.TestPatternComponent"><code>TestPatternComponent</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The test-pattern Video Component definition. Mutually exclusive with the
-other fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_vfx.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.BackgroundRemovalVfxEffect"><code>BackgroundRemovalVfxEffect</code></h3>
-        <p>A Video Effect that removes the background from input video.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>model</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.BackgroundRemovalVfxEffect.Model"><code>Model</code></a>
-
-              </td>
-              <td></td>
-              <td>The background-removal model to use.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.CustomVideoEffect"><code>CustomVideoEffect</code></h3>
-        <p>A customization point for a Video Effect.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>json</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The JSON representation of this custom Video Effect. Its format is
-unspecified.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VideoEffectWrapper"><code>VideoEffectWrapper</code></h3>
-        <p>Wraps one concrete Video Effect definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>custom</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.CustomVideoEffect"><code>CustomVideoEffect</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The custom Video Effect definition. Mutually exclusive with the other
-fields.</td>
-            </tr>
-
-            <tr>
-              <td><code>background_removal</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.BackgroundRemovalVfxEffect"><code>BackgroundRemovalVfxEffect</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The background-removal VFX effect definition. Mutually exclusive with
-the other fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.BackgroundRemovalVfxEffect.Model"><code>BackgroundRemovalVfxEffect.Model</code></h3>
-
-        <table>
-          <thead>
-            <tr><th>Value</th><th>Number</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>UNSPECIFIED</code></td>
-              <td>0</td>
-              <td>No background-removal model is specified.</td>
-            </tr>
-
-            <tr>
-              <td><code>MEDIAPIPE_LANDSCAPE</code></td>
-              <td>1</td>
-              <td>The MediaPipe landscape model.</td>
-            </tr>
-
-          </tbody>
-        </table>
-      </article>
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_vision.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.IntervalVisionTrigger"><code>IntervalVisionTrigger</code></h3>
-        <p>A Vision trigger that invokes Vision at a regular interval.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>interval_seconds_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.OcrVision"><code>OcrVision</code></h3>
-        <p>An image-analysis request that recognizes text in an image.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td></td>
-              <td>The Workspace-local identifier for this entity. Its most significant bit
-is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-and bits 14 through 0 are uniformly random.</td>
-            </tr>
-
-            <tr>
-              <td><code>display_name</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td></td>
-              <td>The name of this Vision shown in the Workspace sidebar.</td>
-            </tr>
-
-            <tr>
-              <td><code>triggers</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></a>
-
-              </td>
-              <td>repeated</td>
-              <td>The conditions that automatically trigger this Vision.</td>
-            </tr>
-
-            <tr>
-              <td><code>video_component_internal_id</code></td>
-              <td>
-
-                  <code>uint64</code>
-
-              </td>
-              <td>oneof <code>source</code></td>
-              <td>Analyzes the component after effects and before Program placement.</td>
-            </tr>
-
-            <tr>
-              <td><code>region_of_interest</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></a>
-
-              </td>
-              <td></td>
-              <td>The region of the input image in which Vision performs the request.</td>
-            </tr>
-
-            <tr>
-              <td><code>accurate</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether text recognition prioritizes accuracy over speed. False uses the
-fast level.</td>
-            </tr>
-
-            <tr>
-              <td><code>recognition_languages</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td>repeated</td>
-              <td>The BCP 47 languages Vision detects, in priority order. An empty list
-enables automatic language detection.</td>
-            </tr>
-
-            <tr>
-              <td><code>uses_language_correction</code></td>
-              <td>
-
-                  <code>bool</code>
-
-              </td>
-              <td></td>
-              <td>Whether Vision applies language correction during text recognition.</td>
-            </tr>
-
-            <tr>
-              <td><code>custom_words</code></td>
-              <td>
-
-                  <code>string</code>
-
-              </td>
-              <td>repeated</td>
-              <td>The words that supplement Vision's lexicon during word recognition.
-Vision uses these only when language correction is enabled.</td>
-            </tr>
-
-            <tr>
-              <td><code>minimum_text_height_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></h3>
-        <p>A normalized rectangle in the input image. Its origin is relative to the
-lower-left corner.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>x_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>y_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>width_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>height_rational</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></h3>
-        <p>Wraps one concrete Vision trigger definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>interval_trigger</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.IntervalVisionTrigger"><code>IntervalVisionTrigger</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The interval-based Vision trigger definition. Mutually exclusive with
-the other fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.VisionWrapper"><code>VisionWrapper</code></h3>
-        <p>Wraps one concrete Vision definition.</p>
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>ocr_vision</code></td>
-              <td>
-
-                  <a href="#ldtx.workspace.v4.OcrVision"><code>OcrVision</code></a>
-
-              </td>
-              <td>oneof <code>definition</code></td>
-              <td>The OCR Vision definition. Mutually exclusive with the other fields.</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-    </section>
-
-    <section>
-      <h2><code>workspace_v4_types.proto</code></h2>
-      <p>Package <code>ldtx.workspace.v4</code></p>
-
-
-
-      <article>
-        <h3 id="ldtx.workspace.v4.Rational32"><code>Rational32</code></h3>
-
-
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Label</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-
-            <tr>
-              <td><code>numerator</code></td>
-              <td>
-
-                  <code>sint32</code>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-            <tr>
-              <td><code>denominator</code></td>
-              <td>
-
-                  <code>uint32</code>
-
-              </td>
-              <td></td>
-              <td>—</td>
-            </tr>
-
-          </tbody>
-        </table>
-
-      </article>
-
-
-
-
-    </section>
-
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LDTX Workspace Protobuf Reference</title>
+<style>
+table { border-collapse: collapse; }
+table, th, td { border: 1px solid; }
+p, td { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>LDTX Workspace Protobuf Reference</h1>
+<p>Schema reference for the persisted Workspace format.</p>
+<section><h2><code>workspace_v4_input_device.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></h3><p>An audio Input Device available in a Workspace.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Input Device shown in the Workspace sidebar.</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_types.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.Rational32"><code>Rational32</code></h3>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>numerator</code></td><td>1</td><td><code>sint32</code></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>denominator</code></td><td>2</td><td><code>uint32</code></td><td></td><td><code>1</code></td><td>—</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.Color"><code>Color</code></h3>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>red</code></td><td>1</td><td><code>float</code></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>green</code></td><td>2</td><td><code>float</code></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>blue</code></td><td>3</td><td><code>float</code></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>alpha</code></td><td>4</td><td><code>float</code></td><td></td><td>—</td><td>—</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_vfx.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.VideoEffectWrapper"><code>VideoEffectWrapper</code></h3><p>Wraps one concrete Video Effect definition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>custom</code></td><td>1</td><td><a href="#ldtx.workspace.v4.CustomVideoEffect"><code>CustomVideoEffect</code></a></td><td>oneof <code>video_effect</code></td><td>—</td><td>The custom Video Effect definition. Mutually exclusive with the other
+ fields.</td></tr>
+<tr><td><code>background_removal</code></td><td>2</td><td><a href="#ldtx.workspace.v4.BackgroundRemovalVfxEffect"><code>BackgroundRemovalVfxEffect</code></a></td><td>oneof <code>video_effect</code></td><td>—</td><td>The background-removal VFX effect definition. Mutually exclusive with
+ the other fields.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.CustomVideoEffect"><code>CustomVideoEffect</code></h3><p>A customization point for a Video Effect.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>json</code></td><td>1</td><td><code>string</code></td><td></td><td>—</td><td>The JSON representation of this custom Video Effect. Its format is
+ unspecified.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.BackgroundRemovalVfxEffect"><code>BackgroundRemovalVfxEffect</code></h3><p>A Video Effect that removes the background from input video.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>model</code></td><td>1</td><td><a href="#ldtx.workspace.v4.BackgroundRemovalVfxEffect.Model"><code>Model</code></a></td><td></td><td>—</td><td>The background-removal model to use.</td></tr></tbody></table></article>
+
+<article><h3 id="ldtx.workspace.v4.BackgroundRemovalVfxEffect.Model"><code>BackgroundRemovalVfxEffect.Model</code></h3>
+<table><thead><tr><th>Value</th><th>Number</th><th>Description</th></tr></thead><tbody><tr><td><code>UNSPECIFIED</code></td><td>0</td><td>No background-removal model is specified.</td></tr>
+<tr><td><code>MEDIAPIPE_LANDSCAPE</code></td><td>1</td><td>The MediaPipe landscape model.</td></tr></tbody></table></article>
+</section>
+<section><h2><code>workspace_v4_video_component.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.VideoComponentWrapper"><code>VideoComponentWrapper</code></h3><p>Wraps one concrete Video Component definition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>solid_color_fill</code></td><td>1</td><td><a href="#ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The solid-color fill Video Component definition. Mutually exclusive with
+ the other fields.</td></tr>
+<tr><td><code>linear_gradient_fill</code></td><td>2</td><td><a href="#ldtx.workspace.v4.FillLinearGradientComponent"><code>FillLinearGradientComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The linear-gradient fill Video Component definition. Mutually exclusive
+ with the other fields.</td></tr>
+<tr><td><code>radial_gradient_fill</code></td><td>3</td><td><a href="#ldtx.workspace.v4.FillRadialGradientComponent"><code>FillRadialGradientComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The radial-gradient fill Video Component definition. Mutually exclusive
+ with the other fields.</td></tr>
+<tr><td><code>conic_gradient_fill</code></td><td>4</td><td><a href="#ldtx.workspace.v4.FillConicGradientComponent"><code>FillConicGradientComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The conic-gradient fill Video Component definition. Mutually exclusive
+ with the other fields.</td></tr>
+<tr><td><code>vfx_source</code></td><td>5</td><td><a href="#ldtx.workspace.v4.VfxSourceComponent"><code>VfxSourceComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The VFX Source Video Component definition. Mutually exclusive with the
+ other fields.</td></tr>
+<tr><td><code>clock</code></td><td>6</td><td><a href="#ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The clock Video Component definition. Mutually exclusive with the other
+ fields.</td></tr>
+<tr><td><code>test_pattern</code></td><td>7</td><td><a href="#ldtx.workspace.v4.TestPatternComponent"><code>TestPatternComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The test-pattern Video Component definition. Mutually exclusive with the
+ other fields.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></h3><p>A Video Component that fills the entire Canvas with one uniform source color.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>extended_srgb_color</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color at every Canvas point, in extended sRGB. RGB components
+ use the nonlinear sRGB transfer function and may extend beyond [0, 1].
+ Alpha is straight, in [0, 1], and is not transfer-function encoded.
+ Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.FillLinearGradientComponent"><code>FillLinearGradientComponent</code></h3><p>A Video Component that fills the Canvas with a linear gradient.
+ The gradient progresses from start_extended_srgb_color to
+ end_extended_srgb_color along the start-to-end axis. Coincident control
+ points and color interpolation are implementation-defined.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>start_x</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The start point X coordinate, normalized by the rendering Canvas width,
+ in [0, 1], measured rightward from its left edge.
+ Gradient positions are computed by orthogonal projection onto the
+ start-to-end axis in normalized Canvas coordinates, with X divided by
+ the Canvas width and Y divided by its height. The start position is 0
+ and the end position is 1.</td></tr>
+<tr><td><code>start_y</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The start point Y coordinate, normalized by the rendering Canvas height,
+ in [0, 1], measured downward from its top edge.</td></tr>
+<tr><td><code>start_extended_srgb_color</code></td><td>5</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color at the gradient start point, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr>
+<tr><td><code>end_x</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The end point X coordinate, normalized by the rendering Canvas width,
+ in [0, 1], measured rightward from its left edge.</td></tr>
+<tr><td><code>end_y</code></td><td>7</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The end point Y coordinate, normalized by the rendering Canvas height,
+ in [0, 1], measured downward from its top edge.</td></tr>
+<tr><td><code>end_extended_srgb_color</code></td><td>8</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color at the gradient end point, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.FillRadialGradientComponent"><code>FillRadialGradientComponent</code></h3><p>A Video Component that fills the Canvas with a radial gradient.
+ The gradient progresses from inner_extended_srgb_color to
+ outer_extended_srgb_color between the two control contours.
+ Color interpolation is implementation-defined.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>center_x</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The center X coordinate, normalized by the rendering Canvas width,
+ in [0, 1], measured rightward from its left edge.</td></tr>
+<tr><td><code>center_y</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The center Y coordinate, normalized by the rendering Canvas height,
+ in [0, 1], measured downward from its top edge.</td></tr>
+<tr><td><code>inner_radius</code></td><td>5</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The inner radius in normalized rendering Canvas coordinates, in [0, 1].
+ Horizontal and vertical radii are this value times the Canvas width and
+ height, respectively. Must be less than outer_radius.</td></tr>
+<tr><td><code>outer_radius</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The outer radius in normalized rendering Canvas coordinates, in [0, 1].
+ Horizontal and vertical radii are this value times the Canvas width and
+ height, respectively. Must be greater than inner_radius.</td></tr>
+<tr><td><code>inner_extended_srgb_color</code></td><td>7</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color at the inner control contour, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr>
+<tr><td><code>outer_extended_srgb_color</code></td><td>8</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color at the outer control contour, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.FillConicGradientComponent"><code>FillConicGradientComponent</code></h3><p>A Video Component that fills the Canvas with a conic gradient.
+ The gradient progresses from start_extended_srgb_color to
+ end_extended_srgb_color over one turn, with a seam at the start ray.
+ Color interpolation and the result at the exact center are implementation-defined.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>center_x</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The center X coordinate, normalized by the rendering Canvas width,
+ in [0, 1], measured rightward from its left edge.</td></tr>
+<tr><td><code>center_y</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The center Y coordinate, normalized by the rendering Canvas height,
+ in [0, 1], measured downward from its top edge.</td></tr>
+<tr><td><code>start_angle_radians</code></td><td>5</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The start angle in radians, not normalized, measured clockwise from the
+ rightward axis after X and Y are normalized by the rendering Canvas width
+ and height. Angles differing by 2 * pi represent the same start ray.</td></tr>
+<tr><td><code>start_extended_srgb_color</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color on the start ray, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr>
+<tr><td><code>end_extended_srgb_color</code></td><td>7</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The source color approached immediately before completing one clockwise
+ turn back to the start ray, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.VfxSourceComponent"><code>VfxSourceComponent</code></h3><p>A Video Component that applies Video Effects to video from an Input Device.
+ Physical camera assignment is app-local and keyed by this entity's LDTXWorkspaceID.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>effects</code></td><td>3</td><td><a href="#ldtx.workspace.v4.VideoEffectWrapper"><code>VideoEffectWrapper</code></a></td><td>repeated</td><td>—</td><td>The VFX effects applied to the input video, in evaluation order.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.TestPatternComponent"><code>TestPatternComponent</code></h3><p>A Video Component that renders a test pattern.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></h3><p>A Video Component that renders the current date and time.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
+<tr><td><code>width</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The Clock width, normalized by the Landscape Canvas width, in [0, 1].
+ The same reference applies to Portrait projection.</td></tr>
+<tr><td><code>height</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The Clock height, normalized by the Landscape Canvas height, in [0, 1].
+ The same reference applies to Portrait projection.</td></tr>
+<tr><td><code>shows_date</code></td><td>5</td><td><code>bool</code></td><td></td><td>—</td><td>Whether the rendered Clock includes the date.</td></tr>
+<tr><td><code>shows_seconds</code></td><td>6</td><td><code>bool</code></td><td></td><td>—</td><td>Whether the rendered time includes seconds.</td></tr>
+<tr><td><code>uses_24_hour_time</code></td><td>7</td><td><code>bool</code></td><td></td><td>—</td><td>Whether the rendered time uses a 24-hour clock.</td></tr>
+<tr><td><code>utc_offset_minutes</code></td><td>8</td><td><code>sint32</code></td><td></td><td>—</td><td>The fixed offset from UTC in minutes.</td></tr>
+<tr><td><code>foreground_extended_srgb_color</code></td><td>9</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The color of the rendered date and time text, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr>
+<tr><td><code>background_extended_srgb_color</code></td><td>10</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The background color of this Clock, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr>
+<tr><td><code>outlines</code></td><td>11</td><td><a href="#ldtx.workspace.v4.ClockTextOutline"><code>ClockTextOutline</code></a></td><td>repeated</td><td>—</td><td>The text outlines rendered around the Clock text in back-to-front
+ compositing order. The first entry is the backmost outline; the last
+ entry is the frontmost outline.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.ClockTextOutline"><code>ClockTextOutline</code></h3><p>A text outline rendered by a Clock.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>thickness</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The outline thickness in pixels of the output Canvas, not normalized.</td></tr>
+<tr><td><code>extended_srgb_color</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The color of this outline, in extended sRGB.
+ RGB components use the nonlinear sRGB transfer function and may extend
+ beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+ encoded. Conversion to an output or display color space, alpha compositing,
+ filtering, and pixel quantization are implementation-defined.</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_vision.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.VisionWrapper"><code>VisionWrapper</code></h3><p>Wraps one concrete Vision definition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>ocr_vision</code></td><td>1</td><td><a href="#ldtx.workspace.v4.OcrVision"><code>OcrVision</code></a></td><td>oneof <code>vision</code></td><td>—</td><td>The OCR Vision definition. Mutually exclusive with the other fields.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></h3><p>The rectangular region of the input image analyzed by Vision.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>x</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The left edge, measured rightward from the target image's left edge
+ and normalized by its width, in [0, 1].
+ Must satisfy x + width &lt;= 1.</td></tr>
+<tr><td><code>y</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The bottom edge, measured upward from the target image's bottom edge
+ and normalized by its height, in [0, 1].
+ Must satisfy y + height &lt;= 1.</td></tr>
+<tr><td><code>width</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The width, normalized by the target image width, in (0, 1].</td></tr>
+<tr><td><code>height</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The height, normalized by the target image height, in (0, 1].</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></h3><p>Wraps one concrete Vision trigger definition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>interval_trigger</code></td><td>1</td><td><a href="#ldtx.workspace.v4.IntervalVisionTrigger"><code>IntervalVisionTrigger</code></a></td><td>oneof <code>trigger</code></td><td>—</td><td>The interval-based Vision trigger definition. Mutually exclusive with
+ the other fields.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.IntervalVisionTrigger"><code>IntervalVisionTrigger</code></h3><p>A Vision trigger that invokes Vision at a regular interval.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>interval_seconds</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The interval between automatic Vision updates in seconds.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.OcrVision"><code>OcrVision</code></h3><p>An image-analysis request that recognizes text in an image.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Vision shown in the Workspace sidebar.</td></tr>
+<tr><td><code>video_component_internal_id</code></td><td>3</td><td><code>uint64</code></td><td></td><td>—</td><td>The LDTXWorkspaceID of the Video Component analyzed after effects and
+ before Program placement.</td></tr>
+<tr><td><code>region_of_interest</code></td><td>4</td><td><a href="#ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></a></td><td></td><td>—</td><td>The region of the input image in which Vision performs the request.</td></tr>
+<tr><td><code>triggers</code></td><td>5</td><td><a href="#ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></a></td><td>repeated</td><td>—</td><td>The conditions that automatically trigger this Vision.</td></tr>
+<tr><td><code>recognition_languages</code></td><td>6</td><td><code>string</code></td><td>repeated</td><td>—</td><td>The BCP 47 languages Vision detects, in priority order.</td></tr>
+<tr><td><code>uses_language_correction</code></td><td>7</td><td><code>bool</code></td><td></td><td>—</td><td>Whether Vision applies language correction during text recognition.</td></tr>
+<tr><td><code>custom_words</code></td><td>8</td><td><code>string</code></td><td>repeated</td><td>—</td><td>The words that supplement Vision's lexicon during word recognition.
+ Vision uses these only when language correction is enabled.</td></tr>
+<tr><td><code>minimum_text_height</code></td><td>9</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The minimum text height, normalized by the target image height, in [0, 1].</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_definition.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.WorkspaceDefinitionV4"><code>WorkspaceDefinitionV4</code></h3><p>Version 4 WorkspaceDefinition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>display_name</code></td><td>1</td><td><code>string</code></td><td></td><td>—</td><td>The title of this Workspace.</td></tr>
+<tr><td><code>programs</code></td><td>2</td><td><a href="#ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></a></td><td>repeated</td><td>—</td><td>The Programs defined in this Workspace.</td></tr>
+<tr><td><code>canvas_configuration</code></td><td>3</td><td><a href="#ldtx.workspace.v4.CanvasConfiguration"><code>CanvasConfiguration</code></a></td><td></td><td>—</td><td>Represents Canvas in the Workspace sidebar.</td></tr>
+<tr><td><code>audio_devices</code></td><td>5</td><td><a href="#ldtx.workspace.v4.AudioInputDevice"><code>AudioInputDevice</code></a></td><td>repeated</td><td>—</td><td>Represents Audio devices in the Workspace sidebar.</td></tr>
+<tr><td><code>video_components</code></td><td>6</td><td><a href="#ldtx.workspace.v4.VideoComponentWrapper"><code>VideoComponentWrapper</code></a></td><td>repeated</td><td>—</td><td>Represents Video Components in the Workspace sidebar.</td></tr>
+<tr><td><code>visions</code></td><td>7</td><td><a href="#ldtx.workspace.v4.VisionWrapper"><code>VisionWrapper</code></a></td><td>repeated</td><td>—</td><td>Represents Visions in the Workspace sidebar.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.ProgramDefinition"><code>ProgramDefinition</code></h3><p>Defines the identity and display name of one Program.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td>—</td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Program shown on the selector.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.CanvasConfiguration"><code>CanvasConfiguration</code></h3><p>Represents Canvas in the Workspace sidebar.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>landscape_profile_id</code></td><td>1</td><td><code>string</code></td><td></td><td>—</td><td>The profile identifier selected for the Landscape Canvas.</td></tr>
+<tr><td><code>portrait_profile_id</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The profile identifier selected for the Portrait Canvas.</td></tr>
+<tr><td><code>frame_rate</code></td><td>3</td><td><code>uint32</code></td><td></td><td>—</td><td>The output frame rate in frames per second.</td></tr>
+<tr><td><code>landscape_video_bit_rate</code></td><td>4</td><td><code>uint32</code></td><td></td><td>—</td><td>The target video bit rate for the Landscape Canvas in bits per second.</td></tr>
+<tr><td><code>portrait_video_bit_rate</code></td><td>5</td><td><code>uint32</code></td><td></td><td>—</td><td>The target video bit rate for the Portrait Canvas in bits per second.</td></tr>
+<tr><td><code>pts_master_vfx_source_internal_id</code></td><td>6</td><td><code>uint64</code></td><td></td><td>—</td><td>The LDTXWorkspaceID of the VFX Source used as the master clock for video
+ presentation timestamps.</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_preferences.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.WorkspacePreferencesV4"><code>WorkspacePreferencesV4</code></h3><p>Contains mutable preferences for one WorkspaceDefinitionV4.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>audio_channel_gains_decibels</code></td><td>1</td><td><code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a><code>&gt;</code></td><td>map</td><td>—</td><td>Audio gain in decibels, keyed by each Audio Input Device's LDTXWorkspaceID.</td></tr>
+<tr><td><code>landscape_program_preferences</code></td><td>2</td><td><code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code></td><td>map</td><td>—</td><td>Preferences for each Landscape Program, keyed by the Program's LDTXWorkspaceID.</td></tr>
+<tr><td><code>portrait_program_preferences</code></td><td>3</td><td><code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></a><code>&gt;</code></td><td>map</td><td>—</td><td>Preferences for each Portrait Program, keyed by the Program's LDTXWorkspaceID.</td></tr></tbody></table></article>
+
+
+
+
+<article><h3 id="ldtx.workspace.v4.ProgramPreferences"><code>ProgramPreferences</code></h3><p>Contains mutable preferences for one Program canvas.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>audio_master_volume_decibels</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>Master volume in decibels.</td></tr>
+<tr><td><code>audio_channel_muted</code></td><td>2</td><td><code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code></td><td>map</td><td>—</td><td>Whether each Audio Input Device is muted, keyed by its LDTXWorkspaceID.</td></tr>
+<tr><td><code>video_layer_internal_ids</code></td><td>3</td><td><code>uint64</code></td><td>repeated</td><td>—</td><td>The Video Component LDTXWorkspaceIDs in back-to-front compositing order
+ for this Program canvas. The first entry is the backmost Video Layer;
+ the last entry is the frontmost Video Layer.</td></tr>
+<tr><td><code>video_layer_transforms</code></td><td>4</td><td><code>map&lt;</code><code>uint64</code><code>, </code><a href="#ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></a><code>&gt;</code></td><td>map</td><td>—</td><td>Video Layer transforms, keyed by each Video Component's LDTXWorkspaceID.</td></tr>
+<tr><td><code>video_layer_hidden</code></td><td>5</td><td><code>map&lt;</code><code>uint64</code><code>, </code><code>bool</code><code>&gt;</code></td><td>map</td><td>—</td><td>Whether each Video Layer is hidden, keyed by its Video Component's LDTXWorkspaceID.</td></tr></tbody></table></article>
+
+
+
+
+<article><h3 id="ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></h3><p>The basic transform applied to a Video Layer, which is a Video Component.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>translation_x</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The horizontal translation, normalized by the target Canvas width,
+ in [0, 1]. Positive values move the Video Layer rightward.</td></tr>
+<tr><td><code>translation_y</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The vertical translation, normalized by the target Canvas height,
+ in [0, 1]. Positive values move the Video Layer downward.</td></tr>
+<tr><td><code>scale_x</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The horizontal size as a dimensionless multiple of the target Canvas width,
+ with no range restriction. Zero specifies zero width.</td></tr>
+<tr><td><code>scale_y</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The vertical size as a dimensionless multiple of the target Canvas height,
+ with no range restriction. Zero specifies zero height.</td></tr>
+<tr><td><code>top_inset</code></td><td>5</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The top inset as a fraction of this Video Layer's statically defined
+ content height, in the range [0, 1].</td></tr>
+<tr><td><code>right_inset</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The right inset as a fraction of this Video Layer's statically defined
+ content width, in the range [0, 1].</td></tr>
+<tr><td><code>bottom_inset</code></td><td>7</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The bottom inset as a fraction of this Video Layer's statically defined
+ content height, in the range [0, 1].</td></tr>
+<tr><td><code>left_inset</code></td><td>8</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The left inset as a fraction of this Video Layer's statically defined
+ content width, in the range [0, 1].</td></tr></tbody></table></article>
+
+
+</section>
+<section><h2><code>workspace_v4_output_settings.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
+<article><h3 id="ldtx.workspace.v4.WorkspaceOutputSettingsV4"><code>WorkspaceOutputSettingsV4</code></h3><p>Contains the persisted output settings for one Workspace.
+ These settings may change between output sessions and must remain unchanged
+ while recording or streaming is active.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>recording_enabled</code></td><td>1</td><td><code>bool</code></td><td></td><td>—</td><td>Whether recording output is enabled.</td></tr>
+<tr><td><code>recording_settings</code></td><td>2</td><td><a href="#ldtx.workspace.v4.RecordingOutputSettings"><code>RecordingOutputSettings</code></a></td><td></td><td>—</td><td>The recording configuration, retained when recording output is disabled.</td></tr>
+<tr><td><code>youtube_enabled</code></td><td>3</td><td><code>bool</code></td><td></td><td>—</td><td>Whether YouTube streaming output is enabled.</td></tr>
+<tr><td><code>youtube_settings</code></td><td>4</td><td><a href="#ldtx.workspace.v4.YouTubeOutputSettings"><code>YouTubeOutputSettings</code></a></td><td></td><td>—</td><td>The YouTube streaming configuration, retained when YouTube output is disabled.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.RecordingOutputSettings"><code>RecordingOutputSettings</code></h3>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>records_landscape</code></td><td>1</td><td><code>bool</code></td><td></td><td>—</td><td>Whether the Landscape output is recorded when recording output is enabled.</td></tr>
+<tr><td><code>records_portrait</code></td><td>2</td><td><code>bool</code></td><td></td><td>—</td><td>Whether the Portrait output is recorded when recording output is enabled.</td></tr>
+<tr><td><code>custom_fields</code></td><td>3</td><td><code>map&lt;</code><code>string</code><code>, </code><code>string</code><code>&gt;</code></td><td>map</td><td>—</td><td>Additional fields written to each recording's custom_fields.json,
+ keyed by their field names.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.YouTubeOutputSettings"><code>YouTubeOutputSettings</code></h3>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>ingest_mode</code></td><td>1</td><td><a href="#ldtx.workspace.v4.YouTubeIngestMode"><code>YouTubeIngestMode</code></a></td><td></td><td>—</td><td>The Canvas layout and ingest protocol used for YouTube streaming.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.YouTubeIngestMode"><code>YouTubeIngestMode</code></h3><p>The layout and protocol used for YouTube ingest.</p>
+<table><thead><tr><th>Value</th><th>Number</th><th>Description</th></tr></thead><tbody><tr><td><code>YOUTUBE_INGEST_MODE_UNSPECIFIED</code></td><td>0</td><td>No YouTube ingest mode is specified.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_RTMPS</code></td><td>1</td><td>Sends the Landscape output using RTMPS ingest.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_PORTRAIT_RTMPS</code></td><td>2</td><td>Sends the Portrait output using RTMPS ingest.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_DUAL_RTMPS</code></td><td>3</td><td>Sends Landscape and Portrait as separate RTMPS streams.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_HLS</code></td><td>4</td><td>Sends the Landscape output using HLS ingest.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_PORTRAIT_HLS</code></td><td>5</td><td>Sends the Portrait output using HLS ingest.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_LANDSCAPE_DASH</code></td><td>6</td><td>Sends the Landscape output using DASH ingest.</td></tr>
+<tr><td><code>YOUTUBE_INGEST_MODE_PORTRAIT_DASH</code></td><td>7</td><td>Sends the Portrait output using DASH ingest.</td></tr></tbody></table></article></section>
+<section><h2><code>envelope.proto</code></h2><p>Package <code>ldtx.envelope</code></p>
+<article><h3 id="ldtx.envelope.WorkspaceDefinitionEnvelope"><code>WorkspaceDefinitionEnvelope</code></h3><p>The persistence envelope for a WorkspaceDefinition. Contains an external_id
+ and a concrete WorkspaceDefinition.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>external_id</code></td><td>1</td><td><code>bytes</code></td><td></td><td>—</td><td>The UUIDv7 identifier for this persisted document, stored as exactly
+ 16 bytes in RFC 9562 network byte order.</td></tr>
+<tr><td><code>workspace_definition_v4</code></td><td>2</td><td><a href="#ldtx.workspace.v4.WorkspaceDefinitionV4"><code>WorkspaceDefinitionV4</code></a></td><td>oneof <code>workspace_definition</code></td><td>—</td><td>The Version 4 WorkspaceDefinition.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.envelope.WorkspacePreferencesEnvelope"><code>WorkspacePreferencesEnvelope</code></h3><p>The persistence envelope for WorkspacePreferences. Contains an external_id
+ and a concrete WorkspacePreferences.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>external_id</code></td><td>1</td><td><code>bytes</code></td><td></td><td>—</td><td>The UUIDv7 identifier for this persisted document, stored as exactly
+ 16 bytes in RFC 9562 network byte order.</td></tr>
+<tr><td><code>workspace_preferences_v4</code></td><td>2</td><td><a href="#ldtx.workspace.v4.WorkspacePreferencesV4"><code>WorkspacePreferencesV4</code></a></td><td>oneof <code>workspace_preferences</code></td><td>—</td><td>The Version 4 WorkspacePreferences.</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.envelope.WorkspaceOutputSettingsEnvelope"><code>WorkspaceOutputSettingsEnvelope</code></h3><p>The persistence envelope for WorkspaceOutputSettings. Contains an external_id
+ and concrete WorkspaceOutputSettings.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>external_id</code></td><td>1</td><td><code>bytes</code></td><td></td><td>—</td><td>The UUIDv7 identifier for this persisted document, stored as exactly
+ 16 bytes in RFC 9562 network byte order.</td></tr>
+<tr><td><code>workspace_output_settings_v4</code></td><td>2</td><td><a href="#ldtx.workspace.v4.WorkspaceOutputSettingsV4"><code>WorkspaceOutputSettingsV4</code></a></td><td>oneof <code>workspace_output_settings</code></td><td>—</td><td>The Version 4 WorkspaceOutputSettings.</td></tr></tbody></table></article>
+
+
+</section>
+</body>
 </html>
