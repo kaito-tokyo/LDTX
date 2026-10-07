@@ -156,3 +156,7 @@ its serialized MainActor parent. Application UI automation remains in
 | `LDTXCorelibsTests` | `Rational32UnitTestSuite` | `Tests/Corelibs/LDTXProtosTests/Rational32Tests.swift` |
 | `LDTXCorelibsTests` | `WorkspaceV4IntegrityValidatorUnitTestSuite` | `Tests/Corelibs/LDTXProtosTests/WorkspaceV4IntegrityValidatorTests.swift` |
 | `LDTXCorelibsTests` | `WorkspaceBundleFormatIntegrationTestSuite` | `Tests/Corelibs/LDTXWorkspaceBundleFormatTests/WorkspaceBundleFormatTests.swift` |
+
+Output suites share the serialized `OutputTestSuite` parent to coordinate
+media-session startup and callbacks while preserving individual Unit and
+Integration suite names. This remains a hostless unit-test target.

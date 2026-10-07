@@ -252,3 +252,7 @@ GitHub Actions uses ad-hoc signing and clears provisioning profiles and custom
 entitlements for its test builds. Production app entitlements remain unchanged.
 No Apple Development certificate or provisioning-profile secrets are consumed
 by the GHA test workflow. Existing secrets are retained for human-managed cleanup.
+
+Output suites share the serialized `OutputTestSuite` parent to coordinate
+media-session startup and callbacks while preserving individual Unit and
+Integration suite names. This remains a hostless unit-test target.
