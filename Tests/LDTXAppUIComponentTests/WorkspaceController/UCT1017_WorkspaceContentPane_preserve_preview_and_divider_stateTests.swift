@@ -233,7 +233,7 @@ extension AppUIComponentTestSuite {
 
       let initialHeight = split.arrangedSubviews[0].frame.height
       let start = NSPoint(x: split.bounds.midX, y: initialHeight + split.dividerThickness / 2)
-      let end = NSPoint(x: start.x, y: 360)
+      let end = NSPoint(x: start.x, y: 360 + split.dividerThickness / 2)
       let timestamp = ProcessInfo.processInfo.systemUptime
       let down = try #require(
         NSEvent.mouseEvent(
