@@ -33,7 +33,7 @@ protocol SettingsAuthorizationProviding {
 }
 
 @MainActor
-private struct KeychainSettingsAuthorizationProvider: SettingsAuthorizationProviding {
+private struct StoredSettingsAuthorizationProvider: SettingsAuthorizationProviding {
   let service: YouTubeAuthorizationService
 
   func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
@@ -113,11 +113,8 @@ enum SettingsAuthorizationServiceFactory {
     guard !isUnitTesting, !isUITesting else {
       return TestModeSettingsAuthorizationProvider()
     }
-    return KeychainSettingsAuthorizationProvider(
-      service: YouTubeAuthorizationService(
-        authorizationStore: YouTubeAuthorizationStore(),
-        oauthClientStore: OAuthClientConfigurationStore()
-      ))
+    return StoredSettingsAuthorizationProvider(
+      service: YouTubeAuthorizationService())
   }
 }
 
@@ -196,7 +193,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       do {
         let accessToken = try await authorizationService.authorize(configuration: configuration)
         let status = await channelAuthorizationStatus(
-          accessToken: accessToken, authorizedStatus: "Authorized (Keychain)")
+          accessToken: accessToken, authorizedStatus: "Authorized")
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
         else { return }
@@ -217,7 +214,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       let loaded = try authorizationService.loadOAuthClient(data: Data(contentsOf: url))
       authorizationRestoreGeneration &+= 1
       configuration = loaded
-      oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID)) (Keychain)"
+      oauthStatus = "OAuth client loaded: \(Self.redacted(loaded.clientID))"
       authorizationStatus = "Not authorized"
       return true
     } catch {

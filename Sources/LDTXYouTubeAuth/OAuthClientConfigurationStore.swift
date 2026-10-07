@@ -25,6 +25,14 @@ public struct OAuthClientConfigurationStore {
 
   private let service: String
   private let account: String
+  #if !LDTX_DISTRIBUTION
+    private var file: YouTubeAuthFile?
+
+    init(file: YouTubeAuthFile) {
+      self.init()
+      self.file = file
+    }
+  #endif
 
   public init(
     service: String = Self.defaultService,
@@ -35,6 +43,12 @@ public struct OAuthClientConfigurationStore {
   }
 
   public func load() throws -> GoogleOAuthClientConfiguration? {
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        guard let data = try file.read().oauthClientJSON else { return nil }
+        return try decode(data)
+      }
+    #endif
     guard let keychainData = try loadFromKeychain() else {
       return nil
     }
@@ -43,10 +57,22 @@ public struct OAuthClientConfigurationStore {
 
   public func save(_ data: Data) throws {
     _ = try decode(data)
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        try file.update { $0.oauthClientJSON = data }
+        return
+      }
+    #endif
     try saveToKeychain(data)
   }
 
   public func delete() throws {
+    #if !LDTX_DISTRIBUTION
+      if let file {
+        try file.update { $0.oauthClientJSON = nil }
+        return
+      }
+    #endif
     try deleteFromKeychain()
   }
 

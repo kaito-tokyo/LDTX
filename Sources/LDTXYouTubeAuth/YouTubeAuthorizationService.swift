@@ -8,6 +8,37 @@ import LDTXYouTube
 
 @MainActor
 public struct YouTubeAuthorizationService {
+  #if !LDTX_DISTRIBUTION
+    private static var applicationFile: YouTubeAuthFile?
+    private static var didConfigureStorage = false
+  #endif
+
+  public static func configureApplicationStorage(
+    applicationSupportDirectory: URL, bundleIdentifier: String
+  ) {
+    #if !LDTX_DISTRIBUTION
+      guard !didConfigureStorage else { return }
+      didConfigureStorage = true
+      if let url = existingApplicationFile(
+        applicationSupportDirectory: applicationSupportDirectory, bundleIdentifier: bundleIdentifier
+      ) {
+        applicationFile = YouTubeAuthFile(url: url)
+      }
+    #endif
+  }
+
+  static func existingApplicationFile(
+    applicationSupportDirectory: URL, bundleIdentifier: String
+  ) -> URL? {
+    #if !LDTX_DISTRIBUTION
+      let url = applicationSupportDirectory.appendingPathComponent(bundleIdentifier)
+        .appendingPathComponent(".YouTubeAuth")
+      return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    #else
+      return nil
+    #endif
+  }
+
   public struct LoadedOAuthClient: Sendable {
     public var configuration: GoogleOAuthClientConfiguration
   }
@@ -26,11 +57,18 @@ public struct YouTubeAuthorizationService {
   private let authorizationPresenter = AppAuthAuthorizationPresenter()
 
   public init(
-    authorizationStore: YouTubeAuthorizationStore = YouTubeAuthorizationStore(),
-    oauthClientStore: OAuthClientConfigurationStore = OAuthClientConfigurationStore()
+    authorizationStore: YouTubeAuthorizationStore? = nil,
+    oauthClientStore: OAuthClientConfigurationStore? = nil
   ) {
-    self.authorizationStore = authorizationStore
-    self.oauthClientStore = oauthClientStore
+    #if !LDTX_DISTRIBUTION
+      if let file = Self.applicationFile {
+        self.authorizationStore = authorizationStore ?? YouTubeAuthorizationStore(file: file)
+        self.oauthClientStore = oauthClientStore ?? OAuthClientConfigurationStore(file: file)
+        return
+      }
+    #endif
+    self.authorizationStore = authorizationStore ?? YouTubeAuthorizationStore()
+    self.oauthClientStore = oauthClientStore ?? OAuthClientConfigurationStore()
   }
 
   public func loadOAuthClient(data: Data) throws -> LoadedOAuthClient {
@@ -46,7 +84,7 @@ public struct YouTubeAuthorizationService {
     return LoadedOAuthClient(configuration: configuration)
   }
 
-  /// Restores OAuth client configuration and authorization independently from Keychain.
+  /// Restores OAuth client configuration and authorization from the configured stores.
   public func restoreStoredAuthorization() async throws -> AuthorizationRestoreResult {
     guard let configuration = try restorePersistedOAuthClient()?.configuration else {
       throw YouTubeAuthorizationServiceError.missingOAuthConfiguration
@@ -58,7 +96,7 @@ public struct YouTubeAuthorizationService {
     }
   }
 
-  /// Gets a fresh access token using only Keychain-persisted credentials.
+  /// Gets a fresh access token using the configured credential stores.
   public func validAccessToken() async throws -> String {
     guard let configuration = try restorePersistedOAuthClient()?.configuration else {
       throw YouTubeAuthorizationServiceError.missingOAuthConfiguration
