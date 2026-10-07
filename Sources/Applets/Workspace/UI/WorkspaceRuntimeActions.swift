@@ -18,6 +18,6 @@ public protocol WorkspaceRuntimeActions: AnyObject {
   @MainActor func pauseOutput() async
   @MainActor func stopOutput() async
   @MainActor func updateMixPreferences()
-  @MainActor func captureScreenshots() throws -> [URL]
+  @MainActor func captureScreenshots() throws -> [WorkspaceScreenshot]
   @MainActor func openScreenshotsDirectory()
 }

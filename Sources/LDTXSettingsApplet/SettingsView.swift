@@ -48,6 +48,19 @@ public struct SettingsView<AccountContent: View>: View {
               }
             }
           }
+          Section("Screenshots Folder") {
+            LabeledContent("Folder", value: outputPreferences.screenshotsFolderPath ?? "~/Pictures")
+            HStack {
+              Button("Choose Folder…", action: chooseScreenshotsFolder)
+              if outputPreferences.screenshotsFolderPath != nil {
+                Button("Use ~/Pictures") {
+                  var preferences = outputPreferences
+                  preferences.screenshotsFolderPath = nil
+                  saveOutputPreferences(preferences)
+                }
+              }
+            }
+          }
         }
         .formStyle(.grouped)
       }
@@ -64,12 +77,28 @@ public struct SettingsView<AccountContent: View>: View {
     panel.canCreateDirectories = true
     panel.prompt = "Use Folder"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    saveOutputPreferences(
-      ApplicationOutputPreferences(defaultOutputFolderPath: url.standardizedFileURL.path))
+    var preferences = outputPreferences
+    preferences.defaultOutputFolderPath = url.standardizedFileURL.path
+    saveOutputPreferences(preferences)
   }
 
   private func resetDefaultOutputFolder() {
-    saveOutputPreferences(ApplicationOutputPreferences())
+    var preferences = outputPreferences
+    preferences.defaultOutputFolderPath = nil
+    saveOutputPreferences(preferences)
+  }
+
+  private func chooseScreenshotsFolder() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = true
+    panel.prompt = "Use Folder"
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    var preferences = outputPreferences
+    preferences.screenshotsFolderPath = url.standardizedFileURL.path
+    saveOutputPreferences(preferences)
   }
 
   private func saveOutputPreferences(_ preferences: ApplicationOutputPreferences) {

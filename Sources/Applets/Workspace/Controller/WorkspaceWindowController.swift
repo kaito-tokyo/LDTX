@@ -424,7 +424,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     recordingSession.updateMixPreferences()
   }
 
-  public func captureScreenshots() throws -> [URL] {
+  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
     try recordingSession.captureScreenshots()
   }
 

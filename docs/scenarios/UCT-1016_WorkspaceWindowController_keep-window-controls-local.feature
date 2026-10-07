@@ -54,10 +54,10 @@ Feature: Keep window controls local
     Then buttons reflect the current state and dispatch actions to that Window runtime
 
   @UCT-1016.9
-  Scenario: Screenshot actions require a local recording
+  Scenario: Screenshot actions remain available outside local recording
     Given a Workspace Window whose output may or may not be a local recording
     When screenshot actions are validated and invoked
-    Then only a local recording enables screenshot actions
+    Then screenshot actions remain enabled regardless of recording state
 
   @UCT-1016.10
   Scenario: Program selection updates only the owning Window runtimes
@@ -94,3 +94,18 @@ Feature: Keep window controls local
     Given a Sidebar has Preview state without a live Document
     When an audio device, video component, or Vision addition is requested
     Then addition fails without changing definitions, selection, or physical assignments
+
+  @UCT-1016.16 @WorkspaceWindow
+  Scenario: Screenshot results use a transient popover without changing output state
+    Given a Workspace is recording locally
+    When screenshot capture fails
+    Then a transient popover appears at the screenshot toolbar item
+    And the output session failure state remains unchanged
+    When capture succeeds
+    Then the popover displays the number of saved Program screenshots
+    And it shows only the Landscape file icon and name
+    And the files can be opened or dragged to another destination
+    And VFX Source screenshots are excluded from the file list
+    And the output session failure state remains unchanged
+    When the Window closes
+    Then the screenshot popover closes

@@ -212,7 +212,7 @@ public final class WorkspaceStoreService {
     runtimeActions?.updateMixPreferences()
   }
 
-  public func captureScreenshots() throws -> [URL] {
+  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }

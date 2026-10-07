@@ -10,6 +10,7 @@ package ldtx.app.v1;
 // Workspace package. They are persisted in AppStorage as one protobuf value.
 message ApplicationOutputPreferences {
   optional string default_output_folder_path = 1;
+  optional string screenshots_folder_path = 2;
 }
 
 // Legacy application output settings retained only to migrate the default

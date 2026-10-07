@@ -301,14 +301,17 @@ public final class WorkspaceV4RecordingSession {
     activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
-  public func captureScreenshots() throws -> [URL] {
-    guard let recordService else { throw ScreenCaptureError.frameUnavailable }
+  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
     var sources: [ScreenCaptureSource] = []
     if let frame = windowRuntime.landscapeRuntime?.latestFrame() {
-      sources.append(ScreenCaptureSource(name: "Landscape", pixelBuffer: frame.pixelBuffer))
+      sources.append(
+        ScreenCaptureSource(
+          name: "Landscape", pixelBuffer: frame.pixelBuffer, programCanvas: .landscape))
     }
     if let frame = windowRuntime.portraitRuntime?.latestFrame() {
-      sources.append(ScreenCaptureSource(name: "Portrait", pixelBuffer: frame.pixelBuffer))
+      sources.append(
+        ScreenCaptureSource(
+          name: "Portrait", pixelBuffer: frame.pixelBuffer, programCanvas: .portrait))
     }
     for wrapper in windowRuntime.definition.videoComponents {
       guard case .vfxSource(let input)? = wrapper.definition,
@@ -317,14 +320,20 @@ public final class WorkspaceV4RecordingSession {
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
     }
+    let globalDirectory = applicationOutputPreferences.screenshotsDirectory
+    var directories = [globalDirectory]
+    if let recordService {
+      directories.append(recordService.packageDirectory.appendingPathComponent("Screenshots"))
+    }
     return try ScreenCaptureService().captureSet(
-      sources: sources, capturedAt: Date(),
-      recordingPackageDirectory: recordService.packageDirectory
-    ).outputURLs
+      sources: sources, capturedAt: Date(), outputDirectories: directories
+    ).screenshots.filter {
+      $0.url.deletingLastPathComponent().standardizedFileURL == globalDirectory.standardizedFileURL
+    }
   }
 
   public var screenshotsDirectory: URL? {
-    recordService?.packageDirectory.appendingPathComponent("Screenshots", isDirectory: true)
+    applicationOutputPreferences.screenshotsDirectory
   }
 
   public var isLocalRecording: Bool { recordService != nil }

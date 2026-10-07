@@ -8,11 +8,13 @@ import LDTXDeviceRegistry
 import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletUI
 import Observation
+import QuickLookThumbnailing
 import SwiftUI
 
 public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
   let contentPane: WorkspaceContentPane
   private let storeService: WorkspaceStoreService
+  let screenshotResultPopover = NSPopover()
 
   init(
     url: URL,
@@ -84,7 +86,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     [
       .init("workspace.sidebar"), .sidebarTrackingSeparator,
       .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
-      .init("workspace.captureScreenshots"), .init("workspace.openScreenshotsFolder"),
+      .init("workspace.captureScreenshots"),
       .flexibleSpace,
       .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
     ]
@@ -118,20 +120,13 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       item.target = self
       item.action = #selector(toggleOutput(_:))
     case "workspace.captureScreenshots":
+      item.isNavigational = true
       item.label = "Capture Screenshot(s)"
       item.paletteLabel = item.label
       item.toolTip = item.label
       item.image = NSImage(systemSymbolName: "camera", accessibilityDescription: item.label)
       item.target = self
       item.action = #selector(captureScreenshots(_:))
-      item.isEnabled = validateToolbarItem(item)
-    case "workspace.openScreenshotsFolder":
-      item.label = "Open Screenshots Folder"
-      item.paletteLabel = item.label
-      item.toolTip = item.label
-      item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: item.label)
-      item.target = self
-      item.action = #selector(openScreenshotsFolder(_:))
       item.isEnabled = validateToolbarItem(item)
     case "workspace.inspector":
       item.label = "Inspector"
@@ -171,22 +166,53 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     case "workspace.stopOutput": storeService.recordingState.canStop
     case "workspace.toggleOutput":
       storeService.recordingState.canStart || storeService.recordingState == .recording
-    case "workspace.captureScreenshots", "workspace.openScreenshotsFolder":
-      storeService.isOutputActive && storeService.isLocalRecording
     default: true
     }
   }
 
   @objc private func captureScreenshots(_ sender: Any?) {
-    guard storeService.isOutputActive && storeService.isLocalRecording else { return }
-    do { _ = try storeService.captureScreenshots() } catch {
-      storeService.outputFailureMessage = error.localizedDescription
+    do {
+      let files = try storeService.captureScreenshots()
+      let programFiles = files.filter { $0.programCanvas != nil }
+      showScreenshotResult(
+        title: "Screenshots saved",
+        message: programFiles.isEmpty
+          ? "No Program screenshots were available."
+          : programFiles.count == 1
+            ? "Saved 1 Program screenshot." : "Saved \(programFiles.count) Program screenshots.",
+        screenshots: programFiles.filter { $0.programCanvas == .landscape })
+    } catch {
+      if !showScreenshotResult(
+        title: "Screenshot could not be captured", message: error.localizedDescription)
+      {
+        storeService.reportError(error)
+      }
     }
   }
 
-  @objc private func openScreenshotsFolder(_ sender: Any?) {
-    guard storeService.isOutputActive && storeService.isLocalRecording else { return }
-    storeService.openScreenshotsDirectory()
+  @discardableResult
+  private func showScreenshotResult(
+    title: String, message: String, screenshots: [WorkspaceScreenshot] = []
+  ) -> Bool {
+    guard
+      let item = toolbar?.items.first(where: {
+        $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
+      })
+    else { return false }
+    screenshotResultPopover.behavior = .transient
+    let controller = NSHostingController(
+      rootView: ScreenshotResultView(title: title, message: message, screenshots: screenshots))
+    controller.sizingOptions = .preferredContentSize
+    screenshotResultPopover.contentViewController = controller
+    screenshotResultPopover.contentViewController?.view.setAccessibilityLabel(
+      "\(title). \(message)")
+    screenshotResultPopover.show(relativeTo: item)
+    return true
+  }
+
+  public override func close() {
+    screenshotResultPopover.close()
+    super.close()
   }
 
   @objc private func stopOutput(_ sender: Any?) {
@@ -208,4 +234,62 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     }
   }
 
+}
+
+struct ScreenshotResultView: View {
+  let title: String
+  let message: String
+  let screenshots: [WorkspaceScreenshot]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(title).font(.headline)
+      Text(message)
+      ForEach(screenshots, id: \.url) { screenshot in
+        Button {
+          NSWorkspace.shared.open(screenshot.url)
+        } label: {
+          HStack(spacing: 10) {
+            FileIcon(url: screenshot.url)
+            Text(screenshot.url.lastPathComponent)
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(screenshot.url.path)
+        .onDrag { NSItemProvider(object: screenshot.url as NSURL) }
+      }
+    }
+    .padding()
+    .frame(width: screenshots.isEmpty ? 280 : 360, alignment: .leading)
+  }
+
+  private struct FileIcon: View {
+    let url: URL
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: NSImage?
+
+    var body: some View {
+      Image(nsImage: image ?? NSWorkspace.shared.icon(forFile: url.path))
+        .resizable()
+        .scaledToFit()
+        .frame(width: 32, height: 32)
+        .task(id: url) {
+          image = nil
+          let request = QLThumbnailGenerator.Request(
+            fileAt: url, size: CGSize(width: 32, height: 32), scale: displayScale,
+            representationTypes: .all)
+          request.iconMode = true
+          guard
+            let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(
+              for: request),
+            !Task.isCancelled
+          else { return }
+          image = representation.nsImage
+        }
+    }
+  }
 }

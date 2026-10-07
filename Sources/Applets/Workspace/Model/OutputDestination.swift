@@ -75,8 +75,18 @@ public struct OutputDestination: Codable, Equatable, Sendable {
 
 public struct ApplicationOutputPreferences: Codable, Equatable, Sendable {
   public var defaultOutputFolderPath: String?
+  public var screenshotsFolderPath: String?
 
-  public init(defaultOutputFolderPath: String? = nil) {
+  public init(defaultOutputFolderPath: String? = nil, screenshotsFolderPath: String? = nil) {
     self.defaultOutputFolderPath = defaultOutputFolderPath
+    self.screenshotsFolderPath = screenshotsFolderPath
+  }
+
+  public var screenshotsDirectory: URL {
+    if let screenshotsFolderPath, !screenshotsFolderPath.isEmpty {
+      return URL(fileURLWithPath: screenshotsFolderPath, isDirectory: true)
+    }
+    return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+      "Pictures", isDirectory: true)
   }
 }

@@ -40,11 +40,21 @@ public nonisolated struct Ldtx_App_V1_ApplicationOutputPreferences: Sendable {
   /// Clears the value of `defaultOutputFolderPath`. Subsequent reads from it will return its default value.
   public mutating func clearDefaultOutputFolderPath() {self._defaultOutputFolderPath = nil}
 
+  public var screenshotsFolderPath: String {
+    get {_screenshotsFolderPath ?? String()}
+    set {_screenshotsFolderPath = newValue}
+  }
+  /// Returns true if `screenshotsFolderPath` has been explicitly set.
+  public var hasScreenshotsFolderPath: Bool {self._screenshotsFolderPath != nil}
+  /// Clears the value of `screenshotsFolderPath`. Subsequent reads from it will return its default value.
+  public mutating func clearScreenshotsFolderPath() {self._screenshotsFolderPath = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _defaultOutputFolderPath: String? = nil
+  fileprivate var _screenshotsFolderPath: String? = nil
 }
 
 /// Legacy application output settings retained only to migrate the default
@@ -178,7 +188,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.app.v1"
 
 nonisolated extension Ldtx_App_V1_ApplicationOutputPreferences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplicationOutputPreferences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}default_output_folder_path\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}default_output_folder_path\0\u{3}screenshots_folder_path\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -187,6 +197,7 @@ nonisolated extension Ldtx_App_V1_ApplicationOutputPreferences: SwiftProtobuf.Me
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self._defaultOutputFolderPath) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._screenshotsFolderPath) }()
       default: break
       }
     }
@@ -200,11 +211,15 @@ nonisolated extension Ldtx_App_V1_ApplicationOutputPreferences: SwiftProtobuf.Me
     try { if let v = self._defaultOutputFolderPath {
       try visitor.visitSingularStringField(value: v, fieldNumber: 1)
     } }()
+    try { if let v = self._screenshotsFolderPath {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_App_V1_ApplicationOutputPreferences, rhs: Ldtx_App_V1_ApplicationOutputPreferences) -> Bool {
     if lhs._defaultOutputFolderPath != rhs._defaultOutputFolderPath {return false}
+    if lhs._screenshotsFolderPath != rhs._screenshotsFolderPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -180,12 +180,17 @@ extension AppUIComponentTestSuite {
       #expect(first.toolbarStyle == .unified)
       #expect(first.titleVisibility == .visible)
       #expect(toolbar.displayMode == .iconOnly)
+      let screenshot = try #require(
+        toolbar.items.first {
+          $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
+        })
+      #expect(screenshot.isNavigational)
       #expect(first.styleMask.contains(.fullSizeContentView))
       #expect(
         toolbar.items.map(\.itemIdentifier) == [
           .init("workspace.sidebar"), .sidebarTrackingSeparator,
           .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
-          .init("workspace.captureScreenshots"), .init("workspace.openScreenshotsFolder"),
+          .init("workspace.captureScreenshots"),
           .flexibleSpace,
           .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
         ])
@@ -281,8 +286,63 @@ extension AppUIComponentTestSuite {
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("UCT-1016.9: Screenshot actions require a local recording")
-    func screenshotToolbarActionsRequireLocalRecording() throws {
+    @Test("UCT-1016.16: Screenshot results use a transient popover without changing output state")
+    func screenshotFailureDoesNotPoisonOutput() async throws {
+      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let dispatcher = ToolbarDispatcher()
+      let window = makeWorkspaceTestWindow(storeService: state, dispatcher: dispatcher)
+      window.orderFront(nil)
+      window.screenshotResultPopover.animates = false
+      defer { window.close() }
+      state.isOutputActive = true
+      state.isLocalRecording = true
+      state.outputFailureMessage = "Existing output failure"
+      window.updateOutputToolbar()
+      let item = try #require(
+        window.toolbar?.items.first {
+          $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
+        })
+      dispatcher.failScreenshot = true
+      #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
+      #expect(window.screenshotResultPopover.isShown)
+      #expect(window.screenshotResultPopover.behavior == .transient)
+      let popoverWindow = try #require(
+        window.screenshotResultPopover.contentViewController?.view.window)
+      #expect(popoverWindow.frame.maxY <= window.frame.maxY)
+      #expect(popoverWindow.frame.maxY >= window.frame.maxY - 70)
+      #expect(state.outputFailureMessage == "Existing output failure")
+      dispatcher.failScreenshot = false
+      for count in [1, 2] {
+        dispatcher.screenshotFiles = (0..<count).map {
+          WorkspaceScreenshot(
+            url: URL(fileURLWithPath: "/tmp/screenshot-\($0).png"),
+            programCanvas: $0 == 0 ? .landscape : .portrait)
+        }
+        dispatcher.screenshotFiles.append(.init(url: URL(fileURLWithPath: "/tmp/source.png")))
+        #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
+        #expect(window.screenshotResultPopover.isShown)
+        let label = window.screenshotResultPopover.contentViewController?.view.accessibilityLabel()
+        #expect(
+          label == "Screenshots saved. Saved \(count) Program screenshot\(count == 1 ? "" : "s").")
+        let controller = try #require(
+          window.screenshotResultPopover.contentViewController
+            as? NSHostingController<ScreenshotResultView>)
+        #expect(controller.rootView.screenshots.count == 1)
+        #expect(controller.rootView.screenshots.allSatisfy { $0.programCanvas == .landscape })
+      }
+      #expect(state.outputFailureMessage == "Existing output failure")
+      dispatcher.failScreenshot = true
+      #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
+      window.close()
+      for _ in 0..<100 {
+        if !window.screenshotResultPopover.isShown { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(!window.screenshotResultPopover.isShown)
+    }
+
+    @Test("UCT-1016.9: Screenshot actions remain available outside local recording")
+    func screenshotToolbarActionsRemainAvailable() throws {
       _ = NSApplication.shared
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
       let dispatcher = ToolbarDispatcher()
@@ -290,16 +350,16 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       for (id, expected) in [
         ("workspace.captureScreenshots", "screenshot"),
-        ("workspace.openScreenshotsFolder", "screenshotsFolder"),
       ] {
         let item = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
         let action = try #require(item.action)
-        #expect(!window.validateToolbarItem(item))
+        #expect(window.validateToolbarItem(item))
         _ = NSApp.sendAction(action, to: item.target, from: item)
-        #expect(dispatcher.actions.isEmpty)
+        #expect(dispatcher.actions == [expected])
+        dispatcher.actions = []
         state.isOutputActive = true
         state.isLocalRecording = false
-        #expect(!window.validateToolbarItem(item))
+        #expect(window.validateToolbarItem(item))
         state.isLocalRecording = true
         window.updateOutputToolbar()
         #expect(window.validateToolbarItem(item))

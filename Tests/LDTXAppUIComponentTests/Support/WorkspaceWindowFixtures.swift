@@ -54,6 +54,8 @@ func makeWorkspaceTestWindow(
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  var failScreenshot = false
+  var screenshotFiles: [WorkspaceScreenshot] = []
   var actions: [String] = []
   var failStart = false
   func startOutput() async throws {
@@ -71,9 +73,10 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   func selectProgram(internalID: UInt64) throws {}
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
-  func captureScreenshots() throws -> [URL] {
+  func captureScreenshots() throws -> [WorkspaceScreenshot] {
     actions.append("screenshot")
-    return []
+    if failScreenshot { throw CocoaError(.fileWriteUnknown) }
+    return screenshotFiles
   }
   func openScreenshotsDirectory() { actions.append("screenshotsFolder") }
 }
