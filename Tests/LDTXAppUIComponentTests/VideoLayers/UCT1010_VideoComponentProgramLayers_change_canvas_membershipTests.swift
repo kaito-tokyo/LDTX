@@ -107,8 +107,7 @@ extension AppUIComponentTestSuite {
         #expect(
           state.preferences[keyPath: target.preferences][100]?.audioMasterVolumeDecibels
             == Ldtx_Workspace_V4_Rational32.with {
-              $0.numerator = -8
-              $0.denominator = 1
+              $0.set(num: -80, den: 10)
             })
         for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
           state.isOutputActive = value.isOutputActive

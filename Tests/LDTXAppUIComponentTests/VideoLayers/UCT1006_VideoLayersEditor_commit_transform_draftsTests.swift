@@ -454,8 +454,7 @@ extension AppUIComponentTestSuite {
       #expect(
         live.audioMasterVolumeDecibels
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -9
-            $0.denominator = 1
+            $0.set(num: -90, den: 10)
           })
       #expect(
         live.videoLayerTransforms[1]?.topInsetRational
