@@ -47,8 +47,9 @@ The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
 
 ## Xcode Cloud tests
 
-Select the shared `LDTXHardTests` scheme for the Xcode Cloud test workflow.
-Its Test action uses `Debug` and the `XcodeCloud` test plan. HardTests is a
+Select the shared `LDTXApp` scheme and `LDTXTests` plan for the Xcode Cloud
+test workflow, using `Debug`. The plan includes Easy, Medium, and Hard tests.
+The dedicated `LDTXHardTests` scheme runs only HardTests directly. HardTests is a
 hostless unit-test bundle for Vision, VideoToolbox, CoreML, Metal, and
 AVFoundation tests.
 It does not launch `LDTXApp` or use XCUI automation. Keep archive workflows on

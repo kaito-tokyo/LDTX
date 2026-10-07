@@ -25,9 +25,9 @@ The AVAssetWriter lifecycle parent and its extensions remain together in Hard
 with their serialized execution control. Serialization does not create a
 SystemTests isolation boundary.
 
-All three tier targets are hostless. Xcode Cloud runs `LDTXHardTests` directly
-using the `XcodeCloud` plan. Only `LDTXAppUITests` uses XCUI, and only XpcTests may
-use an application host. UI component and Corelibs target boundaries are unchanged.
+All three tier targets are hostless. Xcode Cloud runs the hostless targets through
+the `LDTXApp` scheme and `LDTXTests` plan. Only `LDTXAppUITests` uses XCUI,
+and only XpcTests may use an application host. UI component and Corelibs target boundaries are unchanged.
 
 ## Tier suite inventory
 

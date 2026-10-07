@@ -46,6 +46,5 @@ schemes:
         LDTXHardTests: all
     test:
       config: Debug
-      testPlans:
-        - path: XcodeCloud.xctestplan
-          defaultPlan: true
+      targets:
+        - LDTXHardTests
