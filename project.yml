@@ -53,6 +53,8 @@ include:
     relativePaths: false
   - path: project/services.yml
     relativePaths: false
+  - path: project/tests-corelibs.yml
+    relativePaths: false
   - path: project/tests-easy.yml
     relativePaths: false
   - path: project/tests-medium.yml

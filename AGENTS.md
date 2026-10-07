@@ -105,6 +105,12 @@ availability. Computational cost alone does not determine the tier.
   Xcode Cloud environment. Heavy computation, media work, or hardware use alone
   does not make a test Hard. The requirement to launch builds and tests outside
   the sandbox does not by itself make a test Hard.
+  Run this hostless unit-test target directly in Xcode Cloud. It currently
+  contains only the real OCR integration test; do not add XCUI automation.
+- **CorelibsTests target:** Shared Linux-compatible module tests under
+  `Tests/Corelibs` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
+  This target may contain deterministic unit tests and filesystem integration
+  tests; keep their Unit or Integration scope in suite names.
 - **UnitTestSuite:** Tests of one SUT in isolation, with no special setup,
   execution control, or shared-state coordination needed.
 - **IntegrationTestSuite:** Tests involving multiple components or other
@@ -116,6 +122,8 @@ availability. Computational cost alone does not determine the tier.
 - **UITests target:** Operations on the launched application through UI automation
   belong in `LDTXAppUITests`. Keep automation focused on launch and main-menu
   wiring; prefer component tests for document and window behavior.
+  Only `LDTXAppUITests` may use XCUI; it launches the app under test separately.
+  Only XpcTests may use a host application (`TEST_HOST` or `BUNDLE_LOADER`).
 - **SystemTests target:** Use a SUT-specific target only when a concrete process
   isolation requirement prevents safe execution in the shared component target.
   Window or Document usage alone does not require a separate target.
@@ -123,6 +131,7 @@ availability. Computational cost alone does not determine the tier.
   interprocess communication requires an isolated execution boundary. Use the
   `XpcTests` target name for this execution unit; the name does not need to
   include `System`.
+  XpcTests may launch a host application to exercise its embedded XPC service.
 
 Use suite names to express Unit or Integration scope within EasyTests,
 MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a

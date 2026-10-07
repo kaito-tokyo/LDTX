@@ -55,6 +55,10 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |
 | LDTXYouTubeRTMPS           | YouTube-specific secure RTMP publishing and dual-output coordination. |
 
+Linux-compatible modules are maintained under `Sources/Corelibs`. XcodeGen and
+SwiftPM build the same sources independently; see the [Corelibs build guide](docs/build.md#corelibs)
+for Docker verification and test placement.
+
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
 

@@ -22,6 +22,14 @@
       "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "AF349AA2C58E469BDBEFD99B",
+        "name" : "LDTXCorelibsTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "F0FE96F7BA9CE58358994991",
         "name" : "LDTXEasyTests"
       }

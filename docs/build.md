@@ -12,6 +12,63 @@ SPDX-License-Identifier: Apache-2.0
 brew install protobuf swift-protobuf
 ```
 
+## Corelibs
+
+Linux-compatible modules live in `Sources/Corelibs/<module>`.
+XcodeGen builds these sources directly as framework targets; the Xcode project
+has no dependency on a local Swift package. SwiftPM builds the same sources
+independently. On Linux, the root package includes only Corelibs and their tests;
+on macOS, it also includes the existing CLI targets.
+
+Tests live in `Tests/Corelibs/<module>Tests`. XcodeGen and SwiftPM both
+include them in the `LDTXCorelibsTests` target.
+
+Verify the Linux build and tests with the same image used by CI:
+
+```sh
+docker run --rm \
+  --mount "type=bind,source=$PWD,target=/workspace,readonly" \
+  swift:6.4.0-trixie bash -euo pipefail -c '
+    mkdir -p /tmp/package/Sources /tmp/package/Tests
+    cp /workspace/Package.swift /workspace/Package.resolved /tmp/package/
+    cp -R /workspace/Sources/Corelibs /tmp/package/Sources/
+    cp -R /workspace/Tests/Corelibs /tmp/package/Tests/
+    cd /tmp/package
+    swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
+  '
+```
+
+CI disables indexing and debug-info generation for SwiftPM tests and sets build
+parallelism to the runner CPU count. Debug-info generation remains available
+for local debugging by omitting `-debug-info-format none`.
+
+The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
+`golden_gate` job.
+
+## Xcode Cloud tests
+
+Select the shared `LDTXHardTests` scheme for the Xcode Cloud test workflow.
+Its Test action uses `Debug` and the `XcodeCloud` test plan. HardTests is a
+hostless unit-test bundle containing only the real Clock OCR integration test.
+It does not launch `LDTXApp` or use XCUI automation. Keep archive workflows on
+`LDTXApp` with `Distribution`.
+
+Build this test bundle locally with:
+
+```sh
+xcodegen generate
+xcodebuild \
+  -project LDTX.xcodeproj \
+  -scheme LDTXHardTests \
+  -destination platform=macOS \
+  -derivedDataPath .derivedData \
+  build-for-testing
+```
+
+XCUI automation belongs only in `LDTXAppUITests`. Unit-test bundles run without
+a host application, except XpcTests, which may use an application host to
+exercise its embedded XPC service.
+
 ## Generated Files
 
 Prefer changing the source of truth, then regenerate the generated output with
@@ -20,9 +77,9 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Sources/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Sources/LDTXProtos/youtube_output.pb.swift`      | `Protos/youtube_output.proto`                     |
-| `Sources/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Sources/Corelibs/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Sources/Corelibs/LDTXProtos/youtube_output.pb.swift`      | `Protos/youtube_output.proto`                     |
+| `Sources/Corelibs/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
@@ -35,7 +92,7 @@ protoc \
   --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXProtos \
+  --swift_out=Sources/Corelibs/LDTXProtos \
   Protos/envelope.proto \
   Protos/workspace_v4_definition.proto \
   Protos/workspace_v4_input_device.proto \
@@ -77,7 +134,7 @@ protoc \
   --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
   --swift_opt=Visibility=Public \
   --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/LDTXProtos \
+  --swift_out=Sources/Corelibs/LDTXProtos \
   Protos/youtube_output.proto
 ```
 
@@ -224,7 +281,8 @@ xcodebuild \
 GitHub Actions is the pull-request merge gate: Swift package tests run in
 parallel with the hosted `LDTX` integration test. The `LDTX`
 application, Vision, and Quick Look archive are built and signed by Xcode
-Cloud, which is the release build authority and does not run tests.
+Cloud, which is the release build authority. Its separate Test action runs the
+hostless OCR test using `LDTXHardTests`.
 
 ```sh
 reuse --no-multiprocessing lint
