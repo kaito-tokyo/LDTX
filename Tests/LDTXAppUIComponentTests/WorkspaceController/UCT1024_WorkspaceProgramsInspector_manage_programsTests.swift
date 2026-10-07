@@ -82,11 +82,27 @@ extension AppUIComponentTestSuite {
       let controller = WorkspaceWindowController(
         storeService: service, persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
+      document.addWindowController(controller)
       service.isOutputActive = true
       #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
       #expect(service.definition.programs.count == 2)
       #expect(!document.isDocumentEdited)
       service.isOutputActive = false
+      try service.selectProgram(internalID: 101)
+      let editor = MasterVolumeEditor(storeService: service)
+      _ = editor.view
+      let field = editor.masterFields[0]
+      field.stringValue = "invalid"
+      field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+      let definitionBeforeDeletion = service.definition
+      let preferencesBeforeDeletion = service.preferences
+      #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
+      #expect(service.definition == definitionBeforeDeletion)
+      #expect(service.preferences == preferencesBeforeDeletion)
+      #expect(service.selectedProgram?.internalID == 101)
+      #expect(field.dirty && field.stringValue == "invalid")
+      #expect(!document.isDocumentEdited)
+      field.stringValue = "-12"
       try service.removeProgram(internalID: 101)
       #expect(service.definition.programs.map(\.internalID) == [100])
       #expect(service.preferences.landscapeProgramPreferences[101] == nil)

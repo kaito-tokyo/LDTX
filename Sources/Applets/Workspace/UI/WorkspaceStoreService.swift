@@ -170,6 +170,7 @@ public final class WorkspaceStoreService {
   }
 
   public func removeProgram(internalID: UInt64) throws {
+    try validateInspectorEdits()
     guard !isOutputActive else {
       throw WorkspaceSelectionError(message: "Programs cannot be deleted during output.")
     }
