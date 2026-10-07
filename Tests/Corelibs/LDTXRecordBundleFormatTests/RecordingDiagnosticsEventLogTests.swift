@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXRecording
+import LDTXRecordBundleFormat
 import Testing
 
 @Suite struct RecordingDiagnosticsEventLogIntegrationTestSuite {

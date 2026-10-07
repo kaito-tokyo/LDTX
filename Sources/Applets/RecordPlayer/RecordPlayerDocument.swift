@@ -5,6 +5,7 @@
 import AVFoundation
 import AppKit
 import LDTXAppletSupport
+import LDTXRecordBundleFormat
 import LDTXRecording
 import OSLog
 import Observation
@@ -77,18 +78,11 @@ public final class RecordPlayerDocument: NSDocument {
   }
 
   public var canModifyMarkers: Bool {
-    guard let url = fileURL else { return false }
-    return !FileManager.default.fileExists(atPath: url.appendingPathComponent(".shield.json").path)
+    return fileURL != nil
   }
 
   public func createMarker(note: String, at time: CMTime) throws {
-    guard let recordingURL = fileURL else { throw CocoaError(.fileWriteUnknown) }
-    guard
-      !FileManager.default.fileExists(
-        atPath: recordingURL.appendingPathComponent(".shield.json").path)
-    else {
-      throw RecordingMarkerError.recordingInProgress
-    }
+    guard fileURL != nil else { throw CocoaError(.fileWriteUnknown) }
     guard !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw RecordingMarkerError.emptyNote
     }
@@ -104,11 +98,8 @@ public final class RecordPlayerDocument: NSDocument {
   }
 
   public func deleteMarker(_ marker: RecordingMarker) throws {
-    guard let recordingURL = fileURL,
-      !FileManager.default.fileExists(
-        atPath: recordingURL.appendingPathComponent(".shield.json").path)
-    else {
-      throw RecordingMarkerError.recordingInProgress
+    guard let recordingURL = fileURL else {
+      throw CocoaError(.fileWriteUnknown)
     }
     guard let index = markers.firstIndex(of: marker) else {
       throw RecordingMarkerError.invalidMarkerFile

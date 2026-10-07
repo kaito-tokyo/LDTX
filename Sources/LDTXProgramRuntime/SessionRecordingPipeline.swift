@@ -5,6 +5,7 @@
 import CoreMedia
 import Foundation
 import LDTXMP4
+import LDTXRecordBundleFormat
 import LDTXRecording
 import OSLog
 

@@ -131,20 +131,17 @@ struct RecordingMarkerStoreIntegrationTestSuite {
     }
   }
 
-  @Test func saveOverwritesWithoutComparingExternalEditsAndRejectsActiveRecording() throws {
+  @Test func saveOverwritesWithoutComparingExternalEditsAndIgnoresLegacyShield() throws {
     let url = try makeRecordingDirectory()
     defer { try? FileManager.default.removeItem(at: url) }
     let store = RecordingMarkerStore(recordingDirectoryURL: url)
     _ = try store.createMarker(at: .zero, note: "External")
     #expect(try store.save([marker(0, "Edited")]).map(\.note) == ["Edited"])
     try Data().write(to: url.appendingPathComponent(".shield.json"))
-    #expect(throws: RecordingMarkerError.recordingInProgress) {
-      try store.save([marker(0, "Blocked")])
-    }
-    #expect(throws: RecordingMarkerError.recordingInProgress) {
-      try store.deleteMarker(marker(0, "Edited"))
-    }
-    #expect(try store.markers().map(\.note) == ["Edited"])
+    #expect(try store.save([marker(0, "Allowed")]).map(\.note) == ["Allowed"])
+    try store.deleteMarker(marker(0, "Allowed"))
+    #expect(try store.markers().isEmpty)
+    #expect(FileManager.default.fileExists(atPath: url.appendingPathComponent(".shield.json").path))
   }
 
   @Test func partialSaveCanBeRetriedWithoutLosingExistingFiles() throws {

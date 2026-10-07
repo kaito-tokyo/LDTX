@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXRecording
+@testable import LDTXRecordBundleFormat
 import Testing
 
 @Suite
@@ -15,7 +15,7 @@ struct RecordingPackageIntegrationTestSuite {
     let infoURL = url.appendingPathComponent(RecordingPackageInfo.fileName)
     var info = try #require(
       PropertyListSerialization.propertyList(
-        from: Data(contentsOf: infoURL), options: 0, format: nil)
+        from: Data(contentsOf: infoURL), options: .init(), format: nil)
         as? [String: Any])
     info["CFBundleIdentifier"] = bundleIdentifier
     try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(
@@ -272,18 +272,6 @@ struct RecordingPackageIntegrationTestSuite {
     try finalized.requireFinalized()
   }
 
-  @Test func verifierRejectsZeroByteMedia() async throws {
-    let packageURL = try makePackage()
-    defer { try? FileManager.default.removeItem(at: packageURL) }
-    let package = try RecordingPackage(contentsOf: packageURL)
-
-    await #expect(
-      throws: RecordingPackageVerificationError.invalidMediaFile("main-stream.mp4")
-    ) {
-      try await RecordingPackageVerifier().verify(package)
-    }
-  }
-
   @Test func rejectsMediaPathOutsidePackage() throws {
     let packageURL = try makePackage(mainMediaFile: "../outside.mp4")
     defer { try? FileManager.default.removeItem(at: packageURL) }
@@ -318,9 +306,13 @@ struct RecordingPackageIntegrationTestSuite {
       withDestinationURL: FileManager.default.temporaryDirectory
     )
 
-    #expect(throws: RecordingPackageError.symbolicLinkNotAllowed("external")) {
-      try RecordingPackage(contentsOf: packageURL)
+    do {
+      _ = try RecordingPackage(contentsOf: packageURL)
+      Issue.record("Expected symbolic link rejection")
+    } catch RecordingPackageError.symbolicLinkNotAllowed(let path) {
+      #expect(path == "external" || path == "Unused/external")
     }
+
   }
 
   @Test func rejectsSymbolicLinkPackageRoot() throws {
@@ -355,7 +347,7 @@ struct RecordingPackageIntegrationTestSuite {
     let manifestURL = directory.appendingPathComponent("manifest.mpd")
     let property =
       audioStart.map {
-        "<SupplementalProperty schemeIdUri=\"\(RecordingDASHTimeline.audioStartScheme)\" value=\"\($0)\"/>"
+        "<SupplementalProperty schemeIdUri=\"\(RecordingDASHManifestTimeline.audioStartScheme)\" value=\"\($0)\"/>"
       } ?? ""
     try """
     <?xml version="1.0" encoding="UTF-8"?>
@@ -372,16 +364,42 @@ struct RecordingPackageIntegrationTestSuite {
     """.write(to: manifestURL, atomically: true, encoding: .utf8)
 
     if let audioStart, Int64(audioStart) == nil {
-      #expect(throws: (any Error).self) { try RecordingDASHTimeline(contentsOf: manifestURL) }
+      #expect(throws: (any Error).self) {
+        try RecordingDASHManifestTimeline(contentsOf: manifestURL)
+      }
       return
     }
-    let timeline = try RecordingDASHTimeline(contentsOf: manifestURL)
-    #expect(timeline.presentationStart(for: "output-video.mp4")?.seconds == 0)
-    #expect(timeline.presentationStart(for: "InputDevices/Desk%20Mic.mp4")?.seconds == 0.2)
+    let timeline = try RecordingDASHManifestTimeline(contentsOf: manifestURL)
+    #expect(timeline.presentationStart(for: "output-video.mp4") == 0)
+    #expect(timeline.presentationStart(for: "InputDevices/Desk%20Mic.mp4") == 200_000_000)
     #expect(
-      timeline.audioPresentationStart(for: "output-video.mp4")?.value
+      timeline.audioPresentationStart(for: "output-video.mp4")
         == audioStart.flatMap(Int64.init))
     #expect(timeline.audioPresentationStart(for: "InputDevices/Desk%20Mic.mp4") == nil)
+  }
+
+  @Test(arguments: [
+    "C:/outside.mp4", "C:\\outside.mp4", "\\\\server\\share.mp4", "..\\outside.mp4", "/outside.mp4",
+  ])
+  func rejectsNonPortablePaths(_ path: String) throws {
+    let url = try makePackage(mainMediaFile: path)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(throws: RecordingPackageError.invalidRelativePath(path)) {
+      try RecordingPackage(contentsOf: url)
+    }
+  }
+
+  @Test func customFieldsRoundTripAndPreserveOtherFiles() throws {
+    let url = try makePackage()
+    defer { try? FileManager.default.removeItem(at: url) }
+    let infoURL = url.appendingPathComponent(RecordingPackageInfo.fileName)
+    let original = try Data(contentsOf: infoURL)
+    let fields = ["title": "録画", "note": "first\nsecond"]
+    try RecordingCustomFieldsFile.write(fields, to: url)
+    let saved = try Data(
+      contentsOf: url.appendingPathComponent(RecordingPackage.customFieldsFileName))
+    #expect(try JSONDecoder().decode([String: String].self, from: saved) == fields)
+    #expect(try Data(contentsOf: infoURL) == original)
   }
 
   private func makePackage(

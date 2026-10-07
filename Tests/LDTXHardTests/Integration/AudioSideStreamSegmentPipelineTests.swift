@@ -9,6 +9,7 @@ import CoreVideo
 import Foundation
 @testable import LDTXMP4
 @testable import LDTXProgramRuntime
+import LDTXRecordBundleFormat
 import LDTXRecording
 import Testing
 

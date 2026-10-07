@@ -43,6 +43,6 @@ Feature: Persist marker edits
 
   @UCT-1020.7
   Scenario: Failed save and revert preserve pending markers
-    Given a recording has pending markers and an active-recording shield
+    Given a recording has pending markers and an invalid Markers directory
     When saving and reverting to an invalid URL are attempted
     Then pending markers and edited state remain and unsupported document actions are unavailable

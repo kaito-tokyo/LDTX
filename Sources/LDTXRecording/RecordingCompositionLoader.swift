@@ -4,6 +4,7 @@
 
 @preconcurrency import AVFoundation
 import Foundation
+import LDTXRecordBundleFormat
 
 public struct RecordingCompositionLoader: Sendable {
   public init() {}

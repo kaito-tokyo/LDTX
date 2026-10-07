@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AVFoundation
+import LDTXRecordBundleFormat
 import LDTXRecording
 import QuickLookThumbnailing
 

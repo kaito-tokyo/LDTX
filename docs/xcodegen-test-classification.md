@@ -106,9 +106,8 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Medium | `ProgramVideoPTSSelectorHostClockIntegrationTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramVideoPTSSelectorHostClockTests.swift` |
 | Medium | `ProgramVideoPTSSelectorUnitTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramVideoPTSSelectorTests.swift` |
 | Medium | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
-| Medium | `RecordingDiagnosticsEventLogIntegrationTestSuite` | `Tests/LDTXMediumTests/Recording/RecordingDiagnosticsEventLogTests.swift` |
-| Medium | `RecordingPackageIntegrationTestSuite` | `Tests/LDTXMediumTests/Recording/RecordingPackageTests.swift` |
-| Medium | `RecordingShieldIntegrationTestSuite` | `Tests/LDTXMediumTests/Recording/RecordingShieldTests.swift` |
+| Corelibs | `RecordingDiagnosticsEventLogIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingDiagnosticsEventLogTests.swift` |
+| Corelibs | `RecordingPackageIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXMediumTests/Vision/VisionFramePoolTests.swift` |
 | Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | `Tests/LDTXMediumTests/YouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |
 | Medium | `YouTubeAuthFileIntegrationTestSuite` | `Tests/LDTXMediumTests/YouTubeAuth/YouTubeAuthFileTests.swift` |

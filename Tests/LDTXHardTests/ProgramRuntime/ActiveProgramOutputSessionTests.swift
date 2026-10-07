@@ -11,6 +11,7 @@ import LDTXMP4
 import LDTXProgram
 import LDTXProgramRendering
 @testable import LDTXProgramRuntime
+import LDTXRecordBundleFormat
 import LDTXRecording
 import Testing
 

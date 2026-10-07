@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXRecordBundleFormat
 import LDTXRecording
 import QuickLookUI
 

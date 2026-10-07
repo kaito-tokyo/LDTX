@@ -349,7 +349,10 @@ public struct RecordingPackage: Equatable, Sendable {
     fileManager: FileManager,
     requiresExistingFile: Bool
   ) throws -> URL {
-    guard !relativePath.isEmpty, !relativePath.hasPrefix("/") else {
+    guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
+      !relativePath.contains("\\"), !relativePath.contains(":"),
+      !relativePath.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+    else {
       throw RecordingPackageError.invalidRelativePath(relativePath)
     }
     let packageURL = packageURL.standardizedFileURL

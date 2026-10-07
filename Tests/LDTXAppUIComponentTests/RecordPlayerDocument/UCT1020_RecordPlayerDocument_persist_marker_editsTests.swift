@@ -211,7 +211,9 @@ extension AppUIComponentTestSuite {
       let document = try openRecordingTestDocument(url)
       defer { document.close() }
       try document.createMarker(note: "Pending", at: .zero)
-      try Data().write(to: url.appendingPathComponent(".shield.json"))
+      let markerDirectory = url.appendingPathComponent("Markers")
+      try? FileManager.default.removeItem(at: markerDirectory)
+      try Data().write(to: markerDirectory)
       do {
         try await saveRecordingTestDocument(document, to: url)
         Issue.record("Expected save failure")

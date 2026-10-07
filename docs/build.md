@@ -20,6 +20,9 @@ has no dependency on a local Swift package. SwiftPM builds the same sources
 independently. On Linux, the root package includes only Corelibs and their tests;
 on macOS, it also includes the existing CLI targets.
 
+Recording bundle IO and DASH parsing live in `LDTXRecordBundleFormat`;
+AVFoundation media operations remain in `LDTXRecording`.
+
 Tests live in `Tests/Corelibs/<module>Tests`. XcodeGen and SwiftPM both
 include them in the `LDTXCorelibsTests` target.
 
