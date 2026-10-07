@@ -26,6 +26,8 @@ jobs:
     uses: ./.github/workflows/swift.yml
     permissions:
       contents: read
+    with:
+      test-plan: push-main
 
   docs-deploy:
     runs-on: ubuntu-26.04

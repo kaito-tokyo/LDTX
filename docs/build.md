@@ -43,7 +43,11 @@ parallelism to the runner CPU count. Debug-info generation remains available
 for local debugging by omitting `-debug-info-format none`.
 
 The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
-`golden_gate` job.
+`golden_gate` job. Pull requests run Corelibs tests only on Linux. Pushes to
+`main` also run Corelibs tests on macOS. The macOS job selects the `pr` test
+plan for pull requests and the `push-main` plan for pushes to `main`. Both plans
+include Easy, Medium, Hard, UI component, UI automation, and XPC tests; only
+`push-main` includes Corelibs tests.
 
 ## Xcode Cloud tests
 

@@ -261,5 +261,7 @@ schemes:
         - path: Default.xctestplan
           defaultPlan: true
         - path: LDTXTests.xctestplan
+        - path: pr.xctestplan
+        - path: push-main.xctestplan
     archive:
       config: Distribution
