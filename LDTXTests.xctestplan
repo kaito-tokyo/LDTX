@@ -19,6 +19,7 @@
   },
   "testTargets" : [
     {
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "F0FE96F7BA9CE58358994991",
@@ -26,6 +27,7 @@
       }
     },
     {
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "D85952E78C783A63C94E13CB",
@@ -33,6 +35,7 @@
       }
     },
     {
+      "parallelizable" : false,
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "28E249F7B2FC5647692B89E8",
