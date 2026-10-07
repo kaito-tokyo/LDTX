@@ -6,5 +6,7 @@ import Testing
 
 /// Coordinates integration suites that exercise AVAssetWriter's shared
 /// process-wide lifecycle gate and segment delegate.
-@Suite(.serialized)
-struct AVAssetWriterLifecycleIntegrationTestSuite {}
+extension OutputTestSuite {
+  @Suite(.serialized)
+  struct AVAssetWriterLifecycleIntegrationTestSuite {}
+}

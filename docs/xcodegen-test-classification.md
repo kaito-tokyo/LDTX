@@ -24,7 +24,8 @@ isolation tests remain in `LDTXAppXpcTests`.
   such as `ProgramRuntime`, even when capture sources are controlled fakes.
   Mixed suites stay in Hard when any case exercises a Hard framework.
 
-The AVAssetWriter lifecycle parent and its extensions remain together in Hard
+The AVAssetWriter lifecycle parent and its extensions remain together in OutputTests
+under `OutputTestSuite`
 with their serialized execution control. Serialization does not create a
 SystemTests isolation boundary.
 
@@ -54,19 +55,19 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Easy | `CaptureSessionRuntimeFailurePolicyUnitTestSuite` | `Tests/LDTXEasyTests/Capture/CaptureSessionRuntimeFailurePolicyTests.swift` |
 | Easy | `CaptureSessionStartupSequenceUnitTestSuite` | `Tests/LDTXEasyTests/Capture/CaptureSessionStartupSequenceTests.swift` |
 | Easy | `SharedCaptureSessionPlannerUnitTestSuite` | `Tests/LDTXEasyTests/Capture/SharedCaptureSessionPlannerTests.swift` |
-| Easy | `DASHIngestEndpointUnitTestSuite` | `Tests/LDTXEasyTests/Dash/DASHIngestEndpointTests.swift` |
+| Output | `DASHIngestEndpointUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHIngestEndpointTests.swift` |
 | Output | `DASHLiveUploadPipelineUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHLiveUploadPipelineTests.swift` |
-| Easy | `DASHManifestUnitTestSuite` | `Tests/LDTXEasyTests/Dash/DASHManifestTests.swift` |
-| Easy | `DASHUploadClientUnitTestSuite` | `Tests/LDTXEasyTests/Dash/DASHUploadClientTests.swift` |
-| Easy | `DASHUploadFinalizationStateUnitTestSuite` | `Tests/LDTXEasyTests/Dash/DASHUploadFinalizationStateTests.swift` |
+| Output | `DASHManifestUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHManifestTests.swift` |
+| Output | `DASHUploadClientUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHUploadClientTests.swift` |
+| Output | `DASHUploadFinalizationStateUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHUploadFinalizationStateTests.swift` |
 | Easy | `AudioInputDeviceUnitTestSuite` | `Tests/LDTXEasyTests/DeviceRegistry/AudioInputDeviceTests.swift` |
 | Easy | `LowFrequencyUpdateRegistryIntegrationTestSuite` | `Tests/LDTXEasyTests/Integration/LowFrequencyUpdateRegistryTests.swift` |
 | Output | `YouTubeOutputServiceProcessClientIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputServiceProcessClientTests.swift` |
 | Output | `YouTubeOutputWorkspaceServiceIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputWorkspaceServiceTests.swift` |
-| Easy | `DASHStreamContinuityUnitTestSuite` | `Tests/LDTXEasyTests/ProgramRuntime/DASHStreamContinuityTests.swift` |
-| Easy | `ProgramFramePacerUnitTestSuite` | `Tests/LDTXEasyTests/ProgramRuntime/ProgramFramePacerTests.swift` |
+| Output | `DASHStreamContinuityUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/DASHStreamContinuityTests.swift` |
+| Output | `ProgramFramePacerUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramFramePacerTests.swift` |
 | Output | `ProgramOutputProfileUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramOutputProfileTests.swift` |
-| Easy | `SessionRecordAudioTrackUnitTestSuite` | `Tests/LDTXEasyTests/ProgramRuntime/SessionRecordAudioTrackTests.swift` |
+| Output | `SessionRecordAudioTrackUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/SessionRecordAudioTrackTests.swift` |
 | Output | `YouTubeOutputMediaBacklogUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/YouTubeOutputMediaBacklogTests.swift` |
 | Output | `YouTubeOutputRecoveryPolicyUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/YouTubeOutputRecoveryPolicyTests.swift` |
 | Easy | `BackgroundTaskQueueCancellationIntegrationTestSuite` | `Tests/LDTXEasyTests/TaskQueue/BackgroundTaskQueueCancellationTests.swift` |
@@ -85,30 +86,30 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `YouTubeRTMPSStreamKeyConfigurationUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeRTMPS/YouTubeRTMPSStreamKeyConfigurationTests.swift` |
 | Medium | `AudioMixRoutingUnitTestSuite` | `Tests/LDTXMediumTests/App/AudioMixRoutingTests.swift` |
 | Output | `LocalOutputServiceIntegrationTestSuite` | `Tests/LDTXOutputTests/App/LocalOutputServiceTests.swift` |
-| Medium | `ApplicationSettingsStoreIntegrationTestSuite` | `Tests/LDTXMediumTests/App/OutputSettingsModelTests.swift` |
+| Output | `ApplicationSettingsStoreIntegrationTestSuite` | `Tests/LDTXOutputTests/App/ApplicationOutputPreferencesTests.swift` |
 | Medium | `RationalFormatStyleUnitTestSuite` | `Tests/LDTXMediumTests/App/RationalFormatStyleTests.swift` |
 | Medium | `RecordingMarkerStoreIntegrationTestSuite` | `Tests/LDTXMediumTests/App/RecordingMarkerStoreTests.swift` |
 | Medium | `ScreenCaptureServiceIntegrationTestSuite` | `Tests/LDTXMediumTests/App/ScreenCaptureServiceTests.swift` |
 | Medium | `WorkspaceDocumentPackageIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceDocumentPackageTests.swift` |
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
-| Medium | `DASHLocalFilePipelineIntegrationTestSuite` | `Tests/LDTXMediumTests/Dash/DASHLocalFilePipelineTests.swift` |
+| Output | `DASHLocalFilePipelineIntegrationTestSuite` | `Tests/LDTXOutputTests/Dash/DASHLocalFilePipelineTests.swift` |
 | Medium | `DiagnosticsDatabaseIntegrationTestSuite` | `Tests/LDTXMediumTests/Diagnostics/DiagnosticsDatabaseTests.swift` |
 | Medium | `EventTaskLoggerIntegrationTestSuite` | `Tests/LDTXMediumTests/Diagnostics/EventTaskLoggerTests.swift` |
 | Medium | `WorkspaceCaptureSessionCoordinatorIntegrationTestSuite` | `Tests/LDTXMediumTests/Integration/WorkspaceCaptureSessionCoordinatorTests.swift` |
 | Output | `YouTubeOutputMediaBatcherIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputMediaBatcherTests.swift` |
-| Medium | `MP4TimingBoxUnitTestSuite` | `Tests/LDTXMediumTests/MP4/MP4TimingBoxTests.swift` |
-| Medium | `AudioChannelTimelineUnitTestSuite` | `Tests/LDTXMediumTests/MediaTiming/AudioChannelTimelineTests.swift` |
-| Medium | `AudioFramePTSClockUnitTestSuite` | `Tests/LDTXMediumTests/MediaTiming/AudioFramePTSClockTests.swift` |
-| Medium | `DualCanvasRecordingPackageIntegrationTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/DualCanvasRecordingPackageTests.swift` |
+| Output | `MP4TimingBoxUnitTestSuite` | `Tests/LDTXOutputTests/MP4/MP4TimingBoxTests.swift` |
+| Output | `AudioChannelTimelineUnitTestSuite` | `Tests/LDTXOutputTests/MediaTiming/AudioChannelTimelineTests.swift` |
+| Output | `AudioFramePTSClockUnitTestSuite` | `Tests/LDTXOutputTests/MediaTiming/AudioFramePTSClockTests.swift` |
+| Output | `DualCanvasRecordingPackageIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/DualCanvasRecordingPackageTests.swift` |
 | Medium | `ProgramAudioInputPassthroughUnitTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramAudioInputPassthroughTests.swift` |
 | Medium | `ProgramAudioMonitorMixerIntegrationTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramAudioMonitorMixerTests.swift` |
 | Output | `ProgramOutputMediaHubIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramOutputMediaHubTests.swift` |
 | Output | `ProgramOutputSharedH264ServiceIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramOutputSharedH264ServiceTests.swift` |
 | Output | `ProgramOutputVideoTimelineUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramOutputVideoTimelineTests.swift` |
-| Medium | `ProgramVideoPTSSelectorHostClockIntegrationTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramVideoPTSSelectorHostClockTests.swift` |
-| Medium | `ProgramVideoPTSSelectorUnitTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/ProgramVideoPTSSelectorTests.swift` |
-| Medium | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXMediumTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
+| Output | `ProgramVideoPTSSelectorHostClockIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorHostClockTests.swift` |
+| Output | `ProgramVideoPTSSelectorUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorTests.swift` |
+| Output | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
 | Corelibs | `RecordingDiagnosticsEventLogIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingDiagnosticsEventLogTests.swift` |
 | Corelibs | `RecordingPackageIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXMediumTests/Vision/VisionFramePoolTests.swift` |
@@ -118,11 +119,11 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `YouTubeOutputVideoFrameHoldUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeOutputProtocol/YouTubeOutputVideoFrameHoldTests.swift` |
 | Hard | `WorkspaceWindowRuntimeIntegrationTestSuite` | `Tests/LDTXHardTests/App/WorkspaceWindowRuntimeTests.swift` |
 | Hard | `BackgroundRemovalInferenceGateIntegrationTestSuite` | `Tests/LDTXHardTests/BackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
-| Hard | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXHardTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
-| Hard | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXHardTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
-| Hard | `AudioSideStreamSegmentPipelineIntegrationTestSuite` | `Tests/LDTXHardTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
-| Hard | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXHardTests/Integration/H264VideoEncoderTests.swift` |
-| Hard | `H264VideoEncoderIntegrationTestSuite` | `Tests/LDTXHardTests/Integration/H264VideoEncoderTests.swift` |
+| Output | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/AVAssetWriterLifecycleIntegrationTestSuite.swift` |
+| Output | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
+| Output | `AudioSideStreamSegmentPipelineIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/AudioSideStreamSegmentPipelineTests.swift` |
+| Output | `AVAssetWriterLifecycleIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/H264VideoEncoderTests.swift` |
+| Output | `H264VideoEncoderIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/H264VideoEncoderTests.swift` |
 | Hard | `ProgramRenderingOrderIntegrationTestSuite` | `Tests/LDTXHardTests/Program/ProgramRenderingOrderTests.swift` |
 | Output | `ActiveProgramOutputSessionIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ActiveProgramOutputSessionTests.swift` |
 | Hard | `ClockOverlayRuntimeIntegrationTestSuite` | `Tests/LDTXHardTests/ProgramRuntime/ClockOverlayRuntimeTests.swift` |

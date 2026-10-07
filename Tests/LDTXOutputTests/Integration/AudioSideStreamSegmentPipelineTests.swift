@@ -49,7 +49,7 @@ private final class StressSegmentedAssetWriter: @unchecked Sendable {
   }
 }
 
-extension AVAssetWriterLifecycleIntegrationTestSuite {
+extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
   @Suite
   struct AudioSideStreamSegmentPipelineIntegrationTestSuite {
     private let stressRounds = 30

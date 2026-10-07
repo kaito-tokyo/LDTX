@@ -256,3 +256,9 @@ by the GHA test workflow. Existing secrets are retained for human-managed cleanu
 Output suites share the serialized `OutputTestSuite` parent to coordinate
 media-session startup and callbacks while preserving individual Unit and
 Integration suite names. This remains a hostless unit-test target.
+
+OutputTests also includes DASH upload and local-file pipelines, recording-track
+creation, MP4 encoding, and output timing helpers. The AVAssetWriter lifecycle
+parent and its audio/video child suites remain grouped under `OutputTestSuite`.
+Recording playback/verification and marker editing keep their existing targets;
+Corelibs bundle-format tests keep their cross-platform target.
