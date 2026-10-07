@@ -330,6 +330,15 @@ extension AppUIComponentTestSuite {
           NSPoint(x: field.bounds.midX, y: field.bounds.midY), from: field)
         #expect(!container.table.canDragRows(with: IndexSet(integer: 0), at: point))
       }
+      _ = container.table.view(atColumn: 0, row: 1, makeIfNecessary: true)
+      let laterRow = try #require(container.table.rows[2])
+      laterRow.layoutSubtreeIfNeeded()
+      laterRow.setFrameOrigin(NSPoint(x: 0, y: 40))
+      for field in fixture.nativeFields(in: laterRow) {
+        let point = field.convert(
+          NSPoint(x: field.bounds.midX, y: field.bounds.midY), to: laterRow.superview)
+        #expect(laterRow.hitTest(point) != nil)
+      }
       fixture.update(container.table, ids: [3, 2, 1])
       #expect(container.table.rows[1] === row)
       #expect(row.rootView.state === row.state)
