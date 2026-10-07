@@ -93,20 +93,29 @@ Use `/usr/bin/log` with the `tokyo.kaito.ldtx` subsystem to retrieve log message
 This classification applies to XcodeGen-managed tests. SwiftPM-managed tests
 are out of scope for this classification rule; they use Swift Testing and
 belong to their corresponding module. Keep the test target structure
-straightforward. Easy, Medium, and Hard classify execution requirements and CI
-availability. Computational cost alone does not determine the tier.
+straightforward. Easy, Medium, and Hard classify tests by their dependencies.
+The framework lists below are project conventions, not a general measure of
+hardware dependence or test difficulty. Computational cost, sandbox permissions,
+and CI availability do not determine the tier. Decide where each target runs
+in CI separately from its classification.
 
-- **EasyTests target:** Pure logic tests that are deterministic and
-  runnable in a strict sandbox without relying on external resources.
-- **MediumTests target:** Tests that can run on GitHub Actions and naturally use
-  external resources, including temporary directories, databases, controlled
-  subprocesses, media processing, Metal, and supported hardware APIs.
-- **HardTests target:** Tests that cannot run on GitHub Actions and require the
-  Xcode Cloud environment. Heavy computation, media work, or hardware use alone
-  does not make a test Hard. The requirement to launch builds and tests outside
-  the sandbox does not by itself make a test Hard.
-  Run this hostless unit-test target directly in Xcode Cloud. It currently
-  contains only the real OCR integration test; do not add XCUI automation.
+- **EasyTests target:** Pure logic tests without platform-framework execution
+  dependencies.
+- **MediumTests target:** Tests that depend on macOS APIs, including
+  **CoreGraphics**, **CoreAudio**, and **AudioToolbox**, unless they exercise a
+  framework listed under HardTests.
+- **HardTests target:** Tests that exercise **Vision**, **VideoToolbox**,
+  **CoreML**, **Metal**, or **AVFoundation**. Medium and Hard tests may have the
+  same Unit or Integration scope; their framework dependencies distinguish them.
+  Run this hostless unit-test target directly in Xcode Cloud; do not add XCUI
+  automation.
+
+For these three tiers, classify the APIs exercised by the test and its SUT,
+not merely import statements or unrelated transitive dependencies. A test
+that exercises both Medium and Hard frameworks belongs in HardTests. For an
+unlisted framework, make an explicit project decision and update these lists
+rather than inferring its tier from hardware use or CI behavior.
+
 - **CorelibsTests target:** Shared Linux-compatible module tests under
   `Tests/Corelibs` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
   This target may contain deterministic unit tests and filesystem integration
@@ -137,6 +146,5 @@ Use suite names to express Unit or Integration scope within EasyTests,
 MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a
 synonym for `@Suite(.serialized)`; a SystemTests target is an isolation boundary
 for a specific SUT. Keep Xcode application-lifecycle and interprocess
-integration tests focused on startup and minimal service communication. Put
-media processing in the owning module's MediumTests target when it can run on
-GitHub Actions; reserve HardTests for Xcode Cloud requirements.
+integration tests focused on startup and minimal service communication.
+Classify media-processing tests using the framework lists above.
