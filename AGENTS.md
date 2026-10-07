@@ -105,6 +105,10 @@ availability. Computational cost alone does not determine the tier.
   Xcode Cloud environment. Heavy computation, media work, or hardware use alone
   does not make a test Hard. The requirement to launch builds and tests outside
   the sandbox does not by itself make a test Hard.
+- **CorelibsTests target:** Shared Linux-compatible module tests under
+  `Tests/Corelibs` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
+  This target may contain deterministic unit tests and filesystem integration
+  tests; keep their Unit or Integration scope in suite names.
 - **UnitTestSuite:** Tests of one SUT in isolation, with no special setup,
   execution control, or shared-state coordination needed.
 - **IntegrationTestSuite:** Tests involving multiple components or other
