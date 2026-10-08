@@ -99,7 +99,7 @@ jobs:
 
           while ($true) {
               $token = New-AppStoreConnectToken @tokenOpts
-              $response = Invoke-RestMethod -AsHashtable -Uri $env:BUILD_RUNS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+              $response = Invoke-RestMethod -AsHashtable -Uri $env:BUILD_RUNS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
               $latestRun = $response.data | Where-Object { $_.attributes.sourceCommit.commitSha -ieq $env:GITHUB_SHA } | Select-Object -First 1
               if ($latestRun) {
                   Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_BUILD_ID=$($latestRun.id)" -Encoding utf8
@@ -133,7 +133,7 @@ jobs:
 
           while ($true) {
               $token = New-AppStoreConnectToken @tokenOpts
-              $buildActionsResponse = Invoke-RestMethod -AsHashtable -Uri $env:ACTIONS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+              $buildActionsResponse = Invoke-RestMethod -AsHashtable -Uri $env:ACTIONS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
               $notarizeAction = $buildActionsResponse.data | Where-Object { $_.attributes.name -eq 'Notarize - macOS' -and $_.attributes.actionType -eq 'ARCHIVE' }
               if ($notarizeAction -and $notarizeAction.attributes.executionProgress -eq 'COMPLETE') {
                   if ($notarizeAction.attributes.completionStatus -ceq 'SUCCEEDED') {
@@ -172,7 +172,7 @@ jobs:
           }
 
           $token = New-AppStoreConnectToken @tokenOpts
-          $response = Invoke-RestMethod -AsHashtable -Uri $env:NOTARIZE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:NOTARIZE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
           $app = @($response.data | Where-Object { $_.attributes.fileType -eq 'STAPLED_NOTARIZED_ARCHIVE' })
           if ($app.Count -eq 1) {
               Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_NOTARIZED_APP_ARTIFACT_ID=$($app[0].id)" -Encoding utf8
@@ -201,7 +201,7 @@ jobs:
               Scope     = @("GET $(([uri]$env:ARCHIVE_ARTIFACTS_URL).PathAndQuery)")
           }
           $token = New-AppStoreConnectToken @tokenOpts
-          $response = Invoke-RestMethod -AsHashtable -Uri $env:ARCHIVE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:ARCHIVE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
           $archive = @($response.data | Where-Object { $_.attributes.fileType -eq 'ARCHIVE' })
           if ($archive.Count -ne 1) { throw 'Expected exactly one release xcarchive artifact.' }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_XCARCHIVE_ARTIFACT_ID=$($archive[0].id)" -Encoding utf8
@@ -251,7 +251,7 @@ jobs:
           }
 
           $token = New-AppStoreConnectToken @tokenOpts
-          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
           if ($response.data.attributes.fileType -ne 'STAPLED_NOTARIZED_ARCHIVE' -or -not $response.data.attributes.downloadUrl) {
               throw 'Expected a downloadable notarized app artifact.'
           }
@@ -280,7 +280,7 @@ jobs:
           }
 
           $token = New-AppStoreConnectToken @tokenOpts
-          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -ProgressAction SilentlyContinue
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
           if ($response.data.attributes.fileType -ne 'ARCHIVE' -or -not $response.data.attributes.downloadUrl) {
               throw 'Expected a downloadable xcarchive artifact.'
           }
@@ -403,6 +403,16 @@ jobs:
           path: ${{ runner.temp }}
           merge-multiple: true
           skip-decompress: true
+
+      - name: Verify release app version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          DMG_PATH: ${{ runner.temp }}/${{ env.DMG_NAME }}
+        run: |
+          cd "$(mktemp -d "$RUNNER_TEMP/verify-release-version.XXXXXX")"
+          7z e "$DMG_PATH" "${APP_NAME:?}/${APP_BUNDLE_NAME:?}/Contents/Info.plist"
+          python3 -c 'import plistlib, json; print(json.dumps(plistlib.load(open("Info.plist", "rb"))))' >Info.plist.json
+          jq -e --arg version "${GITHUB_REF_NAME#v}" '.CFBundleShortVersionString == $version' Info.plist.json
 
       - name: Create draft GitHub release
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
