@@ -12,20 +12,27 @@ on:
     tags: ['v*']
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}
+  group: release
   cancel-in-progress: false
+  queue: max
+
+env:
+  APP_NAME: LDTX
+  APP_BUNDLE_NAME: LDTX.app
+  DMG_NAME: LDTX-${{ github.ref_name }}.dmg
+  DSYM_ARCHIVE_NAME: LDTX-${{ github.ref_name }}.dSYMs.tar.xz
 
 jobs:
   validate-release:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-
     permissions:
       contents: read
 
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+
     steps:
       - name: Verify release tag signature
-        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -39,7 +46,7 @@ jobs:
           }
 
       - name: Verify release commit is reachable from main
-        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -49,17 +56,20 @@ jobs:
               throw "Release commit $env:GITHUB_SHA is not reachable from main."
           }
 
-  sign-release:
+  wait-for-notarized-app:
     needs: validate-release
-    runs-on: xcode-27
-    environment: release-macos
-    timeout-minutes: 360
-
+    environment:
+      name: release-macos
+      deployment: false
     permissions:
-      artifact-metadata: write
-      attestations: write
-      contents: write
-      id-token: write
+      contents: read
+
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+
+    outputs:
+      XC_XCARCHIVE_ARTIFACT_ID: ${{ steps.find-xc-archive.outputs.XC_XCARCHIVE_ARTIFACT_ID }}
+      XC_NOTARIZED_APP_ARTIFACT_ID: ${{ steps.find-xc-notarized-app.outputs.XC_NOTARIZED_APP_ARTIFACT_ID }}
 
     steps:
       - name: Checkout
@@ -67,235 +77,361 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Create job temp directory
-        id: job-temp
-        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
-        run: |
-          $jobTemp = Join-Path $env:RUNNER_TEMP "$env:GITHUB_JOB-$env:GITHUB_RUN_ID"
-          New-Item -ItemType Directory -Path $jobTemp -Force | Out-Null
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "JOB_TEMP=$jobTemp" -Encoding utf8
-
-      - name: Download LDTX Xcode Cloud Archive artifacts
-        id: ldtx-xcode-cloud-archive
-        uses: $/.github/actions/download-xcode-cloud-notarized
+      - name: Find the latest Xcode Cloud build for the current release tag
+        id: find-xc-build
+        timeout-minutes: 60
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
+          BUILD_RUNS_URL: https://api.appstoreconnect.apple.com/v1/ciWorkflows/${{ vars.XC_WORKFLOW_ID }}/buildRuns?sort=-number&limit=20&include=sourceBranchOrTag
+        run: |
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
+
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:BUILD_RUNS_URL).PathAndQuery)")
+          }
+
+          while ($true) {
+              $token = New-AppStoreConnectToken @tokenOpts
+              $response = Invoke-RestMethod -AsHashtable -Uri $env:BUILD_RUNS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+              $releaseRefIds = @($response.included | Where-Object { $_.type -eq 'scmGitReferences' -and $_.attributes.canonicalName -ceq $env:GITHUB_REF } | Select-Object -ExpandProperty id)
+              $latestRun = $response.data | Where-Object {
+                  $_.attributes.sourceCommit.commitSha -ieq $env:GITHUB_SHA -and
+                  $_.relationships.sourceBranchOrTag.data.id -cin $releaseRefIds
+              } | Select-Object -First 1
+              if ($latestRun) {
+                  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_BUILD_ID=$($latestRun.id)" -Encoding utf8
+                  exit 0
+              }
+              else {
+                  Write-Host "Waiting for an Xcode Cloud build for $env:GITHUB_REF_NAME."
+                  Start-Sleep -Seconds 30
+              }
+          }
+
+      - name: Wait for Xcode Cloud notarization of the current build
+        id: wait-for-xc-notarize
+        timeout-minutes: 60
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ACTIONS_URL: https://api.appstoreconnect.apple.com/v1/ciBuildRuns/${{ steps.find-xc-build.outputs.XC_BUILD_ID }}/actions?limit=20
+        run: |
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
+
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:ACTIONS_URL).PathAndQuery)")
+          }
+
+          while ($true) {
+              $token = New-AppStoreConnectToken @tokenOpts
+              $buildActionsResponse = Invoke-RestMethod -AsHashtable -Uri $env:ACTIONS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+              $notarizeAction = $buildActionsResponse.data | Where-Object { $_.attributes.name -eq 'Notarize - macOS' -and $_.attributes.actionType -eq 'ARCHIVE' }
+              if ($notarizeAction -and $notarizeAction.attributes.executionProgress -eq 'COMPLETE') {
+                  if ($notarizeAction.attributes.completionStatus -ceq 'SUCCEEDED') {
+                      $archiveActions = @($buildActionsResponse.data | Where-Object { $_.attributes.name -eq 'Archive - macOS' -and $_.attributes.actionType -eq 'ARCHIVE' })
+                      if ($archiveActions.Count -ne 1) { throw 'Expected exactly one release Archive action.' }
+                      Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_ARCHIVE_ACTION_ID=$($archiveActions[0].id)", "XC_NOTARIZE_ACTION_ID=$($notarizeAction.id)" -Encoding utf8
+                      exit 0
+                  }
+                  else {
+                      throw 'Xcode Cloud Notarize action did not succeed.'
+                  }
+              }
+              else {
+                  Write-Host "Waiting for the Notarize action to succeed for $env:GITHUB_REF_NAME."
+                  Start-Sleep -Seconds 30
+              }
+          }
+
+      - name: Find Notarized app's artifact ID for the current notarization
+        id: find-xc-notarized-app
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          NOTARIZE_ARTIFACTS_URL: https://api.appstoreconnect.apple.com/v1/ciBuildActions/${{ steps.wait-for-xc-notarize.outputs.XC_NOTARIZE_ACTION_ID }}/artifacts?limit=20
+        run: |
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
+
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:NOTARIZE_ARTIFACTS_URL).PathAndQuery)")
+          }
+
+          $token = New-AppStoreConnectToken @tokenOpts
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:NOTARIZE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+          $app = @($response.data | Where-Object { $_.attributes.fileType -eq 'STAPLED_NOTARIZED_ARCHIVE' })
+          if ($app.Count -eq 1) {
+              Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_NOTARIZED_APP_ARTIFACT_ID=$($app[0].id)" -Encoding utf8
+              exit 0
+          }
+          else {
+              throw 'Expected exactly one notarized app artifact.'
+          }
+
+      - name: Find release xcarchive's artifact ID for the current build
+        id: find-xc-archive
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ARCHIVE_ARTIFACTS_URL: https://api.appstoreconnect.apple.com/v1/ciBuildActions/${{ steps.wait-for-xc-notarize.outputs.XC_ARCHIVE_ACTION_ID }}/artifacts?limit=20
+        run: |
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
+
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:ARCHIVE_ARTIFACTS_URL).PathAndQuery)")
+          }
+          $token = New-AppStoreConnectToken @tokenOpts
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:ARCHIVE_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+          $archive = @($response.data | Where-Object { $_.attributes.fileType -eq 'ARCHIVE' })
+          if ($archive.Count -ne 1) { throw 'Expected exactly one release xcarchive artifact.' }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_XCARCHIVE_ARTIFACT_ID=$($archive[0].id)" -Encoding utf8
+
+  create-release-assets:
+    needs: wait-for-notarized-app
+    environment:
+      name: release-macos
+      deployment: false
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+
+    runs-on: xcode-27
+    timeout-minutes: 60
+
+    env:
+      XC_NOTARIZED_APP_ARTIFACT_ID: ${{ needs.wait-for-notarized-app.outputs.XC_NOTARIZED_APP_ARTIFACT_ID }}
+      XC_XCARCHIVE_ARTIFACT_ID: ${{ needs.wait-for-notarized-app.outputs.XC_XCARCHIVE_ARTIFACT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
         with:
-          product_name: LDTX
-          workflow_name: On push tag - LDTX
+          persist-credentials: false
 
-      - name: Extract Xcode Cloud artifacts
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          LDTX_APP_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.ARTIFACT_PATH }}
-          LDTX_ARCHIVE_ARTIFACT_PATH: ${{ steps.ldtx-xcode-cloud-archive.outputs.ARCHIVE_ARTIFACT_PATH }}
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
-        run: |
-          mkdir -p "$JOB_TEMP/LDTX-app" "$JOB_TEMP/LDTX-archive"
+      # MARK: - Download artifacts from Xcode Cloud
 
-          ditto -x -k "$LDTX_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTX-app" || \
-            ditto "$LDTX_APP_ARTIFACT_PATH" "$JOB_TEMP/LDTX-app"
-          ditto -x -k "$LDTX_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTX-archive" || \
-            ditto "$LDTX_ARCHIVE_ARTIFACT_PATH" "$JOB_TEMP/LDTX-archive"
-          ldtx_app_path="$(find "$JOB_TEMP/LDTX-app" -type d -name 'LDTX.app' -print -quit)"
-          ldtx_archive_path="$(find "$JOB_TEMP/LDTX-archive" -type d -name '*.xcarchive' -print -quit)"
-          [[ -n "$ldtx_app_path" && -n "$ldtx_archive_path" ]] || exit 1
-
-          ditto "$ldtx_archive_path" "$JOB_TEMP/LDTX.xcarchive"
-          ditto "$ldtx_app_path" "$JOB_TEMP/LDTX.xcarchive/Products/Applications/LDTX.app"
-
-      - name: Prepare App Store Connect key
-        id: app-store-connect-key
-        shell: bash --noprofile --norc -euo pipefail {0}
-        env:
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
-        run: |
-          APP_STORE_CONNECT_KEY_PATH="$JOB_TEMP/AuthKey.p8"
-          printf '%s' "$APP_STORE_CONNECT_KEY_BASE64" | base64 -D > "$APP_STORE_CONNECT_KEY_PATH"
-          chmod 600 "$APP_STORE_CONNECT_KEY_PATH"
-          printf 'APP_STORE_CONNECT_KEY_PATH=%s\n' "$APP_STORE_CONNECT_KEY_PATH" >> "$GITHUB_OUTPUT"
-
-      - name: Verify release versions
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
-        run: |
-          expected_version="${GITHUB_REF_NAME#v}"
-          for app_path in "$LDTX_APP_PATH"; do
-            actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")"
-            if [[ "$actual_version" != "$expected_version" ]]; then
-              printf 'Release tag %s does not match app version %s in %s.\n' \
-                "$GITHUB_REF_NAME" "$actual_version" "$app_path" >&2
-              exit 1
-            fi
-          done
-
-      - name: Verify LDTX dSYM matches release app
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
-          LDTX_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive
-        run: |
-          dsym_path="$LDTX_ARCHIVE_PATH/dSYMs/LDTX.app.dSYM"
-          [[ -d "$dsym_path" ]] || {
-            printf 'Expected LDTX app dSYM was not found at %s.\n' "$dsym_path" >&2
-            exit 1
-          }
-
-          app_uuids="$(xcrun dwarfdump --uuid "$LDTX_APP_PATH/Contents/MacOS/LDTX" | awk '{print $2}' | sort)"
-          dsym_uuids="$(xcrun dwarfdump --uuid "$dsym_path" | awk '{print $2}' | sort)"
-          [[ "$app_uuids" == "$dsym_uuids" ]] || {
-            printf 'LDTX app UUIDs do not match dSYM UUIDs.\nApp:\n%s\n\ndSYM:\n%s\n' \
-              "$app_uuids" "$dsym_uuids" >&2
-            exit 1
-          }
-
-      - name: Notarize and staple apps
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+      - name: Download notarized app for the current release
+        id: download-notarized-app
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
         env:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_KEY_PATH: ${{ steps.app-store-connect-key.outputs.APP_STORE_CONNECT_KEY_PATH }}
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
-          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
+          CI_ARTIFACTS_URL: https://api.appstoreconnect.apple.com/v1/ciArtifacts/${{ env.XC_NOTARIZED_APP_ARTIFACT_ID }}
         run: |
-          notarize_app() {
-            local app_path="$1"
-            local product_name="$2"
-            local zip_path="$JOB_TEMP/${product_name}-${GITHUB_REF_NAME}.app.zip"
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
 
-            rm -f "$zip_path"
-            ditto -c -k --keepParent "$app_path" "$zip_path"
-            xcrun notarytool submit "$zip_path" \
-              --key "$APP_STORE_CONNECT_KEY_PATH" \
-              --key-id "$APP_STORE_CONNECT_KEY_ID" \
-              --issuer "$APP_STORE_CONNECT_ISSUER" \
-              --wait
-
-            xcrun stapler staple "$app_path"
-            xcrun stapler validate "$app_path"
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:CI_ARTIFACTS_URL).PathAndQuery)")
           }
 
-          notarize_app "$LDTX_APP_PATH" LDTX
+          $token = New-AppStoreConnectToken @tokenOpts
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+          if ($response.data.attributes.fileType -ne 'STAPLED_NOTARIZED_ARCHIVE' -or -not $response.data.attributes.downloadUrl) {
+              throw 'Expected a downloadable notarized app artifact.'
+          }
+
+          Set-Location $env:RUNNER_TEMP
+          Invoke-WebRequest -Uri $response.data.attributes.downloadUrl -OutFile 'notarized-app.zip' -TimeoutSec 600 -ProgressAction SilentlyContinue
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "NOTARIZED_APP_ZIP_PATH=$env:RUNNER_TEMP/notarized-app.zip" -Encoding utf8
+
+      - name: Download release xcarchive for the current build
+        id: download-xcarchive
+        shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        env:
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          CI_ARTIFACTS_URL: https://api.appstoreconnect.apple.com/v1/ciArtifacts/${{ env.XC_XCARCHIVE_ARTIFACT_ID }}
+        run: |
+          Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
+
+          $tokenOpts = @{
+              Issuer    = $env:APP_STORE_CONNECT_ISSUER
+              ExpiresIn = 180
+              KeyId     = $env:APP_STORE_CONNECT_KEY_ID
+              KeyBase64 = $env:APP_STORE_CONNECT_KEY_BASE64
+              Scope     = @("GET $(([uri]$env:CI_ARTIFACTS_URL).PathAndQuery)")
+          }
+
+          $token = New-AppStoreConnectToken @tokenOpts
+          $response = Invoke-RestMethod -AsHashtable -Uri $env:CI_ARTIFACTS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
+          if ($response.data.attributes.fileType -ne 'ARCHIVE' -or -not $response.data.attributes.downloadUrl) {
+              throw 'Expected a downloadable xcarchive artifact.'
+          }
+
+          Set-Location $env:RUNNER_TEMP
+          Invoke-WebRequest -Uri $response.data.attributes.downloadUrl -OutFile 'app-xcarchive.zip' -TimeoutSec 600 -ProgressAction SilentlyContinue
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XCARCHIVE_ZIP_PATH=$env:RUNNER_TEMP/app-xcarchive.zip" -Encoding utf8
+
+      # MARK: - Create release assets
+
+      - name: Create release DMG
+        id: create-dmg
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          NOTARIZED_APP_ZIP_PATH: ${{ steps.download-notarized-app.outputs.NOTARIZED_APP_ZIP_PATH }}
+        run: |
+          staging_dir="$(mktemp -d "$RUNNER_TEMP/create-dmg-staging.XXXXXX")"
+
+          ditto -x -k "$NOTARIZED_APP_ZIP_PATH" "$staging_dir"
+
+          ci_scripts/create-dmg/create-dmg \
+            --volname "${APP_NAME:?}" \
+            --icon "${APP_BUNDLE_NAME:?}" 140 145 \
+            --app-drop-link 360 145 \
+            --format ULMO \
+            --no-internet-enable \
+            --overwrite \
+            "$RUNNER_TEMP/${DMG_NAME:?}" \
+            "$staging_dir"
+
+          printf 'DMG_PATH=%s\n' "$RUNNER_TEMP/${DMG_NAME:?}" >>"$GITHUB_OUTPUT"
 
       - name: Package release dSYMs
         id: package-dsyms
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
-          LDTX_ARCHIVE_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive
+          XCARCHIVE_ZIP_PATH: ${{ steps.download-xcarchive.outputs.XCARCHIVE_ZIP_PATH }}
         run: |
-          staging_dir="$JOB_TEMP/ldtx-dsyms"
-          dsym_archive_path="$JOB_TEMP/LDTX-${GITHUB_REF_NAME}.dSYMs.cpio.xz"
-          rm -rf "$staging_dir" "$dsym_archive_path"
-          mkdir -p "$staging_dir/dSYMs/LDTX"
+          ditto -x -k "$XCARCHIVE_ZIP_PATH" "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/"*.xcarchive"/dSYMs"
+          COPYFILE_DISABLE=1 tar --no-xattrs --no-acls --no-fflags --uid 0 --gid 0 --uname root --gname root -cf - *.dSYM | xz -8 -c >"$RUNNER_TEMP/${DSYM_ARCHIVE_NAME:?}"
+          printf 'DSYM_ARCHIVE_PATH=%s\n' "$RUNNER_TEMP/${DSYM_ARCHIVE_NAME:?}" >> "$GITHUB_OUTPUT"
 
-          ditto "$LDTX_ARCHIVE_PATH/dSYMs" "$staging_dir/dSYMs/LDTX"
-          rm -rf -- \
-            "$staging_dir/dSYMs/LDTX/encuda.dSYM"
-          ditto -c --keepParent "$staging_dir/dSYMs" - | xz -8 -c > "$dsym_archive_path"
+      # MARK: - Notarize and attest release assets
 
-          printf 'DSYM_ARCHIVE_PATH=%s\n' "$dsym_archive_path" >> "$GITHUB_OUTPUT"
-
-      - name: Create DMG
-        id: create-dmg
+      - name: Store App Store Connect credentials
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
-          LDTX_APP_PATH: ${{ steps.job-temp.outputs.JOB_TEMP }}/LDTX.xcarchive/Products/Applications/LDTX.app
-          JOB_TEMP: ${{ steps.job-temp.outputs.JOB_TEMP }}
-        run: |
-          staging_dir="$JOB_TEMP/ldtx-dmg-staging"
-          dmg_path="$JOB_TEMP/LDTX-${GITHUB_REF_NAME}.dmg"
-
-          rm -rf "$staging_dir" "$dmg_path"
-          mkdir -p "$staging_dir"
-          ditto "$LDTX_APP_PATH" "$staging_dir/LDTX.app"
-
-          create-dmg/create-dmg \
-            --volname "LDTX" \
-            --window-size 520 320 \
-            --icon-size 96 \
-            --icon "LDTX.app" 150 145 \
-            --hide-extension "LDTX.app" \
-            --app-drop-link 370 145 \
-            --format ULFO \
-            --no-internet-enable \
-            --overwrite \
-            "$dmg_path" \
-            "$staging_dir"
-
-          printf 'LDTX_DMG_PATH=%s\n' "$dmg_path" >> "$GITHUB_OUTPUT"
-
-      - name: Notarize and staple DMGs
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        env:
-          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_KEY_PATH: ${{ steps.app-store-connect-key.outputs.APP_STORE_CONNECT_KEY_PATH }}
-          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
+          APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
         run: |
-          for dmg_path in "$LDTX_DMG_PATH"; do
-            xcrun notarytool submit "$dmg_path" \
-              --key "$APP_STORE_CONNECT_KEY_PATH" \
-              --key-id "$APP_STORE_CONNECT_KEY_ID" \
-              --issuer "$APP_STORE_CONNECT_ISSUER" \
-              --wait
+          cd "$(mktemp -d "$RUNNER_TEMP/notarytool-store-credentials.XXXXXX")"
+          trap 'rm -f *' EXIT
 
-            xcrun stapler staple "$dmg_path"
-            xcrun stapler validate "$dmg_path"
-          done
+          umask 077
+          base64 -D <<<"$APP_STORE_CONNECT_KEY_BASE64" >AuthKey.p8
+
+          xcrun notarytool store-credentials notarytool \
+            --key AuthKey.p8 \
+            --key-id "$APP_STORE_CONNECT_KEY_ID" \
+            --issuer "$APP_STORE_CONNECT_ISSUER"
+
+      - name: Notarize and staple release DMG
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          DMG_PATH: ${{ steps.create-dmg.outputs.DMG_PATH }}
+        run: |
+          xcrun notarytool submit "$DMG_PATH" --keychain-profile notarytool --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
 
       - name: Attest release assets
+        id: attest
         uses: actions/attest@v4.2.2
         with:
           subject-path: |
-            ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
+            ${{ steps.create-dmg.outputs.DMG_PATH }}
             ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
 
-      - name: Create or update draft GitHub release
-        shell: bash --noprofile --norc -euo pipefail {0}
+      # MARK: - Upload release assets
+
+      - name: Upload release DMG
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          path: ${{ steps.create-dmg.outputs.DMG_PATH }}
+          archive: false
+
+      - name: Upload release dSYM archive
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          path: ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
+          archive: false
+
+      - name: Upload release provenance
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: release-provenance
+          path: ${{ steps.attest.outputs.bundle-path }}
+          archive: true
+
+  draft-release:
+    needs: create-release-assets
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download release assets
+        uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: ${{ env.APP_NAME }}-${{ github.ref_name }}.*
+          path: ${{ runner.temp }}
+          merge-multiple: true
+          skip-decompress: true
+
+      - name: Verify release app version
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        env:
+          DMG_PATH: ${{ runner.temp }}/${{ env.DMG_NAME }}
+        run: |
+          cd "$(mktemp -d "$RUNNER_TEMP/verify-release-version.XXXXXX")"
+          7z e "$DMG_PATH" "${APP_NAME:?}/${APP_BUNDLE_NAME:?}/Contents/Info.plist"
+          python3 -c 'import plistlib, json; print(json.dumps(plistlib.load(open("Info.plist", "rb"))))' >Info.plist.json
+          jq -e --arg version "${GITHUB_REF_NAME#v}" '.CFBundleShortVersionString == $version' Info.plist.json
+
+      - name: Create draft GitHub release
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         env:
           GH_TOKEN: ${{ github.token }}
-          DSYM_ARCHIVE_PATH: ${{ steps.package-dsyms.outputs.DSYM_ARCHIVE_PATH }}
-          LDTX_DMG_PATH: ${{ steps.create-dmg.outputs.LDTX_DMG_PATH }}
         run: |
-          release_is_draft="$(
-            gh release view "$GITHUB_REF_NAME" \
-              --json isDraft \
-              --template '{{.isDraft}}' 2>/dev/null || true
-          )"
-          if [[ -z "$release_is_draft" ]]; then
-            gh release create "$GITHUB_REF_NAME" \
-              --draft \
-              --notes "" \
-              --title "$GITHUB_REF_NAME" \
-              --verify-tag
-          elif [[ "$release_is_draft" != 'true' ]]; then
-            printf 'Release %s is already published; refusing to replace its assets.\n' "$GITHUB_REF_NAME" >&2
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            printf 'Release %s already exists.\n' "$GITHUB_REF_NAME" >&2
             exit 1
           fi
 
-          ASSETS=(
-            "$LDTX_DMG_PATH"
-            "$DSYM_ARCHIVE_PATH"
-          )
-
-          gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
-
-          release_assets="$(
-            gh release view "$GITHUB_REF_NAME" \
-              --json assets \
-              --jq '.assets[].name'
-          )"
-          while IFS= read -r asset_name; do
-            [[ -n "$asset_name" ]] || continue
-            if [[ "$asset_name" == "${LDTX_DMG_PATH##*/}" || \
-                  "$asset_name" == "${DSYM_ARCHIVE_PATH##*/}" ]]; then
-              continue
-            fi
-            gh release delete-asset "$GITHUB_REF_NAME" "$asset_name" --yes
-          done <<< "$release_assets"
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/${APP_NAME:?}-$GITHUB_REF_NAME.dmg" \
+            "$RUNNER_TEMP/${APP_NAME:?}-$GITHUB_REF_NAME.dSYMs.tar.xz" \
+            --draft \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag

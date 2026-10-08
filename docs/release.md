@@ -22,26 +22,32 @@ the final merge or Publish action to a human.
 ## Release architecture
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) starts automatically when a `v`-prefixed tag is
-pushed. It uses two jobs:
+pushed. It uses four jobs:
 
 1. `validate-release` verifies the signed annotated tag and reachability from `main`.
-2. After the `release-macos` environment review, `sign-release` waits for the matching Xcode Cloud Archive artifacts,
-   downloads the Developer ID app exports and xcarchives, verifies their versions, notarizes and staples the apps and
-   DMGs, records attestations for the release assets, and creates or updates the draft GitHub Release.
+2. `wait-for-notarized-app` runs on Linux with the `release-macos` environment, waits for Xcode Cloud
+   to finish app notarization, and passes the notarized app and xcarchive Artifact IDs to the next job. It does not download artifacts.
+3. `create-release-assets` runs on macOS with the same environment, downloads the stapled notarized app and
+   release xcarchive using their Artifact IDs, creates the DMG and dSYM archive, notarizes and staples the DMG,
+   records attestations, and uploads the release artifacts.
+4. `draft-release` runs on Linux, downloads the release assets, and creates a new draft GitHub Release with
+   automatically generated release notes. It fails if a release already exists for the tag.
 
-Xcode Cloud owns the certificate and provisioning-profile boundary. GitHub Actions receives only the signed app
-exports and matching xcarchives. The App Store Connect API key is used to locate those artifacts and for notarization.
+Xcode Cloud owns app signing and notarization, including the certificate and provisioning-profile boundary. GitHub Actions receives the stapled notarized app as `LDTX.app.zip` and the matching xcarchive for dSYMs. The App Store Connect API key is used to locate those artifacts and for DMG notarization.
 
 ## Prerequisites
 
 - The user has merged the Marketing version update PR for the release into `main`.
-- The Xcode Cloud workflow name is exactly `On push tag - LDTX`.
+- The `XC_WORKFLOW_ID` GitHub Actions variable contains the Xcode Cloud release workflow ID.
+- That workflow has the Notarize post-action enabled.
 - The GitHub Actions environment `release-macos` contains these secrets:
   - `APP_STORE_CONNECT_ISSUER`
   - `APP_STORE_CONNECT_KEY_BASE64`
   - `APP_STORE_CONNECT_KEY_ID`
 - `APP_STORE_CONNECT_KEY_BASE64` is the App Store Connect private key encoded as base64.
 - The environment has required reviewers and deployment-branch or tag restrictions appropriate for release access.
+- `release-*` environments must not use custom deployment protection rules. The workflow uses
+  `deployment: false` to access environment secrets and variables without creating deployments.
 - `gh` is authenticated for the repository when driving the release from CLI.
 
 ## Version and tag rules
@@ -74,8 +80,16 @@ git tag -s v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 ```
 
-The tag must be a cryptographically signed annotated tag. Pushing it starts the matching Xcode Cloud builds and the
-GitHub release workflow. The release job waits for both Xcode Cloud Archive artifact sets.
+The tag must be a cryptographically signed annotated tag. Pushing it starts the matching Xcode Cloud build and the
+GitHub release workflow. The Linux wait job waits for the `Notarize - macOS` action to succeed.
+Separate steps select the notarized app and release xcarchive Artifact IDs and pass them to the macOS job.
+
+The inline PowerShell wait step uses the `XC_WORKFLOW_ID` GitHub Actions variable and fetches the latest 20 builds in descending build-number order without pagination, selecting the highest-numbered build matching the commit SHA.
+It pins that build ID and polls the action list every 30 seconds until notarization succeeds. GitHub Actions limits the wait job to 60 minutes. API errors and terminal Notarize action failures fail immediately.
+The artifact selection step retrieves the Notarize action's artifact list once and fails immediately on missing or ambiguous artifacts. The macOS fetch step reads each artifact directly from `/v1/ciArtifacts/{id}` and requires a download URL.
+It selects `STAPLED_NOTARIZED_ARCHIVE` from the Notarize action; unnotarized `ARCHIVE_EXPORT` artifacts are never accepted.
+
+JWT generation is provided by `ci_scripts/AppStoreConnectAuth.psm1` using .NET cryptography without external dependencies. Each token includes a scope restricted to the GET request path and query string it authorizes. API requests, polling, and downloads remain in the workflow steps.
 
 ### 4. Monitor the release workflow
 
@@ -86,17 +100,16 @@ gh run list --workflow release.yml --branch v0.1.0 --limit 1
 ```
 
 The workflow fails when the tag signature is invalid, when the tagged commit is not reachable from `main`, when the
-matching Xcode Cloud artifacts do not become available, or when an archived app version does not match the tag.
+matching Xcode Cloud artifacts do not become available, when DMG notarization fails, or when a release already exists for the tag.
 
 ### 5. Verify the draft release
 
 When the workflow succeeds, the draft release should contain:
 
-- `LDTX-<tag>.dmg`,
-- `LDTX-<tag>.dSYMs.cpio.xz`, with a `dSYMs/LDTX` directory.
+- `LDTX-<tag>.dmg`.
+- `LDTX-<tag>.dSYMs.tar.xz`, containing the `*.dSYM` bundles at the archive root.
 
-The workflow records GitHub artifact attestations separately from Release assets and packages the dSYMs collected by
-Xcode. When reusing an existing draft, it replaces the current asset set first, then removes any obsolete assets.
+The workflow records GitHub artifact attestations separately from Release assets. The workflow packages dSYMs from the matching release xcarchive as a separate release asset. Existing releases, including drafts, are rejected; the workflow does not replace or remove their assets.
 
 ### 6. Hand off publishing to a human
 
@@ -104,40 +117,20 @@ A human adds or approves the release notes and publishes the draft. Agents must 
 
 ## Failure hints
 
-- `No Xcode Cloud build run matched tag ...`
-  - Confirm the tag triggered both Xcode Cloud workflows and that their configured names have not changed.
-- A missing Developer ID export or xcarchive
-  - Inspect the corresponding Xcode Cloud Archive action and its distribution configuration.
-- `Release tag ... does not match app version ...`
-  - Create the tag from the commit whose archived app version matches the intended release.
-- A missing app or dSYM error
-  - Inspect the corresponding Xcode Cloud artifact and archive layout.
-- A stale draft release asset
-  - Rerun `release.yml`; asset upload uses `--clobber`.
+- `Waiting for an Xcode Cloud build ...` or a timeout
+  - Confirm `XC_WORKFLOW_ID` identifies the release workflow and that the tag triggered it.
+- A missing stapled notarized app
+  - Inspect the Archive action and confirm the Notarize post-action succeeded.
+- A missing app error
+  - Inspect the corresponding Xcode Cloud artifact ZIP layout.
+- `Release ... already exists.`
+  - Inspect the existing release. A human must remove an unwanted draft before rerunning the draft job.
 
 ## Symbolicating a release crash
 
-Use the repository command on macOS with Xcode command-line tools, `gh`, `xz`, and `ditto` available:
-
-```sh
-scripts/symbolicate-release-crash ~/Library/Logs/DiagnosticReports/LDTX-2026-08-10.ips
-```
-
-The authenticated `gh` account needs read access to Releases in `kaito-tokyo/LDTX`. This includes private and draft
-Releases when the account has access; the command passes no credentials itself and does not print authentication
-tokens.
-
-The command reads the product, version, build, architecture, application UUID, load address, and application frames
-from the `.ips` report. It downloads the exact `v<version>` Release's dSYM archive and matching LDTX DMG
-into a new temporary directory. It verifies the downloaded bundle identifier, version, and build, then requires the
-crash, executable, and product-specific dSYM UUIDs to match for the reported architecture before invoking `atos`.
-Missing assets, ambiguous Binary Images entries, incomplete reports, metadata differences, and UUID differences are
-fatal; the command never guesses another Release or symbol file.
-
-Output is limited to the release tag, application metadata, matched UUID, application frames, unresolved-frame count,
-and the corresponding source tag URL. Apple system frames and dependency frames are not sent to `atos` and remain
-outside the application-frame report. dSYM contents are neither printed nor uploaded. Temporary downloads are removed
-unless `--keep-temporary-files` is supplied for local debugging.
+For agent-assisted crash symbolication, use the repository's
+[`symbolicate-ldtx-crash` skill](../.agents/skills/symbolicate-ldtx-crash/SKILL.md).
+It describes downloading release dSYMs, matching crash UUIDs, and resolving frames with Xcode tools.
 
 ## Suggested agent handoff format
 
