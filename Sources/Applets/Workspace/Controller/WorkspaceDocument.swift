@@ -94,6 +94,9 @@ public final class WorkspaceDocument: NSDocument {
       try WorkspaceV4IntegrityValidator.validate(workspace)
       try replaceContents(workspace)
       storeService.localStateURL = url
+      if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+        appletData.migrateOutputData(from: url, externalID: externalID)
+      }
       persistenceCoordinator.setDocumentURL(url)
     }
   }
@@ -246,6 +249,9 @@ public final class WorkspaceDocument: NSDocument {
       appletData.copyState(from: previous, to: url)
     }
     storeService.localStateURL = url
+    if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+      appletData.migrateOutputData(from: url, externalID: externalID)
+    }
     persistenceCoordinator.setDocumentURL(url)
   }
 

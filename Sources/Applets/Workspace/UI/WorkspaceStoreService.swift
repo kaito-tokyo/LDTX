@@ -370,7 +370,13 @@ public final class WorkspaceStoreService {
   }
 
   public var localState: WorkspaceLocalState {
-    workspaceURL.map { appletData.state(for: $0) } ?? .init()
+    var state = workspaceURL.map { appletData.state(for: $0) } ?? .init()
+    if let id = externalID.flatMap(UUID.init(uuidString:)) {
+      state.recordingFolderPath = appletData.recordingFolderPaths[id]
+      state.landscapeYouTubeLiveStreamID = appletData.landscapeYouTubeLiveStreamIDs[id]
+      state.portraitYouTubeLiveStreamID = appletData.portraitYouTubeLiveStreamIDs[id]
+    }
+    return state
   }
   public var canMonitor: Bool { workspaceURL != nil }
   public func updateMonitor(_ mutation: (inout WorkspaceLocalState) -> Void) {
@@ -385,6 +391,9 @@ public final class WorkspaceStoreService {
       reportError(error)
       return
     }
+    updated.recordingFolderPath = nil
+    updated.landscapeYouTubeLiveStreamID = nil
+    updated.portraitYouTubeLiveStreamID = nil
     appletData.updateState(for: workspaceURL) { $0 = updated }
     self.synchronizeAudioMonitor()
   }

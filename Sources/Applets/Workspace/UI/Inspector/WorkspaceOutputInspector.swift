@@ -2,154 +2,128 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXAppletSupport
+import AppKit
 import LDTXWorkspaceAppletInterface
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceOutputInspector: View {
-  @Environment(\.documentReference) private var documentReference
-  private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? storeService.localStateURL
-  }
-  @Bindable var storeService: WorkspaceStoreService
+  @Binding var outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
+  let externalID: UUID
+  let isOutputActive: Bool
   @Bindable var appletData: WorkspaceAppletData
-  @State private var isChoosingRecordingFolder = false
+  let reportError: (Error) -> Void
   @State private var isShowingStreamKeyManager = false
+  @State private var isAddingCustomField = false
   @State private var streamKeyLoadError: String?
+  @State private var newCustomFieldKey = ""
 
   var body: some View {
     Form {
-      Section("Output") {
-        LabeledContent(
-          "Recording Folder", value: localState.recordingFolderPath ?? "Application default")
-        Button("Choose Folder…") { isChoosingRecordingFolder = true }
-          .disabled(workspaceURL == nil)
-        if localState.recordingFolderPath != nil {
-          Button("Use Application Default") {
-            guard let workspaceURL else { return }
-            appletData.updateState(for: workspaceURL) { $0.recordingFolderPath = nil }
-          }
-          .disabled(workspaceURL == nil)
-        }
-        Toggle("Enable Recording", isOn: $storeService.outputSettings.recordingEnabled)
-        Toggle("Record Landscape", isOn: $storeService.outputSettings.recordingSettings.recordsLandscape)
-        Toggle("Record Portrait", isOn: $storeService.outputSettings.recordingSettings.recordsPortrait)
-        if storeService.outputSettings.recordingSettings.recordsLandscape
-          || storeService.outputSettings.recordingSettings.recordsPortrait
-        {
-          RecordingCustomFieldsEditor(
-            fields: storeService.outputSettings.recordingSettings.customFields,
-            canEdit: !storeService.isOutputActive
-          ) { fields in
-            guard !storeService.isOutputActive else { return }
-            storeService.outputSettings.recordingSettings.customFields = fields
+      Section("Recording") {
+        LabeledContent("Recording Folder") {
+          HStack {
+            RecordingFolderPicker(path: $appletData.recordingFolderPaths[externalID])
+            Button("Reset") {
+              appletData.recordingFolderPaths[externalID] = nil
+            }
           }
         }
-        Toggle("Stream to YouTube", isOn: $storeService.outputSettings.youtubeEnabled)
+        Toggle("Enable Recording", isOn: $outputSettings.recordingEnabled)
+        Toggle("Record Landscape", isOn: $outputSettings.recordingSettings.recordsLandscape)
+        Toggle("Record Portrait", isOn: $outputSettings.recordingSettings.recordsPortrait)
+        Text("Custom Fields").font(.headline)
+        ForEach(outputSettings.recordingSettings.customFields.keys.sorted(), id: \.self) { key in
+          HStack {
+            TextField(key, text:
+              Binding($outputSettings.recordingSettings.customFields[key]) ?? .constant(""))
+            Button("Remove", systemImage: "minus", role: .destructive) {
+              outputSettings.recordingSettings.customFields.removeValue(forKey: key)
+            }
+            .labelStyle(.iconOnly)
+          }
+        }
+        Button("Add Field…", systemImage: "plus") {
+          newCustomFieldKey = ""
+          isAddingCustomField = true
+        }
+      }
+      Section("YouTube") {
+        Toggle("Stream to YouTube", isOn: $outputSettings.youtubeEnabled)
         Picker(
           "YouTube Ingest",
-          selection: $storeService.outputSettings.youtubeSettings.ingestMode
+          selection: $outputSettings.youtubeSettings.ingestMode
         ) {
-          ForEach(
-            [Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps, .portraitRtmps, .dualRtmps],
-            id: \.rawValue
-          ) { mode in
-            Text(ingestModeLabel(mode)).tag(mode)
-          }
+          Text("Landscape RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps)
+          Text("Portrait RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.portraitRtmps)
+          Text("Dual RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.dualRtmps)
         }
-        if !isAvailableIngestMode(
-          storeService.outputSettings.youtubeSettings.ingestMode)
-        {
-          Text("This YouTube ingest mode is not available yet.")
-            .foregroundStyle(.secondary)
-        }
-        if usesLandscapeRTMPS {
-          streamKeyPicker("Landscape Stream Key", keyPath: \.landscapeYouTubeLiveStreamID)
-        }
-        if usesPortraitRTMPS {
-          streamKeyPicker("Portrait Stream Key", keyPath: \.portraitYouTubeLiveStreamID)
-        }
+        streamKeyPicker(
+          "Landscape Stream Key", selection: $appletData.landscapeYouTubeLiveStreamIDs[externalID])
+          .disabled(!outputSettings.youtubeSettings.ingestMode.usesLandscapeRTMPS)
+        streamKeyPicker(
+          "Portrait Stream Key", selection: $appletData.portraitYouTubeLiveStreamIDs[externalID])
+          .disabled(!outputSettings.youtubeSettings.ingestMode.usesPortraitRTMPS)
         Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
           .popover(isPresented: $isShowingStreamKeyManager) {
             WorkspaceV4StreamKeyManager(
               configurations: appletData.youtubeStreamKeyConfigurations,
               load: { try appletData.loadYouTubeStreamKeyConfigurations() },
               save: { try appletData.saveYouTubeStreamKeyConfigurations($0) },
-              reportError: { storeService.reportError($0) }
+              reportError: reportError
             )
           }
       }
-      .disabled(storeService.isOutputActive)
-      .onAppear {
-        do {
-          _ = try appletData.loadYouTubeStreamKeyConfigurations()
-          streamKeyLoadError = nil
-        } catch {
-          streamKeyLoadError = error.localizedDescription
-          storeService.reportError(error)
-        }
+    }
+    .disabled(isOutputActive)
+    .onAppear {
+      do {
+        _ = try appletData.loadYouTubeStreamKeyConfigurations()
+        streamKeyLoadError = nil
+      } catch {
+        streamKeyLoadError = error.localizedDescription
+        reportError(error)
       }
     }
     .formStyle(.grouped)
-    .fileImporter(
-      isPresented: $isChoosingRecordingFolder,
-      allowedContentTypes: [.folder]
-    ) { result in
-      do {
-        let url = try result.get()
-        guard !storeService.isOutputActive, let workspaceURL else { return }
-        appletData.updateState(for: workspaceURL) {
-          $0.recordingFolderPath = url.standardizedFileURL.path
+    .sheet(isPresented: $isAddingCustomField) {
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Add Custom Field").font(.headline)
+        TextField("Key", text: $newCustomFieldKey)
+          .disabled(isOutputActive)
+        HStack {
+          Spacer()
+          Button("Cancel", role: .cancel) { isAddingCustomField = false }
+            .keyboardShortcut(.cancelAction)
+          Button("Add") {
+            guard !isOutputActive, !newCustomFieldKey.isEmpty,
+              outputSettings.recordingSettings.customFields[newCustomFieldKey] == nil
+            else { return }
+            outputSettings.recordingSettings.customFields[newCustomFieldKey] = ""
+            isAddingCustomField = false
+          }
+          .keyboardShortcut(.defaultAction)
+          .disabled(isOutputActive || newCustomFieldKey.isEmpty
+            || outputSettings.recordingSettings.customFields[newCustomFieldKey] != nil)
         }
-      } catch {
-        storeService.reportError(error)
       }
+      .padding()
+      .frame(width: 320)
     }
-    .fileDialogDefaultDirectory(
-      localState.recordingFolderPath.map { URL(fileURLWithPath: $0, isDirectory: true) })
-    .fileDialogConfirmationLabel("Choose")
-  }
-
-  private var usesLandscapeRTMPS: Bool {
-    switch storeService.outputSettings.youtubeSettings.ingestMode {
-    case .landscapeRtmps, .dualRtmps: true
-    default: false
-    }
-  }
-
-  private var usesPortraitRTMPS: Bool {
-    switch storeService.outputSettings.youtubeSettings.ingestMode {
-    case .portraitRtmps, .dualRtmps: true
-    default: false
-    }
-  }
-
-  private func isAvailableIngestMode(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> Bool {
-    switch mode {
-    case .landscapeRtmps, .portraitRtmps, .dualRtmps: true
-    default: false
-    }
-  }
-
-  private var localState: WorkspaceLocalState {
-    guard let workspaceURL else { return .init() }
-    return appletData.state(for: workspaceURL)
   }
 
   private func streamKeyPicker(
-    _ title: String, keyPath: WritableKeyPath<WorkspaceLocalState, String?>
+    _ title: String, selection: Binding<String?>
   ) -> some View {
     WorkspaceSelectionField(
-      title: title, current: localState[keyPath: keyPath],
+      title: title, current: selection.wrappedValue,
       options: appletData.youtubeStreamKeyConfigurations.map { .init(id: $0.id, name: $0.name) },
       loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
-      isEditable: !storeService.isOutputActive && workspaceURL != nil,
+      isEditable: !isOutputActive,
       refresh: refreshStreamKeys,
-      reportError: { storeService.reportError($0) },
+      reportError: reportError,
       commit: { selected in
-        guard !storeService.isOutputActive, let workspaceURL else {
+        guard !isOutputActive else {
           throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
         }
         if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
@@ -157,9 +131,7 @@ struct WorkspaceOutputInspector: View {
           selected == nil
             || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
         else { throw WorkspaceSelectionError(message: "The selected stream key no longer exists.") }
-        appletData.updateState(for: workspaceURL) {
-          $0[keyPath: keyPath] = selected
-        }
+        selection.wrappedValue = selected
       })
   }
 
@@ -169,21 +141,59 @@ struct WorkspaceOutputInspector: View {
       streamKeyLoadError = nil
     } catch {
       streamKeyLoadError = error.localizedDescription
-      storeService.reportError(error)
+      reportError(error)
     }
   }
 
-  private func ingestModeLabel(_ mode: Ldtx_Workspace_V4_YouTubeIngestMode) -> String {
-    switch mode {
-    case .landscapeRtmps: "Landscape RTMPS"
-    case .portraitRtmps: "Portrait RTMPS"
-    case .dualRtmps: "Dual RTMPS"
-    case .landscapeHls: "Landscape HLS"
-    case .portraitHls: "Portrait HLS"
-    case .landscapeDash: "Landscape DASH"
-    case .portraitDash: "Portrait DASH"
-    case .unspecified, .UNRECOGNIZED: "Unspecified"
+
+}
+
+private struct RecordingFolderPicker: NSViewRepresentable {
+  @Binding var path: String?
+  @Environment(\.isEnabled) private var isEnabled
+
+  func makeNSView(context: Context) -> NSPathControl {
+    let control = NSPathControl()
+    control.pathStyle = .popUp
+    control.isEditable = true
+    control.allowedTypes = [UTType.folder.identifier]
+    control.placeholderString = String(localized: "(Default)")
+    control.setAccessibilityLabel(String(localized: "Recording Folder"))
+    control.delegate = context.coordinator
+    control.target = context.coordinator
+    control.action = #selector(Coordinator.pathChanged(_:))
+    return control
+  }
+
+  func updateNSView(_ control: NSPathControl, context: Context) {
+    context.coordinator.path = $path
+    context.coordinator.isEnabled = isEnabled
+    control.isEnabled = isEnabled
+    let url = path.map { URL(fileURLWithPath: $0, isDirectory: true) }
+    if control.url != url { control.url = url }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(path: $path) }
+
+  @MainActor
+  final class Coordinator: NSObject, NSPathControlDelegate {
+    var path: Binding<String?>
+    var isEnabled = true
+
+    init(path: Binding<String?>) { self.path = path }
+
+    @objc func pathChanged(_ control: NSPathControl) {
+      guard isEnabled, control.clickedPathItem == nil else { return }
+      path.wrappedValue = control.url?.standardizedFileURL.path
     }
+
+    func pathControl(_ pathControl: NSPathControl, willDisplay openPanel: NSOpenPanel) {
+      openPanel.canChooseDirectories = true
+      openPanel.canChooseFiles = false
+      openPanel.allowsMultipleSelection = false
+    }
+
+
   }
 }
 
@@ -193,7 +203,7 @@ struct WorkspaceOutputInspector: View {
   @MainActor
   private enum WorkspaceOutputInspectorPreviewFixtures {
     static func makeStore(isOutputActive: Bool = false) -> WorkspaceStoreService {
-      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+      let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       var outputSettings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
       outputSettings.recordingEnabled = true
       outputSettings.recordingSettings.recordsLandscape = true
@@ -221,7 +231,11 @@ struct WorkspaceOutputInspector: View {
     @Previewable @State var storeService = WorkspaceOutputInspectorPreviewFixtures.makeStore()
     @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
 
-    WorkspaceOutputInspector(storeService: storeService, appletData: appletData)
+    @Bindable var boundStore = storeService
+    WorkspaceOutputInspector(
+      outputSettings: $boundStore.outputSettings, externalID: UUID(),
+      isOutputActive: storeService.isOutputActive, appletData: appletData,
+      reportError: storeService.reportError)
       .frame(width: 480, height: 640)
   }
 
@@ -230,7 +244,11 @@ struct WorkspaceOutputInspector: View {
       isOutputActive: true)
     @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
 
-    WorkspaceOutputInspector(storeService: storeService, appletData: appletData)
+    @Bindable var boundStore = storeService
+    WorkspaceOutputInspector(
+      outputSettings: $boundStore.outputSettings, externalID: UUID(),
+      isOutputActive: storeService.isOutputActive, appletData: appletData,
+      reportError: storeService.reportError)
       .frame(width: 480, height: 640)
   }
 #endif

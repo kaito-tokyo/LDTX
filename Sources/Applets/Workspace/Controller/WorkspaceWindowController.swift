@@ -153,8 +153,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator: captureSessionCoordinator,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = storeService.localStateURL else { return .init() }
-        return appletData.state(for: url)
+        storeService.localState
       },
       selectProgram: { internalID in
         guard let url = storeService.localStateURL else { return }
@@ -165,8 +164,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       windowRuntime: windowRuntime,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = storeService.localStateURL else { return .init() }
-        return appletData.state(for: url)
+        storeService.localState
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
     let audioCoordinator = WorkspaceAudioCoordinator(

@@ -63,9 +63,11 @@ public struct WorkspaceInspectorContainer: View {
     case .workspaceCanvas:
       WorkspaceCanvasInspector(storeService: storeService)
     case .workspaceOutput:
-      if workspaceURL != nil {
+      if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
         WorkspaceOutputInspector(
-          storeService: storeService, appletData: appletData)
+          outputSettings: $storeService.outputSettings, externalID: externalID,
+          isOutputActive: storeService.isOutputActive, appletData: appletData,
+          reportError: storeService.reportError)
       } else {
         unavailablePreviewInspector
       }
