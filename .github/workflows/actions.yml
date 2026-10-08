@@ -12,7 +12,7 @@ on:
   workflow_call:
 
 jobs:
-  test-download-xcode-cloud-notarized:
+  check-release-powershell:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -25,10 +25,23 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Print Node.js version
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: node --version
-
-      - name: Test notarized archive action
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: node --test .github/actions/download-xcode-cloud-notarized/notarized-build.test.mjs
+      - name: Check release PowerShell syntax
+        shell: pwsh -command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        run: |
+          $source = Get-Content -LiteralPath '.github/workflows/release.yml' -Raw
+          $pattern = '(?ms)^        shell: pwsh[^\n]*\n(?:(?!^        run:).)*^        run: (?:&[\w-]+ )?\|\n(?<script>(?:^          [^\n]*\n|^\n)+)'
+          $scripts = [regex]::Matches($source, $pattern)
+          if ($scripts.Count -eq 0) { throw 'No inline PowerShell scripts found.' }
+          foreach ($script in $scripts) {
+              $text = $script.Groups['script'].Value -replace '(?m)^          ', ''
+              $tokens = $null
+              $errors = $null
+              $null = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$tokens, [ref]$errors)
+              if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+          $tokens = $null
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path 'ci_scripts/AppStoreConnectAuth.psm1').Path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          Write-Host "Checked $($scripts.Count) inline PowerShell scripts and the App Store Connect authentication module."
