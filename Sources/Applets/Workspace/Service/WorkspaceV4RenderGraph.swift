@@ -111,7 +111,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
             fill.internalID,
             .fillSolidColor(
               FillSolidColorComponent(
-                red: fill.extendedSrgbColor.red, green: fill.extendedSrgbColor.green, blue: fill.extendedSrgbColor.blue,
+                red: fill.extendedSrgbColor.red, green: fill.extendedSrgbColor.green,
+                blue: fill.extendedSrgbColor.blue,
                 alpha: fill.extendedSrgbColor.alpha))
           )
         case .linearGradientFill(let fill):
@@ -121,8 +122,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
               FillLinearGradientComponent(
                 startX: fill.startX.float, startY: fill.startY.float,
                 endX: fill.endX.float, endY: fill.endY.float,
-                startRed: fill.startExtendedSrgbColor.red, startGreen: fill.startExtendedSrgbColor.green,
-                startBlue: fill.startExtendedSrgbColor.blue, startAlpha: fill.startExtendedSrgbColor.alpha,
+                startRed: fill.startExtendedSrgbColor.red,
+                startGreen: fill.startExtendedSrgbColor.green,
+                startBlue: fill.startExtendedSrgbColor.blue,
+                startAlpha: fill.startExtendedSrgbColor.alpha,
                 endRed: fill.endExtendedSrgbColor.red, endGreen: fill.endExtendedSrgbColor.green,
                 endBlue: fill.endExtendedSrgbColor.blue, endAlpha: fill.endExtendedSrgbColor.alpha))
           )
@@ -135,9 +138,12 @@ public struct WorkspaceV4RenderGraph: Sendable {
                 centerY: fill.centerY.float,
                 innerRadius: fill.innerRadius.float,
                 outerRadius: fill.outerRadius.float, innerRed: fill.innerExtendedSrgbColor.red,
-                innerGreen: fill.innerExtendedSrgbColor.green, innerBlue: fill.innerExtendedSrgbColor.blue,
-                innerAlpha: fill.innerExtendedSrgbColor.alpha, outerRed: fill.outerExtendedSrgbColor.red,
-                outerGreen: fill.outerExtendedSrgbColor.green, outerBlue: fill.outerExtendedSrgbColor.blue,
+                innerGreen: fill.innerExtendedSrgbColor.green,
+                innerBlue: fill.innerExtendedSrgbColor.blue,
+                innerAlpha: fill.innerExtendedSrgbColor.alpha,
+                outerRed: fill.outerExtendedSrgbColor.red,
+                outerGreen: fill.outerExtendedSrgbColor.green,
+                outerBlue: fill.outerExtendedSrgbColor.blue,
                 outerAlpha: fill.outerExtendedSrgbColor.alpha))
           )
         case .conicGradientFill(let fill):
@@ -149,8 +155,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
                 centerY: fill.centerY.float,
                 startAngleRadians: fill.startAngleRadians.float,
                 startRed: fill.startExtendedSrgbColor.red,
-                startGreen: fill.startExtendedSrgbColor.green, startBlue: fill.startExtendedSrgbColor.blue,
-                startAlpha: fill.startExtendedSrgbColor.alpha, endRed: fill.endExtendedSrgbColor.red,
+                startGreen: fill.startExtendedSrgbColor.green,
+                startBlue: fill.startExtendedSrgbColor.blue,
+                startAlpha: fill.startExtendedSrgbColor.alpha,
+                endRed: fill.endExtendedSrgbColor.red,
                 endGreen: fill.endExtendedSrgbColor.green, endBlue: fill.endExtendedSrgbColor.blue,
                 endAlpha: fill.endExtendedSrgbColor.alpha))
           )
@@ -271,7 +279,8 @@ extension WorkspaceV4RenderGraph {
     }
     var inputDeviceNames: [String: String] = [:]
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.videoComponent, layerIDs.contains(source.internalID)
+      guard case .vfxSource(let source)? = wrapper.videoComponent,
+        layerIDs.contains(source.internalID)
       else { continue }
       inputDeviceNames["v4-\(source.internalID)"] = source.displayName
     }

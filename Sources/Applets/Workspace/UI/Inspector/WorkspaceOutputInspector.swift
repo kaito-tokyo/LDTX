@@ -35,8 +35,10 @@ struct WorkspaceOutputInspector: View {
         Text("Custom Fields").font(.headline)
         ForEach(outputSettings.recordingSettings.customFields.keys.sorted(), id: \.self) { key in
           HStack {
-            TextField(key, text:
-              Binding($outputSettings.recordingSettings.customFields[key]) ?? .constant(""))
+            TextField(
+              key,
+              text:
+                Binding($outputSettings.recordingSettings.customFields[key]) ?? .constant(""))
             Button("Remove", systemImage: "minus", role: .destructive) {
               outputSettings.recordingSettings.customFields.removeValue(forKey: key)
             }
@@ -59,11 +61,13 @@ struct WorkspaceOutputInspector: View {
           Text("Dual RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.dualRtmps)
         }
         streamKeyPicker(
-          "Landscape Stream Key", selection: $appletData.landscapeYouTubeLiveStreamIDs[externalID])
-          .disabled(!outputSettings.youtubeSettings.ingestMode.usesLandscapeRTMPS)
+          "Landscape Stream Key", selection: $appletData.landscapeYouTubeLiveStreamIDs[externalID]
+        )
+        .disabled(!outputSettings.youtubeSettings.ingestMode.usesLandscapeRTMPS)
         streamKeyPicker(
-          "Portrait Stream Key", selection: $appletData.portraitYouTubeLiveStreamIDs[externalID])
-          .disabled(!outputSettings.youtubeSettings.ingestMode.usesPortraitRTMPS)
+          "Portrait Stream Key", selection: $appletData.portraitYouTubeLiveStreamIDs[externalID]
+        )
+        .disabled(!outputSettings.youtubeSettings.ingestMode.usesPortraitRTMPS)
         Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
           .popover(isPresented: $isShowingStreamKeyManager) {
             WorkspaceV4StreamKeyManager(
@@ -103,8 +107,9 @@ struct WorkspaceOutputInspector: View {
             isAddingCustomField = false
           }
           .keyboardShortcut(.defaultAction)
-          .disabled(isOutputActive || newCustomFieldKey.isEmpty
-            || outputSettings.recordingSettings.customFields[newCustomFieldKey] != nil)
+          .disabled(
+            isOutputActive || newCustomFieldKey.isEmpty
+              || outputSettings.recordingSettings.customFields[newCustomFieldKey] != nil)
         }
       }
       .padding()
@@ -144,7 +149,6 @@ struct WorkspaceOutputInspector: View {
       reportError(error)
     }
   }
-
 
 }
 
@@ -193,7 +197,6 @@ private struct RecordingFolderPicker: NSViewRepresentable {
       openPanel.allowsMultipleSelection = false
     }
 
-
   }
 }
 
@@ -214,7 +217,8 @@ private struct RecordingFolderPicker: NSViewRepresentable {
         "player": "Preview Player",
       ]
       return WorkspaceStoreService(
-        definition: definition, preferences: .init(), isOutputActive: isOutputActive, outputSettings: outputSettings)
+        definition: definition, preferences: .init(), isOutputActive: isOutputActive,
+        outputSettings: outputSettings)
     }
 
     static func makeAppletData() -> WorkspaceAppletData {
@@ -235,8 +239,9 @@ private struct RecordingFolderPicker: NSViewRepresentable {
     WorkspaceOutputInspector(
       outputSettings: $boundStore.outputSettings, externalID: UUID(),
       isOutputActive: storeService.isOutputActive, appletData: appletData,
-      reportError: storeService.reportError)
-      .frame(width: 480, height: 640)
+      reportError: storeService.reportError
+    )
+    .frame(width: 480, height: 640)
   }
 
   #Preview("Output Active") {
@@ -248,7 +253,8 @@ private struct RecordingFolderPicker: NSViewRepresentable {
     WorkspaceOutputInspector(
       outputSettings: $boundStore.outputSettings, externalID: UUID(),
       isOutputActive: storeService.isOutputActive, appletData: appletData,
-      reportError: storeService.reportError)
-      .frame(width: 480, height: 640)
+      reportError: storeService.reportError
+    )
+    .frame(width: 480, height: 640)
   }
 #endif

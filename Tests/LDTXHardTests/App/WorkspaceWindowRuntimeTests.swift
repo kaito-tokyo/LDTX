@@ -63,8 +63,10 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.videoLayerTransforms.isEmpty == true)
-    #expect(runtime.preferences.landscapeProgramPreferences[id]?.videoLayerInternalIds == [first, second])
-    #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerInternalIds == [second, first])
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.videoLayerInternalIds == [first, second])
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.videoLayerInternalIds == [second, first])
   }
 
   @Test("edits and removes independent canvas preferences")

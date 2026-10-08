@@ -38,7 +38,8 @@ struct VideoComponentProgramLayers: View {
           let program = storeService.definition.programs.first(where: { $0.internalID == programID }
           )
         else { return false }
-        return storeService.preferences[keyPath: target.preferences][program.internalID]?.videoLayerInternalIds.contains(id) ?? false
+        return storeService.preferences[keyPath: target.preferences][program.internalID]?
+          .videoLayerInternalIds.contains(id) ?? false
       },
       set: { value in
         do {
@@ -67,7 +68,9 @@ struct VideoComponentProgramLayers: View {
       program.internalID = 100
       program.displayName = "Studio"
       service.definition.programs = [program]
-      service.preferences.landscapeProgramPreferences[100] = .with { $0.videoLayerInternalIds = [4] }
+      service.preferences.landscapeProgramPreferences[100] = .with {
+        $0.videoLayerInternalIds = [4]
+      }
     }
   }
 #endif

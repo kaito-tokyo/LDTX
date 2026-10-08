@@ -43,8 +43,12 @@ extension AppUIComponentTestSuite {
         wrapper.vfxSource = device
         return wrapper
       }
-      document.storeService.preferences.landscapeProgramPreferences[101] = .with { $0.videoLayerInternalIds = [1, 2, 3] }
-      document.storeService.preferences.portraitProgramPreferences[101] = .with { $0.videoLayerInternalIds = [3, 2, 1] }
+      document.storeService.preferences.landscapeProgramPreferences[101] = .with {
+        $0.videoLayerInternalIds = [1, 2, 3]
+      }
+      document.storeService.preferences.portraitProgramPreferences[101] = .with {
+        $0.videoLayerInternalIds = [3, 2, 1]
+      }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
       document.storeService.isOutputActive = true

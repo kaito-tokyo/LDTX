@@ -428,7 +428,9 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
       state.definition.programs = [program]
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [1, 2]
+      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
+        1, 2,
+      ]
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleX = .with {
         $0.numerator = 1

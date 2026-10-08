@@ -246,7 +246,8 @@ struct CommandsSystemTestSuite {
       var outputEnvelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
       outputEnvelope.externalIDAsUUID = UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000003")
       outputEnvelope.workspaceOutputSettingsV4 = .init()
-      try outputEnvelope.serializedData().write(to: invalid.appendingPathComponent("output_settings.pb"))
+      try outputEnvelope.serializedData().write(
+        to: invalid.appendingPathComponent("output_settings.pb"))
       var invalidCommand = try WorkspaceCommand.Validate.parse([invalid.path])
       #expect(throws: Error.self) { try invalidCommand.run() }
     }

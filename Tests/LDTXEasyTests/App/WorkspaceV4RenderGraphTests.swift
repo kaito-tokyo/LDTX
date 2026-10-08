@@ -294,7 +294,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    preferences.landscapeProgramPreferences[7] = .with { $0.videoLayerInternalIds = [20, 21, 22, 23] }
+    preferences.landscapeProgramPreferences[7] = .with {
+      $0.videoLayerInternalIds = [20, 21, 22, 23]
+    }
     definition.videoComponents = [solidWrapper, linearWrapper, radialWrapper, conicWrapper]
 
     let graph = try WorkspaceV4RenderGraph(

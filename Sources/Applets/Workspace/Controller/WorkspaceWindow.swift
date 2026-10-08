@@ -192,7 +192,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     inspectorTitleField.stringValue = inspectorTitle
     inspectorTitleField.sizeToFit()
     if index == nil,
-      let separator = toolbar.items.firstIndex(where: { $0.itemIdentifier == .inspectorTrackingSeparator })
+      let separator = toolbar.items.firstIndex(where: {
+        $0.itemIdentifier == .inspectorTrackingSeparator
+      })
     {
       toolbar.insertItem(withItemIdentifier: identifier, at: separator + 1)
     }

@@ -236,7 +236,8 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       let toolbar = try #require(window.toolbar)
       let identifier = NSToolbarItem.Identifier("workspace.inspectorTitle")
-      let label = try #require(toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
+      let label = try #require(
+        toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
       #expect(label.stringValue == String(localized: "Output"))
       state.inspectorSelector = .init(kind: .workspaceCanvas)
       for _ in 0..<100 {
@@ -249,7 +250,8 @@ extension AppUIComponentTestSuite {
       #expect(!toolbar.items.contains { $0.itemIdentifier == identifier })
       state.inspectorSelector = .init(kind: .workspacePrograms)
       split.toggleInspector(nil)
-      let reopened = try #require(toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
+      let reopened = try #require(
+        toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
       #expect(reopened.stringValue == String(localized: "Programs"))
     }
 

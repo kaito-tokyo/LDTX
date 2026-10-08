@@ -84,9 +84,11 @@ public final class WorkspaceStoreService {
         case "X": region.x = try RationalParseStrategy().parse(text)
         case "Y": region.y = try RationalParseStrategy().parse(text)
         case "Width":
-          region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>().parse(text)
+          region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
+            .parse(text)
         case "Height":
-          region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>().parse(text)
+          region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
+            .parse(text)
         default: break
         }
       }

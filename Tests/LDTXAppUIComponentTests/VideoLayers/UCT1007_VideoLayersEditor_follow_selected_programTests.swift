@@ -31,7 +31,8 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       service.definition.programs = [program]
-      service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds = [1, 2]
+      service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds =
+        [1, 2]
       let editor = VideoLayersEditor(storeService: service, target: .landscape)
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
@@ -61,7 +62,8 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       storeService.definition.programs = [program]
-      storeService.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds = [1]
+      storeService.preferences.landscapeProgramPreferences[100, default: .init()]
+        .videoLayerInternalIds = [1]
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
         backing: .buffered, defer: false)
@@ -71,7 +73,8 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       window.contentView?.layoutSubtreeIfNeeded()
       #expect(editor.table.layerIDs == [1])
-      storeService.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds = [1, 2]
+      storeService.preferences.landscapeProgramPreferences[100, default: .init()]
+        .videoLayerInternalIds = [1, 2]
       for _ in 0..<50 {
         if editor.table.layerIDs == [1, 2] { break }
         try await Task.sleep(for: .milliseconds(10))
@@ -86,8 +89,10 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       service.definition.programs = [program]
-      service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds = [1]
-      service.preferences.portraitProgramPreferences[100, default: .init()].videoLayerInternalIds = [2]
+      service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerInternalIds =
+        [1]
+      service.preferences.portraitProgramPreferences[100, default: .init()].videoLayerInternalIds =
+        [2]
       let landscape = VideoLayersEditor(storeService: service, target: .landscape)
       let portrait = VideoLayersEditor(storeService: service, target: .portrait)
       let tabs = NSTabViewController()
@@ -100,7 +105,8 @@ extension AppUIComponentTestSuite {
       window.contentViewController = tabs
       window.orderFront(nil)
       defer { window.close() }
-      service.preferences.portraitProgramPreferences[100, default: .init()].videoLayerInternalIds = [2, 3]
+      service.preferences.portraitProgramPreferences[100, default: .init()].videoLayerInternalIds =
+        [2, 3]
       tabs.selectedTabViewItemIndex = 1
       for _ in 0..<100 {
         if portrait.table.layerIDs == [2, 3] { break }
@@ -186,7 +192,9 @@ extension AppUIComponentTestSuite {
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.programs = [program]
       let state = WorkspaceStoreService(definition: definition, preferences: .init())
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [1, 2, 3]
+      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
+        1, 2, 3,
+      ]
       let content = VideoLayersEditor(
         storeService: state, target: .landscape)
       let editor = content
@@ -202,7 +210,8 @@ extension AppUIComponentTestSuite {
       let old = try #require(editor.table.rows[1])
       old.state.strings[0] = "draft"
       old.state.hasUnconfirmedChanges = true
-      state.preferences.landscapeProgramPreferences[2] = state.preferences.landscapeProgramPreferences[1]
+      state.preferences.landscapeProgramPreferences[2] =
+        state.preferences.landscapeProgramPreferences[1]
       state.definition.programs[0].internalID = 2
       content.refresh()
       #expect(editor.table.rows[1] !== old)

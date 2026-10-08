@@ -382,9 +382,10 @@ private struct RecordingCustomFieldsSheet: View {
   init(fields: Binding<[String: String]>, canEdit: Bool) {
     self._fields = fields
     self.canEdit = canEdit
-    _rows = State(initialValue: fields.wrappedValue.sorted { $0.key < $1.key }.map {
-      Row(key: $0.key, value: $0.value)
-    })
+    _rows = State(
+      initialValue: fields.wrappedValue.sorted { $0.key < $1.key }.map {
+        Row(key: $0.key, value: $0.value)
+      })
   }
 
   var body: some View {

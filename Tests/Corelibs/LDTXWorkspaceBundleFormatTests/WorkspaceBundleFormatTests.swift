@@ -252,7 +252,9 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let workspace = makeWorkspace()
     try WorkspaceDocumentPackage.write(workspace, to: destination, createsPackage: true)
     #expect(try WorkspaceBundleReaderV4(at: destination).read() == workspace)
-    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("output_settings.pb").path))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: destination.appendingPathComponent("output_settings.pb").path))
   }
 
   private func makeWorkspace() -> WorkspaceV4Bundle {
@@ -319,7 +321,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     )
     let outputIDString = try #require(workspace.outputSettingsExternalID)
     let outputID = try #require(UUID(uuidString: outputIDString))
-    #expect(try writer.write(outputSettings: workspace.outputSettings, externalID: outputID) == outputID)
+    #expect(
+      try writer.write(outputSettings: workspace.outputSettings, externalID: outputID) == outputID)
     #expect(definitionExternalID.uuidString.lowercased() == workspace.definitionExternalID)
     #expect(preferencesExternalID.uuidString.lowercased() == workspace.preferencesExternalID)
   }

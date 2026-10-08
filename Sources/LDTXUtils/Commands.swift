@@ -136,7 +136,8 @@ public struct WorkspaceCommand: ParsableCommand {
           try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
           workspace.preferencesExternalID = preferencesExternalID.uuidString.lowercased()
           let outputSettingsExternalID = writer.makeExternalID()
-          try writer.write(outputSettings: workspace.outputSettings, externalID: outputSettingsExternalID)
+          try writer.write(
+            outputSettings: workspace.outputSettings, externalID: outputSettingsExternalID)
           workspace.outputSettingsExternalID = outputSettingsExternalID.uuidString.lowercased()
           print("Created Workspace v4: \(url.path)")
         } catch {
@@ -232,8 +233,10 @@ public func workspaceV4DebugDump(
     programs: programs.map {
       WorkspaceV4DebugDump.Program(
         internalID: $0.internalID, displayName: $0.displayName,
-        landscapeVideoLayerInternalIDs: workspace.preferences.landscapeProgramPreferences[$0.internalID]?.videoLayerInternalIds ?? [],
-        portraitVideoLayerInternalIDs: workspace.preferences.portraitProgramPreferences[$0.internalID]?.videoLayerInternalIds ?? [])
+        landscapeVideoLayerInternalIDs: workspace.preferences.landscapeProgramPreferences[
+          $0.internalID]?.videoLayerInternalIds ?? [],
+        portraitVideoLayerInternalIDs: workspace.preferences.portraitProgramPreferences[
+          $0.internalID]?.videoLayerInternalIds ?? [])
     })
 }
 

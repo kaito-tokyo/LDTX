@@ -39,8 +39,10 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
     let appletData = WorkspaceAppletData(userDefaults: defaults)
     let url = URL(fileURLWithPath: "/tmp/LegacyWorkspace.ldtxworkspace")
     let externalID = UUID()
-    appletData.setState(.init(recordingFolderPath: "/tmp/legacy",
-      monitorVolume: -12, landscapeYouTubeLiveStreamID: "legacy-stream"), for: url)
+    appletData.setState(
+      .init(
+        recordingFolderPath: "/tmp/legacy",
+        monitorVolume: -12, landscapeYouTubeLiveStreamID: "legacy-stream"), for: url)
     appletData.migrateOutputData(from: url, externalID: externalID)
     #expect(appletData.recordingFolderPaths[externalID] == "/tmp/legacy")
     #expect(appletData.landscapeYouTubeLiveStreamIDs[externalID] == "legacy-stream")

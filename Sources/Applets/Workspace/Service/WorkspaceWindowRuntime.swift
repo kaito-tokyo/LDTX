@@ -220,7 +220,8 @@ public final class WorkspaceWindowRuntime {
     _ vision: Ldtx_Workspace_V4_OcrVision
   ) async throws -> WorkspaceVisionAnalysisFrame {
     let componentID = vision.videoComponentInternalID
-    guard let wrapper = definition.videoComponents.first(where: {
+    guard
+      let wrapper = definition.videoComponents.first(where: {
         (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
       })
     else { throw WorkspaceVisionFeatureError.referencedVideoComponentMissing }

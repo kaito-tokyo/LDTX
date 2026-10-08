@@ -33,14 +33,16 @@ public final class WorkspaceDocument: NSDocument {
     replaceWorkspace: { [unowned self] workspace in try replaceContents(workspace) },
     url: fileURL)
 
-  private var outputSettingsExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+  private var outputSettingsExternalID: String? = WorkspaceBundleWriterV4.makeExternalID()
+    .uuidString.lowercased()
 
   private var snapshot: WorkspaceV4Bundle {
     WorkspaceV4Bundle(
       definitionExternalID: storeService.externalID,
       preferencesExternalID: preferencesExternalID,
       definition: storeService.definition, preferences: storeService.preferences,
-      outputSettingsExternalID: outputSettingsExternalID, outputSettings: storeService.outputSettings)
+      outputSettingsExternalID: outputSettingsExternalID,
+      outputSettings: storeService.outputSettings)
   }
 
   public override init() {

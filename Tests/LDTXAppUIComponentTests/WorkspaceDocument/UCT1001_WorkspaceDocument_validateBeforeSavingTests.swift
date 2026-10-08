@@ -98,7 +98,9 @@ extension AppUIComponentTestSuite {
       let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
       defer { reopened.close() }
       #expect(reopened.storeService.preferences == document.storeService.preferences)
-      #expect((reopened.storeService.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds ?? []).isEmpty)
+      #expect(
+        (reopened.storeService.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds
+          ?? []).isEmpty)
       #expect(!document.isDocumentEdited)
     }
 

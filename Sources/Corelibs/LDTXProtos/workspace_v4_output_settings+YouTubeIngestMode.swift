@@ -7,7 +7,8 @@ extension Ldtx_Workspace_V4_YouTubeIngestMode {
     switch self {
     case .landscapeRtmps, .dualRtmps: true
     case .unspecified, .portraitRtmps, .landscapeHls, .portraitHls,
-      .landscapeDash, .portraitDash, .UNRECOGNIZED: false
+      .landscapeDash, .portraitDash, .UNRECOGNIZED:
+      false
     }
   }
 
@@ -15,7 +16,8 @@ extension Ldtx_Workspace_V4_YouTubeIngestMode {
     switch self {
     case .portraitRtmps, .dualRtmps: true
     case .unspecified, .landscapeRtmps, .landscapeHls, .portraitHls,
-      .landscapeDash, .portraitDash, .UNRECOGNIZED: false
+      .landscapeDash, .portraitDash, .UNRECOGNIZED:
+      false
     }
   }
 }
