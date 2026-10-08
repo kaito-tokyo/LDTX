@@ -83,8 +83,8 @@ public nonisolated struct Ldtx_Workspace_V4_VisionRegionOfInterest: Sendable {
   public mutating func clearY() {self._y = nil}
 
   /// The width, normalized by the target image width, in (0, 1].
-  public var width: Ldtx_Workspace_V4_Rational32 {
-    get {_width ?? Ldtx_Workspace_V4_Rational32()}
+  public var width: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_width ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
     set {_width = newValue}
   }
   /// Returns true if `width` has been explicitly set.
@@ -93,8 +93,8 @@ public nonisolated struct Ldtx_Workspace_V4_VisionRegionOfInterest: Sendable {
   public mutating func clearWidth() {self._width = nil}
 
   /// The height, normalized by the target image height, in (0, 1].
-  public var height: Ldtx_Workspace_V4_Rational32 {
-    get {_height ?? Ldtx_Workspace_V4_Rational32()}
+  public var height: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_height ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
     set {_height = newValue}
   }
   /// Returns true if `height` has been explicitly set.
@@ -108,8 +108,8 @@ public nonisolated struct Ldtx_Workspace_V4_VisionRegionOfInterest: Sendable {
 
   fileprivate var _x: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _y: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _width: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _height: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _width: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
+  fileprivate var _height: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
 }
 
 /// Wraps one concrete Vision trigger definition.

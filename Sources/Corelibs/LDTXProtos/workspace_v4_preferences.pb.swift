@@ -111,8 +111,8 @@ public nonisolated struct Ldtx_Workspace_V4_BasicTransform: Sendable {
 
   /// The horizontal size as a dimensionless multiple of the target Canvas width,
   /// with no range restriction. Zero specifies zero width.
-  public var scaleX: Ldtx_Workspace_V4_Rational32 {
-    get {_scaleX ?? Ldtx_Workspace_V4_Rational32()}
+  public var scaleX: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_scaleX ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
     set {_scaleX = newValue}
   }
   /// Returns true if `scaleX` has been explicitly set.
@@ -122,8 +122,8 @@ public nonisolated struct Ldtx_Workspace_V4_BasicTransform: Sendable {
 
   /// The vertical size as a dimensionless multiple of the target Canvas height,
   /// with no range restriction. Zero specifies zero height.
-  public var scaleY: Ldtx_Workspace_V4_Rational32 {
-    get {_scaleY ?? Ldtx_Workspace_V4_Rational32()}
+  public var scaleY: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_scaleY ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
     set {_scaleY = newValue}
   }
   /// Returns true if `scaleY` has been explicitly set.
@@ -181,8 +181,8 @@ public nonisolated struct Ldtx_Workspace_V4_BasicTransform: Sendable {
 
   fileprivate var _translationX: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _translationY: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _scaleX: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _scaleY: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _scaleX: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
+  fileprivate var _scaleY: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
   fileprivate var _topInset: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _rightInset: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _bottomInset: Ldtx_Workspace_V4_Rational32? = nil

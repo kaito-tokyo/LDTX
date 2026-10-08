@@ -44,10 +44,10 @@ message BasicTransform {
   Rational32 translation_y = 2;
   // The horizontal size as a dimensionless multiple of the target Canvas width,
   // with no range restriction. Zero specifies zero width.
-  Rational32 scale_x = 3;
+  Rational32DefaultOne scale_x = 3;
   // The vertical size as a dimensionless multiple of the target Canvas height,
   // with no range restriction. Zero specifies zero height.
-  Rational32 scale_y = 4;
+  Rational32DefaultOne scale_y = 4;
   // The top inset as a fraction of this Video Layer's statically defined
   // content height, in the range [0, 1].
   Rational32 top_inset = 5;

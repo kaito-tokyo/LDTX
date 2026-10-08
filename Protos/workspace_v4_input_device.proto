@@ -9,7 +9,7 @@ package ldtx.workspace.v4;
 // An audio Input Device available in a Workspace.
 message AudioInputDevice {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Input Device shown in the Workspace sidebar.
   string display_name = 2;
 }

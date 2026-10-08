@@ -41,7 +41,7 @@ public nonisolated struct Ldtx_Envelope_WorkspaceDefinitionEnvelope: Sendable {
   /// The UUIDv7 identifier for this persisted document, stored as exactly
   /// 16 bytes in RFC 9562 network byte order.
   public var externalID: Data {
-    get {_externalID ?? Data()}
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     set {_externalID = newValue}
   }
   /// Returns true if `externalID` has been explicitly set.
@@ -83,7 +83,7 @@ public nonisolated struct Ldtx_Envelope_WorkspacePreferencesEnvelope: Sendable {
   /// The UUIDv7 identifier for this persisted document, stored as exactly
   /// 16 bytes in RFC 9562 network byte order.
   public var externalID: Data {
-    get {_externalID ?? Data()}
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     set {_externalID = newValue}
   }
   /// Returns true if `externalID` has been explicitly set.
@@ -125,7 +125,7 @@ public nonisolated struct Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: Sendabl
   /// The UUIDv7 identifier for this persisted document, stored as exactly
   /// 16 bytes in RFC 9562 network byte order.
   public var externalID: Data {
-    get {_externalID ?? Data()}
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
     set {_externalID = newValue}
   }
   /// Returns true if `externalID` has been explicitly set.

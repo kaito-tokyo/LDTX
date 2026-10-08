@@ -7,87 +7,87 @@ edition = "2024";
 package ldtx.youtube_output.v1;
 
 message Context {
-  string session_id = 1;
-  uint64 generation = 2;
+  string session_id = 1 [default = ""];
+  uint64 generation = 2 [default = 0];
 }
 
 message Representation {
-  string id = 1;
-  int32 bandwidth = 2;
-  int32 width = 3;
-  int32 height = 4;
-  string frame_rate = 5;
-  string codecs = 6;
-  int32 audio_sampling_rate = 7;
+  string id = 1 [default = ""];
+  int32 bandwidth = 2 [default = 0];
+  int32 width = 3 [default = 0];
+  int32 height = 4 [default = 0];
+  string frame_rate = 5 [default = ""];
+  string codecs = 6 [default = ""];
+  int32 audio_sampling_rate = 7 [default = 0];
 }
 
 message Bootstrap {
-  uint32 protocol_version = 1;
+  uint32 protocol_version = 1 [default = 0];
   Context context = 2;
-  string endpoint = 3;
-  int64 availability_start_time_milliseconds = 4;
-  int32 timescale = 5;
+  string endpoint = 3 [default = ""];
+  int64 availability_start_time_milliseconds = 4 [default = 0];
+  int32 timescale = 5 [default = 0];
   reserved 6;
   reserved segment_duration_seconds;
-  int32 start_number = 7;
-  string media_template = 8;
+  int32 start_number = 7 [default = 0];
+  string media_template = 8 [default = ""];
   Representation representation = 9;
-  string configuration_fingerprint = 10;
-  bytes initialization_segment = 11;
-  string persistence_identifier = 12;
-  double next_media_time_seconds = 13;
-  int32 shared_video_slot_count = 14;
-  int32 shared_video_slot_size = 15;
+  string configuration_fingerprint = 10 [default = ""];
+  bytes initialization_segment = 11 [default = ""];
+  string persistence_identifier = 12 [default = ""];
+  double next_media_time_seconds = 13 [default = 0];
+  int32 shared_video_slot_count = 14 [default = 0];
+  int32 shared_video_slot_size = 15 [default = 0];
 }
 
 message SharedMemorySlice {
-  int32 slot = 1;
-  uint64 generation = 2;
-  int32 offset = 3;
-  int32 length = 4;
+  int32 slot = 1 [default = 0];
+  uint64 generation = 2 [default = 0];
+  int32 offset = 3 [default = 0];
+  int32 length = 4 [default = 0];
 }
 
 message FinishRequest { Context context = 1; }
 
 message Reply {
   Context context = 1;
-  uint64 sequence = 2;
-  int32 next_media_segment_number = 3;
-  bytes initialization_segment = 4;
-  string configuration_fingerprint = 5;
-  string event_description = 6;
-  string error_description = 7;
-  int64 availability_start_time_milliseconds = 8;
+  uint64 sequence = 2 [default = 0];
+  int32 next_media_segment_number = 3 [default = 0];
+  bytes initialization_segment = 4 [default = ""];
+  string configuration_fingerprint = 5 [default = ""];
+  string event_description = 6 [default = ""];
+  string error_description = 7 [default = ""];
+  int64 availability_start_time_milliseconds = 8 [default = 0];
 }
 
 message ResetRequest {
   Context context = 1;
-  string reason = 2;
-  int32 next_media_segment_number = 3;
-  bytes initialization_segment = 4;
-  string configuration_fingerprint = 5;
-  int64 availability_start_time_milliseconds = 6;
-  double next_media_time_seconds = 7;
+  string reason = 2 [default = ""];
+  int32 next_media_segment_number = 3 [default = 0];
+  bytes initialization_segment = 4 [default = ""];
+  string configuration_fingerprint = 5 [default = ""];
+  int64 availability_start_time_milliseconds = 6 [default = 0];
+  double next_media_time_seconds = 7 [default = 0];
 }
 
 message MediaTime {
-  int64 value = 1;
-  int32 timescale = 2;
+  int64 value = 1 [default = 0];
+  int32 timescale = 2 [default = 0];
 }
 
 message H264Format {
   repeated bytes parameter_sets = 1;
-  int32 nal_unit_header_length = 2;
-  int32 width = 3;
-  int32 height = 4;
+  int32 nal_unit_header_length = 2 [default = 0];
+  int32 width = 3 [default = 0];
+  int32 height = 4 [default = 0];
 }
 
 message H264AccessUnit {
   MediaTime presentation_time = 1;
   MediaTime decode_time = 2;
   MediaTime duration = 3;
-  bool key_frame = 4;
-  bytes avcc_data = 5;
+  bool key_frame = 4 [default = false];
+  bytes avcc_data = 5 [default = ""];
   SharedMemorySlice shared_memory = 6;
 }
 
@@ -99,17 +99,17 @@ enum PCMSampleFormat {
 message PCMBuffer {
   MediaTime presentation_time = 1;
   MediaTime duration = 2;
-  int32 sample_rate = 3;
-  int32 channel_count = 4;
-  int32 frame_count = 5;
-  PCMSampleFormat sample_format = 6;
-  bytes data = 7;
+  int32 sample_rate = 3 [default = 0];
+  int32 channel_count = 4 [default = 0];
+  int32 frame_count = 5 [default = 0];
+  PCMSampleFormat sample_format = 6 [default = PCM_SAMPLE_FORMAT_UNSPECIFIED];
+  bytes data = 7 [default = ""];
 }
 
 message MediaBatch {
-  uint32 protocol_version = 1;
+  uint32 protocol_version = 1 [default = 0];
   Context context = 2;
-  uint64 sequence = 3;
+  uint64 sequence = 3 [default = 0];
   H264Format video_format = 4;
   repeated H264AccessUnit video = 5;
   repeated PCMBuffer audio = 6;

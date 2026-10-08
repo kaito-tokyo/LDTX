@@ -57,6 +57,37 @@ public nonisolated struct Ldtx_Workspace_V4_Rational32: Sendable {
   fileprivate var _denominator: UInt32? = nil
 }
 
+public nonisolated struct Ldtx_Workspace_V4_Rational32DefaultOne: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var numerator: Int32 {
+    get {_numerator ?? 1}
+    set {_numerator = newValue}
+  }
+  /// Returns true if `numerator` has been explicitly set.
+  public var hasNumerator: Bool {self._numerator != nil}
+  /// Clears the value of `numerator`. Subsequent reads from it will return its default value.
+  public mutating func clearNumerator() {self._numerator = nil}
+
+  public var denominator: UInt32 {
+    get {_denominator ?? 1}
+    set {_denominator = newValue}
+  }
+  /// Returns true if `denominator` has been explicitly set.
+  public var hasDenominator: Bool {self._denominator != nil}
+  /// Clears the value of `denominator`. Subsequent reads from it will return its default value.
+  public mutating func clearDenominator() {self._denominator = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _numerator: Int32? = nil
+  fileprivate var _denominator: UInt32? = nil
+}
+
 public nonisolated struct Ldtx_Workspace_V4_Color: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -144,6 +175,45 @@ nonisolated extension Ldtx_Workspace_V4_Rational32: SwiftProtobuf.Message, Swift
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_Rational32, rhs: Ldtx_Workspace_V4_Rational32) -> Bool {
+    if lhs._numerator != rhs._numerator {return false}
+    if lhs._denominator != rhs._denominator {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V4_Rational32DefaultOne: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Rational32DefaultOne"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}numerator\0\u{1}denominator\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSInt32Field(value: &self._numerator) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self._denominator) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._numerator {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._denominator {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V4_Rational32DefaultOne, rhs: Ldtx_Workspace_V4_Rational32DefaultOne) -> Bool {
     if lhs._numerator != rhs._numerator {return false}
     if lhs._denominator != rhs._denominator {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

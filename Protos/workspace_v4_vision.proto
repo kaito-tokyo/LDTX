@@ -27,9 +27,9 @@ message VisionRegionOfInterest {
   // Must satisfy y + height <= 1.
   Rational32 y = 2;
   // The width, normalized by the target image width, in (0, 1].
-  Rational32 width = 3;
+  Rational32DefaultOne width = 3;
   // The height, normalized by the target image height, in (0, 1].
-  Rational32 height = 4;
+  Rational32DefaultOne height = 4;
 }
 
 // Wraps one concrete Vision trigger definition.
@@ -50,12 +50,12 @@ message IntervalVisionTrigger {
 // An image-analysis request that recognizes text in an image.
 message OcrVision {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Vision shown in the Workspace sidebar.
   string display_name = 2;
   // The LDTXWorkspaceID of the Video Component analyzed after effects and
   // before Program placement.
-  uint64 video_component_internal_id = 3;
+  uint64 video_component_internal_id = 3 [default = 0];
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
@@ -63,7 +63,7 @@ message OcrVision {
   // The BCP 47 languages Vision detects, in priority order.
   repeated string recognition_languages = 6;
   // Whether Vision applies language correction during text recognition.
-  bool uses_language_correction = 7;
+  bool uses_language_correction = 7 [default = false];
   // The words that supplement Vision's lexicon during word recognition.
   // Vision uses these only when language correction is enabled.
   repeated string custom_words = 8;

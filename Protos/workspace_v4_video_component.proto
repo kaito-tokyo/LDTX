@@ -40,7 +40,7 @@ message VideoComponentWrapper {
 // A Video Component that fills the entire Canvas with one uniform source color.
 message FillSolidColorComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The source color at every Canvas point, in extended sRGB. RGB components
@@ -57,7 +57,7 @@ message FillSolidColorComponent {
 // points and color interpolation are implementation-defined.
 message FillLinearGradientComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The start point X coordinate, normalized by the rendering Canvas width,
@@ -96,7 +96,7 @@ message FillLinearGradientComponent {
 // Color interpolation is implementation-defined.
 message FillRadialGradientComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -133,7 +133,7 @@ message FillRadialGradientComponent {
 // Color interpolation and the result at the exact center are implementation-defined.
 message FillConicGradientComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -165,7 +165,7 @@ message FillConicGradientComponent {
 // Physical camera assignment is app-local and keyed by this entity's LDTXWorkspaceID.
 message VfxSourceComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The VFX effects applied to the input video, in evaluation order.
@@ -175,7 +175,7 @@ message VfxSourceComponent {
 // A Video Component that renders a test pattern.
 message TestPatternComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
 }
@@ -183,7 +183,7 @@ message TestPatternComponent {
 // A Video Component that renders the current date and time.
 message ClockComponent {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The Clock width, normalized by the Landscape Canvas width, in [0, 1].
@@ -193,13 +193,13 @@ message ClockComponent {
   // The same reference applies to Portrait projection.
   Rational32 height = 4;
   // Whether the rendered Clock includes the date.
-  bool shows_date = 5;
+  bool shows_date = 5 [default = false];
   // Whether the rendered time includes seconds.
-  bool shows_seconds = 6;
+  bool shows_seconds = 6 [default = false];
   // Whether the rendered time uses a 24-hour clock.
-  bool uses_24_hour_time = 7 [features.enforce_naming_style = STYLE_LEGACY];
+  bool uses_24_hour_time = 7 [features.enforce_naming_style = STYLE_LEGACY, default = false];
   // The fixed offset from UTC in minutes.
-  sint32 utc_offset_minutes = 8;
+  sint32 utc_offset_minutes = 8 [default = 0];
   // The color of the rendered date and time text, in extended sRGB.
   // RGB components use the nonlinear sRGB transfer function and may extend
   // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function

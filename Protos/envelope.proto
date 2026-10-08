@@ -17,7 +17,7 @@ import "workspace_v4_output_settings.proto";
 message WorkspaceDefinitionEnvelope {
   // The UUIDv7 identifier for this persisted document, stored as exactly
   // 16 bytes in RFC 9562 network byte order.
-  bytes external_id = 1;
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
 
   oneof workspace_definition {
     // The Version 4 WorkspaceDefinition.
@@ -30,7 +30,7 @@ message WorkspaceDefinitionEnvelope {
 message WorkspacePreferencesEnvelope {
   // The UUIDv7 identifier for this persisted document, stored as exactly
   // 16 bytes in RFC 9562 network byte order.
-  bytes external_id = 1;
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
 
   oneof workspace_preferences {
     // The Version 4 WorkspacePreferences.
@@ -43,7 +43,7 @@ message WorkspacePreferencesEnvelope {
 message WorkspaceOutputSettingsEnvelope {
   // The UUIDv7 identifier for this persisted document, stored as exactly
   // 16 bytes in RFC 9562 network byte order.
-  bytes external_id = 1;
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
 
   oneof workspace_output_settings {
     // The Version 4 WorkspaceOutputSettings.

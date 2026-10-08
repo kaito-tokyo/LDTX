@@ -29,7 +29,7 @@ message WorkspaceDefinitionV4 {
 // Defines the identity and display name of one Program.
 message ProgramDefinition {
   // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1;
+  uint64 internal_id = 1 [default = 0];
   // The name of this Program shown on the selector.
   string display_name = 2;
 }
@@ -37,16 +37,16 @@ message ProgramDefinition {
 // Represents Canvas in the Workspace sidebar.
 message CanvasConfiguration {
   // The profile identifier selected for the Landscape Canvas.
-  string landscape_profile_id = 1;
+  string landscape_profile_id = 1 [default = ""];
   // The profile identifier selected for the Portrait Canvas.
-  string portrait_profile_id = 2;
+  string portrait_profile_id = 2 [default = ""];
   // The output frame rate in frames per second.
-  uint32 frame_rate = 3;
+  uint32 frame_rate = 3 [default = 0];
   // The target video bit rate for the Landscape Canvas in bits per second.
-  uint32 landscape_video_bit_rate = 4;
+  uint32 landscape_video_bit_rate = 4 [default = 0];
   // The target video bit rate for the Portrait Canvas in bits per second.
-  uint32 portrait_video_bit_rate = 5;
+  uint32 portrait_video_bit_rate = 5 [default = 0];
   // The LDTXWorkspaceID of the VFX Source used as the master clock for video
   // presentation timestamps.
-  uint64 pts_master_vfx_source_internal_id = 6;
+  uint64 pts_master_vfx_source_internal_id = 6 [default = 0];
 }
