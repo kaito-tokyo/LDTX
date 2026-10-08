@@ -25,15 +25,15 @@ public enum WorkspaceV4YouTubeOutputError: LocalizedError, Equatable {
 
 public enum WorkspaceV4YouTubeRTMPSDestinationResolver {
   public static func resolve(
-    output: Ldtx_Workspace_V4_OutputConfiguration,
+    output: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4,
     configurations: [YouTubeRTMPSStreamKeyConfiguration],
     landscapeStreamID: String?,
     portraitStreamID: String?
   ) throws -> YouTubeRTMPSDestinations {
     let landscape = configurations.first { $0.id == landscapeStreamID }
     let portrait = configurations.first { $0.id == portraitStreamID }
-    switch output.resolvedYouTubeIngestMode {
-    case .landscapeRtmps:
+    switch output.youtubeSettings.ingestMode {
+    case .unspecified, .landscapeRtmps:
       guard let landscape else { throw WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey }
       return try YouTubeRTMPSDestinations(landscape: landscape.destination())
     case .portraitRtmps:

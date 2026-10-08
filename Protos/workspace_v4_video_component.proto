@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace Video Component definitions.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
@@ -13,7 +12,7 @@ import "workspace_v4_vfx.proto";
 
 // Wraps one concrete Video Component definition.
 message VideoComponentWrapper {
-  oneof definition {
+  oneof video_component {
     // The solid-color fill Video Component definition. Mutually exclusive with
     // the other fields.
     FillSolidColorComponent solid_color_fill = 1;
@@ -38,264 +37,195 @@ message VideoComponentWrapper {
   }
 }
 
-// A Video Component that fills the entire Canvas with one uniform source
-// color. The Extended sRGB source color at every Canvas point is the value of
-// the color field. Conversion from Extended sRGB to an output or display color
-// space, alpha compositing, filtering, and pixel quantization are
-// implementation-defined.
+// A Video Component that fills the entire Canvas with one uniform source color.
 message FillSolidColorComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The uniform source color of this fill, represented by ExtendedSrgbColor.
-  ExtendedSrgbColor color = 3;
+  // The source color at every Canvas point, in extended sRGB. RGB components
+  // use the nonlinear sRGB transfer function and may extend beyond [0, 1].
+  // Alpha is straight, in [0, 1], and is not transfer-function encoded.
+  // Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color extended_srgb_color = 3;
 }
 
-// A Video Component with linear-gradient control points defined in the local
-// coordinate system of the Canvas that renders this Fill. The Canvas origin is
-// its top-left corner, x increases to the right, and y increases downward. For
-// a Canvas with positive width W and height H, a point (x, y) has normalized
-// coordinates (u, v) = (x / W, y / H). The start and end points are
-// (start_x, start_y) and (end_x, end_y) in these normalized coordinates. If
-// the points differ, the directed gradient axis extends from the start point
-// to the end point. For a normalized Canvas point p, let s be the start
-// point and e the end point; its gradient position is the scalar projection
-// t = dot(p - s, e - s) / dot(e - s, e - s). Thus t is zero at s, one at e,
-// and is equal for points on the same line perpendicular to the gradient axis.
-// For 2D vectors a and b, dot(a, b) = a.x * b.x + a.y * b.y.
-// start_color and end_color are the specified Extended sRGB source colors at
-// their respective control points. Source colors at other positions,
-// including interpolation, conversion to an output or display color space,
-// alpha handling, compositing, filtering, and pixel quantization, are
-// implementation-defined. If the two points coincide, the rendered result is
-// implementation-defined. This definition does not require a particular CSS
-// rendering or color interpolation algorithm.
+// A Video Component that fills the Canvas with a linear gradient.
+// The gradient progresses from start_extended_srgb_color to
+// end_extended_srgb_color along the start-to-end axis. Coincident control
+// points and color interpolation are implementation-defined.
 message FillLinearGradientComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The normalized horizontal coordinate of the gradient start point, in
-  // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  reserved 3;
-  reserved "start_x";
-  Rational32 start_x_rational = 9;
-  // The normalized vertical coordinate of the gradient start point, in
-  // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  reserved 4;
-  reserved "start_y";
-  Rational32 start_y_rational = 10;
-  // The specified Extended sRGB source color at the gradient start point.
-  ExtendedSrgbColor start_color = 5;
-  // The normalized horizontal coordinate of the gradient end point, in
-  // [0, 1]. Zero is the Canvas's left edge and one is its right edge.
-  reserved 6;
-  reserved "end_x";
-  Rational32 end_x_rational = 11;
-  // The normalized vertical coordinate of the gradient end point, in
-  // [0, 1]. Zero is the Canvas's top edge and one is its bottom edge.
-  reserved 7;
-  reserved "end_y";
-  Rational32 end_y_rational = 12;
-  // The specified Extended sRGB source color at the gradient end point.
-  ExtendedSrgbColor end_color = 8;
+  // The start point X coordinate, normalized by the rendering Canvas width,
+  // in [0, 1], measured rightward from its left edge.
+  // Gradient positions are computed by orthogonal projection onto the
+  // start-to-end axis in normalized Canvas coordinates, with X divided by
+  // the Canvas width and Y divided by its height. The start position is 0
+  // and the end position is 1.
+  Rational32 start_x = 3;
+  // The start point Y coordinate, normalized by the rendering Canvas height,
+  // in [0, 1], measured downward from its top edge.
+  Rational32 start_y = 4;
+  // The source color at the gradient start point, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color start_extended_srgb_color = 5;
+  // The end point X coordinate, normalized by the rendering Canvas width,
+  // in [0, 1], measured rightward from its left edge.
+  Rational32 end_x = 6;
+  // The end point Y coordinate, normalized by the rendering Canvas height,
+  // in [0, 1], measured downward from its top edge.
+  Rational32 end_y = 7;
+  // The source color at the gradient end point, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color end_extended_srgb_color = 8;
 }
 
-// A Video Component with radial-gradient geometry defined in the local
-// coordinate system of the Canvas that renders this Fill. The Canvas origin is
-// its top-left corner, x increases to the right, and y increases downward. For
-// a Canvas with positive width W and height H, a point (x, y) has normalized
-// coordinates (u, v) = (x / W, y / H). Let c be the center
-// (center_x, center_y), and let d = sqrt((u - center_x)^2 +
-// (v - center_y)^2). The inner and outer control contours are the sets of
-// points where d equals inner_radius and outer_radius. Thus a radius r defines
-// an ellipse centered at c with horizontal radius r * W and vertical radius
-// r * H.
-//
-// inner_color and outer_color are the specified Extended sRGB source colors
-// on their respective control contours. Source colors at all other Canvas
-// points, including inside, between, and outside the contours, are
-// implementation-defined. Color interpolation, conversion to an output or
-// display color space, alpha handling, compositing, filtering, and pixel
-// quantization are implementation-defined. This definition does not require a
-// particular CSS rendering or color interpolation algorithm.
+// A Video Component that fills the Canvas with a radial gradient.
+// The gradient progresses from inner_extended_srgb_color to
+// outer_extended_srgb_color between the two control contours.
+// Color interpolation is implementation-defined.
 message FillRadialGradientComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The normalized horizontal coordinate of the gradient center, in [0, 1].
-  // Zero is the Canvas's left edge and one is its right edge.
-  reserved 3;
-  reserved "center_x";
-  Rational32 center_x_rational = 9;
-  // The normalized vertical coordinate of the gradient center, in [0, 1].
-  // Zero is the Canvas's top edge and one is its bottom edge.
-  reserved 4;
-  reserved "center_y";
-  Rational32 center_y_rational = 10;
-  // The inner control contour's radius in normalized Canvas coordinates, in
-  // [0, 1]. It must be less than outer_radius.
-  reserved 5;
-  reserved "inner_radius";
-  Rational32 inner_radius_rational = 11;
-  // The outer control contour's radius in normalized Canvas coordinates, in
-  // [0, 1]. It must be greater than inner_radius.
-  reserved 6;
-  reserved "outer_radius";
-  Rational32 outer_radius_rational = 12;
-  // The specified Extended sRGB source color at the inner control contour.
-  ExtendedSrgbColor inner_color = 7;
-  // The specified Extended sRGB source color at the outer control contour.
-  ExtendedSrgbColor outer_color = 8;
+  // The center X coordinate, normalized by the rendering Canvas width,
+  // in [0, 1], measured rightward from its left edge.
+  Rational32 center_x = 3;
+  // The center Y coordinate, normalized by the rendering Canvas height,
+  // in [0, 1], measured downward from its top edge.
+  Rational32 center_y = 4;
+  // The inner radius in normalized rendering Canvas coordinates, in [0, 1].
+  // Horizontal and vertical radii are this value times the Canvas width and
+  // height, respectively. Must be less than outer_radius.
+  Rational32 inner_radius = 5;
+  // The outer radius in normalized rendering Canvas coordinates, in [0, 1].
+  // Horizontal and vertical radii are this value times the Canvas width and
+  // height, respectively. Must be greater than inner_radius.
+  Rational32 outer_radius = 6;
+  // The source color at the inner control contour, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color inner_extended_srgb_color = 7;
+  // The source color at the outer control contour, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color outer_extended_srgb_color = 8;
 }
 
-// A Video Component whose conic-gradient geometry is defined in the local
-// coordinate system of the Canvas that renders this Fill. The Canvas origin is
-// its top-left corner; x increases to the right and y increases downward. For
-// a Canvas of positive width W and height H, a point (x, y) has normalized
-// coordinates (u, v) = (x / W, y / H). The gradient center is
-// c = (center_x, center_y) in these normalized coordinates. At every Canvas
-// point other than c, define dx = u - center_x, dy = v - center_y, and
-// angle = atan2(dy, dx), in radians, using the conventional atan2(y, x)
-// function. Thus zero radians points right and positive angles proceed
-// clockwise because the Canvas y-axis points downward. The x and y axes are
-// normalized independently, so angles are measured in normalized Canvas
-// space, not in pixel space; on a non-square Canvas this can change angular
-// spacing compared with pixel-space angles. Define
-// q = (angle - start_angle_radians) / (2*pi) and t = q - floor(q), where pi
-// is the mathematical constant and floor returns the greatest integer not
-// greater than its argument. Thus t is in [0, 1), increases clockwise from
-// the start ray, and is periodic in start_angle_radians with period 2*pi.
-// Every point on the same ray from c has the same t.
-//
-// start_color is the specified Extended sRGB source color on the start ray
-// (t = 0). end_color is the specified Extended sRGB source color in the limit
-// as t approaches 1 from below. The start ray itself uses start_color; if the
-// endpoint colors differ, the angular wrap creates a seam on that ray. These
-// two endpoint colors and the geometry above are required. The source color at
-// intermediate angular positions, including its interpolation space and
-// progression, conversion to an output or display color space, alpha handling,
-// compositing, filtering, and pixel quantization are implementation-defined.
-// The result at the exact center c is implementation-defined because its
-// angular position is undefined. This definition does not require the angle
-// convention or rendering behavior of CSS conic-gradient(), SwiftUI
-// AngularGradient, or any other particular API.
+// A Video Component that fills the Canvas with a conic gradient.
+// The gradient progresses from start_extended_srgb_color to
+// end_extended_srgb_color over one turn, with a seam at the start ray.
+// Color interpolation and the result at the exact center are implementation-defined.
 message FillConicGradientComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The normalized horizontal coordinate of the gradient center, in [0, 1].
-  // Zero is the Canvas's left edge and one is its right edge.
-  reserved 3;
-  reserved "center_x";
-  Rational32 center_x_rational = 8;
-  // The normalized vertical coordinate of the gradient center, in [0, 1].
-  // Zero is the Canvas's top edge and one is its bottom edge.
-  reserved 4;
-  reserved "center_y";
-  Rational32 center_y_rational = 9;
-  // A finite start angle in radians, measured clockwise from the positive
-  // horizontal axis in the normalized Canvas coordinate system. Values that
-  // differ by an integer multiple of 2 * pi represent the same start ray.
-  reserved 5;
-  reserved "start_angle_radians";
-  Rational32 start_angle_radians_rational = 10;
-  // The specified Extended sRGB source color on the start ray (t = 0).
-  ExtendedSrgbColor start_color = 6;
-  // The specified Extended sRGB source color in the limit as t approaches 1
-  // from below, immediately before the angular wrap to the start ray.
-  ExtendedSrgbColor end_color = 7;
+  // The center X coordinate, normalized by the rendering Canvas width,
+  // in [0, 1], measured rightward from its left edge.
+  Rational32 center_x = 3;
+  // The center Y coordinate, normalized by the rendering Canvas height,
+  // in [0, 1], measured downward from its top edge.
+  Rational32 center_y = 4;
+  // The start angle in radians, not normalized, measured clockwise from the
+  // rightward axis after X and Y are normalized by the rendering Canvas width
+  // and height. Angles differing by 2 * pi represent the same start ray.
+  Rational32 start_angle_radians = 5;
+  // The source color on the start ray, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color start_extended_srgb_color = 6;
+  // The source color approached immediately before completing one clockwise
+  // turn back to the start ray, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color end_extended_srgb_color = 7;
 }
 
 // A Video Component that applies Video Effects to video from an Input Device.
+// Physical camera assignment is app-local and keyed by this entity's LDTXWorkspaceID.
 message VfxSourceComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  reserved 3;
-  reserved "input_device_internal_id";
-  // Physical camera assignment is app-local and keyed by internal_id.
   // The VFX effects applied to the input video, in evaluation order.
-  repeated VideoEffectWrapper effects = 4;
+  repeated VideoEffectWrapper effects = 3;
 }
 
 // A Video Component that renders a test pattern.
 message TestPatternComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
 }
 
 // A Video Component that renders the current date and time.
 message ClockComponent {
-  // The Workspace-local identifier for this entity. Its most significant bit
-  // is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  // and bits 14 through 0 are uniformly random.
-  uint64 internal_id = 1;
+  // An LDTXWorkspaceID for this entity.
+  uint64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The Clock width normalized to the fixed 1920-pixel Landscape Canvas width,
-  // in [0, 1]. This remains the reference for Portrait projection.
-  reserved 3;
-  reserved "width";
-  Rational32 width_rational = 12;
-  // The Clock height normalized to the fixed 1080-pixel Landscape Canvas
-  // height, in [0, 1]. This remains the reference for Portrait projection.
-  reserved 4;
-  reserved "height";
-  Rational32 height_rational = 13;
+  // The Clock width, normalized by the Landscape Canvas width, in [0, 1].
+  // The same reference applies to Portrait projection.
+  Rational32 width = 3;
+  // The Clock height, normalized by the Landscape Canvas height, in [0, 1].
+  // The same reference applies to Portrait projection.
+  Rational32 height = 4;
   // Whether the rendered Clock includes the date.
-  bool shows_date = 5;
+  bool shows_date = 5 [default = false];
   // Whether the rendered time includes seconds.
-  bool shows_seconds = 6;
+  bool shows_seconds = 6 [default = false];
   // Whether the rendered time uses a 24-hour clock.
-  bool uses_24_hour_time = 7;
-  // The fixed offset from UTC in minutes. When absent, the Clock uses the
-  // system time zone.
-  optional sint32 utc_offset_minutes = 8;
-  // The color of the rendered date and time text.
-  ExtendedSrgbColor foreground_color = 9;
-  // The background color of this Clock.
-  ExtendedSrgbColor background_color = 10;
-  // The text outlines rendered around the Clock text, in order.
+  bool uses_24_hour_time = 7 [features.enforce_naming_style = STYLE_LEGACY, default = false];
+  // The fixed offset from UTC in minutes.
+  sint32 utc_offset_minutes = 8 [default = 0];
+  // The color of the rendered date and time text, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color foreground_extended_srgb_color = 9;
+  // The background color of this Clock, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color background_extended_srgb_color = 10;
+  // The text outlines rendered around the Clock text in back-to-front
+  // compositing order. The first entry is the backmost outline; the last
+  // entry is the frontmost outline.
   repeated ClockTextOutline outlines = 11;
 }
 
 // A text outline rendered by a Clock.
 message ClockTextOutline {
-  // The outline thickness in output pixels.
-  reserved 1;
-  reserved "thickness";
-  Rational32 thickness_rational = 3;
-  // The color of this outline.
-  ExtendedSrgbColor color = 2;
-}
-
-// A color represented in the extended sRGB color space.
-message ExtendedSrgbColor {
-  // The red component in the extended sRGB color space.
-  float red = 1;
-  // The green component in the extended sRGB color space.
-  float green = 2;
-  // The blue component in the extended sRGB color space.
-  float blue = 3;
-  // The straight alpha component, in the range [0, 1].
-  float alpha = 4;
+  // The outline thickness in pixels of the output Canvas, not normalized.
+  Rational32 thickness = 1;
+  // The color of this outline, in extended sRGB.
+  // RGB components use the nonlinear sRGB transfer function and may extend
+  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
+  // encoded. Conversion to an output or display color space, alpha compositing,
+  // filtering, and pixel quantization are implementation-defined.
+  Color extended_srgb_color = 2;
 }

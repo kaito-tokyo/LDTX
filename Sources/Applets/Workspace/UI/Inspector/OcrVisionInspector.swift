@@ -55,19 +55,14 @@ struct OcrVisionInspector: View {
           .disabled(isRecording)
         TextField("Custom Words (comma separated)", text: customWordsBinding)
           .disabled(isRecording)
-        Toggle("Minimum Text Height", isOn: minimumTextHeightEnabledBinding)
-          .disabled(isRecording)
-        if vision.hasMinimumTextHeightRational {
-          LabeledContent("Minimum Height") {
-            TextField(
-              "Fraction", value: minimumTextHeightBinding,
-              format: RationalFormatStyle()
-            )
-            .multilineTextAlignment(.trailing)
-            .frame(width: 90)
-          }
-          .disabled(isRecording)
+        LabeledContent("Minimum Text Height") {
+          TextField(
+            "Fraction", value: minimumTextHeightBinding, format: RationalFormatStyle()
+          )
+          .multilineTextAlignment(.trailing)
+          .frame(width: 90)
         }
+        .disabled(isRecording)
       }
       Section("Recognition Result") {
         if let failure = storeService.visionFailureMessages[internalID] {
@@ -79,16 +74,14 @@ struct OcrVisionInspector: View {
         }
       }
       Section("Region of Interest") {
-        regionField("X", keyPath: \.xRational, initial: vision.regionOfInterest.xRational)
-        regionField("Y", keyPath: \.yRational, initial: vision.regionOfInterest.yRational)
+        regionField("X", keyPath: \.x, initial: vision.regionOfInterest.x)
+        regionField("Y", keyPath: \.y, initial: vision.regionOfInterest.y)
         regionField(
-          "Width", keyPath: \.widthRational,
-          initial: vision.hasRegionOfInterest
-            ? vision.regionOfInterest.widthRational : .with { $0.set(num: 1, den: 1) })
+          "Width", keyPath: \.width,
+          initial: vision.regionOfInterest.width)
         regionField(
-          "Height", keyPath: \.heightRational,
-          initial: vision.hasRegionOfInterest
-            ? vision.regionOfInterest.heightRational : .with { $0.set(num: 1, den: 1) })
+          "Height", keyPath: \.height,
+          initial: vision.regionOfInterest.height)
         Text("Coordinates are normalized from 0 to 1.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -104,7 +97,7 @@ struct OcrVisionInspector: View {
 
   private var vision: Ldtx_Workspace_V4_OcrVision? {
     storeService.definition.visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
-      guard case .ocrVision(let vision) = wrapper.definition,
+      guard case .ocrVision(let vision) = wrapper.vision,
         vision.internalID == internalID
       else { return nil }
       return vision
@@ -129,15 +122,15 @@ struct OcrVisionInspector: View {
   private var sourceBinding: Binding<UInt64?> {
     Binding(
       get: {
-        if case .videoComponentInternalID(let value)? = vision?.source { return value }
-        return nil
+        guard let sourceID = vision?.videoComponentInternalID, sourceID != 0 else { return nil }
+        return sourceID
       },
       set: { internalID in
         editVision { value in
           if let internalID {
             value.videoComponentInternalID = internalID
           } else {
-            value.source = nil
+            value.clearVideoComponentInternalID()
           }
         }
       }
@@ -148,8 +141,8 @@ struct OcrVisionInspector: View {
     Binding(
       get: {
         vision?.triggers.first.flatMap { wrapper in
-          guard case .intervalTrigger(let value) = wrapper.definition else { return nil }
-          return value.intervalSecondsRational.double
+          guard case .intervalTrigger(let value) = wrapper.trigger else { return nil }
+          return value.intervalSeconds.double
         } ?? 0
       },
       set: { interval in
@@ -157,10 +150,10 @@ struct OcrVisionInspector: View {
           value.triggers.removeAll()
           guard interval > 0 else { return }
           var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-          trigger.intervalSecondsRational =
+          trigger.intervalSeconds =
             (try? RationalParseStrategy().parse(String(interval))) ?? .init()
           var wrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-          wrapper.definition = .intervalTrigger(trigger)
+          wrapper.trigger = .intervalTrigger(trigger)
           value.triggers.append(wrapper)
         }
       }
@@ -193,41 +186,21 @@ struct OcrVisionInspector: View {
     )
   }
 
-  private var minimumTextHeightEnabledBinding: Binding<Bool> {
-    Binding(
-      get: { vision?.hasMinimumTextHeightRational ?? false },
-      set: { enabled in
-        editVision { value in
-          if enabled {
-            value.minimumTextHeightRational = .with {
-              $0.set(num: 1, den: 100)
-            }
-          } else {
-            value.clearMinimumTextHeightRational()
-          }
-        }
-      }
-    )
-  }
-
   private var minimumTextHeightBinding: Binding<Ldtx_Workspace_V4_Rational32> {
     Binding(
       get: {
-        vision?.minimumTextHeightRational
-          ?? .with {
-            $0.set(num: 1, den: 100)
-          }
+        vision?.minimumTextHeight ?? .init()
       },
-      set: { next in editVision { $0.minimumTextHeightRational = next } }
+      set: { next in editVision { $0.minimumTextHeight = next } }
     )
   }
 
-  private func regionField(
+  private func regionField<Value: Rational32Value>(
     _ title: String,
     keyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32
+      Ldtx_Workspace_V4_VisionRegionOfInterest, Value
     >,
-    initial: Ldtx_Workspace_V4_Rational32
+    initial: Value
   ) -> some View {
     LabeledContent(title) {
       TextField(
@@ -235,7 +208,7 @@ struct OcrVisionInspector: View {
         text: Binding(
           get: {
             storeService.ocrRegionDrafts[internalID]?[title]
-              ?? RationalFormatStyle().format(initial)
+              ?? RationalValueFormatStyle<Value>().format(initial)
           },
           set: { storeService.editOcrRegion(internalID: internalID, field: title, text: $0) })
       )
@@ -249,12 +222,12 @@ struct OcrVisionInspector: View {
     var definition = storeService.definition
     guard
       let index = definition.visions.firstIndex(where: { wrapper in
-        guard case .ocrVision(let value) = wrapper.definition else { return false }
+        guard case .ocrVision(let value) = wrapper.vision else { return false }
         return value.internalID == internalID
-      }), case .ocrVision(var value) = definition.visions[index].definition
+      }), case .ocrVision(var value) = definition.visions[index].vision
     else { return }
     mutation(&value)
-    definition.visions[index].definition = .ocrVision(value)
+    definition.visions[index].vision = .ocrVision(value)
     storeService.definition = definition
   }
 }

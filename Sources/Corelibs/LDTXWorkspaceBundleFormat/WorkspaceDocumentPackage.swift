@@ -13,19 +13,19 @@ public enum WorkspaceDocumentPackage {
   ) throws {
     try WorkspaceV4IntegrityValidator.validate(workspace)
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-    definition.externalID =
-      workspace.definitionExternalID
-      ?? WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+    definition.externalIDAsUUID = try envelopeIdentifier(workspace.definitionExternalID)
     definition.workspaceDefinitionV4 = workspace.definition
     var preferences = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-    preferences.externalID =
-      workspace.preferencesExternalID
-      ?? WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
+    preferences.externalIDAsUUID = try envelopeIdentifier(workspace.preferencesExternalID)
     preferences.workspacePreferencesV4 = workspace.preferences
+    var outputSettings = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
+    outputSettings.externalIDAsUUID = try envelopeIdentifier(workspace.outputSettingsExternalID)
+    outputSettings.workspaceOutputSettingsV4 = workspace.outputSettings
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
     let definitionData = try definition.serializedData(options: options)
     let preferencesData = try preferences.serializedData(options: options)
+    let outputSettingsData = try outputSettings.serializedData(options: options)
     let manager = FileManager.default
     if createsPackage {
       try manager.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -40,5 +40,20 @@ public enum WorkspaceDocumentPackage {
       to: destination.appendingPathComponent("definition.pb"), options: .atomic)
     try preferencesData.write(
       to: destination.appendingPathComponent("preferences.pb"), options: .atomic)
+    try outputSettingsData.write(
+      to: destination.appendingPathComponent("output_settings.pb"), options: .atomic)
   }
+
+  private static func envelopeIdentifier(_ identifier: String?) throws -> UUID {
+    guard let identifier else {
+      return WorkspaceBundleWriterV4.makeExternalID()
+    }
+    guard let uuid = UUID(uuidString: identifier),
+      uuid.uuid.6 >> 4 == 7, uuid.uuid.8 & 0xc0 == 0x80
+    else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
+    return uuid
+  }
+
 }

@@ -85,8 +85,10 @@ public final class WorkspaceV4RecordingSession {
       state = .failed("Select a Program before starting recording.")
       return
     }
-    let output = windowRuntime.definition.outputConfiguration
-    guard output.recordsLandscape || output.recordsPortrait || output.streamsToYoutube else {
+    let output = windowRuntime.workspace.outputSettings
+    let recordsLandscape = output.recordingEnabled && output.recordingSettings.recordsLandscape
+    let recordsPortrait = output.recordingEnabled && output.recordingSettings.recordsPortrait
+    guard recordsLandscape || recordsPortrait || output.youtubeEnabled else {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return
     }
@@ -105,15 +107,15 @@ public final class WorkspaceV4RecordingSession {
 
     state = .starting
     sleepInhibitor.start()
-    let baseDirectory = outputDirectory(for: output)
+    let baseDirectory = outputDirectory()
     let runsLandscape =
-      output.recordsLandscape
-      || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .portraitRtmps)
+      recordsLandscape
+      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesLandscapeRTMPS)
     let runsPortrait =
-      output.recordsPortrait
-      || (output.streamsToYoutube && output.resolvedYouTubeIngestMode != .landscapeRtmps)
+      recordsPortrait
+      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesPortraitRTMPS)
     do {
-      if output.recordsLandscape || output.recordsPortrait {
+      if recordsLandscape || recordsPortrait {
         try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(
           baseDirectory)
       }
@@ -132,7 +134,7 @@ public final class WorkspaceV4RecordingSession {
 
     let youtubeService: YouTubeRTMPSWorkspaceService?
     do {
-      youtubeService = output.streamsToYoutube ? try makeYouTubeRTMPSService(for: output) : nil
+      youtubeService = output.youtubeEnabled ? try makeYouTubeRTMPSService(for: output) : nil
     } catch {
       sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
@@ -140,7 +142,7 @@ public final class WorkspaceV4RecordingSession {
     }
     let service: SessionRecordService?
     do {
-      if output.recordsLandscape || output.recordsPortrait {
+      if recordsLandscape || recordsPortrait {
         let recordService = try SessionRecordService(
           baseDirectory: baseDirectory,
           recordID: SessionRecordService.makeRecordID(),
@@ -149,9 +151,9 @@ public final class WorkspaceV4RecordingSession {
           portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
             configuration: portraitConfiguration),
           audioTracks: inputAudioTracks,
-          recordsLandscape: output.recordsLandscape,
-          recordsPortrait: output.recordsPortrait,
-          customFields: output.recordingCustomFields,
+          recordsLandscape: recordsLandscape,
+          recordsPortrait: recordsPortrait,
+          customFields: output.recordingSettings.customFields,
           diagnosticsContext: RecordingDiagnosticsContext(),
           failureHandler: { [weak self] error in
             Task { @MainActor in await self?.fail(error) }
@@ -194,7 +196,7 @@ public final class WorkspaceV4RecordingSession {
     if let service {
       installRecordingSubscriptions(
         service: service, landscapeHub: landscapeHub, portraitHub: portraitHub,
-        recordsLandscape: output.recordsLandscape, recordsPortrait: output.recordsPortrait)
+        recordsLandscape: recordsLandscape, recordsPortrait: recordsPortrait)
     }
     if let youtubeService {
       installYouTubeRTMPSSubscriptions(
@@ -315,7 +317,7 @@ public final class WorkspaceV4RecordingSession {
           name: "Portrait", pixelBuffer: frame.pixelBuffer, programCanvas: .portrait))
     }
     for wrapper in windowRuntime.definition.videoComponents {
-      guard case .vfxSource(let input)? = wrapper.definition,
+      guard case .vfxSource(let input)? = wrapper.videoComponent,
         case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[input.internalID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
@@ -365,9 +367,9 @@ public final class WorkspaceV4RecordingSession {
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub
   ) {
-    let output = windowRuntime.definition.outputConfiguration
-    switch output.resolvedYouTubeIngestMode {
-    case .landscapeRtmps:
+    let output = windowRuntime.workspace.outputSettings
+    switch output.youtubeSettings.ingestMode {
+    case .unspecified, .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
         mainVideo: service.appendLandscapeVideo,
         mainAudioMix: service.appendLandscapeAudioMix,
@@ -590,7 +592,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func makeYouTubeRTMPSService(
-    for output: Ldtx_Workspace_V4_OutputConfiguration
+    for output: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
   ) throws -> YouTubeRTMPSWorkspaceService {
     let configurations = try streamKeyConfigurationsProvider()
     let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
@@ -604,9 +606,9 @@ public final class WorkspaceV4RecordingSession {
       })
   }
 
-  private func outputDirectory(for output: Ldtx_Workspace_V4_OutputConfiguration) -> URL {
-    if output.hasOutputFolderPath, !output.outputFolderPath.isEmpty {
-      return URL(fileURLWithPath: output.outputFolderPath, isDirectory: true)
+  private func outputDirectory() -> URL {
+    if let path = localStateProvider().recordingFolderPath, !path.isEmpty {
+      return URL(fileURLWithPath: path, isDirectory: true)
     }
     if let path = applicationOutputPreferences.defaultOutputFolderPath,
       !path.isEmpty

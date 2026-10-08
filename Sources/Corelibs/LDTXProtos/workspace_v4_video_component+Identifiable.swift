@@ -15,7 +15,8 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper: Identifiable {
   }
 
   public var id: ID {
-    switch definition {
+    guard internalID != nil else { return .invalid }
+    return switch videoComponent {
     case .solidColorFill(let component): .solidColorFill(component.internalID)
     case .linearGradientFill(let component): .linearGradientFill(component.internalID)
     case .radialGradientFill(let component): .radialGradientFill(component.internalID)

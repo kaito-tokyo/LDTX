@@ -12,8 +12,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/// Version 4 Workspace definitions and output configuration.
-
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -26,169 +24,84 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-/// The layout and protocol used for YouTube ingest.
-public nonisolated enum Ldtx_Workspace_V4_YouTubeIngestMode: SwiftProtobuf.Enum, Swift.CaseIterable {
-  public typealias RawValue = Int
-
-  /// No YouTube ingest mode is specified. The runtime uses Landscape RTMPS.
-  case unspecified // = 0
-
-  /// Sends the Landscape output using RTMPS ingest.
-  case landscapeRtmps // = 1
-
-  /// Sends the Portrait output using RTMPS ingest.
-  case portraitRtmps // = 2
-
-  /// Sends Landscape and Portrait as separate RTMPS streams.
-  case dualRtmps // = 3
-
-  /// Sends the Landscape output using HLS ingest.
-  case landscapeHls // = 4
-
-  /// Sends the Portrait output using HLS ingest.
-  case portraitHls // = 5
-
-  /// Sends the Landscape output using DASH ingest.
-  case landscapeDash // = 6
-
-  /// Sends the Portrait output using DASH ingest.
-  case portraitDash // = 7
-  case UNRECOGNIZED(Int)
-
-  public init() {
-    self = .unspecified
-  }
-
-  public init?(rawValue: Int) {
-    switch rawValue {
-    case 0: self = .unspecified
-    case 1: self = .landscapeRtmps
-    case 2: self = .portraitRtmps
-    case 3: self = .dualRtmps
-    case 4: self = .landscapeHls
-    case 5: self = .portraitHls
-    case 6: self = .landscapeDash
-    case 7: self = .portraitDash
-    default: self = .UNRECOGNIZED(rawValue)
-    }
-  }
-
-  public var rawValue: Int {
-    switch self {
-    case .unspecified: return 0
-    case .landscapeRtmps: return 1
-    case .portraitRtmps: return 2
-    case .dualRtmps: return 3
-    case .landscapeHls: return 4
-    case .portraitHls: return 5
-    case .landscapeDash: return 6
-    case .portraitDash: return 7
-    case .UNRECOGNIZED(let i): return i
-    }
-  }
-
-  // The compiler won't synthesize support with the UNRECOGNIZED case.
-  public static let allCases: [Ldtx_Workspace_V4_YouTubeIngestMode] = [
-    .unspecified,
-    .landscapeRtmps,
-    .portraitRtmps,
-    .dualRtmps,
-    .landscapeHls,
-    .portraitHls,
-    .landscapeDash,
-    .portraitDash,
-  ]
-
-}
-
 /// Version 4 WorkspaceDefinition.
-public nonisolated struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: @unchecked Sendable {
+public nonisolated struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// The title of this Workspace.
   public var displayName: String {
-    get {_storage._displayName}
-    set {_uniqueStorage()._displayName = newValue}
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
   }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {self._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {self._displayName = nil}
 
-  /// Contains the Video Layers for each Program in this Workspace.
-  public var programs: [Ldtx_Workspace_V4_ProgramDefinition] {
-    get {_storage._programs}
-    set {_uniqueStorage()._programs = newValue}
-  }
+  /// The Programs defined in this Workspace.
+  public var programs: [Ldtx_Workspace_V4_ProgramDefinition] = []
 
   /// Represents Canvas in the Workspace sidebar.
   public var canvasConfiguration: Ldtx_Workspace_V4_CanvasConfiguration {
-    get {_storage._canvasConfiguration ?? Ldtx_Workspace_V4_CanvasConfiguration()}
-    set {_uniqueStorage()._canvasConfiguration = newValue}
+    get {_canvasConfiguration ?? Ldtx_Workspace_V4_CanvasConfiguration()}
+    set {_canvasConfiguration = newValue}
   }
   /// Returns true if `canvasConfiguration` has been explicitly set.
-  public var hasCanvasConfiguration: Bool {_storage._canvasConfiguration != nil}
+  public var hasCanvasConfiguration: Bool {self._canvasConfiguration != nil}
   /// Clears the value of `canvasConfiguration`. Subsequent reads from it will return its default value.
-  public mutating func clearCanvasConfiguration() {_uniqueStorage()._canvasConfiguration = nil}
-
-  /// Represents Output in the Workspace sidebar.
-  public var outputConfiguration: Ldtx_Workspace_V4_OutputConfiguration {
-    get {_storage._outputConfiguration ?? Ldtx_Workspace_V4_OutputConfiguration()}
-    set {_uniqueStorage()._outputConfiguration = newValue}
-  }
-  /// Returns true if `outputConfiguration` has been explicitly set.
-  public var hasOutputConfiguration: Bool {_storage._outputConfiguration != nil}
-  /// Clears the value of `outputConfiguration`. Subsequent reads from it will return its default value.
-  public mutating func clearOutputConfiguration() {_uniqueStorage()._outputConfiguration = nil}
+  public mutating func clearCanvasConfiguration() {self._canvasConfiguration = nil}
 
   /// Represents Audio devices in the Workspace sidebar.
-  public var audioDevices: [Ldtx_Workspace_V4_AudioInputDevice] {
-    get {_storage._audioDevices}
-    set {_uniqueStorage()._audioDevices = newValue}
-  }
+  public var audioDevices: [Ldtx_Workspace_V4_AudioInputDevice] = []
 
   /// Represents Video Components in the Workspace sidebar.
-  public var videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper] {
-    get {_storage._videoComponents}
-    set {_uniqueStorage()._videoComponents = newValue}
-  }
+  public var videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper] = []
 
   /// Represents Visions in the Workspace sidebar.
-  public var visions: [Ldtx_Workspace_V4_VisionWrapper] {
-    get {_storage._visions}
-    set {_uniqueStorage()._visions = newValue}
-  }
+  public var visions: [Ldtx_Workspace_V4_VisionWrapper] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _displayName: String? = nil
+  fileprivate var _canvasConfiguration: Ldtx_Workspace_V4_CanvasConfiguration? = nil
 }
 
-/// Defines the Video Component order for one Program.
+/// Defines the identity and display name of one Program.
 public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The Workspace-local identifier for this entity. Its most significant bit
-  /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  /// and bits 14 through 0 are uniformly random.
-  public var internalID: UInt64 = 0
+  /// An LDTXWorkspaceID for this entity.
+  public var internalID: UInt64 {
+    get {_internalID ?? 0}
+    set {_internalID = newValue}
+  }
+  /// Returns true if `internalID` has been explicitly set.
+  public var hasInternalID: Bool {self._internalID != nil}
+  /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
+  public mutating func clearInternalID() {self._internalID = nil}
 
   /// The name of this Program shown on the selector.
-  public var displayName: String = String()
-
-  /// The Video Component internal IDs in Landscape Video
-  /// Layer order.
-  public var landscapeVideoLayerInternalIds: [UInt64] = []
-
-  /// The Video Component internal IDs in Portrait Video
-  /// Layer order.
-  public var portraitVideoLayerInternalIds: [UInt64] = []
+  public var displayName: String {
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
+  }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {self._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {self._displayName = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _displayName: String? = nil
 }
 
 /// Represents Canvas in the Workspace sidebar.
@@ -198,21 +111,57 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
   // methods supported on all messages.
 
   /// The profile identifier selected for the Landscape Canvas.
-  public var landscapeProfileID: String = String()
+  public var landscapeProfileID: String {
+    get {_landscapeProfileID ?? String()}
+    set {_landscapeProfileID = newValue}
+  }
+  /// Returns true if `landscapeProfileID` has been explicitly set.
+  public var hasLandscapeProfileID: Bool {self._landscapeProfileID != nil}
+  /// Clears the value of `landscapeProfileID`. Subsequent reads from it will return its default value.
+  public mutating func clearLandscapeProfileID() {self._landscapeProfileID = nil}
 
   /// The profile identifier selected for the Portrait Canvas.
-  public var portraitProfileID: String = String()
+  public var portraitProfileID: String {
+    get {_portraitProfileID ?? String()}
+    set {_portraitProfileID = newValue}
+  }
+  /// Returns true if `portraitProfileID` has been explicitly set.
+  public var hasPortraitProfileID: Bool {self._portraitProfileID != nil}
+  /// Clears the value of `portraitProfileID`. Subsequent reads from it will return its default value.
+  public mutating func clearPortraitProfileID() {self._portraitProfileID = nil}
 
   /// The output frame rate in frames per second.
-  public var frameRate: UInt32 = 0
+  public var frameRate: UInt32 {
+    get {_frameRate ?? 0}
+    set {_frameRate = newValue}
+  }
+  /// Returns true if `frameRate` has been explicitly set.
+  public var hasFrameRate: Bool {self._frameRate != nil}
+  /// Clears the value of `frameRate`. Subsequent reads from it will return its default value.
+  public mutating func clearFrameRate() {self._frameRate = nil}
 
   /// The target video bit rate for the Landscape Canvas in bits per second.
-  public var landscapeVideoBitRate: UInt32 = 0
+  public var landscapeVideoBitRate: UInt32 {
+    get {_landscapeVideoBitRate ?? 0}
+    set {_landscapeVideoBitRate = newValue}
+  }
+  /// Returns true if `landscapeVideoBitRate` has been explicitly set.
+  public var hasLandscapeVideoBitRate: Bool {self._landscapeVideoBitRate != nil}
+  /// Clears the value of `landscapeVideoBitRate`. Subsequent reads from it will return its default value.
+  public mutating func clearLandscapeVideoBitRate() {self._landscapeVideoBitRate = nil}
 
   /// The target video bit rate for the Portrait Canvas in bits per second.
-  public var portraitVideoBitRate: UInt32 = 0
+  public var portraitVideoBitRate: UInt32 {
+    get {_portraitVideoBitRate ?? 0}
+    set {_portraitVideoBitRate = newValue}
+  }
+  /// Returns true if `portraitVideoBitRate` has been explicitly set.
+  public var hasPortraitVideoBitRate: Bool {self._portraitVideoBitRate != nil}
+  /// Clears the value of `portraitVideoBitRate`. Subsequent reads from it will return its default value.
+  public mutating func clearPortraitVideoBitRate() {self._portraitVideoBitRate = nil}
 
-  /// The VFX Source used as the master clock for video presentation timestamps.
+  /// The LDTXWorkspaceID of the VFX Source used as the master clock for video
+  /// presentation timestamps.
   public var ptsMasterVfxSourceInternalID: UInt64 {
     get {_ptsMasterVfxSourceInternalID ?? 0}
     set {_ptsMasterVfxSourceInternalID = newValue}
@@ -226,163 +175,72 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
 
   public init() {}
 
+  fileprivate var _landscapeProfileID: String? = nil
+  fileprivate var _portraitProfileID: String? = nil
+  fileprivate var _frameRate: UInt32? = nil
+  fileprivate var _landscapeVideoBitRate: UInt32? = nil
+  fileprivate var _portraitVideoBitRate: UInt32? = nil
   fileprivate var _ptsMasterVfxSourceInternalID: UInt64? = nil
-}
-
-/// Represents Output in the Workspace sidebar.
-public nonisolated struct Ldtx_Workspace_V4_OutputConfiguration: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Whether the Landscape output is recorded.
-  public var recordsLandscape: Bool = false
-
-  /// Whether the Portrait output is recorded.
-  public var recordsPortrait: Bool = false
-
-  /// Whether output is streamed to YouTube.
-  public var streamsToYoutube: Bool = false
-
-  /// The layout and protocol used for YouTube ingest.
-  public var youtubeIngestMode: Ldtx_Workspace_V4_YouTubeIngestMode = .unspecified
-
-  /// The folder where recordings are written. When absent, the runtime default
-  /// output folder applies.
-  public var outputFolderPath: String {
-    get {_outputFolderPath ?? String()}
-    set {_outputFolderPath = newValue}
-  }
-  /// Returns true if `outputFolderPath` has been explicitly set.
-  public var hasOutputFolderPath: Bool {self._outputFolderPath != nil}
-  /// Clears the value of `outputFolderPath`. Subsequent reads from it will return its default value.
-  public mutating func clearOutputFolderPath() {self._outputFolderPath = nil}
-
-  /// Additional fields written with recordings, keyed by their field names.
-  public var recordingCustomFields: Dictionary<String,String> = [:]
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _outputFolderPath: String? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
-nonisolated extension Ldtx_Workspace_V4_YouTubeIngestMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0YOUTUBE_INGEST_MODE_UNSPECIFIED\0\u{1}YOUTUBE_INGEST_MODE_LANDSCAPE_RTMPS\0\u{1}YOUTUBE_INGEST_MODE_PORTRAIT_RTMPS\0\u{1}YOUTUBE_INGEST_MODE_DUAL_RTMPS\0\u{1}YOUTUBE_INGEST_MODE_LANDSCAPE_HLS\0\u{1}YOUTUBE_INGEST_MODE_PORTRAIT_HLS\0\u{1}YOUTUBE_INGEST_MODE_LANDSCAPE_DASH\0\u{1}YOUTUBE_INGEST_MODE_PORTRAIT_DASH\0")
-}
-
 nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WorkspaceDefinitionV4"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{1}programs\0\u{3}canvas_configuration\0\u{3}output_configuration\0\u{4}\u{2}video_components\0\u{1}visions\0\u{3}audio_devices\0\u{b}input_devices\0\u{c}\u{5}\u{1}")
-
-  fileprivate class _StorageClass {
-    var _displayName: String = String()
-    var _programs: [Ldtx_Workspace_V4_ProgramDefinition] = []
-    var _canvasConfiguration: Ldtx_Workspace_V4_CanvasConfiguration? = nil
-    var _outputConfiguration: Ldtx_Workspace_V4_OutputConfiguration? = nil
-    var _audioDevices: [Ldtx_Workspace_V4_AudioInputDevice] = []
-    var _videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper] = []
-    var _visions: [Ldtx_Workspace_V4_VisionWrapper] = []
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _displayName = source._displayName
-      _programs = source._programs
-      _canvasConfiguration = source._canvasConfiguration
-      _outputConfiguration = source._outputConfiguration
-      _audioDevices = source._audioDevices
-      _videoComponents = source._videoComponents
-      _visions = source._visions
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{1}programs\0\u{3}canvas_configuration\0\u{4}\u{2}audio_devices\0\u{3}video_components\0\u{1}visions\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 2: try { try decoder.decodeRepeatedMessageField(value: &_storage._programs) }()
-        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._canvasConfiguration) }()
-        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._outputConfiguration) }()
-        case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._videoComponents) }()
-        case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._visions) }()
-        case 8: try { try decoder.decodeRepeatedMessageField(value: &_storage._audioDevices) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.programs) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._canvasConfiguration) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.audioDevices) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.videoComponents) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.visions) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._displayName.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 1)
-      }
-      if !_storage._programs.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._programs, fieldNumber: 2)
-      }
-      try { if let v = _storage._canvasConfiguration {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
-      try { if let v = _storage._outputConfiguration {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      } }()
-      if !_storage._videoComponents.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._videoComponents, fieldNumber: 6)
-      }
-      if !_storage._visions.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._visions, fieldNumber: 7)
-      }
-      if !_storage._audioDevices.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._audioDevices, fieldNumber: 8)
-      }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    if !self.programs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.programs, fieldNumber: 2)
+    }
+    try { if let v = self._canvasConfiguration {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if !self.audioDevices.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.audioDevices, fieldNumber: 5)
+    }
+    if !self.videoComponents.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.videoComponents, fieldNumber: 6)
+    }
+    if !self.visions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.visions, fieldNumber: 7)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_WorkspaceDefinitionV4, rhs: Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._displayName != rhs_storage._displayName {return false}
-        if _storage._programs != rhs_storage._programs {return false}
-        if _storage._canvasConfiguration != rhs_storage._canvasConfiguration {return false}
-        if _storage._outputConfiguration != rhs_storage._outputConfiguration {return false}
-        if _storage._audioDevices != rhs_storage._audioDevices {return false}
-        if _storage._videoComponents != rhs_storage._videoComponents {return false}
-        if _storage._visions != rhs_storage._visions {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs._displayName != rhs._displayName {return false}
+    if lhs.programs != rhs.programs {return false}
+    if lhs._canvasConfiguration != rhs._canvasConfiguration {return false}
+    if lhs.audioDevices != rhs.audioDevices {return false}
+    if lhs.videoComponents != rhs.videoComponents {return false}
+    if lhs.visions != rhs.visions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -390,7 +248,7 @@ nonisolated extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: SwiftProtobuf.Mes
 
 nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgramDefinition"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}landscape_video_layer_internal_ids\0\u{3}portrait_video_layer_internal_ids\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -398,36 +256,30 @@ nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.internalID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
-      case 3: try { try decoder.decodeRepeatedUInt64Field(value: &self.landscapeVideoLayerInternalIds) }()
-      case 4: try { try decoder.decodeRepeatedUInt64Field(value: &self.portraitVideoLayerInternalIds) }()
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.internalID != 0 {
-      try visitor.visitSingularUInt64Field(value: self.internalID, fieldNumber: 1)
-    }
-    if !self.displayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
-    }
-    if !self.landscapeVideoLayerInternalIds.isEmpty {
-      try visitor.visitPackedUInt64Field(value: self.landscapeVideoLayerInternalIds, fieldNumber: 3)
-    }
-    if !self.portraitVideoLayerInternalIds.isEmpty {
-      try visitor.visitPackedUInt64Field(value: self.portraitVideoLayerInternalIds, fieldNumber: 4)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._internalID {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_ProgramDefinition, rhs: Ldtx_Workspace_V4_ProgramDefinition) -> Bool {
-    if lhs.internalID != rhs.internalID {return false}
-    if lhs.displayName != rhs.displayName {return false}
-    if lhs.landscapeVideoLayerInternalIds != rhs.landscapeVideoLayerInternalIds {return false}
-    if lhs.portraitVideoLayerInternalIds != rhs.portraitVideoLayerInternalIds {return false}
+    if lhs._internalID != rhs._internalID {return false}
+    if lhs._displayName != rhs._displayName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -435,7 +287,7 @@ nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message
 
 nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CanvasConfiguration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_profile_id\0\u{3}portrait_profile_id\0\u{3}frame_rate\0\u{3}landscape_video_bit_rate\0\u{3}portrait_video_bit_rate\0\u{4}\u{2}pts_master_vfx_source_internal_id\0\u{b}pts_master_video_input_device_internal_id\0\u{c}\u{6}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}landscape_profile_id\0\u{3}portrait_profile_id\0\u{3}frame_rate\0\u{3}landscape_video_bit_rate\0\u{3}portrait_video_bit_rate\0\u{3}pts_master_vfx_source_internal_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -443,12 +295,12 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.landscapeProfileID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.portraitProfileID) }()
-      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.frameRate) }()
-      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.landscapeVideoBitRate) }()
-      case 5: try { try decoder.decodeSingularUInt32Field(value: &self.portraitVideoBitRate) }()
-      case 7: try { try decoder.decodeSingularUInt64Field(value: &self._ptsMasterVfxSourceInternalID) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self._landscapeProfileID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._portraitProfileID) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self._frameRate) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self._landscapeVideoBitRate) }()
+      case 5: try { try decoder.decodeSingularUInt32Field(value: &self._portraitVideoBitRate) }()
+      case 6: try { try decoder.decodeSingularUInt64Field(value: &self._ptsMasterVfxSourceInternalID) }()
       default: break
       }
     }
@@ -459,93 +311,34 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.landscapeProfileID.isEmpty {
-      try visitor.visitSingularStringField(value: self.landscapeProfileID, fieldNumber: 1)
-    }
-    if !self.portraitProfileID.isEmpty {
-      try visitor.visitSingularStringField(value: self.portraitProfileID, fieldNumber: 2)
-    }
-    if self.frameRate != 0 {
-      try visitor.visitSingularUInt32Field(value: self.frameRate, fieldNumber: 3)
-    }
-    if self.landscapeVideoBitRate != 0 {
-      try visitor.visitSingularUInt32Field(value: self.landscapeVideoBitRate, fieldNumber: 4)
-    }
-    if self.portraitVideoBitRate != 0 {
-      try visitor.visitSingularUInt32Field(value: self.portraitVideoBitRate, fieldNumber: 5)
-    }
+    try { if let v = self._landscapeProfileID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._portraitProfileID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._frameRate {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._landscapeVideoBitRate {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._portraitVideoBitRate {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 5)
+    } }()
     try { if let v = self._ptsMasterVfxSourceInternalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 7)
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_CanvasConfiguration, rhs: Ldtx_Workspace_V4_CanvasConfiguration) -> Bool {
-    if lhs.landscapeProfileID != rhs.landscapeProfileID {return false}
-    if lhs.portraitProfileID != rhs.portraitProfileID {return false}
-    if lhs.frameRate != rhs.frameRate {return false}
-    if lhs.landscapeVideoBitRate != rhs.landscapeVideoBitRate {return false}
-    if lhs.portraitVideoBitRate != rhs.portraitVideoBitRate {return false}
+    if lhs._landscapeProfileID != rhs._landscapeProfileID {return false}
+    if lhs._portraitProfileID != rhs._portraitProfileID {return false}
+    if lhs._frameRate != rhs._frameRate {return false}
+    if lhs._landscapeVideoBitRate != rhs._landscapeVideoBitRate {return false}
+    if lhs._portraitVideoBitRate != rhs._portraitVideoBitRate {return false}
     if lhs._ptsMasterVfxSourceInternalID != rhs._ptsMasterVfxSourceInternalID {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Ldtx_Workspace_V4_OutputConfiguration: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".OutputConfiguration"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}records_landscape\0\u{3}records_portrait\0\u{3}streams_to_youtube\0\u{3}youtube_ingest_mode\0\u{3}output_folder_path\0\u{3}recording_custom_fields\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self.recordsLandscape) }()
-      case 2: try { try decoder.decodeSingularBoolField(value: &self.recordsPortrait) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.streamsToYoutube) }()
-      case 4: try { try decoder.decodeSingularEnumField(value: &self.youtubeIngestMode) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self._outputFolderPath) }()
-      case 6: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.recordingCustomFields) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if self.recordsLandscape != false {
-      try visitor.visitSingularBoolField(value: self.recordsLandscape, fieldNumber: 1)
-    }
-    if self.recordsPortrait != false {
-      try visitor.visitSingularBoolField(value: self.recordsPortrait, fieldNumber: 2)
-    }
-    if self.streamsToYoutube != false {
-      try visitor.visitSingularBoolField(value: self.streamsToYoutube, fieldNumber: 3)
-    }
-    if self.youtubeIngestMode != .unspecified {
-      try visitor.visitSingularEnumField(value: self.youtubeIngestMode, fieldNumber: 4)
-    }
-    try { if let v = self._outputFolderPath {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
-    } }()
-    if !self.recordingCustomFields.isEmpty {
-      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.recordingCustomFields, fieldNumber: 6)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Ldtx_Workspace_V4_OutputConfiguration, rhs: Ldtx_Workspace_V4_OutputConfiguration) -> Bool {
-    if lhs.recordsLandscape != rhs.recordsLandscape {return false}
-    if lhs.recordsPortrait != rhs.recordsPortrait {return false}
-    if lhs.streamsToYoutube != rhs.streamsToYoutube {return false}
-    if lhs.youtubeIngestMode != rhs.youtubeIngestMode {return false}
-    if lhs._outputFolderPath != rhs._outputFolderPath {return false}
-    if lhs.recordingCustomFields != rhs.recordingCustomFields {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

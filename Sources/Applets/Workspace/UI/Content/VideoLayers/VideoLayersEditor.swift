@@ -85,9 +85,6 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         else { throw RationalInputError.invalidNumber }
         var value = Ldtx_Workspace_V4_Rational32()
         try value.set(decimal: decimal)
-        guard value.numerator >= 0 else {
-          throw WorkspaceSelectionError(message: "Scale must be nonnegative.")
-        }
         return value
       } catch {
         throw WorkspaceSelectionError(
@@ -98,8 +95,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = values[0]
     transform.translationY = values[1]
-    transform.scaleX = values[2]
-    transform.scaleY = values[3]
+    transform.scaleX = .init(value: values[2])
+    transform.scaleY = .init(value: values[3])
     return transform
   }
 
@@ -131,9 +128,9 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     var names: [UInt64: String] = [:]
     var placementSupport: [UInt64: Bool] = [:]
     for component in definition.videoComponents {
-      if let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component), names[id] == nil {
+      if let id = component.internalID, names[id] == nil {
         names[id] = component.displayName
-        switch component.definition {
+        switch component.videoComponent {
         case .vfxSource, .clock: placementSupport[id] = true
         default: placementSupport[id] = false
         }
@@ -199,10 +196,9 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       table.removeAllRows()
       displayedProgramID = id
     }
-    let program = selectedProgram
     let preference =
       id.flatMap { storeService.preferences[keyPath: target.preferences][$0] } ?? .init()
-    let layerIDs = program?[keyPath: target.layerIDs] ?? []
+    let layerIDs = preference.videoLayerInternalIds
     update(
       definition: storeService.definition, programPreferences: preference, layerIDs: layerIDs,
       canvasWidth: 1920,
@@ -256,10 +252,10 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
     for id: UInt64 in [1, 2] {
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.scaleXRational = .with {
+      transform.scaleX = .with {
         $0.set(num: 1, den: 1)
       }
-      transform.scaleYRational = .with {
+      transform.scaleY = .with {
         $0.set(num: 1, den: 1)
       }
       programPreferences.videoLayerTransforms[id] = transform
@@ -267,7 +263,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     programPreferences.videoLayerHidden[2] = true
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 100
-    program.landscapeVideoLayerInternalIds = [1, 2]
+    programPreferences.videoLayerInternalIds = [1, 2]
     definition.programs = [program]
     storeService.definition = definition
     storeService.preferences.landscapeProgramPreferences[100] = programPreferences

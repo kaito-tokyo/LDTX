@@ -45,8 +45,8 @@ failure to create or write that metadata returns `nil`. Its
 respective protobuf documents independently; neither replaces the package or
 validates the other document. The persistence coordinator validates the
 in-memory bundle before writing both documents. The Writer accepts UUID values
-for document identifiers and writes their lowercase string representation into
-each protobuf envelope. Its `makeExternalID()` operation creates UUIDv7 values
+for document identifiers and writes their 16-byte RFC 9562 network byte order
+representation into each protobuf envelope. Its `makeExternalID()` operation creates UUIDv7 values
 for callers that need new document identifiers.
 The Workspace persistence coordinator and CLI orchestrate their document
 writes; the Writer does not combine them into a package-level replacement.

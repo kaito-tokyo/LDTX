@@ -34,8 +34,6 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 101
       program.displayName = "Main"
-      program.landscapeVideoLayerInternalIds = [1, 2, 3]
-      program.portraitVideoLayerInternalIds = [3, 2, 1]
       document.storeService.definition.programs = [program]
       document.storeService.definition.videoComponents = [1, 2, 3].map { id in
         var device = Ldtx_Workspace_V4_VfxSourceComponent()
@@ -45,33 +43,46 @@ extension AppUIComponentTestSuite {
         wrapper.vfxSource = device
         return wrapper
       }
+      document.storeService.preferences.landscapeProgramPreferences[101] = .with {
+        $0.videoLayerInternalIds = [1, 2, 3]
+      }
+      document.storeService.preferences.portraitProgramPreferences[101] = .with {
+        $0.videoLayerInternalIds = [3, 2, 1]
+      }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
       document.storeService.isOutputActive = true
-      document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [3, 1, 2]
-      document.storeService.definition.programs[0].portraitVideoLayerInternalIds = [1, 3, 2]
+      let definition = document.storeService.definition
+      let outputSettings = document.storeService.outputSettings
+      try document.storeService.commitLayerOrder([3, 1, 2], programID: 101, target: .landscape)
+      try document.storeService.commitLayerOrder([1, 3, 2], programID: 101, target: .portrait)
       #expect(document.isDocumentEdited)
-      let reordered = document.storeService.definition
+      let reordered = document.storeService.preferences
       for rejected: [UInt64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
-        document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = rejected
-        #expect(document.storeService.definition == reordered)
+        #expect(throws: WorkspaceSelectionError.self) {
+          try document.storeService.commitLayerOrder(rejected, programID: 101, target: .landscape)
+        }
+        #expect(document.storeService.preferences == reordered)
       }
-      var mixed = reordered
-      mixed.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
-      mixed.displayName = "Forbidden"
-      document.storeService.definition = mixed
-      #expect(document.storeService.definition == reordered)
-      document.storeService.definition.programs[0].landscapeVideoLayerInternalIds = [2, 3, 1]
-      let latest = document.storeService.definition
+      document.storeService.definition.displayName = "Forbidden"
       document.storeService.definition.programs.removeAll()
-      #expect(document.storeService.definition == latest)
+      #expect(document.storeService.definition == definition)
+      document.storeService.outputSettings.recordingEnabled.toggle()
+      #expect(document.storeService.outputSettings == outputSettings)
+      try document.storeService.commitLayerOrder([2, 3, 1], programID: 101, target: .landscape)
+      let latest = document.storeService.preferences
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
-      #expect(try WorkspaceBundleReaderV4(at: url).read().definition == latest)
+      let persisted = try WorkspaceBundleReaderV4(at: url).read()
+      #expect(persisted.definition == definition)
+      #expect(persisted.preferences == latest)
+      #expect(persisted.outputSettings == outputSettings)
       document.storeService.isOutputActive = false
       let reopened = WorkspaceDocument()
       defer { reopened.close() }
       try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
-      #expect(reopened.storeService.definition == latest)
+      #expect(reopened.storeService.definition == definition)
+      #expect(reopened.storeService.preferences == latest)
+      #expect(reopened.storeService.outputSettings == outputSettings)
     }
 
     @Test("UCT-1004.2: Starting output does not save pending edits")

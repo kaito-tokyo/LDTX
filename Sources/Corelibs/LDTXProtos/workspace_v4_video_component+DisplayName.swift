@@ -4,14 +4,14 @@
 
 extension Ldtx_Workspace_V4_VideoComponentWrapper {
   public var displayName: String? {
-    switch definition {
-    case .vfxSource(let component): component.displayName
-    case .solidColorFill(let component): component.displayName
-    case .linearGradientFill(let component): component.displayName
-    case .radialGradientFill(let component): component.displayName
-    case .conicGradientFill(let component): component.displayName
-    case .clock(let component): component.displayName
-    case .testPattern(let component): component.displayName
+    switch videoComponent {
+    case .solidColorFill(let component): component.hasDisplayName ? component.displayName : nil
+    case .linearGradientFill(let component): component.hasDisplayName ? component.displayName : nil
+    case .radialGradientFill(let component): component.hasDisplayName ? component.displayName : nil
+    case .conicGradientFill(let component): component.hasDisplayName ? component.displayName : nil
+    case .vfxSource(let component): component.hasDisplayName ? component.displayName : nil
+    case .clock(let component): component.hasDisplayName ? component.displayName : nil
+    case .testPattern(let component): component.hasDisplayName ? component.displayName : nil
     case nil: nil
     }
   }

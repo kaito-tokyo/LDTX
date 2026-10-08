@@ -16,8 +16,8 @@ extension AppUIComponentTestSuite {
       var vision = WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1)
         .ocrVision
       vision.regionOfInterest = .with {
-        $0.widthRational = .with { $0.set(num: 1, den: 1) }
-        $0.heightRational = .with { $0.set(num: 1, den: 1) }
+        $0.width = .with { $0.set(num: 1, den: 1) }
+        $0.height = .with { $0.set(num: 1, den: 1) }
       }
       store.definition.visions = [.with { $0.ocrVision = vision }]
       store.inspectorSelector = .init(kind: .ocrVision, internalID: 2)
@@ -49,8 +49,8 @@ extension AppUIComponentTestSuite {
       #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
       store.editOcrRegion(internalID: 2, field: "Width", text: "0.1")
       try store.validateInspectorEdits()
-      #expect(store.definition.visions[0].ocrVision.regionOfInterest.xRational.double == 0.8)
-      #expect(store.definition.visions[0].ocrVision.regionOfInterest.widthRational.double == 0.1)
+      #expect(store.definition.visions[0].ocrVision.regionOfInterest.x.double == 0.8)
+      #expect(store.definition.visions[0].ocrVision.regionOfInterest.width.double == 0.1)
       store.inspectorSelector = .init(kind: .workspacePrograms)
       #expect(store.inspectorSelector == .init(kind: .workspacePrograms))
     }

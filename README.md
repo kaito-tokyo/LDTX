@@ -35,6 +35,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program runtime definitions, output profiles, and clock backgrounds.        |
 | LDTXProtos                 | SwiftProtobuf messages, Workspace bundle values, and Workspace integrity validation. |
+| LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
 | LDTXWorkspaceBundleFormat  | `.ldtxworkspace` package IO and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |

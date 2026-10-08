@@ -42,8 +42,9 @@ public struct WorkspaceBundleWriterV4 {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     externalID: UUID
   ) throws -> UUID {
+    try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-    envelope.externalID = externalID.uuidString.lowercased()
+    envelope.externalIDAsUUID = externalID
     envelope.workspaceDefinitionV4 = definition
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
@@ -56,14 +57,39 @@ public struct WorkspaceBundleWriterV4 {
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     externalID: UUID
   ) throws -> UUID {
+    try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-    envelope.externalID = externalID.uuidString.lowercased()
+    envelope.externalIDAsUUID = externalID
     envelope.workspacePreferencesV4 = preferences
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
     let data = try envelope.serializedData(options: options)
     try data.write(to: preferencesURL, options: .atomic)
     return externalID
+  }
+
+  public var outputSettingsURL: URL {
+    bundleURL.appending(path: "output_settings.pb", directoryHint: .notDirectory)
+  }
+
+  public func write(
+    outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4,
+    externalID: UUID
+  ) throws -> UUID {
+    try validateExternalID(externalID)
+    var envelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
+    envelope.externalIDAsUUID = externalID
+    envelope.workspaceOutputSettingsV4 = outputSettings
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    try envelope.serializedData(options: options).write(to: outputSettingsURL, options: .atomic)
+    return externalID
+  }
+
+  private func validateExternalID(_ identifier: UUID) throws {
+    guard identifier.uuid.6 >> 4 == 7, identifier.uuid.8 & 0xc0 == 0x80 else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
   }
 
   public mutating func makeExternalID() -> UUID {

@@ -26,11 +26,14 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     definition.canvasConfiguration.frameRate = 30
     definition.canvasConfiguration.landscapeVideoBitRate = 1_000_000
     definition.canvasConfiguration.portraitVideoBitRate = 1_000_000
-    definition.outputConfiguration.recordsLandscape = true
-    definition.outputConfiguration.recordsPortrait = true
-    definition.outputConfiguration.outputFolderPath = directory.path
-    var workspace = WorkspaceV4Bundle(definition: definition, preferences: .init())
-    var local = WorkspaceLocalState()
+    let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
+      $0.recordingEnabled = true
+      $0.recordingSettings.recordsLandscape = true
+      $0.recordingSettings.recordsPortrait = true
+    }
+    var workspace = WorkspaceV4Bundle(
+      definition: definition, preferences: .init(), outputSettings: outputSettings)
+    var local = WorkspaceLocalState(recordingFolderPath: directory.path)
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { workspace },
       replaceWorkspace: { workspace = $0 },
@@ -48,7 +51,7 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     runtime.installRuntimes(landscape: landscape, portrait: portrait)
     let first = try runtime.addProgram(displayName: "First")
     let second = try runtime.addProgram(displayName: "Second")
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    var color = Ldtx_Workspace_V4_Color()
     color.blue = 1
     color.alpha = 1
     let fill = try runtime.addSolidColorFill(displayName: "Blue", color: color)

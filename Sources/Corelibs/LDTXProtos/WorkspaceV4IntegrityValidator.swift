@@ -41,7 +41,7 @@ public enum WorkspaceV4IntegrityValidator {
     let videoLayerIDs = Set(componentIDs)
     let vfxSourceIDs = Set(
       definition.videoComponents.compactMap { wrapper -> UInt64? in
-        guard case .vfxSource(let source) = wrapper.definition else { return nil }
+        guard case .vfxSource(let source) = wrapper.videoComponent else { return nil }
         return source.internalID
       })
     if definition.canvasConfiguration.hasPtsMasterVfxSourceInternalID {
@@ -49,22 +49,6 @@ public enum WorkspaceV4IntegrityValidator {
       if !vfxSourceIDs.contains(id) {
         issues.append(
           .init(context: "Canvas", error: WorkspaceV4IntegrityError.missingVfxSource(id)))
-      }
-    }
-    for program in definition.programs {
-      let landscape = program.landscapeVideoLayerInternalIds
-      let portrait = program.portraitVideoLayerInternalIds
-      if Set(landscape).count != landscape.count || Set(portrait).count != portrait.count {
-        issues.append(
-          .init(
-            context: program.displayName,
-            error: WorkspaceV4IntegrityError.duplicateVideoLayer(program.internalID)))
-      }
-      for id in landscape + portrait where !videoLayerIDs.contains(id) {
-        issues.append(
-          .init(
-            context: program.displayName,
-            error: WorkspaceV4IntegrityError.missingVideoLayer(id)))
       }
     }
     for component in definition.videoComponents {
@@ -93,78 +77,73 @@ public enum WorkspaceV4IntegrityValidator {
   private static func validateVideoComponent(
     _ component: Ldtx_Workspace_V4_VideoComponentWrapper
   ) throws {
-    switch component.definition {
+    switch component.videoComponent {
     case .vfxSource(let source):
-      guard source.effects.allSatisfy({ $0.definition != nil }) else {
+      guard source.effects.allSatisfy({ $0.videoEffect != nil }) else {
         throw WorkspaceV4IntegrityError.missingConcreteDefinition
       }
     case .radialGradientFill(let fill):
       try validateRationals(
-        [
-          fill.hasCenterXRational ? fill.centerXRational : nil,
-          fill.hasCenterYRational ? fill.centerYRational : nil,
-          fill.hasInnerRadiusRational ? fill.innerRadiusRational : nil,
-          fill.hasOuterRadiusRational ? fill.outerRadiusRational : nil,
-        ].compactMap { $0 })
-      guard unitInterval(fill.centerXRational),
-        unitInterval(fill.centerYRational),
-        unitInterval(fill.innerRadiusRational),
-        unitInterval(fill.outerRadiusRational),
-        lessThan(fill.innerRadiusRational, fill.outerRadiusRational)
+        ([
+          fill.hasCenterX ? fill.centerX : nil,
+          fill.hasCenterY ? fill.centerY : nil,
+          fill.hasInnerRadius ? fill.innerRadius : nil,
+          fill.hasOuterRadius ? fill.outerRadius : nil,
+        ] as [(any Rational32Value)?]).compactMap { $0 })
+      guard unitInterval(fill.centerX),
+        unitInterval(fill.centerY),
+        unitInterval(fill.innerRadius),
+        unitInterval(fill.outerRadius),
+        lessThan(fill.innerRadius, fill.outerRadius)
       else { throw WorkspaceV4IntegrityError.invalidRadialGradient }
-      try validateColor(fill.innerColor)
-      try validateColor(fill.outerColor)
+      try validateColor(fill.innerExtendedSrgbColor)
+      try validateColor(fill.outerExtendedSrgbColor)
     case .linearGradientFill(let fill):
       try validateRationals(
-        [
-          fill.hasStartXRational ? fill.startXRational : nil,
-          fill.hasStartYRational ? fill.startYRational : nil,
-          fill.hasEndXRational ? fill.endXRational : nil,
-          fill.hasEndYRational ? fill.endYRational : nil,
-        ].compactMap { $0 })
-      guard unitInterval(fill.startXRational),
-        unitInterval(fill.startYRational),
-        unitInterval(fill.endXRational),
-        unitInterval(fill.endYRational),
-        lessThan(fill.startXRational, fill.endXRational)
-          || lessThan(fill.endXRational, fill.startXRational)
-          || lessThan(fill.startYRational, fill.endYRational)
-          || lessThan(fill.endYRational, fill.startYRational)
+        ([
+          fill.hasStartX ? fill.startX : nil,
+          fill.hasStartY ? fill.startY : nil,
+          fill.hasEndX ? fill.endX : nil,
+          fill.hasEndY ? fill.endY : nil,
+        ] as [(any Rational32Value)?]).compactMap { $0 })
+      guard unitInterval(fill.startX),
+        unitInterval(fill.startY),
+        unitInterval(fill.endX),
+        unitInterval(fill.endY),
+        lessThan(fill.startX, fill.endX)
+          || lessThan(fill.endX, fill.startX)
+          || lessThan(fill.startY, fill.endY)
+          || lessThan(fill.endY, fill.startY)
       else { throw WorkspaceV4IntegrityError.invalidLinearGradient }
-      try validateColor(fill.startColor)
-      try validateColor(fill.endColor)
+      try validateColor(fill.startExtendedSrgbColor)
+      try validateColor(fill.endExtendedSrgbColor)
     case .conicGradientFill(let fill):
       try validateRationals(
-        [
-          fill.hasCenterXRational ? fill.centerXRational : nil,
-          fill.hasCenterYRational ? fill.centerYRational : nil,
-          fill.hasStartAngleRadiansRational ? fill.startAngleRadiansRational : nil,
-        ].compactMap { $0 })
-      guard unitInterval(fill.centerXRational),
-        unitInterval(fill.centerYRational)
+        ([
+          fill.hasCenterX ? fill.centerX : nil,
+          fill.hasCenterY ? fill.centerY : nil,
+          fill.hasStartAngleRadians ? fill.startAngleRadians : nil,
+        ] as [(any Rational32Value)?]).compactMap { $0 })
+      guard unitInterval(fill.centerX),
+        unitInterval(fill.centerY)
       else { throw WorkspaceV4IntegrityError.invalidConicGradient }
-      try validateColor(fill.startColor)
-      try validateColor(fill.endColor)
+      try validateColor(fill.startExtendedSrgbColor)
+      try validateColor(fill.endExtendedSrgbColor)
     case .solidColorFill(let fill):
-      let color = fill.color
-      guard color.red.isFinite, color.green.isFinite, color.blue.isFinite,
-        color.alpha.isFinite,
-        (0...1).contains(color.red), (0...1).contains(color.green),
-        (0...1).contains(color.blue), (0...1).contains(color.alpha)
-      else { throw WorkspaceV4IntegrityError.invalidColor }
+      try validateColor(fill.extendedSrgbColor)
     case .clock(let clock):
       try validateRationals(
-        [
-          clock.hasWidthRational ? clock.widthRational : nil,
-          clock.hasHeightRational ? clock.heightRational : nil,
-        ].compactMap { $0 })
-      guard unitInterval(clock.widthRational, positive: true),
-        unitInterval(clock.heightRational, positive: true),
+        ([
+          clock.hasWidth ? clock.width : nil,
+          clock.hasHeight ? clock.height : nil,
+        ] as [(any Rational32Value)?]).compactMap { $0 })
+      guard unitInterval(clock.width, positive: true),
+        unitInterval(clock.height, positive: true),
         clock.outlines.count <= 2
       else { throw WorkspaceV4IntegrityError.invalidClockGeometry }
       for outline in clock.outlines {
-        if outline.hasThicknessRational { try validateRationals([outline.thicknessRational]) }
-        guard outline.thicknessRational.numerator >= 0 else {
+        if outline.hasThickness { try validateRationals([outline.thickness]) }
+        guard outline.thickness.numerator >= 0 else {
           throw WorkspaceV4IntegrityError.invalidClockGeometry
         }
       }
@@ -173,7 +152,7 @@ public enum WorkspaceV4IntegrityValidator {
     }
   }
 
-  private static func unitInterval(_ value: Ldtx_Workspace_V4_Rational32, positive: Bool = false)
+  private static func unitInterval(_ value: some Rational32Value, positive: Bool = false)
     -> Bool
   {
     (positive ? value.numerator > 0 : value.numerator >= 0)
@@ -190,46 +169,33 @@ public enum WorkspaceV4IntegrityValidator {
 
   private static func fitsUnitInterval(
     _ start: Ldtx_Workspace_V4_Rational32,
-    _ size: Ldtx_Workspace_V4_Rational32
+    _ size: Ldtx_Workspace_V4_Rational32DefaultOne
   ) -> Bool {
     UInt128(start.numerator) * UInt128(size.denominator)
       <= UInt128(size.denominator - UInt32(size.numerator)) * UInt128(max(start.denominator, 1))
   }
 
-  private static func validateRationals(_ values: [Ldtx_Workspace_V4_Rational32]) throws {
+  private static func validateRationals(_ values: [any Rational32Value]) throws {
     guard values.allSatisfy({ $0.denominator > 0 || $0.numerator == 0 }) else {
       throw WorkspaceV4IntegrityError.invalidRational
     }
   }
 
-  private static func validateColor(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) throws {
+  private static func validateColor(_ color: Ldtx_Workspace_V4_Color) throws {
     guard color.red.isFinite, color.green.isFinite, color.blue.isFinite,
       color.alpha.isFinite,
-      (0...1).contains(color.red), (0...1).contains(color.green),
-      (0...1).contains(color.blue), (0...1).contains(color.alpha)
+      (0...1).contains(color.alpha)
     else { throw WorkspaceV4IntegrityError.invalidColor }
   }
 
   private static func videoComponentName(
     _ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper
   ) -> String {
-    switch wrapper.definition {
-    case .solidColorFill(let component): component.displayName
-    case .linearGradientFill(let component): component.displayName
-    case .radialGradientFill(let component): component.displayName
-    case .conicGradientFill(let component): component.displayName
-    case .vfxSource(let component): component.displayName
-    case .clock(let component): component.displayName
-    case .testPattern(let component): component.displayName
-    case nil: ""
-    }
+    wrapper.displayName ?? ""
   }
 
   private static func visionName(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) -> String {
-    switch wrapper.definition {
-    case .ocrVision(let vision): vision.displayName
-    case nil: ""
-    }
+    wrapper.displayName ?? ""
   }
 
   /// Validates both documents before they are persisted or used by a runtime.
@@ -267,6 +233,16 @@ public enum WorkspaceV4IntegrityValidator {
         }
         let preference = preferences[programID]!
         let context = "\(program.displayName) / \(canvas)"
+        let layers = preference.videoLayerInternalIds
+        if Set(layers).count != layers.count {
+          issues.append(
+            .init(context: context, error: WorkspaceV4IntegrityError.duplicateVideoLayer(programID))
+          )
+        }
+        for id in layers where !videoComponentIDs.contains(id) {
+          issues.append(
+            .init(context: context, error: WorkspaceV4IntegrityError.missingVideoLayer(id)))
+        }
         if preference.hasAudioMasterVolumeDecibels {
           do { try validateRationals([preference.audioMasterVolumeDecibels]) } catch {
             issues.append(.init(context: context, error: error))
@@ -298,41 +274,41 @@ public enum WorkspaceV4IntegrityValidator {
   public static func videoComponentID(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) throws
     -> UInt64
   {
-    switch wrapper.definition {
-    case .solidColorFill(let component): component.internalID
-    case .linearGradientFill(let component): component.internalID
-    case .radialGradientFill(let component): component.internalID
-    case .conicGradientFill(let component): component.internalID
-    case .vfxSource(let component): component.internalID
-    case .clock(let component): component.internalID
-    case .testPattern(let component): component.internalID
-    case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
+    guard wrapper.videoComponent != nil else {
+      throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
+    guard let id = wrapper.internalID else {
+      throw WorkspaceV4IntegrityError.invalidInternalID
+    }
+    return id
   }
 
   public static func visionID(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) throws -> UInt64 {
-    switch wrapper.definition {
-    case .ocrVision(let vision): vision.internalID
-    case nil: throw WorkspaceV4IntegrityError.missingConcreteDefinition
+    guard wrapper.vision != nil else {
+      throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
+    guard let id = wrapper.internalID else {
+      throw WorkspaceV4IntegrityError.invalidInternalID
+    }
+    return id
   }
 
   public static func validateRegionOfInterest(_ region: Ldtx_Workspace_V4_VisionRegionOfInterest)
     throws
   {
     try validateRationals(
-      [
-        region.hasXRational ? region.xRational : nil,
-        region.hasYRational ? region.yRational : nil,
-        region.hasWidthRational ? region.widthRational : nil,
-        region.hasHeightRational ? region.heightRational : nil,
-      ].compactMap { $0 })
-    guard unitInterval(region.xRational),
-      unitInterval(region.yRational),
-      unitInterval(region.widthRational, positive: true),
-      unitInterval(region.heightRational, positive: true),
-      fitsUnitInterval(region.xRational, region.widthRational),
-      fitsUnitInterval(region.yRational, region.heightRational)
+      ([
+        region.hasX ? region.x : nil,
+        region.hasY ? region.y : nil,
+        region.hasWidth ? region.width : nil,
+        region.hasHeight ? region.height : nil,
+      ] as [(any Rational32Value)?]).compactMap { $0 })
+    guard unitInterval(region.x),
+      unitInterval(region.y),
+      unitInterval(region.width, positive: true),
+      unitInterval(region.height, positive: true),
+      fitsUnitInterval(region.x, region.width),
+      fitsUnitInterval(region.y, region.height)
     else { throw WorkspaceV4IntegrityError.invalidVisionRegionOfInterest }
   }
 
@@ -344,29 +320,31 @@ public enum WorkspaceV4IntegrityValidator {
     _ wrapper: Ldtx_Workspace_V4_VisionWrapper,
     componentIDs: Set<UInt64>
   ) throws {
-    guard case .ocrVision(let vision)? = wrapper.definition else {
+    guard case .ocrVision(let vision)? = wrapper.vision else {
       throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
-    guard case .videoComponentInternalID(let inputID)? = vision.source else {
+    guard vision.hasVideoComponentInternalID else {
       throw WorkspaceV4IntegrityError.missingVisionVideoComponent
     }
+    let inputID = vision.videoComponentInternalID
     guard componentIDs.contains(inputID) else {
       throw WorkspaceV4IntegrityError.missingVideoComponent(inputID)
     }
-    if vision.hasMinimumTextHeightRational {
-      try validateRationals([vision.minimumTextHeightRational])
+    if vision.hasMinimumTextHeight {
+      try validateRationals([vision.minimumTextHeight])
     }
     for trigger in vision.triggers {
-      guard case .intervalTrigger(let interval)? = trigger.definition else {
+      guard case .intervalTrigger(let interval)? = trigger.trigger else {
         throw WorkspaceV4IntegrityError.missingConcreteDefinition
       }
       try validateRationals(
-        [interval.hasIntervalSecondsRational ? interval.intervalSecondsRational : nil].compactMap {
-          $0
-        })
+        ([interval.hasIntervalSeconds ? interval.intervalSeconds : nil] as [(any Rational32Value)?])
+          .compactMap {
+            $0
+          })
       guard
         !lessThan(
-          interval.intervalSecondsRational,
+          interval.intervalSeconds,
           .with {
             $0.set(num: 1, den: 10)
           })
@@ -377,8 +355,8 @@ public enum WorkspaceV4IntegrityValidator {
     if vision.hasRegionOfInterest {
       try validateRegionOfInterest(vision.regionOfInterest)
     }
-    if vision.hasMinimumTextHeightRational {
-      guard unitInterval(vision.minimumTextHeightRational)
+    if vision.hasMinimumTextHeight {
+      guard unitInterval(vision.minimumTextHeight)
       else {
         throw WorkspaceV4IntegrityError.invalidMinimumTextHeight
       }
@@ -405,26 +383,25 @@ public enum WorkspaceV4IntegrityValidator {
 
   public static func validateTransform(_ transform: Ldtx_Workspace_V4_BasicTransform) throws {
     try validateRationals(
-      [
-        transform.translationX,
-        transform.translationY,
-        transform.scaleX,
-        transform.scaleY,
-        transform.topInset,
-        transform.rightInset,
-        transform.bottomInset,
-        transform.leftInset,
-      ].compactMap { $0 })
+      ([
+        (transform.hasTranslationX ? transform.translationX : nil),
+        (transform.hasTranslationY ? transform.translationY : nil),
+        (transform.hasScaleX ? transform.scaleX : nil),
+        (transform.hasScaleY ? transform.scaleY : nil),
+        (transform.hasTopInset ? transform.topInset : nil),
+        (transform.hasRightInset ? transform.rightInset : nil),
+        (transform.hasBottomInset ? transform.bottomInset : nil),
+        (transform.hasLeftInset ? transform.leftInset : nil),
+      ] as [(any Rational32Value)?]).compactMap { $0 })
     guard
       [
-        transform.translationXRational, transform.translationYRational,
-        transform.topInsetRational, transform.rightInsetRational,
-        transform.bottomInsetRational, transform.leftInsetRational,
-      ].allSatisfy({
-        unitInterval($0)
-      }),
-      !transform.hasScaleXRational || transform.scaleXRational.numerator >= 0,
-      !transform.hasScaleYRational || transform.scaleYRational.numerator >= 0
+        (transform.hasTranslationX ? transform.translationX : nil),
+        (transform.hasTranslationY ? transform.translationY : nil),
+        (transform.hasTopInset ? transform.topInset : nil),
+        (transform.hasRightInset ? transform.rightInset : nil),
+        (transform.hasBottomInset ? transform.bottomInset : nil),
+        (transform.hasLeftInset ? transform.leftInset : nil),
+      ].compactMap({ $0 }).allSatisfy({ unitInterval($0) })
     else { throw WorkspaceV4IntegrityError.invalidBasicTransform }
   }
 
@@ -488,14 +465,14 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .invalidRadialGradient:
       "Radial gradient coordinates and radii must be valid normalized values."
     case .invalidBasicTransform:
-      "Transform positions and crop insets must be between 0 and 1; scales must be nonnegative. All values must be finite."
+      "Transform positions and crop insets must be between 0 and 1. All values must be finite."
     case .invalidLinearGradient: "Linear gradient endpoints must be distinct and between 0 and 1."
     case .invalidConicGradient:
       "Conic gradient coordinates must be between 0 and 1 and its angle must be finite."
     case .invalidClockGeometry:
       "Clock dimensions must be greater than 0 and at most 1, with at most two outlines."
     case .invalidRational: "Rational values must have a denominator greater than zero."
-    case .invalidColor: "Color components must be finite and between 0 and 1."
+    case .invalidColor: "Color components must be finite; alpha must be between 0 and 1."
     }
   }
 }

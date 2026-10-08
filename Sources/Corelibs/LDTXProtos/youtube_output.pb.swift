@@ -68,13 +68,30 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Context: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var sessionID: String = String()
+  public var sessionID: String {
+    get {_sessionID ?? String()}
+    set {_sessionID = newValue}
+  }
+  /// Returns true if `sessionID` has been explicitly set.
+  public var hasSessionID: Bool {self._sessionID != nil}
+  /// Clears the value of `sessionID`. Subsequent reads from it will return its default value.
+  public mutating func clearSessionID() {self._sessionID = nil}
 
-  public var generation: UInt64 = 0
+  public var generation: UInt64 {
+    get {_generation ?? 0}
+    set {_generation = newValue}
+  }
+  /// Returns true if `generation` has been explicitly set.
+  public var hasGeneration: Bool {self._generation != nil}
+  /// Clears the value of `generation`. Subsequent reads from it will return its default value.
+  public mutating func clearGeneration() {self._generation = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _sessionID: String? = nil
+  fileprivate var _generation: UInt64? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_Representation: Sendable {
@@ -82,23 +99,80 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Representation: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var id: String = String()
+  public var id: String {
+    get {_id ?? String()}
+    set {_id = newValue}
+  }
+  /// Returns true if `id` has been explicitly set.
+  public var hasID: Bool {self._id != nil}
+  /// Clears the value of `id`. Subsequent reads from it will return its default value.
+  public mutating func clearID() {self._id = nil}
 
-  public var bandwidth: Int32 = 0
+  public var bandwidth: Int32 {
+    get {_bandwidth ?? 0}
+    set {_bandwidth = newValue}
+  }
+  /// Returns true if `bandwidth` has been explicitly set.
+  public var hasBandwidth: Bool {self._bandwidth != nil}
+  /// Clears the value of `bandwidth`. Subsequent reads from it will return its default value.
+  public mutating func clearBandwidth() {self._bandwidth = nil}
 
-  public var width: Int32 = 0
+  public var width: Int32 {
+    get {_width ?? 0}
+    set {_width = newValue}
+  }
+  /// Returns true if `width` has been explicitly set.
+  public var hasWidth: Bool {self._width != nil}
+  /// Clears the value of `width`. Subsequent reads from it will return its default value.
+  public mutating func clearWidth() {self._width = nil}
 
-  public var height: Int32 = 0
+  public var height: Int32 {
+    get {_height ?? 0}
+    set {_height = newValue}
+  }
+  /// Returns true if `height` has been explicitly set.
+  public var hasHeight: Bool {self._height != nil}
+  /// Clears the value of `height`. Subsequent reads from it will return its default value.
+  public mutating func clearHeight() {self._height = nil}
 
-  public var frameRate: String = String()
+  public var frameRate: String {
+    get {_frameRate ?? String()}
+    set {_frameRate = newValue}
+  }
+  /// Returns true if `frameRate` has been explicitly set.
+  public var hasFrameRate: Bool {self._frameRate != nil}
+  /// Clears the value of `frameRate`. Subsequent reads from it will return its default value.
+  public mutating func clearFrameRate() {self._frameRate = nil}
 
-  public var codecs: String = String()
+  public var codecs: String {
+    get {_codecs ?? String()}
+    set {_codecs = newValue}
+  }
+  /// Returns true if `codecs` has been explicitly set.
+  public var hasCodecs: Bool {self._codecs != nil}
+  /// Clears the value of `codecs`. Subsequent reads from it will return its default value.
+  public mutating func clearCodecs() {self._codecs = nil}
 
-  public var audioSamplingRate: Int32 = 0
+  public var audioSamplingRate: Int32 {
+    get {_audioSamplingRate ?? 0}
+    set {_audioSamplingRate = newValue}
+  }
+  /// Returns true if `audioSamplingRate` has been explicitly set.
+  public var hasAudioSamplingRate: Bool {self._audioSamplingRate != nil}
+  /// Clears the value of `audioSamplingRate`. Subsequent reads from it will return its default value.
+  public mutating func clearAudioSamplingRate() {self._audioSamplingRate = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _id: String? = nil
+  fileprivate var _bandwidth: Int32? = nil
+  fileprivate var _width: Int32? = nil
+  fileprivate var _height: Int32? = nil
+  fileprivate var _frameRate: String? = nil
+  fileprivate var _codecs: String? = nil
+  fileprivate var _audioSamplingRate: Int32? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
@@ -107,9 +181,13 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   // methods supported on all messages.
 
   public var protocolVersion: UInt32 {
-    get {_storage._protocolVersion}
+    get {_storage._protocolVersion ?? 0}
     set {_uniqueStorage()._protocolVersion = newValue}
   }
+  /// Returns true if `protocolVersion` has been explicitly set.
+  public var hasProtocolVersion: Bool {_storage._protocolVersion != nil}
+  /// Clears the value of `protocolVersion`. Subsequent reads from it will return its default value.
+  public mutating func clearProtocolVersion() {_uniqueStorage()._protocolVersion = nil}
 
   public var context: Ldtx_YoutubeOutput_V1_Context {
     get {_storage._context ?? Ldtx_YoutubeOutput_V1_Context()}
@@ -121,29 +199,49 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   public mutating func clearContext() {_uniqueStorage()._context = nil}
 
   public var endpoint: String {
-    get {_storage._endpoint}
+    get {_storage._endpoint ?? String()}
     set {_uniqueStorage()._endpoint = newValue}
   }
+  /// Returns true if `endpoint` has been explicitly set.
+  public var hasEndpoint: Bool {_storage._endpoint != nil}
+  /// Clears the value of `endpoint`. Subsequent reads from it will return its default value.
+  public mutating func clearEndpoint() {_uniqueStorage()._endpoint = nil}
 
   public var availabilityStartTimeMilliseconds: Int64 {
-    get {_storage._availabilityStartTimeMilliseconds}
+    get {_storage._availabilityStartTimeMilliseconds ?? 0}
     set {_uniqueStorage()._availabilityStartTimeMilliseconds = newValue}
   }
+  /// Returns true if `availabilityStartTimeMilliseconds` has been explicitly set.
+  public var hasAvailabilityStartTimeMilliseconds: Bool {_storage._availabilityStartTimeMilliseconds != nil}
+  /// Clears the value of `availabilityStartTimeMilliseconds`. Subsequent reads from it will return its default value.
+  public mutating func clearAvailabilityStartTimeMilliseconds() {_uniqueStorage()._availabilityStartTimeMilliseconds = nil}
 
   public var timescale: Int32 {
-    get {_storage._timescale}
+    get {_storage._timescale ?? 0}
     set {_uniqueStorage()._timescale = newValue}
   }
+  /// Returns true if `timescale` has been explicitly set.
+  public var hasTimescale: Bool {_storage._timescale != nil}
+  /// Clears the value of `timescale`. Subsequent reads from it will return its default value.
+  public mutating func clearTimescale() {_uniqueStorage()._timescale = nil}
 
   public var startNumber: Int32 {
-    get {_storage._startNumber}
+    get {_storage._startNumber ?? 0}
     set {_uniqueStorage()._startNumber = newValue}
   }
+  /// Returns true if `startNumber` has been explicitly set.
+  public var hasStartNumber: Bool {_storage._startNumber != nil}
+  /// Clears the value of `startNumber`. Subsequent reads from it will return its default value.
+  public mutating func clearStartNumber() {_uniqueStorage()._startNumber = nil}
 
   public var mediaTemplate: String {
-    get {_storage._mediaTemplate}
+    get {_storage._mediaTemplate ?? String()}
     set {_uniqueStorage()._mediaTemplate = newValue}
   }
+  /// Returns true if `mediaTemplate` has been explicitly set.
+  public var hasMediaTemplate: Bool {_storage._mediaTemplate != nil}
+  /// Clears the value of `mediaTemplate`. Subsequent reads from it will return its default value.
+  public mutating func clearMediaTemplate() {_uniqueStorage()._mediaTemplate = nil}
 
   public var representation: Ldtx_YoutubeOutput_V1_Representation {
     get {_storage._representation ?? Ldtx_YoutubeOutput_V1_Representation()}
@@ -155,9 +253,13 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   public mutating func clearRepresentation() {_uniqueStorage()._representation = nil}
 
   public var configurationFingerprint: String {
-    get {_storage._configurationFingerprint}
+    get {_storage._configurationFingerprint ?? String()}
     set {_uniqueStorage()._configurationFingerprint = newValue}
   }
+  /// Returns true if `configurationFingerprint` has been explicitly set.
+  public var hasConfigurationFingerprint: Bool {_storage._configurationFingerprint != nil}
+  /// Clears the value of `configurationFingerprint`. Subsequent reads from it will return its default value.
+  public mutating func clearConfigurationFingerprint() {_uniqueStorage()._configurationFingerprint = nil}
 
   public var initializationSegment: Data {
     get {_storage._initializationSegment ?? Data()}
@@ -169,9 +271,13 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   public mutating func clearInitializationSegment() {_uniqueStorage()._initializationSegment = nil}
 
   public var persistenceIdentifier: String {
-    get {_storage._persistenceIdentifier}
+    get {_storage._persistenceIdentifier ?? String()}
     set {_uniqueStorage()._persistenceIdentifier = newValue}
   }
+  /// Returns true if `persistenceIdentifier` has been explicitly set.
+  public var hasPersistenceIdentifier: Bool {_storage._persistenceIdentifier != nil}
+  /// Clears the value of `persistenceIdentifier`. Subsequent reads from it will return its default value.
+  public mutating func clearPersistenceIdentifier() {_uniqueStorage()._persistenceIdentifier = nil}
 
   public var nextMediaTimeSeconds: Double {
     get {_storage._nextMediaTimeSeconds ?? 0}
@@ -183,14 +289,22 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_Bootstrap: @unchecked Sendable {
   public mutating func clearNextMediaTimeSeconds() {_uniqueStorage()._nextMediaTimeSeconds = nil}
 
   public var sharedVideoSlotCount: Int32 {
-    get {_storage._sharedVideoSlotCount}
+    get {_storage._sharedVideoSlotCount ?? 0}
     set {_uniqueStorage()._sharedVideoSlotCount = newValue}
   }
+  /// Returns true if `sharedVideoSlotCount` has been explicitly set.
+  public var hasSharedVideoSlotCount: Bool {_storage._sharedVideoSlotCount != nil}
+  /// Clears the value of `sharedVideoSlotCount`. Subsequent reads from it will return its default value.
+  public mutating func clearSharedVideoSlotCount() {_uniqueStorage()._sharedVideoSlotCount = nil}
 
   public var sharedVideoSlotSize: Int32 {
-    get {_storage._sharedVideoSlotSize}
+    get {_storage._sharedVideoSlotSize ?? 0}
     set {_uniqueStorage()._sharedVideoSlotSize = newValue}
   }
+  /// Returns true if `sharedVideoSlotSize` has been explicitly set.
+  public var hasSharedVideoSlotSize: Bool {_storage._sharedVideoSlotSize != nil}
+  /// Clears the value of `sharedVideoSlotSize`. Subsequent reads from it will return its default value.
+  public mutating func clearSharedVideoSlotSize() {_uniqueStorage()._sharedVideoSlotSize = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -204,17 +318,50 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_SharedMemorySlice: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var slot: Int32 = 0
+  public var slot: Int32 {
+    get {_slot ?? 0}
+    set {_slot = newValue}
+  }
+  /// Returns true if `slot` has been explicitly set.
+  public var hasSlot: Bool {self._slot != nil}
+  /// Clears the value of `slot`. Subsequent reads from it will return its default value.
+  public mutating func clearSlot() {self._slot = nil}
 
-  public var generation: UInt64 = 0
+  public var generation: UInt64 {
+    get {_generation ?? 0}
+    set {_generation = newValue}
+  }
+  /// Returns true if `generation` has been explicitly set.
+  public var hasGeneration: Bool {self._generation != nil}
+  /// Clears the value of `generation`. Subsequent reads from it will return its default value.
+  public mutating func clearGeneration() {self._generation = nil}
 
-  public var offset: Int32 = 0
+  public var offset: Int32 {
+    get {_offset ?? 0}
+    set {_offset = newValue}
+  }
+  /// Returns true if `offset` has been explicitly set.
+  public var hasOffset: Bool {self._offset != nil}
+  /// Clears the value of `offset`. Subsequent reads from it will return its default value.
+  public mutating func clearOffset() {self._offset = nil}
 
-  public var length: Int32 = 0
+  public var length: Int32 {
+    get {_length ?? 0}
+    set {_length = newValue}
+  }
+  /// Returns true if `length` has been explicitly set.
+  public var hasLength: Bool {self._length != nil}
+  /// Clears the value of `length`. Subsequent reads from it will return its default value.
+  public mutating func clearLength() {self._length = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _slot: Int32? = nil
+  fileprivate var _generation: UInt64? = nil
+  fileprivate var _offset: Int32? = nil
+  fileprivate var _length: Int32? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_FinishRequest: Sendable {
@@ -343,7 +490,14 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_ResetRequest: Sendable {
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
   public mutating func clearContext() {self._context = nil}
 
-  public var reason: String = String()
+  public var reason: String {
+    get {_reason ?? String()}
+    set {_reason = newValue}
+  }
+  /// Returns true if `reason` has been explicitly set.
+  public var hasReason: Bool {self._reason != nil}
+  /// Clears the value of `reason`. Subsequent reads from it will return its default value.
+  public mutating func clearReason() {self._reason = nil}
 
   public var nextMediaSegmentNumber: Int32 {
     get {_nextMediaSegmentNumber ?? 0}
@@ -395,6 +549,7 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_ResetRequest: Sendable {
   public init() {}
 
   fileprivate var _context: Ldtx_YoutubeOutput_V1_Context? = nil
+  fileprivate var _reason: String? = nil
   fileprivate var _nextMediaSegmentNumber: Int32? = nil
   fileprivate var _initializationSegment: Data? = nil
   fileprivate var _configurationFingerprint: String? = nil
@@ -407,13 +562,30 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaTime: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var value: Int64 = 0
+  public var value: Int64 {
+    get {_value ?? 0}
+    set {_value = newValue}
+  }
+  /// Returns true if `value` has been explicitly set.
+  public var hasValue: Bool {self._value != nil}
+  /// Clears the value of `value`. Subsequent reads from it will return its default value.
+  public mutating func clearValue() {self._value = nil}
 
-  public var timescale: Int32 = 0
+  public var timescale: Int32 {
+    get {_timescale ?? 0}
+    set {_timescale = newValue}
+  }
+  /// Returns true if `timescale` has been explicitly set.
+  public var hasTimescale: Bool {self._timescale != nil}
+  /// Clears the value of `timescale`. Subsequent reads from it will return its default value.
+  public mutating func clearTimescale() {self._timescale = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _value: Int64? = nil
+  fileprivate var _timescale: Int32? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_H264Format: Sendable {
@@ -423,15 +595,40 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_H264Format: Sendable {
 
   public var parameterSets: [Data] = []
 
-  public var nalUnitHeaderLength: Int32 = 0
+  public var nalUnitHeaderLength: Int32 {
+    get {_nalUnitHeaderLength ?? 0}
+    set {_nalUnitHeaderLength = newValue}
+  }
+  /// Returns true if `nalUnitHeaderLength` has been explicitly set.
+  public var hasNalUnitHeaderLength: Bool {self._nalUnitHeaderLength != nil}
+  /// Clears the value of `nalUnitHeaderLength`. Subsequent reads from it will return its default value.
+  public mutating func clearNalUnitHeaderLength() {self._nalUnitHeaderLength = nil}
 
-  public var width: Int32 = 0
+  public var width: Int32 {
+    get {_width ?? 0}
+    set {_width = newValue}
+  }
+  /// Returns true if `width` has been explicitly set.
+  public var hasWidth: Bool {self._width != nil}
+  /// Clears the value of `width`. Subsequent reads from it will return its default value.
+  public mutating func clearWidth() {self._width = nil}
 
-  public var height: Int32 = 0
+  public var height: Int32 {
+    get {_height ?? 0}
+    set {_height = newValue}
+  }
+  /// Returns true if `height` has been explicitly set.
+  public var hasHeight: Bool {self._height != nil}
+  /// Clears the value of `height`. Subsequent reads from it will return its default value.
+  public mutating func clearHeight() {self._height = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _nalUnitHeaderLength: Int32? = nil
+  fileprivate var _width: Int32? = nil
+  fileprivate var _height: Int32? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_H264AccessUnit: Sendable {
@@ -466,9 +663,23 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_H264AccessUnit: Sendable {
   /// Clears the value of `duration`. Subsequent reads from it will return its default value.
   public mutating func clearDuration() {self._duration = nil}
 
-  public var keyFrame: Bool = false
+  public var keyFrame: Bool {
+    get {_keyFrame ?? false}
+    set {_keyFrame = newValue}
+  }
+  /// Returns true if `keyFrame` has been explicitly set.
+  public var hasKeyFrame: Bool {self._keyFrame != nil}
+  /// Clears the value of `keyFrame`. Subsequent reads from it will return its default value.
+  public mutating func clearKeyFrame() {self._keyFrame = nil}
 
-  public var avccData: Data = Data()
+  public var avccData: Data {
+    get {_avccData ?? Data()}
+    set {_avccData = newValue}
+  }
+  /// Returns true if `avccData` has been explicitly set.
+  public var hasAvccData: Bool {self._avccData != nil}
+  /// Clears the value of `avccData`. Subsequent reads from it will return its default value.
+  public mutating func clearAvccData() {self._avccData = nil}
 
   public var sharedMemory: Ldtx_YoutubeOutput_V1_SharedMemorySlice {
     get {_sharedMemory ?? Ldtx_YoutubeOutput_V1_SharedMemorySlice()}
@@ -486,6 +697,8 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_H264AccessUnit: Sendable {
   fileprivate var _presentationTime: Ldtx_YoutubeOutput_V1_MediaTime? = nil
   fileprivate var _decodeTime: Ldtx_YoutubeOutput_V1_MediaTime? = nil
   fileprivate var _duration: Ldtx_YoutubeOutput_V1_MediaTime? = nil
+  fileprivate var _keyFrame: Bool? = nil
+  fileprivate var _avccData: Data? = nil
   fileprivate var _sharedMemory: Ldtx_YoutubeOutput_V1_SharedMemorySlice? = nil
 }
 
@@ -512,15 +725,50 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_PCMBuffer: Sendable {
   /// Clears the value of `duration`. Subsequent reads from it will return its default value.
   public mutating func clearDuration() {self._duration = nil}
 
-  public var sampleRate: Int32 = 0
+  public var sampleRate: Int32 {
+    get {_sampleRate ?? 0}
+    set {_sampleRate = newValue}
+  }
+  /// Returns true if `sampleRate` has been explicitly set.
+  public var hasSampleRate: Bool {self._sampleRate != nil}
+  /// Clears the value of `sampleRate`. Subsequent reads from it will return its default value.
+  public mutating func clearSampleRate() {self._sampleRate = nil}
 
-  public var channelCount: Int32 = 0
+  public var channelCount: Int32 {
+    get {_channelCount ?? 0}
+    set {_channelCount = newValue}
+  }
+  /// Returns true if `channelCount` has been explicitly set.
+  public var hasChannelCount: Bool {self._channelCount != nil}
+  /// Clears the value of `channelCount`. Subsequent reads from it will return its default value.
+  public mutating func clearChannelCount() {self._channelCount = nil}
 
-  public var frameCount: Int32 = 0
+  public var frameCount: Int32 {
+    get {_frameCount ?? 0}
+    set {_frameCount = newValue}
+  }
+  /// Returns true if `frameCount` has been explicitly set.
+  public var hasFrameCount: Bool {self._frameCount != nil}
+  /// Clears the value of `frameCount`. Subsequent reads from it will return its default value.
+  public mutating func clearFrameCount() {self._frameCount = nil}
 
-  public var sampleFormat: Ldtx_YoutubeOutput_V1_PCMSampleFormat = .unspecified
+  public var sampleFormat: Ldtx_YoutubeOutput_V1_PCMSampleFormat {
+    get {_sampleFormat ?? .unspecified}
+    set {_sampleFormat = newValue}
+  }
+  /// Returns true if `sampleFormat` has been explicitly set.
+  public var hasSampleFormat: Bool {self._sampleFormat != nil}
+  /// Clears the value of `sampleFormat`. Subsequent reads from it will return its default value.
+  public mutating func clearSampleFormat() {self._sampleFormat = nil}
 
-  public var data: Data = Data()
+  public var data: Data {
+    get {_data ?? Data()}
+    set {_data = newValue}
+  }
+  /// Returns true if `data` has been explicitly set.
+  public var hasData: Bool {self._data != nil}
+  /// Clears the value of `data`. Subsequent reads from it will return its default value.
+  public mutating func clearData() {self._data = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -528,6 +776,11 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_PCMBuffer: Sendable {
 
   fileprivate var _presentationTime: Ldtx_YoutubeOutput_V1_MediaTime? = nil
   fileprivate var _duration: Ldtx_YoutubeOutput_V1_MediaTime? = nil
+  fileprivate var _sampleRate: Int32? = nil
+  fileprivate var _channelCount: Int32? = nil
+  fileprivate var _frameCount: Int32? = nil
+  fileprivate var _sampleFormat: Ldtx_YoutubeOutput_V1_PCMSampleFormat? = nil
+  fileprivate var _data: Data? = nil
 }
 
 public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
@@ -535,7 +788,14 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var protocolVersion: UInt32 = 0
+  public var protocolVersion: UInt32 {
+    get {_protocolVersion ?? 0}
+    set {_protocolVersion = newValue}
+  }
+  /// Returns true if `protocolVersion` has been explicitly set.
+  public var hasProtocolVersion: Bool {self._protocolVersion != nil}
+  /// Clears the value of `protocolVersion`. Subsequent reads from it will return its default value.
+  public mutating func clearProtocolVersion() {self._protocolVersion = nil}
 
   public var context: Ldtx_YoutubeOutput_V1_Context {
     get {_context ?? Ldtx_YoutubeOutput_V1_Context()}
@@ -546,7 +806,14 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
   /// Clears the value of `context`. Subsequent reads from it will return its default value.
   public mutating func clearContext() {self._context = nil}
 
-  public var sequence: UInt64 = 0
+  public var sequence: UInt64 {
+    get {_sequence ?? 0}
+    set {_sequence = newValue}
+  }
+  /// Returns true if `sequence` has been explicitly set.
+  public var hasSequence: Bool {self._sequence != nil}
+  /// Clears the value of `sequence`. Subsequent reads from it will return its default value.
+  public mutating func clearSequence() {self._sequence = nil}
 
   public var videoFormat: Ldtx_YoutubeOutput_V1_H264Format {
     get {_videoFormat ?? Ldtx_YoutubeOutput_V1_H264Format()}
@@ -565,7 +832,9 @@ public nonisolated struct Ldtx_YoutubeOutput_V1_MediaBatch: Sendable {
 
   public init() {}
 
+  fileprivate var _protocolVersion: UInt32? = nil
   fileprivate var _context: Ldtx_YoutubeOutput_V1_Context? = nil
+  fileprivate var _sequence: UInt64? = nil
   fileprivate var _videoFormat: Ldtx_YoutubeOutput_V1_H264Format? = nil
 }
 
@@ -587,26 +856,30 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Context: SwiftProtobuf.Message, Swif
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
-      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.generation) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self._sessionID) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self._generation) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.sessionID.isEmpty {
-      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
-    }
-    if self.generation != 0 {
-      try visitor.visitSingularUInt64Field(value: self.generation, fieldNumber: 2)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._sessionID {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._generation {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_Context, rhs: Ldtx_YoutubeOutput_V1_Context) -> Bool {
-    if lhs.sessionID != rhs.sessionID {return false}
-    if lhs.generation != rhs.generation {return false}
+    if lhs._sessionID != rhs._sessionID {return false}
+    if lhs._generation != rhs._generation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -622,51 +895,55 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Representation: SwiftProtobuf.Messag
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
-      case 2: try { try decoder.decodeSingularInt32Field(value: &self.bandwidth) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.width) }()
-      case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.frameRate) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.codecs) }()
-      case 7: try { try decoder.decodeSingularInt32Field(value: &self.audioSamplingRate) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self._id) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self._bandwidth) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self._width) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self._height) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._frameRate) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._codecs) }()
+      case 7: try { try decoder.decodeSingularInt32Field(value: &self._audioSamplingRate) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
-    if self.bandwidth != 0 {
-      try visitor.visitSingularInt32Field(value: self.bandwidth, fieldNumber: 2)
-    }
-    if self.width != 0 {
-      try visitor.visitSingularInt32Field(value: self.width, fieldNumber: 3)
-    }
-    if self.height != 0 {
-      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 4)
-    }
-    if !self.frameRate.isEmpty {
-      try visitor.visitSingularStringField(value: self.frameRate, fieldNumber: 5)
-    }
-    if !self.codecs.isEmpty {
-      try visitor.visitSingularStringField(value: self.codecs, fieldNumber: 6)
-    }
-    if self.audioSamplingRate != 0 {
-      try visitor.visitSingularInt32Field(value: self.audioSamplingRate, fieldNumber: 7)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._id {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._bandwidth {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._width {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._height {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._frameRate {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._codecs {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._audioSamplingRate {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_Representation, rhs: Ldtx_YoutubeOutput_V1_Representation) -> Bool {
-    if lhs.id != rhs.id {return false}
-    if lhs.bandwidth != rhs.bandwidth {return false}
-    if lhs.width != rhs.width {return false}
-    if lhs.height != rhs.height {return false}
-    if lhs.frameRate != rhs.frameRate {return false}
-    if lhs.codecs != rhs.codecs {return false}
-    if lhs.audioSamplingRate != rhs.audioSamplingRate {return false}
+    if lhs._id != rhs._id {return false}
+    if lhs._bandwidth != rhs._bandwidth {return false}
+    if lhs._width != rhs._width {return false}
+    if lhs._height != rhs._height {return false}
+    if lhs._frameRate != rhs._frameRate {return false}
+    if lhs._codecs != rhs._codecs {return false}
+    if lhs._audioSamplingRate != rhs._audioSamplingRate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -677,20 +954,20 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}protocol_version\0\u{1}context\0\u{1}endpoint\0\u{3}availability_start_time_milliseconds\0\u{1}timescale\0\u{4}\u{2}start_number\0\u{3}media_template\0\u{1}representation\0\u{3}configuration_fingerprint\0\u{3}initialization_segment\0\u{3}persistence_identifier\0\u{3}next_media_time_seconds\0\u{3}shared_video_slot_count\0\u{3}shared_video_slot_size\0\u{b}segment_duration_seconds\0\u{c}\u{6}\u{1}")
 
   fileprivate class _StorageClass {
-    var _protocolVersion: UInt32 = 0
+    var _protocolVersion: UInt32? = nil
     var _context: Ldtx_YoutubeOutput_V1_Context? = nil
-    var _endpoint: String = String()
-    var _availabilityStartTimeMilliseconds: Int64 = 0
-    var _timescale: Int32 = 0
-    var _startNumber: Int32 = 0
-    var _mediaTemplate: String = String()
+    var _endpoint: String? = nil
+    var _availabilityStartTimeMilliseconds: Int64? = nil
+    var _timescale: Int32? = nil
+    var _startNumber: Int32? = nil
+    var _mediaTemplate: String? = nil
     var _representation: Ldtx_YoutubeOutput_V1_Representation? = nil
-    var _configurationFingerprint: String = String()
+    var _configurationFingerprint: String? = nil
     var _initializationSegment: Data? = nil
-    var _persistenceIdentifier: String = String()
+    var _persistenceIdentifier: String? = nil
     var _nextMediaTimeSeconds: Double? = nil
-    var _sharedVideoSlotCount: Int32 = 0
-    var _sharedVideoSlotSize: Int32 = 0
+    var _sharedVideoSlotCount: Int32? = nil
+    var _sharedVideoSlotSize: Int32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -759,48 +1036,48 @@ nonisolated extension Ldtx_YoutubeOutput_V1_Bootstrap: SwiftProtobuf.Message, Sw
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._protocolVersion != 0 {
-        try visitor.visitSingularUInt32Field(value: _storage._protocolVersion, fieldNumber: 1)
-      }
+      try { if let v = _storage._protocolVersion {
+        try visitor.visitSingularUInt32Field(value: v, fieldNumber: 1)
+      } }()
       try { if let v = _storage._context {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
       } }()
-      if !_storage._endpoint.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._endpoint, fieldNumber: 3)
-      }
-      if _storage._availabilityStartTimeMilliseconds != 0 {
-        try visitor.visitSingularInt64Field(value: _storage._availabilityStartTimeMilliseconds, fieldNumber: 4)
-      }
-      if _storage._timescale != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._timescale, fieldNumber: 5)
-      }
-      if _storage._startNumber != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._startNumber, fieldNumber: 7)
-      }
-      if !_storage._mediaTemplate.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._mediaTemplate, fieldNumber: 8)
-      }
+      try { if let v = _storage._endpoint {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+      } }()
+      try { if let v = _storage._availabilityStartTimeMilliseconds {
+        try visitor.visitSingularInt64Field(value: v, fieldNumber: 4)
+      } }()
+      try { if let v = _storage._timescale {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 5)
+      } }()
+      try { if let v = _storage._startNumber {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 7)
+      } }()
+      try { if let v = _storage._mediaTemplate {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 8)
+      } }()
       try { if let v = _storage._representation {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
       } }()
-      if !_storage._configurationFingerprint.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._configurationFingerprint, fieldNumber: 10)
-      }
+      try { if let v = _storage._configurationFingerprint {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 10)
+      } }()
       try { if let v = _storage._initializationSegment {
         try visitor.visitSingularBytesField(value: v, fieldNumber: 11)
       } }()
-      if !_storage._persistenceIdentifier.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._persistenceIdentifier, fieldNumber: 12)
-      }
+      try { if let v = _storage._persistenceIdentifier {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 12)
+      } }()
       try { if let v = _storage._nextMediaTimeSeconds {
         try visitor.visitSingularDoubleField(value: v, fieldNumber: 13)
       } }()
-      if _storage._sharedVideoSlotCount != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._sharedVideoSlotCount, fieldNumber: 14)
-      }
-      if _storage._sharedVideoSlotSize != 0 {
-        try visitor.visitSingularInt32Field(value: _storage._sharedVideoSlotSize, fieldNumber: 15)
-      }
+      try { if let v = _storage._sharedVideoSlotCount {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 14)
+      } }()
+      try { if let v = _storage._sharedVideoSlotSize {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 15)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -843,36 +1120,40 @@ nonisolated extension Ldtx_YoutubeOutput_V1_SharedMemorySlice: SwiftProtobuf.Mes
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self.slot) }()
-      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.generation) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.offset) }()
-      case 4: try { try decoder.decodeSingularInt32Field(value: &self.length) }()
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self._slot) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self._generation) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self._offset) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self._length) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.slot != 0 {
-      try visitor.visitSingularInt32Field(value: self.slot, fieldNumber: 1)
-    }
-    if self.generation != 0 {
-      try visitor.visitSingularUInt64Field(value: self.generation, fieldNumber: 2)
-    }
-    if self.offset != 0 {
-      try visitor.visitSingularInt32Field(value: self.offset, fieldNumber: 3)
-    }
-    if self.length != 0 {
-      try visitor.visitSingularInt32Field(value: self.length, fieldNumber: 4)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._slot {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._generation {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._offset {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._length {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_SharedMemorySlice, rhs: Ldtx_YoutubeOutput_V1_SharedMemorySlice) -> Bool {
-    if lhs.slot != rhs.slot {return false}
-    if lhs.generation != rhs.generation {return false}
-    if lhs.offset != rhs.offset {return false}
-    if lhs.length != rhs.length {return false}
+    if lhs._slot != rhs._slot {return false}
+    if lhs._generation != rhs._generation {return false}
+    if lhs._offset != rhs._offset {return false}
+    if lhs._length != rhs._length {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -992,7 +1273,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._context) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.reason) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._reason) }()
       case 3: try { try decoder.decodeSingularInt32Field(value: &self._nextMediaSegmentNumber) }()
       case 4: try { try decoder.decodeSingularBytesField(value: &self._initializationSegment) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self._configurationFingerprint) }()
@@ -1011,9 +1292,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
     try { if let v = self._context {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    if !self.reason.isEmpty {
-      try visitor.visitSingularStringField(value: self.reason, fieldNumber: 2)
-    }
+    try { if let v = self._reason {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
     try { if let v = self._nextMediaSegmentNumber {
       try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
     } }()
@@ -1034,7 +1315,7 @@ nonisolated extension Ldtx_YoutubeOutput_V1_ResetRequest: SwiftProtobuf.Message,
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_ResetRequest, rhs: Ldtx_YoutubeOutput_V1_ResetRequest) -> Bool {
     if lhs._context != rhs._context {return false}
-    if lhs.reason != rhs.reason {return false}
+    if lhs._reason != rhs._reason {return false}
     if lhs._nextMediaSegmentNumber != rhs._nextMediaSegmentNumber {return false}
     if lhs._initializationSegment != rhs._initializationSegment {return false}
     if lhs._configurationFingerprint != rhs._configurationFingerprint {return false}
@@ -1055,26 +1336,30 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaTime: SwiftProtobuf.Message, Sw
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt64Field(value: &self.value) }()
-      case 2: try { try decoder.decodeSingularInt32Field(value: &self.timescale) }()
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self._value) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self._timescale) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.value != 0 {
-      try visitor.visitSingularInt64Field(value: self.value, fieldNumber: 1)
-    }
-    if self.timescale != 0 {
-      try visitor.visitSingularInt32Field(value: self.timescale, fieldNumber: 2)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._value {
+      try visitor.visitSingularInt64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._timescale {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_MediaTime, rhs: Ldtx_YoutubeOutput_V1_MediaTime) -> Bool {
-    if lhs.value != rhs.value {return false}
-    if lhs.timescale != rhs.timescale {return false}
+    if lhs._value != rhs._value {return false}
+    if lhs._timescale != rhs._timescale {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1091,35 +1376,39 @@ nonisolated extension Ldtx_YoutubeOutput_V1_H264Format: SwiftProtobuf.Message, S
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedBytesField(value: &self.parameterSets) }()
-      case 2: try { try decoder.decodeSingularInt32Field(value: &self.nalUnitHeaderLength) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.width) }()
-      case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self._nalUnitHeaderLength) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self._width) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self._height) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.parameterSets.isEmpty {
       try visitor.visitRepeatedBytesField(value: self.parameterSets, fieldNumber: 1)
     }
-    if self.nalUnitHeaderLength != 0 {
-      try visitor.visitSingularInt32Field(value: self.nalUnitHeaderLength, fieldNumber: 2)
-    }
-    if self.width != 0 {
-      try visitor.visitSingularInt32Field(value: self.width, fieldNumber: 3)
-    }
-    if self.height != 0 {
-      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 4)
-    }
+    try { if let v = self._nalUnitHeaderLength {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._width {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._height {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_H264Format, rhs: Ldtx_YoutubeOutput_V1_H264Format) -> Bool {
     if lhs.parameterSets != rhs.parameterSets {return false}
-    if lhs.nalUnitHeaderLength != rhs.nalUnitHeaderLength {return false}
-    if lhs.width != rhs.width {return false}
-    if lhs.height != rhs.height {return false}
+    if lhs._nalUnitHeaderLength != rhs._nalUnitHeaderLength {return false}
+    if lhs._width != rhs._width {return false}
+    if lhs._height != rhs._height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1138,8 +1427,8 @@ nonisolated extension Ldtx_YoutubeOutput_V1_H264AccessUnit: SwiftProtobuf.Messag
       case 1: try { try decoder.decodeSingularMessageField(value: &self._presentationTime) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._decodeTime) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._duration) }()
-      case 4: try { try decoder.decodeSingularBoolField(value: &self.keyFrame) }()
-      case 5: try { try decoder.decodeSingularBytesField(value: &self.avccData) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self._keyFrame) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self._avccData) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._sharedMemory) }()
       default: break
       }
@@ -1160,12 +1449,12 @@ nonisolated extension Ldtx_YoutubeOutput_V1_H264AccessUnit: SwiftProtobuf.Messag
     try { if let v = self._duration {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
-    if self.keyFrame != false {
-      try visitor.visitSingularBoolField(value: self.keyFrame, fieldNumber: 4)
-    }
-    if !self.avccData.isEmpty {
-      try visitor.visitSingularBytesField(value: self.avccData, fieldNumber: 5)
-    }
+    try { if let v = self._keyFrame {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._avccData {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 5)
+    } }()
     try { if let v = self._sharedMemory {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
@@ -1176,8 +1465,8 @@ nonisolated extension Ldtx_YoutubeOutput_V1_H264AccessUnit: SwiftProtobuf.Messag
     if lhs._presentationTime != rhs._presentationTime {return false}
     if lhs._decodeTime != rhs._decodeTime {return false}
     if lhs._duration != rhs._duration {return false}
-    if lhs.keyFrame != rhs.keyFrame {return false}
-    if lhs.avccData != rhs.avccData {return false}
+    if lhs._keyFrame != rhs._keyFrame {return false}
+    if lhs._avccData != rhs._avccData {return false}
     if lhs._sharedMemory != rhs._sharedMemory {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -1196,11 +1485,11 @@ nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, Sw
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._presentationTime) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._duration) }()
-      case 3: try { try decoder.decodeSingularInt32Field(value: &self.sampleRate) }()
-      case 4: try { try decoder.decodeSingularInt32Field(value: &self.channelCount) }()
-      case 5: try { try decoder.decodeSingularInt32Field(value: &self.frameCount) }()
-      case 6: try { try decoder.decodeSingularEnumField(value: &self.sampleFormat) }()
-      case 7: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self._sampleRate) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self._channelCount) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self._frameCount) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self._sampleFormat) }()
+      case 7: try { try decoder.decodeSingularBytesField(value: &self._data) }()
       default: break
       }
     }
@@ -1217,32 +1506,32 @@ nonisolated extension Ldtx_YoutubeOutput_V1_PCMBuffer: SwiftProtobuf.Message, Sw
     try { if let v = self._duration {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.sampleRate != 0 {
-      try visitor.visitSingularInt32Field(value: self.sampleRate, fieldNumber: 3)
-    }
-    if self.channelCount != 0 {
-      try visitor.visitSingularInt32Field(value: self.channelCount, fieldNumber: 4)
-    }
-    if self.frameCount != 0 {
-      try visitor.visitSingularInt32Field(value: self.frameCount, fieldNumber: 5)
-    }
-    if self.sampleFormat != .unspecified {
-      try visitor.visitSingularEnumField(value: self.sampleFormat, fieldNumber: 6)
-    }
-    if !self.data.isEmpty {
-      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 7)
-    }
+    try { if let v = self._sampleRate {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._channelCount {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._frameCount {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._sampleFormat {
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._data {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_PCMBuffer, rhs: Ldtx_YoutubeOutput_V1_PCMBuffer) -> Bool {
     if lhs._presentationTime != rhs._presentationTime {return false}
     if lhs._duration != rhs._duration {return false}
-    if lhs.sampleRate != rhs.sampleRate {return false}
-    if lhs.channelCount != rhs.channelCount {return false}
-    if lhs.frameCount != rhs.frameCount {return false}
-    if lhs.sampleFormat != rhs.sampleFormat {return false}
-    if lhs.data != rhs.data {return false}
+    if lhs._sampleRate != rhs._sampleRate {return false}
+    if lhs._channelCount != rhs._channelCount {return false}
+    if lhs._frameCount != rhs._frameCount {return false}
+    if lhs._sampleFormat != rhs._sampleFormat {return false}
+    if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1258,9 +1547,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.protocolVersion) }()
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self._protocolVersion) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._context) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.sequence) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self._sequence) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._videoFormat) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.video) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.audio) }()
@@ -1274,15 +1563,15 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if self.protocolVersion != 0 {
-      try visitor.visitSingularUInt32Field(value: self.protocolVersion, fieldNumber: 1)
-    }
+    try { if let v = self._protocolVersion {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 1)
+    } }()
     try { if let v = self._context {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if self.sequence != 0 {
-      try visitor.visitSingularUInt64Field(value: self.sequence, fieldNumber: 3)
-    }
+    try { if let v = self._sequence {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+    } }()
     try { if let v = self._videoFormat {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
@@ -1296,9 +1585,9 @@ nonisolated extension Ldtx_YoutubeOutput_V1_MediaBatch: SwiftProtobuf.Message, S
   }
 
   public static func ==(lhs: Ldtx_YoutubeOutput_V1_MediaBatch, rhs: Ldtx_YoutubeOutput_V1_MediaBatch) -> Bool {
-    if lhs.protocolVersion != rhs.protocolVersion {return false}
+    if lhs._protocolVersion != rhs._protocolVersion {return false}
     if lhs._context != rhs._context {return false}
-    if lhs.sequence != rhs.sequence {return false}
+    if lhs._sequence != rhs._sequence {return false}
     if lhs._videoFormat != rhs._videoFormat {return false}
     if lhs.video != rhs.video {return false}
     if lhs.audio != rhs.audio {return false}

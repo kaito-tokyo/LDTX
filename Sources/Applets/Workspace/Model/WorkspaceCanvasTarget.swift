@@ -6,7 +6,7 @@ import LDTXProtos
 
 /// Identifies the fields to read and update for one Program canvas.
 public struct WorkspaceCanvasTarget {
-  public let layerIDs: WritableKeyPath<Ldtx_Workspace_V4_ProgramDefinition, [UInt64]>
+  public let layerIDs: WritableKeyPath<Ldtx_Workspace_V4_ProgramPreferences, [UInt64]>
   public let preferences:
     WritableKeyPath<
       Ldtx_Workspace_V4_WorkspacePreferencesV4, [UInt64: Ldtx_Workspace_V4_ProgramPreferences]
@@ -18,14 +18,14 @@ public struct WorkspaceCanvasTarget {
 
   public static var landscape: Self {
     Self(
-      layerIDs: \.landscapeVideoLayerInternalIds, preferences: \.landscapeProgramPreferences,
+      layerIDs: \.videoLayerInternalIds, preferences: \.landscapeProgramPreferences,
       profileID: \.landscapeProfileID, videoBitRate: \.landscapeVideoBitRate,
       defaultProfile: .sdr1080p60, expectedProfileID: "sdr-landscape-1080p60")
   }
 
   public static var portrait: Self {
     Self(
-      layerIDs: \.portraitVideoLayerInternalIds, preferences: \.portraitProgramPreferences,
+      layerIDs: \.videoLayerInternalIds, preferences: \.portraitProgramPreferences,
       profileID: \.portraitProfileID, videoBitRate: \.portraitVideoBitRate,
       defaultProfile: .sdrPortrait1080p60, expectedProfileID: "sdr-portrait-1080p60")
   }
@@ -45,7 +45,7 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     programInternalID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
-    guard let program = definition.programs.first(where: { $0.internalID == programInternalID })
+    guard definition.programs.contains(where: { $0.internalID == programInternalID })
     else {
       throw WorkspaceCanvasSnapshotError.missingProgram(programInternalID)
     }
@@ -56,8 +56,8 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
     }
     audioChannelGainsDecibels = preferences.audioChannelGainsDecibels
     self.programInternalID = programInternalID
-    layerIDs = program[keyPath: target.layerIDs]
     self.preferences = preferences[keyPath: target.preferences][programInternalID] ?? .init()
+    layerIDs = self.preferences[keyPath: target.layerIDs]
     let bitRate = config[keyPath: target.videoBitRate]
     outputProfile =
       bitRate == 0 ? target.defaultProfile : target.defaultProfile.withVideoBitRate(Int(bitRate))

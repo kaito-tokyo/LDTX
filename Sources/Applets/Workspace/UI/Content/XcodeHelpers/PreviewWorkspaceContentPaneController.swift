@@ -25,11 +25,10 @@
         var program = Ldtx_Workspace_V4_ProgramDefinition()
         program.internalID = 100
         program.displayName = "Studio"
-        program.landscapeVideoLayerInternalIds = [4, 3, 8]
-        program.portraitVideoLayerInternalIds = [3, 8]
         service.definition.programs = [program]
         for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
           var preferences = Ldtx_Workspace_V4_ProgramPreferences()
+          preferences.videoLayerInternalIds = index == 0 ? [4, 3, 8] : [3, 8]
           preferences.audioMasterVolumeDecibels =
             index == 0
             ? .with {
@@ -41,10 +40,10 @@
           preferences.audioChannelMuted[11] = index == 1
           for id: UInt64 in [3, 4, 8] {
             var transform = Ldtx_Workspace_V4_BasicTransform()
-            transform.scaleXRational = .with {
+            transform.scaleX = .with {
               $0.set(num: 1, den: 1)
             }
-            transform.scaleYRational = .with {
+            transform.scaleY = .with {
               $0.set(num: 1, den: 1)
             }
             preferences.videoLayerTransforms[id] = transform

@@ -29,20 +29,20 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
   ) {
     stop()
     let ocrVisions = visions.compactMap { wrapper -> Ldtx_Workspace_V4_OcrVision? in
-      guard case .ocrVision(let vision)? = wrapper.definition else { return nil }
+      guard case .ocrVision(let vision)? = wrapper.vision else { return nil }
       return vision
     }
     let validIDs = Set(ocrVisions.map(\.internalID))
     resultsByVisionInternalID = resultsByVisionInternalID.filter { validIDs.contains($0.key) }
     for vision in ocrVisions {
       for trigger in vision.triggers {
-        guard case .intervalTrigger(let interval)? = trigger.definition,
-          interval.intervalSecondsRational.double > 0
+        guard case .intervalTrigger(let interval)? = trigger.trigger,
+          interval.intervalSeconds.double > 0
         else { continue }
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(
-          deadline: .now() + interval.intervalSecondsRational.double,
-          repeating: interval.intervalSecondsRational.double
+          deadline: .now() + interval.intervalSeconds.double,
+          repeating: interval.intervalSeconds.double
         )
         timer.setEventHandler { [weak self] in self?.submit(vision.internalID, context: context) }
         timer.resume()
@@ -102,8 +102,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       recognitionLanguages: vision.recognitionLanguages,
       usesLanguageCorrection: vision.usesLanguageCorrection,
       customWords: vision.customWords,
-      minimumTextHeight: vision.hasMinimumTextHeightRational
-        ? vision.minimumTextHeightRational.float : nil
+      minimumTextHeight: vision.minimumTextHeight.float
     )
   }
 }

@@ -97,15 +97,15 @@ extension AppUIComponentTestSuite {
       let row = try #require(table.rows[1])
       var preferences = Ldtx_Workspace_V4_ProgramPreferences()
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.translationXRational = .with {
+      transform.translationX = .with {
         $0.numerator = 1
         $0.denominator = 2
       }
-      transform.scaleXRational = .with {
+      transform.scaleX = .with {
         $0.numerator = 1
         $0.denominator = 1
       }
-      transform.scaleYRational = .with {
+      transform.scaleY = .with {
         $0.numerator = 1
         $0.denominator = 1
       }
@@ -117,7 +117,7 @@ extension AppUIComponentTestSuite {
       #expect(row.state.isHidden)
       row.state.isEditing = true
       row.state.strings[0] = "draft"
-      preferences.videoLayerTransforms[1]?.translationXRational = .with {
+      preferences.videoLayerTransforms[1]?.translationX = .with {
         $0.numerator = 1
         $0.denominator = 4
       }
@@ -139,20 +139,20 @@ extension AppUIComponentTestSuite {
       row.state.onCommit()
       #expect(saved.count == 1)
       #expect(
-        saved[0].translationXRational
+        saved[0].translationX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 960
             $0.denominator = 1920
           })
       #expect(
-        saved[0].translationYRational
+        saved[0].translationY
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 270
             $0.denominator = 1080
           })
       #expect(
-        saved[0].scaleXRational
-          == Ldtx_Workspace_V4_Rational32.with {
+        saved[0].scaleX
+          == Ldtx_Workspace_V4_Rational32DefaultOne.with {
             $0.numerator = 15
             $0.denominator = 10
           })
@@ -161,7 +161,7 @@ extension AppUIComponentTestSuite {
       row.state.onCommit()
       #expect(saved.count == 2)
       #expect(
-        saved[1].translationXRational
+        saved[1].translationX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 192
             $0.denominator = 1920
@@ -197,13 +197,34 @@ extension AppUIComponentTestSuite {
       row.state.strings = ["100", "1", "1.25", "1"]
       row.state.onCommit()
       let transform = try #require(saved)
-      #expect(transform.translationXRational.numerator == 100)
-      #expect(transform.translationXRational.denominator == 1920)
-      #expect(transform.translationYRational.numerator == 1)
-      #expect(transform.translationYRational.denominator == 1080)
-      #expect(transform.scaleXRational.numerator == 125)
-      #expect(transform.scaleXRational.denominator == 100)
+      #expect(transform.translationX.numerator == 100)
+      #expect(transform.translationX.denominator == 1920)
+      #expect(transform.translationY.numerator == 1)
+      #expect(transform.translationY.denominator == 1080)
+      #expect(transform.scaleX.numerator == 125)
+      #expect(transform.scaleX.denominator == 100)
       #expect(row.state.strings == ["100", "1", "1.25", "1"])
+    }
+
+    @Test("Negative scales remain editable when changing position")
+    func negativeScalesRemainEditable() throws {
+      let fixture = VideoLayersTestFixture()
+      var saved: Ldtx_Workspace_V4_BasicTransform?
+      let table = fixture.makeTable()
+      fixture.update(table, commit: { _, value in saved = value })
+      let row = try #require(table.rows[1])
+      row.state.strings = ["100", "1", "-1.25", "-0.5"]
+      row.state.hasUnconfirmedChanges = true
+      row.state.onCommit()
+      let transform = try #require(saved)
+      #expect(transform.scaleX.double == -1.25)
+      #expect(transform.scaleY.double == -0.5)
+      row.state.strings[0] = "200"
+      row.state.hasUnconfirmedChanges = true
+      row.state.onCommit()
+      #expect(saved?.translationX.double == 200.0 / 1920.0)
+      #expect(saved?.scaleX.double == -1.25)
+      #expect(!row.state.hasUnconfirmedChanges)
     }
 
     @Test("UCT-1006.7: App kit commit requests read current draft once")
@@ -220,7 +241,7 @@ extension AppUIComponentTestSuite {
       row.state.onCommit()
       #expect(saved.count == 1)
       #expect(
-        saved.first?.translationXRational
+        saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 960
             $0.denominator = 1920
@@ -379,7 +400,7 @@ extension AppUIComponentTestSuite {
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
       #expect(saved.count == 1)
       #expect(
-        saved.first?.translationXRational
+        saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 960
             $0.denominator = 1920
@@ -427,14 +448,16 @@ extension AppUIComponentTestSuite {
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
-      program.landscapeVideoLayerInternalIds = [1, 2]
       state.definition.programs = [program]
+      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
+        1, 2,
+      ]
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.scaleXRational = .with {
+      transform.scaleX = .with {
         $0.numerator = 1
         $0.denominator = 1
       }
-      transform.scaleYRational = .with {
+      transform.scaleY = .with {
         $0.numerator = 1
         $0.denominator = 1
       }
@@ -451,7 +474,7 @@ extension AppUIComponentTestSuite {
         }
       state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
         1, default: .init()
-      ].topInsetRational = .with {
+      ].topInset = .with {
         $0.numerator = 1
         $0.denominator = 5
       }
@@ -466,13 +489,13 @@ extension AppUIComponentTestSuite {
             $0.set(num: -90, den: 10)
           })
       #expect(
-        live.videoLayerTransforms[1]?.topInsetRational
+        live.videoLayerTransforms[1]?.topInset
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 1
             $0.denominator = 5
           })
       #expect(
-        live.videoLayerTransforms[1]?.translationXRational
+        live.videoLayerTransforms[1]?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 960
             $0.denominator = 1920
@@ -491,7 +514,7 @@ extension AppUIComponentTestSuite {
         programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
       let row = try #require(editor.table.rows[1])
       let original = store.preferences
-      for strings in [["bad", "0", "1", "1"], ["0", "0", "-1", "1"]] {
+      for strings in [["bad", "0", "1", "1"], ["0", "0", "bad", "1"]] {
         row.state.strings = strings
         row.state.hasUnconfirmedChanges = true
         #expect(throws: (any Error).self) { try store.validateInspectorEdits() }

@@ -12,6 +12,55 @@ import Security
 @MainActor
 @Observable
 public final class WorkspaceAppletData {
+  public var recordingFolderPaths: [UUID: String] = [:] {
+    didSet { persist(recordingFolderPaths, key: "recording-folder-paths") }
+  }
+  public var landscapeYouTubeLiveStreamIDs: [UUID: String] = [:] {
+    didSet { persist(landscapeYouTubeLiveStreamIDs, key: "landscape-youtube-live-stream-ids") }
+  }
+  public var portraitYouTubeLiveStreamIDs: [UUID: String] = [:] {
+    didSet { persist(portraitYouTubeLiveStreamIDs, key: "portrait-youtube-live-stream-ids") }
+  }
+
+  private static func outputDataKey(_ key: String) -> String {
+    "tokyo.kaito.ldtx.workspace.\(key).v1"
+  }
+
+  private func persist(_ values: [UUID: String], key: String) {
+    guard let data = try? PropertyListEncoder().encode(values) else { return }
+    userDefaults.set(data, forKey: Self.outputDataKey(key))
+  }
+
+  private func loadOutputData() {
+    func load(_ key: String) -> [UUID: String] {
+      guard let data = userDefaults.data(forKey: Self.outputDataKey(key)),
+        let values = try? PropertyListDecoder().decode([UUID: String].self, from: data)
+      else { return [:] }
+      return values
+    }
+    recordingFolderPaths = load("recording-folder-paths")
+    landscapeYouTubeLiveStreamIDs = load("landscape-youtube-live-stream-ids")
+    portraitYouTubeLiveStreamIDs = load("portrait-youtube-live-stream-ids")
+  }
+
+  public func migrateOutputData(from url: URL, externalID: UUID) {
+    let path = url.standardizedFileURL.path
+    guard var legacy = statesByWorkspacePath[path] else { return }
+    if recordingFolderPaths[externalID] == nil {
+      recordingFolderPaths[externalID] = legacy.recordingFolderPath
+    }
+    if landscapeYouTubeLiveStreamIDs[externalID] == nil {
+      landscapeYouTubeLiveStreamIDs[externalID] = legacy.landscapeYouTubeLiveStreamID
+    }
+    if portraitYouTubeLiveStreamIDs[externalID] == nil {
+      portraitYouTubeLiveStreamIDs[externalID] = legacy.portraitYouTubeLiveStreamID
+    }
+    legacy.recordingFolderPath = nil
+    legacy.landscapeYouTubeLiveStreamID = nil
+    legacy.portraitYouTubeLiveStreamID = nil
+    setState(legacy, for: url)
+  }
+
   public static let shared = WorkspaceAppletData()
 
   public private(set) var physicalDeviceIDsByResourceInternalID:
@@ -73,6 +122,7 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    loadOutputData()
     loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
@@ -88,6 +138,7 @@ public final class WorkspaceAppletData {
     } else {
       statesByWorkspacePath = [:]
     }
+    loadOutputData()
     loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)

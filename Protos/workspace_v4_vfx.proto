@@ -2,14 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Version 4 Workspace Video Effect definitions.
-syntax = "proto3";
+edition = "2024";
 
 package ldtx.workspace.v4;
 
 // Wraps one concrete Video Effect definition.
 message VideoEffectWrapper {
-  oneof definition {
+  oneof video_effect {
     // The custom Video Effect definition. Mutually exclusive with the other
     // fields.
     CustomVideoEffect custom = 1;
@@ -23,7 +22,7 @@ message VideoEffectWrapper {
 message CustomVideoEffect {
   // The JSON representation of this custom Video Effect. Its format is
   // unspecified.
-  string json = 1;
+  string json = 1 [default = ""];
 }
 
 // A Video Effect that removes the background from input video.
@@ -36,5 +35,5 @@ message BackgroundRemovalVfxEffect {
   }
 
   // The background-removal model to use.
-  Model model = 1;
+  Model model = 1 [default = UNSPECIFIED];
 }

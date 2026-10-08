@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import SwiftProtobuf
 
 public enum Rational32EncodingError: Error, LocalizedError {
   case unrepresentableDecimal
@@ -23,16 +24,29 @@ public enum Rational32DecibelEncoding {
   }
 }
 
-extension Ldtx_Workspace_V4_Rational32 {
+public protocol Rational32Value: SwiftProtobuf.Message {
+  var numerator: Int32 { get set }
+  var denominator: UInt32 { get set }
+}
+
+extension Ldtx_Workspace_V4_Rational32: Rational32Value {}
+extension Ldtx_Workspace_V4_Rational32DefaultOne: Rational32Value {}
+
+extension Rational32Value {
+  /// Copies the represented value, including the source type's fixed defaults.
+  public init(value: some Rational32Value) {
+    self.init()
+    numerator = value.numerator
+    denominator = value.denominator
+  }
+
   public var float: Float { Float(double) }
 
   public var double: Double {
-    if numerator == 0 && denominator == 0 { return 0 }
     return Double(numerator) / Double(denominator)
   }
 
   public var decimal: Decimal {
-    if numerator == 0 && denominator == 0 { return 0 }
     return Decimal(numerator) / Decimal(denominator)
   }
 

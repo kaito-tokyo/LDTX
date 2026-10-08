@@ -58,7 +58,7 @@ struct WorkspaceCanvasInspector: View {
 
   private var videoDevices: [Ldtx_Workspace_V4_VfxSourceComponent] {
     storeService.definition.videoComponents.compactMap { wrapper in
-      guard case .vfxSource(let device) = wrapper.definition else { return nil }
+      guard case .vfxSource(let device) = wrapper.videoComponent else { return nil }
       return device
     }
   }

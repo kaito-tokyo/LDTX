@@ -24,7 +24,7 @@ enum WorkspaceResourceFactory {
   }
 
   static func makeSolidColor(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    var color = Ldtx_Workspace_V4_Color()
     color.red = 0.2
     color.green = 0.2
     color.blue = 0.2
@@ -32,7 +32,7 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillSolidColorComponent()
     component.internalID = id
     component.displayName = name
-    component.color = color
+    component.extendedSrgbColor = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.solidColorFill = component
     return wrapper
@@ -42,16 +42,16 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = name
-    component.widthRational = .with {
+    component.width = .with {
       $0.set(num: 1, den: 6)
     }
-    component.heightRational = .with {
+    component.height = .with {
       $0.set(num: 2, den: 27)
     }
-    component.foregroundColor = opaqueWhite
-    var background = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    component.foregroundExtendedSrgbColor = opaqueWhite
+    var background = Ldtx_Workspace_V4_Color()
     background.alpha = 0.65
-    component.backgroundColor = background
+    component.backgroundExtendedSrgbColor = background
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -65,14 +65,14 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.startColor = gradientStartColor
-    component.endXRational = .with {
+    component.startExtendedSrgbColor = gradientStartColor
+    component.endX = .with {
       $0.set(num: 1, den: 1)
     }
-    component.endYRational = .with {
+    component.endY = .with {
       $0.set(num: 1, den: 1)
     }
-    component.endColor = gradientEndColor
+    component.endExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
     return wrapper
@@ -84,17 +84,17 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerXRational = .with {
+    component.centerX = .with {
       $0.set(num: 1, den: 2)
     }
-    component.centerYRational = .with {
+    component.centerY = .with {
       $0.set(num: 1, den: 2)
     }
-    component.outerRadiusRational = .with {
+    component.outerRadius = .with {
       $0.set(num: 1, den: 2)
     }
-    component.innerColor = gradientStartColor
-    component.outerColor = gradientEndColor
+    component.innerExtendedSrgbColor = gradientStartColor
+    component.outerExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.radialGradientFill = component
     return wrapper
@@ -105,14 +105,14 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = name
-    component.centerXRational = .with {
+    component.centerX = .with {
       $0.set(num: 1, den: 2)
     }
-    component.centerYRational = .with {
+    component.centerY = .with {
       $0.set(num: 1, den: 2)
     }
-    component.startColor = gradientStartColor
-    component.endColor = gradientEndColor
+    component.startExtendedSrgbColor = gradientStartColor
+    component.endExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.conicGradientFill = component
     return wrapper
@@ -131,7 +131,7 @@ enum WorkspaceResourceFactory {
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSecondsRational = .with {
+    trigger.intervalSeconds = .with {
       $0.set(num: 5, den: 1)
     }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
@@ -140,15 +140,14 @@ enum WorkspaceResourceFactory {
     vision.internalID = id
     vision.displayName = name
     vision.videoComponentInternalID = componentID
-    vision.source = .videoComponentInternalID(componentID)
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
     return wrapper
   }
 
-  private static var gradientStartColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+  private static var gradientStartColor: Ldtx_Workspace_V4_Color {
+    var color = Ldtx_Workspace_V4_Color()
     color.red = 1
     color.green = 1
     color.blue = 1
@@ -156,8 +155,8 @@ enum WorkspaceResourceFactory {
     return color
   }
 
-  private static var gradientEndColor: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+  private static var gradientEndColor: Ldtx_Workspace_V4_Color {
+    var color = Ldtx_Workspace_V4_Color()
     color.red = 0.15
     color.green = 0.35
     color.blue = 0.85
@@ -165,7 +164,7 @@ enum WorkspaceResourceFactory {
     return color
   }
 
-  private static var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor { gradientStartColor }
+  private static var opaqueWhite: Ldtx_Workspace_V4_Color { gradientStartColor }
 
   static func nextInternalID() -> UInt64 {
     let milliseconds = UInt64(max(0, Date().timeIntervalSince1970 * 1_000))

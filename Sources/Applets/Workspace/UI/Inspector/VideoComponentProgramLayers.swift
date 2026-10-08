@@ -13,7 +13,7 @@ struct VideoComponentProgramLayers: View {
     guard
       let component = storeService.definition.videoComponents.first(where: { $0.id == componentID })
     else { return nil }
-    return try? WorkspaceV4IntegrityValidator.videoComponentID(component)
+    return component.internalID
   }
 
   var body: some View {
@@ -38,7 +38,8 @@ struct VideoComponentProgramLayers: View {
           let program = storeService.definition.programs.first(where: { $0.internalID == programID }
           )
         else { return false }
-        return program[keyPath: target.layerIDs].contains(id)
+        return storeService.preferences[keyPath: target.preferences][program.internalID]?
+          .videoLayerInternalIds.contains(id) ?? false
       },
       set: { value in
         do {
@@ -66,8 +67,10 @@ struct VideoComponentProgramLayers: View {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       program.displayName = "Studio"
-      program.landscapeVideoLayerInternalIds = [4]
       service.definition.programs = [program]
+      service.preferences.landscapeProgramPreferences[100] = .with {
+        $0.videoLayerInternalIds = [4]
+      }
     }
   }
 #endif

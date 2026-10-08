@@ -23,7 +23,6 @@ public final class WorkspaceDocument: NSDocument {
   private var preferencesExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
     .lowercased()
   private var isReading = false
-  private var outputDefinition: WorkspaceStoreService.WorkspaceDefinition?
   private var closeCallbacks: [WorkspaceCloseCallback] = []
   private var saveCallbacks: [WorkspaceSaveCallback] = []
   private var hasShutDown = false
@@ -34,11 +33,16 @@ public final class WorkspaceDocument: NSDocument {
     replaceWorkspace: { [unowned self] workspace in try replaceContents(workspace) },
     url: fileURL)
 
+  private var outputSettingsExternalID: String? = WorkspaceBundleWriterV4.makeExternalID()
+    .uuidString.lowercased()
+
   private var snapshot: WorkspaceV4Bundle {
     WorkspaceV4Bundle(
       definitionExternalID: storeService.externalID,
       preferencesExternalID: preferencesExternalID,
-      definition: storeService.definition, preferences: storeService.preferences)
+      definition: storeService.definition, preferences: storeService.preferences,
+      outputSettingsExternalID: outputSettingsExternalID,
+      outputSettings: storeService.outputSettings)
   }
 
   public override init() {
@@ -49,45 +53,12 @@ public final class WorkspaceDocument: NSDocument {
     storeService.localStateURL = transientURL
     storeService.documentContentsDidChange = { [weak self] in
       guard let self, !isReading else { return }
-      if let outputDefinition, storeService.definition != outputDefinition {
-        guard Self.isVideoLayerReordering(storeService.definition, of: outputDefinition) else {
-          isReading = true
-          storeService.definition = outputDefinition
-          isReading = false
-          return
-        }
-        self.outputDefinition = storeService.definition
-      }
       updateChangeCount(.changeDone)
     }
     storeService.documentOutputStateDidChange = { [weak self] in
       guard let self else { return }
-      outputDefinition = storeService.isOutputActive ? storeService.definition : nil
       Self.updateRecordingDockBadge()
     }
-  }
-
-  private static func isVideoLayerReordering(
-    _ candidate: WorkspaceStoreService.WorkspaceDefinition,
-    of baseline: WorkspaceStoreService.WorkspaceDefinition
-  ) -> Bool {
-    guard candidate.programs.count == baseline.programs.count else { return false }
-    var normalized = candidate
-    for index in baseline.programs.indices {
-      let before = baseline.programs[index]
-      let after = candidate.programs[index]
-      guard
-        before.landscapeVideoLayerInternalIds.sorted()
-          == after.landscapeVideoLayerInternalIds.sorted(),
-        before.portraitVideoLayerInternalIds.sorted()
-          == after.portraitVideoLayerInternalIds.sorted()
-      else { return false }
-      normalized.programs[index].landscapeVideoLayerInternalIds =
-        before.landscapeVideoLayerInternalIds
-      normalized.programs[index].portraitVideoLayerInternalIds =
-        before.portraitVideoLayerInternalIds
-    }
-    return normalized == baseline
   }
 
   /// Restores only the formal package; legacy recovery contents are not adopted.
@@ -125,6 +96,9 @@ public final class WorkspaceDocument: NSDocument {
       try WorkspaceV4IntegrityValidator.validate(workspace)
       try replaceContents(workspace)
       storeService.localStateURL = url
+      if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+        appletData.migrateOutputData(from: url, externalID: externalID)
+      }
       persistenceCoordinator.setDocumentURL(url)
     }
   }
@@ -134,6 +108,8 @@ public final class WorkspaceDocument: NSDocument {
     defer { isReading = false }
     storeService.definition = workspace.definition
     storeService.preferences = workspace.preferences
+    storeService.outputSettings = workspace.outputSettings
+    outputSettingsExternalID = workspace.outputSettingsExternalID
     storeService.externalID = workspace.definitionExternalID
     preferencesExternalID = workspace.preferencesExternalID
   }
@@ -275,6 +251,9 @@ public final class WorkspaceDocument: NSDocument {
       appletData.copyState(from: previous, to: url)
     }
     storeService.localStateURL = url
+    if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+      appletData.migrateOutputData(from: url, externalID: externalID)
+    }
     persistenceCoordinator.setDocumentURL(url)
   }
 

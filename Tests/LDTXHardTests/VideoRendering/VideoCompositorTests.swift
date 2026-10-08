@@ -68,6 +68,33 @@ struct VideoCompositorIntegrationTestSuite {
   }
 
   @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+  func retainedTextureAcceptsReversedSourceAxes() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .b5g6r5Unorm,
+      width: 2,
+      height: 2,
+      mipmapped: false
+    )
+    descriptor.usage = .shaderRead
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let compositor = try VideoCompositor(
+      configuration: VideoCompositorConfiguration(
+        width: 4,
+        height: 4,
+        pixelBufferPoolMinimumBufferCount: 1
+      ), device: device)
+
+    _ = try compositor.render([
+      RetainedTextureComponent(
+        colorTexture: texture,
+        destinationRect: SIMD4<UInt32>(0, 0, 4, 4),
+        sourceRect: SIMD4<Float>(1, 1, 0, 0)
+      )
+    ])
+  }
+
+  @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
   func retainedTextureRejectsExplicitlyNonSampleableTexture() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(

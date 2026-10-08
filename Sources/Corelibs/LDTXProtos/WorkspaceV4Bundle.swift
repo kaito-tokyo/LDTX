@@ -7,18 +7,24 @@ import Foundation
 public struct WorkspaceV4Bundle: Equatable, Sendable {
   public var definitionExternalID: String?
   public var preferencesExternalID: String?
+  public var outputSettingsExternalID: String?
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
+  public var outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
 
   public init(
     definitionExternalID: String? = nil,
     preferencesExternalID: String? = nil,
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
+    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
+    outputSettingsExternalID: String? = nil,
+    outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .init()
   ) {
     self.definitionExternalID = definitionExternalID
     self.preferencesExternalID = preferencesExternalID
     self.definition = definition
     self.preferences = preferences
+    self.outputSettingsExternalID = outputSettingsExternalID
+    self.outputSettings = outputSettings
   }
 }

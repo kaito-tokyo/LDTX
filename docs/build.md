@@ -94,6 +94,13 @@ the commands below.
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
+All schemas under `Protos` use Edition 2024. Generate them with a compiler and
+SwiftProtobuf generator that support that edition (verified with protoc 36.2
+and protoc-gen-swift 1.38.1). Singular fields use the edition default of
+explicit presence; do not set file-level `IMPLICIT` presence.
+The `uses_24_hour_time` field retains its existing name with a field-level
+legacy naming-style override.
+
 `Protos/envelope.proto` defines the separate persistence envelopes. They are
 documented at `docs/protos/workspace.html`.
 
@@ -108,6 +115,7 @@ protoc \
   Protos/workspace_v4_definition.proto \
   Protos/workspace_v4_input_device.proto \
   Protos/workspace_v4_preferences.proto \
+  Protos/workspace_v4_output_settings.proto \
   Protos/workspace_v4_vfx.proto \
   Protos/workspace_v4_video_component.proto \
   Protos/workspace_v4_vision.proto \

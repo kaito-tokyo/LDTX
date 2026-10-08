@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct SolidColorFillVideoComponentInspector: View {
@@ -23,12 +24,13 @@ struct SolidColorFillVideoComponentInspector: View {
     self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
-        guard case .solidColorFill(let component) = wrapper.definition else { return nil }
+        guard case .solidColorFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._color = State(
-      initialValue: component?.color.asColor() ?? Color(red: 1, green: 0, blue: 1))
+      initialValue: component?.extendedSrgbColor.extendedSRGBSwiftUIColor
+        ?? Color(red: 1, green: 0, blue: 1))
   }
 
   var body: some View {
@@ -52,29 +54,26 @@ struct SolidColorFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(storeService.isOutputActive || component == nil)
-    .onChange(of: name) { commitDraft() }
-    .onChange(of: color) { commitDraft() }
-    .onSubmit { commitDraft() }
+    .onChange(of: name) { updateComponent { $0.displayName = name } }
+    .onChange(of: color) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color) else { return }
+      updateComponent { $0.extendedSrgbColor = value }
+    }
   }
 
-  private func commitDraft() {
-    guard
-      var component,
-      let nsColor = NSColor(color).usingColorSpace(.sRGB)
-    else { return }
-
-    component.displayName = name
-    component.color.red = Float(nsColor.redComponent)
-    component.color.green = Float(nsColor.greenComponent)
-    component.color.blue = Float(nsColor.blueComponent)
-    component.color.alpha = Float(nsColor.alphaComponent)
-
+  private func updateComponent(
+    _ mutation: (inout Ldtx_Workspace_V4_FillSolidColorComponent) -> Void
+  ) {
+    guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+      case .solidColorFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
-    definition.videoComponents[index].definition = .solidColorFill(component)
+    mutation(&component)
+    definition.videoComponents[index].videoComponent = .solidColorFill(component)
     storeService.definition = definition
   }
+
 }
 
 #if DEBUG

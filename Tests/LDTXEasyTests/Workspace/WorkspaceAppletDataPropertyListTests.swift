@@ -11,6 +11,47 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  @Test func persistsRecordingFolderInAppletData() throws {
+    let suiteName = "RecordingFolderTest.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let externalID = UUID()
+    let otherID = UUID()
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    appletData.recordingFolderPaths[externalID] = "/tmp/recordings"
+    appletData.recordingFolderPaths[otherID] = "/tmp/other-recordings"
+    appletData.landscapeYouTubeLiveStreamIDs[externalID] = "landscape"
+    appletData.portraitYouTubeLiveStreamIDs[externalID] = "portrait"
+    let restored = WorkspaceAppletData(userDefaults: defaults)
+    #expect(restored.recordingFolderPaths[externalID] == "/tmp/recordings")
+    #expect(restored.landscapeYouTubeLiveStreamIDs[externalID] == "landscape")
+    #expect(restored.portraitYouTubeLiveStreamIDs[externalID] == "portrait")
+    restored.recordingFolderPaths[externalID] = nil
+    let reopened = WorkspaceAppletData(userDefaults: defaults)
+    #expect(reopened.recordingFolderPaths[externalID] == nil)
+    #expect(reopened.recordingFolderPaths[otherID] == "/tmp/other-recordings")
+  }
+
+  @Test func migratesOutputAssignmentsToExternalIDOnce() throws {
+    let suiteName = "OutputMigrationTest.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+    let url = URL(fileURLWithPath: "/tmp/LegacyWorkspace.ldtxworkspace")
+    let externalID = UUID()
+    appletData.setState(
+      .init(
+        recordingFolderPath: "/tmp/legacy",
+        monitorVolume: -12, landscapeYouTubeLiveStreamID: "legacy-stream"), for: url)
+    appletData.migrateOutputData(from: url, externalID: externalID)
+    #expect(appletData.recordingFolderPaths[externalID] == "/tmp/legacy")
+    #expect(appletData.landscapeYouTubeLiveStreamIDs[externalID] == "legacy-stream")
+    #expect(appletData.state(for: url).monitorVolume == -12)
+    appletData.recordingFolderPaths[externalID] = nil
+    appletData.migrateOutputData(from: url, externalID: externalID)
+    #expect(appletData.recordingFolderPaths[externalID] == nil)
+  }
+
   @Test func persistsMonitorVolumeWithLocalState() throws {
     let state = WorkspaceLocalState(monitorVolume: -12.5)
     let data = try PropertyListEncoder().encode(state)

@@ -118,7 +118,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     guard !newlyFailed.isEmpty else { return }
     let descriptions = newlyFailed.sorted().map { uid in
       let names = storeService.definition.videoComponents.compactMap { component -> String? in
-        guard case .vfxSource(let source) = component.definition,
+        guard case .vfxSource(let source) = component.videoComponent,
           appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
         else { return nil }
         return component.displayName
@@ -153,8 +153,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator: captureSessionCoordinator,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = storeService.localStateURL else { return .init() }
-        return appletData.state(for: url)
+        storeService.localState
       },
       selectProgram: { internalID in
         guard let url = storeService.localStateURL else { return }
@@ -165,8 +164,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       windowRuntime: windowRuntime,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        guard let url = storeService.localStateURL else { return .init() }
-        return appletData.state(for: url)
+        storeService.localState
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
     let audioCoordinator = WorkspaceAudioCoordinator(

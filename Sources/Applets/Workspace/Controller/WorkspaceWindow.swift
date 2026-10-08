@@ -15,6 +15,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
   let contentPane: WorkspaceContentPane
   private let storeService: WorkspaceStoreService
   let screenshotResultPopover = NSPopover()
+  private var inspectorTitleObservationTask: Task<Void, Never>?
+  private var inspectorCollapseObservation: NSKeyValueObservation?
+  private let inspectorTitleField = NSTextField(labelWithString: "")
 
   init(
     url: URL,
@@ -79,6 +82,21 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     splitViewController.setInitialWidths(sidebar: 240, content: 480)
     contentPane.configureAfterEstablished()
 
+    inspectorTitleField.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+    inspectorCollapseObservation = splitViewController.splitViewItems[2].observe(
+      \.isCollapsed, options: [.new]
+    ) { [weak self] _, _ in
+      MainActor.assumeIsolated { self?.updateInspectorToolbar() }
+    }
+    updateInspectorToolbar()
+    let inspectorChanges = Observations { storeService.inspectorSelector }
+    inspectorTitleObservationTask = Task { @MainActor [weak self] in
+      for await _ in inspectorChanges {
+        guard !Task.isCancelled, let self else { return }
+        self.updateInspectorToolbar()
+      }
+    }
+
     self.center()
   }
 
@@ -88,7 +106,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
       .init("workspace.captureScreenshots"),
       .flexibleSpace,
-      .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
+      .inspectorTrackingSeparator, .init("workspace.inspectorTitle"),
+      .flexibleSpace, .init("workspace.inspector"),
     ]
   }
 
@@ -128,6 +147,10 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       item.target = self
       item.action = #selector(captureScreenshots(_:))
       item.isEnabled = validateToolbarItem(item)
+    case "workspace.inspectorTitle":
+      item.label = String(localized: "Inspector")
+      item.paletteLabel = item.label
+      item.view = inspectorTitleField
     case "workspace.inspector":
       item.label = "Inspector"
       item.paletteLabel = "Inspector"
@@ -138,6 +161,43 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       return nil
     }
     return item
+  }
+
+  private var inspectorTitle: String {
+    switch storeService.inspectorSelector?.kind {
+    case .workspacePrograms: String(localized: "Programs")
+    case .workspaceCanvas: String(localized: "Canvas")
+    case .workspaceOutput: String(localized: "Output")
+    case .audioInputDevice: String(localized: "Audio Input Device")
+    case .vfxVideoComponent: String(localized: "VFX")
+    case .solidColorFillVideoComponent: String(localized: "Solid Color Fill")
+    case .linearGradientFillVideoComponent: String(localized: "Linear Gradient Fill")
+    case .radialGradientFillVideoComponent: String(localized: "Radial Gradient Fill")
+    case .conicGradientFillVideoComponent: String(localized: "Conic Gradient Fill")
+    case .clockVideoComponent: String(localized: "Clock")
+    case .testPatternVideoComponent: String(localized: "Test Pattern")
+    case .ocrVision: String(localized: "OCR")
+    case .invalid, nil: String(localized: "Inspector")
+    }
+  }
+
+  func updateInspectorToolbar() {
+    guard let toolbar, let split = contentViewController as? PaneSplitViewController else { return }
+    let identifier = NSToolbarItem.Identifier("workspace.inspectorTitle")
+    let index = toolbar.items.firstIndex { $0.itemIdentifier == identifier }
+    if split.splitViewItems[2].isCollapsed {
+      if let index { toolbar.removeItem(at: index) }
+      return
+    }
+    inspectorTitleField.stringValue = inspectorTitle
+    inspectorTitleField.sizeToFit()
+    if index == nil,
+      let separator = toolbar.items.firstIndex(where: {
+        $0.itemIdentifier == .inspectorTrackingSeparator
+      })
+    {
+      toolbar.insertItem(withItemIdentifier: identifier, at: separator + 1)
+    }
   }
 
   private func configureOutputItem(_ item: NSToolbarItem) {
@@ -211,6 +271,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
   }
 
   public override func close() {
+    inspectorTitleObservationTask?.cancel()
+    inspectorCollapseObservation?.invalidate()
     screenshotResultPopover.close()
     super.close()
   }

@@ -29,15 +29,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       definition: runtime.definition, preferences: runtime.preferences,
       programInternalID: id, target: .landscape)
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationXRational = .with {
+    transform.translationX = .with {
       $0.numerator = 1
       $0.denominator = 4
     }
-    transform.scaleXRational = .with {
+    transform.scaleX = .with {
       $0.numerator = 1
       $0.denominator = 1
     }
-    transform.scaleYRational = .with {
+    transform.scaleY = .with {
       $0.numerator = 1
       $0.denominator = 1
     }
@@ -63,8 +63,10 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(runtime.preferences.portraitProgramPreferences[id]?.videoLayerHidden[second] == true)
     #expect(
       runtime.preferences.portraitProgramPreferences[id]?.videoLayerTransforms.isEmpty == true)
-    #expect(runtime.definition.programs.first?.landscapeVideoLayerInternalIds == [first, second])
-    #expect(runtime.definition.programs.first?.portraitVideoLayerInternalIds == [second, first])
+    #expect(
+      runtime.preferences.landscapeProgramPreferences[id]?.videoLayerInternalIds == [first, second])
+    #expect(
+      runtime.preferences.portraitProgramPreferences[id]?.videoLayerInternalIds == [second, first])
   }
 
   @Test("edits and removes independent canvas preferences")
@@ -169,10 +171,14 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(runtime.preferences.audioChannelGainsDecibels[inputID] == nil)
   }
 
-  @Test("resolves a selected single-Canvas V4 RTMPS destination")
-  func resolvesSingleCanvasRTMPSDestination() throws {
-    var output = Ldtx_Workspace_V4_OutputConfiguration()
-    output.youtubeIngestMode = .landscapeRtmps
+  @Test(
+    "resolves a selected single-Canvas V4 RTMPS destination",
+    arguments: [
+      Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps, .unspecified,
+    ])
+  func resolvesSingleCanvasRTMPSDestination(mode: Ldtx_Workspace_V4_YouTubeIngestMode) throws {
+    var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+    output.youtubeSettings.ingestMode = mode
     let configuration = YouTubeRTMPSStreamKeyConfiguration(
       id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
       streamKey: "landscape-key")
@@ -185,25 +191,19 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(destinations.landscape?.streamName == "landscape-key")
   }
 
-  @Test("uses Landscape RTMPS for an unspecified V4 ingest mode")
-  func resolvesUnspecifiedIngestModeAsLandscapeRTMPS() throws {
-    let output = Ldtx_Workspace_V4_OutputConfiguration()
-    let configuration = YouTubeRTMPSStreamKeyConfiguration(
-      id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
-      streamKey: "landscape-key")
-
-    let destinations = try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
-      output: output, configurations: [configuration], landscapeStreamID: "landscape",
-      portraitStreamID: nil)
-
-    #expect(destinations.canvases == [.landscape])
-    #expect(destinations.landscape?.streamName == "landscape-key")
+  @Test("unspecified V4 RTMPS ingest mode requires a Landscape key")
+  func unspecifiedIngestModeRequiresLandscapeKey() {
+    let output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+    #expect(throws: WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey) {
+      try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
+        output: output, configurations: [], landscapeStreamID: nil, portraitStreamID: nil)
+    }
   }
 
   @Test("rejects V4 RTMPS without the selected Stream Key")
   func rejectsMissingRTMPSStreamKey() {
-    var output = Ldtx_Workspace_V4_OutputConfiguration()
-    output.youtubeIngestMode = .portraitRtmps
+    var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+    output.youtubeSettings.ingestMode = .portraitRtmps
 
     #expect(throws: WorkspaceV4YouTubeOutputError.missingPortraitStreamKey) {
       try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
@@ -217,7 +217,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 42
     vision.displayName = "OCR"
-    vision.source = .videoComponentInternalID(1)
+    vision.videoComponentInternalID = 1
     var videoInput = Ldtx_Workspace_V4_VfxSourceComponent()
     videoInput.internalID = 1
     videoInput.displayName = "Camera"
@@ -395,10 +395,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   @Test("does not start V4 YouTube output without a selected Program runtime")
   func rejectsYouTubeOutputWithoutARuntime() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let runtime = try makeRuntime(capture: capture)
+    let runtime = try makeRuntime(capture: capture, youtubeEnabled: true)
     let recording = WorkspaceV4RecordingSession(windowRuntime: runtime)
     runtime.selectedProgramInternalID = try runtime.addProgram(displayName: "Main")
-    try runtime.editDefinition { $0.outputConfiguration.streamsToYoutube = true }
 
     await recording.start()
 
@@ -528,9 +527,11 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   }
 
   private func makeRuntime(
-    capture: WorkspaceCaptureSessionCoordinator
+    capture: WorkspaceCaptureSessionCoordinator, youtubeEnabled: Bool = false
   ) throws -> WorkspaceWindowRuntime {
-    let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
+    var workspace = cleanWorkspace(displayName: "Unite")
+    workspace.outputSettings.youtubeEnabled = youtubeEnabled
+    let box = WorkspaceBox(workspace)
     var localState = WorkspaceLocalState()
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace },
@@ -550,8 +551,11 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     definition.canvasConfiguration.frameRate = 60
     definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
     definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
-    definition.outputConfiguration.youtubeIngestMode = .landscapeRtmps
-    return WorkspaceV4Bundle(definition: definition, preferences: .init())
+    let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
+      $0.youtubeSettings.ingestMode = .landscapeRtmps
+    }
+    return WorkspaceV4Bundle(
+      definition: definition, preferences: .init(), outputSettings: outputSettings)
   }
 
   private func temporaryDirectory() throws -> URL {

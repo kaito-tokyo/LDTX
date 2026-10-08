@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
@@ -28,32 +29,34 @@ struct LinearGradientFillVideoComponentInspector: View {
     self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
-        guard case .linearGradientFill(let component) = wrapper.definition else { return nil }
+        guard case .linearGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._startX = State(
-      initialValue: component?.startXRational
+      initialValue: component?.startX
         ?? .with {
           $0.set(num: 0, den: 1)
         })
     self._startY = State(
-      initialValue: component?.startYRational
+      initialValue: component?.startY
         ?? .with {
           $0.set(num: 0, den: 1)
         })
     self._endX = State(
-      initialValue: component?.endXRational
+      initialValue: component?.endX
         ?? .with {
           $0.set(num: 1, den: 1)
         })
     self._endY = State(
-      initialValue: component?.endYRational
+      initialValue: component?.endY
         ?? .with {
           $0.set(num: 1, den: 1)
         })
-    self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
-    self._endColor = State(initialValue: component?.endColor.asColor() ?? .black)
+    self._startColor = State(
+      initialValue: component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black)
+    self._endColor = State(
+      initialValue: component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black)
   }
 
   var body: some View {
@@ -89,41 +92,33 @@ struct LinearGradientFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(storeService.isOutputActive || component == nil)
-    .onChange(of: name) { commitDraft() }
-    .onChange(of: startX) { commitDraft() }
-    .onChange(of: startY) { commitDraft() }
-    .onChange(of: endX) { commitDraft() }
-    .onChange(of: endY) { commitDraft() }
-    .onChange(of: startColor) { commitDraft() }
-    .onChange(of: endColor) { commitDraft() }
-    .onSubmit { commitDraft() }
+    .onChange(of: name) { updateComponent { $0.displayName = name } }
+    .onChange(of: startX) { updateComponent { $0.startX = startX } }
+    .onChange(of: startY) { updateComponent { $0.startY = startY } }
+    .onChange(of: endX) { updateComponent { $0.endX = endX } }
+    .onChange(of: endY) { updateComponent { $0.endY = endY } }
+    .onChange(of: startColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: startColor) else {
+        return
+      }
+      updateComponent { $0.startExtendedSrgbColor = value }
+    }
+    .onChange(of: endColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: endColor) else { return }
+      updateComponent { $0.endExtendedSrgbColor = value }
+    }
   }
 
-  private func commitDraft() {
-    guard
-      var component,
-      let startNSColor = NSColor(startColor).usingColorSpace(.sRGB),
-      let endNSColor = NSColor(endColor).usingColorSpace(.sRGB)
-    else { return }
-
-    component.displayName = name
-    component.startXRational = startX
-    component.startYRational = startY
-    component.endXRational = endX
-    component.endYRational = endY
-    component.startColor.red = Float(startNSColor.redComponent)
-    component.startColor.green = Float(startNSColor.greenComponent)
-    component.startColor.blue = Float(startNSColor.blueComponent)
-    component.startColor.alpha = Float(startNSColor.alphaComponent)
-    component.endColor.red = Float(endNSColor.redComponent)
-    component.endColor.green = Float(endNSColor.greenComponent)
-    component.endColor.blue = Float(endNSColor.blueComponent)
-    component.endColor.alpha = Float(endNSColor.alphaComponent)
-
+  private func updateComponent(
+    _ mutation: (inout Ldtx_Workspace_V4_FillLinearGradientComponent) -> Void
+  ) {
+    guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+      case .linearGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
-    definition.videoComponents[index].definition = .linearGradientFill(component)
+    mutation(&component)
+    definition.videoComponents[index].videoComponent = .linearGradientFill(component)
     storeService.definition = definition
   }
 

@@ -25,9 +25,9 @@ struct ClockInspector: View {
         TextField("Name", text: componentBinding(\.displayName, initial: component.displayName))
           .disabled(isRecording)
         numericField(
-          "Width", value: rationalBinding(\.widthRational, initial: component.widthRational))
+          "Width", value: rationalBinding(\.width, initial: component.width))
         numericField(
-          "Height", value: rationalBinding(\.heightRational, initial: component.heightRational))
+          "Height", value: rationalBinding(\.height, initial: component.height))
         Toggle("Show Date", isOn: componentBinding(\.showsDate, initial: component.showsDate))
         Toggle(
           "Show Seconds", isOn: componentBinding(\.showsSeconds, initial: component.showsSeconds))
@@ -44,16 +44,24 @@ struct ClockInspector: View {
         }
         numericField(
           "Text Red",
-          value: colorBinding(\.foregroundColor, \.red, initial: component.foregroundColor.red))
+          value: colorBinding(
+            \.foregroundExtendedSrgbColor, \.red, initial: component.foregroundExtendedSrgbColor.red
+          ))
         numericField(
           "Text Green",
-          value: colorBinding(\.foregroundColor, \.green, initial: component.foregroundColor.green))
+          value: colorBinding(
+            \.foregroundExtendedSrgbColor, \.green,
+            initial: component.foregroundExtendedSrgbColor.green))
         numericField(
           "Text Blue",
-          value: colorBinding(\.foregroundColor, \.blue, initial: component.foregroundColor.blue))
+          value: colorBinding(
+            \.foregroundExtendedSrgbColor, \.blue,
+            initial: component.foregroundExtendedSrgbColor.blue))
         numericField(
           "Text Alpha",
-          value: colorBinding(\.foregroundColor, \.alpha, initial: component.foregroundColor.alpha))
+          value: colorBinding(
+            \.foregroundExtendedSrgbColor, \.alpha,
+            initial: component.foregroundExtendedSrgbColor.alpha))
         LabeledContent("Text Outlines", value: "\(component.outlines.count)")
       }
     } else {
@@ -68,7 +76,7 @@ struct ClockInspector: View {
   private var component: Ldtx_Workspace_V4_ClockComponent? {
     storeService.definition.videoComponents.compactMap {
       wrapper -> Ldtx_Workspace_V4_ClockComponent? in
-      guard case .clock(let component) = wrapper.definition,
+      guard case .clock(let component) = wrapper.videoComponent,
         component.internalID == internalID
       else { return nil }
       return component
@@ -84,9 +92,9 @@ struct ClockInspector: View {
       get: { component?[keyPath: keyPath] ?? initial },
       set: { next in
         updateVideoComponent { wrapper in
-          guard case .clock(var value) = wrapper.definition else { return }
+          guard case .clock(var value) = wrapper.videoComponent else { return }
           value[keyPath: keyPath] = next
-          wrapper.definition = .clock(value)
+          wrapper.videoComponent = .clock(value)
         }
       }
     )
@@ -101,20 +109,20 @@ struct ClockInspector: View {
 
   private func colorBinding(
     _ colorKeyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_ExtendedSrgbColor
+      Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Color
     >,
-    _ channel: WritableKeyPath<Ldtx_Workspace_V4_ExtendedSrgbColor, Float>,
+    _ channel: WritableKeyPath<Ldtx_Workspace_V4_Color, Float>,
     initial: Float
   ) -> Binding<Float> {
     Binding(
       get: { component.map { $0[keyPath: colorKeyPath][keyPath: channel] } ?? initial },
       set: { next in
         updateVideoComponent { wrapper in
-          guard case .clock(var value) = wrapper.definition else { return }
+          guard case .clock(var value) = wrapper.videoComponent else { return }
           var color = value[keyPath: colorKeyPath]
           color[keyPath: channel] = next
           value[keyPath: colorKeyPath] = color
-          wrapper.definition = .clock(value)
+          wrapper.videoComponent = .clock(value)
         }
       }
     )
@@ -125,9 +133,9 @@ struct ClockInspector: View {
       get: { component?.hasUtcOffsetMinutes ?? false },
       set: { enabled in
         updateVideoComponent { wrapper in
-          guard case .clock(var value) = wrapper.definition else { return }
+          guard case .clock(var value) = wrapper.videoComponent else { return }
           if enabled { value.utcOffsetMinutes = 0 } else { value.clearUtcOffsetMinutes() }
-          wrapper.definition = .clock(value)
+          wrapper.videoComponent = .clock(value)
         }
       }
     )
@@ -138,9 +146,9 @@ struct ClockInspector: View {
       get: { component?.utcOffsetMinutes ?? 0 },
       set: { next in
         updateVideoComponent { wrapper in
-          guard case .clock(var value) = wrapper.definition else { return }
+          guard case .clock(var value) = wrapper.videoComponent else { return }
           value.utcOffsetMinutes = next
-          wrapper.definition = .clock(value)
+          wrapper.videoComponent = .clock(value)
         }
       }
     )
@@ -167,15 +175,7 @@ struct ClockInspector: View {
   ) {
     var definition = storeService.definition
     guard
-      let index = definition.videoComponents.firstIndex(where: { wrapper in
-        switch wrapper.id {
-        case .solidColorFill(let id), .linearGradientFill(let id), .radialGradientFill(let id),
-          .conicGradientFill(let id), .vfxSource(let id), .clock(let id), .testPattern(let id):
-          id == internalID
-        case .invalid:
-          false
-        }
-      })
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
     storeService.definition = definition

@@ -125,12 +125,12 @@ final class ClockOverlayRuntimeRegistry {
     let pixelHeight = intendedSize(component.destinationHeight, dimension: height)
     guard pixelWidth > 0, pixelHeight > 0,
       let horizontal = clippedAxis(
-        origin: component.destinationX,
+        origin: component.destinationX + min(component.destinationWidth, 0),
         intendedSize: pixelWidth,
         dimension: width
       ),
       let vertical = clippedAxis(
-        origin: component.destinationY,
+        origin: component.destinationY + min(component.destinationHeight, 0),
         intendedSize: pixelHeight,
         dimension: height
       )
@@ -143,10 +143,10 @@ final class ClockOverlayRuntimeRegistry {
         UInt32(vertical.end)
       ),
       sourceRect: SIMD4<Float>(
-        horizontal.sourceStart,
-        vertical.sourceStart,
-        horizontal.sourceEnd,
-        vertical.sourceEnd
+        component.destinationWidth < 0 ? 1 - horizontal.sourceStart : horizontal.sourceStart,
+        component.destinationHeight < 0 ? 1 - vertical.sourceStart : vertical.sourceStart,
+        component.destinationWidth < 0 ? 1 - horizontal.sourceEnd : horizontal.sourceEnd,
+        component.destinationHeight < 0 ? 1 - vertical.sourceEnd : vertical.sourceEnd
       ),
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight
@@ -154,8 +154,8 @@ final class ClockOverlayRuntimeRegistry {
   }
 
   private static func intendedSize(_ normalized: Float, dimension: Int) -> Int {
-    guard normalized.isFinite, normalized > 0 else { return 0 }
-    let pixels = min(Double(normalized) * Double(dimension), 16_384)
+    guard normalized.isFinite, normalized != 0 else { return 0 }
+    let pixels = min(abs(Double(normalized)) * Double(dimension), 16_384)
     return Int(pixels.rounded(.down))
   }
 

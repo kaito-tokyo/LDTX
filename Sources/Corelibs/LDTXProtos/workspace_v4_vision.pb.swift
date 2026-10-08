@@ -12,8 +12,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/// Version 4 Workspace Vision definitions.
-
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -32,20 +30,20 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var definition: Ldtx_Workspace_V4_VisionWrapper.OneOf_Definition? = nil
+  public var vision: Ldtx_Workspace_V4_VisionWrapper.OneOf_Vision? = nil
 
   /// The OCR Vision definition. Mutually exclusive with the other fields.
   public var ocrVision: Ldtx_Workspace_V4_OcrVision {
     get {
-      if case .ocrVision(let v)? = definition {return v}
+      if case .ocrVision(let v)? = vision {return v}
       return Ldtx_Workspace_V4_OcrVision()
     }
-    set {definition = .ocrVision(newValue)}
+    set {vision = .ocrVision(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+  public nonisolated enum OneOf_Vision: Equatable, Sendable {
     /// The OCR Vision definition. Mutually exclusive with the other fields.
     case ocrVision(Ldtx_Workspace_V4_OcrVision)
 
@@ -54,57 +52,64 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
   public init() {}
 }
 
-/// A normalized rectangle in the input image. Its origin is relative to the
-/// lower-left corner.
+/// The rectangular region of the input image analyzed by Vision.
 public nonisolated struct Ldtx_Workspace_V4_VisionRegionOfInterest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var xRational: Ldtx_Workspace_V4_Rational32 {
-    get {_xRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_xRational = newValue}
+  /// The left edge, measured rightward from the target image's left edge
+  /// and normalized by its width, in [0, 1].
+  /// Must satisfy x + width <= 1.
+  public var x: Ldtx_Workspace_V4_Rational32 {
+    get {_x ?? Ldtx_Workspace_V4_Rational32()}
+    set {_x = newValue}
   }
-  /// Returns true if `xRational` has been explicitly set.
-  public var hasXRational: Bool {self._xRational != nil}
-  /// Clears the value of `xRational`. Subsequent reads from it will return its default value.
-  public mutating func clearXRational() {self._xRational = nil}
+  /// Returns true if `x` has been explicitly set.
+  public var hasX: Bool {self._x != nil}
+  /// Clears the value of `x`. Subsequent reads from it will return its default value.
+  public mutating func clearX() {self._x = nil}
 
-  public var yRational: Ldtx_Workspace_V4_Rational32 {
-    get {_yRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_yRational = newValue}
+  /// The bottom edge, measured upward from the target image's bottom edge
+  /// and normalized by its height, in [0, 1].
+  /// Must satisfy y + height <= 1.
+  public var y: Ldtx_Workspace_V4_Rational32 {
+    get {_y ?? Ldtx_Workspace_V4_Rational32()}
+    set {_y = newValue}
   }
-  /// Returns true if `yRational` has been explicitly set.
-  public var hasYRational: Bool {self._yRational != nil}
-  /// Clears the value of `yRational`. Subsequent reads from it will return its default value.
-  public mutating func clearYRational() {self._yRational = nil}
+  /// Returns true if `y` has been explicitly set.
+  public var hasY: Bool {self._y != nil}
+  /// Clears the value of `y`. Subsequent reads from it will return its default value.
+  public mutating func clearY() {self._y = nil}
 
-  public var widthRational: Ldtx_Workspace_V4_Rational32 {
-    get {_widthRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_widthRational = newValue}
+  /// The width, normalized by the target image width, in (0, 1].
+  public var width: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_width ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
+    set {_width = newValue}
   }
-  /// Returns true if `widthRational` has been explicitly set.
-  public var hasWidthRational: Bool {self._widthRational != nil}
-  /// Clears the value of `widthRational`. Subsequent reads from it will return its default value.
-  public mutating func clearWidthRational() {self._widthRational = nil}
+  /// Returns true if `width` has been explicitly set.
+  public var hasWidth: Bool {self._width != nil}
+  /// Clears the value of `width`. Subsequent reads from it will return its default value.
+  public mutating func clearWidth() {self._width = nil}
 
-  public var heightRational: Ldtx_Workspace_V4_Rational32 {
-    get {_heightRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_heightRational = newValue}
+  /// The height, normalized by the target image height, in (0, 1].
+  public var height: Ldtx_Workspace_V4_Rational32DefaultOne {
+    get {_height ?? Ldtx_Workspace_V4_Rational32DefaultOne()}
+    set {_height = newValue}
   }
-  /// Returns true if `heightRational` has been explicitly set.
-  public var hasHeightRational: Bool {self._heightRational != nil}
-  /// Clears the value of `heightRational`. Subsequent reads from it will return its default value.
-  public mutating func clearHeightRational() {self._heightRational = nil}
+  /// Returns true if `height` has been explicitly set.
+  public var hasHeight: Bool {self._height != nil}
+  /// Clears the value of `height`. Subsequent reads from it will return its default value.
+  public mutating func clearHeight() {self._height = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _xRational: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _yRational: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _widthRational: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _heightRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _x: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _y: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _width: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
+  fileprivate var _height: Ldtx_Workspace_V4_Rational32DefaultOne? = nil
 }
 
 /// Wraps one concrete Vision trigger definition.
@@ -113,21 +118,21 @@ public nonisolated struct Ldtx_Workspace_V4_VisionTriggerWrapper: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var definition: Ldtx_Workspace_V4_VisionTriggerWrapper.OneOf_Definition? = nil
+  public var trigger: Ldtx_Workspace_V4_VisionTriggerWrapper.OneOf_Trigger? = nil
 
   /// The interval-based Vision trigger definition. Mutually exclusive with
   /// the other fields.
   public var intervalTrigger: Ldtx_Workspace_V4_IntervalVisionTrigger {
     get {
-      if case .intervalTrigger(let v)? = definition {return v}
+      if case .intervalTrigger(let v)? = trigger {return v}
       return Ldtx_Workspace_V4_IntervalVisionTrigger()
     }
-    set {definition = .intervalTrigger(newValue)}
+    set {trigger = .intervalTrigger(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+  public nonisolated enum OneOf_Trigger: Equatable, Sendable {
     /// The interval-based Vision trigger definition. Mutually exclusive with
     /// the other fields.
     case intervalTrigger(Ldtx_Workspace_V4_IntervalVisionTrigger)
@@ -143,20 +148,21 @@ public nonisolated struct Ldtx_Workspace_V4_IntervalVisionTrigger: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var intervalSecondsRational: Ldtx_Workspace_V4_Rational32 {
-    get {_intervalSecondsRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_intervalSecondsRational = newValue}
+  /// The interval between automatic Vision updates in seconds.
+  public var intervalSeconds: Ldtx_Workspace_V4_Rational32 {
+    get {_intervalSeconds ?? Ldtx_Workspace_V4_Rational32()}
+    set {_intervalSeconds = newValue}
   }
-  /// Returns true if `intervalSecondsRational` has been explicitly set.
-  public var hasIntervalSecondsRational: Bool {self._intervalSecondsRational != nil}
-  /// Clears the value of `intervalSecondsRational`. Subsequent reads from it will return its default value.
-  public mutating func clearIntervalSecondsRational() {self._intervalSecondsRational = nil}
+  /// Returns true if `intervalSeconds` has been explicitly set.
+  public var hasIntervalSeconds: Bool {self._intervalSeconds != nil}
+  /// Clears the value of `intervalSeconds`. Subsequent reads from it will return its default value.
+  public mutating func clearIntervalSeconds() {self._intervalSeconds = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _intervalSecondsRational: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _intervalSeconds: Ldtx_Workspace_V4_Rational32? = nil
 }
 
 /// An image-analysis request that recognizes text in an image.
@@ -165,39 +171,36 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The Workspace-local identifier for this entity. Its most significant bit
-  /// is zero; bits 62 through 15 encode milliseconds since the Unix epoch,
-  /// and bits 14 through 0 are uniformly random.
+  /// An LDTXWorkspaceID for this entity.
   public var internalID: UInt64 {
-    get {_storage._internalID}
+    get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
+  /// Returns true if `internalID` has been explicitly set.
+  public var hasInternalID: Bool {_storage._internalID != nil}
+  /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
+  public mutating func clearInternalID() {_uniqueStorage()._internalID = nil}
 
   /// The name of this Vision shown in the Workspace sidebar.
   public var displayName: String {
-    get {_storage._displayName}
+    get {_storage._displayName ?? String()}
     set {_uniqueStorage()._displayName = newValue}
   }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {_storage._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {_uniqueStorage()._displayName = nil}
 
-  /// The conditions that automatically trigger this Vision.
-  public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] {
-    get {_storage._triggers}
-    set {_uniqueStorage()._triggers = newValue}
-  }
-
-  public var source: OneOf_Source? {
-    get {return _storage._source}
-    set {_uniqueStorage()._source = newValue}
-  }
-
-  /// Analyzes the component after effects and before Program placement.
+  /// The LDTXWorkspaceID of the Video Component analyzed after effects and
+  /// before Program placement.
   public var videoComponentInternalID: UInt64 {
-    get {
-      if case .videoComponentInternalID(let v)? = _storage._source {return v}
-      return 0
-    }
-    set {_uniqueStorage()._source = .videoComponentInternalID(newValue)}
+    get {_storage._videoComponentInternalID ?? 0}
+    set {_uniqueStorage()._videoComponentInternalID = newValue}
   }
+  /// Returns true if `videoComponentInternalID` has been explicitly set.
+  public var hasVideoComponentInternalID: Bool {_storage._videoComponentInternalID != nil}
+  /// Clears the value of `videoComponentInternalID`. Subsequent reads from it will return its default value.
+  public mutating func clearVideoComponentInternalID() {_uniqueStorage()._videoComponentInternalID = nil}
 
   /// The region of the input image in which Vision performs the request.
   public var regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest {
@@ -209,15 +212,13 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   /// Clears the value of `regionOfInterest`. Subsequent reads from it will return its default value.
   public mutating func clearRegionOfInterest() {_uniqueStorage()._regionOfInterest = nil}
 
-  /// Whether text recognition prioritizes accuracy over speed. False uses the
-  /// fast level.
-  public var accurate: Bool {
-    get {_storage._accurate}
-    set {_uniqueStorage()._accurate = newValue}
+  /// The conditions that automatically trigger this Vision.
+  public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] {
+    get {_storage._triggers}
+    set {_uniqueStorage()._triggers = newValue}
   }
 
-  /// The BCP 47 languages Vision detects, in priority order. An empty list
-  /// enables automatic language detection.
+  /// The BCP 47 languages Vision detects, in priority order.
   public var recognitionLanguages: [String] {
     get {_storage._recognitionLanguages}
     set {_uniqueStorage()._recognitionLanguages = newValue}
@@ -225,9 +226,13 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
 
   /// Whether Vision applies language correction during text recognition.
   public var usesLanguageCorrection: Bool {
-    get {_storage._usesLanguageCorrection}
+    get {_storage._usesLanguageCorrection ?? false}
     set {_uniqueStorage()._usesLanguageCorrection = newValue}
   }
+  /// Returns true if `usesLanguageCorrection` has been explicitly set.
+  public var hasUsesLanguageCorrection: Bool {_storage._usesLanguageCorrection != nil}
+  /// Clears the value of `usesLanguageCorrection`. Subsequent reads from it will return its default value.
+  public mutating func clearUsesLanguageCorrection() {_uniqueStorage()._usesLanguageCorrection = nil}
 
   /// The words that supplement Vision's lexicon during word recognition.
   /// Vision uses these only when language correction is enabled.
@@ -236,22 +241,17 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
     set {_uniqueStorage()._customWords = newValue}
   }
 
-  public var minimumTextHeightRational: Ldtx_Workspace_V4_Rational32 {
-    get {_storage._minimumTextHeightRational ?? Ldtx_Workspace_V4_Rational32()}
-    set {_uniqueStorage()._minimumTextHeightRational = newValue}
+  /// The minimum text height, normalized by the target image height, in [0, 1].
+  public var minimumTextHeight: Ldtx_Workspace_V4_Rational32 {
+    get {_storage._minimumTextHeight ?? Ldtx_Workspace_V4_Rational32()}
+    set {_uniqueStorage()._minimumTextHeight = newValue}
   }
-  /// Returns true if `minimumTextHeightRational` has been explicitly set.
-  public var hasMinimumTextHeightRational: Bool {_storage._minimumTextHeightRational != nil}
-  /// Clears the value of `minimumTextHeightRational`. Subsequent reads from it will return its default value.
-  public mutating func clearMinimumTextHeightRational() {_uniqueStorage()._minimumTextHeightRational = nil}
+  /// Returns true if `minimumTextHeight` has been explicitly set.
+  public var hasMinimumTextHeight: Bool {_storage._minimumTextHeight != nil}
+  /// Clears the value of `minimumTextHeight`. Subsequent reads from it will return its default value.
+  public mutating func clearMinimumTextHeight() {_uniqueStorage()._minimumTextHeight = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public nonisolated enum OneOf_Source: Equatable, Sendable {
-    /// Analyzes the component after effects and before Program placement.
-    case videoComponentInternalID(UInt64)
-
-  }
 
   public init() {}
 
@@ -275,14 +275,14 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
       case 1: try {
         var v: Ldtx_Workspace_V4_OcrVision?
         var hadOneofValue = false
-        if let current = self.definition {
+        if let current = self.vision {
           hadOneofValue = true
           if case .ocrVision(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .ocrVision(v)
+          self.vision = .ocrVision(v)
         }
       }()
       default: break
@@ -295,14 +295,14 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if case .ocrVision(let v)? = self.definition {
+    try { if case .ocrVision(let v)? = self.vision {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_VisionWrapper, rhs: Ldtx_Workspace_V4_VisionWrapper) -> Bool {
-    if lhs.definition != rhs.definition {return false}
+    if lhs.vision != rhs.vision {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -310,7 +310,7 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
 
 nonisolated extension Ldtx_Workspace_V4_VisionRegionOfInterest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionRegionOfInterest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{5}x_rational\0\u{3}y_rational\0\u{3}width_rational\0\u{3}height_rational\0\u{b}x\0\u{b}y\0\u{b}width\0\u{b}height\0\u{c}\u{1}\u{1}\u{c}\u{2}\u{1}\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}width\0\u{1}height\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -318,10 +318,10 @@ nonisolated extension Ldtx_Workspace_V4_VisionRegionOfInterest: SwiftProtobuf.Me
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 5: try { try decoder.decodeSingularMessageField(value: &self._xRational) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._yRational) }()
-      case 7: try { try decoder.decodeSingularMessageField(value: &self._widthRational) }()
-      case 8: try { try decoder.decodeSingularMessageField(value: &self._heightRational) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._x) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._y) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._width) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._height) }()
       default: break
       }
     }
@@ -332,26 +332,26 @@ nonisolated extension Ldtx_Workspace_V4_VisionRegionOfInterest: SwiftProtobuf.Me
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._xRational {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    try { if let v = self._x {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
-    try { if let v = self._yRational {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    try { if let v = self._y {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    try { if let v = self._widthRational {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    try { if let v = self._width {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
-    try { if let v = self._heightRational {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    try { if let v = self._height {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_VisionRegionOfInterest, rhs: Ldtx_Workspace_V4_VisionRegionOfInterest) -> Bool {
-    if lhs._xRational != rhs._xRational {return false}
-    if lhs._yRational != rhs._yRational {return false}
-    if lhs._widthRational != rhs._widthRational {return false}
-    if lhs._heightRational != rhs._heightRational {return false}
+    if lhs._x != rhs._x {return false}
+    if lhs._y != rhs._y {return false}
+    if lhs._width != rhs._width {return false}
+    if lhs._height != rhs._height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -370,14 +370,14 @@ nonisolated extension Ldtx_Workspace_V4_VisionTriggerWrapper: SwiftProtobuf.Mess
       case 1: try {
         var v: Ldtx_Workspace_V4_IntervalVisionTrigger?
         var hadOneofValue = false
-        if let current = self.definition {
+        if let current = self.trigger {
           hadOneofValue = true
           if case .intervalTrigger(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .intervalTrigger(v)
+          self.trigger = .intervalTrigger(v)
         }
       }()
       default: break
@@ -390,14 +390,14 @@ nonisolated extension Ldtx_Workspace_V4_VisionTriggerWrapper: SwiftProtobuf.Mess
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if case .intervalTrigger(let v)? = self.definition {
+    try { if case .intervalTrigger(let v)? = self.trigger {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_VisionTriggerWrapper, rhs: Ldtx_Workspace_V4_VisionTriggerWrapper) -> Bool {
-    if lhs.definition != rhs.definition {return false}
+    if lhs.trigger != rhs.trigger {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -405,7 +405,7 @@ nonisolated extension Ldtx_Workspace_V4_VisionTriggerWrapper: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IntervalVisionTrigger"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}interval_seconds_rational\0\u{b}interval_seconds\0\u{c}\u{1}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{4}\u{2}interval_seconds\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -413,7 +413,7 @@ nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Mes
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._intervalSecondsRational) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._intervalSeconds) }()
       default: break
       }
     }
@@ -424,14 +424,14 @@ nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Mes
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._intervalSecondsRational {
+    try { if let v = self._intervalSeconds {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_IntervalVisionTrigger, rhs: Ldtx_Workspace_V4_IntervalVisionTrigger) -> Bool {
-    if lhs._intervalSecondsRational != rhs._intervalSecondsRational {return false}
+    if lhs._intervalSeconds != rhs._intervalSeconds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -439,19 +439,18 @@ nonisolated extension Ldtx_Workspace_V4_IntervalVisionTrigger: SwiftProtobuf.Mes
 
 nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OcrVision"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}triggers\0\u{4}\u{2}region_of_interest\0\u{1}accurate\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{4}\u{2}video_component_internal_id\0\u{3}minimum_text_height_rational\0\u{b}input_device_internal_id\0\u{b}minimum_text_height\0\u{c}\u{4}\u{1}\u{c}\u{a}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64 = 0
-    var _displayName: String = String()
-    var _triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
-    var _source: Ldtx_Workspace_V4_OcrVision.OneOf_Source?
+    var _internalID: UInt64? = nil
+    var _displayName: String? = nil
+    var _videoComponentInternalID: UInt64? = nil
     var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
-    var _accurate: Bool = false
+    var _triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
     var _recognitionLanguages: [String] = []
-    var _usesLanguageCorrection: Bool = false
+    var _usesLanguageCorrection: Bool? = nil
     var _customWords: [String] = []
-    var _minimumTextHeightRational: Ldtx_Workspace_V4_Rational32? = nil
+    var _minimumTextHeight: Ldtx_Workspace_V4_Rational32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -464,14 +463,13 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
     init(copying source: _StorageClass) {
       _internalID = source._internalID
       _displayName = source._displayName
-      _triggers = source._triggers
-      _source = source._source
+      _videoComponentInternalID = source._videoComponentInternalID
       _regionOfInterest = source._regionOfInterest
-      _accurate = source._accurate
+      _triggers = source._triggers
       _recognitionLanguages = source._recognitionLanguages
       _usesLanguageCorrection = source._usesLanguageCorrection
       _customWords = source._customWords
-      _minimumTextHeightRational = source._minimumTextHeightRational
+      _minimumTextHeight = source._minimumTextHeight
     }
   }
 
@@ -492,21 +490,13 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
         switch fieldNumber {
         case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 3: try { try decoder.decodeRepeatedMessageField(value: &_storage._triggers) }()
-        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._regionOfInterest) }()
-        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._accurate) }()
-        case 7: try { try decoder.decodeRepeatedStringField(value: &_storage._recognitionLanguages) }()
-        case 8: try { try decoder.decodeSingularBoolField(value: &_storage._usesLanguageCorrection) }()
-        case 9: try { try decoder.decodeRepeatedStringField(value: &_storage._customWords) }()
-        case 11: try {
-          var v: UInt64?
-          try decoder.decodeSingularUInt64Field(value: &v)
-          if let v = v {
-            if _storage._source != nil {try decoder.handleConflictingOneOf()}
-            _storage._source = .videoComponentInternalID(v)
-          }
-        }()
-        case 12: try { try decoder.decodeSingularMessageField(value: &_storage._minimumTextHeightRational) }()
+        case 3: try { try decoder.decodeSingularUInt64Field(value: &_storage._videoComponentInternalID) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._regionOfInterest) }()
+        case 5: try { try decoder.decodeRepeatedMessageField(value: &_storage._triggers) }()
+        case 6: try { try decoder.decodeRepeatedStringField(value: &_storage._recognitionLanguages) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._usesLanguageCorrection) }()
+        case 8: try { try decoder.decodeRepeatedStringField(value: &_storage._customWords) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._minimumTextHeight) }()
         default: break
         }
       }
@@ -519,35 +509,32 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
       // allocates stack space for every if/case branch local when no optimizations
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
-      if _storage._internalID != 0 {
-        try visitor.visitSingularUInt64Field(value: _storage._internalID, fieldNumber: 1)
-      }
-      if !_storage._displayName.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._displayName, fieldNumber: 2)
-      }
-      if !_storage._triggers.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._triggers, fieldNumber: 3)
-      }
-      try { if let v = _storage._regionOfInterest {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+      try { if let v = _storage._internalID {
+        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
       } }()
-      if _storage._accurate != false {
-        try visitor.visitSingularBoolField(value: _storage._accurate, fieldNumber: 6)
+      try { if let v = _storage._displayName {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._videoComponentInternalID {
+        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+      } }()
+      try { if let v = _storage._regionOfInterest {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      if !_storage._triggers.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._triggers, fieldNumber: 5)
       }
       if !_storage._recognitionLanguages.isEmpty {
-        try visitor.visitRepeatedStringField(value: _storage._recognitionLanguages, fieldNumber: 7)
+        try visitor.visitRepeatedStringField(value: _storage._recognitionLanguages, fieldNumber: 6)
       }
-      if _storage._usesLanguageCorrection != false {
-        try visitor.visitSingularBoolField(value: _storage._usesLanguageCorrection, fieldNumber: 8)
-      }
-      if !_storage._customWords.isEmpty {
-        try visitor.visitRepeatedStringField(value: _storage._customWords, fieldNumber: 9)
-      }
-      try { if case .videoComponentInternalID(let v)? = _storage._source {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 11)
+      try { if let v = _storage._usesLanguageCorrection {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 7)
       } }()
-      try { if let v = _storage._minimumTextHeightRational {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+      if !_storage._customWords.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._customWords, fieldNumber: 8)
+      }
+      try { if let v = _storage._minimumTextHeight {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
       } }()
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -560,14 +547,13 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
         let rhs_storage = _args.1
         if _storage._internalID != rhs_storage._internalID {return false}
         if _storage._displayName != rhs_storage._displayName {return false}
-        if _storage._triggers != rhs_storage._triggers {return false}
-        if _storage._source != rhs_storage._source {return false}
+        if _storage._videoComponentInternalID != rhs_storage._videoComponentInternalID {return false}
         if _storage._regionOfInterest != rhs_storage._regionOfInterest {return false}
-        if _storage._accurate != rhs_storage._accurate {return false}
+        if _storage._triggers != rhs_storage._triggers {return false}
         if _storage._recognitionLanguages != rhs_storage._recognitionLanguages {return false}
         if _storage._usesLanguageCorrection != rhs_storage._usesLanguageCorrection {return false}
         if _storage._customWords != rhs_storage._customWords {return false}
-        if _storage._minimumTextHeightRational != rhs_storage._minimumTextHeightRational {return false}
+        if _storage._minimumTextHeight != rhs_storage._minimumTextHeight {return false}
         return true
       }
       if !storagesAreEqual {return false}

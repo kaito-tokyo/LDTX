@@ -2,21 +2,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Persistence envelopes for Workspace definitions and preferences.
-syntax = "proto3";
+// DO NOT EDIT: All the definitions in this file are strictly specified.
+
+edition = "2024";
 
 package ldtx.envelope;
 
 import "workspace_v4_definition.proto";
 import "workspace_v4_preferences.proto";
+import "workspace_v4_output_settings.proto";
 
 // The persistence envelope for a WorkspaceDefinition. Contains an external_id
 // and a concrete WorkspaceDefinition.
 message WorkspaceDefinitionEnvelope {
-  // The UUIDv7 identifier for this persisted document.
-  string external_id = 1;
+  // The UUIDv7 identifier for this persisted document, stored as exactly
+  // 16 bytes in RFC 9562 network byte order.
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
 
-  oneof definition {
+  oneof workspace_definition {
     // The Version 4 WorkspaceDefinition.
     ldtx.workspace.v4.WorkspaceDefinitionV4 workspace_definition_v4 = 2;
   }
@@ -25,11 +28,25 @@ message WorkspaceDefinitionEnvelope {
 // The persistence envelope for WorkspacePreferences. Contains an external_id
 // and a concrete WorkspacePreferences.
 message WorkspacePreferencesEnvelope {
-  // The UUIDv7 identifier for this persisted document.
-  string external_id = 1;
+  // The UUIDv7 identifier for this persisted document, stored as exactly
+  // 16 bytes in RFC 9562 network byte order.
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
 
-  oneof preferences {
+  oneof workspace_preferences {
     // The Version 4 WorkspacePreferences.
     ldtx.workspace.v4.WorkspacePreferencesV4 workspace_preferences_v4 = 2;
+  }
+}
+
+// The persistence envelope for WorkspaceOutputSettings. Contains an external_id
+// and concrete WorkspaceOutputSettings.
+message WorkspaceOutputSettingsEnvelope {
+  // The UUIDv7 identifier for this persisted document, stored as exactly
+  // 16 bytes in RFC 9562 network byte order.
+  bytes external_id = 1 [default = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"];
+
+  oneof workspace_output_settings {
+    // The Version 4 WorkspaceOutputSettings.
+    ldtx.workspace.v4.WorkspaceOutputSettingsV4 workspace_output_settings_v4 = 2;
   }
 }

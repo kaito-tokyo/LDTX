@@ -161,6 +161,24 @@ struct ProgramRenderingOrderIntegrationTestSuite {
     #expect(camera.destinationRect == SIMD4<UInt32>(0, 0, 32, 16))
   }
 
+  @Test func cameraNegativeScalesReverseSamplingAcrossClippedBounds() throws {
+    let source = try makeSource(contentKind: .captured, hasAlphaMask: false)
+    var commands: [MetalVideoComponentCommand] = []
+    ProgramComponent.inputCameraDevice(
+      InputDeviceComponent(
+        destinationX: 16, destinationY: 16,
+        destinationScaleX: -0.5, destinationScaleY: -0.25)
+    ).appendComponentCommands(
+      to: &commands, worldWidth: 64, worldHeight: 64,
+      outputWidth: 64, outputHeight: 64, source: source, timeSeconds: 0)
+    guard case .cameraInput(let camera) = try #require(commands.first) else {
+      Issue.record("Expected a camera-input command.")
+      return
+    }
+    #expect(camera.destinationRect == SIMD4<UInt32>(0, 0, 16, 16))
+    #expect(camera.sourceRect == SIMD4<Float>(0.5, 1, -0.5, -1))
+  }
+
   private func cameraCommand(source: MetalVideoSource) -> MetalVideoComponentCommand? {
     var commands: [MetalVideoComponentCommand] = []
     ProgramComponent.inputCameraDevice(InputDeviceComponent()).appendComponentCommands(

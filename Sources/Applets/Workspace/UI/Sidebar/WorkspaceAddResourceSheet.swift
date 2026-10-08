@@ -112,7 +112,7 @@ struct WorkspaceAddResourceSheet: View {
 
   private var componentOptions: [WorkspaceSelectionOption<UInt64>] {
     videoComponents.compactMap {
-      guard let id = try? WorkspaceV4IntegrityValidator.videoComponentID($0),
+      guard let id = $0.internalID,
         let name = $0.displayName
       else { return nil }
       return .init(id: id, name: name)

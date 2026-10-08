@@ -11,6 +11,7 @@ public enum WorkspacePhysicalDeviceID: Codable, Equatable, Hashable, Sendable {
 }
 
 public struct WorkspaceLocalState: Codable, Equatable, Sendable {
+  public var recordingFolderPath: String?
   public var monitorVolume: Double?
   public var selectedProgramInternalID: UInt64?
   public var monitorAudioInputDeviceInternalIDs: Set<UInt64>
@@ -19,11 +20,13 @@ public struct WorkspaceLocalState: Codable, Equatable, Sendable {
 
   public init(
     selectedProgramInternalID: UInt64? = nil,
+    recordingFolderPath: String? = nil,
     monitorVolume: Double? = nil,
     monitorAudioInputDeviceInternalIDs: Set<UInt64> = [],
     landscapeYouTubeLiveStreamID: String? = nil,
     portraitYouTubeLiveStreamID: String? = nil
   ) {
+    self.recordingFolderPath = recordingFolderPath
     self.monitorVolume = monitorVolume
     self.selectedProgramInternalID = selectedProgramInternalID
     self.monitorAudioInputDeviceInternalIDs = monitorAudioInputDeviceInternalIDs

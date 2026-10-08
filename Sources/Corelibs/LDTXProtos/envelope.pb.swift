@@ -12,8 +12,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/// Persistence envelopes for Workspace definitions and preferences.
+// DO NOT EDIT: All the definitions in this file are strictly specified.
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -33,29 +38,39 @@ public nonisolated struct Ldtx_Envelope_WorkspaceDefinitionEnvelope: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The UUIDv7 identifier for this persisted document.
-  public var externalID: String = String()
+  /// The UUIDv7 identifier for this persisted document, stored as exactly
+  /// 16 bytes in RFC 9562 network byte order.
+  public var externalID: Data {
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    set {_externalID = newValue}
+  }
+  /// Returns true if `externalID` has been explicitly set.
+  public var hasExternalID: Bool {self._externalID != nil}
+  /// Clears the value of `externalID`. Subsequent reads from it will return its default value.
+  public mutating func clearExternalID() {self._externalID = nil}
 
-  public var definition: Ldtx_Envelope_WorkspaceDefinitionEnvelope.OneOf_Definition? = nil
+  public var workspaceDefinition: Ldtx_Envelope_WorkspaceDefinitionEnvelope.OneOf_WorkspaceDefinition? = nil
 
   /// The Version 4 WorkspaceDefinition.
   public var workspaceDefinitionV4: Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
     get {
-      if case .workspaceDefinitionV4(let v)? = definition {return v}
+      if case .workspaceDefinitionV4(let v)? = workspaceDefinition {return v}
       return Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     }
-    set {definition = .workspaceDefinitionV4(newValue)}
+    set {workspaceDefinition = .workspaceDefinitionV4(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+  public nonisolated enum OneOf_WorkspaceDefinition: Equatable, Sendable {
     /// The Version 4 WorkspaceDefinition.
     case workspaceDefinitionV4(Ldtx_Workspace_V4_WorkspaceDefinitionV4)
 
   }
 
   public init() {}
+
+  fileprivate var _externalID: Data? = nil
 }
 
 /// The persistence envelope for WorkspacePreferences. Contains an external_id
@@ -65,29 +80,81 @@ public nonisolated struct Ldtx_Envelope_WorkspacePreferencesEnvelope: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// The UUIDv7 identifier for this persisted document.
-  public var externalID: String = String()
+  /// The UUIDv7 identifier for this persisted document, stored as exactly
+  /// 16 bytes in RFC 9562 network byte order.
+  public var externalID: Data {
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    set {_externalID = newValue}
+  }
+  /// Returns true if `externalID` has been explicitly set.
+  public var hasExternalID: Bool {self._externalID != nil}
+  /// Clears the value of `externalID`. Subsequent reads from it will return its default value.
+  public mutating func clearExternalID() {self._externalID = nil}
 
-  public var preferences: Ldtx_Envelope_WorkspacePreferencesEnvelope.OneOf_Preferences? = nil
+  public var workspacePreferences: Ldtx_Envelope_WorkspacePreferencesEnvelope.OneOf_WorkspacePreferences? = nil
 
   /// The Version 4 WorkspacePreferences.
   public var workspacePreferencesV4: Ldtx_Workspace_V4_WorkspacePreferencesV4 {
     get {
-      if case .workspacePreferencesV4(let v)? = preferences {return v}
+      if case .workspacePreferencesV4(let v)? = workspacePreferences {return v}
       return Ldtx_Workspace_V4_WorkspacePreferencesV4()
     }
-    set {preferences = .workspacePreferencesV4(newValue)}
+    set {workspacePreferences = .workspacePreferencesV4(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Preferences: Equatable, Sendable {
+  public nonisolated enum OneOf_WorkspacePreferences: Equatable, Sendable {
     /// The Version 4 WorkspacePreferences.
     case workspacePreferencesV4(Ldtx_Workspace_V4_WorkspacePreferencesV4)
 
   }
 
   public init() {}
+
+  fileprivate var _externalID: Data? = nil
+}
+
+/// The persistence envelope for WorkspaceOutputSettings. Contains an external_id
+/// and concrete WorkspaceOutputSettings.
+public nonisolated struct Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The UUIDv7 identifier for this persisted document, stored as exactly
+  /// 16 bytes in RFC 9562 network byte order.
+  public var externalID: Data {
+    get {_externalID ?? Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])}
+    set {_externalID = newValue}
+  }
+  /// Returns true if `externalID` has been explicitly set.
+  public var hasExternalID: Bool {self._externalID != nil}
+  /// Clears the value of `externalID`. Subsequent reads from it will return its default value.
+  public mutating func clearExternalID() {self._externalID = nil}
+
+  public var workspaceOutputSettings: Ldtx_Envelope_WorkspaceOutputSettingsEnvelope.OneOf_WorkspaceOutputSettings? = nil
+
+  /// The Version 4 WorkspaceOutputSettings.
+  public var workspaceOutputSettingsV4: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 {
+    get {
+      if case .workspaceOutputSettingsV4(let v)? = workspaceOutputSettings {return v}
+      return Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+    }
+    set {workspaceOutputSettings = .workspaceOutputSettingsV4(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_WorkspaceOutputSettings: Equatable, Sendable {
+    /// The Version 4 WorkspaceOutputSettings.
+    case workspaceOutputSettingsV4(Ldtx_Workspace_V4_WorkspaceOutputSettingsV4)
+
+  }
+
+  public init() {}
+
+  fileprivate var _externalID: Data? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -104,18 +171,18 @@ nonisolated extension Ldtx_Envelope_WorkspaceDefinitionEnvelope: SwiftProtobuf.M
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.externalID) }()
+      case 1: try { try decoder.decodeSingularBytesField(value: &self._externalID) }()
       case 2: try {
         var v: Ldtx_Workspace_V4_WorkspaceDefinitionV4?
         var hadOneofValue = false
-        if let current = self.definition {
+        if let current = self.workspaceDefinition {
           hadOneofValue = true
           if case .workspaceDefinitionV4(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .workspaceDefinitionV4(v)
+          self.workspaceDefinition = .workspaceDefinitionV4(v)
         }
       }()
       default: break
@@ -128,18 +195,18 @@ nonisolated extension Ldtx_Envelope_WorkspaceDefinitionEnvelope: SwiftProtobuf.M
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.externalID.isEmpty {
-      try visitor.visitSingularStringField(value: self.externalID, fieldNumber: 1)
-    }
-    try { if case .workspaceDefinitionV4(let v)? = self.definition {
+    try { if let v = self._externalID {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 1)
+    } }()
+    try { if case .workspaceDefinitionV4(let v)? = self.workspaceDefinition {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Envelope_WorkspaceDefinitionEnvelope, rhs: Ldtx_Envelope_WorkspaceDefinitionEnvelope) -> Bool {
-    if lhs.externalID != rhs.externalID {return false}
-    if lhs.definition != rhs.definition {return false}
+    if lhs._externalID != rhs._externalID {return false}
+    if lhs.workspaceDefinition != rhs.workspaceDefinition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -155,18 +222,18 @@ nonisolated extension Ldtx_Envelope_WorkspacePreferencesEnvelope: SwiftProtobuf.
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.externalID) }()
+      case 1: try { try decoder.decodeSingularBytesField(value: &self._externalID) }()
       case 2: try {
         var v: Ldtx_Workspace_V4_WorkspacePreferencesV4?
         var hadOneofValue = false
-        if let current = self.preferences {
+        if let current = self.workspacePreferences {
           hadOneofValue = true
           if case .workspacePreferencesV4(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.preferences = .workspacePreferencesV4(v)
+          self.workspacePreferences = .workspacePreferencesV4(v)
         }
       }()
       default: break
@@ -179,18 +246,69 @@ nonisolated extension Ldtx_Envelope_WorkspacePreferencesEnvelope: SwiftProtobuf.
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.externalID.isEmpty {
-      try visitor.visitSingularStringField(value: self.externalID, fieldNumber: 1)
-    }
-    try { if case .workspacePreferencesV4(let v)? = self.preferences {
+    try { if let v = self._externalID {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 1)
+    } }()
+    try { if case .workspacePreferencesV4(let v)? = self.workspacePreferences {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Envelope_WorkspacePreferencesEnvelope, rhs: Ldtx_Envelope_WorkspacePreferencesEnvelope) -> Bool {
-    if lhs.externalID != rhs.externalID {return false}
-    if lhs.preferences != rhs.preferences {return false}
+    if lhs._externalID != rhs._externalID {return false}
+    if lhs.workspacePreferences != rhs.workspacePreferences {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WorkspaceOutputSettingsEnvelope"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}external_id\0\u{3}workspace_output_settings_v4\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self._externalID) }()
+      case 2: try {
+        var v: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
+        var hadOneofValue = false
+        if let current = self.workspaceOutputSettings {
+          hadOneofValue = true
+          if case .workspaceOutputSettingsV4(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.workspaceOutputSettings = .workspaceOutputSettingsV4(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._externalID {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 1)
+    } }()
+    try { if case .workspaceOutputSettingsV4(let v)? = self.workspaceOutputSettings {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Envelope_WorkspaceOutputSettingsEnvelope, rhs: Ldtx_Envelope_WorkspaceOutputSettingsEnvelope) -> Bool {
+    if lhs._externalID != rhs._externalID {return false}
+    if lhs.workspaceOutputSettings != rhs.workspaceOutputSettings {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -2,11 +2,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-syntax = "proto3";
+// DO NOT EDIT: All the definitions in this file are strictly specified.
+
+edition = "2024";
 
 package ldtx.workspace.v4;
 
 message Rational32 {
-  sint32 numerator = 1;
-  uint32 denominator = 2;
+  sint32 numerator = 1 [default = 0];
+  uint32 denominator = 2 [default = 1];
 }
+
+message Rational32DefaultOne {
+  sint32 numerator = 1 [default = 1];
+  uint32 denominator = 2 [default = 1];
+}
+
+message Color {
+  float red = 1 [default = 0];
+  float green = 2 [default = 0];
+  float blue = 3 [default = 0];
+  float alpha = 4 [default = 0];
+}
+
+// LDTXWorkspaceID is a Workspace-local entity identifier represented by uint64.
+// Its most significant bit (bit 63) is zero; bits 62 through 15 encode
+// milliseconds since the Unix epoch, and bits 14 through 0 are uniformly random.
+// Zero is not a valid LDTXWorkspaceID.
+// References to an entity use its LDTXWorkspaceID within the same Workspace.

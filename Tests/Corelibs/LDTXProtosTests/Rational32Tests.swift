@@ -31,10 +31,16 @@ struct Rational32UnitTestSuite {
   }
 
   @Test func usesStandardDivisionForZeroDenominator() {
-    let value = Ldtx_Workspace_V4_Rational32.with { $0.numerator = 1 }
+    let value = Ldtx_Workspace_V4_Rational32.with {
+      $0.numerator = 1
+      $0.denominator = 0
+    }
     #expect(value.float == .infinity)
     #expect(value.double == .infinity)
-    let negative = Ldtx_Workspace_V4_Rational32.with { $0.numerator = -1 }
+    let negative = Ldtx_Workspace_V4_Rational32.with {
+      $0.numerator = -1
+      $0.denominator = 0
+    }
     #expect(negative.float == -.infinity)
     #expect(negative.double == -.infinity)
     #expect(Ldtx_Workspace_V4_Rational32().float == 0)
@@ -56,7 +62,7 @@ struct Rational32UnitTestSuite {
 
   @Test func invalidStoredDenominator() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleYRational = .with { $0.set(num: 1, den: 0) }
+    transform.scaleY = .with { $0.set(num: 1, den: 0) }
     #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }
@@ -87,11 +93,11 @@ struct Rational32UnitTestSuite {
 
   @Test func validatesWithoutRounding() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationXRational = .with {
+    transform.translationX = .with {
       $0.numerator = Int32.max
       $0.denominator = UInt32(Int32.max - 1)
     }
-    #expect(transform.translationXRational.double > 1)
+    #expect(transform.translationX.double > 1)
     #expect(throws: WorkspaceV4IntegrityError.invalidBasicTransform) {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }
@@ -116,28 +122,9 @@ struct Rational32UnitTestSuite {
     }
     value.set(num: 0, den: 0)
     #expect(value.numerator == 0 && value.denominator == 0)
-    #expect(value.decimal == 0)
+    #expect(value.decimal.isNaN)
+    #expect(value.double.isNaN)
     #expect(try Ldtx_Workspace_V4_Rational32(serializedBytes: value.serializedData()) == value)
-  }
-
-  @Test func transformOptionalsPreservePresence() throws {
-    var transform = Ldtx_Workspace_V4_BasicTransform()
-    let paths: [WritableKeyPath<Ldtx_Workspace_V4_BasicTransform, Ldtx_Workspace_V4_Rational32?>] =
-      [
-        \.translationX, \.translationY, \.scaleX, \.scaleY,
-        \.topInset, \.rightInset, \.bottomInset, \.leftInset,
-      ]
-    for path in paths {
-      #expect(transform[keyPath: path] == nil)
-      transform[keyPath: path] = .init()
-      #expect(transform[keyPath: path]?.double == 0)
-      let decoded = try Ldtx_Workspace_V4_BasicTransform(
-        serializedBytes: transform.serializedData())
-      #expect(decoded[keyPath: path] != nil)
-      try WorkspaceV4IntegrityValidator.validateTransform(decoded)
-      transform[keyPath: path] = nil
-      #expect(transform[keyPath: path] == nil)
-    }
   }
 
 }

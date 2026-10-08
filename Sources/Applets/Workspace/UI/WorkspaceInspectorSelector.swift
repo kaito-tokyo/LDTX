@@ -4,7 +4,7 @@
 
 import Foundation
 
-public enum WorkspaceInspectorKind: Int {
+public enum WorkspaceInspectorKind: Int, Sendable {
   case invalid = 0
   case workspaceCanvas = 2
   case workspaceOutput = 3
@@ -20,7 +20,7 @@ public enum WorkspaceInspectorKind: Int {
   case workspacePrograms = 14
 }
 
-public struct WorkspaceInspectorSelector: Hashable {
+public struct WorkspaceInspectorSelector: Hashable, Sendable {
   public let kind: WorkspaceInspectorKind
   public let internalID: UInt64?
 

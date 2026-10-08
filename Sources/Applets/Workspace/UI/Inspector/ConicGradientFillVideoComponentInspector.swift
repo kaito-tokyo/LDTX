@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct ConicGradientFillVideoComponentInspector: View {
@@ -27,27 +28,29 @@ struct ConicGradientFillVideoComponentInspector: View {
     self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
-        guard case .conicGradientFill(let component) = wrapper.definition else { return nil }
+        guard case .conicGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._centerX = State(
-      initialValue: component?.centerXRational
+      initialValue: component?.centerX
         ?? .with {
           $0.set(num: 1, den: 2)
         })
     self._centerY = State(
-      initialValue: component?.centerYRational
+      initialValue: component?.centerY
         ?? .with {
           $0.set(num: 1, den: 2)
         })
     self._startAngleRadians = State(
-      initialValue: component?.startAngleRadiansRational
+      initialValue: component?.startAngleRadians
         ?? .with {
           $0.set(num: 0, den: 1)
         })
-    self._startColor = State(initialValue: component?.startColor.asColor() ?? .black)
-    self._endColor = State(initialValue: component?.endColor.asColor() ?? .white)
+    self._startColor = State(
+      initialValue: component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black)
+    self._endColor = State(
+      initialValue: component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white)
   }
 
   var body: some View {
@@ -81,39 +84,34 @@ struct ConicGradientFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(storeService.isOutputActive || component == nil)
-    .onChange(of: name) { commitDraft() }
-    .onChange(of: centerX) { commitDraft() }
-    .onChange(of: centerY) { commitDraft() }
-    .onChange(of: startAngleRadians) { commitDraft() }
-    .onChange(of: startColor) { commitDraft() }
-    .onChange(of: endColor) { commitDraft() }
-    .onSubmit { commitDraft() }
+    .onChange(of: name) { updateComponent { $0.displayName = name } }
+    .onChange(of: centerX) { updateComponent { $0.centerX = centerX } }
+    .onChange(of: centerY) { updateComponent { $0.centerY = centerY } }
+    .onChange(of: startAngleRadians) {
+      updateComponent { $0.startAngleRadians = startAngleRadians }
+    }
+    .onChange(of: startColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: startColor) else {
+        return
+      }
+      updateComponent { $0.startExtendedSrgbColor = value }
+    }
+    .onChange(of: endColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: endColor) else { return }
+      updateComponent { $0.endExtendedSrgbColor = value }
+    }
   }
 
-  private func commitDraft() {
-    guard
-      var component,
-      let startNSColor = NSColor(startColor).usingColorSpace(.sRGB),
-      let endNSColor = NSColor(endColor).usingColorSpace(.sRGB)
-    else { return }
-
-    component.displayName = name
-    component.centerXRational = centerX
-    component.centerYRational = centerY
-    component.startAngleRadiansRational = startAngleRadians
-    component.startColor.red = Float(startNSColor.redComponent)
-    component.startColor.green = Float(startNSColor.greenComponent)
-    component.startColor.blue = Float(startNSColor.blueComponent)
-    component.startColor.alpha = Float(startNSColor.alphaComponent)
-    component.endColor.red = Float(endNSColor.redComponent)
-    component.endColor.green = Float(endNSColor.greenComponent)
-    component.endColor.blue = Float(endNSColor.blueComponent)
-    component.endColor.alpha = Float(endNSColor.alphaComponent)
-
+  private func updateComponent(
+    _ mutation: (inout Ldtx_Workspace_V4_FillConicGradientComponent) -> Void
+  ) {
+    guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+      case .conicGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
-    definition.videoComponents[index].definition = .conicGradientFill(component)
+    mutation(&component)
+    definition.videoComponents[index].videoComponent = .conicGradientFill(component)
     storeService.definition = definition
   }
 

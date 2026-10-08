@@ -63,7 +63,7 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(videoComponents) { component in
-            switch component.definition {
+            switch component.videoComponent {
             case .vfxSource(let source):
               Label(source.displayName, systemImage: "play.rectangle")
                 .tag(
@@ -117,7 +117,7 @@ public struct WorkspaceSidebar: View {
 
         Section {
           ForEach(visions) { vision in
-            switch vision.definition {
+            switch vision.vision {
             case .ocrVision(let ocrVision):
               Label(ocrVision.displayName, systemImage: "eye")
                 .tag(

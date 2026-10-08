@@ -41,6 +41,7 @@ struct OutputOrchestrationDetailPane: View {
   var pauseOutputSession: () -> Void
   var stopOutputSession: () -> Void
   @State private var isShowingBroadcastChooser = false
+  @State private var isShowingCustomFields = false
   @State private var isShowingStreamKeyManager = false
   @State private var loadedStreamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
   @State private var didLoadStreamKeyConfigurations = false
@@ -142,14 +143,19 @@ struct OutputOrchestrationDetailPane: View {
             } else {
               LabeledContent("Output Folder", value: "Application default")
             }
-            RecordingCustomFieldsEditor(
-              fields: outputDestination.recordingCustomFields,
-              canEdit: canEditDestination
-            ) { fields in
-              var destination = outputDestination
-              destination.recordingCustomFields = fields
-              applyOutputSettings(destination)
-            }
+            Button("Edit Custom Fields…") { isShowingCustomFields = true }
+              .disabled(!canEditDestination)
+              .sheet(isPresented: $isShowingCustomFields) {
+                RecordingCustomFieldsSheet(
+                  fields: Binding(
+                    get: { outputDestination.recordingCustomFields },
+                    set: { fields in
+                      var destination = outputDestination
+                      destination.recordingCustomFields = fields
+                      applyOutputSettings(destination)
+                    }),
+                  canEdit: canEditDestination)
+              }
           }
         }
         Section("Recording Integrity") {
@@ -360,102 +366,85 @@ struct OutputOrchestrationDetailPane: View {
   }
 }
 
-private struct RecordingCustomFieldsEditor: View {
-  private enum Field: Hashable {
-    case key(UUID)
-    case value(UUID)
-  }
-
-  private struct Row: Identifiable, Equatable {
-    let id: UUID
+private struct RecordingCustomFieldsSheet: View {
+  private struct Row: Identifiable {
+    let id = UUID()
     var key: String
     var value: String
   }
 
-  let fields: [String: String]
+  @Environment(\.dismiss) private var dismiss
+  @Binding var fields: [String: String]
   let canEdit: Bool
-  let apply: ([String: String]) -> Void
   @State private var rows: [Row]
-  @FocusState private var focusedField: Field?
+  @FocusState private var focusedKey: UUID?
 
-  init(
-    fields: [String: String],
-    canEdit: Bool,
-    apply: @escaping ([String: String]) -> Void
-  ) {
-    self.fields = fields
+  init(fields: Binding<[String: String]>, canEdit: Bool) {
+    self._fields = fields
     self.canEdit = canEdit
-    self.apply = apply
-    _rows = State(initialValue: Self.rows(for: fields))
+    _rows = State(
+      initialValue: fields.wrappedValue.sorted { $0.key < $1.key }.map {
+        Row(key: $0.key, value: $0.value)
+      })
   }
 
   var body: some View {
-    Divider()
-    Text("Custom Fields").font(.headline)
-    ForEach($rows) { $row in
-      HStack {
-        TextField("Key", text: $row.key)
-          .accessibilityLabel("Custom field key")
-          .focused($focusedField, equals: .key(row.id))
-          .onSubmit(saveIfValid)
-        TextField("Value", text: $row.value)
-          .accessibilityLabel("Custom field value")
-          .focused($focusedField, equals: .value(row.id))
-          .onSubmit(saveIfValid)
-        Button(role: .destructive) {
-          rows.removeAll { $0.id == row.id }
-          saveIfValid()
-        } label: {
-          Image(systemName: "minus.circle")
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Custom Fields").font(.headline)
+      Table($rows) {
+        TableColumn("Key") { $row in
+          TextField("Key", text: $row.key)
+            .accessibilityLabel("Custom field key")
+            .focused($focusedKey, equals: row.id)
         }
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Remove custom field")
+        TableColumn("Value") { $row in
+          TextField("Value", text: $row.value)
+            .accessibilityLabel("Custom field value")
+        }
+        TableColumn("") { $row in
+          Button(role: .destructive) {
+            rows.removeAll { $0.id == row.id }
+          } label: {
+            Image(systemName: "minus.circle")
+          }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Remove custom field")
+        }
+        .width(28)
       }
       .disabled(!canEdit)
+      Button {
+        let row = Row(key: "", value: "")
+        rows.append(row)
+        focusedKey = row.id
+      } label: {
+        Label("Add Field", systemImage: "plus")
+      }
+      .disabled(!canEdit)
+      if hasEmptyKey {
+        Text("Keys must not be empty.").foregroundStyle(.red)
+      } else if hasDuplicateKeys {
+        Text("Keys must be unique.").foregroundStyle(.red)
+      }
+      HStack {
+        Spacer()
+        Button("Cancel", role: .cancel) { dismiss() }
+          .keyboardShortcut(.cancelAction)
+        Button("Done") {
+          guard canEdit, !hasEmptyKey, !hasDuplicateKeys else { return }
+          fields = Dictionary(uniqueKeysWithValues: rows.map { ($0.key, $0.value) })
+          dismiss()
+        }
+        .keyboardShortcut(.defaultAction)
+        .disabled(!canEdit || hasEmptyKey || hasDuplicateKeys)
+      }
     }
-    if let validationMessage {
-      Text(validationMessage)
-        .font(.caption)
-        .foregroundStyle(.red)
-    }
-    Button {
-      let id = UUID()
-      rows.append(Row(id: id, key: "", value: ""))
-      focusedField = .key(id)
-    } label: {
-      Label("Add Field", systemImage: "plus")
-    }
-    .disabled(!canEdit || validationMessage != nil)
-    .onChange(of: focusedField) { oldField, newField in
-      if oldField != nil, oldField != newField { saveIfValid() }
-    }
-    .onChange(of: fields) { _, newFields in
-      guard dictionaryValue != newFields else { return }
-      rows = Self.rows(for: newFields)
-    }
+    .padding()
+    .frame(minWidth: 480, minHeight: 320)
   }
 
-  private var validationMessage: String? {
-    if rows.contains(where: { $0.key.isEmpty }) { return "Keys must not be empty." }
-    let keys = rows.map(\.key)
-    if Set(keys).count != keys.count { return "Keys must be unique." }
-    return nil
-  }
-
-  private var dictionaryValue: [String: String] {
-    rows.reduce(into: [:]) { $0[$1.key] = $1.value }
-  }
-
-  private func saveIfValid() {
-    guard validationMessage == nil else { return }
-    let value = dictionaryValue
-    guard value != fields else { return }
-    apply(value)
-  }
-
-  private static func rows(for fields: [String: String]) -> [Row] {
-    fields.keys.sorted().map { Row(id: UUID(), key: $0, value: fields[$0] ?? "") }
-  }
+  private var hasEmptyKey: Bool { rows.contains { $0.key.isEmpty } }
+  private var hasDuplicateKeys: Bool { Set(rows.map(\.key)).count != rows.count }
 }
 
 enum OutputFolderOverrideSelection {

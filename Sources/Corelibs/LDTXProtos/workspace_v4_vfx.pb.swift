@@ -12,8 +12,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/// Version 4 Workspace Video Effect definitions.
-
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -32,31 +30,31 @@ public nonisolated struct Ldtx_Workspace_V4_VideoEffectWrapper: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var definition: Ldtx_Workspace_V4_VideoEffectWrapper.OneOf_Definition? = nil
+  public var videoEffect: Ldtx_Workspace_V4_VideoEffectWrapper.OneOf_VideoEffect? = nil
 
   /// The custom Video Effect definition. Mutually exclusive with the other
   /// fields.
   public var custom: Ldtx_Workspace_V4_CustomVideoEffect {
     get {
-      if case .custom(let v)? = definition {return v}
+      if case .custom(let v)? = videoEffect {return v}
       return Ldtx_Workspace_V4_CustomVideoEffect()
     }
-    set {definition = .custom(newValue)}
+    set {videoEffect = .custom(newValue)}
   }
 
   /// The background-removal VFX effect definition. Mutually exclusive with
   /// the other fields.
   public var backgroundRemoval: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect {
     get {
-      if case .backgroundRemoval(let v)? = definition {return v}
+      if case .backgroundRemoval(let v)? = videoEffect {return v}
       return Ldtx_Workspace_V4_BackgroundRemovalVfxEffect()
     }
-    set {definition = .backgroundRemoval(newValue)}
+    set {videoEffect = .backgroundRemoval(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated enum OneOf_Definition: Equatable, Sendable {
+  public nonisolated enum OneOf_VideoEffect: Equatable, Sendable {
     /// The custom Video Effect definition. Mutually exclusive with the other
     /// fields.
     case custom(Ldtx_Workspace_V4_CustomVideoEffect)
@@ -77,11 +75,20 @@ public nonisolated struct Ldtx_Workspace_V4_CustomVideoEffect: Sendable {
 
   /// The JSON representation of this custom Video Effect. Its format is
   /// unspecified.
-  public var json: String = String()
+  public var json: String {
+    get {_json ?? String()}
+    set {_json = newValue}
+  }
+  /// Returns true if `json` has been explicitly set.
+  public var hasJson: Bool {self._json != nil}
+  /// Clears the value of `json`. Subsequent reads from it will return its default value.
+  public mutating func clearJson() {self._json = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _json: String? = nil
 }
 
 /// A Video Effect that removes the background from input video.
@@ -91,7 +98,14 @@ public nonisolated struct Ldtx_Workspace_V4_BackgroundRemovalVfxEffect: Sendable
   // methods supported on all messages.
 
   /// The background-removal model to use.
-  public var model: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model = .unspecified
+  public var model: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model {
+    get {_model ?? .unspecified}
+    set {_model = newValue}
+  }
+  /// Returns true if `model` has been explicitly set.
+  public var hasModel: Bool {self._model != nil}
+  /// Clears the value of `model`. Subsequent reads from it will return its default value.
+  public mutating func clearModel() {self._model = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -134,6 +148,8 @@ public nonisolated struct Ldtx_Workspace_V4_BackgroundRemovalVfxEffect: Sendable
   }
 
   public init() {}
+
+  fileprivate var _model: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -153,27 +169,27 @@ nonisolated extension Ldtx_Workspace_V4_VideoEffectWrapper: SwiftProtobuf.Messag
       case 1: try {
         var v: Ldtx_Workspace_V4_CustomVideoEffect?
         var hadOneofValue = false
-        if let current = self.definition {
+        if let current = self.videoEffect {
           hadOneofValue = true
           if case .custom(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .custom(v)
+          self.videoEffect = .custom(v)
         }
       }()
       case 2: try {
         var v: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect?
         var hadOneofValue = false
-        if let current = self.definition {
+        if let current = self.videoEffect {
           hadOneofValue = true
           if case .backgroundRemoval(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.definition = .backgroundRemoval(v)
+          self.videoEffect = .backgroundRemoval(v)
         }
       }()
       default: break
@@ -186,13 +202,13 @@ nonisolated extension Ldtx_Workspace_V4_VideoEffectWrapper: SwiftProtobuf.Messag
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    switch self.definition {
+    switch self.videoEffect {
     case .custom?: try {
-      guard case .custom(let v)? = self.definition else { preconditionFailure() }
+      guard case .custom(let v)? = self.videoEffect else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     }()
     case .backgroundRemoval?: try {
-      guard case .backgroundRemoval(let v)? = self.definition else { preconditionFailure() }
+      guard case .backgroundRemoval(let v)? = self.videoEffect else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
     case nil: break
@@ -201,7 +217,7 @@ nonisolated extension Ldtx_Workspace_V4_VideoEffectWrapper: SwiftProtobuf.Messag
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_VideoEffectWrapper, rhs: Ldtx_Workspace_V4_VideoEffectWrapper) -> Bool {
-    if lhs.definition != rhs.definition {return false}
+    if lhs.videoEffect != rhs.videoEffect {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -217,21 +233,25 @@ nonisolated extension Ldtx_Workspace_V4_CustomVideoEffect: SwiftProtobuf.Message
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.json) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self._json) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.json.isEmpty {
-      try visitor.visitSingularStringField(value: self.json, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._json {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_CustomVideoEffect, rhs: Ldtx_Workspace_V4_CustomVideoEffect) -> Bool {
-    if lhs.json != rhs.json {return false}
+    if lhs._json != rhs._json {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -247,21 +267,25 @@ nonisolated extension Ldtx_Workspace_V4_BackgroundRemovalVfxEffect: SwiftProtobu
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.model) }()
+      case 1: try { try decoder.decodeSingularEnumField(value: &self._model) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.model != .unspecified {
-      try visitor.visitSingularEnumField(value: self.model, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._model {
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 1)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect, rhs: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect) -> Bool {
-    if lhs.model != rhs.model {return false}
+    if lhs._model != rhs._model {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
