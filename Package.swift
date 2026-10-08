@@ -48,6 +48,16 @@ var dependencies: [Package.Dependency] = [
   products.append(.executable(name: "ldtx", targets: ["ldtx"]))
   targets += [
     .target(
+      name: "LDTXProtosMacOSExtra",
+      dependencies: ["LDTXProtos"],
+      path: "Sources/LDTXProtosMacOSExtra"
+    ),
+    .testTarget(
+      name: "LDTXProtosMacOSExtraTests",
+      dependencies: ["LDTXProtos", "LDTXProtosMacOSExtra"],
+      path: "Tests/LDTXProtosMacOSExtraTests"
+    ),
+    .target(
       name: "LDTXWorkspaceAppletModel",
       dependencies: [
         "LDTXProtos",

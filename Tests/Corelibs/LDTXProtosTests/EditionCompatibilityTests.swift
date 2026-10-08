@@ -7,14 +7,18 @@ import Testing
 
 @Suite
 struct EditionCompatibilityUnitTestSuite {
-  @Test func preservesImplicitScalarWireFormat() throws {
-    var output = Ldtx_Workspace_V4_OutputConfiguration()
-    output.recordsLandscape = false
+  @Test func preservesExplicitFalseForRecordingEnabled() throws {
+    var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+    #expect(!output.hasRecordingEnabled)
     #expect(try output.serializedData().isEmpty)
-    output.recordsLandscape = true
-    let bytes = Data([0x08, 0x01])
+    output.recordingEnabled = false
+    let bytes = Data([0x08, 0x00])
     #expect(try output.serializedData() == bytes)
-    #expect(try Ldtx_Workspace_V4_OutputConfiguration(serializedBytes: bytes) == output)
+    let restored = try Ldtx_Workspace_V4_WorkspaceOutputSettingsV4(serializedBytes: bytes)
+    #expect(restored.hasRecordingEnabled)
+    #expect(!restored.recordingEnabled)
+    output.clearRecordingEnabled()
+    #expect(try output.serializedData().isEmpty)
   }
 
   @Test func preservesExplicitZeroAndClearForClockOffset() throws {

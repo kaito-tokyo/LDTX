@@ -9,7 +9,8 @@ extension Ldtx_Workspace_V4_VisionWrapper: Identifiable {
   }
 
   public var id: ID {
-    switch definition {
+    guard internalID != nil else { return .invalid }
+    return switch vision {
     case .ocrVision(let vision): .ocrVision(vision.internalID)
     case nil: .invalid
     }

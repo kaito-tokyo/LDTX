@@ -47,6 +47,7 @@ targets:
       - target: LDTXDeviceRegistry
       - target: LDTXWorkspaceAppletModel
       - target: LDTXProtos
+      - target: LDTXProtosMacOSExtra
       - package: SwiftProtobuf
       - target: LDTXYouTubeRTMPS
     settings:
@@ -185,6 +186,8 @@ targets:
       - target: LDTXWorkspaceAppletModel
         embed: true
       - target: LDTXProtos
+        embed: true
+      - target: LDTXProtosMacOSExtra
         embed: true
       - target: LDTXWorkspaceAppletInterface
         embed: true

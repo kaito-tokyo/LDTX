@@ -38,3 +38,13 @@ extension Ldtx_Envelope_WorkspacePreferencesEnvelope {
     }
   }
 }
+
+extension Ldtx_Envelope_WorkspaceOutputSettingsEnvelope {
+  public var externalIDAsUUID: UUID? {
+    get { uuidFromData(externalID) }
+    set {
+      if let newValue { externalID = uuidData(newValue) }
+      else { clearExternalID() }
+    }
+  }
+}

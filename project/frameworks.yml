@@ -9,6 +9,21 @@ schemes:
         LDTXWorkspaceBundleFormat: all
 
 targets:
+  LDTXProtosMacOSExtra:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXProtosMacOSExtra
+    dependencies:
+      - target: LDTXProtos
+      - sdk: AppKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProtosMacOSExtra
+        PRODUCT_MODULE_NAME: LDTXProtosMacOSExtra
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
   LDTXAppHelper:
     type: framework
     platform: macOS
@@ -526,6 +541,7 @@ targets:
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXProtos
+      - target: LDTXProtosMacOSExtra
       - target: LDTXCapture
       - target: LDTXAppletSupport
       - target: LDTXDash

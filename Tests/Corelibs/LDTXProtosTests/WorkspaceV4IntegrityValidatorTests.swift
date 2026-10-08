@@ -27,11 +27,11 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
     portrait.audioChannelMuted[2] = true
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleXRational = .with {
+    transform.scaleX = .with {
       $0.numerator = 1
       $0.denominator = 2
     }
-    transform.scaleYRational = .with {
+    transform.scaleY = .with {
       $0.numerator = 1
       $0.denominator = 1
     }
@@ -69,11 +69,16 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
-    program.landscapeVideoLayerInternalIds = [99]
+    program.displayName = "Main"
     definition.programs = [program]
 
     #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(99)) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
+      try WorkspaceV4IntegrityValidator.validate(
+        WorkspaceV4Bundle(
+          definition: definition,
+          preferences: .with {
+            $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [99] }
+          }))
     }
   }
 
@@ -206,17 +211,23 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
   func rejectsDuplicateVideoLayers() {
     var video = Ldtx_Workspace_V4_VfxSourceComponent()
     video.internalID = 1
+    video.displayName = "Camera"
     var input = Ldtx_Workspace_V4_VideoComponentWrapper()
     input.vfxSource = video
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 2
-    program.landscapeVideoLayerInternalIds = [1, 1]
+    program.displayName = "Main"
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [input]
     definition.programs = [program]
 
     #expect(throws: WorkspaceV4IntegrityError.duplicateVideoLayer(2)) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
+      try WorkspaceV4IntegrityValidator.validate(
+        WorkspaceV4Bundle(
+          definition: definition,
+          preferences: .with {
+            $0.landscapeProgramPreferences[2] = .with { $0.videoLayerInternalIds = [1, 1] }
+          }))
     }
   }
   @Test("collects definition and preferences issues in both canvases")
@@ -248,13 +259,13 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       $0.denominator = 1
     }
     preferences.landscapeProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
-      $0.translationXRational = .with {
+      $0.translationX = .with {
         $0.numerator = 11
         $0.denominator = 10
       }
     }
     preferences.portraitProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
-      $0.scaleYRational = .with {
+      $0.bottomInset = .with {
         $0.numerator = -1
         $0.denominator = 1
       }
@@ -291,11 +302,11 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
     preferences.portraitProgramPreferences[1, default: .init()].videoLayerTransforms[2] = .with {
-      $0.translationXRational = .with {
+      $0.translationX = .with {
         $0.numerator = 1
         $0.denominator = 2
       }
-      $0.scaleXRational = .with {
+      $0.scaleX = .with {
         $0.numerator = 2
         $0.denominator = 1
       }
@@ -330,15 +341,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       (.init(), true),
       (
         .with {
-          $0.translationXRational = .with {
+          $0.translationX = .with {
             $0.numerator = 1
             $0.denominator = 1
           }
-          $0.translationYRational = .with {
+          $0.translationY = .with {
             $0.numerator = 1
             $0.denominator = 1
           }
-          $0.scaleXRational = .with {
+          $0.scaleX = .with {
             $0.numerator = 2
             $0.denominator = 1
           }
@@ -346,7 +357,7 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       ),
       (
         .with {
-          $0.translationXRational = .with {
+          $0.translationX = .with {
             $0.numerator = 11
             $0.denominator = 10
           }
@@ -354,7 +365,7 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       ),
       (
         .with {
-          $0.translationYRational = .with {
+          $0.translationY = .with {
             $0.numerator = -1
             $0.denominator = 10
           }
@@ -362,15 +373,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       ),
       (
         .with {
-          $0.scaleXRational = .with {
+          $0.scaleX = .with {
             $0.numerator = -1
             $0.denominator = 1
           }
-        }, false
+        }, true
       ),
       (
         .with {
-          $0.topInsetRational = .with {
+          $0.topInset = .with {
             $0.numerator = 11
             $0.denominator = 10
           }
@@ -389,6 +400,33 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
           try WorkspaceV4IntegrityValidator.validate(workspace)
         }
       }
+    }
+  }
+
+  @Test("extended sRGB allows RGB outside the unit interval but constrains alpha")
+  func validatesExtendedSRGBComponents() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.videoComponents = [
+        .with {
+          $0.solidColorFill = .with {
+            $0.internalID = 1
+            $0.displayName = "Fill"
+            $0.extendedSrgbColor = .with {
+              $0.red = -0.25
+              $0.green = 1.5
+              $0.blue = 0
+              $0.alpha = 0.8
+            }
+          }
+        }
+      ]
+    }
+    let bytes = try definition.serializedData()
+    try WorkspaceV4IntegrityValidator.validate(definition)
+    #expect(try definition.serializedData() == bytes)
+    definition.videoComponents[0].solidColorFill.extendedSrgbColor.alpha = 1.5
+    #expect(throws: WorkspaceV4IntegrityError.invalidColor) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
     }
   }
 
