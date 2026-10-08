@@ -192,7 +192,8 @@ extension AppUIComponentTestSuite {
           .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
           .init("workspace.captureScreenshots"),
           .flexibleSpace,
-          .inspectorTrackingSeparator, .flexibleSpace, .init("workspace.inspector"),
+          .inspectorTrackingSeparator, .init("workspace.inspectorTitle"),
+          .flexibleSpace, .init("workspace.inspector"),
         ])
       #expect(first.contentLayoutRect.size == NSSize(width: 1062, height: 700))
       let split = try #require(first.contentViewController as? PaneSplitViewController)
@@ -225,6 +226,31 @@ extension AppUIComponentTestSuite {
         #expect(!split.splitViewItems[index].isCollapsed)
         #expect(abs(split.splitView.arrangedSubviews[index].frame.width - width) <= 1)
       }
+    }
+
+    @Test("Inspector toolbar title follows selection and collapse")
+    func inspectorToolbarTitleFollowsSelectionAndCollapse() async throws {
+      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      state.inspectorSelector = .init(kind: .workspaceOutput)
+      let window = makeWorkspaceTestWindow(storeService: state)
+      defer { window.close() }
+      let toolbar = try #require(window.toolbar)
+      let identifier = NSToolbarItem.Identifier("workspace.inspectorTitle")
+      let label = try #require(toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
+      #expect(label.stringValue == String(localized: "Output"))
+      state.inspectorSelector = .init(kind: .workspaceCanvas)
+      for _ in 0..<100 {
+        if label.stringValue == String(localized: "Canvas") { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(label.stringValue == String(localized: "Canvas"))
+      let split = try #require(window.contentViewController as? PaneSplitViewController)
+      split.toggleInspector(nil)
+      #expect(!toolbar.items.contains { $0.itemIdentifier == identifier })
+      state.inspectorSelector = .init(kind: .workspacePrograms)
+      split.toggleInspector(nil)
+      let reopened = try #require(toolbar.items.first { $0.itemIdentifier == identifier }?.view as? NSTextField)
+      #expect(reopened.stringValue == String(localized: "Programs"))
     }
 
     @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
