@@ -77,7 +77,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Find the latest Xcode Cloud build for the current commit
+      - name: Find the latest Xcode Cloud build for the current release tag
         id: find-xc-build
         timeout-minutes: 60
         shell: pwsh -Command "Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
@@ -85,7 +85,7 @@ jobs:
           APP_STORE_CONNECT_ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER }}
           APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          BUILD_RUNS_URL: https://api.appstoreconnect.apple.com/v1/ciWorkflows/${{ vars.XC_WORKFLOW_ID }}/buildRuns?sort=-number&limit=20
+          BUILD_RUNS_URL: https://api.appstoreconnect.apple.com/v1/ciWorkflows/${{ vars.XC_WORKFLOW_ID }}/buildRuns?sort=-number&limit=20&include=sourceBranchOrTag
         run: |
           Import-Module './ci_scripts/AppStoreConnectAuth.psm1'
 
@@ -100,7 +100,11 @@ jobs:
           while ($true) {
               $token = New-AppStoreConnectToken @tokenOpts
               $response = Invoke-RestMethod -AsHashtable -Uri $env:BUILD_RUNS_URL -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 60 -MaximumRetryCount 3 -RetryIntervalSec 30 -ProgressAction SilentlyContinue
-              $latestRun = $response.data | Where-Object { $_.attributes.sourceCommit.commitSha -ieq $env:GITHUB_SHA } | Select-Object -First 1
+              $releaseRefIds = @($response.included | Where-Object { $_.type -eq 'scmGitReferences' -and $_.attributes.canonicalName -ceq $env:GITHUB_REF } | Select-Object -ExpandProperty id)
+              $latestRun = $response.data | Where-Object {
+                  $_.attributes.sourceCommit.commitSha -ieq $env:GITHUB_SHA -and
+                  $_.relationships.sourceBranchOrTag.data.id -cin $releaseRefIds
+              } | Select-Object -First 1
               if ($latestRun) {
                   Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "XC_BUILD_ID=$($latestRun.id)" -Encoding utf8
                   exit 0
