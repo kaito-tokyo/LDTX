@@ -16,8 +16,8 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let original = root.appendingPathComponent("Original.ldtxworkspace")
     let snapshot = WorkspaceV4Bundle(
-      definitionExternalID: UUID().uuidString.lowercased(),
-      preferencesExternalID: UUID().uuidString.lowercased(),
+      definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       definition: .init(), preferences: .init())
     try WorkspaceDocumentPackage.write(snapshot, to: original, createsPackage: true)
     let infoURL = original.appendingPathComponent("Info.plist")
@@ -54,8 +54,8 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     var workspace = WorkspaceV4Bundle(
-      definitionExternalID: UUID().uuidString.lowercased(),
-      preferencesExternalID: UUID().uuidString.lowercased(),
+      definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       definition: .init(), preferences: .init())
     try WorkspaceDocumentPackage.write(workspace, to: url, createsPackage: true)
     let info = url.appendingPathComponent("Info.plist")

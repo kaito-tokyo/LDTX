@@ -110,10 +110,10 @@ public final class WorkspaceV4RecordingSession {
     let baseDirectory = outputDirectory()
     let runsLandscape =
       recordsLandscape
-      || (output.youtubeEnabled && output.youtubeSettings.ingestMode != .portraitRtmps)
+      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesLandscapeRTMPS)
     let runsPortrait =
       recordsPortrait
-      || (output.youtubeEnabled && output.youtubeSettings.ingestMode != .landscapeRtmps)
+      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesPortraitRTMPS)
     do {
       if recordsLandscape || recordsPortrait {
         try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(

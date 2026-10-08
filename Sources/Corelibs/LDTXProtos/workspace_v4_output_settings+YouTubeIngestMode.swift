@@ -5,8 +5,8 @@
 extension Ldtx_Workspace_V4_YouTubeIngestMode {
   public var usesLandscapeRTMPS: Bool {
     switch self {
-    case .landscapeRtmps, .dualRtmps: true
-    case .unspecified, .portraitRtmps, .landscapeHls, .portraitHls,
+    case .unspecified, .landscapeRtmps, .dualRtmps: true
+    case .portraitRtmps, .landscapeHls, .portraitHls,
       .landscapeDash, .portraitDash, .UNRECOGNIZED:
       false
     }

@@ -42,6 +42,7 @@ public struct WorkspaceBundleWriterV4 {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     externalID: UUID
   ) throws -> UUID {
+    try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     envelope.externalIDAsUUID = externalID
     envelope.workspaceDefinitionV4 = definition
@@ -56,6 +57,7 @@ public struct WorkspaceBundleWriterV4 {
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     externalID: UUID
   ) throws -> UUID {
+    try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
     envelope.externalIDAsUUID = externalID
     envelope.workspacePreferencesV4 = preferences
@@ -74,6 +76,7 @@ public struct WorkspaceBundleWriterV4 {
     outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4,
     externalID: UUID
   ) throws -> UUID {
+    try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
     envelope.externalIDAsUUID = externalID
     envelope.workspaceOutputSettingsV4 = outputSettings
@@ -81,6 +84,12 @@ public struct WorkspaceBundleWriterV4 {
     options.useDeterministicOrdering = true
     try envelope.serializedData(options: options).write(to: outputSettingsURL, options: .atomic)
     return externalID
+  }
+
+  private func validateExternalID(_ identifier: UUID) throws {
+    guard identifier.uuid.6 >> 4 == 7, identifier.uuid.8 & 0xc0 == 0x80 else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
   }
 
   public mutating func makeExternalID() -> UUID {

@@ -384,6 +384,30 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     registry.deactivateAll()
   }
 
+  @Test func negativeClockDimensionsMirrorTheRetainedTexture() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+    let registry = try ClockOverlayRuntimeRegistry(
+      device: device, updateRegistry: updates,
+      currentTimeProvider: FixedClockCurrentTimeProvider(
+        date: Date(timeIntervalSince1970: 1_700_000_000)))
+    defer { registry.deactivateAll() }
+    registry.synchronize(
+      composite: CompositeProgramDefinition(steps: [
+        CompositeProgramStep(
+          id: "clock",
+          component: .clock(
+            ClockComponent(
+              destinationX: 0.5, destinationY: 1,
+              destinationWidth: -1, destinationHeight: -1)))
+      ]), outputWidth: 640, outputHeight: 360)
+    waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: "clock") != nil }
+    let texture = try unwrap(registry.retainedTexture(forStepNamed: "clock"))
+    assertEqual(texture.colorTexture.width, 640)
+    assertEqual(texture.destinationRect, SIMD4<UInt32>(0, 0, 320, 360))
+    assertEqual(texture.sourceRect, SIMD4<Float>(0.5, 1, 0, 0))
+  }
+
   @Test func rendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
     _ = try unwrap(MTLCreateSystemDefaultDevice())
     let attempts = ClockOverlayInitializationAttemptCounter()

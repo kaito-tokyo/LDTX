@@ -115,8 +115,8 @@ extension ClockComponent {
     let x1 = clockPixelCoordinate(x + destinationWidth, limit: width)
     let y1 = clockPixelCoordinate(y + destinationHeight, limit: height)
     return SIMD4<UInt32>(
-      x0,
-      y0,
+      min(x0, x1),
+      min(y0, y1),
       max(x0, x1),
       max(y0, y1)
     )
@@ -530,8 +530,8 @@ extension InputDeviceComponent {
     canvasHeight: Float
   ) -> SIMD4<Float> {
     let source = sourceUVRect()
-    let scaleX = max(destinationScaleX, 0)
-    let scaleY = max(destinationScaleY, 0)
+    let scaleX = destinationScaleX
+    let scaleY = destinationScaleY
     let rectWidth = canvasWidth * source.z * scaleX
     let rectHeight = canvasHeight * source.w * scaleY
     return SIMD4<Float>(destinationX, destinationY, rectWidth, rectHeight)
@@ -545,10 +545,10 @@ extension InputDeviceComponent {
       canvasWidth: canvasWidth,
       canvasHeight: canvasHeight
     )
-    let x0 = min(max(rect.x, 0), canvasWidth)
-    let y0 = min(max(rect.y, 0), canvasHeight)
-    let x1 = min(max(rect.x + rect.z, x0), canvasWidth)
-    let y1 = min(max(rect.y + rect.w, y0), canvasHeight)
+    let x0 = min(max(min(rect.x, rect.x + rect.z), 0), canvasWidth)
+    let y0 = min(max(min(rect.y, rect.y + rect.w), 0), canvasHeight)
+    let x1 = min(max(max(rect.x, rect.x + rect.z), x0), canvasWidth)
+    let y1 = min(max(max(rect.y, rect.y + rect.w), y0), canvasHeight)
     return SIMD4<Float>(x0, y0, x1 - x0, y1 - y0)
   }
 
@@ -564,7 +564,7 @@ extension InputDeviceComponent {
       canvasWidth: canvasWidth,
       canvasHeight: canvasHeight
     )
-    guard full.z > 0, full.w > 0, clipped.z > 0, clipped.w > 0 else {
+    guard full.z != 0, full.w != 0, clipped.z > 0, clipped.w > 0 else {
       return SIMD4<Float>(0, 0, 0, 0)
     }
     return SIMD4<Float>(

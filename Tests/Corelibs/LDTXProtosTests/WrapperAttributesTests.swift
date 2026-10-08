@@ -6,6 +6,12 @@ import Testing
 
 @Suite
 struct WrapperAttributesUnitTestSuite {
+  @Test func unspecifiedIngestUsesOnlyLandscapeRTMPS() {
+    let mode = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4().youtubeSettings.ingestMode
+    #expect(mode.usesLandscapeRTMPS)
+    #expect(!mode.usesPortraitRTMPS)
+  }
+
   @Test func preservesPresenceForEveryVideoComponentKind() {
     let definitions: [Ldtx_Workspace_V4_VideoComponentWrapper.OneOf_VideoComponent] = [
       .solidColorFill(.init()), .linearGradientFill(.init()),

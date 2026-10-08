@@ -280,6 +280,30 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(!FileManager.default.fileExists(atPath: destination.path))
   }
 
+  @Test(
+    arguments: [0, 1, 2],
+    [
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-7000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000000",
+    ])
+  func lowLevelWriterRejectsInvalidIDs(document: Int, identifier: String) throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let writer = try #require(WorkspaceBundleWriterV4(at: root))
+    let id = try #require(UUID(uuidString: identifier))
+    #expect(throws: CocoaError(.fileWriteInvalidFileName)) {
+      switch document {
+      case 0: _ = try writer.write(definition: .init(), externalID: id)
+      case 1: _ = try writer.write(preferences: .init(), externalID: id)
+      default: _ = try writer.write(outputSettings: .init(), externalID: id)
+      }
+    }
+    for url in [writer.definitionURL, writer.preferencesURL, writer.outputSettingsURL] {
+      #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+  }
+
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"

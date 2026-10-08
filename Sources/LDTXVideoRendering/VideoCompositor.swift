@@ -691,8 +691,10 @@ public final class VideoCompositor: @unchecked Sendable {
             source.w.isFinite,
             source.x >= 0,
             source.y >= 0,
-            source.x <= source.z,
-            source.y <= source.w,
+            source.x <= 1,
+            source.y <= 1,
+            source.z >= 0,
+            source.w >= 0,
             source.z <= 1,
             source.w <= 1
           else {
