@@ -7,7 +7,7 @@ import LDTXProtos
 import SwiftUI
 
 extension Ldtx_Workspace_V4_Color {
-  /// Interprets explicitly set RGBA components as extended sRGB for SwiftUI.
+  /// Interprets RGBA components, including protobuf defaults, as extended sRGB for SwiftUI.
   public var extendedSRGBSwiftUIColor: SwiftUI.Color? {
     extendedSRGBNSColor.map { SwiftUI.Color(nsColor: $0) }
   }

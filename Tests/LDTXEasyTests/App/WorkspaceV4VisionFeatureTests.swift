@@ -11,6 +11,12 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceV4VisionFeatureUnitTestSuite {
+  @Test func usesFixedProtobufDefaultForMinimumTextHeight() {
+    let vision = Ldtx_Workspace_V4_OcrVision()
+    #expect(!vision.hasMinimumTextHeight)
+    #expect(WorkspaceV4VisionFeature.ocrConfiguration(for: vision).minimumTextHeight == 0)
+  }
+
   @Test func mapsV4OCRSettings() {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.recognitionLanguages = ["ja-JP"]

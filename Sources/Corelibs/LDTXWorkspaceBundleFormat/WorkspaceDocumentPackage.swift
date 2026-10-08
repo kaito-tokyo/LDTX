@@ -48,7 +48,9 @@ public enum WorkspaceDocumentPackage {
     guard let identifier else {
       return WorkspaceBundleWriterV4.makeExternalID()
     }
-    guard let uuid = UUID(uuidString: identifier) else {
+    guard let uuid = UUID(uuidString: identifier),
+      uuid.uuid.6 >> 4 == 7, uuid.uuid.8 & 0xc0 == 0x80
+    else {
       throw CocoaError(.fileWriteInvalidFileName)
     }
     return uuid

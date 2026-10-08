@@ -85,9 +85,6 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         else { throw RationalInputError.invalidNumber }
         var value = Ldtx_Workspace_V4_Rational32()
         try value.set(decimal: decimal)
-        guard value.numerator >= 0 else {
-          throw WorkspaceSelectionError(message: "Scale must be nonnegative.")
-        }
         return value
       } catch {
         throw WorkspaceSelectionError(

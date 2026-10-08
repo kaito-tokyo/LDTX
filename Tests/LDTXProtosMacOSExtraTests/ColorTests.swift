@@ -10,7 +10,7 @@ import Testing
 @Suite
 struct ExtendedSRGBColorUnitTestSuite {
   @Test(arguments: [0, 1, 2, 3])
-  func rejectsMissingComponents(component: Int) {
+  func usesDefaultsForMissingComponents(component: Int) throws {
     var color = Ldtx_Workspace_V4_Color.with {
       $0.red = 0
       $0.green = 0
@@ -23,8 +23,21 @@ struct ExtendedSRGBColorUnitTestSuite {
     case 2: color.clearBlue()
     default: color.clearAlpha()
     }
-    #expect(color.extendedSRGBNSColor == nil)
-    #expect(color.extendedSRGBSwiftUIColor == nil)
+    let converted = try #require(color.extendedSRGBNSColor)
+    #expect(converted.redComponent == 0)
+    #expect(converted.greenComponent == 0)
+    #expect(converted.blueComponent == 0)
+    #expect(converted.alphaComponent == 0)
+    #expect(color.extendedSRGBSwiftUIColor != nil)
+  }
+
+  @Test func usesDefaultsForOpaqueBlack() throws {
+    let color = Ldtx_Workspace_V4_Color.with { $0.alpha = 1 }
+    let converted = try #require(color.extendedSRGBNSColor)
+    #expect(
+      converted.redComponent == 0 && converted.greenComponent == 0 && converted.blueComponent == 0)
+    #expect(converted.alphaComponent == 1)
+    #expect(!color.hasRed && !color.hasGreen && !color.hasBlue)
   }
 
   @Test func preservesExplicitZeroAndExtendedComponents() throws {

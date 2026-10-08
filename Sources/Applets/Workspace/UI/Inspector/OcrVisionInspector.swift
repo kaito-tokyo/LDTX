@@ -55,19 +55,14 @@ struct OcrVisionInspector: View {
           .disabled(isRecording)
         TextField("Custom Words (comma separated)", text: customWordsBinding)
           .disabled(isRecording)
-        Toggle("Minimum Text Height", isOn: minimumTextHeightEnabledBinding)
-          .disabled(isRecording)
-        if vision.hasMinimumTextHeight {
-          LabeledContent("Minimum Height") {
-            TextField(
-              "Fraction", value: minimumTextHeightBinding,
-              format: RationalFormatStyle()
-            )
-            .multilineTextAlignment(.trailing)
-            .frame(width: 90)
-          }
-          .disabled(isRecording)
+        LabeledContent("Minimum Text Height") {
+          TextField(
+            "Fraction", value: minimumTextHeightBinding, format: RationalFormatStyle()
+          )
+          .multilineTextAlignment(.trailing)
+          .frame(width: 90)
         }
+        .disabled(isRecording)
       }
       Section("Recognition Result") {
         if let failure = storeService.visionFailureMessages[internalID] {
@@ -190,30 +185,10 @@ struct OcrVisionInspector: View {
     )
   }
 
-  private var minimumTextHeightEnabledBinding: Binding<Bool> {
-    Binding(
-      get: { vision?.hasMinimumTextHeight ?? false },
-      set: { enabled in
-        editVision { value in
-          if enabled {
-            value.minimumTextHeight = .with {
-              $0.set(num: 1, den: 100)
-            }
-          } else {
-            value.clearMinimumTextHeight()
-          }
-        }
-      }
-    )
-  }
-
   private var minimumTextHeightBinding: Binding<Ldtx_Workspace_V4_Rational32> {
     Binding(
       get: {
-        vision?.minimumTextHeight
-          ?? .with {
-            $0.set(num: 1, den: 100)
-          }
+        vision?.minimumTextHeight ?? .init()
       },
       set: { next in editVision { $0.minimumTextHeight = next } }
     )

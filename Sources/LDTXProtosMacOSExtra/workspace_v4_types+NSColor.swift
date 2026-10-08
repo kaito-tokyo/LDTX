@@ -6,10 +6,9 @@ import AppKit
 import LDTXProtos
 
 extension Ldtx_Workspace_V4_Color {
-  /// Interprets all four explicitly set components as extended sRGB.
-  /// Returns nil if any component is unset; RGB values are not clamped.
+  /// Interprets RGBA components, including protobuf defaults, as extended sRGB.
+  /// RGB values are not clamped.
   public var extendedSRGBNSColor: NSColor? {
-    guard hasRed, hasGreen, hasBlue, hasAlpha else { return nil }
     return NSColor(
       colorSpace: .extendedSRGB,
       components: [CGFloat(red), CGFloat(green), CGFloat(blue), CGFloat(alpha)],

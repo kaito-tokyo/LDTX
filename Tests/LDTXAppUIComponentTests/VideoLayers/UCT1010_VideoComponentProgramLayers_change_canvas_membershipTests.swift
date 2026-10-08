@@ -13,6 +13,28 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1010VideoComponentProgramLayersIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
+    @Test("Active output allows reordering but rejects membership and count changes")
+    func activeOutputPreservesLayerMembership() throws {
+      let service = WorkspaceStoreService(
+        definition: .with {
+          $0.programs = [.with { $0.internalID = 100 }]
+        }, preferences: .init())
+      var preferences = Ldtx_Workspace_V4_ProgramPreferences()
+      preferences.videoLayerInternalIds = [10, 20]
+      try service.commitPreferences(preferences, programID: 100, target: .landscape)
+      service.isOutputActive = true
+      preferences.videoLayerInternalIds = [20, 10]
+      try service.commitPreferences(preferences, programID: 100, target: .landscape)
+      for ids: [UInt64] in [[10], [10, 20, 30], [10, 20, 20]] {
+        preferences.videoLayerInternalIds = ids
+        #expect(throws: WorkspaceSelectionError.self) {
+          try service.commitPreferences(preferences, programID: 100, target: .landscape)
+        }
+        #expect(
+          try service.preferences(for: 100, target: .landscape).videoLayerInternalIds == [20, 10])
+      }
+    }
+
     @Test(
       "UCT-1010.1: Component inspector membership uses latest program and preserves preferences")
     func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {

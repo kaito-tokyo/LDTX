@@ -280,7 +280,11 @@ public final class WorkspaceStoreService {
   public func commitPreferences(
     _ value: Ldtx_Workspace_V4_ProgramPreferences, programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
-    _ = try preferences(for: programID, target: target)
+    let current = try preferences(for: programID, target: target)
+    guard
+      !isOutputActive
+        || current.videoLayerInternalIds.sorted() == value.videoLayerInternalIds.sorted()
+    else { throw WorkspaceSelectionError(message: "Video layer membership cannot be changed now.") }
     for transform in value.videoLayerTransforms.values {
       try WorkspaceV4IntegrityValidator.validateTransform(transform)
     }

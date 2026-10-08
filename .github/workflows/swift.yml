@@ -191,10 +191,10 @@ jobs:
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Run CLI tests
+      - name: Run CLI and macOS protobuf-extra tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          swift test --disable-index-store -debug-info-format none --jobs "$(sysctl -n hw.logicalcpu)" --filter LDTXUtilsTests
+          swift test --disable-index-store -debug-info-format none --jobs "$(sysctl -n hw.logicalcpu)" --filter 'LDTXUtilsTests|LDTXProtosMacOSExtraTests'
 
       - name: Run App Automation MCP tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

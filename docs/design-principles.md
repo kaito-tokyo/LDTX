@@ -31,20 +31,21 @@ the relevant design or feature documentation instead.
 - The runtime is responsible for applying supported values and safely ignoring
   unsupported values.
 
-## PERSISTENCE: Separate definition from preferences
+## PERSISTENCE: Separate definition, preferences, and output settings
 
-- `definition` is the authoritative Workspace structure, including resources,
-  Programs, layers, physical assignments, and output configuration.
-- While recording or streaming is active, `definition` changes are limited to
-  reordering existing video layers within each Program and canvas. Layer IDs and
-  their occurrence counts must remain unchanged; all other definition fields
-  remain fixed.
-- `preferences` contain editable presentation and mix state, such as
-  transforms, mute state, gain, and selections.
-- `preferences` may be changed while output is active when the running output
-  pipeline supports the change.
-- The UI must prevent other changes to `definition` during active output while
-  continuing to allow supported `preferences` changes.
+- `definition` is the authoritative inventory of Workspace resources and Programs.
+  No definition field may change while recording or streaming is active.
+- `preferences` contain presentation and mix state, including each Program and
+  canvas's video layer order, transforms, visibility, mute state, and gain.
+- Video layer IDs are ordered from back to front. During output, reordering is
+  allowed, but layer membership and occurrence counts must remain unchanged.
+- Other preferences may change during output when the pipeline supports them.
+- `outputSettings` is a separate persisted Workspace document for recording and
+  streaming configuration. It may change between sessions, but remains fixed
+  while output is active.
+- Device assignments, recording folder paths, and stream-key assignments belong
+  to AppletData rather than the Workspace documents. Workspace-specific output
+  assignments are keyed by the definition envelope's external ID.
 
 ## Device availability must not make output start unintuitive
 
@@ -81,20 +82,27 @@ the relevant design or feature documentation instead.
   resolved Program, including a restored selection. This does not change the
   unselected-draft policy for dynamic resource editing sheets.
 
-## Rational values and optional transforms
+## Protobuf defaults and Rational values
 
-- Construct or update Rational32 values through `set(num:den:)` or
+- Read ordinary protobuf fields through their generated getters, which expose
+  the schema's fixed defaults. Do not turn absent fields into contextual defaults
+  or hide presence checks inside convenience accessors. Oneof absence must be
+  handled explicitly; validation may inspect field presence.
+- Construct or update Rational values through `set(num:den:)` or
   `set(decimal:)`; application code must not assign numerator or denominator
   directly. Generated protobuf code is exempt.
+- Rational32 defaults to zero; Rational32DefaultOne defaults to one. Use the
+  latter only for fields whose baseline is the multiplicative identity.
 - `set(num:den:)` preserves the supplied representation without validation or
   reduction. `set(decimal:)` encodes a representable Decimal exactly with a
   power-of-ten denominator; an encoding overflow leaves the prior value intact.
-- Read through `float`, `double`, or `decimal`. All three interpret `0/0` as
-  zero without mutating the stored representation. Other zero denominators
-  follow the numeric type's division rules.
-- BasicTransform's optional accessors preserve protobuf presence. Setting an
-  accessor to nil clears the field. Runtime defaults apply only to absent
-  fields: translation and insets default to zero, while scale defaults to one.
+- Read through `float`, `double`, or `decimal`. Zero denominators follow the
+  numeric type's division rules, including NaN for `0/0`; do not reinterpret
+  that representation as zero.
+- Transform translation defaults to zero and scale defaults to one through
+  their protobuf types. Scale has no sign restriction.
+- OCR minimum text height uses its protobuf default of zero. Absence does not
+  select Vision's framework default.
 - Decimal editing uses `decimal` and `set(decimal:)`. Float and Double have no
   generic setters; each caller owns its quantization and encoding policy.
 

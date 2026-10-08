@@ -257,6 +257,29 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         atPath: destination.appendingPathComponent("output_settings.pb").path))
   }
 
+  @Test(
+    arguments: [0, 1, 2],
+    [
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-7000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000000",
+    ])
+  func packageWriterRejectsInvalidEnvelopeIDs(document: Int, identifier: String) throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let destination = root.appendingPathComponent("Invalid.ldtxworkspace")
+    var workspace = makeWorkspace()
+    switch document {
+    case 0: workspace.definitionExternalID = identifier
+    case 1: workspace.preferencesExternalID = identifier
+    default: workspace.outputSettingsExternalID = identifier
+    }
+    #expect(throws: CocoaError(.fileWriteInvalidFileName)) {
+      try WorkspaceDocumentPackage.write(workspace, to: destination, createsPackage: true)
+    }
+    #expect(!FileManager.default.fileExists(atPath: destination.path))
+  }
+
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"

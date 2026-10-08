@@ -206,6 +206,27 @@ extension AppUIComponentTestSuite {
       #expect(row.state.strings == ["100", "1", "1.25", "1"])
     }
 
+    @Test("Negative scales remain editable when changing position")
+    func negativeScalesRemainEditable() throws {
+      let fixture = VideoLayersTestFixture()
+      var saved: Ldtx_Workspace_V4_BasicTransform?
+      let table = fixture.makeTable()
+      fixture.update(table, commit: { _, value in saved = value })
+      let row = try #require(table.rows[1])
+      row.state.strings = ["100", "1", "-1.25", "-0.5"]
+      row.state.hasUnconfirmedChanges = true
+      row.state.onCommit()
+      let transform = try #require(saved)
+      #expect(transform.scaleX.double == -1.25)
+      #expect(transform.scaleY.double == -0.5)
+      row.state.strings[0] = "200"
+      row.state.hasUnconfirmedChanges = true
+      row.state.onCommit()
+      #expect(saved?.translationX.double == 200.0 / 1920.0)
+      #expect(saved?.scaleX.double == -1.25)
+      #expect(!row.state.hasUnconfirmedChanges)
+    }
+
     @Test("UCT-1006.7: App kit commit requests read current draft once")
     func appKitCommitRequestsReadCurrentDraftOnce() throws {
       let fixture = VideoLayersTestFixture()
@@ -493,7 +514,7 @@ extension AppUIComponentTestSuite {
         programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
       let row = try #require(editor.table.rows[1])
       let original = store.preferences
-      for strings in [["bad", "0", "1", "1"], ["0", "0", "-1", "1"]] {
+      for strings in [["bad", "0", "1", "1"], ["0", "0", "bad", "1"]] {
         row.state.strings = strings
         row.state.hasUnconfirmedChanges = true
         #expect(throws: (any Error).self) { try store.validateInspectorEdits() }

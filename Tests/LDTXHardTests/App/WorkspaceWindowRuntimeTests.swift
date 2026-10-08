@@ -171,10 +171,14 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(runtime.preferences.audioChannelGainsDecibels[inputID] == nil)
   }
 
-  @Test("resolves a selected single-Canvas V4 RTMPS destination")
-  func resolvesSingleCanvasRTMPSDestination() throws {
+  @Test(
+    "resolves a selected single-Canvas V4 RTMPS destination",
+    arguments: [
+      Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps, .unspecified,
+    ])
+  func resolvesSingleCanvasRTMPSDestination(mode: Ldtx_Workspace_V4_YouTubeIngestMode) throws {
     var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
-    output.youtubeSettings.ingestMode = .landscapeRtmps
+    output.youtubeSettings.ingestMode = mode
     let configuration = YouTubeRTMPSStreamKeyConfiguration(
       id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
       streamKey: "landscape-key")
@@ -187,10 +191,10 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(destinations.landscape?.streamName == "landscape-key")
   }
 
-  @Test("rejects an unspecified V4 RTMPS ingest mode")
-  func rejectsUnspecifiedIngestMode() {
+  @Test("unspecified V4 RTMPS ingest mode requires a Landscape key")
+  func unspecifiedIngestModeRequiresLandscapeKey() {
     let output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
-    #expect(throws: WorkspaceV4YouTubeOutputError.unsupportedIngestMode) {
+    #expect(throws: WorkspaceV4YouTubeOutputError.missingLandscapeStreamKey) {
       try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
         output: output, configurations: [], landscapeStreamID: nil, portraitStreamID: nil)
     }
