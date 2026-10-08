@@ -122,7 +122,8 @@ struct OcrVisionInspector: View {
   private var sourceBinding: Binding<UInt64?> {
     Binding(
       get: {
-        vision?.videoComponentInternalID
+        guard let sourceID = vision?.videoComponentInternalID, sourceID != 0 else { return nil }
+        return sourceID
       },
       set: { internalID in
         editVision { value in

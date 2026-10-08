@@ -369,7 +369,7 @@ public final class WorkspaceV4RecordingSession {
   ) {
     let output = windowRuntime.workspace.outputSettings
     switch output.youtubeSettings.ingestMode {
-    case .landscapeRtmps:
+    case .unspecified, .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
         mainVideo: service.appendLandscapeVideo,
         mainAudioMix: service.appendLandscapeAudioMix,

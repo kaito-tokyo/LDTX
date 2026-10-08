@@ -115,6 +115,7 @@ protoc \
   Protos/workspace_v4_definition.proto \
   Protos/workspace_v4_input_device.proto \
   Protos/workspace_v4_preferences.proto \
+  Protos/workspace_v4_output_settings.proto \
   Protos/workspace_v4_vfx.proto \
   Protos/workspace_v4_video_component.proto \
   Protos/workspace_v4_vision.proto \
