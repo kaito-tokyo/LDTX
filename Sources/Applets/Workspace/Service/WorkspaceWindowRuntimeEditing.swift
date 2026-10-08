@@ -62,14 +62,14 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addSolidColorFill(displayName: String, color: Ldtx_Workspace_V4_ExtendedSrgbColor)
+  public func addSolidColorFill(displayName: String, color: Ldtx_Workspace_V4_Color)
     throws -> UInt64
   {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillSolidColorComponent()
     component.internalID = id
     component.displayName = displayName
-    component.color = color
+    component.extendedSrgbColor = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.solidColorFill = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -78,27 +78,27 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addLinearGradientFill(
-    displayName: String, startColor: Ldtx_Workspace_V4_ExtendedSrgbColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor
+    displayName: String, startColor: Ldtx_Workspace_V4_Color,
+    endColor: Ldtx_Workspace_V4_Color
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.startXRational = .with {
+    component.startX = .with {
       $0.set(num: 0, den: 1)
     }
-    component.startYRational = .with {
+    component.startY = .with {
       $0.set(num: 0, den: 1)
     }
-    component.startColor = startColor
-    component.endXRational = .with {
+    component.startExtendedSrgbColor = startColor
+    component.endX = .with {
       $0.set(num: 1, den: 1)
     }
-    component.endYRational = .with {
+    component.endY = .with {
       $0.set(num: 1, den: 1)
     }
-    component.endColor = endColor
+    component.endExtendedSrgbColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.linearGradientFill = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -107,27 +107,27 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addRadialGradientFill(
-    displayName: String, innerColor: Ldtx_Workspace_V4_ExtendedSrgbColor,
-    outerColor: Ldtx_Workspace_V4_ExtendedSrgbColor
+    displayName: String, innerColor: Ldtx_Workspace_V4_Color,
+    outerColor: Ldtx_Workspace_V4_Color
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerXRational = .with {
+    component.centerX = .with {
       $0.set(num: 1, den: 2)
     }
-    component.centerYRational = .with {
+    component.centerY = .with {
       $0.set(num: 1, den: 2)
     }
-    component.innerRadiusRational = .with {
+    component.innerRadius = .with {
       $0.set(num: 0, den: 1)
     }
-    component.outerRadiusRational = .with {
+    component.outerRadius = .with {
       $0.set(num: 1, den: 2)
     }
-    component.innerColor = innerColor
-    component.outerColor = outerColor
+    component.innerExtendedSrgbColor = innerColor
+    component.outerExtendedSrgbColor = outerColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.radialGradientFill = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -136,21 +136,21 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addConicGradientFill(
-    displayName: String, startColor: Ldtx_Workspace_V4_ExtendedSrgbColor,
-    endColor: Ldtx_Workspace_V4_ExtendedSrgbColor
+    displayName: String, startColor: Ldtx_Workspace_V4_Color,
+    endColor: Ldtx_Workspace_V4_Color
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = displayName
-    component.centerXRational = .with {
+    component.centerX = .with {
       $0.set(num: 1, den: 2)
     }
-    component.centerYRational = .with {
+    component.centerY = .with {
       $0.set(num: 1, den: 2)
     }
-    component.startColor = startColor
-    component.endColor = endColor
+    component.startExtendedSrgbColor = startColor
+    component.endExtendedSrgbColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.conicGradientFill = component
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
@@ -163,16 +163,16 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = displayName
-    component.widthRational = .with {
+    component.width = .with {
       $0.set(num: 1, den: 6)
     }
-    component.heightRational = .with {
+    component.height = .with {
       $0.set(num: 2, den: 27)
     }
-    component.foregroundColor = Self.opaqueWhite
-    var backgroundColor = Ldtx_Workspace_V4_ExtendedSrgbColor()
+    component.foregroundExtendedSrgbColor = Self.opaqueWhite
+    var backgroundColor = Ldtx_Workspace_V4_Color()
     backgroundColor.alpha = 0.65
-    component.backgroundColor = backgroundColor
+    component.backgroundExtendedSrgbColor = backgroundColor
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
@@ -202,14 +202,14 @@ extension WorkspaceWindowRuntime {
   ) throws -> UInt64 {
     let id = internalIDGenerator.next()
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
-    trigger.intervalSecondsRational = intervalSeconds
+    trigger.intervalSeconds = intervalSeconds
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = displayName
     vision.videoComponentInternalID = videoComponentInternalID
-    vision.source = .videoComponentInternalID(videoComponentInternalID)
+    vision.videoComponentInternalID = videoComponentInternalID
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     wrapper.ocrVision = vision
@@ -230,11 +230,8 @@ extension WorkspaceWindowRuntime {
   public func setVideoLayerOrder(
     _ ids: [UInt64], forProgramInternalID programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
-    try editWorkspace { workspace in
-      guard
-        let index = workspace.definition.programs.firstIndex(where: { $0.internalID == programID })
-      else { throw WorkspaceRuntimeError.missingProgram(programID) }
-      workspace.definition.programs[index][keyPath: target.layerIDs] = ids
+    try editProgramPreference(programID, target: target) {
+      $0.videoLayerInternalIds = ids
     }
   }
 
@@ -294,8 +291,8 @@ extension WorkspaceWindowRuntime {
       localState: appletLocalState, physicalDeviceIDs: physicalDeviceIDs)
   }
 
-  private static var opaqueWhite: Ldtx_Workspace_V4_ExtendedSrgbColor {
-    var color = Ldtx_Workspace_V4_ExtendedSrgbColor()
+  private static var opaqueWhite: Ldtx_Workspace_V4_Color {
+    var color = Ldtx_Workspace_V4_Color()
     color.red = 1
     color.green = 1
     color.blue = 1
@@ -310,13 +307,14 @@ extension WorkspaceWindowRuntime {
       switch kind {
       case .component:
         let definition = workspace.definition
-        let usedByProgram = definition.programs.contains {
-          $0.landscapeVideoLayerInternalIds.contains(id)
-            || $0.portraitVideoLayerInternalIds.contains(id)
+        let usedByProgram = [WorkspaceCanvasTarget.landscape, .portrait].contains { target in
+          workspace.preferences[keyPath: target.preferences].values.contains {
+            $0.videoLayerInternalIds.contains(id)
+          }
         }
         let usedByVision = definition.visions.contains {
-          guard case .ocrVision(let vision) = $0.definition else { return false }
-          return vision.source == .videoComponentInternalID(id)
+          guard case .ocrVision(let vision) = $0.vision else { return false }
+          return vision.videoComponentInternalID == id
         }
         guard !usedByProgram, !usedByVision,
           definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id
@@ -346,14 +344,6 @@ extension WorkspaceWindowRuntime {
         }
 
       }
-      for index in workspace.definition.programs.indices {
-        workspace.definition.programs[index].landscapeVideoLayerInternalIds.removeAll {
-          removedIDs.contains($0)
-        }
-        workspace.definition.programs[index].portraitVideoLayerInternalIds.removeAll {
-          removedIDs.contains($0)
-        }
-      }
       for removedID in removedIDs {
         workspace.preferences.audioChannelGainsDecibels.removeValue(forKey: removedID)
       }
@@ -362,6 +352,7 @@ extension WorkspaceWindowRuntime {
           guard var pref = workspace.preferences[keyPath: target.preferences][programID] else {
             continue
           }
+          pref.videoLayerInternalIds.removeAll { removedIDs.contains($0) }
           for removedID in removedIDs {
             pref.audioChannelMuted.removeValue(forKey: removedID)
             pref.videoLayerTransforms.removeValue(forKey: removedID)

@@ -49,7 +49,7 @@ struct VfxVideoComponentInspector: View {
 
   private var component: Ldtx_Workspace_V4_VfxSourceComponent? {
     storeService.definition.videoComponents.compactMap { wrapper in
-      guard case .vfxSource(let component) = wrapper.definition,
+      guard case .vfxSource(let component) = wrapper.videoComponent,
         component.internalID == internalID
       else { return nil }
       return component
@@ -61,9 +61,9 @@ struct VfxVideoComponentInspector: View {
       get: { component?.displayName ?? "" },
       set: { name in
         updateVideoComponent { wrapper in
-          guard case .vfxSource(var value) = wrapper.definition else { return }
+          guard case .vfxSource(var value) = wrapper.videoComponent else { return }
           value.displayName = name
-          wrapper.definition = .vfxSource(value)
+          wrapper.videoComponent = .vfxSource(value)
         }
       }
     )
@@ -71,7 +71,7 @@ struct VfxVideoComponentInspector: View {
 
   private var hasBackgroundRemoval: Bool {
     component?.effects.contains(where: {
-      if case .backgroundRemoval = $0.definition { true } else { false }
+      if case .backgroundRemoval = $0.videoEffect { true } else { false }
     }) ?? false
   }
 
@@ -80,18 +80,18 @@ struct VfxVideoComponentInspector: View {
       get: { hasBackgroundRemoval },
       set: { enabled in
         updateVideoComponent { wrapper in
-          guard case .vfxSource(var value) = wrapper.definition else { return }
+          guard case .vfxSource(var value) = wrapper.videoComponent else { return }
           value.effects.removeAll {
-            if case .backgroundRemoval = $0.definition { true } else { false }
+            if case .backgroundRemoval = $0.videoEffect { true } else { false }
           }
           if enabled {
             var effect = Ldtx_Workspace_V4_BackgroundRemovalVfxEffect()
             effect.model = .mediapipeLandscape
             var effectWrapper = Ldtx_Workspace_V4_VideoEffectWrapper()
-            effectWrapper.definition = .backgroundRemoval(effect)
+            effectWrapper.videoEffect = .backgroundRemoval(effect)
             value.effects.append(effectWrapper)
           }
-          wrapper.definition = .vfxSource(value)
+          wrapper.videoComponent = .vfxSource(value)
         }
       }
     )
@@ -104,21 +104,21 @@ struct VfxVideoComponentInspector: View {
       get: {
         component?.effects.compactMap {
           wrapper -> Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model? in
-          guard case .backgroundRemoval(let value) = wrapper.definition else { return nil }
+          guard case .backgroundRemoval(let value) = wrapper.videoEffect else { return nil }
           return value.model
         }.first ?? .mediapipeLandscape
       },
       set: { model in
         updateVideoComponent { wrapper in
-          guard case .vfxSource(var value) = wrapper.definition,
+          guard case .vfxSource(var value) = wrapper.videoComponent,
             let index = value.effects.firstIndex(where: {
-              if case .backgroundRemoval = $0.definition { true } else { false }
+              if case .backgroundRemoval = $0.videoEffect { true } else { false }
             }),
-            case .backgroundRemoval(var effect) = value.effects[index].definition
+            case .backgroundRemoval(var effect) = value.effects[index].videoEffect
           else { return }
           effect.model = model
-          value.effects[index].definition = .backgroundRemoval(effect)
-          wrapper.definition = .vfxSource(value)
+          value.effects[index].videoEffect = .backgroundRemoval(effect)
+          wrapper.videoComponent = .vfxSource(value)
         }
       }
     )
@@ -128,15 +128,7 @@ struct VfxVideoComponentInspector: View {
   ) {
     var definition = storeService.definition
     guard
-      let index = definition.videoComponents.firstIndex(where: { wrapper in
-        switch wrapper.id {
-        case .solidColorFill(let id), .linearGradientFill(let id), .radialGradientFill(let id),
-          .conicGradientFill(let id), .vfxSource(let id), .clock(let id), .testPattern(let id):
-          id == internalID
-        case .invalid:
-          false
-        }
-      })
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
     storeService.definition = definition

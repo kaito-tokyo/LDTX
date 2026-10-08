@@ -87,7 +87,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     var invalidComponent = Ldtx_Workspace_V4_FillSolidColorComponent()
     invalidComponent.internalID = 0
     var componentWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    componentWrapper.definition = .solidColorFill(invalidComponent)
+    componentWrapper.videoComponent = .solidColorFill(invalidComponent)
     invalidDefinition.videoComponents = [componentWrapper]
     let definitionID = writer.makeExternalID()
     let preferencesID = writer.makeExternalID()
@@ -99,6 +99,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         == preferencesID
     )
 
+    try writer.write(outputSettings: .init(), externalID: writer.makeExternalID())
     let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
     #expect(workspace.definition == invalidDefinition)
   }
@@ -243,6 +244,17 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(readerFactoryFailed(at: missingURL))
   }
 
+  @Test("package writer persists the independent output settings envelope")
+  func outputSettingsRoundTrip() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let destination = root.appendingPathComponent("Workspace.ldtxworkspace")
+    let workspace = makeWorkspace()
+    try WorkspaceDocumentPackage.write(workspace, to: destination, createsPackage: true)
+    #expect(try WorkspaceBundleReaderV4(at: destination).read() == workspace)
+    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("output_settings.pb").path))
+  }
+
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"
@@ -274,7 +286,13 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       definitionExternalID: "0198f4b4-1fa3-7000-8000-000000000001",
       preferencesExternalID: "0198f4b4-1fa3-7000-8000-000000000002",
       definition: definition,
-      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4(),
+      outputSettingsExternalID: "0198f4b4-1fa3-7000-8000-000000000003",
+      outputSettings: .with {
+        $0.recordingEnabled = true
+        $0.recordingSettings.recordsLandscape = true
+        $0.recordingSettings.customFields["game"] = "Unite"
+      }
     )
   }
 
@@ -299,6 +317,9 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
         == preferencesExternalID
     )
+    let outputIDString = try #require(workspace.outputSettingsExternalID)
+    let outputID = try #require(UUID(uuidString: outputIDString))
+    #expect(try writer.write(outputSettings: workspace.outputSettings, externalID: outputID) == outputID)
     #expect(definitionExternalID.uuidString.lowercased() == workspace.definitionExternalID)
     #expect(preferencesExternalID.uuidString.lowercased() == workspace.preferencesExternalID)
   }

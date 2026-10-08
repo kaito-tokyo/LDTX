@@ -33,7 +33,7 @@ struct TestPatternInspector: View {
 
   private var component: Ldtx_Workspace_V4_TestPatternComponent? {
     storeService.definition.videoComponents.compactMap { wrapper in
-      guard case .testPattern(let value) = wrapper.definition,
+      guard case .testPattern(let value) = wrapper.videoComponent,
         value.internalID == internalID
       else { return nil }
       return value
@@ -45,9 +45,9 @@ struct TestPatternInspector: View {
       get: { component?.displayName ?? "" },
       set: { name in
         updateVideoComponent { wrapper in
-          guard case .testPattern(var value) = wrapper.definition else { return }
+          guard case .testPattern(var value) = wrapper.videoComponent else { return }
           value.displayName = name
-          wrapper.definition = .testPattern(value)
+          wrapper.videoComponent = .testPattern(value)
         }
       }
     )
@@ -57,15 +57,7 @@ struct TestPatternInspector: View {
   ) {
     var definition = storeService.definition
     guard
-      let index = definition.videoComponents.firstIndex(where: { wrapper in
-        switch wrapper.id {
-        case .solidColorFill(let id), .linearGradientFill(let id), .radialGradientFill(let id),
-          .conicGradientFill(let id), .vfxSource(let id), .clock(let id), .testPattern(let id):
-          id == internalID
-        case .invalid:
-          false
-        }
-      })
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
     storeService.definition = definition

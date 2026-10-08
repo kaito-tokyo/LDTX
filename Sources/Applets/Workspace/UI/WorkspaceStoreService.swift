@@ -15,9 +15,22 @@ public final class WorkspaceStoreService {
   public typealias VideoComponentWrapper = Ldtx_Workspace_V4_VideoComponentWrapper
   public typealias WorkspacePreferences = Ldtx_Workspace_V4_WorkspacePreferencesV4
 
+  private var storedDefinition: WorkspaceDefinition
   public var definition: WorkspaceDefinition {
-    didSet {
-      if definition != oldValue { documentContentsDidChange?() }
+    get { storedDefinition }
+    set {
+      guard !isOutputActive, newValue != storedDefinition else { return }
+      storedDefinition = newValue
+      documentContentsDidChange?()
+    }
+  }
+  private var storedOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
+  public var outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 {
+    get { storedOutputSettings }
+    set {
+      guard !isOutputActive, newValue != storedOutputSettings else { return }
+      storedOutputSettings = newValue
+      documentContentsDidChange?()
     }
   }
   public var preferences: WorkspacePreferences {
@@ -63,31 +76,23 @@ public final class WorkspaceStoreService {
     do {
       guard
         let index = definition.visions.firstIndex(where: { $0.ocrVision.internalID == internalID }),
-        case .ocrVision(var vision) = definition.visions[index].definition
+        case .ocrVision(var vision) = definition.visions[index].vision
       else { throw WorkspaceSelectionError(message: "The OCR Vision is no longer available.") }
-      var region =
-        vision.hasRegionOfInterest
-        ? vision.regionOfInterest
-        : .with {
-          $0.widthRational = .with { $0.set(num: 1, den: 1) }
-          $0.heightRational = .with { $0.set(num: 1, den: 1) }
-        }
-      let fields:
-        [(
-          String,
-          WritableKeyPath<Ldtx_Workspace_V4_VisionRegionOfInterest, Ldtx_Workspace_V4_Rational32>
-        )] = [
-          ("X", \.xRational), ("Y", \.yRational), ("Width", \.widthRational),
-          ("Height", \.heightRational),
-        ]
-      for (name, path) in fields {
-        if let text = ocrRegionDrafts[internalID]?[name] {
-          region[keyPath: path] = try RationalParseStrategy().parse(text)
+      var region = vision.regionOfInterest
+      for (name, text) in ocrRegionDrafts[internalID, default: [:]] {
+        switch name {
+        case "X": region.x = try RationalParseStrategy().parse(text)
+        case "Y": region.y = try RationalParseStrategy().parse(text)
+        case "Width":
+          region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>().parse(text)
+        case "Height":
+          region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>().parse(text)
+        default: break
         }
       }
       try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
       vision.regionOfInterest = region
-      definition.visions[index].definition = .ocrVision(vision)
+      definition.visions[index].vision = .ocrVision(vision)
       inspectorEditErrors.removeValue(forKey: internalID)
     } catch {
       inspectorEditErrors[internalID] =
@@ -111,9 +116,11 @@ public final class WorkspaceStoreService {
     inspectorSelector: WorkspaceInspectorSelector? = nil,
     isOutputActive: Bool = false,
     isLocalRecording: Bool = false,
-    outputFailureMessage: String? = nil
+    outputFailureMessage: String? = nil,
+    outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .init()
   ) {
-    self.definition = definition
+    self.storedDefinition = definition
+    self.storedOutputSettings = outputSettings
     self.preferences = preferences
     self.inspectorSelector = inspectorSelector
     self.isOutputActive = isOutputActive
@@ -289,16 +296,16 @@ public final class WorkspaceStoreService {
   public func commitLayerOrder(_ ids: [UInt64], programID: UInt64, target: WorkspaceCanvasTarget)
     throws
   {
-    guard let index = self.definition.programs.firstIndex(where: { $0.internalID == programID }),
-      self.definition.programs[index][keyPath: target.layerIDs].sorted() == ids.sorted()
+    var updated = try preferences(for: programID, target: target)
+    guard updated.videoLayerInternalIds.sorted() == ids.sorted()
     else { throw WorkspaceSelectionError(message: "The video layer order changed.") }
-    var definition = self.definition
-    definition.programs[index][keyPath: target.layerIDs] = ids
-    self.definition = definition
+    updated.videoLayerInternalIds = ids
+    try commitPreferences(updated, programID: programID, target: target)
   }
+
   var videoComponentOptions: [WorkspaceSelectionOption<UInt64>] {
     definition.videoComponents.compactMap { component in
-      guard let id = try? WorkspaceV4IntegrityValidator.videoComponentID(component),
+      guard let id = component.internalID,
         let name = component.displayName
       else { return nil }
       return .init(id: id, name: name)
@@ -309,10 +316,11 @@ public final class WorkspaceStoreService {
     _ included: Bool, componentID: UInt64, programID: UInt64, target: WorkspaceCanvasTarget
   ) throws {
     guard !isOutputActive,
-      let index = definition.programs.firstIndex(where: { $0.internalID == programID }),
+      definition.programs.contains(where: { $0.internalID == programID }),
       videoComponentOptions.contains(where: { $0.id == componentID })
     else { throw WorkspaceSelectionError(message: "Video layer membership cannot be changed now.") }
-    var ids = definition.programs[index][keyPath: target.layerIDs]
+    var updated = try preferences(for: programID, target: target)
+    var ids = updated.videoLayerInternalIds
     if included {
       guard !ids.contains(componentID) else { return }
       ids.append(componentID)
@@ -320,10 +328,10 @@ public final class WorkspaceStoreService {
       guard ids.contains(componentID) else { return }
       ids.removeAll { $0 == componentID }
     }
-    var updated = definition
-    updated.programs[index][keyPath: target.layerIDs] = ids
-    definition = updated
+    updated.videoLayerInternalIds = ids
+    try commitPreferences(updated, programID: programID, target: target)
   }
+
   @discardableResult
   public func updateAudio(
     target: WorkspaceCanvasTarget, mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void

@@ -8,6 +8,7 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXProtosMacOSExtra
 @_exported import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import OSLog
@@ -161,7 +162,7 @@ public final class WorkspaceWindowRuntime {
     var audioDeviceIDs: Set<String> = []
     let assignments = physicalDeviceIDsProvider()
     for wrapper in workspace.definition.videoComponents {
-      guard case .vfxSource(let source) = wrapper.definition,
+      guard case .vfxSource(let source) = wrapper.videoComponent,
         case .avCaptureDevice(let id)? = assignments[source.internalID], !id.isEmpty
       else { continue }
       videoCameraIDs.insert(id)
@@ -191,7 +192,7 @@ public final class WorkspaceWindowRuntime {
       vision: { internalID in
         self.workspace.definition.visions.compactMap {
           wrapper -> Ldtx_Workspace_V4_OcrVision? in
-          guard case .ocrVision(let vision)? = wrapper.definition,
+          guard case .ocrVision(let vision)? = wrapper.vision,
             vision.internalID == internalID
           else { return nil }
           return vision
@@ -218,14 +219,14 @@ public final class WorkspaceWindowRuntime {
   private func frameForVision(
     _ vision: Ldtx_Workspace_V4_OcrVision
   ) async throws -> WorkspaceVisionAnalysisFrame {
-    guard case .videoComponentInternalID(let componentID)? = vision.source,
-      let wrapper = definition.videoComponents.first(where: {
+    let componentID = vision.videoComponentInternalID
+    guard let wrapper = definition.videoComponents.first(where: {
         (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
       })
     else { throw WorkspaceVisionFeatureError.referencedVideoComponentMissing }
     var width = 1920
     var height = 1080
-    switch wrapper.definition {
+    switch wrapper.videoComponent {
     case .vfxSource:
       guard case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[componentID]
       else { throw WorkspaceVisionFeatureError.vfxSourceHasNoPhysicalCamera }
@@ -234,11 +235,11 @@ public final class WorkspaceWindowRuntime {
       width = CVPixelBufferGetWidth(frame.pixelBuffer)
       height = CVPixelBufferGetHeight(frame.pixelBuffer)
     case .clock(let clock):
-      guard clock.widthRational.double.isFinite, clock.heightRational.double.isFinite else {
+      guard clock.width.double.isFinite, clock.height.double.isFinite else {
         throw WorkspaceVisionFeatureError.frameUnavailable
       }
-      width = max(1, Int((clock.widthRational.double * 1920).rounded()))
-      height = max(1, Int((clock.heightRational.double * 1080).rounded()))
+      width = max(1, Int((clock.width.double * 1920).rounded()))
+      height = max(1, Int((clock.height.double * 1080).rounded()))
     default: break
     }
     guard let renderer = componentFrameRenderer else {
@@ -254,15 +255,8 @@ public final class WorkspaceWindowRuntime {
     }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
     guard vision.hasRegionOfInterest else { return WorkspaceVisionAnalysisFrame(image: image) }
-    let region = vision.regionOfInterest
-    let extent = image.extent
-    return WorkspaceVisionAnalysisFrame(
-      image: image.cropped(
-        to: CGRect(
-          x: extent.minX + extent.width * CGFloat(region.xRational.double),
-          y: extent.minY + extent.height * CGFloat(region.yRational.double),
-          width: extent.width * CGFloat(region.widthRational.double),
-          height: extent.height * CGFloat(region.heightRational.double))))
+    let region = vision.regionOfInterest.rect(in: image.extent)
+    return WorkspaceVisionAnalysisFrame(image: image.cropped(to: region))
   }
 
 }

@@ -33,19 +33,19 @@ public struct WorkspaceV4RenderGraph: Sendable {
         var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
-      let topInsetRational = Self.unitInterval(transform.topInset?.float ?? 0, default: 0)
+      let topInsetRational = Self.unitInterval(transform.topInset.float, default: 0)
       let rightInsetRational = Self.unitInterval(
-        transform.rightInset?.float ?? 0, default: 0)
+        transform.rightInset.float, default: 0)
       let bottomInsetRational = Self.unitInterval(
-        transform.bottomInset?.float ?? 0, default: 0)
+        transform.bottomInset.float, default: 0)
       let leftInsetRational = Self.unitInterval(
-        transform.leftInset?.float ?? 0, default: 0)
+        transform.leftInset.float, default: 0)
       let translationXRational = Self.unitInterval(
-        transform.translationX?.float ?? 0, default: 0)
+        transform.translationX.float, default: 0)
       let translationYRational = Self.unitInterval(
-        transform.translationY?.float ?? 0, default: 0)
-      let scaleX = transform.scaleX?.float ?? 1
-      let scaleY = transform.scaleY?.float ?? 1
+        transform.translationY.float, default: 0)
+      let scaleX = transform.scaleX.float
+      let scaleY = transform.scaleY.float
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
         input.sourceCropTop = topInsetRational * 100
@@ -104,55 +104,55 @@ public struct WorkspaceV4RenderGraph: Sendable {
   ) -> [UInt64: ProgramComponent] {
     Dictionary(
       uniqueKeysWithValues: definition.videoComponents.compactMap {
-        guard let definition = $0.definition else { return nil }
+        guard let definition = $0.videoComponent else { return nil }
         switch definition {
         case .solidColorFill(let fill):
           return (
             fill.internalID,
             .fillSolidColor(
               FillSolidColorComponent(
-                red: fill.color.red, green: fill.color.green, blue: fill.color.blue,
-                alpha: fill.color.alpha))
+                red: fill.extendedSrgbColor.red, green: fill.extendedSrgbColor.green, blue: fill.extendedSrgbColor.blue,
+                alpha: fill.extendedSrgbColor.alpha))
           )
         case .linearGradientFill(let fill):
           return (
             fill.internalID,
             .fillLinearGradient(
               FillLinearGradientComponent(
-                startX: fill.startXRational.float, startY: fill.startYRational.float,
-                endX: fill.endXRational.float, endY: fill.endYRational.float,
-                startRed: fill.startColor.red, startGreen: fill.startColor.green,
-                startBlue: fill.startColor.blue, startAlpha: fill.startColor.alpha,
-                endRed: fill.endColor.red, endGreen: fill.endColor.green,
-                endBlue: fill.endColor.blue, endAlpha: fill.endColor.alpha))
+                startX: fill.startX.float, startY: fill.startY.float,
+                endX: fill.endX.float, endY: fill.endY.float,
+                startRed: fill.startExtendedSrgbColor.red, startGreen: fill.startExtendedSrgbColor.green,
+                startBlue: fill.startExtendedSrgbColor.blue, startAlpha: fill.startExtendedSrgbColor.alpha,
+                endRed: fill.endExtendedSrgbColor.red, endGreen: fill.endExtendedSrgbColor.green,
+                endBlue: fill.endExtendedSrgbColor.blue, endAlpha: fill.endExtendedSrgbColor.alpha))
           )
         case .radialGradientFill(let fill):
           return (
             fill.internalID,
             .fillRadialGradient(
               FillRadialGradientComponent(
-                centerX: fill.centerXRational.float,
-                centerY: fill.centerYRational.float,
-                innerRadius: fill.innerRadiusRational.float,
-                outerRadius: fill.outerRadiusRational.float, innerRed: fill.innerColor.red,
-                innerGreen: fill.innerColor.green, innerBlue: fill.innerColor.blue,
-                innerAlpha: fill.innerColor.alpha, outerRed: fill.outerColor.red,
-                outerGreen: fill.outerColor.green, outerBlue: fill.outerColor.blue,
-                outerAlpha: fill.outerColor.alpha))
+                centerX: fill.centerX.float,
+                centerY: fill.centerY.float,
+                innerRadius: fill.innerRadius.float,
+                outerRadius: fill.outerRadius.float, innerRed: fill.innerExtendedSrgbColor.red,
+                innerGreen: fill.innerExtendedSrgbColor.green, innerBlue: fill.innerExtendedSrgbColor.blue,
+                innerAlpha: fill.innerExtendedSrgbColor.alpha, outerRed: fill.outerExtendedSrgbColor.red,
+                outerGreen: fill.outerExtendedSrgbColor.green, outerBlue: fill.outerExtendedSrgbColor.blue,
+                outerAlpha: fill.outerExtendedSrgbColor.alpha))
           )
         case .conicGradientFill(let fill):
           return (
             fill.internalID,
             .fillConicGradient(
               FillConicGradientComponent(
-                centerX: fill.centerXRational.float,
-                centerY: fill.centerYRational.float,
-                startAngleRadians: fill.startAngleRadiansRational.float,
-                startRed: fill.startColor.red,
-                startGreen: fill.startColor.green, startBlue: fill.startColor.blue,
-                startAlpha: fill.startColor.alpha, endRed: fill.endColor.red,
-                endGreen: fill.endColor.green, endBlue: fill.endColor.blue,
-                endAlpha: fill.endColor.alpha))
+                centerX: fill.centerX.float,
+                centerY: fill.centerY.float,
+                startAngleRadians: fill.startAngleRadians.float,
+                startRed: fill.startExtendedSrgbColor.red,
+                startGreen: fill.startExtendedSrgbColor.green, startBlue: fill.startExtendedSrgbColor.blue,
+                startAlpha: fill.startExtendedSrgbColor.alpha, endRed: fill.endExtendedSrgbColor.red,
+                endGreen: fill.endExtendedSrgbColor.green, endBlue: fill.endExtendedSrgbColor.blue,
+                endAlpha: fill.endExtendedSrgbColor.alpha))
           )
         case .vfxSource(let source):
           return (
@@ -164,22 +164,22 @@ public struct WorkspaceV4RenderGraph: Sendable {
             clock.internalID,
             .clock(
               ClockComponent(
-                destinationWidth: clock.widthRational.float,
-                destinationHeight: clock.heightRational.float,
+                destinationWidth: clock.width.float,
+                destinationHeight: clock.height.float,
                 showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
-                foregroundRed: clock.foregroundColor.red,
-                foregroundGreen: clock.foregroundColor.green,
-                foregroundBlue: clock.foregroundColor.blue,
-                foregroundAlpha: clock.foregroundColor.alpha,
-                backgroundRed: clock.backgroundColor.red,
-                backgroundGreen: clock.backgroundColor.green,
-                backgroundBlue: clock.backgroundColor.blue,
-                backgroundAlpha: clock.backgroundColor.alpha,
+                foregroundRed: clock.foregroundExtendedSrgbColor.red,
+                foregroundGreen: clock.foregroundExtendedSrgbColor.green,
+                foregroundBlue: clock.foregroundExtendedSrgbColor.blue,
+                foregroundAlpha: clock.foregroundExtendedSrgbColor.alpha,
+                backgroundRed: clock.backgroundExtendedSrgbColor.red,
+                backgroundGreen: clock.backgroundExtendedSrgbColor.green,
+                backgroundBlue: clock.backgroundExtendedSrgbColor.blue,
+                backgroundAlpha: clock.backgroundExtendedSrgbColor.alpha,
                 showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
                 utcOffsetMinutes: clock.utcOffsetMinutes,
                 outlines: clock.outlines.map {
                   ClockTextOutline(
-                    thickness: $0.thicknessRational.float, color: colorString($0.color))
+                    thickness: $0.thickness.float, color: colorString($0.extendedSrgbColor))
                 }))
           )
         case .testPattern(let pattern): return (pattern.internalID, .testPattern)
@@ -217,7 +217,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
     ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
   }
 
-  private static func colorString(_ color: Ldtx_Workspace_V4_ExtendedSrgbColor) -> String {
+  private static func colorString(_ color: Ldtx_Workspace_V4_Color) -> String {
     return String(
       format: "#%02X%02X%02X%02X", colorComponent(color.red), colorComponent(color.green),
       colorComponent(color.blue), colorComponent(color.alpha))
@@ -262,7 +262,7 @@ extension WorkspaceV4RenderGraph {
     let frameRate = canvas.frameRate
     var cameraIDs: [String: String] = [:]
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.definition,
+      guard case .vfxSource(let source)? = wrapper.videoComponent,
         layerIDs.contains(source.internalID),
         case .avCaptureDevice(let physicalID)? =
           physicalDeviceIDs[source.internalID]
@@ -271,7 +271,7 @@ extension WorkspaceV4RenderGraph {
     }
     var inputDeviceNames: [String: String] = [:]
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.definition, layerIDs.contains(source.internalID)
+      guard case .vfxSource(let source)? = wrapper.videoComponent, layerIDs.contains(source.internalID)
       else { continue }
       inputDeviceNames["v4-\(source.internalID)"] = source.displayName
     }
@@ -341,10 +341,10 @@ extension WorkspaceV4RenderGraph {
   ) -> Set<String> {
     Set(
       definition.videoComponents.compactMap { wrapper -> String? in
-        guard case .vfxSource(let source)? = wrapper.definition,
+        guard case .vfxSource(let source)? = wrapper.videoComponent,
           layerIDs.contains(source.internalID),
           source.effects.contains(where: { effect in
-            guard case .backgroundRemoval(let removal)? = effect.definition else { return false }
+            guard case .backgroundRemoval(let removal)? = effect.videoEffect else { return false }
             return removal.model == .mediapipeLandscape
           })
         else { return nil }

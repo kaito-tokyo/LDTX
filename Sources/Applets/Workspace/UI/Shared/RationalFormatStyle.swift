@@ -17,12 +17,13 @@ enum RationalInputError: Error, LocalizedError {
   }
 }
 
-struct RationalFormatStyle: ParseableFormatStyle {
+typealias RationalFormatStyle = RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32>
+
+struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
   var multiplier: UInt64 = 1
-  var parseStrategy: RationalParseStrategy { RationalParseStrategy(divisor: multiplier) }
-  func format(_ value: Ldtx_Workspace_V4_Rational32) -> String {
-    if value.numerator == 0 && value.denominator == 0 { return "0" }
-    guard value.denominator > 0 else { return "" }
+  var parseStrategy: RationalValueParseStrategy<Value> { .init(divisor: multiplier) }
+  func format(_ value: Value) -> String {
+    guard value.denominator > 0 else { return String(value.double) }
     var magnitude = Int128(value.numerator).magnitude * UInt128(multiplier)
     var denominator = UInt128(value.denominator)
     var a = magnitude
@@ -48,9 +49,11 @@ struct RationalFormatStyle: ParseableFormatStyle {
 
 }
 
-struct RationalParseStrategy: ParseStrategy {
+typealias RationalParseStrategy = RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32>
+
+struct RationalValueParseStrategy<Value: Rational32Value>: ParseStrategy {
   var divisor: UInt64 = 1
-  func parse(_ text: String) throws -> Ldtx_Workspace_V4_Rational32 {
+  func parse(_ text: String) throws -> Value {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     if text.contains("/") {
       let parts = text.split(separator: "/", omittingEmptySubsequences: false)
@@ -101,7 +104,7 @@ struct RationalParseStrategy: ParseStrategy {
   }
 
   private static func reduced(_ numerator: Int128, _ denominator: UInt128) throws
-    -> Ldtx_Workspace_V4_Rational32
+    -> Value
   {
     guard denominator > 0 else { throw RationalInputError.zeroDenominator }
     if numerator == 0 { return .with { $0.set(num: 0, den: 1) } }
@@ -111,7 +114,7 @@ struct RationalParseStrategy: ParseStrategy {
     guard let n = Int32(exactly: numerator / Int128(a)),
       let d = UInt32(exactly: denominator / a)
     else { throw RationalInputError.overflow }
-    var result = Ldtx_Workspace_V4_Rational32()
+    var result = Value()
     result.set(num: n, den: d)
     return result
   }

@@ -38,8 +38,8 @@ extension AppUIComponentTestSuite {
           })
       document.storeService.preferences.portraitProgramPreferences[1, default: .init()]
         .videoLayerTransforms[2] = validationTransform(
-          scale: .with {
-            $0.numerator = -1
+          x: .with {
+            $0.numerator = 2
             $0.denominator = 1
           })
       do {
@@ -98,7 +98,7 @@ extension AppUIComponentTestSuite {
       let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
       defer { reopened.close() }
       #expect(reopened.storeService.preferences == document.storeService.preferences)
-      #expect(reopened.storeService.definition.programs[0].landscapeVideoLayerInternalIds.isEmpty)
+      #expect((reopened.storeService.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds ?? []).isEmpty)
       #expect(!document.isDocumentEdited)
     }
 
@@ -192,8 +192,8 @@ extension AppUIComponentTestSuite {
       -> Ldtx_Workspace_V4_BasicTransform
     {
       var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.translationXRational = x
-      transform.scaleXRational = scale
+      transform.translationX = x
+      transform.scaleX = .init(value: scale)
       return transform
     }
 

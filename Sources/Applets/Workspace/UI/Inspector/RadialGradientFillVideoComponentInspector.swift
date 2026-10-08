@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct RadialGradientFillVideoComponentInspector: View {
@@ -28,32 +29,34 @@ struct RadialGradientFillVideoComponentInspector: View {
     self.component = storeService.definition.videoComponents
       .first(where: { $0.id == videoComponentID })
       .flatMap { wrapper in
-        guard case .radialGradientFill(let component) = wrapper.definition else { return nil }
+        guard case .radialGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
     self._name = State(initialValue: component?.displayName ?? "(invalid)")
     self._centerX = State(
-      initialValue: component?.centerXRational
+      initialValue: component?.centerX
         ?? .with {
           $0.set(num: 1, den: 2)
         })
     self._centerY = State(
-      initialValue: component?.centerYRational
+      initialValue: component?.centerY
         ?? .with {
           $0.set(num: 1, den: 2)
         })
     self._innerRadius = State(
-      initialValue: component?.innerRadiusRational
+      initialValue: component?.innerRadius
         ?? .with {
           $0.set(num: 0, den: 1)
         })
     self._outerRadius = State(
-      initialValue: component?.outerRadiusRational
+      initialValue: component?.outerRadius
         ?? .with {
           $0.set(num: 18, den: 25)
         })
-    self._innerColor = State(initialValue: component?.innerColor.asColor() ?? .white)
-    self._outerColor = State(initialValue: component?.outerColor.asColor() ?? .black)
+    self._innerColor = State(
+      initialValue: component?.innerExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white)
+    self._outerColor = State(
+      initialValue: component?.outerExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black)
   }
 
   var body: some View {
@@ -89,41 +92,35 @@ struct RadialGradientFillVideoComponentInspector: View {
     }
     .formStyle(.grouped)
     .disabled(storeService.isOutputActive || component == nil)
-    .onChange(of: name) { commitDraft() }
-    .onChange(of: centerX) { commitDraft() }
-    .onChange(of: centerY) { commitDraft() }
-    .onChange(of: innerRadius) { commitDraft() }
-    .onChange(of: outerRadius) { commitDraft() }
-    .onChange(of: innerColor) { commitDraft() }
-    .onChange(of: outerColor) { commitDraft() }
-    .onSubmit { commitDraft() }
+    .onChange(of: name) { updateComponent { $0.displayName = name } }
+    .onChange(of: centerX) { updateComponent { $0.centerX = centerX } }
+    .onChange(of: centerY) { updateComponent { $0.centerY = centerY } }
+    .onChange(of: innerRadius) { updateComponent { $0.innerRadius = innerRadius } }
+    .onChange(of: outerRadius) { updateComponent { $0.outerRadius = outerRadius } }
+    .onChange(of: innerColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: innerColor) else {
+        return
+      }
+      updateComponent { $0.innerExtendedSrgbColor = value }
+    }
+    .onChange(of: outerColor) {
+      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: outerColor) else {
+        return
+      }
+      updateComponent { $0.outerExtendedSrgbColor = value }
+    }
   }
 
-  private func commitDraft() {
-    guard
-      var component,
-      let innerNSColor = NSColor(innerColor).usingColorSpace(.sRGB),
-      let outerNSColor = NSColor(outerColor).usingColorSpace(.sRGB)
-    else { return }
-
-    component.displayName = name
-    component.centerXRational = centerX
-    component.centerYRational = centerY
-    component.innerRadiusRational = innerRadius
-    component.outerRadiusRational = outerRadius
-    component.innerColor.red = Float(innerNSColor.redComponent)
-    component.innerColor.green = Float(innerNSColor.greenComponent)
-    component.innerColor.blue = Float(innerNSColor.blueComponent)
-    component.innerColor.alpha = Float(innerNSColor.alphaComponent)
-    component.outerColor.red = Float(outerNSColor.redComponent)
-    component.outerColor.green = Float(outerNSColor.greenComponent)
-    component.outerColor.blue = Float(outerNSColor.blueComponent)
-    component.outerColor.alpha = Float(outerNSColor.alphaComponent)
-
+  private func updateComponent(
+    _ mutation: (inout Ldtx_Workspace_V4_FillRadialGradientComponent) -> Void
+  ) {
+    guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID })
+    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+      case .radialGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
-    definition.videoComponents[index].definition = .radialGradientFill(component)
+    mutation(&component)
+    definition.videoComponents[index].videoComponent = .radialGradientFill(component)
     storeService.definition = definition
   }
 

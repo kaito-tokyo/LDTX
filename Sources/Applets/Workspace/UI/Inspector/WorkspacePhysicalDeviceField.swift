@@ -52,7 +52,7 @@ struct WorkspacePhysicalDeviceField: View {
       isAudio
       ? storeService.definition.audioDevices.contains { $0.internalID == internalID }
       : storeService.definition.videoComponents.contains {
-        guard case .vfxSource(let source) = $0.definition else { return false }
+        guard case .vfxSource(let source) = $0.videoComponent else { return false }
         return source.internalID == internalID
       }
     guard exists else { throw WorkspaceSelectionError(message: "This resource no longer exists.") }

@@ -118,7 +118,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     guard !newlyFailed.isEmpty else { return }
     let descriptions = newlyFailed.sorted().map { uid in
       let names = storeService.definition.videoComponents.compactMap { component -> String? in
-        guard case .vfxSource(let source) = component.definition,
+        guard case .vfxSource(let source) = component.videoComponent,
           appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
         else { return nil }
         return component.displayName

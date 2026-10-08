@@ -13,11 +13,10 @@ import Testing
 struct WorkspaceV4VisionFeatureUnitTestSuite {
   @Test func mapsV4OCRSettings() {
     var vision = Ldtx_Workspace_V4_OcrVision()
-    vision.accurate = false
     vision.recognitionLanguages = ["ja-JP"]
     vision.usesLanguageCorrection = true
     vision.customWords = ["Unite"]
-    vision.minimumTextHeightRational = .with {
+    vision.minimumTextHeight = .with {
       $0.numerator = 1
       $0.denominator = 5
     }

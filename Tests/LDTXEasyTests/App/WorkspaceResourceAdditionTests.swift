@@ -168,31 +168,31 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     let component = try #require(state.definition.videoComponents.first)
     switch kind {
     case .vfxSource: #expect(component.vfxSource.internalID == id)
-    case .solidColor: #expect(component.solidColorFill.color.alpha == 1)
+    case .solidColor: #expect(component.solidColorFill.extendedSrgbColor.alpha == 1)
     case .linearGradient:
       #expect(
-        component.linearGradientFill.endXRational
+        component.linearGradientFill.endX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 1
             $0.denominator = 1
           })
     case .radialGradient:
       #expect(
-        component.radialGradientFill.outerRadiusRational
+        component.radialGradientFill.outerRadius
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 1
             $0.denominator = 2
           })
     case .conicGradient:
       #expect(
-        component.conicGradientFill.centerXRational
+        component.conicGradientFill.centerX
           == Ldtx_Workspace_V4_Rational32.with {
             $0.numerator = 1
             $0.denominator = 2
           })
     case .clock:
       #expect(component.clock.showsSeconds)
-      #expect(component.clock.widthRational.float > 0)
+      #expect(component.clock.width.float > 0)
     case .testPattern: #expect(component.testPattern.internalID == id)
     }
     #expect(state.definition.programs == [program])
@@ -209,10 +209,9 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     let id = try WorkspaceResourceAddition.add(
       sheet: .vision, draft: draft, devices: [], storeService: state)
     let vision = try #require(state.definition.visions.first?.ocrVision)
-    #expect(vision.source == .videoComponentInternalID(7))
     #expect(vision.videoComponentInternalID == 7)
     #expect(
-      vision.triggers.first?.intervalTrigger.intervalSecondsRational
+      vision.triggers.first?.intervalTrigger.intervalSeconds
         == Ldtx_Workspace_V4_Rational32.with {
           $0.numerator = 5
           $0.denominator = 1

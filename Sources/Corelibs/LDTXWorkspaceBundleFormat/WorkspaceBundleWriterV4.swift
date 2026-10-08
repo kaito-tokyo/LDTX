@@ -66,6 +66,23 @@ public struct WorkspaceBundleWriterV4 {
     return externalID
   }
 
+  public var outputSettingsURL: URL {
+    bundleURL.appending(path: "output_settings.pb", directoryHint: .notDirectory)
+  }
+
+  public func write(
+    outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4,
+    externalID: UUID
+  ) throws -> UUID {
+    var envelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
+    envelope.externalIDAsUUID = externalID
+    envelope.workspaceOutputSettingsV4 = outputSettings
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    try envelope.serializedData(options: options).write(to: outputSettingsURL, options: .atomic)
+    return externalID
+  }
+
   public mutating func makeExternalID() -> UUID {
     Self.makeExternalID(using: &randomNumberGenerator)
   }

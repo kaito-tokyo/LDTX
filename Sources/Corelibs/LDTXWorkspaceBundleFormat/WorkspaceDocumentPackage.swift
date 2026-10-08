@@ -18,10 +18,14 @@ public enum WorkspaceDocumentPackage {
     var preferences = Ldtx_Envelope_WorkspacePreferencesEnvelope()
     preferences.externalIDAsUUID = try envelopeIdentifier(workspace.preferencesExternalID)
     preferences.workspacePreferencesV4 = workspace.preferences
+    var outputSettings = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
+    outputSettings.externalIDAsUUID = try envelopeIdentifier(workspace.outputSettingsExternalID)
+    outputSettings.workspaceOutputSettingsV4 = workspace.outputSettings
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
     let definitionData = try definition.serializedData(options: options)
     let preferencesData = try preferences.serializedData(options: options)
+    let outputSettingsData = try outputSettings.serializedData(options: options)
     let manager = FileManager.default
     if createsPackage {
       try manager.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -36,6 +40,8 @@ public enum WorkspaceDocumentPackage {
       to: destination.appendingPathComponent("definition.pb"), options: .atomic)
     try preferencesData.write(
       to: destination.appendingPathComponent("preferences.pb"), options: .atomic)
+    try outputSettingsData.write(
+      to: destination.appendingPathComponent("output_settings.pb"), options: .atomic)
   }
 
   private static func envelopeIdentifier(_ identifier: String?) throws -> UUID {

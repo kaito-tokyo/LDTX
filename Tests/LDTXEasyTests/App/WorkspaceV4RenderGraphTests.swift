@@ -41,9 +41,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.videoComponents = [component]
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
-    program.landscapeVideoLayerInternalIds = [2]
     definition.programs = [program]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [2]
     func graph() throws -> WorkspaceV4RenderGraph {
       try WorkspaceV4RenderGraph(
         definition: definition,
@@ -54,7 +54,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     }
     #expect(try graph().layerPreferences.first?.destinationScaleX == 1)
     preferences.landscapeProgramPreferences[1, default: .init()]
-      .videoLayerTransforms[2, default: .init()].scaleXRational = .with {
+      .videoLayerTransforms[2, default: .init()].scaleX = .with {
         $0.numerator = 0
         $0.denominator = 1
       }
@@ -65,11 +65,11 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
   func preservesClockDimensions() throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
-    clock.widthRational = .with {
+    clock.width = .with {
       $0.numerator = 1
       $0.denominator = 6
     }
-    clock.heightRational = .with {
+    clock.height = .with {
       $0.numerator = 2
       $0.denominator = 27
     }
@@ -77,14 +77,15 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     wrapper.clock = clock
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
-    program.landscapeVideoLayerInternalIds = [1]
-    program.portraitVideoLayerInternalIds = [1]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[7] = .with { $0.videoLayerInternalIds = [1] }
+    preferences.portraitProgramPreferences[7] = .with { $0.videoLayerInternalIds = [1] }
     definition.videoComponents = [wrapper]
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
       let canvas = try WorkspaceProgramCanvasSnapshot(
-        definition: definition, preferences: .init(), programInternalID: 7, target: target)
+        definition: definition, preferences: preferences, programInternalID: 7, target: target)
       let graph = try WorkspaceV4RenderGraph(definition: definition, canvas: canvas)
       guard case .clock(let value) = graph.composite.steps.first?.component else {
         Issue.record("Clock component missing")
@@ -99,8 +100,6 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
   func resolvesCanvasSnapshots() throws {
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
-    program.landscapeVideoLayerInternalIds = [1, 2]
-    program.portraitVideoLayerInternalIds = [2, 1]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
     definition.canvasConfiguration.landscapeVideoBitRate = 8_000_000
@@ -108,6 +107,8 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.canvasConfiguration.frameRate = 30
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.landscapeProgramPreferences[7] = .init()
+    preferences.landscapeProgramPreferences[7, default: .init()].videoLayerInternalIds = [1, 2]
+    preferences.portraitProgramPreferences[7, default: .init()].videoLayerInternalIds = [2, 1]
     preferences.landscapeProgramPreferences[7]?.videoLayerHidden[1] = true
     let landscape = try WorkspaceProgramCanvasSnapshot(
       definition: definition, preferences: preferences, programInternalID: 7, target: .landscape)
@@ -134,26 +135,24 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     audio.internalID = 12
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
-    program.landscapeVideoLayerInternalIds = [11]
-    program.portraitVideoLayerInternalIds = [11]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
     definition.videoComponents = [input]
     definition.audioDevices = [audio]
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationXRational = .with {
+    transform.translationX = .with {
       $0.numerator = 1
       $0.denominator = 4
     }
-    transform.translationYRational = .with {
+    transform.translationY = .with {
       $0.numerator = 1
       $0.denominator = 2
     }
-    transform.scaleXRational = .with {
+    transform.scaleX = .with {
       $0.numerator = 3
       $0.denominator = 4
     }
-    transform.scaleYRational = .with {
+    transform.scaleY = .with {
       $0.numerator = 3
       $0.denominator = 5
     }
@@ -177,7 +176,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         $0.denominator = 10
       }
     ]
+    preference.videoLayerInternalIds = [11]
     preferences.landscapeProgramPreferences = [7: preference]
+    portraitPreference.videoLayerInternalIds = [11]
     preferences.portraitProgramPreferences = [7: portraitPreference]
 
     let graph = try WorkspaceV4RenderGraph(
@@ -243,15 +244,16 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     component.vfxSource = source
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
-    program.landscapeVideoLayerInternalIds = [12]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [component]
     definition.programs = [program]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[7] = .with { $0.videoLayerInternalIds = [12] }
 
     let configuration = try WorkspaceV4RenderGraph.runtimeConfiguration(
       definition: definition,
       canvas: try WorkspaceProgramCanvasSnapshot(
-        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape),
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape),
       timeSeconds: 1)
     let step = try #require(configuration.composite.steps.first)
     let renderingKey = configuration.composite.inputCameraDeviceMappingKey(for: step)
@@ -259,7 +261,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     let assignedConfiguration = try WorkspaceV4RenderGraph.runtimeProjection(
       definition: definition,
       canvas: try WorkspaceProgramCanvasSnapshot(
-        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape),
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape),
       physicalDeviceIDs: [12: .avCaptureDevice(uniqueID: "camera")], timeSeconds: 1
     ).configuration
     #expect(assignedConfiguration.cameraIDsByInputKey[renderingKey] == "camera")
@@ -289,15 +291,16 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
 
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
-    program.landscapeVideoLayerInternalIds = [20, 21, 22, 23]
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[7] = .with { $0.videoLayerInternalIds = [20, 21, 22, 23] }
     definition.videoComponents = [solidWrapper, linearWrapper, radialWrapper, conicWrapper]
 
     let graph = try WorkspaceV4RenderGraph(
       definition: definition,
       canvas: try WorkspaceProgramCanvasSnapshot(
-        definition: definition, preferences: .init(), programInternalID: 7, target: .landscape))
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape))
 
     #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
     #expect(

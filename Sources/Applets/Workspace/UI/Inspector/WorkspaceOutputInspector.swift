@@ -33,23 +33,24 @@ struct WorkspaceOutputInspector: View {
           }
           .disabled(workspaceURL == nil)
         }
-        Toggle("Record Landscape", isOn: $storeService.definition.outputConfiguration.recordsLandscape)
-        Toggle("Record Portrait", isOn: $storeService.definition.outputConfiguration.recordsPortrait)
-        if storeService.definition.outputConfiguration.recordsLandscape
-          || storeService.definition.outputConfiguration.recordsPortrait
+        Toggle("Enable Recording", isOn: $storeService.outputSettings.recordingEnabled)
+        Toggle("Record Landscape", isOn: $storeService.outputSettings.recordingSettings.recordsLandscape)
+        Toggle("Record Portrait", isOn: $storeService.outputSettings.recordingSettings.recordsPortrait)
+        if storeService.outputSettings.recordingSettings.recordsLandscape
+          || storeService.outputSettings.recordingSettings.recordsPortrait
         {
           RecordingCustomFieldsEditor(
-            fields: storeService.definition.outputConfiguration.recordingCustomFields,
+            fields: storeService.outputSettings.recordingSettings.customFields,
             canEdit: !storeService.isOutputActive
           ) { fields in
             guard !storeService.isOutputActive else { return }
-            storeService.definition.outputConfiguration.recordingCustomFields = fields
+            storeService.outputSettings.recordingSettings.customFields = fields
           }
         }
-        Toggle("Stream to YouTube", isOn: $storeService.definition.outputConfiguration.streamsToYoutube)
+        Toggle("Stream to YouTube", isOn: $storeService.outputSettings.youtubeEnabled)
         Picker(
           "YouTube Ingest",
-          selection: $storeService.definition.outputConfiguration.resolvedYouTubeIngestMode
+          selection: $storeService.outputSettings.youtubeSettings.ingestMode
         ) {
           ForEach(
             [Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps, .portraitRtmps, .dualRtmps],
@@ -59,7 +60,7 @@ struct WorkspaceOutputInspector: View {
           }
         }
         if !isAvailableIngestMode(
-          storeService.definition.outputConfiguration.resolvedYouTubeIngestMode)
+          storeService.outputSettings.youtubeSettings.ingestMode)
         {
           Text("This YouTube ingest mode is not available yet.")
             .foregroundStyle(.secondary)
@@ -112,14 +113,14 @@ struct WorkspaceOutputInspector: View {
   }
 
   private var usesLandscapeRTMPS: Bool {
-    switch storeService.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch storeService.outputSettings.youtubeSettings.ingestMode {
     case .landscapeRtmps, .dualRtmps: true
     default: false
     }
   }
 
   private var usesPortraitRTMPS: Bool {
-    switch storeService.definition.outputConfiguration.resolvedYouTubeIngestMode {
+    switch storeService.outputSettings.youtubeSettings.ingestMode {
     case .portraitRtmps, .dualRtmps: true
     default: false
     }
@@ -193,15 +194,17 @@ struct WorkspaceOutputInspector: View {
   private enum WorkspaceOutputInspectorPreviewFixtures {
     static func makeStore(isOutputActive: Bool = false) -> WorkspaceStoreService {
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-      definition.outputConfiguration.recordsLandscape = true
-      definition.outputConfiguration.recordsPortrait = true
-      definition.outputConfiguration.youtubeIngestMode = .dualRtmps
-      definition.outputConfiguration.recordingCustomFields = [
+      var outputSettings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+      outputSettings.recordingEnabled = true
+      outputSettings.recordingSettings.recordsLandscape = true
+      outputSettings.recordingSettings.recordsPortrait = true
+      outputSettings.youtubeSettings.ingestMode = .dualRtmps
+      outputSettings.recordingSettings.customFields = [
         "game": "Pokémon UNITE",
         "player": "Preview Player",
       ]
       return WorkspaceStoreService(
-        definition: definition, preferences: .init(), isOutputActive: isOutputActive)
+        definition: definition, preferences: .init(), isOutputActive: isOutputActive, outputSettings: outputSettings)
     }
 
     static func makeAppletData() -> WorkspaceAppletData {

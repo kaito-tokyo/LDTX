@@ -236,8 +236,11 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     definition.canvasConfiguration.frameRate = 60
     definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
     definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
-    definition.outputConfiguration.youtubeIngestMode = .landscapeRtmps
-    return WorkspaceV4Bundle(definition: definition, preferences: .init())
+    let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
+      $0.youtubeSettings.ingestMode = .landscapeRtmps
+    }
+    return WorkspaceV4Bundle(
+      definition: definition, preferences: .init(), outputSettings: outputSettings)
   }
 
   private func temporaryDirectory() throws -> URL {

@@ -95,9 +95,9 @@ enum WorkspaceResourceAddition {
       return "Select an available audio device."
     }
     if sheet == .vision {
-      if !storeService.definition.videoComponents.contains(where: {
-        (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == draft.videoComponentID
-      }) {
+      guard let componentID = draft.videoComponentID,
+        storeService.definition.videoComponents.contains(where: { $0.internalID == componentID })
+      else {
         return "Select a video component."
       }
     }
@@ -151,23 +151,14 @@ enum WorkspaceResourceAddition {
   static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
     String
   > {
-    Set(
-      definition.audioDevices.map(\.displayName)
-        + definition.videoComponents.compactMap {
-          switch $0.definition {
-          case .vfxSource(let value): value.displayName
-          case .solidColorFill(let value): value.displayName
-          case .linearGradientFill(let value): value.displayName
-          case .radialGradientFill(let value): value.displayName
-          case .conicGradientFill(let value): value.displayName
-          case .clock(let value): value.displayName
-          case .testPattern(let value): value.displayName
-          case nil: nil
-          }
-        }
-        + definition.visions.compactMap {
-          if case .ocrVision(let value) = $0.definition { return value.displayName }
-          return nil
-        } + definition.programs.map(\.displayName))
+    var names = Set(
+      definition.audioDevices.map(\.displayName) + definition.programs.map(\.displayName))
+    for component in definition.videoComponents {
+      if let name = component.displayName { names.insert(name) }
+    }
+    for vision in definition.visions {
+      if let name = vision.displayName { names.insert(name) }
+    }
+    return names
   }
 }

@@ -32,19 +32,19 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let full = try await runtime.visionFeatureContext.frameForVision(vision)
     #expect(full.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
     vision.regionOfInterest = .with {
-      $0.xRational = .with {
+      $0.x = .with {
         $0.numerator = 1
         $0.denominator = 4
       }
-      $0.yRational = .with {
+      $0.y = .with {
         $0.numerator = 1
         $0.denominator = 2
       }
-      $0.widthRational = .with {
+      $0.width = .with {
         $0.numerator = 1
         $0.denominator = 2
       }
-      $0.heightRational = .with {
+      $0.height = .with {
         $0.numerator = 1
         $0.denominator = 4
       }

@@ -40,9 +40,17 @@ public struct WorkspaceBundleReaderV4 {
       serializedBytes: try Data(contentsOf: definitionURL))
     let preferencesEnvelope = try Ldtx_Envelope_WorkspacePreferencesEnvelope(
       serializedBytes: try Data(contentsOf: preferencesURL))
+    let outputSettingsEnvelope = try Ldtx_Envelope_WorkspaceOutputSettingsEnvelope(
+      serializedBytes: try Data(contentsOf: bundleURL.appending(path: "output_settings.pb")))
     guard
+      case .workspaceDefinitionV4 = definitionEnvelope.workspaceDefinition,
+      case .workspacePreferencesV4 = preferencesEnvelope.workspacePreferences,
+      case .workspaceOutputSettingsV4 = outputSettingsEnvelope.workspaceOutputSettings,
+      let outputSettingsExternalID = outputSettingsEnvelope.externalIDAsUUID,
       let definitionExternalID = definitionEnvelope.externalIDAsUUID,
-      let preferencesExternalID = preferencesEnvelope.externalIDAsUUID
+      isUUIDv7(definitionExternalID),
+      let preferencesExternalID = preferencesEnvelope.externalIDAsUUID,
+      isUUIDv7(preferencesExternalID), isUUIDv7(outputSettingsExternalID)
     else {
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: bundleURL])
     }
@@ -51,6 +59,12 @@ public struct WorkspaceBundleReaderV4 {
       definitionExternalID: definitionExternalID.uuidString.lowercased(),
       preferencesExternalID: preferencesExternalID.uuidString.lowercased(),
       definition: definitionEnvelope.workspaceDefinitionV4,
-      preferences: preferencesEnvelope.workspacePreferencesV4)
+      preferences: preferencesEnvelope.workspacePreferencesV4,
+      outputSettingsExternalID: outputSettingsExternalID.uuidString.lowercased(),
+      outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4)
   }
+  private func isUUIDv7(_ value: UUID) -> Bool {
+    value.uuid.6 >> 4 == 7 && value.uuid.8 & 0xc0 == 0x80
+  }
+
 }

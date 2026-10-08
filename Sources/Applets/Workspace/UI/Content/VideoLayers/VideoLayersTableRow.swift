@@ -46,19 +46,11 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   func display(
     _ transform: Ldtx_Workspace_V4_BasicTransform, canvasWidth: Double, canvasHeight: Double
   ) {
-    let zero: Ldtx_Workspace_V4_Rational32 = .with { $0.set(num: 0, den: 1) }
-    let identity: Ldtx_Workspace_V4_Rational32 = .with {
-      $0.set(num: 1, den: 1)
-    }
     strings = [
-      pixelPosition(
-        transform.translationX ?? zero, size: 1920),
-      pixelPosition(
-        transform.translationY ?? zero, size: 1080),
-      RationalFormatStyle().format(
-        transform.scaleX ?? identity),
-      RationalFormatStyle().format(
-        transform.scaleY ?? identity),
+      pixelPosition(transform.translationX, size: canvasWidth),
+      pixelPosition(transform.translationY, size: canvasHeight),
+      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleX),
+      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleY),
     ]
   }
 

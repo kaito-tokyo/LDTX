@@ -217,7 +217,6 @@ struct CommandsSystemTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
       program.displayName = "Invalid"
-      program.landscapeVideoLayerInternalIds = [999]
       definition.programs = [program]
       try FileManager.default.createDirectory(at: invalid, withIntermediateDirectories: true)
       let infoData = try PropertyListSerialization.data(
@@ -239,9 +238,15 @@ struct CommandsSystemTestSuite {
       var preferencesEnvelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
       preferencesEnvelope.externalIDAsUUID = try #require(
         UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002"))
-      preferencesEnvelope.workspacePreferencesV4 = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+      preferencesEnvelope.workspacePreferencesV4 = .with {
+        $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [999] }
+      }
       try preferencesEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("preferences.pb"))
+      var outputEnvelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
+      outputEnvelope.externalIDAsUUID = UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000003")
+      outputEnvelope.workspaceOutputSettingsV4 = .init()
+      try outputEnvelope.serializedData().write(to: invalid.appendingPathComponent("output_settings.pb"))
       var invalidCommand = try WorkspaceCommand.Validate.parse([invalid.path])
       #expect(throws: Error.self) { try invalidCommand.run() }
     }
@@ -260,6 +265,7 @@ struct CommandsSystemTestSuite {
     try writer.write(definition: workspace.definition, externalID: definitionExternalID)
     let preferencesExternalID = writer.makeExternalID()
     try writer.write(preferences: workspace.preferences, externalID: preferencesExternalID)
+    try writer.write(outputSettings: workspace.outputSettings, externalID: writer.makeExternalID())
     #expect(definitionExternalID.uuidString.lowercased().split(separator: "-")[2].first == "7")
     #expect(preferencesExternalID.uuidString.lowercased().split(separator: "-")[2].first == "7")
   }
@@ -294,24 +300,24 @@ struct CommandsSystemTestSuite {
       .with {
         $0.internalID = 1
         $0.displayName = "Landscape"
-        $0.landscapeVideoLayerInternalIds = [10]
-        $0.portraitVideoLayerInternalIds = [20]
       },
       .with {
         $0.internalID = 2
         $0.displayName = "Portrait"
-        $0.landscapeVideoLayerInternalIds = [30]
-        $0.portraitVideoLayerInternalIds = [40]
       },
     ]
-    return WorkspaceV4Bundle(
-      definition: definition,
-      preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
+    let preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 = .with {
+      $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [10] }
+      $0.portraitProgramPreferences[1] = .with { $0.videoLayerInternalIds = [20] }
+      $0.landscapeProgramPreferences[2] = .with { $0.videoLayerInternalIds = [30] }
+      $0.portraitProgramPreferences[2] = .with { $0.videoLayerInternalIds = [40] }
+    }
+    return WorkspaceV4Bundle(definition: definition, preferences: preferences)
   }
 
   private func packageSnapshot(_ packageURL: URL) throws -> [String: Data] {
     try [
-      "definition.pb", "preferences.pb",
+      "definition.pb", "preferences.pb", "output_settings.pb",
     ]
     .reduce(into: [:]) { result, name in
       result[name] = try Data(contentsOf: packageURL.appendingPathComponent(name))

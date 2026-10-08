@@ -395,6 +395,7 @@ extension AppUIComponentTestSuite {
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
       second.storeService.definition = first.storeService.definition
+      second.storeService.preferences = first.storeService.preferences
       let secondWindow = WorkspaceWindowController(
         storeService: second.storeService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
@@ -487,6 +488,7 @@ extension AppUIComponentTestSuite {
         $0.selectedProgramInternalID = program
       }
       second.storeService.definition = first.storeService.definition
+      second.storeService.preferences = first.storeService.preferences
       let secondWindow = WorkspaceWindowController(
         storeService: second.storeService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
@@ -600,8 +602,8 @@ extension AppUIComponentTestSuite {
       defer { reopened.close() }
       #expect(reopened.storeService.definition == expected)
       #expect(
-        reopened.storeService.definition.visions.first?.ocrVision.source
-          == .videoComponentInternalID(inputID)
+        reopened.storeService.definition.visions.first?.ocrVision.videoComponentInternalID
+          == inputID
       )
     }
 
