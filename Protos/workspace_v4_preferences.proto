@@ -10,11 +10,11 @@ import "workspace_v4_types.proto";
 
 // Contains mutable preferences for one WorkspaceDefinitionV4.
 message WorkspacePreferencesV4 {
-  // Audio gain in decibels, keyed by each Audio Input Device's LDTXWorkspaceID.
+  // Audio gain in decibels, keyed by each Audio Input Device's LdtxInternalId.
   map<uint64, Rational32> audio_channel_gains_decibels = 1;
-  // Preferences for each Landscape Program, keyed by the Program's LDTXWorkspaceID.
+  // Preferences for each Landscape Program, keyed by the Program's LdtxInternalId.
   map<uint64, ProgramPreferences> landscape_program_preferences = 2;
-  // Preferences for each Portrait Program, keyed by the Program's LDTXWorkspaceID.
+  // Preferences for each Portrait Program, keyed by the Program's LdtxInternalId.
   map<uint64, ProgramPreferences> portrait_program_preferences = 3;
 }
 
@@ -22,15 +22,15 @@ message WorkspacePreferencesV4 {
 message ProgramPreferences {
   // Master volume in decibels.
   Rational32 audio_master_volume_decibels = 1;
-  // Whether each Audio Input Device is muted, keyed by its LDTXWorkspaceID.
+  // Whether each Audio Input Device is muted, keyed by its LdtxInternalId.
   map<uint64, bool> audio_channel_muted = 2;
-  // The Video Component LDTXWorkspaceIDs in back-to-front compositing order
+  // The Video Component LdtxInternalIds in back-to-front compositing order
   // for this Program canvas. The first entry is the backmost Video Layer;
   // the last entry is the frontmost Video Layer.
   repeated uint64 video_layer_internal_ids = 3;
-  // Video Layer transforms, keyed by each Video Component's LDTXWorkspaceID.
+  // Video Layer transforms, keyed by each Video Component's LdtxInternalId.
   map<uint64, BasicTransform> video_layer_transforms = 4;
-  // Whether each Video Layer is hidden, keyed by its Video Component's LDTXWorkspaceID.
+  // Whether each Video Layer is hidden, keyed by its Video Component's LdtxInternalId.
   map<uint64, bool> video_layer_hidden = 5;
 }
 

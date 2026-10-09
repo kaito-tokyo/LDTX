@@ -76,7 +76,7 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -160,7 +160,7 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
   /// Clears the value of `portraitVideoBitRate`. Subsequent reads from it will return its default value.
   public mutating func clearPortraitVideoBitRate() {self._portraitVideoBitRate = nil}
 
-  /// The LDTXWorkspaceID of the VFX Source used as the master clock for video
+  /// The LdtxInternalId of the VFX Source used as the master clock for video
   /// presentation timestamps.
   public var ptsMasterVfxSourceInternalID: UInt64 {
     get {_ptsMasterVfxSourceInternalID ?? 0}

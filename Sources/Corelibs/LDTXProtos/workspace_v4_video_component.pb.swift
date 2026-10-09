@@ -138,7 +138,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -190,7 +190,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: @unchec
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
@@ -302,7 +302,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: @unchec
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
@@ -412,7 +412,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -509,13 +509,13 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
 }
 
 /// A Video Component that applies Video Effects to video from an Input Device.
-/// Physical camera assignment is app-local and keyed by this entity's LDTXWorkspaceID.
+/// Physical camera assignment is app-local and keyed by this entity's LdtxInternalId.
 public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -552,7 +552,7 @@ public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -586,7 +586,7 @@ public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable 
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}

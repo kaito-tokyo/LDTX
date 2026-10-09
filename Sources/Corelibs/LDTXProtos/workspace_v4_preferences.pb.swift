@@ -30,13 +30,13 @@ public nonisolated struct Ldtx_Workspace_V4_WorkspacePreferencesV4: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Audio gain in decibels, keyed by each Audio Input Device's LDTXWorkspaceID.
+  /// Audio gain in decibels, keyed by each Audio Input Device's LdtxInternalId.
   public var audioChannelGainsDecibels: Dictionary<UInt64,Ldtx_Workspace_V4_Rational32> = [:]
 
-  /// Preferences for each Landscape Program, keyed by the Program's LDTXWorkspaceID.
+  /// Preferences for each Landscape Program, keyed by the Program's LdtxInternalId.
   public var landscapeProgramPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreferences> = [:]
 
-  /// Preferences for each Portrait Program, keyed by the Program's LDTXWorkspaceID.
+  /// Preferences for each Portrait Program, keyed by the Program's LdtxInternalId.
   public var portraitProgramPreferences: Dictionary<UInt64,Ldtx_Workspace_V4_ProgramPreferences> = [:]
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -60,18 +60,18 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramPreferences: Sendable {
   /// Clears the value of `audioMasterVolumeDecibels`. Subsequent reads from it will return its default value.
   public mutating func clearAudioMasterVolumeDecibels() {self._audioMasterVolumeDecibels = nil}
 
-  /// Whether each Audio Input Device is muted, keyed by its LDTXWorkspaceID.
+  /// Whether each Audio Input Device is muted, keyed by its LdtxInternalId.
   public var audioChannelMuted: Dictionary<UInt64,Bool> = [:]
 
-  /// The Video Component LDTXWorkspaceIDs in back-to-front compositing order
+  /// The Video Component LdtxInternalIds in back-to-front compositing order
   /// for this Program canvas. The first entry is the backmost Video Layer;
   /// the last entry is the frontmost Video Layer.
   public var videoLayerInternalIds: [UInt64] = []
 
-  /// Video Layer transforms, keyed by each Video Component's LDTXWorkspaceID.
+  /// Video Layer transforms, keyed by each Video Component's LdtxInternalId.
   public var videoLayerTransforms: Dictionary<UInt64,Ldtx_Workspace_V4_BasicTransform> = [:]
 
-  /// Whether each Video Layer is hidden, keyed by its Video Component's LDTXWorkspaceID.
+  /// Whether each Video Layer is hidden, keyed by its Video Component's LdtxInternalId.
   public var videoLayerHidden: Dictionary<UInt64,Bool> = [:]
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

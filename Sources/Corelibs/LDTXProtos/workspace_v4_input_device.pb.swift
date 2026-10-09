@@ -30,7 +30,7 @@ public nonisolated struct Ldtx_Workspace_V4_AudioInputDevice: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}

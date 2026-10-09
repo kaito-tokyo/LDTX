@@ -182,7 +182,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
@@ -202,7 +202,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
   public mutating func clearDisplayName() {_uniqueStorage()._displayName = nil}
 
-  /// The LDTXWorkspaceID of the Video Component analyzed after effects and
+  /// The LdtxInternalId of the Video Component analyzed after effects and
   /// before Program placement.
   public var videoComponentInternalID: UInt64 {
     get {_storage._videoComponentInternalID ?? 0}
@@ -275,7 +275,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
+  /// An LdtxInternalId for this entity.
   public var internalID: UInt64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
@@ -295,7 +295,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
   public mutating func clearDisplayName() {self._displayName = nil}
 
-  /// The LDTXWorkspaceID of the Video Component analyzed after effects and
+  /// The LdtxInternalId of the Video Component analyzed after effects and
   /// before Program placement.
   public var videoComponentInternalID: UInt64 {
     get {_videoComponentInternalID ?? 0}
