@@ -9,9 +9,9 @@ import LDTXWorkspaceAppletModel
 import LDTXYouTubeRTMPS
 import SwiftUI
 
-struct CreateMlImageClassificationVisionInspector: View {
+struct CreateMlImageClassifierVisionInspector: View {
   @Bindable var storeService: WorkspaceStoreService
-  @Binding var vision: Ldtx_Workspace_V4_CreateMlImageClassificationVision
+  @Binding var vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision
 
   @State var x: Int32?
   @State var xDenominator: UInt32?
@@ -26,7 +26,7 @@ struct CreateMlImageClassificationVisionInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
-    vision: Binding<Ldtx_Workspace_V4_CreateMlImageClassificationVision>
+    vision: Binding<Ldtx_Workspace_V4_CreateMlImageClassifierVision>
   ) {
     self.storeService = storeService
     self._vision = vision
@@ -52,7 +52,7 @@ struct CreateMlImageClassificationVisionInspector: View {
 
   var body: some View {
     Form {
-      Section("Vision - Create ML Image Classification") {
+      Section("Vision - Create ML Image Classifier") {
         TextField("Name", text: $vision.displayName)
         Picker("Input video", selection: $vision.videoComponentInternalIDIfPresent) {
           Text("Unassigned").tag(UInt64?.none)
@@ -192,7 +192,7 @@ struct CreateMlImageClassificationVisionInspector: View {
       return region
     } catch {
       throw WorkspaceSelectionError(
-        message: "Correct the classification ROI before applying changes. "
+        message: "Correct the classifier ROI before applying changes. "
           + error.localizedDescription)
     }
   }
@@ -201,21 +201,21 @@ struct CreateMlImageClassificationVisionInspector: View {
 #if DEBUG
   #Preview("Default") {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .createMlImageClassificationVision, internalID: 11))
+      inspectorSelector: .init(kind: .createMlImageClassifierVision, internalID: 11))
     @Bindable var boundStore = storeService
-    if let vision = $boundStore.createMlImageClassificationVision(internalID: 11) {
-      CreateMlImageClassificationVisionInspector(storeService: storeService, vision: vision)
+    if let vision = $boundStore.createMlImageClassifierVision(internalID: 11) {
+      CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
         .frame(width: 480, height: 600, alignment: .topLeading)
     }
   }
 
   #Preview("Output Active") {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .createMlImageClassificationVision, internalID: 11),
+      inspectorSelector: .init(kind: .createMlImageClassifierVision, internalID: 11),
       isOutputActive: true)
     @Bindable var boundStore = storeService
-    if let vision = $boundStore.createMlImageClassificationVision(internalID: 11) {
-      CreateMlImageClassificationVisionInspector(storeService: storeService, vision: vision)
+    if let vision = $boundStore.createMlImageClassifierVision(internalID: 11) {
+      CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
         .frame(width: 480, height: 600, alignment: .topLeading)
     }
   }

@@ -283,7 +283,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
     case .clockVideoComponent: "Clock"
     case .testPatternVideoComponent: "Test Pattern"
     case .ocrVision: "OCR Vision"
-    case .createMlImageClassificationVision: "Create ML Image Classification"
+    case .createMlImageClassifierVision: "Create ML Image Classifier"
     }
   }
 

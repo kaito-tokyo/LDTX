@@ -155,8 +155,8 @@
       ocrVisionWrapper.ocrVision = ocrVision
       definition.visions = [
         ocrVisionWrapper,
-        WorkspaceResourceFactory.makeCreateMlImageClassificationVision(
-          id: 11, name: "Scene Classification", componentID: vfxSource.internalID),
+        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+          id: 11, name: "Scene Classifier", componentID: vfxSource.internalID),
       ]
 
       return definition

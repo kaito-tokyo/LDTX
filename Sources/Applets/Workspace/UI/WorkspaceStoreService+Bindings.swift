@@ -32,13 +32,13 @@ extension Bindable where Value == WorkspaceStoreService {
       })
   }
   @MainActor
-  func createMlImageClassificationVision(internalID: UInt64) -> Binding<
-    Ldtx_Workspace_V4_CreateMlImageClassificationVision
+  func createMlImageClassifierVision(internalID: UInt64) -> Binding<
+    Ldtx_Workspace_V4_CreateMlImageClassifierVision
   >? {
     let store = wrappedValue
-    func currentVision() -> Ldtx_Workspace_V4_CreateMlImageClassificationVision? {
+    func currentVision() -> Ldtx_Workspace_V4_CreateMlImageClassifierVision? {
       store.definition.visions.compactMap { wrapper in
-        guard case .createMlImageClassificationVision(let vision) = wrapper.vision,
+        guard case .createMlImageClassifierVision(let vision) = wrapper.vision,
           vision.internalID == internalID
         else { return nil }
         return vision
@@ -51,13 +51,13 @@ extension Bindable where Value == WorkspaceStoreService {
       set: { updated in
         guard updated.internalID == internalID,
           let index = store.definition.visions.firstIndex(where: {
-            guard case .createMlImageClassificationVision(let vision) = $0.vision else {
+            guard case .createMlImageClassifierVision(let vision) = $0.vision else {
               return false
             }
             return vision.internalID == internalID
           })
         else { return }
-        store.definition.visions[index].vision = .createMlImageClassificationVision(updated)
+        store.definition.visions[index].vision = .createMlImageClassifierVision(updated)
       })
   }
 }

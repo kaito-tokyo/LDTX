@@ -146,7 +146,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeCreateMlImageClassificationVision(id: UInt64, name: String, componentID: UInt64)
+  static func makeCreateMlImageClassifierVision(id: UInt64, name: String, componentID: UInt64)
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
@@ -155,13 +155,13 @@ enum WorkspaceResourceFactory {
     }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
     triggerWrapper.intervalTrigger = trigger
-    var vision = Ldtx_Workspace_V4_CreateMlImageClassificationVision()
+    var vision = Ldtx_Workspace_V4_CreateMlImageClassifierVision()
     vision.internalID = id
     vision.displayName = name
     vision.videoComponentInternalID = componentID
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.createMlImageClassificationVision = vision
+    wrapper.createMlImageClassifierVision = vision
     return wrapper
   }
 

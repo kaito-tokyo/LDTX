@@ -333,7 +333,7 @@ public enum WorkspaceV4IntegrityValidator {
       triggers = vision.triggers
       region = vision.hasRegionOfInterest ? vision.regionOfInterest : nil
       minimumTextHeight = vision.hasMinimumTextHeight ? vision.minimumTextHeight : nil
-    case .createMlImageClassificationVision(let vision):
+    case .createMlImageClassifierVision(let vision):
       guard vision.hasVideoComponentInternalID else {
         throw WorkspaceV4IntegrityError.missingVisionVideoComponent
       }

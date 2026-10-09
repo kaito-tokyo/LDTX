@@ -41,13 +41,13 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
     set {vision = .ocrVision(newValue)}
   }
 
-  /// The Create ML Image Classification Vision definition. Mutually exclusive with the other fields.
-  public var createMlImageClassificationVision: Ldtx_Workspace_V4_CreateMlImageClassificationVision {
+  /// The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.
+  public var createMlImageClassifierVision: Ldtx_Workspace_V4_CreateMlImageClassifierVision {
     get {
-      if case .createMlImageClassificationVision(let v)? = vision {return v}
-      return Ldtx_Workspace_V4_CreateMlImageClassificationVision()
+      if case .createMlImageClassifierVision(let v)? = vision {return v}
+      return Ldtx_Workspace_V4_CreateMlImageClassifierVision()
     }
-    set {vision = .createMlImageClassificationVision(newValue)}
+    set {vision = .createMlImageClassifierVision(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -55,8 +55,8 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
   public nonisolated enum OneOf_Vision: Equatable, Sendable {
     /// The OCR Vision definition. Mutually exclusive with the other fields.
     case ocrVision(Ldtx_Workspace_V4_OcrVision)
-    /// The Create ML Image Classification Vision definition. Mutually exclusive with the other fields.
-    case createMlImageClassificationVision(Ldtx_Workspace_V4_CreateMlImageClassificationVision)
+    /// The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.
+    case createMlImageClassifierVision(Ldtx_Workspace_V4_CreateMlImageClassifierVision)
 
   }
 
@@ -270,7 +270,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
 }
 
 /// An image-analysis request that classifies an image using a Create ML model.
-public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassificationVision: Sendable {
+public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -335,7 +335,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionWrapper"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0\u{3}create_ml_image_classification_vision\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0\u{3}create_ml_image_classifier_vision\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -357,16 +357,16 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
         }
       }()
       case 2: try {
-        var v: Ldtx_Workspace_V4_CreateMlImageClassificationVision?
+        var v: Ldtx_Workspace_V4_CreateMlImageClassifierVision?
         var hadOneofValue = false
         if let current = self.vision {
           hadOneofValue = true
-          if case .createMlImageClassificationVision(let m) = current {v = m}
+          if case .createMlImageClassifierVision(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.vision = .createMlImageClassificationVision(v)
+          self.vision = .createMlImageClassifierVision(v)
         }
       }()
       default: break
@@ -384,8 +384,8 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
       guard case .ocrVision(let v)? = self.vision else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     }()
-    case .createMlImageClassificationVision?: try {
-      guard case .createMlImageClassificationVision(let v)? = self.vision else { preconditionFailure() }
+    case .createMlImageClassifierVision?: try {
+      guard case .createMlImageClassifierVision(let v)? = self.vision else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
     case nil: break
@@ -655,8 +655,8 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassificationVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CreateMlImageClassificationVision"
+nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateMlImageClassifierVision"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -698,7 +698,7 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassificationVision: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V4_CreateMlImageClassificationVision, rhs: Ldtx_Workspace_V4_CreateMlImageClassificationVision) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V4_CreateMlImageClassifierVision, rhs: Ldtx_Workspace_V4_CreateMlImageClassifierVision) -> Bool {
     if lhs._internalID != rhs._internalID {return false}
     if lhs._displayName != rhs._displayName {return false}
     if lhs._videoComponentInternalID != rhs._videoComponentInternalID {return false}

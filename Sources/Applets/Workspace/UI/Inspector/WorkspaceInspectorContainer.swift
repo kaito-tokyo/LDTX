@@ -145,11 +145,11 @@ public struct WorkspaceInspectorContainer: View {
       } else {
         emptyInspector
       }
-    case .createMlImageClassificationVision:
+    case .createMlImageClassifierVision:
       if let internalID = selector.internalID,
-        let vision = $storeService.createMlImageClassificationVision(internalID: internalID)
+        let vision = $storeService.createMlImageClassifierVision(internalID: internalID)
       {
-        CreateMlImageClassificationVisionInspector(storeService: storeService, vision: vision)
+        CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
       } else {
         emptyInspector
       }

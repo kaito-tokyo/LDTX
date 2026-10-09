@@ -6,7 +6,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
   public var displayName: String? {
     switch vision {
     case .ocrVision(let value): value.hasDisplayName ? value.displayName : nil
-    case .createMlImageClassificationVision(let value):
+    case .createMlImageClassifierVision(let value):
       value.hasDisplayName ? value.displayName : nil
     case nil: nil
     }
@@ -14,7 +14,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
   public var internalID: UInt64? {
     switch vision {
     case .ocrVision(let value): value.hasInternalID ? value.internalID : nil
-    case .createMlImageClassificationVision(let value): value.hasInternalID ? value.internalID : nil
+    case .createMlImageClassifierVision(let value): value.hasInternalID ? value.internalID : nil
     case nil: nil
     }
   }
@@ -23,7 +23,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
 extension Ldtx_Workspace_V4_VisionWrapper: Identifiable {
   public enum ID: Hashable {
     case ocrVision(UInt64)
-    case createMlImageClassificationVision(UInt64)
+    case createMlImageClassifierVision(UInt64)
     case invalid
   }
 
@@ -31,8 +31,8 @@ extension Ldtx_Workspace_V4_VisionWrapper: Identifiable {
     guard internalID != nil else { return .invalid }
     return switch vision {
     case .ocrVision(let vision): .ocrVision(vision.internalID)
-    case .createMlImageClassificationVision(let vision):
-      .createMlImageClassificationVision(vision.internalID)
+    case .createMlImageClassifierVision(let vision):
+      .createMlImageClassifierVision(vision.internalID)
     case nil: .invalid
     }
   }
@@ -54,7 +54,7 @@ extension Ldtx_Workspace_V4_OcrVision {
   }
 }
 
-extension Ldtx_Workspace_V4_CreateMlImageClassificationVision {
+extension Ldtx_Workspace_V4_CreateMlImageClassifierVision {
   public var videoComponentInternalIDIfPresent: UInt64? {
     get {
       guard hasVideoComponentInternalID, videoComponentInternalID != 0 else { return nil }

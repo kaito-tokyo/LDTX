@@ -18,7 +18,7 @@ public enum WorkspaceInspectorKind: Int, Sendable {
   case testPatternVideoComponent = 12
   case ocrVision = 13
   case workspacePrograms = 14
-  case createMlImageClassificationVision = 15
+  case createMlImageClassifierVision = 15
 }
 
 public struct WorkspaceInspectorSelector: Hashable, Sendable {
