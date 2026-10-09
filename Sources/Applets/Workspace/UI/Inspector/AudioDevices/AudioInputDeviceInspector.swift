@@ -4,7 +4,7 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {

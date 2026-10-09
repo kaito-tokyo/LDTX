@@ -42,10 +42,10 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
   }
 
   /// The Create ML Image Classification Vision definition. Mutually exclusive with the other fields.
-  public var createMlImageClassificationVision: Ldtx_Workspace_V4_CreateMLImageClassificationVision {
+  public var createMlImageClassificationVision: Ldtx_Workspace_V4_CreateMlImageClassificationVision {
     get {
       if case .createMlImageClassificationVision(let v)? = vision {return v}
-      return Ldtx_Workspace_V4_CreateMLImageClassificationVision()
+      return Ldtx_Workspace_V4_CreateMlImageClassificationVision()
     }
     set {vision = .createMlImageClassificationVision(newValue)}
   }
@@ -56,7 +56,7 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
     /// The OCR Vision definition. Mutually exclusive with the other fields.
     case ocrVision(Ldtx_Workspace_V4_OcrVision)
     /// The Create ML Image Classification Vision definition. Mutually exclusive with the other fields.
-    case createMlImageClassificationVision(Ldtx_Workspace_V4_CreateMLImageClassificationVision)
+    case createMlImageClassificationVision(Ldtx_Workspace_V4_CreateMlImageClassificationVision)
 
   }
 
@@ -270,7 +270,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
 }
 
 /// An image-analysis request that classifies an image using a Create ML model.
-public nonisolated struct Ldtx_Workspace_V4_CreateMLImageClassificationVision: Sendable {
+public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassificationVision: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -357,7 +357,7 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
         }
       }()
       case 2: try {
-        var v: Ldtx_Workspace_V4_CreateMLImageClassificationVision?
+        var v: Ldtx_Workspace_V4_CreateMlImageClassificationVision?
         var hadOneofValue = false
         if let current = self.vision {
           hadOneofValue = true
@@ -655,8 +655,8 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Ldtx_Workspace_V4_CreateMLImageClassificationVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CreateMLImageClassificationVision"
+nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassificationVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CreateMlImageClassificationVision"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -698,7 +698,7 @@ nonisolated extension Ldtx_Workspace_V4_CreateMLImageClassificationVision: Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V4_CreateMLImageClassificationVision, rhs: Ldtx_Workspace_V4_CreateMLImageClassificationVision) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V4_CreateMlImageClassificationVision, rhs: Ldtx_Workspace_V4_CreateMlImageClassificationVision) -> Bool {
     if lhs._internalID != rhs._internalID {return false}
     if lhs._displayName != rhs._displayName {return false}
     if lhs._videoComponentInternalID != rhs._videoComponentInternalID {return false}

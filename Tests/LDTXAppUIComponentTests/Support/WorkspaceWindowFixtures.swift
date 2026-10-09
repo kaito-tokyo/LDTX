@@ -4,9 +4,11 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
+import LDTXProgramRuntime
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI
@@ -79,7 +81,6 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   }
   func pauseOutput() async { actions.append("pause") }
   func stopOutput() async { actions.append("stop") }
-  func synchronizeVision() {}
   func synchronizeAudioMonitor() {}
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void

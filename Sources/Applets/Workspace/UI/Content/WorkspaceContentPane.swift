@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
 
 private let kBelowDividerDragPriority0 = NSLayoutConstraint.Priority(250)
 private let kBelowDividerDragPriority10 = NSLayoutConstraint.Priority(260)

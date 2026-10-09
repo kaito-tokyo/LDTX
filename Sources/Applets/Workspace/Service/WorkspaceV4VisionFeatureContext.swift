@@ -3,6 +3,7 @@
 
 import CoreImage
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 
 @MainActor

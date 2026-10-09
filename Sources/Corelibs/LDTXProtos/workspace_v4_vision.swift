@@ -54,7 +54,7 @@ extension Ldtx_Workspace_V4_OcrVision {
   }
 }
 
-extension Ldtx_Workspace_V4_CreateMLImageClassificationVision {
+extension Ldtx_Workspace_V4_CreateMlImageClassificationVision {
   public var videoComponentInternalIDIfPresent: UInt64? {
     get {
       guard hasVideoComponentInternalID, videoComponentInternalID != 0 else { return nil }

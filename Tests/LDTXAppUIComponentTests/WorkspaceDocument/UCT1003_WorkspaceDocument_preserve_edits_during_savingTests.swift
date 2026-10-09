@@ -4,9 +4,10 @@
 import AppKit
 import Foundation
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat

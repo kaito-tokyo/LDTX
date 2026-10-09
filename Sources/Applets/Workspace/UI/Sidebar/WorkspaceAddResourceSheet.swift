@@ -62,6 +62,13 @@ struct WorkspaceAddResourceSheet: View {
           .accessibilityIdentifier("addVideoComponentKindPicker")
         }
         if sheet == .vision {
+          Picker("Kind", selection: $draft.visionKind) {
+            ForEach(WorkspaceAddVisionKind.allCases) { kind in Text(kind.rawValue).tag(kind) }
+          }
+          .accessibilityIdentifier("addVisionKindPicker")
+          .onChange(of: draft.visionKind) { oldKind, newKind in
+            if draft.name == oldKind.rawValue { draft.name = newKind.rawValue }
+          }
           Text("Video Component")
           ForEach(componentOptions) { input in
             Button {
@@ -83,7 +90,11 @@ struct WorkspaceAddResourceSheet: View {
       }
       .formStyle(.grouped)
       if sheet == .vision {
-        Text("Recognize text locally with Apple Vision.").font(.caption).foregroundStyle(.secondary)
+        Text(
+          draft.visionKind == .ocr
+            ? "Recognize text locally with Apple Vision."
+            : "Classify images locally with a Create ML model."
+        ).font(.caption).foregroundStyle(.secondary)
       }
       if let message = validationMessage {
         Text(message).font(.caption).foregroundStyle(.red)

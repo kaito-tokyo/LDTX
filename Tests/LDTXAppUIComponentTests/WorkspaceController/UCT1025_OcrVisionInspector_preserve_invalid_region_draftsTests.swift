@@ -54,17 +54,21 @@ extension AppUIComponentTestSuite {
     func correctionAllowsNavigation() throws {
       let store = makeStore()
       var x = "0"
-      var width = "1"
+      var width = "10"
       let validatorID = UUID()
       store.registerInspectorEditValidator(id: validatorID) {
-        _ = try OcrVisionInspector.validatedRegion(x: x, y: "0", width: width, height: "1")
+        _ = try OcrVisionInspector.validatedRegion(
+          x: x, y: "0", width: width, height: "10", xDenominator: "10", yDenominator: "10",
+          widthDenominator: "10", heightDenominator: "10")
       }
       defer { store.removeInspectorEditValidator(id: validatorID) }
-      x = "0.8"
+      x = "8"
       #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
-      width = "0.1"
+      width = "1"
       store.definition.visions[0].ocrVision.regionOfInterest =
-        try OcrVisionInspector.validatedRegion(x: x, y: "0", width: width, height: "1")
+        try OcrVisionInspector.validatedRegion(
+          x: x, y: "0", width: width, height: "10", xDenominator: "10", yDenominator: "10",
+          widthDenominator: "10", heightDenominator: "10")
       try store.validateInspectorEdits()
       #expect(store.definition.visions[0].ocrVision.regionOfInterest.x.double == 0.8)
       #expect(store.definition.visions[0].ocrVision.regionOfInterest.width.double == 0.1)

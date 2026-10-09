@@ -1,7 +1,9 @@
+import AppKit
+import LDTXBackgroundSegmentation
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {

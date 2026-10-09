@@ -3,8 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
+  import LDTXProtos
   import AppKit
-  import LDTXWorkspaceAppletInterface
+
+  import LDTXProgramRuntime
+  import LDTXVideoRendering
+  import LDTXWorkspaceAppletModel
   import MetalKit
 
   @MainActor

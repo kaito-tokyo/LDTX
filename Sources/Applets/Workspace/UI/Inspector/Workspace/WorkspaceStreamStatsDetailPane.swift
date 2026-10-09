@@ -2,7 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXCapture
+import LDTXProgram
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXWorkspaceAppletModel
+import LDTXYouTube
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OutputOrchestrationDetailPane: View {
@@ -40,7 +46,6 @@ struct OutputOrchestrationDetailPane: View {
   var startOutputSession: () -> Void
   var pauseOutputSession: () -> Void
   var stopOutputSession: () -> Void
-  @State private var isShowingBroadcastChooser = false
   @State private var isShowingCustomFields = false
   @State private var isShowingStreamKeyManager = false
   @State private var loadedStreamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
@@ -102,12 +107,25 @@ struct OutputOrchestrationDetailPane: View {
           }
           if outputDestination.youtubeIngestMode == .dash {
             Section("YouTube Broadcast") {
-              LabeledContent("Broadcast", value: selectedBroadcast?.title ?? "Not selected")
-              Button(isLoadingBroadcasts ? "Loading" : "Select Broadcast") {
-                refreshExistingBroadcasts()
-                isShowingBroadcastChooser = true
+              Picker("Broadcast", selection: Binding(
+                get: { selectedBroadcastID },
+                set: { selectBroadcast($0) })
+              ) {
+                Text("Not selected").tag(String?.none)
+                ForEach(existingBroadcasts) { broadcast in
+                  Text(broadcast.title).tag(Optional(broadcast.id))
+                }
+                if let selectedBroadcastID,
+                  !existingBroadcasts.contains(where: { $0.id == selectedBroadcastID })
+                {
+                  Text("Unavailable").tag(Optional(selectedBroadcastID))
+                }
               }
-              .disabled(!canEditDestination)
+              .pickerStyle(.menu)
+              .disabled(!canEditDestination || isLoadingBroadcasts)
+              .onAppear(perform: refreshExistingBroadcasts)
+              Button(isLoadingBroadcasts ? "Loading" : "Refresh", action: refreshExistingBroadcasts)
+                .disabled(isLoadingBroadcasts)
               Button("Manage", action: manageYouTubeBroadcasts)
             }
           } else {
@@ -175,7 +193,6 @@ struct OutputOrchestrationDetailPane: View {
       guard phase == .active else { return }
       reloadStreamKeyConfigurations()
     }
-    .sheet(isPresented: $isShowingBroadcastChooser) { broadcastChooser }
     .sheet(isPresented: $isShowingStreamKeyManager) { streamKeyManager }
   }
 
@@ -302,32 +319,52 @@ struct OutputOrchestrationDetailPane: View {
         && (excludedStreamKey == nil || $0.id == selection
           || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedStreamKey)
     }.map { WorkspaceSelectionOption(id: $0.id, name: $0.name) }
-    WorkspaceSelectionField(
-      title: title, current: selection, options: options,
-      loaded: didLoadStreamKeyConfigurations, loadError: streamKeyLoadError,
-      clearTitle: "Remove Assignment",
-      isEditable: canEditDestination,
-      refresh: reloadStreamKeyConfigurations,
-      commit: { proposed in
-        guard canEditDestination else {
-          throw WorkspaceSelectionError(message: "Output settings are locked.")
-        }
-        guard let proposed else {
-          onSelect(nil)
-          return
-        }
-        let latest = try loadStreamKeyConfigurations()
-        let excludedKey = latest.first { $0.id == excludedID }?.streamKey.trimmingCharacters(
-          in: .whitespacesAndNewlines)
-        guard
-          latest.contains(where: {
-            $0.id == proposed && ($0.id != excludedID || $0.id == selection)
-              && (excludedKey == nil || $0.id == selection
-                || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedKey)
+    VStack(alignment: .leading) {
+      Picker(
+        title,
+        selection: Binding(
+          get: { selection },
+          set: { proposed in
+            do {
+              guard canEditDestination else {
+                throw WorkspaceSelectionError(message: "Output settings are locked.")
+              }
+              guard let proposed else {
+                onSelect(nil)
+                return
+              }
+              let latest = try loadStreamKeyConfigurations()
+              let excludedKey = latest.first { $0.id == excludedID }?.streamKey.trimmingCharacters(
+                in: .whitespacesAndNewlines)
+              guard
+                latest.contains(where: {
+                  $0.id == proposed && ($0.id != excludedID || $0.id == selection)
+                    && (excludedKey == nil || $0.id == selection
+                      || $0.streamKey.trimmingCharacters(in: .whitespacesAndNewlines) != excludedKey)
+                })
+              else {
+                throw WorkspaceSelectionError(message: "The selected stream key is unavailable.")
+              }
+              onSelect(proposed)
+            } catch { streamKeyLoadError = error.localizedDescription }
           })
-        else { throw WorkspaceSelectionError(message: "The selected stream key is unavailable.") }
-        onSelect(proposed)
-      })
+      ) {
+        Text("Unassigned").tag(String?.none)
+        ForEach(options) { option in
+          Text(option.name).tag(Optional(option.id))
+        }
+        if let selection, !options.contains(where: { $0.id == selection }) {
+          Text(didLoadStreamKeyConfigurations ? "Unavailable" : "Checking…")
+            .tag(Optional(selection))
+        }
+      }
+      .pickerStyle(.menu)
+      .disabled(!canEditDestination)
+      .onAppear(perform: reloadStreamKeyConfigurations)
+      if let streamKeyLoadError {
+        Text(streamKeyLoadError).font(.caption).foregroundStyle(.red)
+      }
+    }
   }
 
   private var streamKeyManager: some View {
@@ -344,26 +381,7 @@ struct OutputOrchestrationDetailPane: View {
       load: loadStreamKeyConfigurations)
   }
 
-  private var broadcastChooser: some View {
-    NavigationStack {
-      List(existingBroadcasts) { broadcast in
-        Button(broadcast.title) {
-          selectBroadcast(broadcast.id)
-          isShowingBroadcastChooser = false
-        }
-      }
-      .navigationTitle("Select Live Broadcast")
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Close") { isShowingBroadcastChooser = false }
-        }
-        ToolbarItem(placement: .primaryAction) {
-          Button("Refresh", action: refreshExistingBroadcasts).disabled(isLoadingBroadcasts)
-        }
-      }
-    }
-    .frame(minWidth: 440, minHeight: 320)
-  }
+
 }
 
 private struct RecordingCustomFieldsSheet: View {
@@ -498,21 +516,19 @@ struct CanvasDetailPane: View {
           LabeledContent("GOP", value: "2 seconds, no B-frames")
         }
         Section("Video Timing") {
-          WorkspaceSelectionField(
-            title: "PTS Master", current: videoPTSMasterInputDeviceID,
-            options: videoPTSMasterInputDeviceOptions.map { .init(id: $0.id, name: $0.name) },
-            emptyLabel: "Host Clock", clearTitle: "Use Host Clock",
-            isEditable: windowState.mode == .edit && !windowState.isOperationLocked,
-            commit: { proposed in
-              guard windowState.mode == .edit, !windowState.isOperationLocked,
-                proposed == nil
-                  || videoPTSMasterInputDeviceOptions.contains(where: { $0.id == proposed })
-              else {
-                throw WorkspaceSelectionError(
-                  message: "The timing input is unavailable for editing.")
-              }
-              videoPTSMasterInputDeviceID = proposed
-            })
+          Picker("PTS Master", selection: $videoPTSMasterInputDeviceID) {
+            Text("Host Clock").tag(String?.none)
+            ForEach(videoPTSMasterInputDeviceOptions, id: \.id) { option in
+              Text(option.name).tag(Optional(option.id))
+            }
+            if let selected = videoPTSMasterInputDeviceID,
+              !videoPTSMasterInputDeviceOptions.contains(where: { $0.id == selected })
+            {
+              Text("Unavailable").tag(Optional(selected))
+            }
+          }
+          .pickerStyle(.menu)
+          .disabled(windowState.mode != .edit || windowState.isOperationLocked)
         }
       }
       .formStyle(.grouped)

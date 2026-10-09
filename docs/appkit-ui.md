@@ -50,7 +50,7 @@ settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
 continue to use AppKit's supplied URLs rather than the environment.
 The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
-input devices, video components, and OCR visions. The window injects its device
+input devices, video components, and OCR or Create ML image-classification visions. The window injects its device
 registry and app-local data. Form drafts do not change the document until Add
 validates a live document, the current output state, name, and input references.
 Missing documents disable Sidebar additions, and submission rechecks document
@@ -159,7 +159,9 @@ one Workspace root rather than registered as separate navigator groups.
 
 Workspace retains its existing module boundaries because lower-level frameworks
 also consume its model. Each Workspace target includes only its own Controller,
-Interface, Model, Service, Store, or UI subdirectory. XcodeGen generates the
+Model, Service, Store, or UI subdirectory. Workspace has no Interface umbrella
+module: consumers import their dependencies directly. Shared state enums live
+in Model; runtime protocols and Program resolution live in Service. XcodeGen generates the
 per-target membership exceptions, so a source compiles in one Xcode target.
 Adding or removing Workspace files requires regenerating the project to update
 these exceptions. SwiftPM-only entrypoints remain managed by Package.swift.
@@ -208,8 +210,9 @@ The Workspace window uses the unified toolbar style. WorkspaceWindow owns its
 NSToolbar, implements its delegate and handles target/action directly. Both
 hosting controllers use `sceneBridgingOptions = []`; Workspace pane roots do not use
 the SwiftUI toolbar modifier. Independent sheets retain their own controls. The fixed order is Sidebar, Stop, Start/Pause,
-Screenshot, flexible space, the native `inspectorTrackingSeparator`, flexible
-space, Apply, Inspector. Inspector stays at the trailing edge when Apply is hidden.
+Screenshot, flexible space, the native `inspectorTrackingSeparator`, Inspector
+title, flexible space, Apply, Inspector. The title follows the selected Inspector
+kind and hides when the Inspector is collapsed. Inspector stays at the trailing edge when Apply is hidden.
 Output state updates existing item labels, images and
 enabled state. Inspector collapse changes Apply's `isHidden` without removing
 its item or the separator. Pane toggles directly change `isCollapsed`, without
@@ -220,14 +223,15 @@ draft without displaying an error dialog. The store's non-persisted
 `pendingEditsDidBlockSelection` callback asks the owning Window to open the
 Inspector without animation and show a transient NSPopover anchored to Apply.
 Repeated attempts reuse the popover. Apply, confirmed edits, and Window closure
-dismiss it. Input validation uses the same non-modal popover; independent selection sheets display
+dismiss it. Input validation uses the same non-modal popover; inline selection controls display
 their validation messages inline.
 
 Apply requests Window-wide Submit through the non-persisted, Window-local
 `WorkspaceStoreService.hasPendingSubmit`. The Window has one request observer.
 Existing edit-validation registrations also supply change status and writeback;
-OCR owns its seven input States, Video Layers owns transform drafts, and Master
-Volume owns its numeric drafts. Submit first validates every pending owner. Any
+OCR owns its seven input States, Create ML Image Classification owns its four
+ROI input States, Video Layers owns transform drafts, and Master Volume owns its
+numeric drafts. Submit first validates every pending owner. Any
 validation failure reports the existing error and leaves all drafts and models
 unchanged. Once every validation succeeds, each owner commits its values and
 clears its change status. The request is cleared after either outcome, allowing
@@ -492,3 +496,26 @@ base64 `oauthClientJSON` and an `authorizations` dictionary keyed by client ID;
 authorization values are base64 secure archives of AppAuth state. Writes are
 atomic and set file permissions to `0600`. This development file contains
 credentials, including refresh tokens, and is not encrypted by this mechanism.
+
+## Create ML Image Classification Inspector
+
+The Add Vision sheet selects OCR or Create ML Image Classification and requires
+an explicit Video Component selection. Classification Visions have their own
+Sidebar selection and Inspector with name, Video Component, update interval,
+and ROI settings. Name, input, and interval use direct Bindings. ROI uses four
+local text States and joins Window-wide Apply and local Enter submission; an
+invalid rectangle preserves its draft. Editing is disabled during output.
+The Inspector includes Default and Output Active previews. Classification
+settings are validated and saved in Workspace V4. Model import and classification
+execution are separate work; this UI does not select or compile a model.
+
+OCR and Create ML Image Classification Inspectors select their input Video
+Component with a menu Picker. Unassigned clears the reference; a missing current
+reference appears as Unavailable until the user chooses a replacement. Selection
+changes synchronize Vision immediately, and output activity disables editing.
+
+Physical device, timing master, and stream-key assignments use inline menu
+Pickers rather than selection sheets. Physical-device and stream-key selections
+retain their availability checks before committing. Missing assigned values
+remain visible as Unavailable; clearing an assignment uses Unassigned, Automatic,
+or Host Clock as appropriate.

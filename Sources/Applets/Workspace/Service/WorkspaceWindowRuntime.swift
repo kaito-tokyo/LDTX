@@ -5,11 +5,12 @@
 import CoreImage
 import CoreVideo
 import Foundation
+import LDTXBackgroundSegmentation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
-@_exported import LDTXWorkspaceAppletInterface
+import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 import OSLog
 import Observation
@@ -216,10 +217,7 @@ public final class WorkspaceWindowRuntime {
     )
   }
 
-  private func frameForVision(
-    _ vision: Ldtx_Workspace_V4_OcrVision
-  ) async throws -> WorkspaceVisionAnalysisFrame {
-    let componentID = vision.videoComponentInternalID
+  public func visionInputSize(componentID: UInt64) throws -> CGSize {
     guard
       let wrapper = definition.videoComponents.first(where: {
         (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
@@ -243,6 +241,16 @@ public final class WorkspaceWindowRuntime {
       height = max(1, Int((clock.height.double * 1080).rounded()))
     default: break
     }
+    return CGSize(width: width, height: height)
+  }
+
+  private func frameForVision(
+    _ vision: Ldtx_Workspace_V4_OcrVision
+  ) async throws -> WorkspaceVisionAnalysisFrame {
+    let componentID = vision.videoComponentInternalID
+    let size = try visionInputSize(componentID: componentID)
+    let width = Int(size.width)
+    let height = Int(size.height)
     guard let renderer = componentFrameRenderer else {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }

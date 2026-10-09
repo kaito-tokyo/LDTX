@@ -4,6 +4,7 @@
 
 import CoreImage
 import Foundation
+import LDTXProtos
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel

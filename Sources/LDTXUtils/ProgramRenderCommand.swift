@@ -7,7 +7,16 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import ImageIO
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXCapture
+import LDTXDiagnostics
+import LDTXProgram
+import LDTXVideoComposition
+import LDTXVideoRendering
+import LDTXWorkspaceAppletModel
+import LDTXYouTube
+import LDTXYouTubeAuth
+import LDTXYouTubeRTMPS
 import Metal
 import UniformTypeIdentifiers
 

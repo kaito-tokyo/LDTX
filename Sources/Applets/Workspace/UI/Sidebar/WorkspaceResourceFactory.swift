@@ -146,6 +146,25 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
+  static func makeCreateMlImageClassificationVision(id: UInt64, name: String, componentID: UInt64)
+    -> Ldtx_Workspace_V4_VisionWrapper
+  {
+    var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
+    trigger.intervalSeconds = .with {
+      $0.set(num: 5, den: 1)
+    }
+    var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
+    triggerWrapper.intervalTrigger = trigger
+    var vision = Ldtx_Workspace_V4_CreateMlImageClassificationVision()
+    vision.internalID = id
+    vision.displayName = name
+    vision.videoComponentInternalID = componentID
+    vision.triggers = [triggerWrapper]
+    var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+    wrapper.createMlImageClassificationVision = vision
+    return wrapper
+  }
+
   private static var gradientStartColor: Ldtx_Workspace_V4_Color {
     var color = Ldtx_Workspace_V4_Color()
     color.red = 1

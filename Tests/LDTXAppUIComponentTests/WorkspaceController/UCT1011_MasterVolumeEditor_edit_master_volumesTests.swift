@@ -3,10 +3,12 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
 import LDTXDeviceRegistry
+import LDTXProgramRuntime
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI

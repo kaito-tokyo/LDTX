@@ -10,7 +10,7 @@ import LDTXDeviceRegistry
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletInterface
+import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -254,15 +254,16 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
 
     let definitionChanges = Observations { storeService.definition }
-    self.definitionObservationTask = Task { @MainActor [weak windowRuntime] in
+    self.definitionObservationTask = Task { @MainActor [weak self] in
       var isInitialValue = true
       for await _ in definitionChanges {
-        guard !Task.isCancelled, windowRuntime != nil else { return }
+        guard !Task.isCancelled, let self, shutdownTask == nil else { return }
         guard !isInitialValue else {
           isInitialValue = false
           continue
         }
-        storeService.updateProgramRuntimes()
+        updateProgramRuntimes()
+        synchronizeVision()
       }
     }
 

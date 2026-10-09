@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct WorkspacePhysicalDeviceField: View {
@@ -26,22 +26,39 @@ struct WorkspacePhysicalDeviceField: View {
   }
 
   var body: some View {
-    WorkspaceSelectionField(
-      title: title, current: appletData.physicalDeviceID(for: internalID), options: options,
-      loaded: deviceRegistry.hasRefreshed,
-      loadError: isAudio ? deviceRegistry.errorMessage : nil,
-      clearTitle: "Remove Assignment", isEditable: isEditable && !storeService.isOutputActive,
-      refresh: { deviceRegistry.refresh() },
-      reportError: { storeService.reportError($0) },
-      commit: { proposed in
-        try applySelection(proposed)
-        storeService.synchronizeCaptureInputs(
-          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-        ) { _ in }
-        storeService.synchronizeAudioMonitor()
+    VStack(alignment: .leading) {
+      Picker(
+        title,
+        selection: Binding(
+          get: { appletData.physicalDeviceID(for: internalID) },
+          set: { proposed in
+            do {
+              try applySelection(proposed)
+              storeService.synchronizeCaptureInputs(
+                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+              ) { _ in }
+              storeService.synchronizeAudioMonitor()
+            } catch { storeService.reportError(error) }
+          })
+      ) {
+        Text("Unassigned").tag(WorkspacePhysicalDeviceID?.none)
+        ForEach(options) { option in
+          Text(option.name).tag(Optional(option.id))
+        }
+        if let selected = appletData.physicalDeviceID(for: internalID),
+          !options.contains(where: { $0.id == selected })
+        {
+          Text(deviceRegistry.hasRefreshed ? "Unavailable" : "Checking…")
+            .tag(Optional(selected))
+        }
       }
-    )
-    .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
+      .pickerStyle(.menu)
+      .disabled(!isEditable || storeService.isOutputActive)
+      .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
+      if isAudio, let message = deviceRegistry.errorMessage {
+        Text(message).font(.caption).foregroundStyle(.red)
+      }
+    }
   }
 
   func applySelection(_ proposed: WorkspacePhysicalDeviceID?) throws {

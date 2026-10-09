@@ -4,9 +4,13 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXCapture
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
 import Observation
 import QuickLookThumbnailing
 import SwiftUI
@@ -125,6 +129,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
         guard let self else { return }
         self.storeService.isInspectorVisible = !isCollapsed
         self.toolbarItems[.init("workspace.inspector.apply")]?.isHidden = isCollapsed
+        self.toolbarItems[.init("workspace.inspector.title")]?.isHidden = isCollapsed
         if !isCollapsed {
           let width = self.expandedInspectorWidth
           self.splitViewController.view.layoutSubtreeIfNeeded()
@@ -165,7 +170,8 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
       "workspace.sidebar", "workspace.stopOutput", "workspace.toggleOutput",
       "workspace.captureScreenshots", NSToolbarItem.Identifier.flexibleSpace.rawValue,
       NSToolbarItem.Identifier.inspectorTrackingSeparator.rawValue,
-      NSToolbarItem.Identifier.flexibleSpace.rawValue, "workspace.inspector.apply",
+      "workspace.inspector.title", NSToolbarItem.Identifier.flexibleSpace.rawValue,
+      "workspace.inspector.apply",
       "workspace.inspector",
     ].map { NSToolbarItem.Identifier($0) }
   }
@@ -205,6 +211,15 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
       label = "Capture Screenshot(s)"
       symbol = "camera"
       item.action = #selector(captureScreenshots)
+    case "workspace.inspector.title":
+      label = inspectorTitle
+      symbol = nil
+      let titleView = NSTextField(labelWithString: label)
+      titleView.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+      titleView.lineBreakMode = .byTruncatingTail
+      titleView.setAccessibilityLabel("Inspector title")
+      item.view = titleView
+      item.isHidden = !storeService.isInspectorVisible
     case "workspace.inspector":
       label = "Inspector"
       symbol = "sidebar.right"
@@ -217,7 +232,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
     default: return nil
     }
     item.label = label
-    if symbol == nil {
+    if symbol == nil && item.view == nil {
       item.title = label
       item.isBordered = true
     }
@@ -231,6 +246,13 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
 
   private func updateToolbarItems() {
     if !storeService.hasUnconfirmedChanges { pendingEditsPopover.close() }
+    if let item = toolbarItems[.init("workspace.inspector.title")],
+      let titleView = item.view as? NSTextField
+    {
+      item.label = inspectorTitle
+      titleView.stringValue = inspectorTitle
+      titleView.sizeToFit()
+    }
     toolbarItems[.init("workspace.stopOutput")]?.isEnabled = storeService.recordingState.canStop
     if let item = toolbarItems[.init("workspace.toggleOutput")] {
       let recording = storeService.recordingState == .recording
@@ -243,6 +265,26 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
     toolbarItems[.init("workspace.inspector.apply")]?.isEnabled =
       storeService.hasUnconfirmedChanges && !storeService.isOutputActive
       && !storeService.hasPendingSubmit
+  }
+
+  var inspectorTitle: String {
+    guard let kind = storeService.inspectorSelector?.kind else { return "Inspector" }
+    return switch kind {
+    case .invalid: "Inspector"
+    case .workspacePrograms: "Programs"
+    case .workspaceCanvas: "Canvas"
+    case .workspaceOutput: "Output"
+    case .audioInputDevice: "Audio Input Device"
+    case .vfxVideoComponent: "VFX Source"
+    case .solidColorFillVideoComponent: "Solid Color Fill"
+    case .linearGradientFillVideoComponent: "Linear Gradient Fill"
+    case .radialGradientFillVideoComponent: "Radial Gradient Fill"
+    case .conicGradientFillVideoComponent: "Conic Gradient Fill"
+    case .clockVideoComponent: "Clock"
+    case .testPatternVideoComponent: "Test Pattern"
+    case .ocrVision: "OCR Vision"
+    case .createMlImageClassificationVision: "Create ML Image Classification"
+    }
   }
 
   private func observeToolbarState() {

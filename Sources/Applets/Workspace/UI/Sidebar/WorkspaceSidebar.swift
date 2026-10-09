@@ -4,7 +4,9 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
@@ -128,7 +130,10 @@ public struct WorkspaceSidebar: View {
                     kind: .ocrVision, internalID: ocrVision.internalID))
             case .createMlImageClassificationVision(let classificationVision):
               Label(classificationVision.displayName, systemImage: "eye")
-                .disabled(true)
+                .tag(
+                  WorkspaceInspectorSelector(
+                    kind: .createMlImageClassificationVision,
+                    internalID: classificationVision.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -216,7 +221,6 @@ public struct WorkspaceSidebar: View {
       ) { _ in }
       storeService.synchronizeAudioMonitor()
     }
-    if sheet == .vision { storeService.synchronizeVision() }
   }
 
 }

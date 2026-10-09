@@ -142,3 +142,30 @@ extension Binding where Value == Ldtx_Workspace_V4_Rational32 {
       })
   }
 }
+
+/// Keeps both fraction fields editable without discarding invalid drafts.
+enum RationalFractionInput {
+  static func fields<Value: Rational32Value>(
+    for value: Value, defaultDenominator: UInt32
+  ) -> (numerator: String, denominator: String) {
+    let scaled = Int64(value.numerator) * Int64(defaultDenominator)
+    if value.denominator > 0, scaled % Int64(value.denominator) == 0,
+      let numerator = Int32(exactly: scaled / Int64(value.denominator))
+    {
+      return (String(numerator), String(defaultDenominator))
+    }
+    return (String(value.numerator), String(value.denominator))
+  }
+
+  static func parse<Value: Rational32Value>(
+    numerator: String, denominator: String, as: Value.Type
+  ) throws -> Value {
+    guard let n = Int32(numerator.trimmingCharacters(in: .whitespacesAndNewlines)),
+      let d = UInt32(denominator.trimmingCharacters(in: .whitespacesAndNewlines))
+    else { throw RationalInputError.invalidNumber }
+    guard d > 0 else { throw RationalInputError.zeroDenominator }
+    var result = Value()
+    result.set(num: n, den: d)
+    return result
+  }
+}

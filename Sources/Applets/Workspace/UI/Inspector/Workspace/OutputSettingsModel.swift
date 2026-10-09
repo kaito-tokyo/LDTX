@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 
 public struct LiveBroadcastSummary: Identifiable, Equatable, Sendable {
   public let id: String

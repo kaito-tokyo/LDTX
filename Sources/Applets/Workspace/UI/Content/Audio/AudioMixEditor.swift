@@ -1,7 +1,10 @@
+import AppKit
+import LDTXProgram
+import LDTXProgramRuntime
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 
 final class AudioMixEditor: NSViewController {
   private let storeService: WorkspaceStoreService

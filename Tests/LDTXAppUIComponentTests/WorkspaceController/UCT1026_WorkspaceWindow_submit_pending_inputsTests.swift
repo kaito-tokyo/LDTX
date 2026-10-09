@@ -4,7 +4,6 @@
 import AppKit
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Testing
 

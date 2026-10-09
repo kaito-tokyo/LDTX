@@ -2,22 +2,30 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXProtos
+import LDTXTaskQueue
+import LDTXWorkspaceAppletModel
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OcrVisionInspector: View {
   @Bindable var storeService: WorkspaceStoreService
   @Binding var vision: Ldtx_Workspace_V4_OcrVision
 
-  @State private var languages: String
-  @State private var customWords: String
-  @State private var minimumTextHeight: String
-  @State private var x: String
-  @State private var y: String
-  @State private var width: String
-  @State private var height: String
-  @State private var validatorID = UUID()
-  @State private var submittedInputs: [String] = []
+  @State var languages: String
+  @State var customWords: String
+  @State var minimumTextHeight: String
+  @State var x: String
+  @State var xDenominator: String
+  @State var y: String
+  @State var yDenominator: String
+  @State var width: String
+  @State var widthDenominator: String
+  @State var height: String
+  @State var heightDenominator: String
+  @State var validatorID = UUID()
+  @State var submittedInputs: [String] = []
 
   init(storeService: WorkspaceStoreService, vision: Binding<Ldtx_Workspace_V4_OcrVision>) {
     self.storeService = storeService
@@ -27,36 +35,41 @@ struct OcrVisionInspector: View {
     self._customWords = State(initialValue: value.customWords.joined(separator: ", "))
     self._minimumTextHeight = State(
       initialValue: RationalFormatStyle().format(value.minimumTextHeight))
-    self._x = State(initialValue: RationalFormatStyle().format(value.regionOfInterest.x))
-    self._y = State(initialValue: RationalFormatStyle().format(value.regionOfInterest.y))
-    self._width = State(
-      initialValue: RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(
-        value.regionOfInterest.width))
-    self._height = State(
-      initialValue: RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(
-        value.regionOfInterest.height))
+    let profile = WorkspaceCanvasTarget.landscape.defaultProfile
+    let xFields = RationalFractionInput.fields(
+      for: value.regionOfInterest.x, defaultDenominator: UInt32(profile.width))
+    self._x = State(initialValue: xFields.numerator)
+    self._xDenominator = State(initialValue: xFields.denominator)
+    let yFields = RationalFractionInput.fields(
+      for: value.regionOfInterest.y, defaultDenominator: UInt32(profile.height))
+    self._y = State(initialValue: yFields.numerator)
+    self._yDenominator = State(initialValue: yFields.denominator)
+    let widthFields = RationalFractionInput.fields(
+      for: value.regionOfInterest.width, defaultDenominator: UInt32(profile.width))
+    self._width = State(initialValue: widthFields.numerator)
+    self._widthDenominator = State(initialValue: widthFields.denominator)
+    let heightFields = RationalFractionInput.fields(
+      for: value.regionOfInterest.height, defaultDenominator: UInt32(profile.height))
+    self._height = State(initialValue: heightFields.numerator)
+    self._heightDenominator = State(initialValue: heightFields.denominator)
   }
 
   var body: some View {
     Form {
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
-        WorkspaceSelectionField(
-          title: "Video Component", current: vision.videoComponentInternalIDIfPresent,
-          options: storeService.videoComponentOptions,
-          clearTitle: "Remove Assignment", isEditable: !storeService.isOutputActive,
-          reportError: { storeService.reportError($0) },
-          commit: { selected in
-            guard !storeService.isOutputActive,
-              selected == nil
-                || storeService.videoComponentOptions.contains(where: { $0.id == selected })
-            else {
-              throw WorkspaceSelectionError(
-                message: "The input or Vision is no longer available for editing.")
-            }
-            vision.videoComponentInternalIDIfPresent = selected
-            storeService.synchronizeVision()
-          })
+        Picker("Video Component", selection: $vision.videoComponentInternalIDIfPresent) {
+          Text("Unassigned").tag(UInt64?.none)
+          ForEach(storeService.videoComponentOptions) { option in
+            Text(option.name).tag(Optional(option.id))
+          }
+          if let selected = vision.videoComponentInternalIDIfPresent,
+            !storeService.videoComponentOptions.contains(where: { $0.id == selected })
+          {
+            Text("Unavailable").tag(Optional(selected))
+          }
+        }
+        .pickerStyle(.menu)
         Picker("Update Interval", selection: $vision.triggers) {
           Text("Manual").tag([Ldtx_Workspace_V4_VisionTriggerWrapper]())
           Text("Every 1 Second").tag([intervalTrigger(seconds: 1)])
@@ -84,15 +97,26 @@ struct OcrVisionInspector: View {
       }
       .disabled(storeService.isOutputActive)
       Section("Region of Interest") {
-        regionField("X", text: $x)
-        regionField("Y", text: $y)
-        regionField(
-          "Width", text: $width)
-        regionField(
-          "Height", text: $height)
-        Text("Coordinates are normalized from 0 to 1.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        LabeledContent("X") {
+          Rational32TextField(
+            numerator: $x, denominator: $xDenominator,
+            accessibilityLabel: "X", onSubmit: submitEdits)
+        }
+        LabeledContent("Y") {
+          Rational32TextField(
+            numerator: $y, denominator: $yDenominator,
+            accessibilityLabel: "Y", onSubmit: submitEdits)
+        }
+        LabeledContent("Width") {
+          Rational32TextField(
+            numerator: $width, denominator: $widthDenominator,
+            accessibilityLabel: "Width", onSubmit: submitEdits)
+        }
+        LabeledContent("Height") {
+          Rational32TextField(
+            numerator: $height, denominator: $heightDenominator,
+            accessibilityLabel: "Height", onSubmit: submitEdits)
+        }
       }
       .disabled(storeService.isOutputActive)
       Section("Recognition Result") {
@@ -113,7 +137,10 @@ struct OcrVisionInspector: View {
         id: validatorID, hasChanges: { inputs != submittedInputs },
         submit: { try commitEdits() }
       ) {
-        _ = try Self.validatedRegion(x: x, y: y, width: width, height: height)
+        _ = try Self.validatedRegion(
+          x: x, y: y, width: width, height: height, xDenominator: xDenominator,
+          yDenominator: yDenominator,
+          widthDenominator: widthDenominator, heightDenominator: heightDenominator)
         _ = try validatedMinimumTextHeight()
       }
     }
@@ -121,31 +148,29 @@ struct OcrVisionInspector: View {
     .onDisappear { storeService.removeInspectorEditValidator(id: validatorID) }
   }
 
-  private func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
+  func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
     var trigger = Ldtx_Workspace_V4_VisionTriggerWrapper()
     trigger.intervalTrigger.intervalSeconds.set(num: seconds, den: 1)
     return trigger
   }
 
-  private func regionField(
-    _ title: String, text: Binding<String>
-  ) -> some View {
-    LabeledContent(title) {
-      TextField(title, text: text)
-        .multilineTextAlignment(.trailing)
-        .frame(width: 90)
-    }
+  var inputs: [String] {
+    [
+      languages, customWords, minimumTextHeight, x, xDenominator, y, yDenominator, width,
+      widthDenominator, height, heightDenominator,
+    ]
   }
 
-  private var inputs: [String] { [languages, customWords, minimumTextHeight, x, y, width, height] }
-
-  private func submitEdits() {
+  func submitEdits() {
     guard !storeService.isOutputActive else { return }
     do { try commitEdits() } catch { storeService.reportInputValidationError(error) }
   }
 
-  private func commitEdits() throws {
-    let region = try Self.validatedRegion(x: x, y: y, width: width, height: height)
+  func commitEdits() throws {
+    let region = try Self.validatedRegion(
+      x: x, y: y, width: width, height: height, xDenominator: xDenominator,
+      yDenominator: yDenominator,
+      widthDenominator: widthDenominator, heightDenominator: heightDenominator)
     let minimumHeight = try validatedMinimumTextHeight()
     var updated = vision
     updated.recognitionLanguages = Self.commaSeparatedValues(languages)
@@ -157,17 +182,25 @@ struct OcrVisionInspector: View {
     storeService.refreshUnconfirmedChanges()
   }
 
-  static func validatedRegion(x: String, y: String, width: String, height: String) throws
+  static func validatedRegion(
+    x: String, y: String, width: String, height: String,
+    xDenominator: String = "1", yDenominator: String = "1",
+    widthDenominator: String = "1", heightDenominator: String = "1"
+  ) throws
     -> Ldtx_Workspace_V4_VisionRegionOfInterest
   {
     do {
       var region = Ldtx_Workspace_V4_VisionRegionOfInterest()
-      region.x = try RationalParseStrategy().parse(x)
-      region.y = try RationalParseStrategy().parse(y)
-      region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-        .parse(width)
-      region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-        .parse(height)
+      region.x = try RationalFractionInput.parse(
+        numerator: x, denominator: xDenominator, as: Ldtx_Workspace_V4_Rational32.self)
+      region.y = try RationalFractionInput.parse(
+        numerator: y, denominator: yDenominator, as: Ldtx_Workspace_V4_Rational32.self)
+      region.width = try RationalFractionInput.parse(
+        numerator: width, denominator: widthDenominator,
+        as: Ldtx_Workspace_V4_Rational32DefaultOne.self)
+      region.height = try RationalFractionInput.parse(
+        numerator: height, denominator: heightDenominator,
+        as: Ldtx_Workspace_V4_Rational32DefaultOne.self)
       try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
       return region
     } catch {
@@ -176,7 +209,7 @@ struct OcrVisionInspector: View {
     }
   }
 
-  private func validatedMinimumTextHeight() throws -> Ldtx_Workspace_V4_Rational32 {
+  func validatedMinimumTextHeight() throws -> Ldtx_Workspace_V4_Rational32 {
     let value = try RationalParseStrategy().parse(minimumTextHeight)
     guard value.double.isFinite, (0...1).contains(value.double) else {
       throw WorkspaceSelectionError(message: "Minimum Text Height must be between 0 and 1.")
@@ -184,7 +217,7 @@ struct OcrVisionInspector: View {
     return value
   }
 
-  private static func commaSeparatedValues(_ text: String) -> [String] {
+  static func commaSeparatedValues(_ text: String) -> [String] {
     text.split(separator: ",").map {
       $0.trimmingCharacters(in: .whitespacesAndNewlines)
     }.filter { !$0.isEmpty }

@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXProtos
+import LDTXTaskQueue
+import LDTXWorkspaceAppletModel
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct VideoComponentProgramLayers: View {

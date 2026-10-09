@@ -6,7 +6,6 @@ import Foundation
 import LDTXAppletSupport
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat

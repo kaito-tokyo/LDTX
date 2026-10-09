@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXBackgroundSegmentation
 import LDTXProtos
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
 import Testing
 
 @Suite

@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXProtos
 
 class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDelegate {
   static let dragRegionHeight: CGFloat = 28

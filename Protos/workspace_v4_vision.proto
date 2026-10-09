@@ -14,7 +14,7 @@ message VisionWrapper {
     // The OCR Vision definition. Mutually exclusive with the other fields.
     OcrVision ocr_vision = 1;
     // The Create ML Image Classification Vision definition. Mutually exclusive with the other fields.
-    CreateMLImageClassificationVision create_ml_image_classification_vision = 2;
+    CreateMlImageClassificationVision create_ml_image_classification_vision = 2;
   }
 }
 
@@ -74,7 +74,7 @@ message OcrVision {
 }
 
 // An image-analysis request that classifies an image using a Create ML model.
-message CreateMLImageClassificationVision {
+message CreateMlImageClassificationVision {
   // An LDTXWorkspaceID for this entity.
   uint64 internal_id = 1 [default = 0];
   // The name of this Vision shown in the Workspace sidebar.

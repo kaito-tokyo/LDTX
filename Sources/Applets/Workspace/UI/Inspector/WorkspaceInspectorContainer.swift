@@ -4,7 +4,9 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 #if DEBUG
@@ -143,6 +145,15 @@ public struct WorkspaceInspectorContainer: View {
       } else {
         emptyInspector
       }
+    case .createMlImageClassificationVision:
+      if let internalID = selector.internalID,
+        let vision = $storeService.createMlImageClassificationVision(internalID: internalID)
+      {
+        CreateMlImageClassificationVisionInspector(storeService: storeService, vision: vision)
+      } else {
+        emptyInspector
+      }
+
     }
   }
 

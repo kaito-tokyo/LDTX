@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXProtos
 import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
@@ -32,21 +33,18 @@ struct WorkspaceCanvasInspector: View {
           .multilineTextAlignment(.trailing)
           .frame(width: 110)
       }
-      WorkspaceSelectionField(
-        title: "PTS Master VFX Source", current: ptsMasterBinding.wrappedValue,
-        options: videoDevices.map { .init(id: $0.internalID, name: $0.displayName) },
-        emptyLabel: "Automatic", clearTitle: "Use Automatic Timing",
-        isEditable: !storeService.isOutputActive,
-        reportError: { storeService.reportError($0) },
-        commit: { selected in
-          guard !storeService.isOutputActive,
-            selected == nil || videoDevices.contains(where: { $0.internalID == selected })
-          else {
-            throw WorkspaceSelectionError(
-              message: "Select an available timing input while output is stopped.")
-          }
-          ptsMasterBinding.wrappedValue = selected
-        })
+      Picker("PTS Master VFX Source", selection: ptsMasterBinding) {
+        Text("Automatic").tag(UInt64?.none)
+        ForEach(videoDevices, id: \.internalID) { device in
+          Text(device.displayName).tag(Optional(device.internalID))
+        }
+        if let selected = ptsMasterBinding.wrappedValue,
+          !videoDevices.contains(where: { $0.internalID == selected })
+        {
+          Text("Unavailable").tag(Optional(selected))
+        }
+      }
+      .pickerStyle(.menu)
     }
     .disabled(storeService.isOutputActive)
 

@@ -320,20 +320,37 @@ public enum WorkspaceV4IntegrityValidator {
     _ wrapper: Ldtx_Workspace_V4_VisionWrapper,
     componentIDs: Set<UInt64>
   ) throws {
-    guard case .ocrVision(let vision)? = wrapper.vision else {
+    let inputID: UInt64
+    let triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper]
+    let region: Ldtx_Workspace_V4_VisionRegionOfInterest?
+    let minimumTextHeight: Ldtx_Workspace_V4_Rational32?
+    switch wrapper.vision {
+    case .ocrVision(let vision):
+      guard vision.hasVideoComponentInternalID else {
+        throw WorkspaceV4IntegrityError.missingVisionVideoComponent
+      }
+      inputID = vision.videoComponentInternalID
+      triggers = vision.triggers
+      region = vision.hasRegionOfInterest ? vision.regionOfInterest : nil
+      minimumTextHeight = vision.hasMinimumTextHeight ? vision.minimumTextHeight : nil
+    case .createMlImageClassificationVision(let vision):
+      guard vision.hasVideoComponentInternalID else {
+        throw WorkspaceV4IntegrityError.missingVisionVideoComponent
+      }
+      inputID = vision.videoComponentInternalID
+      triggers = vision.triggers
+      region = vision.hasRegionOfInterest ? vision.regionOfInterest : nil
+      minimumTextHeight = nil
+    case nil:
       throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
-    guard vision.hasVideoComponentInternalID else {
-      throw WorkspaceV4IntegrityError.missingVisionVideoComponent
-    }
-    let inputID = vision.videoComponentInternalID
     guard componentIDs.contains(inputID) else {
       throw WorkspaceV4IntegrityError.missingVideoComponent(inputID)
     }
-    if vision.hasMinimumTextHeight {
-      try validateRationals([vision.minimumTextHeight])
+    if let minimumTextHeight {
+      try validateRationals([minimumTextHeight])
     }
-    for trigger in vision.triggers {
+    for trigger in triggers {
       guard case .intervalTrigger(let interval)? = trigger.trigger else {
         throw WorkspaceV4IntegrityError.missingConcreteDefinition
       }
@@ -352,11 +369,11 @@ public enum WorkspaceV4IntegrityValidator {
         throw WorkspaceV4IntegrityError.invalidVisionInterval
       }
     }
-    if vision.hasRegionOfInterest {
-      try validateRegionOfInterest(vision.regionOfInterest)
+    if let region {
+      try validateRegionOfInterest(region)
     }
-    if vision.hasMinimumTextHeight {
-      guard unitInterval(vision.minimumTextHeight)
+    if let minimumTextHeight {
+      guard unitInterval(minimumTextHeight)
       else {
         throw WorkspaceV4IntegrityError.invalidMinimumTextHeight
       }
@@ -455,10 +472,10 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .missingVfxSource(let id): "VFX Source \(id) referenced by the PTS master is missing."
     case .missingAudioInputDevice(let id):
       "Audio device \(id) referenced by preferences is missing."
-    case .missingVisionVideoComponent: "OCR must reference a Video Component."
+    case .missingVisionVideoComponent: "Vision must reference a Video Component."
     case .invalidVisionInterval: "OCR intervals must be finite and at least 0.1 seconds."
     case .invalidVisionRegionOfInterest:
-      "The OCR region must have positive dimensions and fit within the image."
+      "The Vision region must have positive dimensions and fit within the image."
     case .invalidMinimumTextHeight: "Minimum text height must be between 0 and 1."
     case .unsupportedOutputProfile(let profile): "The output profile ‘\(profile)’ is unsupported."
     case .unsupportedFrameRate(let rate): "The frame rate \(rate) is unsupported."

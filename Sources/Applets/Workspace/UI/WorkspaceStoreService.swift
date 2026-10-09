@@ -4,8 +4,10 @@
 
 import Foundation
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
+import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 import Observation
 
 @MainActor
@@ -172,10 +174,6 @@ public final class WorkspaceStoreService {
   }
   @ObservationIgnored public var appletData = WorkspaceAppletData()
   @ObservationIgnored public var audioPeakMeter = ProgramAudioPeakMeter()
-
-  public func synchronizeVision() {
-    runtimeActions?.synchronizeVision()
-  }
 
   public func synchronizeAudioMonitor() {
     runtimeActions?.synchronizeAudioMonitor()
