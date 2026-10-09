@@ -51,12 +51,9 @@ public final class WorkspaceStoreService {
       do {
         try validateInspectorEdits()
         storedInspectorSelector = newValue
-        ocrRegionDrafts.removeAll()
       } catch { reportError(error) }
     }
   }
-  var ocrRegionDrafts: [UInt64: [String: String]] = [:]
-  private var inspectorEditErrors: [UInt64: String] = [:]
   @ObservationIgnored private var contentEditValidators: [() throws -> Void] = []
 
   func registerContentEditValidator(_ validate: @escaping () throws -> Void) {
@@ -65,41 +62,17 @@ public final class WorkspaceStoreService {
 
   public func validateInspectorEdits() throws {
     for validate in contentEditValidators { try validate() }
-    if let message = inspectorEditErrors.sorted(by: { $0.key < $1.key }).first?.value {
-      throw WorkspaceSelectionError(message: message)
-    }
+    for validate in inspectorEditValidators.values { try validate() }
   }
 
-  func editOcrRegion(internalID: UInt64, field: String, text: String) {
-    guard !isOutputActive else { return }
-    ocrRegionDrafts[internalID, default: [:]][field] = text
-    do {
-      guard
-        let index = definition.visions.firstIndex(where: { $0.ocrVision.internalID == internalID }),
-        case .ocrVision(var vision) = definition.visions[index].vision
-      else { throw WorkspaceSelectionError(message: "The OCR Vision is no longer available.") }
-      var region = vision.regionOfInterest
-      for (name, text) in ocrRegionDrafts[internalID, default: [:]] {
-        switch name {
-        case "X": region.x = try RationalParseStrategy().parse(text)
-        case "Y": region.y = try RationalParseStrategy().parse(text)
-        case "Width":
-          region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-            .parse(text)
-        case "Height":
-          region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-            .parse(text)
-        default: break
-        }
-      }
-      try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
-      vision.regionOfInterest = region
-      definition.visions[index].vision = .ocrVision(vision)
-      inspectorEditErrors.removeValue(forKey: internalID)
-    } catch {
-      inspectorEditErrors[internalID] =
-        "Correct the OCR ROI before leaving this Inspector. " + error.localizedDescription
-    }
+  @ObservationIgnored private var inspectorEditValidators: [UUID: () throws -> Void] = [:]
+
+  func registerInspectorEditValidator(id: UUID, _ validate: @escaping () throws -> Void) {
+    inspectorEditValidators[id] = validate
+  }
+
+  func removeInspectorEditValidator(id: UUID) {
+    inspectorEditValidators.removeValue(forKey: id)
   }
 
   @ObservationIgnored public var documentOutputStateDidChange: (() -> Void)?

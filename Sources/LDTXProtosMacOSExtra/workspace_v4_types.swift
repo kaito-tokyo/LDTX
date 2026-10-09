@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXProtos
+import SwiftUI
 
 extension Ldtx_Workspace_V4_Color {
   /// Interprets RGBA components, including protobuf defaults, as extended sRGB.
@@ -24,5 +25,17 @@ extension Ldtx_Workspace_V4_Color {
     green = Float(converted.greenComponent)
     blue = Float(converted.blueComponent)
     alpha = Float(converted.alphaComponent)
+  }
+}
+
+extension Ldtx_Workspace_V4_Color {
+  /// Interprets RGBA components, including protobuf defaults, as extended sRGB for SwiftUI.
+  public var extendedSRGBSwiftUIColor: SwiftUI.Color? {
+    extendedSRGBNSColor.map { SwiftUI.Color(nsColor: $0) }
+  }
+
+  /// Converts a SwiftUI color to extended sRGB and sets all four components.
+  public init?(extendedSRGBSwiftUIColor color: SwiftUI.Color) {
+    self.init(extendedSRGBNSColor: NSColor(color))
   }
 }
