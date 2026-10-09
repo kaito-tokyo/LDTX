@@ -123,6 +123,9 @@ public struct WorkspaceSidebar: View {
                 .tag(
                   WorkspaceInspectorSelector(
                     kind: .ocrVision, internalID: ocrVision.internalID))
+            case .createMlImageClassificationVision(let classificationVision):
+              Label(classificationVision.displayName, systemImage: "eye")
+                .disabled(true)
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }

@@ -94,6 +94,10 @@ struct OcrVisionInspector: View {
           .foregroundStyle(.secondary)
       }
       .disabled(storeService.isOutputActive)
+      Section {
+        Button("Apply") { submitEdits() }
+      }
+      .disabled(storeService.isOutputActive)
       Section("Recognition Result") {
         if let failure = storeService.visionFailureMessages[vision.internalID] {
           Text(failure).foregroundStyle(.red)
@@ -105,24 +109,7 @@ struct OcrVisionInspector: View {
       }
     }
     .formStyle(.grouped)
-    .onChange(of: languages) {
-      guard !storeService.isOutputActive else { return }
-      vision.recognitionLanguages = Self.commaSeparatedValues(languages)
-    }
-    .onChange(of: customWords) {
-      guard !storeService.isOutputActive else { return }
-      vision.customWords = Self.commaSeparatedValues(customWords)
-    }
-    .onChange(of: minimumTextHeight) {
-      guard !storeService.isOutputActive,
-        let value = try? validatedMinimumTextHeight()
-      else { return }
-      vision.minimumTextHeight = value
-    }
-    .onChange(of: x) { updateRegion() }
-    .onChange(of: y) { updateRegion() }
-    .onChange(of: width) { updateRegion() }
-    .onChange(of: height) { updateRegion() }
+    .onSubmit { submitEdits() }
     .onAppear {
       storeService.registerInspectorEditValidator(id: validatorID) {
         _ = try Self.validatedRegion(x: x, y: y, width: width, height: height)
@@ -148,11 +135,20 @@ struct OcrVisionInspector: View {
     }
   }
 
-  private func updateRegion() {
-    guard !storeService.isOutputActive,
-      let region = try? Self.validatedRegion(x: x, y: y, width: width, height: height)
-    else { return }
-    vision.regionOfInterest = region
+  private func submitEdits() {
+    guard !storeService.isOutputActive else { return }
+    do {
+      let region = try Self.validatedRegion(x: x, y: y, width: width, height: height)
+      let minimumHeight = try validatedMinimumTextHeight()
+      var updated = vision
+      updated.recognitionLanguages = Self.commaSeparatedValues(languages)
+      updated.customWords = Self.commaSeparatedValues(customWords)
+      updated.minimumTextHeight = minimumHeight
+      updated.regionOfInterest = region
+      vision = updated
+    } catch {
+      storeService.reportError(error)
+    }
   }
 
   static func validatedRegion(x: String, y: String, width: String, height: String) throws

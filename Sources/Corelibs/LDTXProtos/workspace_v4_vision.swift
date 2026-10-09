@@ -6,12 +6,15 @@ extension Ldtx_Workspace_V4_VisionWrapper {
   public var displayName: String? {
     switch vision {
     case .ocrVision(let value): value.hasDisplayName ? value.displayName : nil
+    case .createMlImageClassificationVision(let value):
+      value.hasDisplayName ? value.displayName : nil
     case nil: nil
     }
   }
   public var internalID: UInt64? {
     switch vision {
     case .ocrVision(let value): value.hasInternalID ? value.internalID : nil
+    case .createMlImageClassificationVision(let value): value.hasInternalID ? value.internalID : nil
     case nil: nil
     }
   }
@@ -20,6 +23,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
 extension Ldtx_Workspace_V4_VisionWrapper: Identifiable {
   public enum ID: Hashable {
     case ocrVision(UInt64)
+    case createMlImageClassificationVision(UInt64)
     case invalid
   }
 
@@ -27,17 +31,21 @@ extension Ldtx_Workspace_V4_VisionWrapper: Identifiable {
     guard internalID != nil else { return .invalid }
     return switch vision {
     case .ocrVision(let vision): .ocrVision(vision.internalID)
+    case .createMlImageClassificationVision(let vision):
+      .createMlImageClassificationVision(vision.internalID)
     case nil: .invalid
     }
   }
 }
 
 extension Ldtx_Workspace_V4_OcrVision {
-  /// The referenced Video Component ID, or nil when unassigned.
   public var videoComponentInternalIDIfPresent: UInt64? {
-    get { videoComponentInternalID == 0 ? nil : videoComponentInternalID }
+    get {
+      guard hasVideoComponentInternalID, videoComponentInternalID != 0 else { return nil }
+      return videoComponentInternalID
+    }
     set {
-      if let newValue {
+      if let newValue, newValue != 0 {
         videoComponentInternalID = newValue
       } else {
         clearVideoComponentInternalID()
@@ -47,11 +55,13 @@ extension Ldtx_Workspace_V4_OcrVision {
 }
 
 extension Ldtx_Workspace_V4_CreateMLImageClassificationVision {
-  /// The referenced Video Component ID, or nil when unassigned.
   public var videoComponentInternalIDIfPresent: UInt64? {
-    get { videoComponentInternalID == 0 ? nil : videoComponentInternalID }
+    get {
+      guard hasVideoComponentInternalID, videoComponentInternalID != 0 else { return nil }
+      return videoComponentInternalID
+    }
     set {
-      if let newValue {
+      if let newValue, newValue != 0 {
         videoComponentInternalID = newValue
       } else {
         clearVideoComponentInternalID()
