@@ -346,7 +346,7 @@ Content contains only the fixed previews and tabbed editor; Program selection
 has no reserved row, horizontal scrolling, or custom layout sizing.
 
 The Program candidates are static entries in the Workspace definition. The
-Picker uses matching optional `UInt64` selection and tag values and reads the
+Picker uses matching optional `Int64` selection and tag values and reads the
 resolved Program directly from model state. Its setter uses the existing
 dispatcher; failed changes retain the model selection and report the error through
 the Workspace standard error sheet. No independent selection state is kept. With an empty Program

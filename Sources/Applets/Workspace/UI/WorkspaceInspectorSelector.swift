@@ -23,9 +23,9 @@ public enum WorkspaceInspectorKind: Int, Sendable {
 
 public struct WorkspaceInspectorSelector: Hashable, Sendable {
   public let kind: WorkspaceInspectorKind
-  public let internalID: UInt64?
+  public let internalID: Int64?
 
-  public init(kind: WorkspaceInspectorKind, internalID: UInt64? = nil) {
+  public init(kind: WorkspaceInspectorKind, internalID: Int64? = nil) {
     self.kind = kind
     self.internalID = internalID
   }
@@ -39,9 +39,9 @@ public final class WorkspaceInspectorSelectorRepresentation: NSObject, NSSecureC
   public static var supportsSecureCoding: Bool { true }
 
   public let kindID: Int
-  public let internalID: UInt64?
+  public let internalID: Int64?
 
-  public init(kindID: Int, internalID: UInt64?) {
+  public init(kindID: Int, internalID: Int64?) {
     self.kindID = kindID
     self.internalID = internalID
     super.init()
@@ -57,7 +57,7 @@ public final class WorkspaceInspectorSelectorRepresentation: NSObject, NSSecureC
     kindID = coder.decodeInteger(forKey: "kindID")
     internalID =
       coder.containsValue(forKey: "internalID")
-      ? UInt64(bitPattern: coder.decodeInt64(forKey: "internalID"))
+      ? coder.decodeInt64(forKey: "internalID")
       : nil
     super.init()
   }
@@ -65,7 +65,7 @@ public final class WorkspaceInspectorSelectorRepresentation: NSObject, NSSecureC
   public func encode(with coder: NSCoder) {
     coder.encode(kindID, forKey: "kindID")
     if let internalID {
-      coder.encode(Int64(bitPattern: internalID), forKey: "internalID")
+      coder.encode(internalID, forKey: "internalID")
     }
   }
 }

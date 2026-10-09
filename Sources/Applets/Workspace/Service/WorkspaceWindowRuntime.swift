@@ -28,25 +28,25 @@ private let workspaceV4OperationLogger = Logger(
 public final class WorkspaceWindowRuntime {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
+  private let physicalDeviceIDsProvider: () -> [Int64: WorkspacePhysicalDeviceID]
   @ObservationIgnored private var componentFrameRenderer: VideoComponentFrameRenderer?
   private let localStateProvider: () -> WorkspaceLocalState
-  private let selectProgramHandler: (UInt64?) -> Void
+  private let selectProgramHandler: (Int64?) -> Void
   public private(set) var landscapeRuntime: ProgramRuntime?
   public private(set) var portraitRuntime: ProgramRuntime?
   let internalIDGenerator = WorkspaceInternalIDGenerator()
   public private(set) var recordingState: WorkspaceRecordingState = .idle
-  public private(set) var visionFailureMessages: [UInt64: String] = [:]
-  public private(set) var visionResults: [UInt64: String] = [:]
-  var visionArchiveHandler: ((UInt64, CIImage, String) -> Void)?
+  public private(set) var visionFailureMessages: [Int64: String] = [:]
+  public private(set) var visionResults: [Int64: String] = [:]
+  var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
 
   public init(
     persistence: WorkspaceV4PersistenceCoordinator,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    physicalDeviceIDs: @escaping () -> [UInt64: WorkspacePhysicalDeviceID] = { [:] },
+    physicalDeviceIDs: @escaping () -> [Int64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
-    selectProgram: @escaping (UInt64?) -> Void = { _ in }
+    selectProgram: @escaping (Int64?) -> Void = { _ in }
   ) {
     self.persistenceCoordinator = persistence
     self.captureSessionCoordinator = captureSessionCoordinator
@@ -55,7 +55,7 @@ public final class WorkspaceWindowRuntime {
     self.selectProgramHandler = selectProgram
   }
 
-  var physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
+  var physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
 
   public var workspace: WorkspaceV4Bundle { persistenceCoordinator.workspace }
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
@@ -89,7 +89,7 @@ public final class WorkspaceWindowRuntime {
     try replaceWorkspace(editedWorkspace)
     updateRuntimes()
   }
-  var selectedProgramInternalID: UInt64? {
+  var selectedProgramInternalID: Int64? {
     get {
       let programs = definition.programs
       guard let selectedID = localStateProvider().selectedProgramInternalID,
@@ -121,7 +121,7 @@ public final class WorkspaceWindowRuntime {
     updateRuntime(portraitRuntime, target: .portrait)
   }
 
-  public func removeProgram(internalID: UInt64) throws {
+  public func removeProgram(internalID: Int64) throws {
     var workspace = self.workspace
     workspace.definition.programs.removeAll { $0.internalID == internalID }
     guard workspace.definition.programs.count != self.workspace.definition.programs.count else {
@@ -217,7 +217,7 @@ public final class WorkspaceWindowRuntime {
     )
   }
 
-  public func visionInputSize(componentID: UInt64) throws -> CGSize {
+  public func visionInputSize(componentID: Int64) throws -> CGSize {
     guard
       let wrapper = definition.videoComponents.first(where: {
         (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
@@ -275,11 +275,11 @@ extension WorkspaceWindowRuntime: WorkspaceWindowRuntimeProtocol {}
 public enum WorkspaceRuntimeError: Error, LocalizedError, Equatable, Sendable {
   case invalidAudioChannelGain
   case invalidAudioMasterVolume
-  case missingVideoLayer(UInt64)
-  case missingProgram(UInt64)
-  case missingVision(UInt64)
-  case missingResource(UInt64)
-  case resourceInUse(UInt64)
+  case missingVideoLayer(Int64)
+  case missingProgram(Int64)
+  case missingVision(Int64)
+  case missingResource(Int64)
+  case resourceInUse(Int64)
 
   public var errorDescription: String? {
     switch self {

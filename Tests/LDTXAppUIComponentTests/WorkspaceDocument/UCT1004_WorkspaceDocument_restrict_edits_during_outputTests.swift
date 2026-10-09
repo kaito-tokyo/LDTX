@@ -37,7 +37,7 @@ extension AppUIComponentTestSuite {
       document.storeService.definition.programs = [program]
       document.storeService.definition.videoComponents = [1, 2, 3].map { id in
         var device = Ldtx_Workspace_V4_VfxSourceComponent()
-        device.internalID = UInt64(id)
+        device.internalID = Int64(id)
         device.displayName = "Camera \(id)"
         var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
         wrapper.vfxSource = device
@@ -58,7 +58,7 @@ extension AppUIComponentTestSuite {
       try document.storeService.commitLayerOrder([1, 3, 2], programID: 101, target: .portrait)
       #expect(document.isDocumentEdited)
       let reordered = document.storeService.preferences
-      for rejected: [UInt64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
+      for rejected: [Int64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
         #expect(throws: WorkspaceSelectionError.self) {
           try document.storeService.commitLayerOrder(rejected, programID: 101, target: .landscape)
         }

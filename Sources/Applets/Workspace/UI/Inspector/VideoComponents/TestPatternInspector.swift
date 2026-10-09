@@ -7,11 +7,11 @@ import SwiftUI
 
 struct TestPatternInspector: View {
   let storeService: WorkspaceStoreService
-  let internalID: UInt64
+  let internalID: Int64
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: .testPattern(internalID))
+      VideoComponentProgramLayers(storeService: storeService, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)

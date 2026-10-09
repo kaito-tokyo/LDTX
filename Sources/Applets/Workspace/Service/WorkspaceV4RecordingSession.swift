@@ -37,7 +37,7 @@ public final class WorkspaceV4RecordingSession {
   public typealias State = WorkspaceRecordingState
 
   private let windowRuntime: WorkspaceWindowRuntime
-  private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
+  private let physicalDeviceIDsProvider: () -> [Int64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
@@ -65,7 +65,7 @@ public final class WorkspaceV4RecordingSession {
 
   public init(
     windowRuntime: WorkspaceWindowRuntime,
-    physicalDeviceIDs: @escaping () -> [UInt64: WorkspacePhysicalDeviceID] = { [:] },
+    physicalDeviceIDs: @escaping () -> [Int64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
@@ -500,7 +500,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private nonisolated static func archiveVisionResult(
-    internalID: UInt64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
+    internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
     packageDirectory: URL
   ) {
     let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
@@ -540,7 +540,7 @@ public final class WorkspaceV4RecordingSession {
     return preferences(windowRuntime.preferences.landscapeProgramPreferences[id] ?? .init())
   }
 
-  private var selectedProgramInternalID: UInt64? {
+  private var selectedProgramInternalID: Int64? {
     let programs = windowRuntime.definition.programs
     guard let selectedID = localStateProvider().selectedProgramInternalID,
       programs.contains(where: { $0.internalID == selectedID })
@@ -548,7 +548,7 @@ public final class WorkspaceV4RecordingSession {
     return selectedID
   }
 
-  private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
+  private func portraitPreferences(for programInternalID: Int64) -> ProgramPreferences {
     preferences(windowRuntime.preferences.portraitProgramPreferences[programInternalID] ?? .init())
   }
 
@@ -637,11 +637,11 @@ public final class WorkspaceV4RecordingSession {
     }
     let audioInputIDs = Set(
       configurations.flatMap { configuration in
-        configuration.audioChannels.compactMap { channel -> UInt64? in
+        configuration.audioChannels.compactMap { channel -> Int64? in
           guard case .inputAudioDevice(let input) = channel.component,
             let inputDeviceID = input.inputDeviceID,
             inputDeviceID.hasPrefix("v4-"),
-            let id = UInt64(inputDeviceID.dropFirst(3))
+            let id = Int64(inputDeviceID.dropFirst(3))
           else { return nil }
           return id
         }

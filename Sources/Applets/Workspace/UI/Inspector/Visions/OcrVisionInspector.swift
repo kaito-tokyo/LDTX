@@ -59,7 +59,7 @@ struct OcrVisionInspector: View {
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
         Picker("Video Component", selection: $vision.videoComponentInternalIDIfPresent) {
-          Text("Unassigned").tag(UInt64?.none)
+          Text("Unassigned").tag(Int64?.none)
           ForEach(storeService.videoComponentOptions) { option in
             Text(option.name).tag(Optional(option.id))
           }

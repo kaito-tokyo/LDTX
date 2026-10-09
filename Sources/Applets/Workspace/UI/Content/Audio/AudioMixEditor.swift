@@ -18,7 +18,7 @@ final class AudioMixEditor: NSViewController {
 
   let outputErrorLabel = NSTextField(wrappingLabelWithString: "")
   private let channels = contentStack([])
-  private var rows: [UInt64: AudioInputRow] = [:]
+  private var rows: [Int64: AudioInputRow] = [:]
 
   override func loadView() {
     view = NSView()

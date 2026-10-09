@@ -8,7 +8,7 @@ import SwiftUI
 
 struct ConicGradientFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
-  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillConicGradientComponent?
 
@@ -21,12 +21,12 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
-    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+    videoComponentID: Int64
   ) {
     self.storeService = storeService
     self.videoComponentID = videoComponentID
     self.component = storeService.definition.videoComponents
-      .first(where: { $0.id == videoComponentID })
+      .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .conicGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
@@ -107,7 +107,9 @@ struct ConicGradientFillVideoComponentInspector: View {
   ) {
     guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+    guard
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
+      ),
       case .conicGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
     mutation(&component)
@@ -129,7 +131,7 @@ struct ConicGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7))
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .conicGradientFill(7)
+      storeService: storeService, videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -141,7 +143,7 @@ struct ConicGradientFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7),
       isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .conicGradientFill(7)
+      storeService: storeService, videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

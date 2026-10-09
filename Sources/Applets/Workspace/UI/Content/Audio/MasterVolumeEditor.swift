@@ -34,7 +34,7 @@ final class MasterVolumeEditor: NSViewController {
   private let monitorVolume = NSSlider(
     value: 0, minValue: ProgramPreferences.minimumAudioChannelGainDecibels,
     maxValue: ProgramPreferences.maximumAudioChannelGainDecibels, target: nil, action: nil)
-  private var programID: UInt64?
+  private var programID: Int64?
 
   override func loadView() {
     view = NSView()

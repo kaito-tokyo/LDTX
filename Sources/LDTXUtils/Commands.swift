@@ -195,10 +195,10 @@ public struct WorkspaceCommand: ParsableCommand {
 public struct WorkspaceV4DebugDump: Codable, Equatable {
   static let format = "ldtx-workspace-debug-dump-v4"
   public struct Program: Codable, Equatable {
-    public var internalID: UInt64
+    public var internalID: Int64
     public var displayName: String
-    public var landscapeVideoLayerInternalIDs: [UInt64]
-    public var portraitVideoLayerInternalIDs: [UInt64]
+    public var landscapeVideoLayerInternalIDs: [Int64]
+    public var portraitVideoLayerInternalIDs: [Int64]
   }
   public var format: String
   public var definitionExternalID: String

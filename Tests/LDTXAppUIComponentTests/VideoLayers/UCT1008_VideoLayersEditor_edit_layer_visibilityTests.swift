@@ -14,7 +14,7 @@ extension AppUIComponentTestSuite {
     func hideCallbacksRestoreStateOnFailure() throws {
       let fixture = VideoLayersTestFixture()
       let table = fixture.makeTable()
-      var saved: [(UInt64, Bool)] = []
+      var saved: [(Int64, Bool)] = []
       var failures = 0
       fixture.update(table, ids: [1], setHidden: { id, hidden in saved.append((id, hidden)) })
       let row = try #require(table.rows[1])

@@ -37,7 +37,7 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
     case .testPattern: .testPatternVideoComponent
     }
   }
-  func make(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  func make(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     switch self {
     case .vfxSource: WorkspaceResourceFactory.makeVFXSource(id: id, name: name)
     case .solidColor: WorkspaceResourceFactory.makeSolidColor(id: id, name: name)
@@ -66,7 +66,7 @@ struct WorkspaceAddDraft: Equatable {
   var name = ""
   var physicalDeviceID: WorkspacePhysicalDeviceID?
   var componentKind: WorkspaceAddComponentKind = .vfxSource
-  var videoComponentID: UInt64?
+  var videoComponentID: Int64?
   var visionKind: WorkspaceAddVisionKind = .ocr
 }
 
@@ -125,7 +125,7 @@ enum WorkspaceResourceAddition {
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
     storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
-  ) throws -> UInt64 {
+  ) throws -> Int64 {
     if let message = validationMessage(
       sheet: sheet, draft: draft, devices: devices, storeService: storeService,
       audioDiscoveryError: audioDiscoveryError)

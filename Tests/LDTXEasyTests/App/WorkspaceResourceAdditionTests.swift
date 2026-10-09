@@ -11,6 +11,14 @@ import Testing
 @Suite
 @MainActor
 struct WorkspaceResourceAdditionUnitTestSuite {
+  @Test func generatedIDsArePositiveAndOdd() {
+    for _ in 0..<100 {
+      let id = WorkspaceResourceFactory.nextInternalID()
+      #expect(id > 0)
+      #expect(id & 1 == 1)
+    }
+  }
+
   @Test func programNamesAreReservedAcrossAllResourceTypes() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.audioDevices = [WorkspaceResourceFactory.makeAudioInput(id: 1, name: "Program")]

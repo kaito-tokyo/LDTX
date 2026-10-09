@@ -63,14 +63,14 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
   }
 
   @Test func roundTripsTypedAssignmentsInBinaryPropertyList() throws {
-    let assignments: [UInt64: WorkspacePhysicalDeviceID] = [
+    let assignments: [Int64: WorkspacePhysicalDeviceID] = [
       8: .avCaptureDevice(uniqueID: "camera-uid"), 9: .coreAudioDevice(uid: "microphone-uid"),
     ]
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .binary
     let data = try encoder.encode(assignments)
     #expect(
-      try PropertyListDecoder().decode([UInt64: WorkspacePhysicalDeviceID].self, from: data)
+      try PropertyListDecoder().decode([Int64: WorkspacePhysicalDeviceID].self, from: data)
         == assignments)
     #expect(data.starts(with: Data("bplist".utf8)))
   }

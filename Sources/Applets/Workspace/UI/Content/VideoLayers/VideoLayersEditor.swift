@@ -12,7 +12,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   private let status = NSTextField(wrappingLabelWithString: "")
   private let storeService: WorkspaceStoreService
   private let target: WorkspaceCanvasTarget
-  private var displayedProgramID: UInt64?
+  private var displayedProgramID: Int64?
   private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? { storeService.selectedProgram }
 
   init(storeService: WorkspaceStoreService, target: WorkspaceCanvasTarget) {
@@ -40,13 +40,13 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   private var onCommitTransform:
-    (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Ldtx_Workspace_V4_BasicTransform = {
+    (Int64, Ldtx_Workspace_V4_BasicTransform) throws -> Ldtx_Workspace_V4_BasicTransform = {
       _, value in value
     }
-  private var onSetHidden: (UInt64, Bool) throws -> Void = { _, _ in }
+  private var onSetHidden: (Int64, Bool) throws -> Void = { _, _ in }
   private var onError: (Error) -> Void = { _ in }
 
-  private func internalID(for row: VideoLayersTableRow) throws -> UInt64 {
+  private func internalID(for row: VideoLayersTableRow) throws -> Int64 {
     guard let id = table.rows.first(where: { $0.value === row })?.key else {
       throw WorkspaceSelectionError(message: "Video layer is no longer available.")
     }
@@ -125,20 +125,20 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   func update(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     programPreferences: Ldtx_Workspace_V4_ProgramPreferences,
-    layerIDs: [UInt64], canvasWidth: Double, canvasHeight: Double,
+    layerIDs: [Int64], canvasWidth: Double, canvasHeight: Double,
     onCommitTransform:
-      @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws ->
+      @escaping (Int64, Ldtx_Workspace_V4_BasicTransform) throws ->
       Ldtx_Workspace_V4_BasicTransform = { _, value in value },
-    onSetHidden: @escaping (UInt64, Bool) throws -> Void = { _, _ in },
-    onCommitLayerOrder: @escaping ([UInt64]) throws -> Void = { _ in },
+    onSetHidden: @escaping (Int64, Bool) throws -> Void = { _, _ in },
+    onCommitLayerOrder: @escaping ([Int64]) throws -> Void = { _ in },
     onError: @escaping (Error) -> Void = { _ in }
   ) {
     _ = view
     self.onCommitTransform = onCommitTransform
     self.onSetHidden = onSetHidden
     self.onError = onError
-    var names: [UInt64: String] = [:]
-    var placementSupport: [UInt64: Bool] = [:]
+    var names: [Int64: String] = [:]
+    var placementSupport: [Int64: Bool] = [:]
     for component in definition.videoComponents {
       if let id = component.internalID, names[id] == nil {
         names[id] = component.displayName
@@ -148,7 +148,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         }
       }
     }
-    var rows: [UInt64: VideoLayersTableRow] = [:]
+    var rows: [Int64: VideoLayersTableRow] = [:]
     for id in layerIDs {
       let row: VideoLayersTableRow
       if let existing = table.rows[id],
@@ -258,14 +258,14 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     definition.videoComponents = ["Camera", "Background", "Portrait Source"].enumerated().map {
       index, name in
       var device = Ldtx_Workspace_V4_VfxSourceComponent()
-      device.internalID = UInt64(index + 1)
+      device.internalID = Int64(index + 1)
       device.displayName = name
       var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       wrapper.vfxSource = device
       return wrapper
     }
     var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
-    for id: UInt64 in [1, 2] {
+    for id: Int64 in [1, 2] {
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleX = .with {
         $0.set(num: 1, den: 1)

@@ -42,7 +42,7 @@
               $0.set(num: -60, den: 10)
             }
           preferences.audioChannelMuted[11] = index == 1
-          for id: UInt64 in [3, 4, 8] {
+          for id: Int64 in [3, 4, 8] {
             var transform = Ldtx_Workspace_V4_BasicTransform()
             transform.scaleX = .with {
               $0.set(num: 1, den: 1)

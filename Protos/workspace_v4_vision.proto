@@ -57,7 +57,7 @@ message OcrVision {
   string display_name = 2;
   // The LdtxInternalId of the Video Component analyzed after effects and
   // before Program placement.
-  uint64 video_component_internal_id = 3 [default = 0];
+  sfixed64 video_component_internal_id = 3 [default = 0];
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
@@ -81,7 +81,7 @@ message CreateMlImageClassifierVision {
   string display_name = 2;
   // The LdtxInternalId of the Video Component analyzed after effects and
   // before Program placement.
-  uint64 video_component_internal_id = 3 [default = 0];
+  sfixed64 video_component_internal_id = 3 [default = 0];
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.

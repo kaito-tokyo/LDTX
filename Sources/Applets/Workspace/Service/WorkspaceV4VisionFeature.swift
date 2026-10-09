@@ -15,12 +15,12 @@ import Observation
 @MainActor
 @Observable
 public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
-  public private(set) var resultsByVisionInternalID: [UInt64: String] = [:]
+  public private(set) var resultsByVisionInternalID: [Int64: String] = [:]
 
   @ObservationIgnored private let ocrService = VisionOCRService()
   @ObservationIgnored private var timers: [DispatchSourceTimer] = []
-  @ObservationIgnored private var analysisTasks: [UInt64: Task<Void, Never>] = [:]
-  @ObservationIgnored private var analysisTaskGenerations: [UInt64: UUID] = [:]
+  @ObservationIgnored private var analysisTasks: [Int64: Task<Void, Never>] = [:]
+  @ObservationIgnored private var analysisTaskGenerations: [Int64: UUID] = [:]
 
   public init() {}
 
@@ -60,11 +60,11 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     analysisTaskGenerations = [:]
   }
 
-  public func submit(visionInternalID: UInt64, context: WorkspaceV4VisionFeatureContext) {
+  public func submit(visionInternalID: Int64, context: WorkspaceV4VisionFeatureContext) {
     submit(visionInternalID, context: context)
   }
 
-  private func submit(_ internalID: UInt64, context: WorkspaceV4VisionFeatureContext) {
+  private func submit(_ internalID: Int64, context: WorkspaceV4VisionFeatureContext) {
     guard analysisTasks[internalID] == nil,
       let vision = context.vision(internalID)
     else { return }

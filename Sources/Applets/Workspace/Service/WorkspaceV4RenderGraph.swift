@@ -90,7 +90,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
     let mutedAudio = preference.audioChannelMuted
     for channel in audioChannels {
       guard case .inputAudioDevice(let input) = channel.component,
-        let id = input.inputDeviceID.flatMap({ UInt64($0.dropFirst(3)) })
+        let id = input.inputDeviceID.flatMap({ Int64($0.dropFirst(3)) })
       else { continue }
       audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(
         (gains[id]?.double ?? 0))
@@ -102,7 +102,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
 
   static func componentsByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
-  ) -> [UInt64: ProgramComponent] {
+  ) -> [Int64: ProgramComponent] {
     Dictionary(
       uniqueKeysWithValues: definition.videoComponents.compactMap {
         guard let definition = $0.videoComponent else { return nil }
@@ -250,7 +250,7 @@ extension WorkspaceV4RenderGraph {
   public static func runtimeConfiguration(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     canvas: WorkspaceProgramCanvasSnapshot,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float
   ) throws -> ProgramRuntimeConfiguration {
     try runtimeProjection(
@@ -262,7 +262,7 @@ extension WorkspaceV4RenderGraph {
   public static func runtimeProjection(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     canvas: WorkspaceProgramCanvasSnapshot,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float
   ) throws -> WorkspaceV4RuntimeProjection {
     let graph = try Self(definition: definition, canvas: canvas)
@@ -319,8 +319,8 @@ extension WorkspaceV4RenderGraph {
 
   /// Projects one component without any Program transforms or visibility preferences.
   static func componentConfiguration(
-    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, componentID: UInt64,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080
+    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, componentID: Int64,
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080
   ) throws -> ProgramRuntimeConfiguration {
     guard var component = componentsByInternalID(definition)[componentID] else {
       throw WorkspaceV4RenderGraphError.missingVideoLayer(componentID)
@@ -347,7 +347,7 @@ extension WorkspaceV4RenderGraph {
 
   private static func backgroundRemovalInputKeys(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    layerIDs: [UInt64]
+    layerIDs: [Int64]
   ) -> Set<String> {
     Set(
       definition.videoComponents.compactMap { wrapper -> String? in
@@ -369,7 +369,7 @@ public struct WorkspaceV4RuntimeProjection: Sendable {
 }
 
 public enum WorkspaceV4RenderGraphError: Error, Equatable {
-  case missingProgram(UInt64)
-  case missingVideoLayer(UInt64)
+  case missingProgram(Int64)
+  case missingVideoLayer(Int64)
   case unsupportedOutputProfile(String)
 }

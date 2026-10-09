@@ -5,14 +5,14 @@ import Foundation
 import LDTXProtos
 
 enum WorkspaceResourceFactory {
-  static func makeAudioInput(id: UInt64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
+  static func makeAudioInput(id: Int64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = name
     return device
   }
 
-  static func makeVFXSource(id: UInt64, name: String)
+  static func makeVFXSource(id: Int64, name: String)
     -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
@@ -23,7 +23,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeSolidColor(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  static func makeSolidColor(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     var color = Ldtx_Workspace_V4_Color()
     color.red = 0.2
     color.green = 0.2
@@ -38,7 +38,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeClock(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  static func makeClock(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = name
@@ -59,7 +59,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeLinearGradient(id: UInt64, name: String)
+  static func makeLinearGradient(id: Int64, name: String)
     -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
@@ -78,7 +78,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeRadialGradient(id: UInt64, name: String)
+  static func makeRadialGradient(id: Int64, name: String)
     -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
@@ -100,7 +100,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeConicGradient(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper
+  static func makeConicGradient(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper
   {
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
@@ -118,7 +118,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeTestPattern(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  static func makeTestPattern(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     var component = Ldtx_Workspace_V4_TestPatternComponent()
     component.internalID = id
     component.displayName = name
@@ -127,7 +127,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeOcrVision(id: UInt64, name: String, componentID: UInt64)
+  static func makeOcrVision(id: Int64, name: String, componentID: Int64)
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
@@ -146,7 +146,7 @@ enum WorkspaceResourceFactory {
     return wrapper
   }
 
-  static func makeCreateMlImageClassifierVision(id: UInt64, name: String, componentID: UInt64)
+  static func makeCreateMlImageClassifierVision(id: Int64, name: String, componentID: Int64)
     -> Ldtx_Workspace_V4_VisionWrapper
   {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
@@ -185,10 +185,10 @@ enum WorkspaceResourceFactory {
 
   private static var opaqueWhite: Ldtx_Workspace_V4_Color { gradientStartColor }
 
-  static func nextInternalID() -> UInt64 {
-    let milliseconds = UInt64(max(0, Date().timeIntervalSince1970 * 1_000))
+  static func nextInternalID() -> Int64 {
+    let milliseconds = Int64(max(0, Date().timeIntervalSince1970 * 1_000))
     return ((milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15)
-      | UInt64.random(in: 0...0x7fff)
+      | (Int64.random(in: 0...0x3fff) << 1) | 1
   }
 
 }

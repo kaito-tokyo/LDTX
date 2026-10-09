@@ -20,11 +20,11 @@ public enum WorkspaceV4IntegrityValidator {
       do { try body() } catch { issues.append(.init(context: context, error: error)) }
     }
     check("Canvas") { try validateCanvasConfiguration(definition.canvasConfiguration) }
-    var componentIDs: [UInt64] = []
+    var componentIDs: [Int64] = []
     for component in definition.videoComponents {
       check("Video Component") { componentIDs.append(try videoComponentID(component)) }
     }
-    var visionIDs: [UInt64] = []
+    var visionIDs: [Int64] = []
     for vision in definition.visions {
       check("Vision") { visionIDs.append(try visionID(vision)) }
     }
@@ -40,7 +40,7 @@ public enum WorkspaceV4IntegrityValidator {
     }
     let videoLayerIDs = Set(componentIDs)
     let vfxSourceIDs = Set(
-      definition.videoComponents.compactMap { wrapper -> UInt64? in
+      definition.videoComponents.compactMap { wrapper -> Int64? in
         guard case .vfxSource(let source) = wrapper.videoComponent else { return nil }
         return source.internalID
       })
@@ -272,7 +272,7 @@ public enum WorkspaceV4IntegrityValidator {
   }
 
   public static func videoComponentID(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper) throws
-    -> UInt64
+    -> Int64
   {
     guard wrapper.videoComponent != nil else {
       throw WorkspaceV4IntegrityError.missingConcreteDefinition
@@ -283,7 +283,7 @@ public enum WorkspaceV4IntegrityValidator {
     return id
   }
 
-  public static func visionID(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) throws -> UInt64 {
+  public static func visionID(_ wrapper: Ldtx_Workspace_V4_VisionWrapper) throws -> Int64 {
     guard wrapper.vision != nil else {
       throw WorkspaceV4IntegrityError.missingConcreteDefinition
     }
@@ -312,15 +312,15 @@ public enum WorkspaceV4IntegrityValidator {
     else { throw WorkspaceV4IntegrityError.invalidVisionRegionOfInterest }
   }
 
-  private static func isValidInternalID(_ value: UInt64) -> Bool {
-    value != 0 && value & (UInt64(1) << 63) == 0
+  private static func isValidInternalID(_ value: Int64) -> Bool {
+    value > 0
   }
 
   private static func validate(
     _ wrapper: Ldtx_Workspace_V4_VisionWrapper,
-    componentIDs: Set<UInt64>
+    componentIDs: Set<Int64>
   ) throws {
-    let inputID: UInt64
+    let inputID: Int64
     let triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper]
     let region: Ldtx_Workspace_V4_VisionRegionOfInterest?
     let minimumTextHeight: Ldtx_Workspace_V4_Rational32?
@@ -430,12 +430,12 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case duplicateInternalID
   case duplicateDisplayName(String)
   case emptyDisplayName
-  case duplicateVideoLayer(UInt64)
-  case missingVideoLayer(UInt64)
-  case missingProgram(UInt64)
-  case missingVideoComponent(UInt64)
-  case missingVfxSource(UInt64)
-  case missingAudioInputDevice(UInt64)
+  case duplicateVideoLayer(Int64)
+  case missingVideoLayer(Int64)
+  case missingProgram(Int64)
+  case missingVideoComponent(Int64)
+  case missingVfxSource(Int64)
+  case missingAudioInputDevice(Int64)
   case missingVisionVideoComponent
   case invalidVisionInterval
   case invalidVisionRegionOfInterest
@@ -460,7 +460,7 @@ extension WorkspaceV4IntegrityError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .missingConcreteDefinition: "A resource has no concrete definition."
-    case .invalidInternalID: "Resource IDs must be nonzero and must not have the sign bit set."
+    case .invalidInternalID: "Resource IDs must be positive."
     case .duplicateInternalID: "Resource IDs must be unique across the Workspace."
     case .duplicateDisplayName(let name): "The name ‘\(name)’ is used by more than one resource."
     case .emptyDisplayName: "Resource names must not be empty."

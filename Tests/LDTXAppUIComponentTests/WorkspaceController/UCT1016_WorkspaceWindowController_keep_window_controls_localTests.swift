@@ -522,7 +522,7 @@ extension AppUIComponentTestSuite {
       #expect(inspector.programSelection.wrappedValue == a)
       #expect(second.storeService.inspectorSelector == nil)
       #expect(first.storeService.definition == definition)
-      #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: UInt64.max) }
+      #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: Int64.max) }
       for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
         firstWindow.windowRuntime.setRecordingState(state)
         #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: a) }

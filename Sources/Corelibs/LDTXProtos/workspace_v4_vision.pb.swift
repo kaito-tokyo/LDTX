@@ -183,7 +183,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
@@ -204,7 +204,7 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
 
   /// The LdtxInternalId of the Video Component analyzed after effects and
   /// before Program placement.
-  public var videoComponentInternalID: UInt64 {
+  public var videoComponentInternalID: Int64 {
     get {_storage._videoComponentInternalID ?? 0}
     set {_uniqueStorage()._videoComponentInternalID = newValue}
   }
@@ -276,7 +276,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -297,7 +297,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
 
   /// The LdtxInternalId of the Video Component analyzed after effects and
   /// before Program placement.
-  public var videoComponentInternalID: UInt64 {
+  public var videoComponentInternalID: Int64 {
     get {_videoComponentInternalID ?? 0}
     set {_videoComponentInternalID = newValue}
   }
@@ -323,9 +323,9 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
-  fileprivate var _videoComponentInternalID: UInt64? = nil
+  fileprivate var _videoComponentInternalID: Int64? = nil
   fileprivate var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
 }
 
@@ -534,9 +534,9 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64? = nil
+    var _internalID: Int64? = nil
     var _displayName: String? = nil
-    var _videoComponentInternalID: UInt64? = nil
+    var _videoComponentInternalID: Int64? = nil
     var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
     var _triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
     var _recognitionLanguages: [String] = []
@@ -580,9 +580,9 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 3: try { try decoder.decodeSingularUInt64Field(value: &_storage._videoComponentInternalID) }()
+        case 3: try { try decoder.decodeSingularSFixed64Field(value: &_storage._videoComponentInternalID) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._regionOfInterest) }()
         case 5: try { try decoder.decodeRepeatedMessageField(value: &_storage._triggers) }()
         case 6: try { try decoder.decodeRepeatedStringField(value: &_storage._recognitionLanguages) }()
@@ -602,13 +602,13 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
       try { if let v = _storage._internalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
       } }()
       try { if let v = _storage._displayName {
         try visitor.visitSingularStringField(value: v, fieldNumber: 2)
       } }()
       try { if let v = _storage._videoComponentInternalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 3)
       } }()
       try { if let v = _storage._regionOfInterest {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
@@ -665,9 +665,9 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
-      case 3: try { try decoder.decodeSingularUInt64Field(value: &self._videoComponentInternalID) }()
+      case 3: try { try decoder.decodeSingularSFixed64Field(value: &self._videoComponentInternalID) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._regionOfInterest) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.triggers) }()
       default: break
@@ -681,13 +681,13 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
     } }()
     try { if let v = self._videoComponentInternalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 3)
     } }()
     try { if let v = self._regionOfInterest {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)

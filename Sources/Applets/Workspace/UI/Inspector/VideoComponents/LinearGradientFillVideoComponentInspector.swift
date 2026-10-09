@@ -8,7 +8,7 @@ import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
-  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
 
@@ -22,12 +22,12 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
-    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+    videoComponentID: Int64
   ) {
     self.storeService = storeService
     self.videoComponentID = videoComponentID
     self.component = storeService.definition.videoComponents
-      .first(where: { $0.id == videoComponentID })
+      .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .linearGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
@@ -114,7 +114,9 @@ struct LinearGradientFillVideoComponentInspector: View {
   ) {
     guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+    guard
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
+      ),
       case .linearGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
     mutation(&component)
@@ -135,7 +137,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: 5
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -147,7 +149,7 @@ struct LinearGradientFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5),
       isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .linearGradientFill(5)
+      storeService: storeService, videoComponentID: 5
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -158,7 +160,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .linearGradientFill(404)
+      storeService: storeService, videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

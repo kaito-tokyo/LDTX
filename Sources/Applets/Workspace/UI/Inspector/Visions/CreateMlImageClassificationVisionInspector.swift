@@ -55,7 +55,7 @@ struct CreateMlImageClassifierVisionInspector: View {
       Section("Vision - Create ML Image Classifier") {
         TextField("Name", text: $vision.displayName)
         Picker("Input video", selection: $vision.videoComponentInternalIDIfPresent) {
-          Text("Unassigned").tag(UInt64?.none)
+          Text("Unassigned").tag(Int64?.none)
           ForEach(storeService.videoComponentOptions) { option in
             Text(option.name).tag(Optional(option.id))
           }

@@ -7,7 +7,7 @@ import SwiftUI
 
 struct WorkspacePhysicalDeviceField: View {
   let title: String
-  let internalID: UInt64
+  let internalID: Int64
   let isAudio: Bool
   let storeService: WorkspaceStoreService
   let appletData: WorkspaceAppletData

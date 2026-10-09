@@ -11,7 +11,7 @@ import SwiftUI
 
 struct WorkspaceProgramSelector: View {
   let programs: [Ldtx_Workspace_V4_ProgramDefinition]
-  @Binding var selection: UInt64?
+  @Binding var selection: Int64?
 
   var body: some View {
     if programs.isEmpty {
@@ -33,7 +33,7 @@ struct WorkspaceProgramsInspector: View {
   @Bindable var appletData: WorkspaceAppletData
 
   private struct ActionTarget: Identifiable {
-    let id: UInt64
+    let id: Int64
     let name: String
   }
   @State private var renameTarget: ActionTarget?
@@ -119,7 +119,7 @@ struct WorkspaceProgramsInspector: View {
     }
     storeService.synchronizeAudioMonitor()
   }
-  private func nextInternalID() -> UInt64 { WorkspaceResourceFactory.nextInternalID() }
+  private func nextInternalID() -> Int64 { WorkspaceResourceFactory.nextInternalID() }
 
   func uniqueProgramDisplayName(_ base: String) -> String {
     let names = WorkspaceResourceAddition.existingNames(storeService.definition)
@@ -129,7 +129,7 @@ struct WorkspaceProgramsInspector: View {
     return "\(base) \(suffix)"
   }
 
-  var programSelection: Binding<UInt64?> {
+  var programSelection: Binding<Int64?> {
     Binding(
       get: {
         let selectedID =

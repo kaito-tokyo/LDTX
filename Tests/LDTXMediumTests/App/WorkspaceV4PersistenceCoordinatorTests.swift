@@ -20,6 +20,17 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
+  @Test func generatedIDsPreserveTimestampAndSetLowBit() {
+    let generator = WorkspaceInternalIDGenerator()
+    let milliseconds: Int64 = 1_800_000_000_000
+    for _ in 0..<100 {
+      let id = generator.next(now: Date(timeIntervalSince1970: Double(milliseconds) / 1_000))
+      #expect(id > 0)
+      #expect(id & 1 == 1)
+      #expect(id >> 15 == milliseconds)
+    }
+  }
+
   private final class ObservationFlag: @unchecked Sendable {
     var didChange = false
   }

@@ -120,7 +120,7 @@ extension AppUIComponentTestSuite {
     func editorReusesRowsAndRefreshesSaveConnections() throws {
       let fixture = VideoLayersTestFixture()
       let editor = fixture.makeEditor()
-      var saved: [UInt64] = []
+      var saved: [Int64] = []
       editor.update(
         definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
         canvasWidth: 1920, canvasHeight: 1080,

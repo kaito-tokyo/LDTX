@@ -121,7 +121,7 @@ struct WorkspaceAddResourceSheet: View {
     .onChange(of: draft.componentKind) { _, kind in draft.name = kind.rawValue }
   }
 
-  private var componentOptions: [WorkspaceSelectionOption<UInt64>] {
+  private var componentOptions: [WorkspaceSelectionOption<Int64>] {
     videoComponents.compactMap {
       guard let id = $0.internalID,
         let name = $0.displayName

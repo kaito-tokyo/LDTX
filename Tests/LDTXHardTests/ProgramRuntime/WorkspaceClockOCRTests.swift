@@ -58,7 +58,7 @@ struct WorkspaceClockOCRIntegrationTestSuite {
 
   private func makeRuntime(
     capture: WorkspaceCaptureSessionCoordinator,
-    assignments: [UInt64: WorkspacePhysicalDeviceID] = [:]
+    assignments: [Int64: WorkspacePhysicalDeviceID] = [:]
   ) -> WorkspaceWindowRuntime {
     let box = WorkspaceBox()
     let persistence = WorkspaceV4PersistenceCoordinator(

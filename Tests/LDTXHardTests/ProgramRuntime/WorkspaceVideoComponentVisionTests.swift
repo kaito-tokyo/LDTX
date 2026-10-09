@@ -89,7 +89,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
         lowFrequencyUpdateRegistry: registry))
     defer { runtime.shutdown() }
     try runtime.editDefinition { definition in
-      definition.videoComponents = [UInt64(1), 2].map { id in
+      definition.videoComponents = [Int64(1), 2].map { id in
         .with { wrapper in
           wrapper.vfxSource = .with { source in
             source.internalID = id
@@ -167,7 +167,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
 
   private func makeRuntime(
     capture: WorkspaceCaptureSessionCoordinator,
-    assignments: [UInt64: WorkspacePhysicalDeviceID] = [:]
+    assignments: [Int64: WorkspacePhysicalDeviceID] = [:]
   ) -> WorkspaceWindowRuntime {
     let box = WorkspaceBox()
     let persistence = WorkspaceV4PersistenceCoordinator(

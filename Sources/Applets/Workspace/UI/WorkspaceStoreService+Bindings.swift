@@ -7,7 +7,7 @@ import SwiftUI
 
 extension Bindable where Value == WorkspaceStoreService {
   @MainActor
-  func ocrVision(internalID: UInt64) -> Binding<Ldtx_Workspace_V4_OcrVision>? {
+  func ocrVision(internalID: Int64) -> Binding<Ldtx_Workspace_V4_OcrVision>? {
     let store = wrappedValue
     func currentVision() -> Ldtx_Workspace_V4_OcrVision? {
       store.definition.visions.compactMap { wrapper in
@@ -32,7 +32,7 @@ extension Bindable where Value == WorkspaceStoreService {
       })
   }
   @MainActor
-  func createMlImageClassifierVision(internalID: UInt64) -> Binding<
+  func createMlImageClassifierVision(internalID: Int64) -> Binding<
     Ldtx_Workspace_V4_CreateMlImageClassifierVision
   >? {
     let store = wrappedValue

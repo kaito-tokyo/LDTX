@@ -139,7 +139,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -176,7 +176,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
   fileprivate var _extendedSrgbColor: Ldtx_Workspace_V4_Color? = nil
 }
@@ -191,7 +191,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: @unchec
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
@@ -303,7 +303,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: @unchec
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
@@ -413,7 +413,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -499,7 +499,7 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
   fileprivate var _centerX: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _centerY: Ldtx_Workspace_V4_Rational32? = nil
@@ -516,7 +516,7 @@ public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -542,7 +542,7 @@ public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
 }
 
@@ -553,7 +553,7 @@ public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -576,7 +576,7 @@ public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
 }
 
@@ -587,7 +587,7 @@ public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable 
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
@@ -915,7 +915,7 @@ nonisolated extension Ldtx_Workspace_V4_FillSolidColorComponent: SwiftProtobuf.M
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._extendedSrgbColor) }()
       default: break
@@ -929,7 +929,7 @@ nonisolated extension Ldtx_Workspace_V4_FillSolidColorComponent: SwiftProtobuf.M
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -954,7 +954,7 @@ nonisolated extension Ldtx_Workspace_V4_FillLinearGradientComponent: SwiftProtob
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}start_x\0\u{3}start_y\0\u{3}start_extended_srgb_color\0\u{3}end_x\0\u{3}end_y\0\u{3}end_extended_srgb_color\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64? = nil
+    var _internalID: Int64? = nil
     var _displayName: String? = nil
     var _startX: Ldtx_Workspace_V4_Rational32? = nil
     var _startY: Ldtx_Workspace_V4_Rational32? = nil
@@ -998,7 +998,7 @@ nonisolated extension Ldtx_Workspace_V4_FillLinearGradientComponent: SwiftProtob
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._startX) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._startY) }()
@@ -1019,7 +1019,7 @@ nonisolated extension Ldtx_Workspace_V4_FillLinearGradientComponent: SwiftProtob
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
       try { if let v = _storage._internalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
       } }()
       try { if let v = _storage._displayName {
         try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -1073,7 +1073,7 @@ nonisolated extension Ldtx_Workspace_V4_FillRadialGradientComponent: SwiftProtob
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}center_x\0\u{3}center_y\0\u{3}inner_radius\0\u{3}outer_radius\0\u{3}inner_extended_srgb_color\0\u{3}outer_extended_srgb_color\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64? = nil
+    var _internalID: Int64? = nil
     var _displayName: String? = nil
     var _centerX: Ldtx_Workspace_V4_Rational32? = nil
     var _centerY: Ldtx_Workspace_V4_Rational32? = nil
@@ -1117,7 +1117,7 @@ nonisolated extension Ldtx_Workspace_V4_FillRadialGradientComponent: SwiftProtob
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._centerX) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._centerY) }()
@@ -1138,7 +1138,7 @@ nonisolated extension Ldtx_Workspace_V4_FillRadialGradientComponent: SwiftProtob
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
       try { if let v = _storage._internalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
       } }()
       try { if let v = _storage._displayName {
         try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -1197,7 +1197,7 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._centerX) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._centerY) }()
@@ -1215,7 +1215,7 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -1261,7 +1261,7 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.effects) }()
       default: break
@@ -1275,7 +1275,7 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -1305,7 +1305,7 @@ nonisolated extension Ldtx_Workspace_V4_TestPatternComponent: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       default: break
       }
@@ -1318,7 +1318,7 @@ nonisolated extension Ldtx_Workspace_V4_TestPatternComponent: SwiftProtobuf.Mess
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -1339,7 +1339,7 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{3}shows_date\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}utc_offset_minutes\0\u{3}foreground_extended_srgb_color\0\u{3}background_extended_srgb_color\0\u{1}outlines\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64? = nil
+    var _internalID: Int64? = nil
     var _displayName: String? = nil
     var _width: Ldtx_Workspace_V4_Rational32? = nil
     var _height: Ldtx_Workspace_V4_Rational32? = nil
@@ -1389,7 +1389,7 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._width) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._height) }()
@@ -1413,7 +1413,7 @@ nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, S
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
       try { if let v = _storage._internalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
       } }()
       try { if let v = _storage._displayName {
         try visitor.visitSingularStringField(value: v, fieldNumber: 2)

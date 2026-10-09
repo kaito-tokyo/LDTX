@@ -94,7 +94,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         SolidColorFillVideoComponentInspector(
           storeService: storeService,
-          videoComponentID: .solidColorFill(internalID))
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
@@ -102,7 +102,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         LinearGradientFillVideoComponentInspector(
           storeService: storeService,
-          videoComponentID: .linearGradientFill(internalID))
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
@@ -110,7 +110,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         RadialGradientFillVideoComponentInspector(
           storeService: storeService,
-          videoComponentID: .radialGradientFill(internalID))
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
@@ -118,7 +118,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         ConicGradientFillVideoComponentInspector(
           storeService: storeService,
-          videoComponentID: .conicGradientFill(internalID))
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }

@@ -11,11 +11,11 @@ import SwiftUI
 
 struct VideoComponentProgramLayers: View {
   let storeService: WorkspaceStoreService
-  let componentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  let componentID: Int64
 
-  private var internalID: UInt64? {
+  private var internalID: Int64? {
     guard
-      let component = storeService.definition.videoComponents.first(where: { $0.id == componentID })
+      let component = storeService.definition.videoComponents.first(where: { $0.internalID == componentID })
     else { return nil }
     return component.internalID
   }
@@ -35,7 +35,7 @@ struct VideoComponentProgramLayers: View {
     .disabled(storeService.isOutputActive || internalID == nil)
   }
 
-  func membership(for programID: UInt64, target: WorkspaceCanvasTarget) -> Binding<Bool> {
+  func membership(for programID: Int64, target: WorkspaceCanvasTarget) -> Binding<Bool> {
     Binding(
       get: {
         guard let id = internalID,
@@ -63,7 +63,7 @@ struct VideoComponentProgramLayers: View {
   #Preview("Video Layer Membership") {
     @Previewable @State var service = WorkspaceSidebarPreviewFixtures.makeUIState()
     Form {
-      VideoComponentProgramLayers(storeService: service, componentID: .solidColorFill(4))
+      VideoComponentProgramLayers(storeService: service, componentID: 4)
     }
     .formStyle(.grouped)
     .frame(width: 320, height: 240)

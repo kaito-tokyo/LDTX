@@ -77,7 +77,7 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
-  public var internalID: UInt64 {
+  public var internalID: Int64 {
     get {_internalID ?? 0}
     set {_internalID = newValue}
   }
@@ -100,7 +100,7 @@ public nonisolated struct Ldtx_Workspace_V4_ProgramDefinition: Sendable {
 
   public init() {}
 
-  fileprivate var _internalID: UInt64? = nil
+  fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
 }
 
@@ -162,7 +162,7 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
 
   /// The LdtxInternalId of the VFX Source used as the master clock for video
   /// presentation timestamps.
-  public var ptsMasterVfxSourceInternalID: UInt64 {
+  public var ptsMasterVfxSourceInternalID: Int64 {
     get {_ptsMasterVfxSourceInternalID ?? 0}
     set {_ptsMasterVfxSourceInternalID = newValue}
   }
@@ -180,7 +180,7 @@ public nonisolated struct Ldtx_Workspace_V4_CanvasConfiguration: Sendable {
   fileprivate var _frameRate: UInt32? = nil
   fileprivate var _landscapeVideoBitRate: UInt32? = nil
   fileprivate var _portraitVideoBitRate: UInt32? = nil
-  fileprivate var _ptsMasterVfxSourceInternalID: UInt64? = nil
+  fileprivate var _ptsMasterVfxSourceInternalID: Int64? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -256,7 +256,7 @@ nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularUInt64Field(value: &self._internalID) }()
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       default: break
       }
@@ -269,7 +269,7 @@ nonisolated extension Ldtx_Workspace_V4_ProgramDefinition: SwiftProtobuf.Message
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
     try { if let v = self._internalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
     } }()
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
@@ -300,7 +300,7 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self._frameRate) }()
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self._landscapeVideoBitRate) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self._portraitVideoBitRate) }()
-      case 6: try { try decoder.decodeSingularUInt64Field(value: &self._ptsMasterVfxSourceInternalID) }()
+      case 6: try { try decoder.decodeSingularSFixed64Field(value: &self._ptsMasterVfxSourceInternalID) }()
       default: break
       }
     }
@@ -327,7 +327,7 @@ nonisolated extension Ldtx_Workspace_V4_CanvasConfiguration: SwiftProtobuf.Messa
       try visitor.visitSingularUInt32Field(value: v, fieldNumber: 5)
     } }()
     try { if let v = self._ptsMasterVfxSourceInternalID {
-      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 6)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }

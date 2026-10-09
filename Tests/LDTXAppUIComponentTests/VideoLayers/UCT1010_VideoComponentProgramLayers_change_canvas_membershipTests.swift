@@ -25,7 +25,7 @@ extension AppUIComponentTestSuite {
       service.isOutputActive = true
       preferences.videoLayerInternalIds = [20, 10]
       try service.commitPreferences(preferences, programID: 100, target: .landscape)
-      for ids: [UInt64] in [[10], [10, 20, 30], [10, 20, 20]] {
+      for ids: [Int64] in [[10], [10, 20, 30], [10, 20, 20]] {
         preferences.videoLayerInternalIds = ids
         #expect(throws: WorkspaceSelectionError.self) {
           try service.commitPreferences(preferences, programID: 100, target: .landscape)
@@ -48,13 +48,13 @@ extension AppUIComponentTestSuite {
         $0.videoLayerInternalIds = [20]
       }
       service.definition.videoComponents = [10, 20].map {
-        WorkspaceResourceFactory.makeSolidColor(id: UInt64($0), name: "Color \($0)")
+        WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
       }
       service.preferences.landscapeProgramPreferences[100, default: .init()].videoLayerHidden[10] =
         true
       let preferences = service.preferences
       let controls = VideoComponentProgramLayers(
-        storeService: service, componentID: .solidColorFill(10))
+        storeService: service, componentID: 10)
       let landscape = controls.membership(for: 100, target: .landscape)
       let portrait = controls.membership(for: 100, target: .portrait)
       #expect(!landscape.wrappedValue && !portrait.wrappedValue)
@@ -86,7 +86,7 @@ extension AppUIComponentTestSuite {
       newProgram.wrappedValue = true
       #expect(
         (service.preferences.portraitProgramPreferences[200]?.videoLayerInternalIds ?? []) == [10])
-      service.definition.videoComponents.removeAll { $0.id == .solidColorFill(10) }
+      service.definition.videoComponents.removeAll { $0.internalID == 10 }
       newProgram.wrappedValue = false
       #expect(
         (service.preferences.portraitProgramPreferences[200]?.videoLayerInternalIds ?? []) == [10])
@@ -108,7 +108,7 @@ extension AppUIComponentTestSuite {
       program.displayName = "Main"
       state.definition.programs = [program]
       state.definition.videoComponents = [10, 20, 30].map {
-        WorkspaceResourceFactory.makeSolidColor(id: UInt64($0), name: "Color \($0)")
+        WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
       }
       let other = WorkspaceStoreService(definition: state.definition, preferences: .init())
       let first = makeWorkspaceTestWindow(storeService: state)
@@ -119,7 +119,7 @@ extension AppUIComponentTestSuite {
       }
       for target in [WorkspaceCanvasTarget.landscape, .portrait] {
         let content = first.contentPane
-        for id: UInt64 in [10, 20, 30] {
+        for id: Int64 in [10, 20, 30] {
           try content.storeService.setVideoLayerIncluded(
             true, componentID: id, programID: 100, target: target)
         }

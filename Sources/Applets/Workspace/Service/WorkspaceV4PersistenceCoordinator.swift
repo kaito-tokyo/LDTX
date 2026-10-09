@@ -63,10 +63,10 @@ public final class WorkspaceV4PersistenceCoordinator {
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func runtimeProjection(
-    programInternalID: UInt64,
+    programInternalID: Int64,
     target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
     let canvas = try WorkspaceProgramCanvasSnapshot(
@@ -80,10 +80,10 @@ public final class WorkspaceV4PersistenceCoordinator {
   /// Installs one V4 Program directly into a shared preview or output runtime.
   func applyRuntime(
     _ runtime: ProgramRuntime,
-    programInternalID: UInt64,
+    programInternalID: Int64,
     target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws {
     let projection = try runtimeProjection(

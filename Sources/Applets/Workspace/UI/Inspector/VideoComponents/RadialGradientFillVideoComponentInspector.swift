@@ -8,7 +8,7 @@ import SwiftUI
 
 struct RadialGradientFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
-  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillRadialGradientComponent?
 
@@ -22,12 +22,12 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
-    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+    videoComponentID: Int64
   ) {
     self.storeService = storeService
     self.videoComponentID = videoComponentID
     self.component = storeService.definition.videoComponents
-      .first(where: { $0.id == videoComponentID })
+      .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .radialGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
@@ -116,7 +116,9 @@ struct RadialGradientFillVideoComponentInspector: View {
   ) {
     guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+    guard
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
+      ),
       case .radialGradientFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
     mutation(&component)
@@ -138,7 +140,7 @@ struct RadialGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .radialGradientFill(6)
+      storeService: storeService, videoComponentID: 6
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -150,7 +152,7 @@ struct RadialGradientFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6),
       isOutputActive: true)
     RadialGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .radialGradientFill(6)
+      storeService: storeService, videoComponentID: 6
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -161,7 +163,7 @@ struct RadialGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .radialGradientFillVideoComponent, internalID: 6))
     RadialGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .radialGradientFill(404)
+      storeService: storeService, videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

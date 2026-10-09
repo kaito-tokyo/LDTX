@@ -8,7 +8,7 @@ import SwiftUI
 
 struct SolidColorFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
-  let videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+  let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillSolidColorComponent?
 
@@ -17,12 +17,12 @@ struct SolidColorFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
-    videoComponentID: WorkspaceStoreService.VideoComponentWrapper.ID
+    videoComponentID: Int64
   ) {
     self.storeService = storeService
     self.videoComponentID = videoComponentID
     self.component = storeService.definition.videoComponents
-      .first(where: { $0.id == videoComponentID })
+      .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .solidColorFill(let component) = wrapper.videoComponent else { return nil }
         return component
@@ -66,7 +66,9 @@ struct SolidColorFillVideoComponentInspector: View {
   ) {
     guard !storeService.isOutputActive else { return }
     var definition = storeService.definition
-    guard let index = definition.videoComponents.firstIndex(where: { $0.id == videoComponentID }),
+    guard
+      let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
+      ),
       case .solidColorFill(var component) = definition.videoComponents[index].videoComponent
     else { return }
     mutation(&component)
@@ -81,7 +83,7 @@ struct SolidColorFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .solidColorFill(4)
+      storeService: storeService, videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -93,7 +95,7 @@ struct SolidColorFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4),
       isOutputActive: true)
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .solidColorFill(4)
+      storeService: storeService, videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -104,7 +106,7 @@ struct SolidColorFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: .solidColorFill(404)
+      storeService: storeService, videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

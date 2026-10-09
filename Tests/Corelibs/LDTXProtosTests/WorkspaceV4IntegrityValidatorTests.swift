@@ -195,11 +195,53 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     }
   }
 
+  @Test("signed fixed-width IDs and reference keys round trip without loss")
+  func signedIDsRoundTrip() throws {
+    for id in [Int64.min, -1, 0, 1, Int64.max] {
+      let program = Ldtx_Workspace_V4_ProgramDefinition.with { $0.internalID = id }
+      let encoded = try program.serializedData()
+      #expect(encoded.count == 9)
+      #expect(try Ldtx_Workspace_V4_ProgramDefinition(serializedBytes: encoded).internalID == id)
+      let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4.with {
+        $0.landscapeProgramPreferences[id] = .with {
+          $0.videoLayerInternalIds = [id]
+          $0.videoLayerHidden[id] = true
+        }
+      }
+      #expect(try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+        serializedBytes: preferences.serializedData()) == preferences)
+    }
+  }
+
+  @Test("negative and zero entity IDs cannot be persisted", arguments: [Int64.min, -1, 0])
+  func rejectsNonpositiveID(_ id: Int64) {
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.programs = [.with { $0.internalID = id }]
+    }
+    #expect(throws: WorkspaceV4IntegrityError.invalidInternalID) {
+      try WorkspaceV4IntegrityValidator.validate(definition)
+    }
+  }
+
+  @Test("negative references cannot be persisted")
+  func rejectsNegativeReference() {
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.programs = [.with { $0.internalID = 1; $0.displayName = "Main" }]
+    }
+    let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4.with {
+      $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [-1] }
+    }
+    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(-1)) {
+      try WorkspaceV4IntegrityValidator.validate(WorkspaceV4Bundle(
+        definition: definition, preferences: preferences))
+    }
+  }
+
   @Test("rejects an internal ID with the sign bit set")
   func rejectsInternalIDWithSignBit() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
-    program.internalID = UInt64(1) << 63
+    program.internalID = Int64.min
     definition.programs = [program]
 
     #expect(throws: WorkspaceV4IntegrityError.invalidInternalID) {

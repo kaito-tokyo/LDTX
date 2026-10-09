@@ -145,8 +145,8 @@ public final class WorkspaceStoreService {
   public var recordingState: WorkspaceRecordingState = .idle
   public var isLocalRecording = false
   public var outputFailureMessage: String?
-  public var visionResults: [UInt64: String] = [:]
-  public var visionFailureMessages: [UInt64: String] = [:]
+  public var visionResults: [Int64: String] = [:]
+  public var visionFailureMessages: [Int64: String] = [:]
 
   public init(
     definition: WorkspaceDefinition,
@@ -191,7 +191,7 @@ public final class WorkspaceStoreService {
       availableCameraIDs: availableCameraIDs, completionHandler: completionHandler)
   }
 
-  public func renameProgram(internalID: UInt64, name: String) throws {
+  public func renameProgram(internalID: Int64, name: String) throws {
     guard !isOutputActive else {
       throw WorkspaceSelectionError(message: "Programs cannot be edited during output.")
     }
@@ -210,7 +210,7 @@ public final class WorkspaceStoreService {
     updateProgramRuntimes()
   }
 
-  public func removeProgram(internalID: UInt64) throws {
+  public func removeProgram(internalID: Int64) throws {
     try requireConfirmedEdits()
     guard !isOutputActive else {
       throw WorkspaceSelectionError(message: "Programs cannot be deleted during output.")
@@ -222,7 +222,7 @@ public final class WorkspaceStoreService {
     documentContentsDidChange?()
   }
 
-  public func selectProgram(internalID: UInt64) throws {
+  public func selectProgram(internalID: Int64) throws {
     if selectedProgram?.internalID != internalID { try requireConfirmedEdits() }
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
@@ -304,7 +304,7 @@ public final class WorkspaceStoreService {
       .map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
     return definition.programs.first { $0.internalID == id } ?? definition.programs.first
   }
-  public func preferences(for id: UInt64, target: WorkspaceCanvasTarget) throws
+  public func preferences(for id: Int64, target: WorkspaceCanvasTarget) throws
     -> Ldtx_Workspace_V4_ProgramPreferences
   {
     guard self.definition.programs.contains(where: { $0.internalID == id }) else {
@@ -313,8 +313,8 @@ public final class WorkspaceStoreService {
     return self.preferences[keyPath: target.preferences][id] ?? .init()
   }
   public func commitVideoLayerTransform(
-    _ value: Ldtx_Workspace_V4_BasicTransform, layerID: UInt64,
-    programID: UInt64, target: WorkspaceCanvasTarget
+    _ value: Ldtx_Workspace_V4_BasicTransform, layerID: Int64,
+    programID: Int64, target: WorkspaceCanvasTarget
   ) throws -> Ldtx_Workspace_V4_BasicTransform {
     var updated = try preferences(for: programID, target: target)
     var transform = updated.videoLayerTransforms[layerID] ?? .init()
@@ -328,7 +328,7 @@ public final class WorkspaceStoreService {
   }
 
   public func commitPreferences(
-    _ value: Ldtx_Workspace_V4_ProgramPreferences, programID: UInt64, target: WorkspaceCanvasTarget
+    _ value: Ldtx_Workspace_V4_ProgramPreferences, programID: Int64, target: WorkspaceCanvasTarget
   ) throws {
     let current = try preferences(for: programID, target: target)
     guard
@@ -349,7 +349,7 @@ public final class WorkspaceStoreService {
     self.updateMixPreferences()
     self.synchronizeAudioMonitor()
   }
-  public func commitLayerOrder(_ ids: [UInt64], programID: UInt64, target: WorkspaceCanvasTarget)
+  public func commitLayerOrder(_ ids: [Int64], programID: Int64, target: WorkspaceCanvasTarget)
     throws
   {
     var updated = try preferences(for: programID, target: target)
@@ -359,7 +359,7 @@ public final class WorkspaceStoreService {
     try commitPreferences(updated, programID: programID, target: target)
   }
 
-  var videoComponentOptions: [WorkspaceSelectionOption<UInt64>] {
+  var videoComponentOptions: [WorkspaceSelectionOption<Int64>] {
     definition.videoComponents.compactMap { component in
       guard let id = component.internalID,
         let name = component.displayName
@@ -369,7 +369,7 @@ public final class WorkspaceStoreService {
   }
 
   func setVideoLayerIncluded(
-    _ included: Bool, componentID: UInt64, programID: UInt64, target: WorkspaceCanvasTarget
+    _ included: Bool, componentID: Int64, programID: Int64, target: WorkspaceCanvasTarget
   ) throws {
     guard !isOutputActive,
       definition.programs.contains(where: { $0.internalID == programID }),
@@ -407,7 +407,7 @@ public final class WorkspaceStoreService {
     }
   }
   @discardableResult
-  public func setAudioChannelGain(_ decibels: Double, forAudioInputDeviceInternalID id: UInt64)
+  public func setAudioChannelGain(_ decibels: Double, forAudioInputDeviceInternalID id: Int64)
     -> Bool
   {
     guard definition.audioDevices.contains(where: { $0.internalID == id }) else {

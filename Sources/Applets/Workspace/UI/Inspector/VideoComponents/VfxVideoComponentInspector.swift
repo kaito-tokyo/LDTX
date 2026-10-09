@@ -8,13 +8,13 @@ import SwiftUI
 
 struct VfxVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
-  let internalID: UInt64
+  let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   let appletData: WorkspaceAppletData
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: .vfxSource(internalID))
+      VideoComponentProgramLayers(storeService: storeService, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)

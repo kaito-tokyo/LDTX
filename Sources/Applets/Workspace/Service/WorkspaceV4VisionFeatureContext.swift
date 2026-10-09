@@ -8,21 +8,21 @@ import LDTXWorkspaceAppletModel
 
 @MainActor
 public struct WorkspaceV4VisionFeatureContext {
-  public var vision: (UInt64) -> Ldtx_Workspace_V4_OcrVision?
+  public var vision: (Int64) -> Ldtx_Workspace_V4_OcrVision?
   public var frameForVision:
     (Ldtx_Workspace_V4_OcrVision) async throws -> WorkspaceVisionAnalysisFrame
-  public var reportResult: (UInt64, String) -> Void
-  public var reportFailure: (UInt64, Error) -> Void
-  public var archiveResult: ((UInt64, CIImage, String) -> Void)?
+  public var reportResult: (Int64, String) -> Void
+  public var reportFailure: (Int64, Error) -> Void
+  public var archiveResult: ((Int64, CIImage, String) -> Void)?
   public var recordingTimelineMilliseconds: (() -> UInt64?)?
 
   public init(
-    vision: @escaping (UInt64) -> Ldtx_Workspace_V4_OcrVision?,
+    vision: @escaping (Int64) -> Ldtx_Workspace_V4_OcrVision?,
     frameForVision:
       @escaping (Ldtx_Workspace_V4_OcrVision) async throws -> WorkspaceVisionAnalysisFrame,
-    reportResult: @escaping (UInt64, String) -> Void,
-    reportFailure: @escaping (UInt64, Error) -> Void,
-    archiveResult: ((UInt64, CIImage, String) -> Void)? = nil,
+    reportResult: @escaping (Int64, String) -> Void,
+    reportFailure: @escaping (Int64, Error) -> Void,
+    archiveResult: ((Int64, CIImage, String) -> Void)? = nil,
     recordingTimelineMilliseconds: (() -> UInt64?)? = nil
   ) {
     self.vision = vision

@@ -64,14 +64,14 @@ public final class WorkspaceAppletData {
   public static let shared = WorkspaceAppletData()
 
   public private(set) var physicalDeviceIDsByResourceInternalID:
-    [UInt64: WorkspacePhysicalDeviceID] = [:]
+    [Int64: WorkspacePhysicalDeviceID] = [:]
   private static let assignmentsKey = "tokyo.kaito.ldtx.input-device-assignments.v1"
 
-  public func physicalDeviceID(for internalID: UInt64) -> WorkspacePhysicalDeviceID? {
+  public func physicalDeviceID(for internalID: Int64) -> WorkspacePhysicalDeviceID? {
     physicalDeviceIDsByResourceInternalID[internalID]
   }
 
-  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: UInt64)
+  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: Int64)
   {
     var updated = physicalDeviceIDsByResourceInternalID
     updated[internalID] = identifier
@@ -85,7 +85,7 @@ public final class WorkspaceAppletData {
   private func loadAssignments() {
     guard let data = userDefaults.data(forKey: Self.assignmentsKey),
       let assignments = try? PropertyListDecoder().decode(
-        [UInt64: WorkspacePhysicalDeviceID].self, from: data)
+        [Int64: WorkspacePhysicalDeviceID].self, from: data)
     else { return }
     physicalDeviceIDsByResourceInternalID = assignments
   }

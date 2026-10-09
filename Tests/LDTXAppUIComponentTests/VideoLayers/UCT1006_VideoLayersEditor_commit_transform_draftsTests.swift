@@ -554,7 +554,7 @@ extension AppUIComponentTestSuite {
       window.contentView = container
       defer { window.close() }
       window.displayIfNeeded()
-      for id in UInt64(1)...7 {
+      for id in Int64(1)...7 {
         let row = try #require(editor.table.rows[id])
         row.frame = NSRect(x: 0, y: 0, width: 1000, height: 80)
         container.addSubview(row)

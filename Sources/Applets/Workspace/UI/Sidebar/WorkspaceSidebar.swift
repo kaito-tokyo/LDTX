@@ -30,10 +30,26 @@ public struct WorkspaceSidebar: View {
     self._displayedSelection = State(initialValue: storeService.inspectorSelector)
   }
 
+  static func rows<Value>(
+    _ values: [Value], internalID: (Value) -> Int64?
+  ) -> [(id: Int64, value: Value, isSelectable: Bool)] {
+    let ids = values.map(internalID)
+    let counts = ids.compactMap { $0 }.filter { $0 > 0 }
+      .reduce(into: [Int64: Int]()) { $0[$1, default: 0] += 1 }
+    return values.enumerated().map { index, value in
+      if let id = ids[index], id > 0, counts[id] == 1 {
+        return (id, value, true)
+      }
+      return (-Int64(index) - 1, value, false)
+    }
+  }
+
   public var body: some View {
-    let inputDevices = storeService.definition.audioDevices
-    let videoComponents = storeService.definition.videoComponents
-    let visions = storeService.definition.visions
+    let inputDevices = Self.rows(storeService.definition.audioDevices) {
+      $0.hasInternalID ? $0.internalID : nil
+    }
+    let videoComponents = Self.rows(storeService.definition.videoComponents) { $0.internalID }
+    let visions = Self.rows(storeService.definition.visions) { $0.internalID }
 
     VStack {
       List(selection: $displayedSelection) {
@@ -49,10 +65,16 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(inputDevices) { device in
-            Label(device.displayName, systemImage: "waveform")
-              .tag(
-                WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID))
+          ForEach(inputDevices, id: \.id) { row in
+            let device = row.value
+            if row.isSelectable {
+              Label(device.displayName, systemImage: "waveform")
+                .tag(
+                  WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID)
+                )
+            } else {
+              Label(device.displayName, systemImage: "waveform").disabled(true)
+            }
           }
 
           Button {
@@ -67,45 +89,51 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(videoComponents) { component in
-            switch component.videoComponent {
-            case .vfxSource(let source):
-              Label(source.displayName, systemImage: "play.rectangle")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .vfxVideoComponent, internalID: source.internalID))
-            case .solidColorFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .solidColorFillVideoComponent, internalID: fill.internalID))
-            case .linearGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
-            case .radialGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
-            case .conicGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
-            case .clock(let clock):
-              Label(clock.displayName, systemImage: "clock")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .clockVideoComponent, internalID: clock.internalID))
-            case .testPattern(let testPattern):
-              Label(testPattern.displayName, systemImage: "testtube.2")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .testPatternVideoComponent, internalID: testPattern.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
+          ForEach(videoComponents, id: \.id) { row in
+            let component = row.value
+            if row.isSelectable {
+              switch component.videoComponent {
+              case .vfxSource(let source):
+                Label(source.displayName, systemImage: "play.rectangle")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .vfxVideoComponent, internalID: source.internalID))
+              case .solidColorFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .solidColorFillVideoComponent, internalID: fill.internalID))
+              case .linearGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
+              case .radialGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
+              case .conicGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
+              case .clock(let clock):
+                Label(clock.displayName, systemImage: "clock")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .clockVideoComponent, internalID: clock.internalID))
+              case .testPattern(let testPattern):
+                Label(testPattern.displayName, systemImage: "testtube.2")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .testPatternVideoComponent, internalID: testPattern.internalID))
+              case nil:
+                Label("(invalid)", systemImage: "questionmark.square.dashed")
+              }
+            } else {
+              Label(component.displayName ?? "(invalid)", systemImage: "questionmark.square.dashed")
+                .disabled(true)
             }
           }
 
@@ -121,21 +149,27 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(visions) { vision in
-            switch vision.vision {
-            case .ocrVision(let ocrVision):
-              Label(ocrVision.displayName, systemImage: "eye")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .ocrVision, internalID: ocrVision.internalID))
-            case .createMlImageClassifierVision(let classifierVision):
-              Label(classifierVision.displayName, systemImage: "eye")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .createMlImageClassifierVision,
-                    internalID: classifierVision.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
+          ForEach(visions, id: \.id) { row in
+            let vision = row.value
+            if row.isSelectable {
+              switch vision.vision {
+              case .ocrVision(let ocrVision):
+                Label(ocrVision.displayName, systemImage: "eye")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .ocrVision, internalID: ocrVision.internalID))
+              case .createMlImageClassifierVision(let classifierVision):
+                Label(classifierVision.displayName, systemImage: "eye")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .createMlImageClassifierVision,
+                      internalID: classifierVision.internalID))
+              case nil:
+                Label("(invalid)", systemImage: "questionmark.square.dashed")
+              }
+            } else {
+              Label(vision.displayName ?? "(invalid)", systemImage: "questionmark.square.dashed")
+                .disabled(true)
             }
           }
 

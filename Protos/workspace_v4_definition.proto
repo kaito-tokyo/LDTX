@@ -48,5 +48,5 @@ message CanvasConfiguration {
   uint32 portrait_video_bit_rate = 5 [default = 0];
   // The LdtxInternalId of the VFX Source used as the master clock for video
   // presentation timestamps.
-  uint64 pts_master_vfx_source_internal_id = 6 [default = 0];
+  sfixed64 pts_master_vfx_source_internal_id = 6 [default = 0];
 }

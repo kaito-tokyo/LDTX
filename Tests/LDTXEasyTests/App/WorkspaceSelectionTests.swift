@@ -33,12 +33,12 @@ import Testing
       #expect(!state.canSelectProgram)
     }
     let options = [
-      WorkspaceSelectionOption(id: UInt64(1), name: "Same"),
-      WorkspaceSelectionOption(id: UInt64(2), name: "Same"),
+      WorkspaceSelectionOption(id: Int64(1), name: "Same"),
+      WorkspaceSelectionOption(id: Int64(2), name: "Same"),
     ]
     #expect(options.map(\.id) == [1, 2])
     #expect(
-      WorkspaceSelectionRules.reconciled(nil as UInt64?, availableIDs: options.map(\.id)) == nil)
+      WorkspaceSelectionRules.reconciled(nil as Int64?, availableIDs: options.map(\.id)) == nil)
   }
 
   @Test func dynamicCandidatesNeverSelectThemselves() {

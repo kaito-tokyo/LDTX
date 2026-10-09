@@ -34,7 +34,7 @@ struct WorkspaceCanvasInspector: View {
           .frame(width: 110)
       }
       Picker("PTS Master VFX Source", selection: ptsMasterBinding) {
-        Text("Automatic").tag(UInt64?.none)
+        Text("Automatic").tag(Int64?.none)
         ForEach(videoDevices, id: \.internalID) { device in
           Text(device.displayName).tag(Optional(device.internalID))
         }
@@ -99,7 +99,7 @@ struct WorkspaceCanvasInspector: View {
     )
   }
 
-  private var ptsMasterBinding: Binding<UInt64?> {
+  private var ptsMasterBinding: Binding<Int64?> {
     Binding(
       get: {
         canvas.hasPtsMasterVfxSourceInternalID

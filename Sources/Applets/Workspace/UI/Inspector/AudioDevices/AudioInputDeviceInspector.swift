@@ -10,7 +10,7 @@ import SwiftUI
 struct AudioInputDeviceInspector: View {
   @Environment(\.documentReference) private var documentReference
   let storeService: WorkspaceStoreService
-  let internalID: UInt64
+  let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
 

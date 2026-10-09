@@ -85,8 +85,8 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) { completionHandler([]) }
-  func removeProgram(internalID: UInt64) throws {}
-  func selectProgram(internalID: UInt64) throws {}
+  func removeProgram(internalID: Int64) throws {}
+  func selectProgram(internalID: Int64) throws {}
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
   func captureScreenshots() throws -> [WorkspaceScreenshot] {
