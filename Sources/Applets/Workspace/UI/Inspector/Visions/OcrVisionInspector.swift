@@ -17,6 +17,7 @@ struct OcrVisionInspector: View {
   @State private var width: String
   @State private var height: String
   @State private var validatorID = UUID()
+  @State private var submittedInputs: [String] = []
 
   init(storeService: WorkspaceStoreService, vision: Binding<Ldtx_Workspace_V4_OcrVision>) {
     self.storeService = storeService
@@ -94,10 +95,6 @@ struct OcrVisionInspector: View {
           .foregroundStyle(.secondary)
       }
       .disabled(storeService.isOutputActive)
-      Section {
-        Button("Apply") { submitEdits() }
-      }
-      .disabled(storeService.isOutputActive)
       Section("Recognition Result") {
         if let failure = storeService.visionFailureMessages[vision.internalID] {
           Text(failure).foregroundStyle(.red)
@@ -111,11 +108,16 @@ struct OcrVisionInspector: View {
     .formStyle(.grouped)
     .onSubmit { submitEdits() }
     .onAppear {
-      storeService.registerInspectorEditValidator(id: validatorID) {
+      if submittedInputs.isEmpty { submittedInputs = inputs }
+      storeService.registerInspectorEditValidator(
+        id: validatorID, hasChanges: { inputs != submittedInputs },
+        submit: { try commitEdits() }
+      ) {
         _ = try Self.validatedRegion(x: x, y: y, width: width, height: height)
         _ = try validatedMinimumTextHeight()
       }
     }
+    .onChange(of: inputs) { storeService.refreshUnconfirmedChanges() }
     .onDisappear { storeService.removeInspectorEditValidator(id: validatorID) }
   }
 
@@ -135,20 +137,24 @@ struct OcrVisionInspector: View {
     }
   }
 
+  private var inputs: [String] { [languages, customWords, minimumTextHeight, x, y, width, height] }
+
   private func submitEdits() {
     guard !storeService.isOutputActive else { return }
-    do {
-      let region = try Self.validatedRegion(x: x, y: y, width: width, height: height)
-      let minimumHeight = try validatedMinimumTextHeight()
-      var updated = vision
-      updated.recognitionLanguages = Self.commaSeparatedValues(languages)
-      updated.customWords = Self.commaSeparatedValues(customWords)
-      updated.minimumTextHeight = minimumHeight
-      updated.regionOfInterest = region
-      vision = updated
-    } catch {
-      storeService.reportError(error)
-    }
+    do { try commitEdits() } catch { storeService.reportInputValidationError(error) }
+  }
+
+  private func commitEdits() throws {
+    let region = try Self.validatedRegion(x: x, y: y, width: width, height: height)
+    let minimumHeight = try validatedMinimumTextHeight()
+    var updated = vision
+    updated.recognitionLanguages = Self.commaSeparatedValues(languages)
+    updated.customWords = Self.commaSeparatedValues(customWords)
+    updated.minimumTextHeight = minimumHeight
+    updated.regionOfInterest = region
+    vision = updated
+    submittedInputs = inputs
+    storeService.refreshUnconfirmedChanges()
   }
 
   static func validatedRegion(x: String, y: String, width: String, height: String) throws

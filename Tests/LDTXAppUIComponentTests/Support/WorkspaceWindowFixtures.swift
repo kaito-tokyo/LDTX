@@ -19,6 +19,21 @@ func drainWorkspaceTestTasks() async {
 }
 
 @MainActor
+func settleWorkspaceToolbar(_ window: NSWindow) async {
+  // SwiftUI creates accessibility nodes lazily, even in hostless component tests.
+  NSApp.accessibilitySetValue(
+    true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
+  window.contentView?.layoutSubtreeIfNeeded()
+  try? await Task.sleep(for: .milliseconds(100))
+}
+
+@MainActor
+func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
+  let action = try #require(item.action)
+  #expect(NSApp.sendAction(action, to: item.target, from: item))
+}
+
+@MainActor
 func makeWorkspaceTestWindow(
   storeService: WorkspaceStoreService? = nil,
   dispatcher: (any WorkspaceRuntimeActions)? = nil,
@@ -44,10 +59,10 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
+  document.fileURL = url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace")
   return WorkspaceWindow(
-    url: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"),
-    deviceRegistry: DeviceRegistryService(), appletData: state.appletData,
-    storeService: state, documentReference: DocumentReference(document), pairedPreview: preview)
+    document: document, appletData: state.appletData, storeService: state,
+    deviceRegistry: DeviceRegistryService(), pairedPreview: preview)
 
 }
 

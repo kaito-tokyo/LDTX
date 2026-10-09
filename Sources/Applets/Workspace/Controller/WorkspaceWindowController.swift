@@ -48,6 +48,10 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var captureFailureIDs: Set<String> = []
 
   func reportError(_ error: Error) {
+    if WorkspaceStoreService.isInputValidationError(error) {
+      storeService.reportInputValidationError(error)
+      return
+    }
     guard !errorPresentationClosed, shutdownTask == nil else { return }
     pendingErrors.append(error)
     presentNextError()
@@ -212,10 +216,10 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     let deviceRegistry = DeviceRegistryService()
     deviceRegistry.errorHandler = { [weak storeService] error in storeService?.reportError(error) }
     let window = WorkspaceWindow(
-      url: url,
-      deviceRegistry: deviceRegistry,
+      document: documentReference.document!,
       appletData: appletData,
-      storeService: storeService, documentReference: documentReference,
+      storeService: storeService,
+      deviceRegistry: deviceRegistry,
       pairedPreview: pairedPreview)
     self.workspaceWindow = window
     self.windowRuntime = windowRuntime
@@ -286,7 +290,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       self.storeService.recordingState = state
       self.storeService.isOutputActive = state.isOutputActive
       self.storeService.isLocalRecording = self.recordingSession.isLocalRecording
-      (self.window as? WorkspaceWindow)?.updateOutputToolbar()
       self.storeService.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
@@ -344,6 +347,9 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   }
 
   public func selectProgram(internalID: UInt64) throws {
+    if storeService.selectedProgram?.internalID != internalID {
+      try storeService.requireConfirmedEdits()
+    }
     guard let document = document as? NSDocument else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,

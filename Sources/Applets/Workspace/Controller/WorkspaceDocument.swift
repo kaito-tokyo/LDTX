@@ -227,7 +227,8 @@ public final class WorkspaceDocument: NSDocument {
       try storeService.validateForSaving()
     } catch {
       if derivesInitialName { storeService.definition.displayName = initialName }
-      completionHandler(error)
+      storeService.reportInputValidationError(error)
+      completionHandler(CocoaError(.userCancelled))
       return
     }
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
@@ -324,7 +325,7 @@ public final class WorkspaceDocument: NSDocument {
     ) { [weak self] callback in self?.closeCallbacks.removeAll { $0 === callback } }
     closeCallbacks.append(callback)
     do { try storeService.validateInspectorEdits() } catch {
-      storeService.reportError(error)
+      storeService.reportInputValidationError(error)
       callback.reviewed(self, shouldClose: false, contextInfo: nil)
       return
     }

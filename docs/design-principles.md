@@ -117,10 +117,12 @@ the relevant design or feature documentation instead.
 - Reject non-finite or unrepresentable decibel edits before changing the model,
   preserving the previous value and the invalid editing draft.
 
-## Invalid edits prevent leaving their screen
+## Unconfirmed edits prevent leaving their screen
 
-- A screen containing invalid edited values cannot be left. Attempted navigation
-  must report the validation error and preserve the current screen and draft.
+- A screen containing unconfirmed edited values cannot be left. Attempted navigation
+  must preserve the current screen and draft and indicate the pending edits.
+  Sidebar selection shows a popover at Apply instead of presenting an error dialog. Same-selection
+  assignments and pane opening or closing are allowed.
 - Validate at multiple layers. Ordinary edits that were allowed to leave their
   screen must not become latent validation failures discovered only on save.
 - OCR ROI text remains a draft until the whole rectangle is valid. Inspector
@@ -129,7 +131,8 @@ the relevant design or feature documentation instead.
 - Content Editors register weakly captured draft validators with the Workspace
   store. Master-volume and layer-transform drafts participate in the same
   navigation, output-start, save, and close validation as OCR ROI drafts.
-  Validation checks the current text without committing or discarding it.
+  Validation checks the current text without committing or discarding it. Window-wide
+  Submit validates all pending owners before any writeback; Enter may commit locally.
 
 ## Video visibility terminology
 

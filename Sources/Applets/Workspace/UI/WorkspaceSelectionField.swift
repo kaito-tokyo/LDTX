@@ -144,7 +144,7 @@ struct WorkspaceSelectionSheet<ID: Hashable>: View {
       try commit(proposed)
       cancel()
     } catch {
-      if let reportError { reportError(error) } else { failure = error.localizedDescription }
+      failure = error.localizedDescription
     }
   }
 }

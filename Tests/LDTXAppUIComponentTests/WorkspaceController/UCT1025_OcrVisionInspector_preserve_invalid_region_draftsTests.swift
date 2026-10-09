@@ -32,7 +32,7 @@ extension AppUIComponentTestSuite {
       var x = "0"
       let width = "1"
       let validatorID = UUID()
-      store.registerInspectorEditValidator(id: validatorID) {
+      store.registerInspectorEditValidator(id: validatorID, hasChanges: { x != "0" }) {
         _ = try OcrVisionInspector.validatedRegion(x: x, y: "0", width: width, height: "1")
       }
       defer { store.removeInspectorEditValidator(id: validatorID) }
@@ -47,7 +47,7 @@ extension AppUIComponentTestSuite {
         #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
         #expect(throws: (any Error).self) { try store.validateForSaving() }
       }
-      #expect(errors.count == 3)
+      #expect(errors.isEmpty)
     }
 
     @Test("UCT-1025.2: Correcting the complete rectangle allows navigation")

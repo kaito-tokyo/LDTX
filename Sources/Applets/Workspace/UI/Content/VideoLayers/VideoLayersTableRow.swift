@@ -40,7 +40,16 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   var isHidden = false
   var supportsPlacement = true
   var strings = ["0", "0", "1", "1"]
-  var hasUnconfirmedChanges = false
+  @ObservationIgnored var onEditsChanged: () -> Void = {}
+  @ObservationIgnored private var submittedStrings = ["0", "0", "1", "1"]
+  var hasUnconfirmedChanges = false {
+    didSet { if oldValue != hasUnconfirmedChanges { onEditsChanged() } }
+  }
+
+  func edit(_ text: String, at index: Int) {
+    strings[index] = text
+    hasUnconfirmedChanges = strings != submittedStrings
+  }
   var isEditing = false
 
   func display(
@@ -52,6 +61,8 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleX),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleY),
     ]
+    submittedStrings = strings
+    hasUnconfirmedChanges = false
   }
 
   private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32, size: Double) -> String {
@@ -89,8 +100,7 @@ struct VideoLayersTableRowContent: View {
                 get: { state.strings[index] },
                 set: {
                   guard state.strings[index] != $0 else { return }
-                  state.strings[index] = $0
-                  state.hasUnconfirmedChanges = true
+                  state.edit($0, at: index)
                 })
             )
             .focused($focusedField, equals: index)

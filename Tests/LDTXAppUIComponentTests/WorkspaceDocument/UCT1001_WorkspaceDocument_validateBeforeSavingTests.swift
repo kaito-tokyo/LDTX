@@ -26,6 +26,8 @@ extension AppUIComponentTestSuite {
       let url = root.appendingPathComponent("Invalid.ldtxworkspace")
       let document = WorkspaceDocument()
       defer { document.close() }
+      var validationErrors: [Error] = []
+      document.storeService.inputValidationErrorHandler = { validationErrors.append($0) }
       var reportedErrors: [Error] = []
       document.storeService.errorHandler = { reportedErrors.append($0) }
       document.storeService.definition.programs = [validationProgram(name: "Pattern")]
@@ -45,13 +47,14 @@ extension AppUIComponentTestSuite {
       do {
         try await saveWorkspaceDocument(document, to: url)
         Issue.record("Expected validation failure")
-      } catch let error as WorkspaceSaveValidationError {
-        #expect(error.messages.count == 3)
-        let alert = NSAlert(error: error)
-        #expect(alert.informativeText.contains("Landscape"))
-        #expect(alert.informativeText.contains("Portrait"))
-        #expect(alert.informativeText.contains("Pattern"))
+      } catch {
+        #expect((error as NSError).code == CocoaError.userCancelled.rawValue)
       }
+      let validationError = try #require(validationErrors.first as? WorkspaceSaveValidationError)
+      #expect(validationError.messages.count == 3)
+      #expect(validationError.failureReason?.contains("Landscape") == true)
+      #expect(validationError.failureReason?.contains("Portrait") == true)
+      #expect(validationError.failureReason?.contains("Pattern") == true)
       #expect(reportedErrors.isEmpty)
       #expect(document.storeService.definition.displayName == "Untitled")
       #expect(document.fileURL == nil)
@@ -79,7 +82,9 @@ extension AppUIComponentTestSuite {
       do {
         try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
         Issue.record("Expected validation failure")
-      } catch is WorkspaceSaveValidationError {}
+      } catch {
+        #expect((error as NSError).code == CocoaError.userCancelled.rawValue)
+      }
       #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == before)
       #expect(document.isDocumentEdited)
       document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
@@ -104,8 +109,8 @@ extension AppUIComponentTestSuite {
       #expect(!document.isDocumentEdited)
     }
 
-    @Test("UCT-1001.3: The Save action presents one aggregated validation sheet")
-    func saveActionPresentsOneValidationSheet() async throws {
+    @Test("UCT-1001.3: The Save action reports aggregated validation without an error sheet")
+    func saveActionReportsValidationWithoutSheet() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
@@ -123,21 +128,21 @@ extension AppUIComponentTestSuite {
       try await saveWorkspaceDocument(document, to: url)
       document.storeService.preferences.landscapeProgramPreferences[99] = .init()
       document.storeService.preferences.portraitProgramPreferences[100] = .init()
+      var errors: [Error] = []
+      document.storeService.inputValidationErrorHandler = { errors.append($0) }
       window.orderFront(nil)
       document.save(nil)
-      for _ in 0..<100 where window.attachedSheet == nil {
+      for _ in 0..<100 where errors.isEmpty {
         try await Task.sleep(for: .milliseconds(20))
       }
-      let sheet = try #require(window.attachedSheet)
-      func text(in view: NSView) -> [String] {
-        (view as? NSTextField).map { [$0.stringValue] } ?? view.subviews.flatMap { text(in: $0) }
-      }
-      let messages = text(in: try #require(sheet.contentView)).joined(separator: "\n")
+      let error = try #require(errors.first as? WorkspaceSaveValidationError)
+      #expect(errors.count == 1)
+      #expect(window.attachedSheet == nil)
+      let messages = error.messages.joined(separator: "\n")
       #expect(messages.contains("Landscape"))
       #expect(messages.contains("Portrait"))
       #expect(messages.contains("99"))
       #expect(messages.contains("100"))
-      window.endSheet(sheet)
       await Task.yield()
     }
 

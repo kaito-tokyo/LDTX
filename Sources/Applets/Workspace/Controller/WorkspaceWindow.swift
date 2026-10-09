@@ -11,28 +11,41 @@ import Observation
 import QuickLookThumbnailing
 import SwiftUI
 
-public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemValidation {
+public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
+  private weak var document: NSDocument?
+  private let documentReference: DocumentReference
+  let appletData: WorkspaceAppletData
+  let storeService: WorkspaceStoreService
+  let deviceRegistry: DeviceRegistryService
+
+  let splitViewController: NSSplitViewController
   let contentPane: WorkspaceContentPane
-  private let storeService: WorkspaceStoreService
+
   let screenshotResultPopover = NSPopover()
-  private var inspectorTitleObservationTask: Task<Void, Never>?
   private var inspectorCollapseObservation: NSKeyValueObservation?
-  private let inspectorTitleField = NSTextField(labelWithString: "")
+  private var sidebarCollapseObservation: NSKeyValueObservation?
+  private var toolbarItems: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+  private var isClosed = false
+  let pendingEditsPopover = NSPopover()
+  private var expandedSidebarWidth: CGFloat = 240
+  private var expandedInspectorWidth: CGFloat = 340
 
   init(
-    url: URL,
-    deviceRegistry: DeviceRegistryService,
+    document: NSDocument,
     appletData: WorkspaceAppletData,
     storeService: WorkspaceStoreService,
-    documentReference: DocumentReference,
+    deviceRegistry: DeviceRegistryService,
     pairedPreview: ProgramCanvasPairedPreview
   ) {
+    self.document = document
+    self.documentReference = DocumentReference(document)
+    self.appletData = appletData
     self.storeService = storeService
-    storeService.appletData = appletData
-    storeService.documentReference = documentReference
+    self.deviceRegistry = deviceRegistry
+
+    self.splitViewController = NSSplitViewController()
     self.contentPane = WorkspaceContentPane(
-      storeService: storeService,
-      pairedPreview: pairedPreview)
+      storeService: storeService, pairedPreview: pairedPreview)
 
     super.init(
       contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
@@ -40,37 +53,40 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       backing: .buffered,
       defer: false)
 
-    self.representedURL = url
-    self.title = url.deletingPathExtension().lastPathComponent
+    self.representedURL = document.fileURL
+    self.title = document.fileURL?.lastPathComponent ?? "(Untitled)"
     self.isReleasedWhenClosed = false
 
-    let sidebarView = WorkspaceSidebar(
-      storeService: storeService, deviceRegistry: deviceRegistry, appletData: appletData
-    )
-
-    let inspectorView = WorkspaceInspectorContainer(
-      deviceRegistry: deviceRegistry,
-      storeService: storeService,
-      appletData: appletData
-    )
-
-    let sidebarController = NSHostingController(
-      rootView: sidebarView.environment(\.documentReference, documentReference))
+    let sidebarController = NSHostingController(rootView: sidebarView)
     sidebarController.sizingOptions = [.minSize]
+    sidebarController.sceneBridgingOptions = []
 
-    let inspectorController = NSHostingController(
-      rootView: inspectorView.environment(\.documentReference, documentReference))
+    let inspectorController = NSHostingController(rootView: inspectorView)
     inspectorController.sizingOptions = [.minSize]
+    inspectorController.sceneBridgingOptions = []
 
-    let splitViewController = PaneSplitViewController(
-      sidebar: sidebarController, content: contentPane, inspector: inspectorController,
-      sidebarCanCollapse: true)
+    let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
+    sidebarItem.canCollapse = true
+    sidebarItem.canCollapseFromWindowResize = false
+    sidebarItem.holdingPriority = .init(260)
+    let contentItem = NSSplitViewItem(viewController: contentPane)
+    contentItem.holdingPriority = .init(250)
+    let inspectorItem = NSSplitViewItem(inspectorWithViewController: inspectorController)
+    inspectorItem.canCollapse = true
+    inspectorItem.canCollapseFromWindowResize = false
+    inspectorItem.maximumThickness = 480
+    inspectorItem.holdingPriority = .init(260)
+    for item in [sidebarItem, contentItem, inspectorItem] {
+      item.automaticallyAdjustsSafeAreaInsets = false
+      splitViewController.addSplitViewItem(item)
+    }
 
     self.contentViewController = splitViewController
     self.titleVisibility = .visible
     self.toolbarStyle = .unified
-    let toolbar = NSToolbar(identifier: "WorkspaceV4Toolbar.AppKit.v1")
+    let toolbar = NSToolbar(identifier: "workspace")
     toolbar.delegate = self
+    toolbar.allowsUserCustomization = false
     toolbar.displayMode = .iconOnly
     self.toolbar = toolbar
     // Installing the content controller replaces the initial size with its fitting size.
@@ -79,36 +95,79 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
       NSRect(origin: frame.origin, size: NSSize(width: 1062, height: 700 + toolbarHeight)),
       display: false)
 
-    splitViewController.setInitialWidths(sidebar: 240, content: 480)
+    splitViewController.view.layoutSubtreeIfNeeded()
+    let splitView = splitViewController.splitView
+    splitView.setPosition(240, ofDividerAt: 0)
+    splitView.setPosition(240 + 480 + splitView.dividerThickness, ofDividerAt: 1)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(paneLayoutChanged(_:)),
+      name: NSSplitView.didResizeSubviewsNotification, object: splitView)
+    sidebarCollapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) {
+      [weak self] item, _ in
+      let isCollapsed = item.isCollapsed
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        if !isCollapsed {
+          let width = self.expandedSidebarWidth
+          self.splitViewController.view.layoutSubtreeIfNeeded()
+          self.splitViewController.splitView.setPosition(width, ofDividerAt: 0)
+        }
+        self.invalidateRestorableState()
+      }
+    }
     contentPane.configureAfterEstablished()
 
-    inspectorTitleField.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
     inspectorCollapseObservation = splitViewController.splitViewItems[2].observe(
-      \.isCollapsed, options: [.new]
-    ) { [weak self] _, _ in
-      MainActor.assumeIsolated { self?.updateInspectorToolbar() }
-    }
-    updateInspectorToolbar()
-    let inspectorChanges = Observations { storeService.inspectorSelector }
-    inspectorTitleObservationTask = Task { @MainActor [weak self] in
-      for await _ in inspectorChanges {
-        guard !Task.isCancelled, let self else { return }
-        self.updateInspectorToolbar()
+      \.isCollapsed, options: [.initial, .new]
+    ) { [weak self] item, _ in
+      let isCollapsed = item.isCollapsed
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.storeService.isInspectorVisible = !isCollapsed
+        self.toolbarItems[.init("workspace.inspector.apply")]?.isHidden = isCollapsed
+        if !isCollapsed {
+          let width = self.expandedInspectorWidth
+          self.splitViewController.view.layoutSubtreeIfNeeded()
+          let splitView = self.splitViewController.splitView
+          splitView.setPosition(
+            splitView.bounds.width - width - splitView.dividerThickness, ofDividerAt: 1)
+        }
+        self.invalidateRestorableState()
       }
     }
 
+    storeService.pendingEditsDidBlockSelection = { [weak self] in
+      self?.showPendingEditsPopover()
+    }
+    storeService.inputValidationErrorHandler = { [weak self] error in
+      self?.showPendingEditsPopover(message: error.localizedDescription)
+    }
+    observeToolbarState()
     self.center()
+  }
+
+  @objc private func paneLayoutChanged(_ notification: Notification) {
+    let split = splitViewController.splitView
+    guard split.arrangedSubviews.count == 3 else { return }
+    if !splitViewController.splitViewItems[0].isCollapsed {
+      let width = split.arrangedSubviews[0].frame.width
+      if width > 0 { expandedSidebarWidth = width }
+    }
+    if !splitViewController.splitViewItems[2].isCollapsed {
+      let width = split.arrangedSubviews[2].frame.width
+      if width > 0 { expandedInspectorWidth = width }
+    }
+    invalidateRestorableState()
   }
 
   public func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
     [
-      .init("workspace.sidebar"), .sidebarTrackingSeparator,
-      .init("workspace.stopOutput"), .init("workspace.toggleOutput"),
-      .init("workspace.captureScreenshots"),
-      .flexibleSpace,
-      .inspectorTrackingSeparator, .init("workspace.inspectorTitle"),
-      .flexibleSpace, .init("workspace.inspector"),
-    ]
+      "workspace.sidebar", "workspace.stopOutput", "workspace.toggleOutput",
+      "workspace.captureScreenshots", NSToolbarItem.Identifier.flexibleSpace.rawValue,
+      NSToolbarItem.Identifier.inspectorTrackingSeparator.rawValue,
+      NSToolbarItem.Identifier.flexibleSpace.rawValue, "workspace.inspector.apply",
+      "workspace.inspector",
+    ].map { NSToolbarItem.Identifier($0) }
   }
 
   public func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -119,118 +178,136 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
     _ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
     willBeInsertedIntoToolbar flag: Bool
   ) -> NSToolbarItem? {
-    let item = NSToolbarItem(itemIdentifier: identifier)
-    item.target = contentViewController
-    switch identifier.rawValue {
-    case "workspace.sidebar":
-      item.label = "Sidebar"
-      item.paletteLabel = "Sidebar"
-      item.toolTip = "Show or hide the Sidebar"
-      item.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Sidebar")
-      item.action = #selector(PaneSplitViewController.toggleSidebar(_:))
-    case "workspace.stopOutput":
-      configureOutputItem(item)
-      item.isNavigational = true
-      item.target = self
-      item.action = #selector(stopOutput(_:))
-    case "workspace.toggleOutput":
-      configureOutputItem(item)
-      item.isNavigational = true
-      item.target = self
-      item.action = #selector(toggleOutput(_:))
-    case "workspace.captureScreenshots":
-      item.isNavigational = true
-      item.label = "Capture Screenshot(s)"
-      item.paletteLabel = item.label
-      item.toolTip = item.label
-      item.image = NSImage(systemSymbolName: "camera", accessibilityDescription: item.label)
-      item.target = self
-      item.action = #selector(captureScreenshots(_:))
-      item.isEnabled = validateToolbarItem(item)
-    case "workspace.inspectorTitle":
-      item.label = String(localized: "Inspector")
-      item.paletteLabel = item.label
-      item.view = inspectorTitleField
-    case "workspace.inspector":
-      item.label = "Inspector"
-      item.paletteLabel = "Inspector"
-      item.toolTip = "Show or hide the Inspector"
-      item.image = NSImage(systemSymbolName: "sidebar.right", accessibilityDescription: "Inspector")
-      item.action = #selector(PaneSplitViewController.toggleInspector(_:))
-    default:
+    if let item = toolbarItems[identifier] { return item }
+    // AppKit supplies its standard space and tracking separator items.
+    guard identifier != .flexibleSpace, identifier != .inspectorTrackingSeparator else {
       return nil
     }
+    let item = NSToolbarItem(itemIdentifier: identifier)
+    item.target = self
+    item.autovalidates = false
+    let label: String
+    let symbol: String?
+    switch identifier.rawValue {
+    case "workspace.sidebar":
+      label = "Sidebar"
+      symbol = "sidebar.left"
+      item.action = #selector(toggleSidebar)
+    case "workspace.stopOutput":
+      label = "Stop Output"
+      symbol = "stop.fill"
+      item.action = #selector(stopOutput)
+    case "workspace.toggleOutput":
+      label = "Start Output"
+      symbol = "play.fill"
+      item.action = #selector(toggleOutput)
+    case "workspace.captureScreenshots":
+      label = "Capture Screenshot(s)"
+      symbol = "camera"
+      item.action = #selector(captureScreenshots)
+    case "workspace.inspector":
+      label = "Inspector"
+      symbol = "sidebar.right"
+      item.action = #selector(toggleInspector)
+    case "workspace.inspector.apply":
+      label = "Apply"
+      symbol = nil
+      item.action = #selector(applyPendingEdits)
+      item.isHidden = !storeService.isInspectorVisible
+    default: return nil
+    }
+    item.label = label
+    if symbol == nil {
+      item.title = label
+      item.isBordered = true
+    }
+    if let symbol {
+      item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+    }
+    toolbarItems[identifier] = item
+    updateToolbarItems()
     return item
   }
 
-  private var inspectorTitle: String {
-    switch storeService.inspectorSelector?.kind {
-    case .workspacePrograms: String(localized: "Programs")
-    case .workspaceCanvas: String(localized: "Canvas")
-    case .workspaceOutput: String(localized: "Output")
-    case .audioInputDevice: String(localized: "Audio Input Device")
-    case .vfxVideoComponent: String(localized: "VFX")
-    case .solidColorFillVideoComponent: String(localized: "Solid Color Fill")
-    case .linearGradientFillVideoComponent: String(localized: "Linear Gradient Fill")
-    case .radialGradientFillVideoComponent: String(localized: "Radial Gradient Fill")
-    case .conicGradientFillVideoComponent: String(localized: "Conic Gradient Fill")
-    case .clockVideoComponent: String(localized: "Clock")
-    case .testPatternVideoComponent: String(localized: "Test Pattern")
-    case .ocrVision: String(localized: "OCR")
-    case .invalid, nil: String(localized: "Inspector")
+  private func updateToolbarItems() {
+    if !storeService.hasUnconfirmedChanges { pendingEditsPopover.close() }
+    toolbarItems[.init("workspace.stopOutput")]?.isEnabled = storeService.recordingState.canStop
+    if let item = toolbarItems[.init("workspace.toggleOutput")] {
+      let recording = storeService.recordingState == .recording
+      item.label = recording ? "Pause Output" : "Start Output"
+      item.image = NSImage(
+        systemSymbolName: recording ? "pause.fill" : "play.fill",
+        accessibilityDescription: item.label)
+      item.isEnabled = storeService.recordingState.canStart || recording
+    }
+    toolbarItems[.init("workspace.inspector.apply")]?.isEnabled =
+      storeService.hasUnconfirmedChanges && !storeService.isOutputActive
+      && !storeService.hasPendingSubmit
+  }
+
+  private func observeToolbarState() {
+    guard !isClosed else { return }
+    withObservationTracking {
+      if storeService.hasPendingSubmit { storeService.submitPendingEdits() }
+      updateToolbarItems()
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in self?.observeToolbarState() }
     }
   }
 
-  func updateInspectorToolbar() {
-    guard let toolbar, let split = contentViewController as? PaneSplitViewController else { return }
-    let identifier = NSToolbarItem.Identifier("workspace.inspectorTitle")
-    let index = toolbar.items.firstIndex { $0.itemIdentifier == identifier }
-    if split.splitViewItems[2].isCollapsed {
-      if let index { toolbar.removeItem(at: index) }
-      return
-    }
-    inspectorTitleField.stringValue = inspectorTitle
-    inspectorTitleField.sizeToFit()
-    if index == nil,
-      let separator = toolbar.items.firstIndex(where: {
-        $0.itemIdentifier == .inspectorTrackingSeparator
-      })
-    {
-      toolbar.insertItem(withItemIdentifier: identifier, at: separator + 1)
-    }
+  @objc private func toggleSidebar() {
+    splitViewController.splitViewItems[0].isCollapsed.toggle()
   }
 
-  private func configureOutputItem(_ item: NSToolbarItem) {
-    let isStop = item.itemIdentifier.rawValue == "workspace.stopOutput"
-    let isRunning = storeService.recordingState == .recording
-    let label = isStop ? "Stop Output" : (isRunning ? "Pause Output" : "Start Output")
-    let symbol = isStop ? "stop.fill" : (isRunning ? "pause.fill" : "play.fill")
-    item.label = label
-    item.paletteLabel = label
-    item.toolTip = label
-    item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
-    item.isEnabled = validateToolbarItem(item)
+  @objc private func toggleInspector() {
+    splitViewController.splitViewItems[2].isCollapsed.toggle()
   }
 
-  func updateOutputToolbar() {
-    for item in toolbar?.items ?? [] where item.target === self {
-      switch item.itemIdentifier.rawValue {
-      case "workspace.stopOutput", "workspace.toggleOutput": configureOutputItem(item)
-      default: item.isEnabled = validateToolbarItem(item)
-      }
+  @objc private func applyPendingEdits() {
+    pendingEditsPopover.close()
+    storeService.hasPendingSubmit = true
+    updateToolbarItems()
+  }
+
+  private func showPendingEditsPopover(
+    message: String = "Apply pending changes before selecting another item."
+  ) {
+    guard !isClosed else { return }
+    splitViewController.splitViewItems[2].isCollapsed = false
+    Task { @MainActor [weak self] in
+      await Task.yield()
+      guard let self, !isClosed,
+        let item = toolbarItems[.init("workspace.inspector.apply")]
+      else { return }
+      contentView?.superview?.layoutSubtreeIfNeeded()
+      pendingEditsPopover.close()
+      pendingEditsPopover.behavior = .transient
+      let controller = NSHostingController(
+        rootView: Text(message)
+          .padding().frame(width: 280))
+      controller.sizingOptions = .preferredContentSize
+      pendingEditsPopover.contentViewController = controller
+      pendingEditsPopover.show(relativeTo: item)
     }
   }
 
-  public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-    switch item.itemIdentifier.rawValue {
-    case "workspace.stopOutput": storeService.recordingState.canStop
-    case "workspace.toggleOutput":
-      storeService.recordingState.canStart || storeService.recordingState == .recording
-    default: true
-    }
+  private var sidebarView: some View {
+    WorkspaceSidebar(
+      storeService: storeService, deviceRegistry: deviceRegistry, appletData: appletData
+    )
+    .environment(\.documentReference, documentReference)
   }
 
-  @objc private func captureScreenshots(_ sender: Any?) {
+  private var inspectorView: some View {
+    WorkspaceInspectorContainer(
+      deviceRegistry: deviceRegistry,
+      storeService: storeService,
+      appletData: appletData
+    )
+    .environment(\.documentReference, documentReference)
+  }
+
+  @objc private func captureScreenshots() {
     do {
       let files = try storeService.captureScreenshots()
       let programFiles = files.filter { $0.programCanvas != nil }
@@ -271,18 +348,25 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate, NSToolbarItemVa
   }
 
   public override func close() {
-    inspectorTitleObservationTask?.cancel()
+    isClosed = true
+    pendingEditsPopover.close()
+    storeService.pendingEditsDidBlockSelection = nil
+    storeService.inputValidationErrorHandler = nil
     inspectorCollapseObservation?.invalidate()
+    sidebarCollapseObservation?.invalidate()
+    NotificationCenter.default.removeObserver(
+      self, name: NSSplitView.didResizeSubviewsNotification,
+      object: splitViewController.splitView)
     screenshotResultPopover.close()
     super.close()
   }
 
-  @objc private func stopOutput(_ sender: Any?) {
+  @objc private func stopOutput() {
     guard storeService.recordingState.canStop else { return }
     Task { await storeService.stopOutput() }
   }
 
-  @objc private func toggleOutput(_ sender: Any?) {
+  @objc private func toggleOutput() {
     let state = storeService.recordingState
     guard state.canStart || state == .recording else { return }
     Task {
