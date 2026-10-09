@@ -1,12 +1,17 @@
+---
+name: prepare-release
+description: Prepare an LDTX release, including Marketing version updates, release tags, workflow monitoring, and draft release verification. Use when preparing a release or troubleshooting the release flow; publishing remains a human operation.
+---
+
 <!--
 SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Release Guide
+# Prepare an LDTX release
 
-This document describes the Developer ID release flow for LDTX and the operator checklist that an agent can follow.
+Use this skill to prepare an LDTX release through Xcode Cloud and GitHub Actions, verify the draft release, and hand off publishing to a human.
 
 ## Human-only operations
 
@@ -15,13 +20,15 @@ The following operations must always be performed by a human and are prohibited 
 - merging a pull request, and
 - publishing a GitHub Release.
 
-Agents may prepare and create commits, push commits and tags, create or update draft pull requests, run the release
+Agents may prepare and create commits, push commits, create or update draft pull requests, run the release
 workflow, and create or update draft GitHub Releases. An agent must stop after verifying the draft release and hand
 the final merge or Publish action to a human.
 
+Agents must obtain explicit human permission before pushing a release tag.
+
 ## Release architecture
 
-[`.github/workflows/release.yml`](../.github/workflows/release.yml) starts automatically when a `v`-prefixed tag is
+[`.github/workflows/release.yml`](../../../.github/workflows/release.yml) starts automatically when a `v`-prefixed tag is
 pushed. It uses four jobs:
 
 1. `validate-release` verifies the signed annotated tag and reachability from `main`.
@@ -33,7 +40,7 @@ pushed. It uses four jobs:
 4. `draft-release` runs on Linux, downloads the release assets, and creates a new draft GitHub Release with
    automatically generated release notes. It fails if a release already exists for the tag.
 
-Xcode Cloud owns app signing and notarization, including the certificate and provisioning-profile boundary. GitHub Actions receives the stapled notarized app as `LDTX.app.zip` and the matching xcarchive for dSYMs. The App Store Connect API key is used to locate those artifacts and for DMG notarization.
+Xcode Cloud owns app signing and notarization. GitHub Actions does not import Developer ID certificates or sign the app or DMG. It receives the stapled notarized app and the matching xcarchive for dSYMs. The App Store Connect API key is used to locate those artifacts and for DMG notarization.
 
 ## Prerequisites
 
@@ -45,15 +52,15 @@ Xcode Cloud owns app signing and notarization, including the certificate and pro
   - `APP_STORE_CONNECT_KEY_BASE64`
   - `APP_STORE_CONNECT_KEY_ID`
 - `APP_STORE_CONNECT_KEY_BASE64` is the App Store Connect private key encoded as base64.
-- The environment has required reviewers and deployment-branch or tag restrictions appropriate for release access.
-- `release-*` environments must not use custom deployment protection rules. The workflow uses
-  `deployment: false` to access environment secrets and variables without creating deployments.
+- The `release-macos` environment is used to access secrets and variables with `deployment: false`, without
+  creating deployments. Environment manual approval is not part of the release flow; required reviewers and
+  custom deployment protection rules are not used.
 - `gh` is authenticated for the repository when driving the release from CLI.
 
 ## Version and tag rules
 
 - Prepare release work on a dedicated branch named `releases/<tag>`.
-- Update `MARKETING_VERSION` in [`project.yml`](../project.yml) before the release tag is created.
+- Update `MARKETING_VERSION` in [`project.yml`](../../../project.yml) before the release tag is created.
 - `LDTX.xcodeproj` is generated and ignored; `project.yml` is the release version source of truth.
 - The release tag must match the archived apps' Marketing version with a leading `v`.
 
@@ -64,7 +71,7 @@ Examples include `v0.1.0`, `v0.1.0-beta.2`, and `v0.1.0-rc.3`.
 ### 1. Open the Marketing version update PR
 
 Start from the latest `origin/main`, create a branch such as `releases/v0.1.0`, and update `MARKETING_VERSION` in
-[`project.yml`](../project.yml). A human must review and merge the PR.
+[`project.yml`](../../../project.yml). A human must review and merge the PR.
 
 ### 2. Confirm main CI is passing
 
@@ -73,7 +80,7 @@ stop and fix CI before continuing.
 
 ### 3. Create and push the release tag
 
-Create the tag on the exact commit to release, then push it:
+Create the tag on the exact commit to release, then push it after obtaining explicit human permission:
 
 ```sh
 git tag -s v0.1.0 -m "v0.1.0"
@@ -129,7 +136,7 @@ A human adds or approves the release notes and publishes the draft. Agents must 
 ## Symbolicating a release crash
 
 For agent-assisted crash symbolication, use the repository's
-[`symbolicate-ldtx-crash` skill](../.agents/skills/symbolicate-ldtx-crash/SKILL.md).
+[`symbolicate-ldtx-crash` skill](../symbolicate-ldtx-crash/SKILL.md).
 It describes downloading release dSYMs, matching crash UUIDs, and resolving frames with Xcode tools.
 
 ## Suggested agent handoff format
