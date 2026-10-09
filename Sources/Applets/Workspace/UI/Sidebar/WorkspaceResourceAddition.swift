@@ -50,11 +50,24 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
   }
 }
 
+enum WorkspaceAddVisionKind: String, CaseIterable, Identifiable {
+  case ocr = "OCR Vision"
+  case createMlImageClassifier = "Create ML Image Classifier"
+  var id: Self { self }
+  var inspectorKind: WorkspaceInspectorKind {
+    switch self {
+    case .ocr: .ocrVision
+    case .createMlImageClassifier: .createMlImageClassifierVision
+    }
+  }
+}
+
 struct WorkspaceAddDraft: Equatable {
   var name = ""
   var physicalDeviceID: WorkspacePhysicalDeviceID?
   var componentKind: WorkspaceAddComponentKind = .vfxSource
   var videoComponentID: UInt64?
+  var visionKind: WorkspaceAddVisionKind = .ocr
 }
 
 struct WorkspaceAddDeviceOption: Identifiable {
@@ -132,11 +145,17 @@ enum WorkspaceResourceAddition {
         draft.componentKind.make(id: id, name: name))
       inspectorKind = draft.componentKind.inspectorKind
     case .vision:
-      definition.visions.append(
-        WorkspaceResourceFactory.makeOcrVision(
+      let vision: Ldtx_Workspace_V4_VisionWrapper
+      switch draft.visionKind {
+      case .ocr:
+        vision = WorkspaceResourceFactory.makeOcrVision(
           id: id, name: name, componentID: draft.videoComponentID!)
-      )
-      inspectorKind = .ocrVision
+      case .createMlImageClassifier:
+        vision = WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+          id: id, name: name, componentID: draft.videoComponentID!)
+      }
+      definition.visions.append(vision)
+      inspectorKind = draft.visionKind.inspectorKind
     }
     storeService.definition = definition
     storeService.inspectorSelector = .init(kind: inspectorKind, internalID: id)

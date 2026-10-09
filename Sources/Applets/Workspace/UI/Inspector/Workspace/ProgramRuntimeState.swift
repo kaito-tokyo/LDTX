@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXProgram
+import LDTXVideoComposition
 
 public let programWorldCanvasSize = (width: 1_920, height: 1_080)
 

@@ -1,7 +1,10 @@
+import AppKit
+import LDTXProgram
+import LDTXProgramRuntime
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 
 final class MasterVolumeEditor: NSViewController {
   private let storeService: WorkspaceStoreService
@@ -9,7 +12,15 @@ final class MasterVolumeEditor: NSViewController {
   init(storeService: WorkspaceStoreService) {
     self.storeService = storeService
     super.init(nibName: nil, bundle: nil)
-    storeService.registerContentEditValidator { [weak self] in
+    for field in masterFields {
+      field.onEditsChanged = { [weak storeService] in storeService?.refreshUnconfirmedChanges() }
+    }
+    storeService.registerContentEditValidator(
+      hasChanges: { [weak self] in self?.masterFields.contains { $0.dirty } ?? false },
+      submit: { [weak self] in
+        for field in self?.masterFields ?? [] { try field.submit() }
+      }
+    ) { [weak self] in
       for field in self?.masterFields ?? [] {
         if field.dirty { _ = try field.validatedValue() }
       }
@@ -116,7 +127,7 @@ final class MasterVolumeEditor: NSViewController {
         } ?? false
       }
       masterFields[index].onInvalid = { [weak storeService] message in
-        storeService?.reportError(WorkspaceSelectionError(message: message))
+        storeService?.reportInputValidationError(WorkspaceSelectionError(message: message))
       }
     }
     monitorVolume.doubleValue = storeService.localState.monitorVolume ?? 0
@@ -130,7 +141,11 @@ final class MasterVolumeEditor: NSViewController {
 }
 
 final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
-  private(set) var dirty = false
+  private(set) var dirty = false {
+    didSet { if oldValue != dirty { onEditsChanged() } }
+  }
+  private var submittedText = ""
+  var onEditsChanged: () -> Void = {}
   private var editing = false
   private var commitValue: (Ldtx_Workspace_V4_Rational32) -> Bool = { _ in false }
   var onInvalid: (String) -> Void = { _ in }
@@ -146,17 +161,19 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   ) {
     isEnabled = enabled
     commitValue = commit
-    if !dirty && !editing { stringValue = RationalFormatStyle().format(value) }
+    if !dirty && !editing {
+      stringValue = RationalFormatStyle().format(value)
+      submittedText = stringValue
+    }
   }
   func discard() {
     dirty = false
     editing = false
   }
   func controlTextDidBeginEditing(_ notification: Notification) { editing = true }
-  func controlTextDidChange(_ notification: Notification) { dirty = true }
+  func controlTextDidChange(_ notification: Notification) { dirty = stringValue != submittedText }
   func controlTextDidEndEditing(_ notification: Notification) {
     editing = false
-    commit()
   }
   func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
     guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
@@ -165,18 +182,20 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   }
   func commit() {
     guard dirty else { return }
-    let value: Ldtx_Workspace_V4_Rational32
-    do {
-      value = try validatedValue()
-    } catch {
+    do { try submit() } catch {
       toolTip = error.localizedDescription
       onInvalid(error.localizedDescription)
-      return
     }
-    if commitValue(value) {
-      dirty = false
-      toolTip = nil
+  }
+  func submit() throws {
+    guard dirty else { return }
+    let value = try validatedValue()
+    guard commitValue(value) else {
+      throw WorkspaceSelectionError(message: "The master volume could not be applied.")
     }
+    submittedText = stringValue
+    dirty = false
+    toolTip = nil
   }
   func validatedValue() throws -> Ldtx_Workspace_V4_Rational32 {
     guard let parsed = try? RationalParseStrategy().parse(stringValue),

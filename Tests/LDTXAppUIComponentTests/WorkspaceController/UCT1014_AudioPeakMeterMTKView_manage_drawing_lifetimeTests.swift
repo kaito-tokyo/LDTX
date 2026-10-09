@@ -5,8 +5,8 @@ import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI

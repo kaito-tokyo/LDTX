@@ -4,8 +4,10 @@
 
 import Foundation
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
+import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 import Observation
 
 @MainActor
@@ -44,62 +46,96 @@ public final class WorkspaceStoreService {
   public var selectedAudioMix: ProgramAudioPeakMeter.Master = .landscape
 
   private var storedInspectorSelector: WorkspaceInspectorSelector?
+  public var isInspectorVisible = true
+  @ObservationIgnored public var pendingEditsDidBlockSelection: (() -> Void)?
+
   public var inspectorSelector: WorkspaceInspectorSelector? {
     get { storedInspectorSelector }
     set {
       guard newValue != storedInspectorSelector else { return }
-      do {
-        try validateInspectorEdits()
-        storedInspectorSelector = newValue
-        ocrRegionDrafts.removeAll()
-      } catch { reportError(error) }
+      refreshUnconfirmedChanges()
+      guard !hasUnconfirmedChanges else {
+        pendingEditsDidBlockSelection?()
+        return
+      }
+      storedInspectorSelector = newValue
     }
   }
-  var ocrRegionDrafts: [UInt64: [String: String]] = [:]
-  private var inspectorEditErrors: [UInt64: String] = [:]
-  @ObservationIgnored private var contentEditValidators: [() throws -> Void] = []
+  private struct EditValidator {
+    var hasChanges: () -> Bool
+    var validate: () throws -> Void
+    var submit: () throws -> Void
+  }
 
-  func registerContentEditValidator(_ validate: @escaping () throws -> Void) {
-    contentEditValidators.append(validate)
+  @ObservationIgnored private var contentEditValidators: [EditValidator] = []
+  @ObservationIgnored private var inspectorEditValidators: [UUID: EditValidator] = [:]
+  public private(set) var hasUnconfirmedChanges = false
+  private var storedHasPendingSubmit = false
+  public var hasPendingSubmit: Bool {
+    get { storedHasPendingSubmit }
+    set {
+      if newValue { refreshUnconfirmedChanges() }
+      guard !newValue || (hasUnconfirmedChanges && !isOutputActive) else { return }
+      storedHasPendingSubmit = newValue
+    }
+  }
+
+  func registerContentEditValidator(
+    hasChanges: @escaping () -> Bool = { false },
+    submit: @escaping () throws -> Void = {},
+    _ validate: @escaping () throws -> Void
+  ) {
+    contentEditValidators.append(.init(hasChanges: hasChanges, validate: validate, submit: submit))
+    refreshUnconfirmedChanges()
+  }
+
+  func registerInspectorEditValidator(
+    id: UUID, hasChanges: @escaping () -> Bool = { false },
+    submit: @escaping () throws -> Void = {},
+    _ validate: @escaping () throws -> Void
+  ) {
+    inspectorEditValidators[id] = .init(hasChanges: hasChanges, validate: validate, submit: submit)
+    refreshUnconfirmedChanges()
+  }
+
+  func removeInspectorEditValidator(id: UUID) {
+    inspectorEditValidators.removeValue(forKey: id)
+    refreshUnconfirmedChanges()
+  }
+
+  public func refreshUnconfirmedChanges() {
+    hasUnconfirmedChanges =
+      contentEditValidators.contains { $0.hasChanges() }
+      || inspectorEditValidators.values.contains { $0.hasChanges() }
   }
 
   public func validateInspectorEdits() throws {
-    for validate in contentEditValidators { try validate() }
-    if let message = inspectorEditErrors.sorted(by: { $0.key < $1.key }).first?.value {
-      throw WorkspaceSelectionError(message: message)
+    for entry in contentEditValidators { try entry.validate() }
+    for entry in inspectorEditValidators.values { try entry.validate() }
+  }
+
+  public func requireConfirmedEdits() throws {
+    refreshUnconfirmedChanges()
+    try validateInspectorEdits()
+    guard !hasUnconfirmedChanges else {
+      throw WorkspaceSelectionError(message: "Apply the pending edits before switching views.")
     }
   }
 
-  func editOcrRegion(internalID: UInt64, field: String, text: String) {
-    guard !isOutputActive else { return }
-    ocrRegionDrafts[internalID, default: [:]][field] = text
-    do {
-      guard
-        let index = definition.visions.firstIndex(where: { $0.ocrVision.internalID == internalID }),
-        case .ocrVision(var vision) = definition.visions[index].vision
-      else { throw WorkspaceSelectionError(message: "The OCR Vision is no longer available.") }
-      var region = vision.regionOfInterest
-      for (name, text) in ocrRegionDrafts[internalID, default: [:]] {
-        switch name {
-        case "X": region.x = try RationalParseStrategy().parse(text)
-        case "Y": region.y = try RationalParseStrategy().parse(text)
-        case "Width":
-          region.width = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-            .parse(text)
-        case "Height":
-          region.height = try RationalValueParseStrategy<Ldtx_Workspace_V4_Rational32DefaultOne>()
-            .parse(text)
-        default: break
-        }
-      }
-      try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
-      vision.regionOfInterest = region
-      definition.visions[index].vision = .ocrVision(vision)
-      inspectorEditErrors.removeValue(forKey: internalID)
-    } catch {
-      inspectorEditErrors[internalID] =
-        "Correct the OCR ROI before leaving this Inspector. " + error.localizedDescription
+  // The Window is the only consumer. Validate every owner before invoking any writeback.
+  public func submitPendingEdits() {
+    guard hasPendingSubmit else { return }
+    defer {
+      hasPendingSubmit = false
+      refreshUnconfirmedChanges()
     }
+    guard !isOutputActive else { return }
+    let entries = contentEditValidators + Array(inspectorEditValidators.values)
+    let pending = entries.filter { $0.hasChanges() }
+    do {
+      for entry in pending { try entry.validate() }
+      for entry in pending { try entry.submit() }
+    } catch { reportInputValidationError(error) }
   }
 
   @ObservationIgnored public var documentOutputStateDidChange: (() -> Void)?
@@ -139,10 +175,6 @@ public final class WorkspaceStoreService {
   @ObservationIgnored public var appletData = WorkspaceAppletData()
   @ObservationIgnored public var audioPeakMeter = ProgramAudioPeakMeter()
 
-  public func synchronizeVision() {
-    runtimeActions?.synchronizeVision()
-  }
-
   public func synchronizeAudioMonitor() {
     runtimeActions?.synchronizeAudioMonitor()
   }
@@ -179,7 +211,7 @@ public final class WorkspaceStoreService {
   }
 
   public func removeProgram(internalID: UInt64) throws {
-    try validateInspectorEdits()
+    try requireConfirmedEdits()
     guard !isOutputActive else {
       throw WorkspaceSelectionError(message: "Programs cannot be deleted during output.")
     }
@@ -191,7 +223,7 @@ public final class WorkspaceStoreService {
   }
 
   public func selectProgram(internalID: UInt64) throws {
-    try validateInspectorEdits()
+    if selectedProgram?.internalID != internalID { try requireConfirmedEdits() }
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }
@@ -203,7 +235,7 @@ public final class WorkspaceStoreService {
   }
 
   public func startOutput() async throws {
-    try validateInspectorEdits()
+    try requireConfirmedEdits()
     guard let runtimeActions else {
       throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
     }
@@ -245,13 +277,31 @@ public final class WorkspaceStoreService {
         messages: issues.map { "\($0.context): \($0.error.localizedDescription)" })
     }
   }
+  @ObservationIgnored public var inputValidationErrorHandler: ((Error) -> Void)?
+
+  public func reportInputValidationError(_ error: Error) {
+    inputValidationErrorHandler?(error)
+  }
+
   @ObservationIgnored public var errorHandler: ((Error) -> Void)?
 
+  public static func isInputValidationError(_ error: Error) -> Bool {
+    error is WorkspaceSelectionError || error is RationalInputError
+      || error is Rational32EncodingError || error is WorkspaceSaveValidationError
+      || error is WorkspaceV4IntegrityError
+  }
+
   public func reportError(_ error: Error) {
-    errorHandler?(error)
+    if Self.isInputValidationError(error) {
+      reportInputValidationError(error)
+    } else {
+      errorHandler?(error)
+    }
   }
   public var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
-    let id = workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
+    let id =
+      (documentReference?.document?.fileURL ?? localStateURL)
+      .map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
     return definition.programs.first { $0.internalID == id } ?? definition.programs.first
   }
   public func preferences(for id: UInt64, target: WorkspaceCanvasTarget) throws

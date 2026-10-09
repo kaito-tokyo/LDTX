@@ -50,7 +50,7 @@ settings operations. Existing observable models drive presentation updates;
 the weak reference is not a change-observation mechanism. Read and write hooks
 continue to use AppKit's supplied URLs rather than the environment.
 The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
-input devices, video components, and OCR visions. The window injects its device
+input devices, video components, and OCR or Create ML image-classification visions. The window injects its device
 registry and app-local data. Form drafts do not change the document until Add
 validates a live document, the current output state, name, and input references.
 Missing documents disable Sidebar additions, and submission rechecks document
@@ -76,7 +76,7 @@ under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
 WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 
-WorkspaceWindow uses PaneSplitViewController with hosted SwiftUI sidebar and
+WorkspaceWindow configures its NSSplitViewController directly with hosted SwiftUI sidebar and
 Inspector panes and an AppKit WorkspaceContentPane in the center.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
@@ -159,7 +159,9 @@ one Workspace root rather than registered as separate navigator groups.
 
 Workspace retains its existing module boundaries because lower-level frameworks
 also consume its model. Each Workspace target includes only its own Controller,
-Interface, Model, Service, Store, or UI subdirectory. XcodeGen generates the
+Model, Service, Store, or UI subdirectory. Workspace has no Interface umbrella
+module: consumers import their dependencies directly. Shared state enums live
+in Model; runtime protocols and Program resolution live in Service. XcodeGen generates the
 per-target membership exceptions, so a source compiles in one Xcode target.
 Adding or removing Workspace files requires regenerating the project to update
 these exceptions. SwiftPM-only entrypoints remain managed by Package.swift.
@@ -204,10 +206,44 @@ relocation cleanup for those fields is a separate change. Landscape and Portrait
 master volumes and audio mute settings are independent. There is no mix
 synchronization setting between the canvases.
 
-The Workspace toolbar marks Stop and Start/Pause as navigational items, in that
-order, so AppKit places them before the standard document title. The window uses
-the unified toolbar style; AppKit manages the title's placement and synchronizes
-it with the document name. Content does not repeat the title in its editor.
+The Workspace window uses the unified toolbar style. WorkspaceWindow owns its
+NSToolbar, implements its delegate and handles target/action directly. Both
+hosting controllers use `sceneBridgingOptions = []`; Workspace pane roots do not use
+the SwiftUI toolbar modifier. Independent sheets retain their own controls. The fixed order is Sidebar, Stop, Start/Pause,
+Screenshot, flexible space, the native `inspectorTrackingSeparator`, Inspector
+title, flexible space, Apply, Inspector. The title follows the selected Inspector
+kind and hides when the Inspector is collapsed. Inspector stays at the trailing edge when Apply is hidden.
+Output state updates existing item labels, images and
+enabled state. Inspector collapse changes Apply's `isHidden` without removing
+its item or the separator. Pane toggles directly change `isCollapsed`, without
+animation. Toolbar customization and layout persistence are disabled.
+
+Sidebar selection changes with pending edits preserve the current selection and
+draft without displaying an error dialog. The store's non-persisted
+`pendingEditsDidBlockSelection` callback asks the owning Window to open the
+Inspector without animation and show a transient NSPopover anchored to Apply.
+Repeated attempts reuse the popover. Apply, confirmed edits, and Window closure
+dismiss it. Input validation uses the same non-modal popover; inline selection controls display
+their validation messages inline.
+
+Apply requests Window-wide Submit through the non-persisted, Window-local
+`WorkspaceStoreService.hasPendingSubmit`. The Window has one request observer.
+Existing edit-validation registrations also supply change status and writeback;
+OCR owns its seven input States, Create ML Image Classification owns its four
+ROI input States, Video Layers owns transform drafts, and Master Volume owns its
+numeric drafts. Submit first validates every pending owner. Any
+validation failure reports the existing error and leaves all drafts and models
+unchanged. Once every validation succeeds, each owner commits its values and
+clears its change status. The request is cleared after either outcome, allowing
+retry. Enter retains its existing local commit behavior; leaving a Master Volume
+text field preserves its draft until Enter or Apply. Direct Bindings,
+immediate controls, and independently confirmed sheets keep their behavior.
+
+Apply is disabled with no pending changes, during output, or while a request is
+pending, and hidden while the Inspector is collapsed. Unconfirmed changes block
+Inspector selection, Program selection, and Content editor tab switches; assigning
+the current selection or opening and closing panes is allowed and retains input.
+
 Toolbar controls project the V4 recording session state. Pause drains
 and finalizes the current output and leaves the session paused; the next Start
 creates a new output session. Stop from paused returns to idle. Transition states
@@ -296,7 +332,7 @@ The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
 AppKit controls retain their default selection, background, and focus behavior.
 Each layer operation copies the latest ProgramPreferences and submits the complete
 value, preserving unrelated fields. Reordering submits the complete ID array and
-must preserve the current membership. Tab changes retain drafts; Program changes
+must preserve the current membership. Tab changes require confirmed drafts; Program changes
 discard field editors. Editors update from
 `viewWillLayout()` using AppKit automatic Observation, without observation Tasks
 or an externally invoked `stop()`.
@@ -374,8 +410,8 @@ disconnects the service's runtime actions before releasing resources.
 WorkspaceStoreService validates the definition and both canvas preference maps
 with WorkspaceV4IntegrityValidator before a document save begins. Validation
 collects independent issues with resource and canvas context into one localized
-error. NSDocument's save error presentation displays the messages together in
-its standard error sheet; editors do not add inline save-validation labels.
+error. The Window displays the messages in its Apply popover and cancels the
+save with `CocoaError.userCancelled`, suppressing AppKit error sheets.
 A rejected save retains the edited model and leaves the existing package intact.
 The asynchronous writer validates its captured snapshot again before any I/O.
 
@@ -404,7 +440,12 @@ exact Rational32 ranges before writing the Workspace. Workspace Version remains
 
 ## Workspace operation errors
 
-`WorkspaceStoreService.reportError(_:)` passes operation errors unchanged to an
+Input validation uses `reportInputValidationError(_:)` and an Observation-ignored
+Window callback; it never calls `presentError`. Known validation error types
+reported through `reportError(_:)` are routed to this same callback. Enter,
+Submit, navigation, save, and close preserve invalid drafts.
+
+`WorkspaceStoreService.reportError(_:)` passes runtime operation errors to an
 Observation-ignored closure installed by the owning WorkspaceWindowController.
 Editors and Inspectors report failed commits through this boundary and retain
 unconfirmed input and open editing sheets. Pre-submit validation and candidate
@@ -430,10 +471,10 @@ Capture synchronization similarly reports newly failed camera IDs together,
 retains assignments, and clears failure state on successful retry. Device
 enumeration retains its availability state and reports new failures.
 
-Save validation continues to throw its aggregated LocalizedError through
-NSDocument's save completion. It does not also call `reportError`, preventing
-duplicate presentation. Error descriptions, failure reasons, and recovery
-suggestions remain available to AppKit's standard error presentation.
+Save preflight reports its aggregated LocalizedError through the non-modal
+validation callback and completes with cancellation. Background snapshot
+validation still throws before I/O. Runtime save failures retain standard
+AppKit error presentation.
 
 ## Local YouTube authorization storage
 
@@ -455,3 +496,26 @@ base64 `oauthClientJSON` and an `authorizations` dictionary keyed by client ID;
 authorization values are base64 secure archives of AppAuth state. Writes are
 atomic and set file permissions to `0600`. This development file contains
 credentials, including refresh tokens, and is not encrypted by this mechanism.
+
+## Create ML Image Classification Inspector
+
+The Add Vision sheet selects OCR or Create ML Image Classification and requires
+an explicit Video Component selection. Classification Visions have their own
+Sidebar selection and Inspector with name, Video Component, update interval,
+and ROI settings. Name, input, and interval use direct Bindings. ROI uses four
+local text States and joins Window-wide Apply and local Enter submission; an
+invalid rectangle preserves its draft. Editing is disabled during output.
+The Inspector includes Default and Output Active previews. Classification
+settings are validated and saved in Workspace V4. Model import and classification
+execution are separate work; this UI does not select or compile a model.
+
+OCR and Create ML Image Classification Inspectors select their input Video
+Component with a menu Picker. Unassigned clears the reference; a missing current
+reference appears as Unavailable until the user chooses a replacement. Selection
+changes synchronize Vision immediately, and output activity disables editing.
+
+Physical device, timing master, and stream-key assignments use inline menu
+Pickers rather than selection sheets. Physical-device and stream-key selections
+retain their availability checks before committing. Missing assigned values
+remain visible as Unavailable; clearing an assignment uses Unassigned, Automatic,
+or Host Clock as appropriate.

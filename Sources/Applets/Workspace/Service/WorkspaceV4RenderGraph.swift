@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 

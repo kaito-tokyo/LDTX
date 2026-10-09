@@ -3,6 +3,7 @@
 
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService

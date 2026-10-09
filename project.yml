@@ -5,6 +5,7 @@
 name: LDTX
 
 fileGroups:
+  - Protos
   - pr.xctestplan
   - push-main.xctestplan
 

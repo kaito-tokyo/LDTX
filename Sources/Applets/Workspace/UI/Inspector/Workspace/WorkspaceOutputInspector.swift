@@ -3,7 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXCapture
+import LDTXProgramRuntime
+import LDTXProtos
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -120,24 +125,45 @@ struct WorkspaceOutputInspector: View {
   private func streamKeyPicker(
     _ title: String, selection: Binding<String?>
   ) -> some View {
-    WorkspaceSelectionField(
-      title: title, current: selection.wrappedValue,
-      options: appletData.youtubeStreamKeyConfigurations.map { .init(id: $0.id, name: $0.name) },
-      loadError: streamKeyLoadError, clearTitle: "Remove Assignment",
-      isEditable: !isOutputActive,
-      refresh: refreshStreamKeys,
-      reportError: reportError,
-      commit: { selected in
-        guard !isOutputActive else {
-          throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
+    VStack(alignment: .leading) {
+      Picker(
+        title,
+        selection: Binding(
+          get: { selection.wrappedValue },
+          set: { selected in
+            do {
+              guard !isOutputActive else {
+                throw WorkspaceSelectionError(message: "Stop output before changing a stream key.")
+              }
+              if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
+              guard
+                selected == nil
+                  || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected }
+                  )
+              else {
+                throw WorkspaceSelectionError(message: "The selected stream key no longer exists.")
+              }
+              selection.wrappedValue = selected
+            } catch { reportError(error) }
+          })
+      ) {
+        Text("Unassigned").tag(String?.none)
+        ForEach(appletData.youtubeStreamKeyConfigurations) { configuration in
+          Text(configuration.name).tag(Optional(configuration.id))
         }
-        if selected != nil { _ = try appletData.loadYouTubeStreamKeyConfigurations() }
-        guard
-          selected == nil
-            || appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
-        else { throw WorkspaceSelectionError(message: "The selected stream key no longer exists.") }
-        selection.wrappedValue = selected
-      })
+        if let selected = selection.wrappedValue,
+          !appletData.youtubeStreamKeyConfigurations.contains(where: { $0.id == selected })
+        {
+          Text("Unavailable").tag(Optional(selected))
+        }
+      }
+      .pickerStyle(.menu)
+      .disabled(isOutputActive)
+      .onAppear(perform: refreshStreamKeys)
+      if let streamKeyLoadError {
+        Text(streamKeyLoadError).font(.caption).foregroundStyle(.red)
+      }
+    }
   }
 
   private func refreshStreamKeys() {

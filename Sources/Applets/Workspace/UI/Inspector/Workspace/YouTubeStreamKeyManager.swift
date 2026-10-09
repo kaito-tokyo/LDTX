@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXCapture
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct YouTubeStreamKeyManager: View {

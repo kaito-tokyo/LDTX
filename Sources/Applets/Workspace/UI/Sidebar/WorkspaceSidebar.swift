@@ -4,7 +4,9 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
@@ -14,6 +16,8 @@ public struct WorkspaceSidebar: View {
   @Environment(\.documentReference) private var documentReference
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
+  @State private var additionFailure: String?
+  @State private var displayedSelection: WorkspaceInspectorSelector?
 
   public init(
     storeService: WorkspaceStoreService,
@@ -23,6 +27,7 @@ public struct WorkspaceSidebar: View {
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
     self._storeService = Bindable(wrappedValue: storeService)
+    self._displayedSelection = State(initialValue: storeService.inspectorSelector)
   }
 
   public var body: some View {
@@ -31,7 +36,7 @@ public struct WorkspaceSidebar: View {
     let visions = storeService.definition.visions
 
     VStack {
-      List(selection: $storeService.inspectorSelector) {
+      List(selection: $displayedSelection) {
         Section {
           Label("Programs", systemImage: "rectangle.stack")
             .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
@@ -123,6 +128,12 @@ public struct WorkspaceSidebar: View {
                 .tag(
                   WorkspaceInspectorSelector(
                     kind: .ocrVision, internalID: ocrVision.internalID))
+            case .createMlImageClassifierVision(let classifierVision):
+              Label(classifierVision.displayName, systemImage: "eye")
+                .tag(
+                  WorkspaceInspectorSelector(
+                    kind: .createMlImageClassifierVision,
+                    internalID: classifierVision.internalID))
             case nil:
               Label("(invalid)", systemImage: "questionmark.square.dashed")
             }
@@ -141,15 +152,23 @@ public struct WorkspaceSidebar: View {
       }
     }
     .listStyle(.sidebar)
+    .onChange(of: displayedSelection) { _, selection in
+      storeService.inspectorSelector = selection
+      displayedSelection = storeService.inspectorSelector
+    }
+    .onChange(of: storeService.inspectorSelector) { _, selection in
+      displayedSelection = selection
+    }
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
         videoComponents: storeService.definition.videoComponents,
         validationMessage: documentReference?.document == nil
           ? "The Workspace document is unavailable."
-          : WorkspaceResourceAddition.validationMessage(
-            sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
-            audioDiscoveryError: deviceRegistry.errorMessage),
+          : additionFailure
+            ?? WorkspaceResourceAddition.validationMessage(
+              sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
+              audioDiscoveryError: deviceRegistry.errorMessage),
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
@@ -168,6 +187,7 @@ public struct WorkspaceSidebar: View {
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
     if sheet == .device { deviceRegistry.refresh() }
+    additionFailure = nil
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
@@ -179,7 +199,7 @@ public struct WorkspaceSidebar: View {
       try addResource(sheet, draft: draft)
       addSheet = nil
     } catch {
-      storeService.reportError(error)
+      additionFailure = error.localizedDescription
     }
   }
 
@@ -201,7 +221,6 @@ public struct WorkspaceSidebar: View {
       ) { _ in }
       storeService.synchronizeAudioMonitor()
     }
-    if sheet == .vision { storeService.synchronizeVision() }
   }
 
 }

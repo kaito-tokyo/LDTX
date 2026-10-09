@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
 
 private let kBelowDividerDragPriority0 = NSLayoutConstraint.Priority(250)
 private let kBelowDividerDragPriority10 = NSLayoutConstraint.Priority(260)
@@ -17,7 +16,7 @@ public final class WorkspaceContentPane: NSViewController {
   let editorStack: NSStackView = FlipedStackView()
   let masterVolumeEditor: MasterVolumeEditor
   let audioMixEditor: AudioMixEditor
-  let videoLayersEditorTabs = NSTabViewController()
+  let videoLayersEditorTabs: NSTabViewController
   let landscapeLayersEditor: VideoLayersEditor
   let landscapeLayersTab: NSTabViewItem
   let portraitLayersEditor: VideoLayersEditor
@@ -29,6 +28,7 @@ public final class WorkspaceContentPane: NSViewController {
   ) {
     self.pairedPreview = pairedPreview
     self.storeService = storeService
+    self.videoLayersEditorTabs = EditorTabViewController(storeService: storeService)
     self.masterVolumeEditor = MasterVolumeEditor(storeService: storeService)
     self.audioMixEditor = AudioMixEditor(storeService: storeService)
     self.landscapeLayersEditor = VideoLayersEditor(storeService: storeService, target: .landscape)
@@ -102,6 +102,25 @@ public final class WorkspaceContentPane: NSViewController {
     splitView.layoutSubtreeIfNeeded()
     splitView.setPosition(280, ofDividerAt: 0)
     splitView.autosaveName = storeService.externalID.map { "WorkspaceContentPane.\($0)" }
+  }
+
+  private final class EditorTabViewController: NSTabViewController {
+    let storeService: WorkspaceStoreService
+    init(storeService: WorkspaceStoreService) {
+      self.storeService = storeService
+      super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func tabView(_ tabView: NSTabView, shouldSelect tabViewItem: NSTabViewItem?) -> Bool {
+      guard tabViewItem !== tabView.selectedTabViewItem else { return true }
+      do {
+        try storeService.requireConfirmedEdits()
+        return true
+      } catch {
+        storeService.reportInputValidationError(error)
+        return false
+      }
+    }
   }
 
   private final class FlipedStackView: NSStackView {

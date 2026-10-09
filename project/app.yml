@@ -41,8 +41,15 @@ targets:
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXInternalProtocols
+      - target: LDTXProgram
+      - target: LDTXProgramRuntime
+      - target: LDTXTaskQueue
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXYouTube
       - target: LDTXAppletSupport
-      - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
       - target: LDTXWorkspaceAppletModel
@@ -188,8 +195,6 @@ targets:
       - target: LDTXProtos
         embed: true
       - target: LDTXProtosMacOSExtra
-        embed: true
-      - target: LDTXWorkspaceAppletInterface
         embed: true
       - target: LDTXWorkspaceAppletStore
         embed: true

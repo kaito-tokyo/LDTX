@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {

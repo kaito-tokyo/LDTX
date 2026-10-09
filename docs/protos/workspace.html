@@ -226,7 +226,8 @@ p, td { white-space: pre-wrap; }
 </section>
 <section><h2><code>workspace_v4_vision.proto</code></h2><p>Package <code>ldtx.workspace.v4</code></p>
 <article><h3 id="ldtx.workspace.v4.VisionWrapper"><code>VisionWrapper</code></h3><p>Wraps one concrete Vision definition.</p>
-<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>ocr_vision</code></td><td>1</td><td><a href="#ldtx.workspace.v4.OcrVision"><code>OcrVision</code></a></td><td>oneof <code>vision</code></td><td>—</td><td>The OCR Vision definition. Mutually exclusive with the other fields.</td></tr></tbody></table></article>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>ocr_vision</code></td><td>1</td><td><a href="#ldtx.workspace.v4.OcrVision"><code>OcrVision</code></a></td><td>oneof <code>vision</code></td><td>—</td><td>The OCR Vision definition. Mutually exclusive with the other fields.</td></tr>
+<tr><td><code>create_ml_image_classifier_vision</code></td><td>2</td><td><a href="#ldtx.workspace.v4.CreateMlImageClassifierVision"><code>CreateMlImageClassifierVision</code></a></td><td>oneof <code>vision</code></td><td>—</td><td>The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.</td></tr></tbody></table></article>
 
 
 <article><h3 id="ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></h3><p>The rectangular region of the input image analyzed by Vision.</p>
@@ -261,6 +262,15 @@ p, td { white-space: pre-wrap; }
 <tr><td><code>custom_words</code></td><td>8</td><td><code>string</code></td><td>repeated</td><td>—</td><td>The words that supplement Vision's lexicon during word recognition.
  Vision uses these only when language correction is enabled.</td></tr>
 <tr><td><code>minimum_text_height</code></td><td>9</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The minimum text height, normalized by the target image height, in [0, 1].</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.CreateMlImageClassifierVision"><code>CreateMlImageClassifierVision</code></h3><p>An image-analysis request that classifies an image using a Create ML model.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>uint64</code></td><td></td><td><code>0</code></td><td>An LDTXWorkspaceID for this entity.</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Vision shown in the Workspace sidebar.</td></tr>
+<tr><td><code>video_component_internal_id</code></td><td>3</td><td><code>uint64</code></td><td></td><td><code>0</code></td><td>The LDTXWorkspaceID of the Video Component analyzed after effects and
+ before Program placement.</td></tr>
+<tr><td><code>region_of_interest</code></td><td>4</td><td><a href="#ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></a></td><td></td><td>—</td><td>The region of the input image in which Vision performs the request.</td></tr>
+<tr><td><code>triggers</code></td><td>5</td><td><a href="#ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></a></td><td>repeated</td><td>—</td><td>The conditions that automatically trigger this Vision.</td></tr></tbody></table></article>
 
 
 </section>

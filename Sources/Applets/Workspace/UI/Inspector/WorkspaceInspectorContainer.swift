@@ -4,7 +4,9 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 #if DEBUG
@@ -135,12 +137,23 @@ public struct WorkspaceInspectorContainer: View {
         emptyInspector
       }
     case .ocrVision:
-      if let internalID = selector.internalID {
+      if let internalID = selector.internalID,
+        let vision = $storeService.ocrVision(internalID: internalID)
+      {
         OcrVisionInspector(
-          storeService: storeService, internalID: internalID)
+          storeService: storeService, vision: vision)
       } else {
         emptyInspector
       }
+    case .createMlImageClassifierVision:
+      if let internalID = selector.internalID,
+        let vision = $storeService.createMlImageClassifierVision(internalID: internalID)
+      {
+        CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
+      } else {
+        emptyInspector
+      }
+
     }
   }
 

@@ -1,7 +1,9 @@
+import AppKit
+import LDTXBackgroundSegmentation
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
@@ -17,7 +19,17 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     self.storeService = storeService
     self.target = target
     super.init(nibName: nil, bundle: nil)
-    storeService.registerContentEditValidator { [weak self] in
+    storeService.registerContentEditValidator(
+      hasChanges: { [weak self] in
+        self?.table.rows.values.contains { $0.state.hasUnconfirmedChanges } ?? false
+      },
+      submit: { [weak self] in
+        guard let self else { return }
+        for row in table.rows.values where row.state.hasUnconfirmedChanges {
+          try commit(row)
+        }
+      }
+    ) { [weak self] in
       guard let self else { return }
       for row in table.rows.values where row.state.hasUnconfirmedChanges {
         _ = try validatedTransform(for: row)
@@ -42,18 +54,17 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   }
 
   func videoLayersTableRowDidRequestCommit(_ row: VideoLayersTableRow) {
-    guard row.state.hasUnconfirmedChanges,
-      let id = try? internalID(for: row)
-    else { return }
-    do {
-      let transform = try validatedTransform(for: row)
-      let saved = try onCommitTransform(id, transform)
-      row.state.hasUnconfirmedChanges = false
-      row.state.display(
-        saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
-    } catch {
-      onError(error)
-    }
+    do { try commit(row) } catch { onError(error) }
+  }
+
+  private func commit(_ row: VideoLayersTableRow) throws {
+    guard row.state.hasUnconfirmedChanges else { return }
+    let id = try internalID(for: row)
+    let transform = try validatedTransform(for: row)
+    let saved = try onCommitTransform(id, transform)
+    row.state.display(
+      saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
+    storeService.refreshUnconfirmedChanges()
   }
 
   private func validatedTransform(for row: VideoLayersTableRow) throws
@@ -97,6 +108,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     transform.translationY = values[1]
     transform.scaleX = .init(value: values[2])
     transform.scaleY = .init(value: values[3])
+    try WorkspaceV4IntegrityValidator.validateTransform(transform)
     return transform
   }
 
@@ -156,6 +168,9 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
           guard let row else { return }
           row.delegate?.videoLayersTableRow(row, setHidden: value)
         }
+      }
+      row.state.onEditsChanged = { [weak storeService] in
+        storeService?.refreshUnconfirmedChanges()
       }
       row.delegate = self
       row.state.name = names[id] ?? "Missing Video Layer"
@@ -225,7 +240,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         try storeService.commitLayerOrder(ids, programID: id, target: target)
       },
       onError: { [weak storeService] error in
-        storeService?.reportError(error)
+        storeService?.reportInputValidationError(error)
       })
     status.textColor = .secondaryLabelColor
     status.stringValue =

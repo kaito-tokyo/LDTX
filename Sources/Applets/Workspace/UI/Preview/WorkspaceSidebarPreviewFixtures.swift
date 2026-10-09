@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
-  import LDTXWorkspaceAppletInterface
+  import LDTXProtos
 
   @MainActor
   enum WorkspaceSidebarPreviewFixtures {
@@ -153,7 +153,11 @@
       ocrVision.triggers = [triggerWrapper]
       var ocrVisionWrapper = Ldtx_Workspace_V4_VisionWrapper()
       ocrVisionWrapper.ocrVision = ocrVision
-      definition.visions = [ocrVisionWrapper]
+      definition.visions = [
+        ocrVisionWrapper,
+        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+          id: 11, name: "Scene Classifier", componentID: vfxSource.internalID),
+      ]
 
       return definition
     }

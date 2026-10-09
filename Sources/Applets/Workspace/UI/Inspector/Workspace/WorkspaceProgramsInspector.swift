@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
+import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletInterface
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct WorkspaceProgramSelector: View {

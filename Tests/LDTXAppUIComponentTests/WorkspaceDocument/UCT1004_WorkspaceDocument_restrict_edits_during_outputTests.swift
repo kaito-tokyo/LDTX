@@ -4,9 +4,9 @@
 import AppKit
 import Foundation
 import LDTXAppletSupport
+import LDTXProgramRuntime
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat

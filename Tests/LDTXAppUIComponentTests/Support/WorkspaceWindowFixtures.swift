@@ -4,9 +4,11 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
+import LDTXProgramRuntime
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI
@@ -16,6 +18,21 @@ import Testing
 func drainWorkspaceTestTasks() async {
   // The action creates a main-actor task; yield until it has run.
   for _ in 0..<10 { await Task.yield() }
+}
+
+@MainActor
+func settleWorkspaceToolbar(_ window: NSWindow) async {
+  // SwiftUI creates accessibility nodes lazily, even in hostless component tests.
+  NSApp.accessibilitySetValue(
+    true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
+  window.contentView?.layoutSubtreeIfNeeded()
+  try? await Task.sleep(for: .milliseconds(100))
+}
+
+@MainActor
+func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
+  let action = try #require(item.action)
+  #expect(NSApp.sendAction(action, to: item.target, from: item))
 }
 
 @MainActor
@@ -44,10 +61,10 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
+  document.fileURL = url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace")
   return WorkspaceWindow(
-    url: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"),
-    deviceRegistry: DeviceRegistryService(), appletData: state.appletData,
-    storeService: state, documentReference: DocumentReference(document), pairedPreview: preview)
+    document: document, appletData: state.appletData, storeService: state,
+    deviceRegistry: DeviceRegistryService(), pairedPreview: preview)
 
 }
 
@@ -64,7 +81,6 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   }
   func pauseOutput() async { actions.append("pause") }
   func stopOutput() async { actions.append("stop") }
-  func synchronizeVision() {}
   func synchronizeAudioMonitor() {}
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void

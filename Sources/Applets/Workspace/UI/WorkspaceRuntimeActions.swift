@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 
 public protocol WorkspaceRuntimeActions: AnyObject {
-  @MainActor func synchronizeVision()
   @MainActor func synchronizeAudioMonitor()
   @MainActor func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,

@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProgram
+import LDTXProtos
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
