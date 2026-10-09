@@ -73,6 +73,7 @@ message OcrVision {
   Rational32 minimum_text_height = 9;
 }
 
+// An image-analysis request that classifies an image using a Create ML model.
 message CreateMLImageClassificationVision {
   // An LDTXWorkspaceID for this entity.
   uint64 internal_id = 1 [default = 0];
