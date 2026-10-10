@@ -6,8 +6,9 @@ import LDTXAppletSupport
 import LDTXProgramRuntime
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletUI
+@testable import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
+import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
@@ -16,11 +17,48 @@ extension AppUIComponentTestSuite {
   struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
+    @Test("Input validation is routed to the document editing state without a modal sheet")
+    func inputValidationUsesEditingOwner() {
+      let (document, controller, window) = makeController()
+      defer { window.close() }
+      var errors: [Error] = []
+      document.editingState.inputValidationErrorHandler = { errors.append($0) }
+      controller.reportError(WorkspaceSelectionError(message: "Invalid input"))
+      controller.reportError(RationalInputError.invalidNumber)
+      let workspaceWindow = window as! WorkspaceWindow
+      #expect(
+        !workspaceWindow.contentPane.testAudioMixEditor.setAudioChannelGain(
+          0, forAudioInputDeviceInternalID: 999))
+      #expect(errors.count == 3)
+      #expect(window.attachedSheet == nil)
+    }
+
+    @Test("SwiftUI Environment routes input errors to the document editing owner")
+    func swiftUIErrorEnvironmentRoutesToController() async throws {
+      let (document, controller, window) = makeController()
+      defer { window.close() }
+      var errors: [Error] = []
+      document.editingState.inputValidationErrorHandler = { errors.append($0) }
+      let probe = NSHostingView(
+        rootView: WorkspaceErrorEnvironmentProbe()
+          .environment(\.workspaceReportError, { [weak controller] in controller?.reportError($0) })
+      )
+      probe.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+      window.contentView!.addSubview(probe)
+      defer { probe.removeFromSuperview() }
+      for _ in 0..<100 {
+        if !errors.isEmpty { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(errors.count == 1)
+      #expect(window.attachedSheet == nil)
+    }
+
     private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
       _ = NSApplication.shared
       let document = WorkspaceDocument()
       let controller = WorkspaceWindowController(
-        storeService: document.storeService,
+        storeService: document.storeService, editingState: document.editingState,
         persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
       let window = controller.window!
@@ -71,21 +109,21 @@ extension AppUIComponentTestSuite {
           NSLocalizedFailureReasonErrorKey: "A retained failure reason.",
           NSLocalizedRecoverySuggestionErrorKey: "Retry the edit.",
         ])
-      document.storeService.reportError(error)
+      controller.reportError(error)
       let first = try await waitForSheet(on: editor)
       #expect(first.sheetParent === editor)
       let text = displayedText(in: first.contentView)
       #expect(text.contains("Edit failed."))
       #expect(text.contains("A retained failure reason."))
       #expect(text.contains("Retry the edit."))
-      document.storeService.reportError(NSError(domain: "test", code: 2))
+      controller.reportError(NSError(domain: "test", code: 2))
       #expect(editor.attachedSheet === first)
       dismiss(first)
       let second = try await waitForSheet(on: editor, excluding: first)
       #expect(second !== first)
       await controller.shutdown()
       dismiss(second)
-      document.storeService.reportError(error)
+      controller.reportError(error)
       controller.reportError(error)
       try await Task.sleep(for: .milliseconds(100))
       #expect(editor.attachedSheet == nil)
@@ -150,6 +188,15 @@ extension AppUIComponentTestSuite {
       try await Task.sleep(for: .milliseconds(100))
       #expect(window.attachedSheet == nil)
       await controller.shutdown()
+    }
+  }
+}
+
+private struct WorkspaceErrorEnvironmentProbe: View {
+  @Environment(\.workspaceReportError) private var reportError
+  var body: some View {
+    Text("Error probe").onAppear {
+      reportError(WorkspaceSelectionError(message: "Invalid SwiftUI input"))
     }
   }
 }

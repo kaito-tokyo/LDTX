@@ -20,6 +20,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
   private let documentReference: DocumentReference
   let appletData: WorkspaceAppletData
   let storeService: WorkspaceStoreService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let reportError: (Error) -> Void
+  private let editingState: WorkspaceEditingState
   let deviceRegistry: DeviceRegistryService
 
   let splitViewController: NSSplitViewController
@@ -38,18 +41,27 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
     document: NSDocument,
     appletData: WorkspaceAppletData,
     storeService: WorkspaceStoreService,
+    editingState: WorkspaceEditingState,
+    peakMeter: ProgramAudioPeakMeter,
+    reportError: @escaping (Error) -> Void,
     deviceRegistry: DeviceRegistryService,
-    pairedPreview: ProgramCanvasPairedPreview
+    pairedPreview: ProgramCanvasPairedPreview,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.document = document
     self.documentReference = DocumentReference(document)
     self.appletData = appletData
     self.storeService = storeService
+    self.runtimeActions = runtimeActions
+    self.reportError = reportError
+    self.editingState = editingState
     self.deviceRegistry = deviceRegistry
 
     self.splitViewController = NSSplitViewController()
     self.contentPane = WorkspaceContentPane(
-      storeService: storeService, pairedPreview: pairedPreview)
+      storeService: storeService, appletData: appletData, editingState: editingState,
+      peakMeter: peakMeter, reportError: reportError, pairedPreview: pairedPreview,
+      runtimeActions: runtimeActions)
 
     super.init(
       contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
@@ -141,10 +153,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
       }
     }
 
-    storeService.pendingEditsDidBlockSelection = { [weak self] in
-      self?.showPendingEditsPopover()
-    }
-    storeService.inputValidationErrorHandler = { [weak self] error in
+    editingState.inputValidationErrorHandler = { [weak self] error in
       self?.showPendingEditsPopover(message: error.localizedDescription)
     }
     observeToolbarState()
@@ -245,7 +254,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
   }
 
   private func updateToolbarItems() {
-    if !storeService.hasUnconfirmedChanges { pendingEditsPopover.close() }
+    if !editingState.hasUnconfirmedChanges { pendingEditsPopover.close() }
     if let item = toolbarItems[.init("workspace.inspector.title")],
       let titleView = item.view as? NSTextField
     {
@@ -263,8 +272,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
       item.isEnabled = storeService.recordingState.canStart || recording
     }
     toolbarItems[.init("workspace.inspector.apply")]?.isEnabled =
-      storeService.hasUnconfirmedChanges && !storeService.isOutputActive
-      && !storeService.hasPendingSubmit
+      editingState.hasUnconfirmedChanges && !storeService.isOutputActive
   }
 
   var inspectorTitle: String {
@@ -290,7 +298,6 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
   private func observeToolbarState() {
     guard !isClosed else { return }
     withObservationTracking {
-      if storeService.hasPendingSubmit { storeService.submitPendingEdits() }
       updateToolbarItems()
     } onChange: { [weak self] in
       Task { @MainActor [weak self] in self?.observeToolbarState() }
@@ -307,7 +314,9 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
 
   @objc private func applyPendingEdits() {
     pendingEditsPopover.close()
-    storeService.hasPendingSubmit = true
+    editingState.refreshUnconfirmedChanges()
+    guard !storeService.isOutputActive, editingState.hasUnconfirmedChanges else { return }
+    editingState.submitPendingEdits(isOutputActive: storeService.isOutputActive)
     updateToolbarItems()
   }
 
@@ -335,23 +344,31 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
 
   private var sidebarView: some View {
     WorkspaceSidebar(
-      storeService: storeService, deviceRegistry: deviceRegistry, appletData: appletData
+      storeService: storeService, editingState: editingState, deviceRegistry: deviceRegistry,
+      appletData: appletData,
+      onSelectionBlocked: { [weak self] in self?.showPendingEditsPopover() },
+      runtimeActions: runtimeActions
     )
     .environment(\.documentReference, documentReference)
+    .environment(\.workspaceReportError, reportError)
   }
 
   private var inspectorView: some View {
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
-      storeService: storeService,
-      appletData: appletData
+      storeService: storeService, editingState: editingState,
+      appletData: appletData, runtimeActions: runtimeActions
     )
     .environment(\.documentReference, documentReference)
+    .environment(\.workspaceReportError, reportError)
   }
 
   @objc private func captureScreenshots() {
     do {
-      let files = try storeService.captureScreenshots()
+      guard let runtimeActions = runtimeActions() else {
+        throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
+      }
+      let files = try runtimeActions.captureScreenshots()
       let programFiles = files.filter { $0.programCanvas != nil }
       showScreenshotResult(
         title: "Screenshots saved",
@@ -364,7 +381,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
       if !showScreenshotResult(
         title: "Screenshot could not be captured", message: error.localizedDescription)
       {
-        storeService.reportError(error)
+        reportError(error)
       }
     }
   }
@@ -392,8 +409,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
   public override func close() {
     isClosed = true
     pendingEditsPopover.close()
-    storeService.pendingEditsDidBlockSelection = nil
-    storeService.inputValidationErrorHandler = nil
+    editingState.inputValidationErrorHandler = nil
     inspectorCollapseObservation?.invalidate()
     sidebarCollapseObservation?.invalidate()
     NotificationCenter.default.removeObserver(
@@ -405,7 +421,7 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
 
   @objc private func stopOutput() {
     guard storeService.recordingState.canStop else { return }
-    Task { await storeService.stopOutput() }
+    Task { await runtimeActions()?.stopOutput() }
   }
 
   @objc private func toggleOutput() {
@@ -413,9 +429,15 @@ public final class WorkspaceWindow: NSWindow, NSToolbarDelegate {
     guard state.canStart || state == .recording else { return }
     Task {
       if state == .recording {
-        await storeService.pauseOutput()
+        await runtimeActions()?.pauseOutput()
       } else {
-        do { try await storeService.startOutput() } catch {
+        do {
+          try editingState.requireConfirmedEdits()
+          guard let runtimeActions = runtimeActions() else {
+            throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
+          }
+          try await runtimeActions.startOutput()
+        } catch {
           storeService.outputFailureMessage = error.localizedDescription
         }
       }

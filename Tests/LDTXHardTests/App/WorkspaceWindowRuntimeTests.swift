@@ -30,16 +30,16 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       programInternalID: id, target: .landscape)
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = .with {
-      $0.numerator = 1
-      $0.denominator = 4
+      $0.num = 1
+      $0.den = 4
     }
     transform.scaleX = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.num = 1
+      $0.den = 1
     }
     transform.scaleY = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.num = 1
+      $0.den = 1
     }
     try runtime.setBasicTransform(
       transform, forVideoLayerInternalID: first,
@@ -49,8 +49,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       programInternalID: id, target: .portrait)
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -6
-        $0.denominator = 1
+        $0.num = -6
+        $0.den = 1
       }, programInternalID: id, target: .landscape)
     #expect(old.preferences.videoLayerTransforms.isEmpty)
     #expect(
@@ -75,13 +75,13 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let id = try runtime.addProgram(displayName: "Canvas Preferences")
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -81
-        $0.denominator = 25
+        $0.num = -81
+        $0.den = 25
       }, programInternalID: id, target: .landscape)
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -9
-        $0.denominator = 1
+        $0.num = -9
+        $0.den = 1
       }, programInternalID: id, target: .portrait)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
@@ -95,8 +95,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         })
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -6
-        $0.denominator = 1
+        $0.num = -6
+        $0.den = 1
       }, programInternalID: id, target: .landscape)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
@@ -124,8 +124,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
     try runtime.setAudioChannelGain(
       .with {
-        $0.numerator = -617
-        $0.denominator = 50
+        $0.num = -617
+        $0.den = 50
       }, forAudioInputDeviceInternalID: inputID)
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
@@ -134,8 +134,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         })
     try runtime.setAudioChannelGain(
       .with {
-        $0.numerator = 63
-        $0.denominator = 50
+        $0.num = 63
+        $0.den = 50
       }, forAudioInputDeviceInternalID: inputID)
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
@@ -155,8 +155,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
       try runtime.setAudioChannelGain(
         .with {
-          $0.numerator = -6
-          $0.denominator = 1
+          $0.num = -6
+          $0.den = 1
         }, forAudioInputDeviceInternalID: 999)
     }
     try runtime.removeProgram(internalID: id)

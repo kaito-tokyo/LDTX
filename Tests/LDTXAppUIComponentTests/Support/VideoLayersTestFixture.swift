@@ -14,7 +14,7 @@ final class VideoLayersTestFixture {
   func makeEditor() -> VideoLayersEditor {
     let editor = VideoLayersEditor(
       storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
-      target: .landscape)
+      appletData: WorkspaceAppletData(), editingState: WorkspaceEditingState(), target: .landscape)
     _ = editor.view
     return editor
   }

@@ -25,34 +25,52 @@ public enum Rational32DecibelEncoding {
 }
 
 public protocol Rational32Value: SwiftProtobuf.Message {
-  var numerator: Int32 { get set }
-  var denominator: UInt32 { get set }
+  var num: Int32 { get set }
+  var den: UInt32 { get set }
+  var hasNum: Bool { get }
+  var hasDen: Bool { get }
+  mutating func clearNum()
+  mutating func clearDen()
 }
 
 extension Ldtx_Workspace_V4_Rational32: Rational32Value {}
 extension Ldtx_Workspace_V4_Rational32DefaultOne: Rational32Value {}
 
 extension Rational32Value {
+  public var numIfPresent: Int32? {
+    get { hasNum ? num : nil }
+    set {
+      if let newValue { num = newValue } else { clearNum() }
+    }
+  }
+
+  public var denIfPresent: UInt32? {
+    get { hasDen ? den : nil }
+    set {
+      if let newValue { den = newValue } else { clearDen() }
+    }
+  }
+
   /// Copies the represented value, including the source type's fixed defaults.
   public init(value: some Rational32Value) {
     self.init()
-    numerator = value.numerator
-    denominator = value.denominator
+    num = value.num
+    den = value.den
   }
 
   public var float: Float { Float(double) }
 
   public var double: Double {
-    return Double(numerator) / Double(denominator)
+    return Double(num) / Double(den)
   }
 
   public var decimal: Decimal {
-    return Decimal(numerator) / Decimal(denominator)
+    return Decimal(num) / Decimal(den)
   }
 
   public mutating func set(num: Int32, den: UInt32) {
-    numerator = num
-    denominator = den
+    self.num = num
+    self.den = den
   }
 
   public mutating func set(decimal: Decimal) throws {

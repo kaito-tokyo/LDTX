@@ -33,20 +33,20 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(full.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
     vision.regionOfInterest = .with {
       $0.x = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
       $0.y = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.width = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.height = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
     }
     let cropped = try await runtime.visionFeatureContext.frameForVision(vision)

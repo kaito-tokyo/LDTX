@@ -11,20 +11,20 @@ import Testing
   private func region() -> Ldtx_Workspace_V4_VisionRegionOfInterest {
     .with {
       $0.x = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
       $0.y = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.width = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.height = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
     }
   }
@@ -48,10 +48,10 @@ import Testing
   @Test func projectionUsesFixedDefaultsForUnsetComponents() {
     var value = region()
     value.clearX()
-    value.width.clearNumerator()
+    value.width.clearNum()
     let rect = value.rect(in: CGRect(x: 10, y: 20, width: 100, height: 100))
     #expect(rect.minX == 10)
     #expect(rect.width == 50)
-    #expect(!value.hasX && !value.width.hasNumerator)
+    #expect(!value.hasX && !value.width.hasNum)
   }
 }

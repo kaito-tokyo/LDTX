@@ -38,7 +38,9 @@ func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
 @MainActor
 func makeWorkspaceTestWindow(
   storeService: WorkspaceStoreService? = nil,
+  editingState: WorkspaceEditingState? = nil,
   dispatcher: (any WorkspaceRuntimeActions)? = nil,
+  reportError: @escaping (Error) -> Void = { _ in },
   appletData: WorkspaceAppletData? = nil,
   url: URL? = nil,
   externalID: String = UUID().uuidString.lowercased()
@@ -46,8 +48,7 @@ func makeWorkspaceTestWindow(
   let document = WorkspaceDocument()
   let state = storeService ?? document.storeService
   state.externalID = externalID
-  state.appletData = appletData ?? WorkspaceAppletData()
-  state.runtimeActions = dispatcher
+  let data = appletData ?? WorkspaceAppletData()
   let renderer = ProgramPairPreviewRenderer(
     landscapeRuntime: ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -63,8 +64,10 @@ func makeWorkspaceTestWindow(
     onSelectPortrait: { state.selectedAudioMix = .portrait })
   document.fileURL = url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace")
   return WorkspaceWindow(
-    document: document, appletData: state.appletData, storeService: state,
-    deviceRegistry: DeviceRegistryService(), pairedPreview: preview)
+    document: document, appletData: data, storeService: state,
+    editingState: editingState ?? document.editingState,
+    peakMeter: .init(), reportError: { _ in },
+    deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
 
 }
 

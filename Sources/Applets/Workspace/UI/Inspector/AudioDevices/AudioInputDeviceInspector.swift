@@ -14,6 +14,8 @@ struct AudioInputDeviceInspector: View {
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
 
+  var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
+
   var body: some View {
     Form {
       formContent
@@ -30,7 +32,8 @@ struct AudioInputDeviceInspector: View {
         if documentReference?.document != nil {
           WorkspacePhysicalDeviceField(
             title: "Physical Device", internalID: internalID, isAudio: true,
-            storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry)
+            storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry,
+            runtimeActions: runtimeActions)
         }
       }
     } else {
@@ -40,7 +43,7 @@ struct AudioInputDeviceInspector: View {
   }
 
   private var device: Ldtx_Workspace_V4_AudioInputDevice? {
-    storeService.definition.audioDevices.first { $0.internalID == internalID }
+    storeService.workspaceDefinition.audioDevices.first { $0.internalID == internalID }
   }
 
   private var nameBinding: Binding<String> {
@@ -61,12 +64,12 @@ struct AudioInputDeviceInspector: View {
     }
   }
   private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_AudioInputDevice) -> Void) {
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.audioDevices.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.audioDevices[index])
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
 }

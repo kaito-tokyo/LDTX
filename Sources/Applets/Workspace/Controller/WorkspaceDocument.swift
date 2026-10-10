@@ -7,12 +7,14 @@ import LDTXProtos
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
+import Observation
 import os
 
 @MainActor
 @objc(WorkspaceDocument)
 public final class WorkspaceDocument: NSDocument {
-  public let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
+  public let storeService: WorkspaceStoreService
+  public let editingState: WorkspaceEditingState
   public let appletData = WorkspaceAppletData.shared
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID().uuidString)")!
   private struct SaveSnapshot: Sendable {
@@ -22,6 +24,7 @@ public final class WorkspaceDocument: NSDocument {
   private nonisolated let writingSnapshot = OSAllocatedUnfairLock<SaveSnapshot?>(initialState: nil)
   private var preferencesExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
     .lowercased()
+  private var outputStateObservationTask: Task<Void, Never>?
   private var isReading = false
   private var closeCallbacks: [WorkspaceCloseCallback] = []
   private var saveCallbacks: [WorkspaceSaveCallback] = []
@@ -40,24 +43,44 @@ public final class WorkspaceDocument: NSDocument {
     WorkspaceV4Bundle(
       definitionExternalID: storeService.externalID,
       preferencesExternalID: preferencesExternalID,
-      definition: storeService.definition, preferences: storeService.preferences,
+      definition: storeService.workspaceDefinition, preferences: storeService.workspacePreferences,
       outputSettingsExternalID: outputSettingsExternalID,
-      outputSettings: storeService.outputSettings)
+      outputSettings: storeService.workspaceOutputSettings)
   }
 
   public override init() {
+    let editingState = WorkspaceEditingState()
+    self.editingState = editingState
+    self.storeService = WorkspaceStoreService(
+      definition: .init(), preferences: .init())
     super.init()
     fileType = "tokyo.kaito.ldtx.workspace"
     storeService.externalID = WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased()
-    storeService.definition.displayName = "Untitled"
+    storeService.workspaceDefinition.displayName = "Untitled"
     storeService.localStateURL = transientURL
-    storeService.documentContentsDidChange = { [weak self] in
-      guard let self, !isReading else { return }
-      updateChangeCount(.changeDone)
+    observeWorkspaceContents()
+    let outputStates = Observations { [storeService] in storeService.isOutputActive }
+    outputStateObservationTask = Task { @MainActor [weak self] in
+      for await _ in outputStates {
+        guard !Task.isCancelled, let self, !self.hasShutDown else { return }
+        Self.updateRecordingDockBadge()
+      }
     }
-    storeService.documentOutputStateDidChange = { [weak self] in
-      guard let self else { return }
-      Self.updateRecordingDockBadge()
+  }
+
+  private func observeWorkspaceContents() {
+    guard !hasShutDown else { return }
+    withObservationTracking {
+      _ = storeService.workspaceDefinition
+      _ = storeService.workspacePreferences
+      _ = storeService.workspaceOutputSettings
+    } onChange: { [weak self] in
+      // The observed Store is MainActor-isolated; its mutations happen here.
+      MainActor.assumeIsolated {
+        guard let self, !self.hasShutDown else { return }
+        if !self.isReading { self.updateChangeCount(.changeDone) }
+        self.observeWorkspaceContents()
+      }
     }
   }
 
@@ -84,7 +107,8 @@ public final class WorkspaceDocument: NSDocument {
     guard windowControllers.isEmpty else { return }
     appletData.registerTransientState(at: transientURL)
     let windowController = WorkspaceWindowController(
-      storeService: storeService, persistenceCoordinator: persistenceCoordinator,
+      storeService: storeService, editingState: editingState,
+      persistenceCoordinator: persistenceCoordinator,
       appletData: appletData, documentReference: DocumentReference(self))
     addWindowController(windowController)
   }
@@ -106,12 +130,20 @@ public final class WorkspaceDocument: NSDocument {
   private func replaceContents(_ workspace: WorkspaceV4Bundle) throws {
     isReading = true
     defer { isReading = false }
-    storeService.definition = workspace.definition
-    storeService.preferences = workspace.preferences
-    storeService.outputSettings = workspace.outputSettings
+    storeService.workspaceDefinition = workspace.definition
+    storeService.workspacePreferences = workspace.preferences
+    storeService.workspaceOutputSettings = workspace.outputSettings
     outputSettingsExternalID = workspace.outputSettingsExternalID
     storeService.externalID = workspace.definitionExternalID
     preferencesExternalID = workspace.preferencesExternalID
+  }
+
+  private nonisolated static func validateForSaving(_ workspace: WorkspaceV4Bundle) throws {
+    let issues = WorkspaceV4IntegrityValidator.validationIssues(in: workspace)
+    guard issues.isEmpty else {
+      throw WorkspaceSaveValidationError(
+        messages: issues.map { "\($0.context): \($0.error.localizedDescription)" })
+    }
   }
 
   private var writingChangeCountToken: (token: Any, operation: NSDocument.SaveOperationType)?
@@ -173,7 +205,7 @@ public final class WorkspaceDocument: NSDocument {
     default:
       throw CocoaError(.featureUnsupported)
     }
-    try WorkspaceStoreService.validateForSaving(contents.workspace)
+    try Self.validateForSaving(contents.workspace)
     unblockUserInteraction()
     try writeProbe.withLock { $0 }?()
     let coordinator = NSFileCoordinator(filePresenter: self)
@@ -219,15 +251,16 @@ public final class WorkspaceDocument: NSDocument {
       completionHandler(CocoaError(.featureUnsupported))
       return
     }
-    let initialName = storeService.definition.displayName
+    let initialName = storeService.workspaceDefinition.displayName
     let derivesInitialName = fileURL == nil && initialName == "Untitled"
     let destinationName = url.deletingPathExtension().lastPathComponent
-    if derivesInitialName { storeService.definition.displayName = destinationName }
+    if derivesInitialName { storeService.workspaceDefinition.displayName = destinationName }
     do {
-      try storeService.validateForSaving()
+      try editingState.validateInspectorEdits()
+      try Self.validateForSaving(snapshot)
     } catch {
-      if derivesInitialName { storeService.definition.displayName = initialName }
-      storeService.reportInputValidationError(error)
+      if derivesInitialName { storeService.workspaceDefinition.displayName = initialName }
+      editingState.reportInputValidationError(error)
       completionHandler(CocoaError(.userCancelled))
       return
     }
@@ -235,9 +268,9 @@ public final class WorkspaceDocument: NSDocument {
       writingChangeCountToken = nil
       if let error {
         if derivesInitialName && fileURL == nil
-          && storeService.definition.displayName == destinationName
+          && storeService.workspaceDefinition.displayName == destinationName
         {
-          storeService.definition.displayName = initialName
+          storeService.workspaceDefinition.displayName = initialName
         }
         completionHandler(error)
         return
@@ -324,8 +357,8 @@ public final class WorkspaceDocument: NSDocument {
       delegate: delegate as AnyObject, selector: shouldCloseSelector, context: contextInfo
     ) { [weak self] callback in self?.closeCallbacks.removeAll { $0 === callback } }
     closeCallbacks.append(callback)
-    do { try storeService.validateInspectorEdits() } catch {
-      storeService.reportInputValidationError(error)
+    do { try editingState.validateInspectorEdits() } catch {
+      editingState.reportInputValidationError(error)
       callback.reviewed(self, shouldClose: false, contextInfo: nil)
       return
     }
@@ -367,6 +400,7 @@ public final class WorkspaceDocument: NSDocument {
             userInfo: [NSLocalizedDescriptionKey: message]))
       }
     }
+    outputStateObservationTask?.cancel()
     hasShutDown = true
   }
 

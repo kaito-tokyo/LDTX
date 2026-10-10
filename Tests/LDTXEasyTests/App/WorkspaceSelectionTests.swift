@@ -68,13 +68,13 @@ import Testing
     #expect(draft.videoComponentID == nil)
     let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     #expect(state.inspectorSelector == nil)
-    let before = state.definition
+    let before = state.workspaceDefinition
     #expect(
       WorkspaceResourceAddition.validationMessage(
         sheet: .device, draft: draft, devices: [], storeService: state) != nil)
     #expect(
       WorkspaceResourceAddition.validationMessage(
         sheet: .vision, draft: draft, devices: [], storeService: state) != nil)
-    #expect(state.definition == before)
+    #expect(state.workspaceDefinition == before)
   }
 }

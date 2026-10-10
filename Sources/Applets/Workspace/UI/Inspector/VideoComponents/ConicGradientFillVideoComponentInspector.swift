@@ -8,6 +8,7 @@ import SwiftUI
 
 struct ConicGradientFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
+  let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillConicGradientComponent?
@@ -21,11 +22,13 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
+    appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
     self.storeService = storeService
+    self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = storeService.definition.videoComponents
+    self.component = storeService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .conicGradientFill(let component) = wrapper.videoComponent else { return nil }
@@ -55,7 +58,8 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
+      VideoComponentProgramLayers(
+        storeService: storeService, appletData: appletData, componentID: videoComponentID)
       Section("Conic Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -106,7 +110,7 @@ struct ConicGradientFillVideoComponentInspector: View {
     _ mutation: (inout Ldtx_Workspace_V4_FillConicGradientComponent) -> Void
   ) {
     guard !storeService.isOutputActive else { return }
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
       ),
@@ -114,7 +118,7 @@ struct ConicGradientFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .conicGradientFill(component)
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
   private var gradient: AngularGradient {
@@ -131,7 +135,7 @@ struct ConicGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7))
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 7
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -143,7 +147,7 @@ struct ConicGradientFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7),
       isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 7
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

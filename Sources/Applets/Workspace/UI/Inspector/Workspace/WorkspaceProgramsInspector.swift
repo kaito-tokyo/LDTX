@@ -28,9 +28,12 @@ struct WorkspaceProgramSelector: View {
 }
 
 struct WorkspaceProgramsInspector: View {
-  @Environment(\.documentReference) private var documentReference
+  @Environment(\.workspaceReportError) private var reportError
   let storeService: WorkspaceStoreService
+  let editingState: WorkspaceEditingState
   @Bindable var appletData: WorkspaceAppletData
+
+  var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
 
   private struct ActionTarget: Identifiable {
     let id: Int64
@@ -41,20 +44,20 @@ struct WorkspaceProgramsInspector: View {
   @State private var deleteTarget: ActionTarget?
   @State private var showsDeleteConfirmation = false
 
-  private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? storeService.localStateURL
-  }
+  private var workspaceURL: URL? { storeService.localStateURL }
 
-  var canSelectProgram: Bool { workspaceURL != nil && storeService.recordingState.canSelectProgram }
+  var canSelectProgram: Bool {
+    workspaceURL != nil && runtimeActions() != nil
+      && storeService.recordingState.canSelectProgram
+  }
 
   var body: some View {
     Form {
       WorkspaceProgramSelector(
-        programs: storeService.definition.programs, selection: programSelection
+        programs: storeService.workspaceDefinition.programs, selection: programSelection
       )
       .disabled(!canSelectProgram)
-      ForEach(storeService.definition.programs, id: \.internalID) { program in
+      ForEach(storeService.workspaceDefinition.programs, id: \.internalID) { program in
         HStack {
           Text(program.displayName)
           Spacer()
@@ -77,22 +80,27 @@ struct WorkspaceProgramsInspector: View {
       ItemNameDialog(
         name: $nameDraft, title: "Rename Program", fieldTitle: "Name", submitTitle: "Rename",
         isNameAvailable: { name in
-          var definition = storeService.definition
+          var definition = storeService.workspaceDefinition
           definition.programs.removeAll { $0.internalID == target.id }
           return !WorkspaceResourceAddition.existingNames(definition).contains(name)
         },
         submit: { name in
           do {
-            try storeService.renameProgram(internalID: target.id, name: name)
+            try renameProgram(internalID: target.id, name: name)
             renameTarget = nil
-          } catch { storeService.reportError(error) }
+          } catch { reportError(error) }
         }, cancel: { renameTarget = nil })
     }
     .alert("Delete Program?", isPresented: $showsDeleteConfirmation, presenting: deleteTarget) {
       target in
       Button("Delete", role: .destructive) {
-        do { try storeService.removeProgram(internalID: target.id) } catch {
-          storeService.reportError(error)
+        do {
+          guard let runtimeActions = runtimeActions() else {
+            throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
+          }
+          try runtimeActions.removeProgram(internalID: target.id)
+        } catch {
+          reportError(error)
         }
       }
       Button("Cancel", role: .cancel) {}
@@ -101,32 +109,68 @@ struct WorkspaceProgramsInspector: View {
     }
   }
 
+  func renameProgram(internalID: Int64, name: String) throws {
+    guard !storeService.isOutputActive else {
+      throw WorkspaceSelectionError(message: "Programs cannot be edited during output.")
+    }
+    guard
+      let index = storeService.workspaceDefinition.programs.firstIndex(where: {
+        $0.internalID == internalID
+      })
+    else {
+      throw WorkspaceSelectionError(message: "The Program is no longer available.")
+    }
+    let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    var otherResources = storeService.workspaceDefinition
+    otherResources.programs.remove(at: index)
+    guard !candidate.isEmpty,
+      !WorkspaceResourceAddition.existingNames(otherResources).contains(candidate)
+    else {
+      throw WorkspaceSelectionError(message: "Enter a unique, nonempty Program name.")
+    }
+    storeService.workspaceDefinition.programs[index].displayName = candidate
+    runtimeActions()?.updateProgramRuntimes()
+  }
+
   private func addProgram() {
     let id = nextInternalID()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = id
     program.displayName = uniqueProgramDisplayName("Program")
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     definition.programs.append(program)
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
     if let workspaceURL {
       var state = appletData.state(for: workspaceURL)
       if state.selectedProgramInternalID == nil {
         state.selectedProgramInternalID = id
         appletData.setState(state, for: workspaceURL)
-        storeService.updateProgramRuntimes()
+        runtimeActions()?.updateProgramRuntimes()
       }
     }
-    storeService.synchronizeAudioMonitor()
+    runtimeActions()?.synchronizeAudioMonitor()
   }
   private func nextInternalID() -> Int64 { WorkspaceResourceFactory.nextInternalID() }
 
   func uniqueProgramDisplayName(_ base: String) -> String {
-    let names = WorkspaceResourceAddition.existingNames(storeService.definition)
+    let names = WorkspaceResourceAddition.existingNames(storeService.workspaceDefinition)
     guard names.contains(base) else { return base }
     var suffix = 2
     while names.contains("\(base) \(suffix)") { suffix += 1 }
     return "\(base) \(suffix)"
+  }
+
+  func selectProgram(internalID: Int64) throws {
+    if appletData.selectedProgram(
+      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
+      != internalID
+    {
+      try editingState.requireConfirmedEdits()
+    }
+    guard let runtimeActions = runtimeActions() else {
+      throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
+    }
+    try runtimeActions.selectProgram(internalID: internalID)
   }
 
   var programSelection: Binding<Int64?> {
@@ -135,14 +179,14 @@ struct WorkspaceProgramsInspector: View {
         let selectedID =
           workspaceURL.map { appletData.state(for: $0).selectedProgramInternalID } ?? nil
         return
-          (storeService.definition.programs.first { $0.internalID == selectedID }
-          ?? storeService.definition.programs.first)?.internalID
+          (storeService.workspaceDefinition.programs.first { $0.internalID == selectedID }
+          ?? storeService.workspaceDefinition.programs.first)?.internalID
       },
       set: { id in
         guard let id, workspaceURL != nil else { return }
         do {
-          try storeService.selectProgram(internalID: id)
-        } catch { storeService.reportError(error) }
+          try selectProgram(internalID: id)
+        } catch { reportError(error) }
       })
   }
 }

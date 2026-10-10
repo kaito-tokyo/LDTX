@@ -7,15 +7,30 @@ import LDTXProtos
 import LDTXWorkspaceAppletModel
 
 final class MasterVolumeEditor: NSViewController {
+  private let peakMeter: ProgramAudioPeakMeter
+  private let reportError: (Error) -> Void
+  private let appletData: WorkspaceAppletData
   private let storeService: WorkspaceStoreService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let editingState: WorkspaceEditingState
 
-  init(storeService: WorkspaceStoreService) {
+  init(
+    storeService: WorkspaceStoreService, appletData: WorkspaceAppletData,
+    peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
+    editingState: WorkspaceEditingState,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
+  ) {
+    self.reportError = reportError
+    self.peakMeter = peakMeter
+    self.appletData = appletData
+    self.runtimeActions = runtimeActions
     self.storeService = storeService
+    self.editingState = editingState
     super.init(nibName: nil, bundle: nil)
     for field in masterFields {
-      field.onEditsChanged = { [weak storeService] in storeService?.refreshUnconfirmedChanges() }
+      field.onEditsChanged = { [weak editingState] in editingState?.refreshUnconfirmedChanges() }
     }
-    storeService.registerContentEditValidator(
+    editingState.registerContentEditValidator(
       hasChanges: { [weak self] in self?.masterFields.contains { $0.dirty } ?? false },
       submit: { [weak self] in
         for field in self?.masterFields ?? [] { try field.submit() }
@@ -87,9 +102,9 @@ final class MasterVolumeEditor: NSViewController {
   }
 
   func refresh() {
-    let peakMeter = storeService.audioPeakMeter
     _ = view
-    let id = storeService.selectedProgram?.internalID
+    let id = appletData.selectedProgram(
+      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
     if programID != id {
       for field in masterFields {
         field.discard()
@@ -100,42 +115,61 @@ final class MasterVolumeEditor: NSViewController {
     let enabled = id != nil
     for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
       let preferences =
-        id.flatMap { try? storeService.preferences(for: $0, target: target) } ?? .init()
+        id.flatMap { storeService.workspacePreferences[keyPath: target.preferences][$0] } ?? .init()
       let value =
         (preferences.hasAudioMasterVolumeDecibels
           ? preferences.audioMasterVolumeDecibels.double : 0)
       masters[index].configure(
         label: "", value: ProgramPreferences.linearAudioChannelGain(fromDecibels: value),
         showsValue: false, isEnabled: enabled,
-        peakProvider: { peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
+        peakProvider: { [peakMeter] in peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
         onPreview: { [weak storeService] gain in
           let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: gain)
           guard let value = try? Rational32DecibelEncoding.encode(decibels) else {
             return
           }
-          storeService?.updateAudio(target: target) {
-            $0.audioMasterVolumeDecibels = value
-          }
+          guard let storeService, let id,
+            storeService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+          else { return }
+          storeService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+            .audioMasterVolumeDecibels = value
         }, onCommit: { _ in })
       masterFields[index].configure(
         value: preferences.hasAudioMasterVolumeDecibels
           ? preferences.audioMasterVolumeDecibels : .with { $0.set(num: 0, den: 10) },
         enabled: enabled
       ) { [weak storeService] value in
-        storeService?.updateAudio(target: target) {
-          $0.audioMasterVolumeDecibels = value
-        } ?? false
+        guard let storeService, let id,
+          storeService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+        else { return false }
+        storeService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+          .audioMasterVolumeDecibels = value
+        return true
       }
-      masterFields[index].onInvalid = { [weak storeService] message in
-        storeService?.reportInputValidationError(WorkspaceSelectionError(message: message))
+      masterFields[index].onInvalid = { [weak editingState] message in
+        editingState?.reportInputValidationError(WorkspaceSelectionError(message: message))
       }
     }
-    monitorVolume.doubleValue = storeService.localState.monitorVolume ?? 0
-    monitorVolume.isEnabled = storeService.canMonitor
+    monitorVolume.doubleValue =
+      storeService.localStateURL.map { appletData.state(for: $0) }.flatMap(\.monitorVolume) ?? 0
+    monitorVolume.isEnabled = storeService.localStateURL != nil
   }
+  @discardableResult
+  func setMonitorVolume(_ value: Double) -> Bool {
+    guard let url = storeService.localStateURL else { return false }
+    do {
+      let volume = try Rational32DecibelEncoding.encode(value).double
+      appletData.updateState(for: url) { $0.monitorVolume = volume }
+      runtimeActions()?.synchronizeAudioMonitor()
+      return true
+    } catch {
+      reportError(error)
+      return false
+    }
+  }
+
   @objc private func monitorChanged() {
-    let value = monitorVolume.doubleValue
-    storeService.updateMonitor { $0.monitorVolume = value }
+    setMonitorVolume(monitorVolume.doubleValue)
   }
 
 }

@@ -13,7 +13,7 @@ extension AppUIComponentTestSuite {
   struct WorkspaceStoreVisionBindingUnitTestSuite {
     @Test func bindingFollowsIDAndDoesNotRestoreRemovedVision() throws {
       let store = WorkspaceStoreService(definition: .init(), preferences: .init())
-      store.definition.visions = [
+      store.workspaceDefinition.visions = [
         WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1),
         WorkspaceResourceFactory.makeOcrVision(id: 3, name: "Other", componentID: 1),
       ]
@@ -21,19 +21,19 @@ extension AppUIComponentTestSuite {
       let binding = try #require($boundStore.ocrVision(internalID: 2))
       #expect($boundStore.ocrVision(internalID: 999) == nil)
 
-      store.definition.visions.reverse()
+      store.workspaceDefinition.visions.reverse()
       binding.wrappedValue.displayName = "Renamed"
-      #expect(store.definition.visions[0].ocrVision.displayName == "Other")
-      #expect(store.definition.visions[1].ocrVision.displayName == "Renamed")
+      #expect(store.workspaceDefinition.visions[0].ocrVision.displayName == "Other")
+      #expect(store.workspaceDefinition.visions[1].ocrVision.displayName == "Renamed")
 
       store.isOutputActive = true
-      binding.wrappedValue.displayName = "Blocked"
-      #expect(binding.wrappedValue.displayName == "Renamed")
+      binding.wrappedValue.displayName = "Assigned during output"
+      #expect(binding.wrappedValue.displayName == "Assigned during output")
       store.isOutputActive = false
 
-      store.definition.visions.removeLast()
+      store.workspaceDefinition.visions.removeLast()
       binding.wrappedValue.displayName = "Removed"
-      #expect(store.definition.visions.count == 1)
+      #expect(store.workspaceDefinition.visions.count == 1)
       #expect($boundStore.ocrVision(internalID: 2) == nil)
       #expect(binding.wrappedValue.internalID == 2)
     }

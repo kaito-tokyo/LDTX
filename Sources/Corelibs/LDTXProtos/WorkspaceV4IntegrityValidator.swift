@@ -143,7 +143,7 @@ public enum WorkspaceV4IntegrityValidator {
       else { throw WorkspaceV4IntegrityError.invalidClockGeometry }
       for outline in clock.outlines {
         if outline.hasThickness { try validateRationals([outline.thickness]) }
-        guard outline.thickness.numerator >= 0 else {
+        guard outline.thickness.num >= 0 else {
           throw WorkspaceV4IntegrityError.invalidClockGeometry
         }
       }
@@ -155,28 +155,28 @@ public enum WorkspaceV4IntegrityValidator {
   private static func unitInterval(_ value: some Rational32Value, positive: Bool = false)
     -> Bool
   {
-    (positive ? value.numerator > 0 : value.numerator >= 0)
-      && UInt32(value.numerator) <= max(value.denominator, 1)
+    (positive ? value.num > 0 : value.num >= 0)
+      && UInt32(value.num) <= max(value.den, 1)
   }
 
   private static func lessThan(
     _ lhs: Ldtx_Workspace_V4_Rational32,
     _ rhs: Ldtx_Workspace_V4_Rational32
   ) -> Bool {
-    Int128(lhs.numerator) * Int128(max(rhs.denominator, 1))
-      < Int128(rhs.numerator) * Int128(max(lhs.denominator, 1))
+    Int128(lhs.num) * Int128(max(rhs.den, 1))
+      < Int128(rhs.num) * Int128(max(lhs.den, 1))
   }
 
   private static func fitsUnitInterval(
     _ start: Ldtx_Workspace_V4_Rational32,
     _ size: Ldtx_Workspace_V4_Rational32DefaultOne
   ) -> Bool {
-    UInt128(start.numerator) * UInt128(size.denominator)
-      <= UInt128(size.denominator - UInt32(size.numerator)) * UInt128(max(start.denominator, 1))
+    UInt128(start.num) * UInt128(size.den)
+      <= UInt128(size.den - UInt32(size.num)) * UInt128(max(start.den, 1))
   }
 
   private static func validateRationals(_ values: [any Rational32Value]) throws {
-    guard values.allSatisfy({ $0.denominator > 0 || $0.numerator == 0 }) else {
+    guard values.allSatisfy({ $0.den > 0 || $0.num == 0 }) else {
       throw WorkspaceV4IntegrityError.invalidRational
     }
   }

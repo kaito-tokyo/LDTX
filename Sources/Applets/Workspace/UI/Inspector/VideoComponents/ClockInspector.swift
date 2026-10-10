@@ -7,11 +7,13 @@ import SwiftUI
 
 struct ClockInspector: View {
   let storeService: WorkspaceStoreService
+  let appletData: WorkspaceAppletData
   let internalID: Int64
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: internalID)
+      VideoComponentProgramLayers(
+        storeService: storeService, appletData: appletData, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)
@@ -74,7 +76,7 @@ struct ClockInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_ClockComponent? {
-    storeService.definition.videoComponents.compactMap {
+    storeService.workspaceDefinition.videoComponents.compactMap {
       wrapper -> Ldtx_Workspace_V4_ClockComponent? in
       guard case .clock(let component) = wrapper.videoComponent,
         component.internalID == internalID
@@ -173,12 +175,12 @@ struct ClockInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
 }

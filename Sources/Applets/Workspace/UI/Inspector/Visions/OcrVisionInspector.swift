@@ -11,6 +11,7 @@ import SwiftUI
 
 struct OcrVisionInspector: View {
   @Bindable var storeService: WorkspaceStoreService
+  let editingState: WorkspaceEditingState
   @Binding var vision: Ldtx_Workspace_V4_OcrVision
 
   @State var languages: String
@@ -27,7 +28,11 @@ struct OcrVisionInspector: View {
   @State var validatorID = UUID()
   @State var submittedInputs: [String] = []
 
-  init(storeService: WorkspaceStoreService, vision: Binding<Ldtx_Workspace_V4_OcrVision>) {
+  init(
+    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
+    vision: Binding<Ldtx_Workspace_V4_OcrVision>
+  ) {
+    self.editingState = editingState
     self.storeService = storeService
     self._vision = vision
     let value = vision.wrappedValue
@@ -54,17 +59,26 @@ struct OcrVisionInspector: View {
     self._heightDenominator = State(initialValue: heightFields.denominator)
   }
 
+  private var videoComponentOptions: [WorkspaceSelectionOption<Int64>] {
+    storeService.workspaceDefinition.videoComponents.compactMap { component in
+      guard let id = component.internalID,
+        let name = component.displayName
+      else { return nil }
+      return .init(id: id, name: name)
+    }
+  }
+
   var body: some View {
     Form {
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
         Picker("Video Component", selection: $vision.videoComponentInternalIDIfPresent) {
           Text("Unassigned").tag(Int64?.none)
-          ForEach(storeService.videoComponentOptions) { option in
+          ForEach(videoComponentOptions) { option in
             Text(option.name).tag(Optional(option.id))
           }
           if let selected = vision.videoComponentInternalIDIfPresent,
-            !storeService.videoComponentOptions.contains(where: { $0.id == selected })
+            !videoComponentOptions.contains(where: { $0.id == selected })
           {
             Text("Unavailable").tag(Optional(selected))
           }
@@ -133,7 +147,7 @@ struct OcrVisionInspector: View {
     .onSubmit { submitEdits() }
     .onAppear {
       if submittedInputs.isEmpty { submittedInputs = inputs }
-      storeService.registerInspectorEditValidator(
+      editingState.registerInspectorEditValidator(
         id: validatorID, hasChanges: { inputs != submittedInputs },
         submit: { try commitEdits() }
       ) {
@@ -144,8 +158,8 @@ struct OcrVisionInspector: View {
         _ = try validatedMinimumTextHeight()
       }
     }
-    .onChange(of: inputs) { storeService.refreshUnconfirmedChanges() }
-    .onDisappear { storeService.removeInspectorEditValidator(id: validatorID) }
+    .onChange(of: inputs) { editingState.refreshUnconfirmedChanges() }
+    .onDisappear { editingState.removeInspectorEditValidator(id: validatorID) }
   }
 
   func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
@@ -163,7 +177,7 @@ struct OcrVisionInspector: View {
 
   func submitEdits() {
     guard !storeService.isOutputActive else { return }
-    do { try commitEdits() } catch { storeService.reportInputValidationError(error) }
+    do { try commitEdits() } catch { editingState.reportInputValidationError(error) }
   }
 
   func commitEdits() throws {
@@ -179,7 +193,7 @@ struct OcrVisionInspector: View {
     updated.regionOfInterest = region
     vision = updated
     submittedInputs = inputs
-    storeService.refreshUnconfirmedChanges()
+    editingState.refreshUnconfirmedChanges()
   }
 
   static func validatedRegion(
@@ -227,23 +241,29 @@ struct OcrVisionInspector: View {
 
 #if DEBUG
   #Preview("Default") {
+    @Previewable @State var editingState = WorkspaceEditingState()
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .ocrVision, internalID: 10))
     @Bindable var boundStore = storeService
     if let vision = $boundStore.ocrVision(internalID: 10) {
-      OcrVisionInspector(storeService: storeService, vision: vision)
-        .frame(width: 480, height: 800, alignment: .topLeading)
+      OcrVisionInspector(
+        storeService: storeService, editingState: editingState, vision: vision
+      )
+      .frame(width: 480, height: 800, alignment: .topLeading)
     }
   }
 
   #Preview("Output Active") {
+    @Previewable @State var editingState = WorkspaceEditingState()
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .ocrVision, internalID: 10),
       isOutputActive: true)
     @Bindable var boundStore = storeService
     if let vision = $boundStore.ocrVision(internalID: 10) {
-      OcrVisionInspector(storeService: storeService, vision: vision)
-        .frame(width: 480, height: 800, alignment: .topLeading)
+      OcrVisionInspector(
+        storeService: storeService, editingState: editingState, vision: vision
+      )
+      .frame(width: 480, height: 800, alignment: .topLeading)
     }
   }
 

@@ -12,28 +12,28 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     var landscape = Ldtx_Workspace_V4_ProgramPreferences()
     landscape.audioMasterVolumeDecibels = .with {
-      $0.numerator = -16
-      $0.denominator = 5
+      $0.num = -16
+      $0.den = 5
     }
     preferences.audioChannelGainsDecibels[2] = .with {
-      $0.numerator = -61
-      $0.denominator = 10
+      $0.num = -61
+      $0.den = 10
     }
     landscape.videoLayerHidden[3] = true
     var portrait = Ldtx_Workspace_V4_ProgramPreferences()
     portrait.audioMasterVolumeDecibels = .with {
-      $0.numerator = 17
-      $0.denominator = 10
+      $0.num = 17
+      $0.den = 10
     }
     portrait.audioChannelMuted[2] = true
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.scaleX = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.num = 1
+      $0.den = 2
     }
     transform.scaleY = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.num = 1
+      $0.den = 1
     }
     portrait.videoLayerTransforms[3] = transform
     preferences.landscapeProgramPreferences[1] = landscape
@@ -44,8 +44,8 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     #expect(
       decoded.audioChannelGainsDecibels[2]
         == Ldtx_Workspace_V4_Rational32.with {
-          $0.numerator = -61
-          $0.denominator = 10
+          $0.num = -61
+          $0.den = 10
         })
     #expect(decoded.landscapeProgramPreferences[1] == landscape)
     #expect(decoded.portraitProgramPreferences[1] == portrait)
@@ -55,8 +55,8 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
   func rejectsDanglingAudioGain() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.audioChannelGainsDecibels[99] = .with {
-      $0.numerator = -6
-      $0.denominator = 1
+      $0.num = -6
+      $0.den = 1
     }
     let workspace = WorkspaceV4Bundle(definition: .init(), preferences: preferences)
     #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(99)) {
@@ -208,8 +208,9 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
           $0.videoLayerHidden[id] = true
         }
       }
-      #expect(try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-        serializedBytes: preferences.serializedData()) == preferences)
+      #expect(
+        try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+          serializedBytes: preferences.serializedData()) == preferences)
     }
   }
 
@@ -226,14 +227,20 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
   @Test("negative references cannot be persisted")
   func rejectsNegativeReference() {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-      $0.programs = [.with { $0.internalID = 1; $0.displayName = "Main" }]
+      $0.programs = [
+        .with {
+          $0.internalID = 1
+          $0.displayName = "Main"
+        }
+      ]
     }
     let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4.with {
       $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [-1] }
     }
     #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(-1)) {
-      try WorkspaceV4IntegrityValidator.validate(WorkspaceV4Bundle(
-        definition: definition, preferences: preferences))
+      try WorkspaceV4IntegrityValidator.validate(
+        WorkspaceV4Bundle(
+          definition: definition, preferences: preferences))
     }
   }
 
@@ -297,19 +304,19 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     ]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.audioChannelGainsDecibels[99] = .with {
-      $0.numerator = 0
-      $0.denominator = 1
+      $0.num = 0
+      $0.den = 1
     }
     preferences.landscapeProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
       $0.translationX = .with {
-        $0.numerator = 11
-        $0.denominator = 10
+        $0.num = 11
+        $0.den = 10
       }
     }
     preferences.portraitProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
       $0.bottomInset = .with {
-        $0.numerator = -1
-        $0.denominator = 1
+        $0.num = -1
+        $0.den = 1
       }
     }
     let issues = WorkspaceV4IntegrityValidator.validationIssues(
@@ -345,12 +352,12 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
     preferences.portraitProgramPreferences[1, default: .init()].videoLayerTransforms[2] = .with {
       $0.translationX = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.scaleX = .with {
-        $0.numerator = 2
-        $0.denominator = 1
+        $0.num = 2
+        $0.den = 1
       }
     }
     try WorkspaceV4IntegrityValidator.validate(
@@ -384,48 +391,48 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       (
         .with {
           $0.translationX = .with {
-            $0.numerator = 1
-            $0.denominator = 1
+            $0.num = 1
+            $0.den = 1
           }
           $0.translationY = .with {
-            $0.numerator = 1
-            $0.denominator = 1
+            $0.num = 1
+            $0.den = 1
           }
           $0.scaleX = .with {
-            $0.numerator = 2
-            $0.denominator = 1
+            $0.num = 2
+            $0.den = 1
           }
         }, true
       ),
       (
         .with {
           $0.translationX = .with {
-            $0.numerator = 11
-            $0.denominator = 10
+            $0.num = 11
+            $0.den = 10
           }
         }, false
       ),
       (
         .with {
           $0.translationY = .with {
-            $0.numerator = -1
-            $0.denominator = 10
+            $0.num = -1
+            $0.den = 10
           }
         }, false
       ),
       (
         .with {
           $0.scaleX = .with {
-            $0.numerator = -1
-            $0.denominator = 1
+            $0.num = -1
+            $0.den = 1
           }
         }, true
       ),
       (
         .with {
           $0.topInset = .with {
-            $0.numerator = 11
-            $0.denominator = 10
+            $0.num = 11
+            $0.den = 10
           }
         }, false
       ),

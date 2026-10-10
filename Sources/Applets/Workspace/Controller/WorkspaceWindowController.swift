@@ -24,8 +24,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   WorkspaceRuntimeActions
 {
   private let storeService: WorkspaceStoreService
+  private let editingState: WorkspaceEditingState
   private let appletData: WorkspaceAppletData
-  private let workspaceWindow: WorkspaceWindow
 
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
@@ -48,8 +48,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var captureFailureIDs: Set<String> = []
 
   func reportError(_ error: Error) {
-    if WorkspaceStoreService.isInputValidationError(error) {
-      storeService.reportInputValidationError(error)
+    if WorkspaceEditingState.isInputValidationError(error) {
+      editingState.reportInputValidationError(error)
       return
     }
     guard !errorPresentationClosed, shutdownTask == nil else { return }
@@ -89,7 +89,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private func closeErrorPresentation() {
     errorPresentationClosed = true
     pendingErrors.removeAll()
-    storeService.errorHandler = nil
     if let audioStatusObserver {
       NotificationCenter.default.removeObserver(audioStatusObserver)
       self.audioStatusObserver = nil
@@ -121,7 +120,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     captureFailureIDs = failures
     guard !newlyFailed.isEmpty else { return }
     let descriptions = newlyFailed.sorted().map { uid in
-      let names = storeService.definition.videoComponents.compactMap { component -> String? in
+      let names = storeService.workspaceDefinition.videoComponents.compactMap {
+        component -> String? in
         guard case .vfxSource(let source) = component.videoComponent,
           appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
         else { return nil }
@@ -142,14 +142,15 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
   public init(
     storeService: WorkspaceStoreService,
+    editingState: WorkspaceEditingState,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
     documentReference: DocumentReference
   ) {
     let url = storeService.localStateURL!
     self.storeService = storeService
+    self.editingState = editingState
     self.appletData = appletData
-    storeService.appletData = appletData
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
@@ -157,7 +158,9 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       captureSessionCoordinator: captureSessionCoordinator,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        storeService.localState
+        appletData.state(
+          for: storeService.localStateURL,
+          externalID: storeService.externalID.flatMap(UUID.init(uuidString:)))
       },
       selectProgram: { internalID in
         guard let url = storeService.localStateURL else { return }
@@ -168,7 +171,9 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       windowRuntime: windowRuntime,
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
-        storeService.localState
+        appletData.state(
+          for: storeService.localStateURL,
+          externalID: storeService.externalID.flatMap(UUID.init(uuidString:)))
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
     let audioCoordinator = WorkspaceAudioCoordinator(
@@ -207,29 +212,34 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
       prefersColor: true)
     self.previewRenderer = previewRenderer
-    storeService.audioPeakMeter = audioCoordinator.peakMeter
     let pairedPreview = ProgramCanvasPairedPreview(
       device: previewRenderer.device, delegate: previewRenderer,
       onSelectLandscape: { storeService.selectedAudioMix = .landscape },
       onSelectPortrait: { storeService.selectedAudioMix = .portrait })
     self.pairedPreview = pairedPreview
-    let deviceRegistry = DeviceRegistryService()
-    deviceRegistry.errorHandler = { [weak storeService] error in storeService?.reportError(error) }
-    let window = WorkspaceWindow(
-      document: documentReference.document!,
-      appletData: appletData,
-      storeService: storeService,
-      deviceRegistry: deviceRegistry,
-      pairedPreview: pairedPreview)
-    self.workspaceWindow = window
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
     self.audioCoordinator = audioCoordinator
     self.visionFeature = visionFeature
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
-    super.init(window: window)
+    super.init(window: nil)
+    weak var errorOwner: WorkspaceWindowController? = self
+    let reportOperationError: (Error) -> Void = { errorOwner?.reportError($0) }
+    let deviceRegistry = DeviceRegistryService()
+    deviceRegistry.errorHandler = reportOperationError
+    let window = WorkspaceWindow(
+      document: documentReference.document!,
+      appletData: appletData,
+      storeService: storeService, editingState: editingState,
+      peakMeter: audioCoordinator.peakMeter, reportError: reportOperationError,
+      deviceRegistry: deviceRegistry,
+      pairedPreview: pairedPreview,
+      runtimeActions: {
+        guard let owner = errorOwner, owner.shutdownTask == nil else { return nil }
+        return owner
+      })
+    self.window = window
 
-    storeService.errorHandler = { [weak self] error in self?.reportError(error) }
     let engine = captureSessionCoordinator.audioEngine
     let engineID = engine.statusIdentifier
     audioStatusObserver = NotificationCenter.default.addObserver(
@@ -242,8 +252,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
     updateMonitorFailure(engine.currentFailures["Monitor"])
     previewRenderer.start()
-    storeService.runtimeActions = self
-    storeService.synchronizeAudioMonitor()
+    synchronizeAudioMonitor()
 
     let assignmentChanges = Observations { appletData.physicalDeviceIDsByResourceInternalID }
     deviceAssignmentsObservationTask = Task { @MainActor [weak self] in
@@ -253,7 +262,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       }
     }
 
-    let definitionChanges = Observations { storeService.definition }
+    let definitionChanges = Observations { storeService.workspaceDefinition }
     self.definitionObservationTask = Task { @MainActor [weak self] in
       var isInitialValue = true
       for await _ in definitionChanges {
@@ -267,16 +276,18 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       }
     }
 
-    let preferencesChanges = Observations { storeService.preferences }
-    self.preferencesObservationTask = Task { @MainActor [weak windowRuntime] in
+    let preferencesChanges = Observations { storeService.workspacePreferences }
+    self.preferencesObservationTask = Task { @MainActor [weak self] in
       var isInitialValue = true
       for await _ in preferencesChanges {
-        guard !Task.isCancelled, windowRuntime != nil else { return }
+        guard !Task.isCancelled, let self else { return }
         guard !isInitialValue else {
           isInitialValue = false
           continue
         }
-        storeService.updateProgramRuntimes()
+        self.updateProgramRuntimes()
+        self.updateMixPreferences()
+        self.synchronizeAudioMonitor()
       }
     }
 
@@ -334,6 +345,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   public func removeProgram(internalID: Int64) throws {
+    try editingState.requireConfirmedEdits()
     guard shutdownTask == nil, !storeService.isOutputActive else {
       throw NSError(
         domain: "WorkspaceProgramDeletion", code: 1,
@@ -348,8 +360,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   }
 
   public func selectProgram(internalID: Int64) throws {
-    if storeService.selectedProgram?.internalID != internalID {
-      try storeService.requireConfirmedEdits()
+    if appletData.selectedProgram(
+      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
+      != internalID
+    {
+      try editingState.requireConfirmedEdits()
     }
     guard let document = document as? NSDocument else {
       throw NSError(
@@ -381,6 +396,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   }
 
   public func startOutput() async throws {
+    try editingState.requireConfirmedEdits()
     guard recordingSession.state.canStart else { return }
     guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
@@ -394,7 +410,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
     closeErrorPresentation()
     let task = Task { @MainActor in
-      storeService.runtimeActions = nil
       pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
@@ -492,7 +507,8 @@ extension WorkspaceWindowController {
   public func synchronizeAudioMonitor() {
     let localState = storeService.localStateURL.map { appletData.state(for: $0) } ?? .init()
     let audioChannels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
-    let programInternalID = storeService.selectedProgram?.internalID
+    let programInternalID = appletData.selectedProgram(
+      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
     let projection = programInternalID.flatMap {
       try? windowRuntime.runtimeProjection(programInternalID: $0, target: .landscape)
     }
@@ -521,7 +537,7 @@ extension WorkspaceWindowController {
       landscape: projection?.preferences ?? .init(),
       portrait: portraitProjection?.preferences ?? .init())
     let preferences = WorkspaceV4RenderGraph.monitorPreferences(
-      definition: windowRuntime.definition, preferences: storeService.preferences,
+      definition: windowRuntime.definition, preferences: storeService.workspacePreferences,
       volumeDecibels: localState.monitorVolume ?? 0)
     _ = audioCoordinator.restart(
       audioChannels: audioChannels,

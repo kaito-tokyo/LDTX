@@ -174,7 +174,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   #Preview("Video Layers Table") {
     let editor = VideoLayersEditor(
       storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
-      target: .landscape)
+      appletData: WorkspaceAppletData(), editingState: WorkspaceEditingState(), target: .landscape)
     _ = editor.view
     editor.view.frame = NSRect(x: 0, y: 0, width: 720, height: 560)
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()

@@ -26,9 +26,12 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1017.1: Content reflects output failures through AppKit Observation")
     func editorsObserveStoreThroughAppKitLayout() async throws {
+      let serviceAppletData = WorkspaceAppletData()
       _ = NSApplication.shared
       let service = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let content = AudioMixEditor(storeService: service)
+      let content = AudioMixEditor(
+        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
       #expect(!content.isViewLoaded)
       service.outputFailureMessage = "Initial failure"
       let window = NSWindow(
@@ -87,7 +90,7 @@ extension AppUIComponentTestSuite {
         }
       }
       let controller = WorkspaceWindowController(
-        storeService: document.storeService,
+        storeService: document.storeService, editingState: document.editingState,
         persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
       let window = try #require(controller.window as? WorkspaceWindow)
@@ -118,21 +121,36 @@ extension AppUIComponentTestSuite {
       let firstDelegate = firstPreview.metalView.delegate
       #expect(firstPreview !== second.contentPane.testPairedPreview)
       #expect(firstDelegate !== second.contentPane.testPairedPreview.metalView.delegate)
-      #expect(first.contentPane.storeService.selectedProgram == nil)
+      #expect(
+        first.contentPane.appletData.selectedProgram(
+          in: first.contentPane.storeService.workspaceDefinition,
+          for: first.contentPane.storeService.localStateURL) == nil)
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 42
       program.displayName = "Preview"
-      state.definition.programs = [program]
-      #expect(first.contentPane.storeService.selectedProgram != nil)
-      #expect(second.contentPane.storeService.selectedProgram == nil)
+      state.workspaceDefinition.programs = [program]
+      #expect(
+        first.contentPane.appletData.selectedProgram(
+          in: first.contentPane.storeService.workspaceDefinition,
+          for: first.contentPane.storeService.localStateURL) != nil)
+      #expect(
+        second.contentPane.appletData.selectedProgram(
+          in: second.contentPane.storeService.workspaceDefinition,
+          for: second.contentPane.storeService.localStateURL) == nil)
       for value in [WorkspaceRecordingState.idle, .recording, .paused] {
         state.recordingState = value
-        #expect(first.contentPane.storeService.selectedProgram != nil)
+        #expect(
+          first.contentPane.appletData.selectedProgram(
+            in: first.contentPane.storeService.workspaceDefinition,
+            for: first.contentPane.storeService.localStateURL) != nil)
         #expect(first.contentPane.testPairedPreview === firstPreview)
         #expect(firstPreview.metalView.delegate === firstDelegate)
       }
-      state.definition.programs = []
-      #expect(first.contentPane.storeService.selectedProgram == nil)
+      state.workspaceDefinition.programs = []
+      #expect(
+        first.contentPane.appletData.selectedProgram(
+          in: first.contentPane.storeService.workspaceDefinition,
+          for: first.contentPane.storeService.localStateURL) == nil)
     }
 
     @Test("UCT-1017.5: Preview selection and Divider position remain Window local")
@@ -144,8 +162,9 @@ extension AppUIComponentTestSuite {
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
-      var changes = 0
-      state.documentContentsDidChange = { changes += 1 }
+      let definition = state.workspaceDefinition
+      let preferences = state.workspacePreferences
+      let outputSettings = state.workspaceOutputSettings
       let externalID = UUID().uuidString.lowercased()
       let dividerKey = "NSSplitView Subview Frames WorkspaceContentPane.\(externalID)"
       let savedDivider = UserDefaults.standard.object(forKey: dividerKey)
@@ -209,7 +228,9 @@ extension AppUIComponentTestSuite {
       defer { reopened.close() }
       let split = reopened.contentPane.testSplitView
       #expect(split.autosaveName == pane.testSplitView.autosaveName)
-      #expect(changes == 0)
+      #expect(state.workspaceDefinition == definition)
+      #expect(state.workspacePreferences == preferences)
+      #expect(state.workspaceOutputSettings == outputSettings)
       pane.testPairedPreview.stop()
       #expect(pane.testPairedPreview.metalView.delegate == nil)
       #expect(pane.testPairedPreview.metalView.isPaused)

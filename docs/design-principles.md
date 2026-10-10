@@ -22,6 +22,12 @@ the relevant design or feature documentation instead.
   of a V4 Workspace.
 - Runtime state, editor state, and persistence code must project from that
   model rather than maintaining an independent parallel representation.
+- The Workspace Store exposes its authoritative documents as ordinary stored
+  properties. Assignments must remain transparent: setters must not silently
+  reject, reinterpret, or replace an assigned value. Editing restrictions and
+  validation belong to explicit editing operations and their UI owners.
+- Documents observe these properties to track unsaved changes. The Store must
+  not own document-change callbacks or hide persistence notifications in setters.
 
 ## Preferences are permissive input
 
@@ -34,15 +40,17 @@ the relevant design or feature documentation instead.
 ## PERSISTENCE: Separate definition, preferences, and output settings
 
 - `definition` is the authoritative inventory of Workspace resources and Programs.
-  No definition field may change while recording or streaming is active.
+  Editing operations and UI controls must prevent definition edits while
+  recording or streaming is active; the Store does not enforce this by rejecting
+  property assignments.
 - `preferences` contain presentation and mix state, including each Program and
   canvas's video layer order, transforms, visibility, mute state, and gain.
 - Video layer IDs are ordered from back to front. During output, reordering is
   allowed, but layer membership and occurrence counts must remain unchanged.
 - Other preferences may change during output when the pipeline supports them.
 - `outputSettings` is a separate persisted Workspace document for recording and
-  streaming configuration. It may change between sessions, but remains fixed
-  while output is active.
+  streaming configuration. Editing controls may change it between sessions;
+  each active output session uses the configuration captured at startup.
 - Device assignments, recording folder paths, and stream-key assignments belong
   to AppletData rather than the Workspace documents. Workspace-specific output
   assignments are keyed by the definition envelope's external ID.
@@ -129,7 +137,8 @@ the relevant design or feature documentation instead.
   selection, Program changes, output start, save, and document close must respect
   pending invalid edits.
 - Content Editors register weakly captured draft validators with the Workspace
-  store. Master-volume and layer-transform drafts participate in the same
+  editing state owned by the Workspace Document. Master-volume and layer-transform
+  drafts participate in the same
   navigation, output-start, save, and close validation as OCR ROI drafts.
   Validation checks the current text without committing or discarding it. Window-wide
   Submit validates all pending owners before any writeback; Enter may commit locally.

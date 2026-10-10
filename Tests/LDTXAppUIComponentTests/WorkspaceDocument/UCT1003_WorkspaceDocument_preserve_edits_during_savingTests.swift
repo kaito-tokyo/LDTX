@@ -30,7 +30,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       let destination = root.appendingPathComponent("Saved.ldtxworkspace")
       #expect(document.fileURL == nil)
-      document.storeService.definition.displayName = "Saved"
+      document.storeService.workspaceDefinition.displayName = "Saved"
       #expect(document.isDocumentEdited)
       try await saveWorkspaceDocument(document, to: destination)
       #expect(!document.isDocumentEdited)
@@ -50,7 +50,7 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       let destination = root.appendingPathComponent("Snapshot.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.storeService.definition.displayName = "Snapshot"
+      document.storeService.workspaceDefinition.displayName = "Snapshot"
       try await withCheckedThrowingContinuation {
         (continuation: CheckedContinuation<Void, Error>) in
         document.save(to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation)
@@ -58,11 +58,11 @@ extension AppUIComponentTestSuite {
           error in
           if let error { continuation.resume(throwing: error) } else { continuation.resume() }
         }
-        document.storeService.definition.displayName = "Later edit"
+        document.storeService.workspaceDefinition.displayName = "Later edit"
       }
       #expect(
         try WorkspaceBundleReaderV4(at: destination).read().definition.displayName == "Later edit")
-      #expect(document.storeService.definition.displayName == "Later edit")
+      #expect(document.storeService.workspaceDefinition.displayName == "Later edit")
       #expect(!document.isDocumentEdited)
       document.close()
     }
@@ -74,12 +74,12 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       let destination = root.appendingPathComponent("Snapshot.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.storeService.definition.displayName = "Snapshot"
+      document.storeService.workspaceDefinition.displayName = "Snapshot"
       let token = document.changeCountToken(for: .saveOperation)
       #expect(
         document.canAsynchronouslyWrite(
           to: destination, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation))
-      document.storeService.definition.displayName = "Later edit"
+      document.storeService.workspaceDefinition.displayName = "Later edit"
       let writer = BackgroundSnapshotWriter(document: document, destination: destination)
       try await Task.detached { try writer.write() }.value
       document.updateChangeCount(withToken: token, for: .saveOperation)
@@ -97,11 +97,11 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 101
       program.displayName = "Main"
-      document.storeService.definition.programs = [program]
+      document.storeService.workspaceDefinition.programs = [program]
       var audio = Ldtx_Workspace_V4_AudioInputDevice()
       audio.internalID = 102
       audio.displayName = "Input"
-      document.storeService.definition.audioDevices = [audio]
+      document.storeService.workspaceDefinition.audioDevices = [audio]
       defer { document.close() }
       for action in [
         #selector(NSDocument.saveAs(_:)), #selector(NSDocument.saveTo(_:)),
@@ -115,32 +115,34 @@ extension AppUIComponentTestSuite {
       try await saveWorkspaceDocument(document, to: url)
       document.writeProbe.withLock { $0 = { throw CocoaError(.fileWriteNoPermission) } }
       defer { document.writeProbe.withLock { $0 = nil } }
-      document.storeService.definition.displayName = "Pending"
+      document.storeService.workspaceDefinition.displayName = "Pending"
       do {
         try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
         Issue.record("Expected partial save failure")
       } catch {}
       #expect(document.isDocumentEdited)
-      #expect(document.storeService.definition.displayName == "Pending")
+      #expect(document.storeService.workspaceDefinition.displayName == "Pending")
       document.writeProbe.withLock { $0 = nil }
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       #expect(!document.isDocumentEdited)
       document.storeService.isOutputActive = true
-      let fixedDefinition = document.storeService.definition
-      document.storeService.definition.displayName = "Rejected during output"
-      document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
+      document.storeService.workspaceDefinition.displayName = "Assigned during output"
+      let fixedDefinition = document.storeService.workspaceDefinition
+      document.storeService.workspacePreferences.landscapeProgramPreferences[101, default: .init()]
         .audioMasterVolumeDecibels = .with {
-          $0.numerator = -8
-          $0.denominator = 1
+          $0.num = -8
+          $0.den = 1
         }
-      #expect(document.storeService.setAudioChannelGain(-12, forAudioInputDeviceInternalID: 102))
+      document.storeService.workspacePreferences.audioChannelGainsDecibels[102] = .with {
+        $0.set(num: -120, den: 10)
+      }
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       let savedOutput = try WorkspaceBundleReaderV4(at: url).read()
       #expect(
         savedOutput.preferences.landscapeProgramPreferences[101]?.audioMasterVolumeDecibels
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = -8
-            $0.denominator = 1
+            $0.num = -8
+            $0.den = 1
           })
       #expect(
         savedOutput.preferences.audioChannelGainsDecibels[102]
@@ -159,7 +161,7 @@ extension AppUIComponentTestSuite {
       defer { document.close() }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
-      document.storeService.definition.displayName = "Snapshot"
+      document.storeService.workspaceDefinition.displayName = "Snapshot"
       let gate = DispatchSemaphore(value: 0)
       let handle = BackgroundSnapshotWriter(document: document, destination: url)
       defer { document.writeProbe.withLock { $0 = nil } }
@@ -167,7 +169,7 @@ extension AppUIComponentTestSuite {
         probe = {
           DispatchQueue.main.async {
             MainActor.assumeIsolated {
-              handle.document.storeService.definition.displayName = "Later edit"
+              handle.document.storeService.workspaceDefinition.displayName = "Later edit"
               gate.signal()
             }
           }
@@ -178,7 +180,7 @@ extension AppUIComponentTestSuite {
       }
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       document.writeProbe.withLock { $0 = nil }
-      #expect(document.storeService.definition.displayName == "Later edit")
+      #expect(document.storeService.workspaceDefinition.displayName == "Later edit")
       #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Snapshot")
       #expect(document.isDocumentEdited)
     }

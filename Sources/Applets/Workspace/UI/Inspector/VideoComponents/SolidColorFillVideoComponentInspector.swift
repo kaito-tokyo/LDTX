@@ -8,6 +8,7 @@ import SwiftUI
 
 struct SolidColorFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
+  let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillSolidColorComponent?
@@ -17,11 +18,13 @@ struct SolidColorFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
+    appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
     self.storeService = storeService
+    self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = storeService.definition.videoComponents
+    self.component = storeService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .solidColorFill(let component) = wrapper.videoComponent else { return nil }
@@ -35,7 +38,8 @@ struct SolidColorFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
+      VideoComponentProgramLayers(
+        storeService: storeService, appletData: appletData, componentID: videoComponentID)
       Section("Solid Color Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -65,7 +69,7 @@ struct SolidColorFillVideoComponentInspector: View {
     _ mutation: (inout Ldtx_Workspace_V4_FillSolidColorComponent) -> Void
   ) {
     guard !storeService.isOutputActive else { return }
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
       ),
@@ -73,7 +77,7 @@ struct SolidColorFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .solidColorFill(component)
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
 }
@@ -83,7 +87,7 @@ struct SolidColorFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 4
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -95,7 +99,7 @@ struct SolidColorFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4),
       isOutputActive: true)
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 4
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -106,7 +110,7 @@ struct SolidColorFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 404
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

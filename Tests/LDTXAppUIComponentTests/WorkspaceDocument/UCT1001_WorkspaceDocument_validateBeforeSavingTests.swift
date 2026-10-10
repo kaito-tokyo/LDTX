@@ -28,22 +28,20 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       defer { document.close() }
       var validationErrors: [Error] = []
-      document.storeService.inputValidationErrorHandler = { validationErrors.append($0) }
-      var reportedErrors: [Error] = []
-      document.storeService.errorHandler = { reportedErrors.append($0) }
-      document.storeService.definition.programs = [validationProgram(name: "Pattern")]
-      document.storeService.definition.videoComponents = [validationPattern()]
-      document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      document.editingState.inputValidationErrorHandler = { validationErrors.append($0) }
+      document.storeService.workspaceDefinition.programs = [validationProgram(name: "Pattern")]
+      document.storeService.workspaceDefinition.videoComponents = [validationPattern()]
+      document.storeService.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .videoLayerTransforms[2] = validationTransform(
           x: .with {
-            $0.numerator = 2
-            $0.denominator = 1
+            $0.num = 2
+            $0.den = 1
           })
-      document.storeService.preferences.portraitProgramPreferences[1, default: .init()]
+      document.storeService.workspacePreferences.portraitProgramPreferences[1, default: .init()]
         .videoLayerTransforms[2] = validationTransform(
           x: .with {
-            $0.numerator = 2
-            $0.denominator = 1
+            $0.num = 2
+            $0.den = 1
           })
       do {
         try await saveWorkspaceDocument(document, to: url)
@@ -56,8 +54,7 @@ extension AppUIComponentTestSuite {
       #expect(validationError.failureReason?.contains("Landscape") == true)
       #expect(validationError.failureReason?.contains("Portrait") == true)
       #expect(validationError.failureReason?.contains("Pattern") == true)
-      #expect(reportedErrors.isEmpty)
-      #expect(document.storeService.definition.displayName == "Untitled")
+      #expect(document.storeService.workspaceDefinition.displayName == "Untitled")
       #expect(document.fileURL == nil)
       #expect(document.isDocumentEdited)
       #expect(!FileManager.default.fileExists(atPath: url.path))
@@ -70,15 +67,15 @@ extension AppUIComponentTestSuite {
       let url = root.appendingPathComponent("Validated.ldtxworkspace")
       let document = WorkspaceDocument()
       defer { document.close() }
-      document.storeService.definition.programs = [validationProgram(name: "Main")]
-      document.storeService.definition.videoComponents = [validationPattern()]
+      document.storeService.workspaceDefinition.programs = [validationProgram(name: "Main")]
+      document.storeService.workspaceDefinition.videoComponents = [validationPattern()]
       try await saveWorkspaceDocument(document, to: url)
       let before = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
-      document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      document.storeService.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .videoLayerTransforms[2] = validationTransform(
           x: .with {
-            $0.numerator = 2
-            $0.denominator = 1
+            $0.num = 2
+            $0.den = 1
           })
       do {
         try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
@@ -88,24 +85,26 @@ extension AppUIComponentTestSuite {
       }
       #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == before)
       #expect(document.isDocumentEdited)
-      document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      document.storeService.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .videoLayerTransforms[2] = validationTransform(
           x: .with {
-            $0.numerator = 1
-            $0.denominator = 2
+            $0.num = 1
+            $0.den = 2
           },
           scale: .with {
-            $0.numerator = 1
-            $0.denominator = 1
+            $0.num = 1
+            $0.den = 1
           })
-      document.storeService.preferences.landscapeProgramPreferences[1, default: .init()]
+      document.storeService.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .videoLayerHidden[2] = true
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
       defer { reopened.close() }
-      #expect(reopened.storeService.preferences == document.storeService.preferences)
       #expect(
-        (reopened.storeService.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds
+        reopened.storeService.workspacePreferences == document.storeService.workspacePreferences)
+      #expect(
+        (reopened.storeService.workspacePreferences.landscapeProgramPreferences[1]?
+          .videoLayerInternalIds
           ?? []).isEmpty)
       #expect(!document.isDocumentEdited)
     }
@@ -127,10 +126,10 @@ extension AppUIComponentTestSuite {
       }
       let url = root.appendingPathComponent("ValidationSheet.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
-      document.storeService.preferences.landscapeProgramPreferences[99] = .init()
-      document.storeService.preferences.portraitProgramPreferences[100] = .init()
+      document.storeService.workspacePreferences.landscapeProgramPreferences[99] = .init()
+      document.storeService.workspacePreferences.portraitProgramPreferences[100] = .init()
       var errors: [Error] = []
-      document.storeService.inputValidationErrorHandler = { errors.append($0) }
+      document.editingState.inputValidationErrorHandler = { errors.append($0) }
       window.orderFront(nil)
       document.save(nil)
       for _ in 0..<100 where errors.isEmpty {
@@ -154,14 +153,14 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       defer { document.close() }
       let url = root.appendingPathComponent("Invalid.ldtxworkspace")
-      document.storeService.preferences.audioChannelGainsDecibels[99] = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+      document.storeService.workspacePreferences.audioChannelGainsDecibels[99] = .with {
+        $0.num = 0
+        $0.den = 1
       }
       #expect(
         document.canAsynchronouslyWrite(
           to: url, ofType: "tokyo.kaito.ldtx.workspace", for: .saveAsOperation))
-      document.storeService.preferences.audioChannelGainsDecibels.removeValue(forKey: 99)
+      document.storeService.workspacePreferences.audioChannelGainsDecibels.removeValue(forKey: 99)
       let writer = BackgroundSnapshotWriter(document: document, destination: url)
       do {
         try await Task.detached { try writer.write() }.value
@@ -189,12 +188,12 @@ extension AppUIComponentTestSuite {
 
     private func validationTransform(
       x: Ldtx_Workspace_V4_Rational32 = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.num = 0
+        $0.den = 1
       },
       scale: Ldtx_Workspace_V4_Rational32 = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.num = 0
+        $0.den = 1
       }
     )
       -> Ldtx_Workspace_V4_BasicTransform

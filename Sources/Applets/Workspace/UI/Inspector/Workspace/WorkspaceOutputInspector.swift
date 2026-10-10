@@ -263,9 +263,9 @@ private struct RecordingFolderPicker: NSViewRepresentable {
 
     @Bindable var boundStore = storeService
     WorkspaceOutputInspector(
-      outputSettings: $boundStore.outputSettings, externalID: UUID(),
+      outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
       isOutputActive: storeService.isOutputActive, appletData: appletData,
-      reportError: storeService.reportError
+      reportError: { _ in }
     )
     .frame(width: 480, height: 640)
   }
@@ -277,9 +277,9 @@ private struct RecordingFolderPicker: NSViewRepresentable {
 
     @Bindable var boundStore = storeService
     WorkspaceOutputInspector(
-      outputSettings: $boundStore.outputSettings, externalID: UUID(),
+      outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
       isOutputActive: storeService.isOutputActive, appletData: appletData,
-      reportError: storeService.reportError
+      reportError: { _ in }
     )
     .frame(width: 480, height: 640)
   }

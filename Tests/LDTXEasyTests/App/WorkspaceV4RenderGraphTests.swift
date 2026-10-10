@@ -56,8 +56,8 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(try graph().layerPreferences.first?.destinationScaleX == 1)
     preferences.landscapeProgramPreferences[1, default: .init()]
       .videoLayerTransforms[2, default: .init()].scaleX = .with {
-        $0.numerator = 0
-        $0.denominator = 1
+        $0.num = 0
+        $0.den = 1
       }
     #expect(try graph().layerPreferences.first?.destinationScaleX == 0)
   }
@@ -67,12 +67,12 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
     clock.width = .with {
-      $0.numerator = 1
-      $0.denominator = 6
+      $0.num = 1
+      $0.den = 6
     }
     clock.height = .with {
-      $0.numerator = 2
-      $0.denominator = 27
+      $0.num = 2
+      $0.den = 27
     }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.clock = clock
@@ -142,39 +142,39 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     definition.audioDevices = [audio]
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = .with {
-      $0.numerator = 1
-      $0.denominator = 4
+      $0.num = 1
+      $0.den = 4
     }
     transform.translationY = .with {
-      $0.numerator = 1
-      $0.denominator = 2
+      $0.num = 1
+      $0.den = 2
     }
     transform.scaleX = .with {
-      $0.numerator = 3
-      $0.denominator = 4
+      $0.num = 3
+      $0.den = 4
     }
     transform.scaleY = .with {
-      $0.numerator = 3
-      $0.denominator = 5
+      $0.num = 3
+      $0.den = 5
     }
     var preference = Ldtx_Workspace_V4_ProgramPreferences()
     var portraitPreference = Ldtx_Workspace_V4_ProgramPreferences()
     preference.videoLayerTransforms = [11: transform]
     preference.audioMasterVolumeDecibels = .with {
-      $0.numerator = -16
-      $0.denominator = 5
+      $0.num = -16
+      $0.den = 5
     }
     preference.audioChannelMuted = [12: true]
     portraitPreference.audioMasterVolumeDecibels = .with {
-      $0.numerator = -91
-      $0.denominator = 10
+      $0.num = -91
+      $0.den = 10
     }
     portraitPreference.audioChannelMuted = [12: false]
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.audioChannelGainsDecibels = [
       12: .with {
-        $0.numerator = -123
-        $0.denominator = 10
+        $0.num = -123
+        $0.den = 10
       }
     ]
     preference.videoLayerInternalIds = [11]

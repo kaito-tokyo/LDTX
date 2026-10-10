@@ -8,6 +8,7 @@ import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {
   let storeService: WorkspaceStoreService
+  let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
   private let component: Ldtx_Workspace_V4_FillLinearGradientComponent?
@@ -22,11 +23,13 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   init(
     storeService: WorkspaceStoreService,
+    appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
     self.storeService = storeService
+    self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = storeService.definition.videoComponents
+    self.component = storeService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .linearGradientFill(let component) = wrapper.videoComponent else { return nil }
@@ -61,7 +64,8 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: videoComponentID)
+      VideoComponentProgramLayers(
+        storeService: storeService, appletData: appletData, componentID: videoComponentID)
       Section("Linear Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -113,7 +117,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     _ mutation: (inout Ldtx_Workspace_V4_FillLinearGradientComponent) -> Void
   ) {
     guard !storeService.isOutputActive else { return }
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
       ),
@@ -121,7 +125,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .linearGradientFill(component)
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
   private var gradient: LinearGradient {
@@ -137,7 +141,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 5
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 5
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -149,7 +153,7 @@ struct LinearGradientFillVideoComponentInspector: View {
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5),
       isOutputActive: true)
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 5
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 5
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -160,7 +164,7 @@ struct LinearGradientFillVideoComponentInspector: View {
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .linearGradientFillVideoComponent, internalID: 5))
     LinearGradientFillVideoComponentInspector(
-      storeService: storeService, videoComponentID: 404
+      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

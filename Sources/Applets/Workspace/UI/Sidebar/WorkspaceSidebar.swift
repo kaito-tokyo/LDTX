@@ -11,8 +11,11 @@ import SwiftUI
 
 public struct WorkspaceSidebar: View {
   @Bindable var storeService: WorkspaceStoreService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  let editingState: WorkspaceEditingState
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
+  private let onSelectionBlocked: () -> Void
   @Environment(\.documentReference) private var documentReference
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
@@ -20,14 +23,35 @@ public struct WorkspaceSidebar: View {
   @State private var displayedSelection: WorkspaceInspectorSelector?
 
   public init(
-    storeService: WorkspaceStoreService,
+    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
     deviceRegistry: DeviceRegistryService,
-    appletData: WorkspaceAppletData
+    appletData: WorkspaceAppletData,
+    onSelectionBlocked: @escaping () -> Void = {},
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.editingState = editingState
+    self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
+    self.onSelectionBlocked = onSelectionBlocked
     self._storeService = Bindable(wrappedValue: storeService)
     self._displayedSelection = State(initialValue: storeService.inspectorSelector)
+  }
+
+  @discardableResult
+  static func select(
+    _ selection: WorkspaceInspectorSelector?, storeService: WorkspaceStoreService,
+    editingState: WorkspaceEditingState,
+    onBlocked: () -> Void = {}
+  ) -> Bool {
+    guard selection != storeService.inspectorSelector else { return true }
+    editingState.refreshUnconfirmedChanges()
+    guard !editingState.hasUnconfirmedChanges else {
+      onBlocked()
+      return false
+    }
+    storeService.inspectorSelector = selection
+    return true
   }
 
   static func rows<Value>(
@@ -45,11 +69,13 @@ public struct WorkspaceSidebar: View {
   }
 
   public var body: some View {
-    let inputDevices = Self.rows(storeService.definition.audioDevices) {
+    let inputDevices = Self.rows(storeService.workspaceDefinition.audioDevices) {
       $0.hasInternalID ? $0.internalID : nil
     }
-    let videoComponents = Self.rows(storeService.definition.videoComponents) { $0.internalID }
-    let visions = Self.rows(storeService.definition.visions) { $0.internalID }
+    let videoComponents = Self.rows(storeService.workspaceDefinition.videoComponents) {
+      $0.internalID
+    }
+    let visions = Self.rows(storeService.workspaceDefinition.visions) { $0.internalID }
 
     VStack {
       List(selection: $displayedSelection) {
@@ -187,7 +213,9 @@ public struct WorkspaceSidebar: View {
     }
     .listStyle(.sidebar)
     .onChange(of: displayedSelection) { _, selection in
-      storeService.inspectorSelector = selection
+      Self.select(
+        selection, storeService: storeService, editingState: editingState,
+        onBlocked: onSelectionBlocked)
       displayedSelection = storeService.inspectorSelector
     }
     .onChange(of: storeService.inspectorSelector) { _, selection in
@@ -196,7 +224,7 @@ public struct WorkspaceSidebar: View {
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoComponents: storeService.definition.videoComponents,
+        videoComponents: storeService.workspaceDefinition.videoComponents,
         validationMessage: documentReference?.document == nil
           ? "The Workspace document is unavailable."
           : additionFailure
@@ -250,10 +278,10 @@ public struct WorkspaceSidebar: View {
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-      storeService.synchronizeCaptureInputs(
+      runtimeActions()?.synchronizeCaptureInputs(
         availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
       ) { _ in }
-      storeService.synchronizeAudioMonitor()
+      runtimeActions()?.synchronizeAudioMonitor()
     }
   }
 
@@ -261,9 +289,11 @@ public struct WorkspaceSidebar: View {
 
 #if DEBUG
   #Preview("Workspace Sidebar") {
+    @Previewable @State var editingState = WorkspaceEditingState()
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
     WorkspaceSidebar(
-      storeService: storeService, deviceRegistry: DeviceRegistryService(),
+      storeService: storeService, editingState: editingState,
+      deviceRegistry: DeviceRegistryService(),
       appletData: WorkspaceAppletData()
     )
     .frame(width: 260, height: 640)

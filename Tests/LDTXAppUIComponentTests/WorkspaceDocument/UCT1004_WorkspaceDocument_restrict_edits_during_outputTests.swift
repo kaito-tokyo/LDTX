@@ -34,8 +34,8 @@ extension AppUIComponentTestSuite {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 101
       program.displayName = "Main"
-      document.storeService.definition.programs = [program]
-      document.storeService.definition.videoComponents = [1, 2, 3].map { id in
+      document.storeService.workspaceDefinition.programs = [program]
+      document.storeService.workspaceDefinition.videoComponents = [1, 2, 3].map { id in
         var device = Ldtx_Workspace_V4_VfxSourceComponent()
         device.internalID = Int64(id)
         device.displayName = "Camera \(id)"
@@ -43,34 +43,45 @@ extension AppUIComponentTestSuite {
         wrapper.vfxSource = device
         return wrapper
       }
-      document.storeService.preferences.landscapeProgramPreferences[101] = .with {
+      document.storeService.workspacePreferences.landscapeProgramPreferences[101] = .with {
         $0.videoLayerInternalIds = [1, 2, 3]
       }
-      document.storeService.preferences.portraitProgramPreferences[101] = .with {
+      document.storeService.workspacePreferences.portraitProgramPreferences[101] = .with {
         $0.videoLayerInternalIds = [3, 2, 1]
       }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
       document.storeService.isOutputActive = true
-      let definition = document.storeService.definition
-      let outputSettings = document.storeService.outputSettings
-      try document.storeService.commitLayerOrder([3, 1, 2], programID: 101, target: .landscape)
-      try document.storeService.commitLayerOrder([1, 3, 2], programID: 101, target: .portrait)
+      let definition = document.storeService.workspaceDefinition
+      let outputSettings = document.storeService.workspaceOutputSettings
+      try VideoLayersEditor(
+        storeService: document.storeService, appletData: document.appletData,
+        editingState: document.editingState, target: .landscape
+      )
+      .commitLayerOrder([3, 1, 2], programID: 101)
+      try VideoLayersEditor(
+        storeService: document.storeService, appletData: document.appletData,
+        editingState: document.editingState, target: .portrait
+      )
+      .commitLayerOrder([1, 3, 2], programID: 101)
       #expect(document.isDocumentEdited)
-      let reordered = document.storeService.preferences
+      let reordered = document.storeService.workspacePreferences
       for rejected: [Int64] in [[3, 1], [3, 1, 2, 4], [3, 1, 1]] {
         #expect(throws: WorkspaceSelectionError.self) {
-          try document.storeService.commitLayerOrder(rejected, programID: 101, target: .landscape)
+          try VideoLayersEditor(
+            storeService: document.storeService, appletData: document.appletData,
+            editingState: document.editingState, target: .landscape
+          )
+          .commitLayerOrder(rejected, programID: 101)
         }
-        #expect(document.storeService.preferences == reordered)
+        #expect(document.storeService.workspacePreferences == reordered)
       }
-      document.storeService.definition.displayName = "Forbidden"
-      document.storeService.definition.programs.removeAll()
-      #expect(document.storeService.definition == definition)
-      document.storeService.outputSettings.recordingEnabled.toggle()
-      #expect(document.storeService.outputSettings == outputSettings)
-      try document.storeService.commitLayerOrder([2, 3, 1], programID: 101, target: .landscape)
-      let latest = document.storeService.preferences
+      try VideoLayersEditor(
+        storeService: document.storeService, appletData: document.appletData,
+        editingState: document.editingState, target: .landscape
+      )
+      .commitLayerOrder([2, 3, 1], programID: 101)
+      let latest = document.storeService.workspacePreferences
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       let persisted = try WorkspaceBundleReaderV4(at: url).read()
       #expect(persisted.definition == definition)
@@ -80,9 +91,9 @@ extension AppUIComponentTestSuite {
       let reopened = WorkspaceDocument()
       defer { reopened.close() }
       try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
-      #expect(reopened.storeService.definition == definition)
-      #expect(reopened.storeService.preferences == latest)
-      #expect(reopened.storeService.outputSettings == outputSettings)
+      #expect(reopened.storeService.workspaceDefinition == definition)
+      #expect(reopened.storeService.workspacePreferences == latest)
+      #expect(reopened.storeService.workspaceOutputSettings == outputSettings)
     }
 
     @Test("UCT-1004.2: Starting output does not save pending edits")
@@ -97,33 +108,37 @@ extension AppUIComponentTestSuite {
       let preferences = try Data(contentsOf: url.appendingPathComponent("preferences.pb"))
       document.makeWindowControllers()
       let controller = try #require(document.windowControllers.first as? WorkspaceWindowController)
-      document.storeService.definition.displayName = "Pending"
+      document.storeService.workspaceDefinition.displayName = "Pending"
       // No Program/output is enabled, so this exercises the entry without media I/O.
       try await controller.startOutput()
       #expect(document.isDocumentEdited)
-      #expect(document.storeService.definition.displayName == "Pending")
+      #expect(document.storeService.workspaceDefinition.displayName == "Pending")
       #expect(try Data(contentsOf: url.appendingPathComponent("definition.pb")) == definition)
       #expect(try Data(contentsOf: url.appendingPathComponent("preferences.pb")) == preferences)
       await document.shutdown()
     }
 
-    @Test("UCT-1004.3: Output freezes definition while preferences remain editable")
-    func outputFreezesDefinitionButTracksPreferences() {
+    @Test("UCT-1004.3: Workspace definition assignments remain transparent during output")
+    func definitionAssignmentsRemainTransparent() {
       let document = WorkspaceDocument()
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 101
       program.displayName = "Main"
-      document.storeService.definition.programs = [program]
+      document.storeService.workspaceDefinition.programs = [program]
       document.updateChangeCount(.changeCleared)
-      let original = document.storeService.definition
       document.storeService.isOutputActive = true
-      document.storeService.definition.displayName = "Rejected"
-      #expect(document.storeService.definition == original)
-      #expect(!document.isDocumentEdited)
-      document.storeService.preferences.landscapeProgramPreferences[101, default: .init()]
+      document.storeService.workspaceDefinition.displayName = "Updated"
+      #expect(document.storeService.workspaceDefinition.displayName == "Updated")
+      let replacement = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+        $0.displayName = "Replacement"
+      }
+      document.storeService.workspaceDefinition = replacement
+      #expect(document.storeService.workspaceDefinition == replacement)
+      #expect(document.isDocumentEdited)
+      document.storeService.workspacePreferences.landscapeProgramPreferences[101, default: .init()]
         .audioMasterVolumeDecibels = .with {
-          $0.numerator = -6
-          $0.denominator = 1
+          $0.num = -6
+          $0.den = 1
         }
       #expect(document.isDocumentEdited)
     }

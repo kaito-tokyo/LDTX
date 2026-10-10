@@ -27,7 +27,7 @@ extension AppUIComponentTestSuite {
       for _ in 0..<100 where probe.result == nil { try await Task.sleep(for: .milliseconds(10)) }
       #expect(probe.result == false)
       #expect(document.isDocumentEdited)
-      #expect(document.storeService.definition.displayName == "Pending")
+      #expect(document.storeService.workspaceDefinition.displayName == "Pending")
       #expect(window.isVisible)
       #expect(UIComponentTestEnvironment.documentController.documents.contains { $0 === document })
     }

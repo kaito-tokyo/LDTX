@@ -31,7 +31,8 @@ enum WorkspaceSelectionRules {
   }
 }
 
-struct WorkspaceSelectionError: LocalizedError {
-  let message: String
-  var errorDescription: String? { message }
+public struct WorkspaceSelectionError: LocalizedError {
+  public let message: String
+  public init(message: String) { self.message = message }
+  public var errorDescription: String? { message }
 }

@@ -11,6 +11,29 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  @Test func runtimeStateUsesExternalAssignmentsWithoutChangingPathState() throws {
+    let suite = "RuntimeLocalState.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let url = URL(fileURLWithPath: "/tmp/RuntimeLocalState.ldtxworkspace")
+    let externalID = UUID()
+    var original = WorkspaceLocalState()
+    original.monitorVolume = -12
+    original.selectedProgramInternalID = 123
+    original.recordingFolderPath = "/tmp/legacy-recordings"
+    data.setState(original, for: url)
+    data.recordingFolderPaths[externalID] = "/tmp/current-recordings"
+    data.landscapeYouTubeLiveStreamIDs[externalID] = "landscape"
+    let runtime = data.state(for: url, externalID: externalID)
+    #expect(runtime.monitorVolume == -12)
+    #expect(runtime.selectedProgramInternalID == 123)
+    #expect(runtime.recordingFolderPath == "/tmp/current-recordings")
+    #expect(runtime.landscapeYouTubeLiveStreamID == "landscape")
+    #expect(data.state(for: url) == original)
+    #expect(data.state(for: url, externalID: nil) == original)
+  }
+
   @Test func persistsRecordingFolderInAppletData() throws {
     let suiteName = "RecordingFolderTest.\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suiteName))

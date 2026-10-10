@@ -14,20 +14,22 @@ import SwiftUI
 #endif
 
 public struct WorkspaceInspectorContainer: View {
-  @Environment(\.documentReference) private var documentReference
-  private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? storeService.localStateURL
-  }
+  @Environment(\.workspaceReportError) private var reportError
+  private var workspaceURL: URL? { storeService.localStateURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var storeService: WorkspaceStoreService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  let editingState: WorkspaceEditingState
 
   public init(
     deviceRegistry: DeviceRegistryService,
-    storeService: WorkspaceStoreService,
-    appletData: WorkspaceAppletData
+    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
+    appletData: WorkspaceAppletData,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.editingState = editingState
+    self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
     self._storeService = Bindable(wrappedValue: storeService)
@@ -61,15 +63,17 @@ public struct WorkspaceInspectorContainer: View {
     case .invalid:
       emptyInspector
     case .workspacePrograms:
-      WorkspaceProgramsInspector(storeService: storeService, appletData: appletData)
+      WorkspaceProgramsInspector(
+        storeService: storeService, editingState: editingState, appletData: appletData,
+        runtimeActions: runtimeActions)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(storeService: storeService)
     case .workspaceOutput:
       if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
         WorkspaceOutputInspector(
-          outputSettings: $storeService.outputSettings, externalID: externalID,
+          outputSettings: $storeService.workspaceOutputSettings, externalID: externalID,
           isOutputActive: storeService.isOutputActive, appletData: appletData,
-          reportError: storeService.reportError)
+          reportError: reportError)
       } else {
         unavailablePreviewInspector
       }
@@ -78,7 +82,7 @@ public struct WorkspaceInspectorContainer: View {
         AudioInputDeviceInspector(
           storeService: storeService, internalID: internalID,
           deviceRegistry: deviceRegistry,
-          appletData: appletData)
+          appletData: appletData, runtimeActions: runtimeActions)
       } else {
         emptyInspector
       }
@@ -86,7 +90,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
           storeService: storeService, internalID: internalID,
-          deviceRegistry: deviceRegistry, appletData: appletData)
+          deviceRegistry: deviceRegistry, appletData: appletData, runtimeActions: runtimeActions)
       } else {
         emptyInspector
       }
@@ -94,6 +98,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         SolidColorFillVideoComponentInspector(
           storeService: storeService,
+          appletData: appletData,
           videoComponentID: internalID)
       } else {
         emptyInspector
@@ -102,6 +107,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         LinearGradientFillVideoComponentInspector(
           storeService: storeService,
+          appletData: appletData,
           videoComponentID: internalID)
       } else {
         emptyInspector
@@ -110,6 +116,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         RadialGradientFillVideoComponentInspector(
           storeService: storeService,
+          appletData: appletData,
           videoComponentID: internalID)
       } else {
         emptyInspector
@@ -118,6 +125,7 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID {
         ConicGradientFillVideoComponentInspector(
           storeService: storeService,
+          appletData: appletData,
           videoComponentID: internalID)
       } else {
         emptyInspector
@@ -125,14 +133,14 @@ public struct WorkspaceInspectorContainer: View {
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(
-          storeService: storeService, internalID: internalID)
+          storeService: storeService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
     case .testPatternVideoComponent:
       if let internalID = selector.internalID {
         TestPatternInspector(
-          storeService: storeService, internalID: internalID)
+          storeService: storeService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
@@ -141,7 +149,7 @@ public struct WorkspaceInspectorContainer: View {
         let vision = $storeService.ocrVision(internalID: internalID)
       {
         OcrVisionInspector(
-          storeService: storeService, vision: vision)
+          storeService: storeService, editingState: editingState, vision: vision)
       } else {
         emptyInspector
       }
@@ -149,7 +157,10 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID,
         let vision = $storeService.createMlImageClassifierVision(internalID: internalID)
       {
-        CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
+        CreateMlImageClassifierVisionInspector(
+          videoComponents: storeService.workspaceDefinition.videoComponents, vision: vision
+        )
+        .environment(\.outputActive, storeService.isOutputActive)
       } else {
         emptyInspector
       }
@@ -171,12 +182,14 @@ public struct WorkspaceInspectorContainer: View {
 
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
+    @Previewable @State var editingState = WorkspaceEditingState()
     @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        storeService: storeService, deviceRegistry: DeviceRegistryService(),
+        storeService: storeService, editingState: editingState,
+        deviceRegistry: DeviceRegistryService(),
         appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
@@ -185,7 +198,7 @@ public struct WorkspaceInspectorContainer: View {
 
       WorkspaceInspectorContainer(
         deviceRegistry: DeviceRegistryService(), storeService: storeService,
-        appletData: WorkspaceAppletData()
+        editingState: editingState, appletData: WorkspaceAppletData()
       )
       .padding(16)
       .frame(width: 260)

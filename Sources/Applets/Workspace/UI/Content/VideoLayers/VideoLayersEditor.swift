@@ -10,16 +10,27 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   let table = VideoLayersTableView()
 
   private let status = NSTextField(wrappingLabelWithString: "")
+  private let appletData: WorkspaceAppletData
   private let storeService: WorkspaceStoreService
+  private let editingState: WorkspaceEditingState
   private let target: WorkspaceCanvasTarget
   private var displayedProgramID: Int64?
-  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? { storeService.selectedProgram }
+  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
+    appletData.selectedProgram(
+      in: storeService.workspaceDefinition, for: storeService.localStateURL)
+  }
 
-  init(storeService: WorkspaceStoreService, target: WorkspaceCanvasTarget) {
+  init(
+    storeService: WorkspaceStoreService, appletData: WorkspaceAppletData,
+    editingState: WorkspaceEditingState,
+    target: WorkspaceCanvasTarget
+  ) {
+    self.appletData = appletData
     self.storeService = storeService
+    self.editingState = editingState
     self.target = target
     super.init(nibName: nil, bundle: nil)
-    storeService.registerContentEditValidator(
+    editingState.registerContentEditValidator(
       hasChanges: { [weak self] in
         self?.table.rows.values.contains { $0.state.hasUnconfirmedChanges } ?? false
       },
@@ -64,7 +75,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     let saved = try onCommitTransform(id, transform)
     row.state.display(
       saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
-    storeService.refreshUnconfirmedChanges()
+    editingState.refreshUnconfirmedChanges()
   }
 
   private func validatedTransform(for row: VideoLayersTableRow) throws
@@ -169,8 +180,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
           row.delegate?.videoLayersTableRow(row, setHidden: value)
         }
       }
-      row.state.onEditsChanged = { [weak storeService] in
-        storeService?.refreshUnconfirmedChanges()
+      row.state.onEditsChanged = { [weak editingState] in
+        editingState?.refreshUnconfirmedChanges()
       }
       row.delegate = self
       row.state.name = names[id] ?? "Missing Video Layer"
@@ -204,6 +215,21 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     refresh()
   }
 
+  func commitLayerOrder(_ ids: [Int64], programID: Int64) throws {
+    guard storeService.workspaceDefinition.programs.contains(where: { $0.internalID == programID })
+    else {
+      throw WorkspaceSelectionError(message: "The Program is unavailable.")
+    }
+    let current =
+      storeService.workspacePreferences[keyPath: target.preferences][programID]?
+      .videoLayerInternalIds ?? []
+    guard current.sorted() == ids.sorted() else {
+      throw WorkspaceSelectionError(message: "The video layer order changed.")
+    }
+    storeService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
+      .videoLayerInternalIds = ids
+  }
+
   func refresh() {
     _ = view
     let id = selectedProgram?.internalID
@@ -212,35 +238,52 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
       displayedProgramID = id
     }
     let preference =
-      id.flatMap { storeService.preferences[keyPath: target.preferences][$0] } ?? .init()
+      id.flatMap { storeService.workspacePreferences[keyPath: target.preferences][$0] } ?? .init()
     let layerIDs = preference.videoLayerInternalIds
     update(
-      definition: storeService.definition, programPreferences: preference, layerIDs: layerIDs,
+      definition: storeService.workspaceDefinition, programPreferences: preference,
+      layerIDs: layerIDs,
       canvasWidth: 1920,
       canvasHeight: 1080,
       onCommitTransform: { [weak self] layerID, value in
         guard let self, let id else {
           throw WorkspaceSelectionError(message: "No program selected.")
         }
-        return try storeService.commitVideoLayerTransform(
-          value, layerID: layerID, programID: id, target: target)
+        guard storeService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+        else {
+          throw WorkspaceSelectionError(message: "The Program is unavailable.")
+        }
+        try WorkspaceV4IntegrityValidator.validateTransform(value)
+        var transform =
+          storeService.workspacePreferences[keyPath: target.preferences][id]?
+          .videoLayerTransforms[layerID] ?? .init()
+        transform.translationX = value.translationX
+        transform.translationY = value.translationY
+        transform.scaleX = value.scaleX
+        transform.scaleY = value.scaleY
+        storeService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+          .videoLayerTransforms[layerID] = transform
+        return transform
       },
       onSetHidden: { [weak self] layerID, value in
         guard let self, let id else {
           throw WorkspaceSelectionError(message: "No program selected.")
         }
-        var updated = try storeService.preferences(for: id, target: target)
-        updated.videoLayerHidden[layerID] = value
-        try storeService.commitPreferences(updated, programID: id, target: target)
+        guard storeService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+        else {
+          throw WorkspaceSelectionError(message: "The Program is unavailable.")
+        }
+        storeService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+          .videoLayerHidden[layerID] = value
       },
       onCommitLayerOrder: { [weak self] ids in
         guard let self, let id else {
           throw WorkspaceSelectionError(message: "No program selected.")
         }
-        try storeService.commitLayerOrder(ids, programID: id, target: target)
+        try commitLayerOrder(ids, programID: id)
       },
-      onError: { [weak storeService] error in
-        storeService?.reportInputValidationError(error)
+      onError: { [weak editingState] error in
+        editingState?.reportInputValidationError(error)
       })
     status.textColor = .secondaryLabelColor
     status.stringValue =
@@ -253,6 +296,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
 #if DEBUG
 
   #Preview("Video Layers Editor", traits: .fixedLayout(width: 720, height: 360)) {
+    @Previewable @State var editingState = WorkspaceEditingState()
     let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = ["Camera", "Background", "Portrait Source"].enumerated().map {
@@ -280,9 +324,11 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     program.internalID = 100
     programPreferences.videoLayerInternalIds = [1, 2]
     definition.programs = [program]
-    storeService.definition = definition
-    storeService.preferences.landscapeProgramPreferences[100] = programPreferences
-    let editor = VideoLayersEditor(storeService: storeService, target: .landscape)
+    storeService.workspaceDefinition = definition
+    storeService.workspacePreferences.landscapeProgramPreferences[100] = programPreferences
+    let editor = VideoLayersEditor(
+      storeService: storeService, appletData: WorkspaceAppletData(), editingState: editingState,
+      target: .landscape)
     NSLayoutConstraint.activate([
       editor.view.widthAnchor.constraint(equalToConstant: 720),
       editor.view.heightAnchor.constraint(equalToConstant: 360),
@@ -293,7 +339,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   #Preview("Video Layers Editor — No Program", traits: .fixedLayout(width: 720, height: 360)) {
     let editor = VideoLayersEditor(
       storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
-      target: .landscape)
+      appletData: WorkspaceAppletData(), editingState: WorkspaceEditingState(), target: .landscape)
     NSLayoutConstraint.activate([
       editor.view.widthAnchor.constraint(equalToConstant: 720),
       editor.view.heightAnchor.constraint(equalToConstant: 360),

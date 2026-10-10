@@ -11,11 +11,11 @@ struct RationalFormatStyleUnitTestSuite {
   @Test func parsesAndFormatsExactValues() throws {
     let parser = RationalParseStrategy()
     let value = try parser.parse("0.125")
-    #expect(value.numerator == 1)
-    #expect(value.denominator == 8)
+    #expect(value.num == 1)
+    #expect(value.den == 8)
     #expect(RationalFormatStyle().format(value) == "0.125")
-    #expect(try parser.parse("1.25e-2").denominator == 80)
-    #expect(try parser.parse("-2147483648").numerator == Int32.min)
+    #expect(try parser.parse("1.25e-2").den == 80)
+    #expect(try parser.parse("-2147483648").num == Int32.min)
   }
 
   @Test func preservesPixelCoordinates() throws {
@@ -37,7 +37,7 @@ struct RationalFormatStyleUnitTestSuite {
     for input in [0.123456789, Double.pi, 2 * Double.pi] {
       binding.wrappedValue = input
       #expect(abs(value.double - input) <= 0.0000005)
-      #expect(value.denominator == 1_000_000)
+      #expect(value.den == 1_000_000)
     }
     let previous = value
     for input in [Double.nan, .infinity, Double.greatestFiniteMagnitude] {
@@ -45,8 +45,8 @@ struct RationalFormatStyleUnitTestSuite {
       #expect(value == previous)
     }
     let gain = try RationalSliderEncoding.encode(-11.899999999999999, denominator: 10)
-    #expect(gain.numerator == -119)
-    #expect(gain.denominator == 10)
+    #expect(gain.num == -119)
+    #expect(gain.den == 10)
   }
 
 }

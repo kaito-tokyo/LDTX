@@ -10,7 +10,7 @@ extension Bindable where Value == WorkspaceStoreService {
   func ocrVision(internalID: Int64) -> Binding<Ldtx_Workspace_V4_OcrVision>? {
     let store = wrappedValue
     func currentVision() -> Ldtx_Workspace_V4_OcrVision? {
-      store.definition.visions.compactMap { wrapper in
+      store.workspaceDefinition.visions.compactMap { wrapper in
         guard case .ocrVision(let vision) = wrapper.vision,
           vision.internalID == internalID
         else { return nil }
@@ -23,12 +23,12 @@ extension Bindable where Value == WorkspaceStoreService {
       get: { currentVision() ?? initial },
       set: { updated in
         guard updated.internalID == internalID,
-          let index = store.definition.visions.firstIndex(where: {
+          let index = store.workspaceDefinition.visions.firstIndex(where: {
             guard case .ocrVision(let vision) = $0.vision else { return false }
             return vision.internalID == internalID
           })
         else { return }
-        store.definition.visions[index].vision = .ocrVision(updated)
+        store.workspaceDefinition.visions[index].vision = .ocrVision(updated)
       })
   }
   @MainActor
@@ -37,7 +37,7 @@ extension Bindable where Value == WorkspaceStoreService {
   >? {
     let store = wrappedValue
     func currentVision() -> Ldtx_Workspace_V4_CreateMlImageClassifierVision? {
-      store.definition.visions.compactMap { wrapper in
+      store.workspaceDefinition.visions.compactMap { wrapper in
         guard case .createMlImageClassifierVision(let vision) = wrapper.vision,
           vision.internalID == internalID
         else { return nil }
@@ -50,14 +50,14 @@ extension Bindable where Value == WorkspaceStoreService {
       get: { currentVision() ?? initial },
       set: { updated in
         guard updated.internalID == internalID,
-          let index = store.definition.visions.firstIndex(where: {
+          let index = store.workspaceDefinition.visions.firstIndex(where: {
             guard case .createMlImageClassifierVision(let vision) = $0.vision else {
               return false
             }
             return vision.internalID == internalID
           })
         else { return }
-        store.definition.visions[index].vision = .createMlImageClassifierVision(updated)
+        store.workspaceDefinition.visions[index].vision = .createMlImageClassifierVision(updated)
       })
   }
 }

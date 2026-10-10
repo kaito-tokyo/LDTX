@@ -12,9 +12,12 @@ struct VfxVideoComponentInspector: View {
   let deviceRegistry: DeviceRegistryService
   let appletData: WorkspaceAppletData
 
+  var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
+
   var body: some View {
     Form {
-      VideoComponentProgramLayers(storeService: storeService, componentID: internalID)
+      VideoComponentProgramLayers(
+        storeService: storeService, appletData: appletData, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)
@@ -28,7 +31,8 @@ struct VfxVideoComponentInspector: View {
           .disabled(storeService.isOutputActive)
         WorkspacePhysicalDeviceField(
           title: "Physical Device", internalID: internalID, isAudio: false,
-          storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry)
+          storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry,
+          runtimeActions: runtimeActions)
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
           .disabled(storeService.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
@@ -48,7 +52,7 @@ struct VfxVideoComponentInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_VfxSourceComponent? {
-    storeService.definition.videoComponents.compactMap { wrapper in
+    storeService.workspaceDefinition.videoComponents.compactMap { wrapper in
       guard case .vfxSource(let component) = wrapper.videoComponent,
         component.internalID == internalID
       else { return nil }
@@ -126,12 +130,12 @@ struct VfxVideoComponentInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
   }
 
 }

@@ -109,14 +109,16 @@ enum WorkspaceResourceAddition {
     }
     if sheet == .vision {
       guard let componentID = draft.videoComponentID,
-        storeService.definition.videoComponents.contains(where: { $0.internalID == componentID })
+        storeService.workspaceDefinition.videoComponents.contains(where: {
+          $0.internalID == componentID
+        })
       else {
         return "Select a video component."
       }
     }
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
     if name.isEmpty { return "Enter a name." }
-    if existingNames(storeService.definition).contains(name) {
+    if existingNames(storeService.workspaceDefinition).contains(name) {
       return "This name is already in use."
     }
     return nil
@@ -134,7 +136,7 @@ enum WorkspaceResourceAddition {
     }
     let id = WorkspaceResourceFactory.nextInternalID()
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
-    var definition = storeService.definition
+    var definition = storeService.workspaceDefinition
     let inspectorKind: WorkspaceInspectorKind
     switch sheet {
     case .device:
@@ -157,7 +159,7 @@ enum WorkspaceResourceAddition {
       definition.visions.append(vision)
       inspectorKind = draft.visionKind.inspectorKind
     }
-    storeService.definition = definition
+    storeService.workspaceDefinition = definition
     storeService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
     return id
   }
@@ -167,7 +169,7 @@ enum WorkspaceResourceAddition {
     var errorDescription: String? { message }
   }
 
-  static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
+  static func existingNames(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Set<
     String
   > {
     var names = Set(

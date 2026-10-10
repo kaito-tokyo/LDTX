@@ -2,65 +2,60 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
 import LDTXProtos
-import LDTXTaskQueue
-import LDTXWorkspaceAppletModel
-import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct CreateMlImageClassifierVisionInspector: View {
-  @Bindable var storeService: WorkspaceStoreService
+  var videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper]
   @Binding var vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision
 
-  @State var x: Int32?
-  @State var xDenominator: UInt32?
-  @State var y: Int32?
-  @State var yDenominator: UInt32?
-  @State var width: Int32?
-  @State var widthDenominator: UInt32?
-  @State var height: Int32?
-  @State var heightDenominator: UInt32?
-  @State var validatorID = UUID()
-  @State var submittedInputs: [Int64?] = []
+  @Environment(\.outputActive) var outputActive
 
-  init(
-    storeService: WorkspaceStoreService,
-    vision: Binding<Ldtx_Workspace_V4_CreateMlImageClassifierVision>
-  ) {
-    self.storeService = storeService
-    self._vision = vision
-    let region = vision.wrappedValue.regionOfInterest
-    let profile = WorkspaceCanvasTarget.landscape.defaultProfile
-    let xFields = RationalFractionInput.fields(
-      for: region.x, defaultDenominator: UInt32(profile.width))
-    self._x = State(initialValue: Int32(xFields.numerator)!)
-    self._xDenominator = State(initialValue: UInt32(xFields.denominator)!)
-    let yFields = RationalFractionInput.fields(
-      for: region.y, defaultDenominator: UInt32(profile.height))
-    self._y = State(initialValue: Int32(yFields.numerator)!)
-    self._yDenominator = State(initialValue: UInt32(yFields.denominator)!)
-    let widthFields = RationalFractionInput.fields(
-      for: region.width, defaultDenominator: UInt32(profile.width))
-    self._width = State(initialValue: Int32(widthFields.numerator)!)
-    self._widthDenominator = State(initialValue: UInt32(widthFields.denominator)!)
-    let heightFields = RationalFractionInput.fields(
-      for: region.height, defaultDenominator: UInt32(profile.height))
-    self._height = State(initialValue: Int32(heightFields.numerator)!)
-    self._heightDenominator = State(initialValue: UInt32(heightFields.denominator)!)
+  private func rationalTextField<Value: Rational32Value>(
+    value: Binding<Value>,
+    numeratorPrompt: Text?,
+    denominatorPrompt: Text?,
+    numeratorLabel: LocalizedStringResource,
+    denominatorLabel: LocalizedStringResource
+  ) -> some View {
+    HStack(alignment: .firstTextBaseline) {
+      TextField(
+        numeratorLabel,
+        value: value.numIfPresent,
+        formatter: NullableIntegerFormatter<Int32>(),
+        prompt: numeratorPrompt
+      )
+      .frame(width: 50)
+      Text("/")
+      TextField(
+        denominatorLabel,
+        value: value.denIfPresent,
+        formatter: NullableIntegerFormatter<UInt32>(),
+        prompt: denominatorPrompt
+      )
+      .frame(width: 50)
+    }
+    .labelsHidden()
   }
 
   var body: some View {
+    let visionInputOptions: [(Int64?, String?)] = videoComponents.enumerated().compactMap {
+      $1.canBeVisionInput ? (id: $1.internalID ?? -Int64($0 + 1), name: $1.displayName) : nil
+    }
+
     Form {
       Section("Vision - Create ML Image Classifier") {
         TextField("Name", text: $vision.displayName)
         Picker("Input video", selection: $vision.videoComponentInternalIDIfPresent) {
           Text("Unassigned").tag(Int64?.none)
-          ForEach(storeService.videoComponentOptions) { option in
-            Text(option.name).tag(Optional(option.id))
+          ForEach(visionInputOptions, id: \.0) { (id, name) in
+            if let name {
+              Text(name).tag(id)
+            } else {
+              Text("(invalid video component)").tag(id)
+            }
           }
         }
-        .pickerStyle(.automatic)
         Picker("Update Interval", selection: $vision.triggers) {
           Text("Manual").tag([Ldtx_Workspace_V4_VisionTriggerWrapper]())
           Text("Every 1 Second").tag([intervalTrigger(seconds: 1)])
@@ -69,105 +64,49 @@ struct CreateMlImageClassifierVisionInspector: View {
           Text("Every 30 Seconds").tag([intervalTrigger(seconds: 30)])
         }
       }
-      .disabled(storeService.isOutputActive)
+      .disabled(outputActive)
       Section("Region of Interest") {
         LabeledContent("X") {
-          HStack {
-            TextField("X numerator", value: $x, formatter: NullableIntegerFormatter<Int32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-            Text("/")
-            TextField("X denominator", value: $xDenominator, formatter: NullableIntegerFormatter<UInt32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-          }
+          rationalTextField(
+            value: $vision.regionOfInterest.x,
+            numeratorPrompt: Text("0"),
+            denominatorPrompt: inputSize.map { Text(String($0.width)) },
+            numeratorLabel: "X numerator", denominatorLabel: "X denominator")
         }
         LabeledContent("Y") {
-          HStack {
-            TextField("Y numerator", value: $y, formatter: NullableIntegerFormatter<Int32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-            Text("/")
-            TextField("Y denominator", value: $yDenominator, formatter: NullableIntegerFormatter<UInt32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-          }
+          rationalTextField(
+            value: $vision.regionOfInterest.y,
+            numeratorPrompt: Text("0"),
+            denominatorPrompt: inputSize.map { Text(String($0.height)) },
+            numeratorLabel: "Y numerator", denominatorLabel: "Y denominator")
         }
         LabeledContent("Width") {
-          HStack {
-            TextField("Width numerator", value: $width, formatter: NullableIntegerFormatter<Int32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-            Text("/")
-            TextField("Width denominator", value: $widthDenominator, formatter: NullableIntegerFormatter<UInt32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-          }
+          rationalTextField(
+            value: $vision.regionOfInterest.width,
+            numeratorPrompt: inputSize.map { Text(String($0.width)) },
+            denominatorPrompt: inputSize.map { Text(String($0.width)) },
+            numeratorLabel: "Width numerator", denominatorLabel: "Width denominator")
         }
         LabeledContent("Height") {
-          HStack {
-            TextField("Height numerator", value: $height, formatter: NullableIntegerFormatter<Int32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-            Text("/")
-            TextField("Height denominator", value: $heightDenominator, formatter: NullableIntegerFormatter<UInt32>())
-              .labelsHidden()
-              .multilineTextAlignment(.trailing)
-              .frame(width: 90)
-          }
+          rationalTextField(
+            value: $vision.regionOfInterest.height,
+            numeratorPrompt: inputSize.map { Text(String($0.height)) },
+            denominatorPrompt: inputSize.map { Text(String($0.height)) },
+            numeratorLabel: "Height numerator", denominatorLabel: "Height denominator")
         }
       }
-      .disabled(storeService.isOutputActive)
+      .disabled(outputActive)
     }
     .formStyle(.grouped)
-    .onSubmit { submitEdits() }
-    .onAppear {
-      if submittedInputs.isEmpty { submittedInputs = inputs }
-      storeService.registerInspectorEditValidator(
-        id: validatorID, hasChanges: { inputs != submittedInputs },
-        submit: { try commitEdits() }
-      ) {
-        _ = try Self.validatedRegion(
-          x: x, y: y, width: width, height: height, xDenominator: xDenominator,
-          yDenominator: yDenominator,
-          widthDenominator: widthDenominator, heightDenominator: heightDenominator)
-      }
-    }
-    .onChange(of: inputs) { storeService.refreshUnconfirmedChanges() }
-    .onDisappear { storeService.removeInspectorEditValidator(id: validatorID) }
   }
 
-  var inputs: [Int64?] {
-    [
-      x.map { Int64($0) }, xDenominator.map { Int64($0) }, y.map { Int64($0) }, yDenominator.map { Int64($0) }, width.map { Int64($0) },
-      widthDenominator.map { Int64($0) }, height.map { Int64($0) }, heightDenominator.map { Int64($0) },
-    ]
+  var inputSize: (width: UInt32, height: UInt32)? {
+    guard let id = vision.videoComponentInternalIDIfPresent else { return nil }
+    return videoComponents.first { $0.internalID == id }?.renderingSize
   }
 
   func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
     .with { $0.intervalTrigger.intervalSeconds.set(num: seconds, den: 1) }
-  }
-
-  func submitEdits() {
-    guard !storeService.isOutputActive else { return }
-    do { try commitEdits() } catch { storeService.reportInputValidationError(error) }
-  }
-
-  func commitEdits() throws {
-    let region = try Self.validatedRegion(
-      x: x, y: y, width: width, height: height, xDenominator: xDenominator,
-      yDenominator: yDenominator,
-      widthDenominator: widthDenominator, heightDenominator: heightDenominator)
-    vision.regionOfInterest = region
-    submittedInputs = inputs
-    storeService.refreshUnconfirmedChanges()
   }
 
   static func validatedRegion(
@@ -199,24 +138,19 @@ struct CreateMlImageClassifierVisionInspector: View {
 }
 
 #if DEBUG
-  #Preview("Default") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .createMlImageClassifierVision, internalID: 11))
-    @Bindable var boundStore = storeService
-    if let vision = $boundStore.createMlImageClassifierVision(internalID: 11) {
-      CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
-        .frame(width: 480, height: 600, alignment: .topLeading)
-    }
-  }
+  #Preview {
+    @Previewable @State var vision =
+      Ldtx_Workspace_V4_CreateMlImageClassifierVision.with {
+        $0.videoComponentInternalID = 7
+      }
 
-  #Preview("Output Active") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
-      inspectorSelector: .init(kind: .createMlImageClassifierVision, internalID: 11),
-      isOutputActive: true)
-    @Bindable var boundStore = storeService
-    if let vision = $boundStore.createMlImageClassifierVision(internalID: 11) {
-      CreateMlImageClassifierVisionInspector(storeService: storeService, vision: vision)
-        .frame(width: 480, height: 600, alignment: .topLeading)
+    let videoComponent = Ldtx_Workspace_V4_VideoComponentWrapper.with {
+      $0.vfxSource.internalID = 7
+      $0.vfxSource.displayName = "Camera"
+      $0.vfxSource.deviceWidth = 1920
+      $0.vfxSource.deviceHeight = 1080
     }
+
+    CreateMlImageClassifierVisionInspector(videoComponents: [videoComponent], vision: $vision)
   }
 #endif

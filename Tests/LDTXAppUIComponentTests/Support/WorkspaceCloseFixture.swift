@@ -30,7 +30,7 @@ final class WorkspaceCloseFixture {
       document.makeWindowControllers()
       let window = try #require(document.windowControllers.first?.window)
       window.orderFront(nil)
-      document.storeService.definition.displayName = "Pending"
+      document.storeService.workspaceDefinition.displayName = "Pending"
       self.document = document
       self.url = url
       self.window = window

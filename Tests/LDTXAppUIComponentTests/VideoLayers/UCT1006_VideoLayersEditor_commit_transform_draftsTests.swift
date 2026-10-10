@@ -100,16 +100,16 @@ extension AppUIComponentTestSuite {
       var preferences = Ldtx_Workspace_V4_ProgramPreferences()
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.translationX = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       transform.scaleX = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       transform.scaleY = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       preferences.videoLayerTransforms[1] = transform
       preferences.videoLayerHidden[1] = true
@@ -120,8 +120,8 @@ extension AppUIComponentTestSuite {
       row.state.isEditing = true
       row.state.strings[0] = "draft"
       preferences.videoLayerTransforms[1]?.translationX = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
       preferences.videoLayerHidden[1] = false
       fixture.update(table, preferences: preferences)
@@ -143,20 +143,20 @@ extension AppUIComponentTestSuite {
       #expect(
         saved[0].translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(
         saved[0].translationY
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 270
-            $0.denominator = 1080
+            $0.num = 270
+            $0.den = 1080
           })
       #expect(
         saved[0].scaleX
           == Ldtx_Workspace_V4_Rational32DefaultOne.with {
-            $0.numerator = 15
-            $0.denominator = 10
+            $0.num = 15
+            $0.den = 10
           })
       row.state.strings[0] = "192"
       row.state.hasUnconfirmedChanges = true
@@ -165,8 +165,8 @@ extension AppUIComponentTestSuite {
       #expect(
         saved[1].translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 192
-            $0.denominator = 1920
+            $0.num = 192
+            $0.den = 1920
           })
       #expect(!row.state.hasUnconfirmedChanges)
     }
@@ -199,12 +199,12 @@ extension AppUIComponentTestSuite {
       row.state.strings = ["100", "1", "1.25", "1"]
       row.state.onCommit()
       let transform = try #require(saved)
-      #expect(transform.translationX.numerator == 100)
-      #expect(transform.translationX.denominator == 1920)
-      #expect(transform.translationY.numerator == 1)
-      #expect(transform.translationY.denominator == 1080)
-      #expect(transform.scaleX.numerator == 125)
-      #expect(transform.scaleX.denominator == 100)
+      #expect(transform.translationX.num == 100)
+      #expect(transform.translationX.den == 1920)
+      #expect(transform.translationY.num == 1)
+      #expect(transform.translationY.den == 1080)
+      #expect(transform.scaleX.num == 125)
+      #expect(transform.scaleX.den == 100)
       #expect(row.state.strings == ["100", "1", "1.25", "1"])
     }
 
@@ -245,8 +245,8 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(row.state.strings[0] == "960")
 
@@ -404,8 +404,8 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(!row.state.hasUnconfirmedChanges)
 
@@ -447,86 +447,96 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1006.14: Preference commit uses latest value and preserves insets")
     func preferenceCommitUsesLatestValueAndPreservesInsets() throws {
+      let stateAppletData = WorkspaceAppletData()
+      let stateEditingState = WorkspaceEditingState()
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
-      state.definition.programs = [program]
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
-        1, 2,
-      ]
+      state.workspaceDefinition.programs = [program]
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerInternalIds = [
+          1, 2,
+        ]
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleX = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       transform.scaleY = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[1] =
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerTransforms[1] =
         transform
       let content = VideoLayersEditor(
-        storeService: state, target: .landscape)
+        storeService: state, appletData: stateAppletData, editingState: stateEditingState,
+        target: .landscape)
       content.refresh()
       let row = try #require(content.table.rows[1])
-      state.preferences.landscapeProgramPreferences[1, default: .init()]
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .audioMasterVolumeDecibels = .with {
-          $0.numerator = -9
-          $0.denominator = 1
+          $0.num = -9
+          $0.den = 1
         }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
-        1, default: .init()
-      ].topInset = .with {
-        $0.numerator = 1
-        $0.denominator = 5
-      }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerTransforms[
+          1, default: .init()
+        ].topInset = .with {
+          $0.num = 1
+          $0.den = 5
+        }
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[
+        2] = true
       row.state.strings[0] = "960"
       row.state.hasUnconfirmedChanges = true
       row.state.onCommit()
-      let live = state.preferences.landscapeProgramPreferences[1] ?? .init()
+      let live = state.workspacePreferences.landscapeProgramPreferences[1] ?? .init()
       #expect(
         live.audioMasterVolumeDecibels
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.set(num: -90, den: 10)
+            $0.set(num: -9, den: 1)
           })
       #expect(
         live.videoLayerTransforms[1]?.topInset
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 5
+            $0.num = 1
+            $0.den = 5
           })
       #expect(
         live.videoLayerTransforms[1]?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(live.videoLayerHidden[2] == true)
-      #expect(state.preferences.portraitProgramPreferences.isEmpty)
+      #expect(state.workspacePreferences.portraitProgramPreferences.isEmpty)
       #expect(row.state.strings[0] == "960")
     }
 
     @Test("UCT-1006.16: Invalid transform drafts block navigation until corrected")
     func invalidTransformBlocksNavigation() throws {
+      let storeAppletData = WorkspaceAppletData()
+      let storeEditingState = WorkspaceEditingState()
       let store = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let editor = VideoLayersEditor(storeService: store, target: .landscape)
+      let editor = VideoLayersEditor(
+        storeService: store, appletData: storeAppletData, editingState: storeEditingState,
+        target: .landscape)
       editor.update(
         definition: .with { $0.videoComponents = [.with { $0.vfxSource.internalID = 1 }] },
         programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
       let row = try #require(editor.table.rows[1])
-      let original = store.preferences
+      let original = store.workspacePreferences
       for strings in [["bad", "0", "1", "1"], ["0", "0", "bad", "1"]] {
         row.state.strings = strings
         row.state.hasUnconfirmedChanges = true
-        #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
-        #expect(throws: (any Error).self) { try store.validateForSaving() }
+        #expect(throws: (any Error).self) { try storeEditingState.validateInspectorEdits() }
         #expect(row.state.strings == strings)
-        #expect(store.preferences == original)
+        #expect(store.workspacePreferences == original)
       }
       row.state.strings = ["0", "0", "1", "1"]
-      try store.validateInspectorEdits()
-      #expect(store.preferences == original)
+      try storeEditingState.validateInspectorEdits()
+      #expect(store.workspacePreferences == original)
     }
 
     @Test("UCT-1006.15: Only VFX Sources and Clocks expose placement fields")

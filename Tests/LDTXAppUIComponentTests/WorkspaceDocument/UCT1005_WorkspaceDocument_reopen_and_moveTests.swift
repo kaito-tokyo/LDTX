@@ -80,7 +80,7 @@ extension AppUIComponentTestSuite {
         ofType: "tokyo.kaito.ldtx.workspace")
       defer { document.close() }
       #expect(document.fileURL == formal)
-      #expect(document.storeService.definition.displayName == "Formal")
+      #expect(document.storeService.workspaceDefinition.displayName == "Formal")
       #expect(!document.isDocumentEdited)
       #expect(document.autosavedContentsFileURL == nil)
       #expect(throws: (any Error).self) {
@@ -143,7 +143,7 @@ extension AppUIComponentTestSuite {
       #expect(document.persistenceCoordinator.url == moved)
       let other = try WorkspaceDocument(contentsOf: moved, ofType: "tokyo.kaito.ldtx.workspace")
       other.close()
-      document.storeService.definition.displayName = "After move"
+      document.storeService.workspaceDefinition.displayName = "After move"
       try await saveWorkspaceDocument(document, to: moved, operation: .saveOperation)
       #expect(!document.isDocumentEdited)
       #expect(try Data(contentsOf: moved.appendingPathComponent("resource.bin")) == resource)

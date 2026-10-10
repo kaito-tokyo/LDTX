@@ -133,6 +133,8 @@ public nonisolated struct Ldtx_Workspace_V4_VideoComponentWrapper: Sendable {
 }
 
 /// A Video Component that fills the entire Canvas with one uniform source color.
+/// It has no intrinsic image size and uses the rendering Canvas dimensions.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -185,6 +187,8 @@ public nonisolated struct Ldtx_Workspace_V4_FillSolidColorComponent: Sendable {
 /// The gradient progresses from start_extended_srgb_color to
 /// end_extended_srgb_color along the start-to-end axis. Coincident control
 /// points and color interpolation are implementation-defined.
+/// It has no intrinsic image size and uses the rendering Canvas dimensions.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -297,6 +301,8 @@ public nonisolated struct Ldtx_Workspace_V4_FillLinearGradientComponent: @unchec
 /// The gradient progresses from inner_extended_srgb_color to
 /// outer_extended_srgb_color between the two control contours.
 /// Color interpolation is implementation-defined.
+/// It has no intrinsic image size and uses the rendering Canvas dimensions.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -407,6 +413,8 @@ public nonisolated struct Ldtx_Workspace_V4_FillRadialGradientComponent: @unchec
 /// The gradient progresses from start_extended_srgb_color to
 /// end_extended_srgb_color over one turn, with a seam at the start ray.
 /// Color interpolation and the result at the exact center are implementation-defined.
+/// It has no intrinsic image size and uses the rendering Canvas dimensions.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -510,6 +518,10 @@ public nonisolated struct Ldtx_Workspace_V4_FillConicGradientComponent: Sendable
 
 /// A Video Component that applies Video Effects to video from an Input Device.
 /// Physical camera assignment is app-local and keyed by this entity's LdtxInternalId.
+/// Its device image size is explicitly defined by device_width and device_height
+/// and can be resolved without a connected physical device. These dimensions
+/// count pixels on the device image grid, so they are unsigned integers rather
+/// than Rational32 values normalized to a Canvas.
 public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -535,6 +547,26 @@ public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
   /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
   public mutating func clearDisplayName() {self._displayName = nil}
 
+  /// The configured device image width in pixels.
+  public var deviceWidth: UInt32 {
+    get {_deviceWidth ?? 0}
+    set {_deviceWidth = newValue}
+  }
+  /// Returns true if `deviceWidth` has been explicitly set.
+  public var hasDeviceWidth: Bool {self._deviceWidth != nil}
+  /// Clears the value of `deviceWidth`. Subsequent reads from it will return its default value.
+  public mutating func clearDeviceWidth() {self._deviceWidth = nil}
+
+  /// The configured device image height in pixels.
+  public var deviceHeight: UInt32 {
+    get {_deviceHeight ?? 0}
+    set {_deviceHeight = newValue}
+  }
+  /// Returns true if `deviceHeight` has been explicitly set.
+  public var hasDeviceHeight: Bool {self._deviceHeight != nil}
+  /// Clears the value of `deviceHeight`. Subsequent reads from it will return its default value.
+  public mutating func clearDeviceHeight() {self._deviceHeight = nil}
+
   /// The VFX effects applied to the input video, in evaluation order.
   public var effects: [Ldtx_Workspace_V4_VideoEffectWrapper] = []
 
@@ -544,9 +576,13 @@ public nonisolated struct Ldtx_Workspace_V4_VfxSourceComponent: Sendable {
 
   fileprivate var _internalID: Int64? = nil
   fileprivate var _displayName: String? = nil
+  fileprivate var _deviceWidth: UInt32? = nil
+  fileprivate var _deviceHeight: UInt32? = nil
 }
 
 /// A Video Component that renders a test pattern.
+/// It has no intrinsic image size and uses the rendering Canvas dimensions.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -581,6 +617,9 @@ public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
 }
 
 /// A Video Component that renders the current date and time.
+/// It has no intrinsic image size. Its width and height define the rendering
+/// extent relative to the Canvas, not an independent image size.
+/// It must not be referenced as a Vision input.
 public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1253,7 +1292,7 @@ nonisolated extension Ldtx_Workspace_V4_FillConicGradientComponent: SwiftProtobu
 
 nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VfxSourceComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}effects\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}device_width\0\u{3}device_height\0\u{1}effects\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1263,7 +1302,9 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.effects) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self._deviceWidth) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self._deviceHeight) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.effects) }()
       default: break
       }
     }
@@ -1280,8 +1321,14 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
     try { if let v = self._displayName {
       try visitor.visitSingularStringField(value: v, fieldNumber: 2)
     } }()
+    try { if let v = self._deviceWidth {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._deviceHeight {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 4)
+    } }()
     if !self.effects.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.effects, fieldNumber: 3)
+      try visitor.visitRepeatedMessageField(value: self.effects, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1289,6 +1336,8 @@ nonisolated extension Ldtx_Workspace_V4_VfxSourceComponent: SwiftProtobuf.Messag
   public static func ==(lhs: Ldtx_Workspace_V4_VfxSourceComponent, rhs: Ldtx_Workspace_V4_VfxSourceComponent) -> Bool {
     if lhs._internalID != rhs._internalID {return false}
     if lhs._displayName != rhs._displayName {return false}
+    if lhs._deviceWidth != rhs._deviceWidth {return false}
+    if lhs._deviceHeight != rhs._deviceHeight {return false}
     if lhs.effects != rhs.effects {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

@@ -6,6 +6,7 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct WorkspacePhysicalDeviceField: View {
+  @Environment(\.workspaceReportError) private var reportError
   let title: String
   let internalID: Int64
   let isAudio: Bool
@@ -13,6 +14,8 @@ struct WorkspacePhysicalDeviceField: View {
   let appletData: WorkspaceAppletData
   let deviceRegistry: DeviceRegistryService
   var isEditable = true
+
+  var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
 
   private var options: [WorkspaceSelectionOption<WorkspacePhysicalDeviceID>] {
     if isAudio {
@@ -34,11 +37,11 @@ struct WorkspacePhysicalDeviceField: View {
           set: { proposed in
             do {
               try applySelection(proposed)
-              storeService.synchronizeCaptureInputs(
+              runtimeActions()?.synchronizeCaptureInputs(
                 availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
               ) { _ in }
-              storeService.synchronizeAudioMonitor()
-            } catch { storeService.reportError(error) }
+              runtimeActions()?.synchronizeAudioMonitor()
+            } catch { reportError(error) }
           })
       ) {
         Text("Unassigned").tag(WorkspacePhysicalDeviceID?.none)
@@ -67,8 +70,8 @@ struct WorkspacePhysicalDeviceField: View {
     }
     let exists =
       isAudio
-      ? storeService.definition.audioDevices.contains { $0.internalID == internalID }
-      : storeService.definition.videoComponents.contains {
+      ? storeService.workspaceDefinition.audioDevices.contains { $0.internalID == internalID }
+      : storeService.workspaceDefinition.videoComponents.contains {
         guard case .vfxSource(let source) = $0.videoComponent else { return false }
         return source.internalID == internalID
       }

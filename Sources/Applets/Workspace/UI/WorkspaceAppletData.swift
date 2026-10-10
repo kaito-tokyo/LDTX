@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXYouTubeRTMPS
 import Observation
@@ -71,8 +72,7 @@ public final class WorkspaceAppletData {
     physicalDeviceIDsByResourceInternalID[internalID]
   }
 
-  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: Int64)
-  {
+  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: Int64) {
     var updated = physicalDeviceIDsByResourceInternalID
     updated[internalID] = identifier
     let encoder = PropertyListEncoder()
@@ -142,6 +142,23 @@ public final class WorkspaceAppletData {
     loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
+  }
+
+  public func state(for workspaceURL: URL?, externalID: UUID?) -> WorkspaceLocalState {
+    var state = workspaceURL.map { self.state(for: $0) } ?? .init()
+    if let externalID {
+      state.recordingFolderPath = recordingFolderPaths[externalID]
+      state.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamIDs[externalID]
+      state.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamIDs[externalID]
+    }
+    return state
+  }
+
+  public func selectedProgram(
+    in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, for workspaceURL: URL?
+  ) -> Ldtx_Workspace_V4_ProgramDefinition? {
+    let id = workspaceURL.map { state(for: $0).selectedProgramInternalID } ?? nil
+    return definition.programs.first { $0.internalID == id } ?? definition.programs.first
   }
 
   public func state(for workspaceURL: URL) -> WorkspaceLocalState {

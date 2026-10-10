@@ -28,18 +28,13 @@ extension AppUIComponentTestSuite {
     init() { _ = Self.controller }
 
     @Test("UCT-1016.1: Operations fail safely when a runtime is unavailable")
-    func storeRejectsOperationsWithoutRuntime() async {
+    func programInspectorRejectsSelectionWithoutRuntime() {
+      let serviceEditingState = WorkspaceEditingState()
       let service = WorkspaceStoreService(definition: .init(), preferences: .init())
-      await #expect(throws: WorkspaceSelectionError.self) { try await service.startOutput() }
-      #expect(throws: WorkspaceSelectionError.self) { try service.selectProgram(internalID: 1) }
-      #expect(throws: WorkspaceSelectionError.self) { try service.captureScreenshots() }
-      let ids: Set<String> = await withCheckedContinuation { continuation in
-        service.synchronizeCaptureInputs(availableCameraIDs: []) { ids in
-          continuation.resume(returning: ids)
-        }
-      }
-      #expect(ids.isEmpty)
-      service.synchronizeAudioMonitor()
+      let inspector = WorkspaceProgramsInspector(
+        storeService: service, editingState: serviceEditingState, appletData: WorkspaceAppletData())
+      #expect(throws: WorkspaceSelectionError.self) { try inspector.selectProgram(internalID: 1) }
+
     }
 
     @Test("UCT-1016.2: Program choices are laid out vertically")
@@ -74,6 +69,7 @@ extension AppUIComponentTestSuite {
     @Test(
       "UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs")
     func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
+      let stateEditingState = WorkspaceEditingState()
       _ = NSApplication.shared
       let suite = "ProgramPicker." + UUID().uuidString
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -82,39 +78,45 @@ extension AppUIComponentTestSuite {
       let url = URL(fileURLWithPath: "/tmp/ProgramPicker-\(UUID()).ldtxworkspace")
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
       state.localStateURL = url
-      let window = makeWorkspaceTestWindow(storeService: state, appletData: data)
+      let window = makeWorkspaceTestWindow(
+        storeService: state, editingState: stateEditingState, appletData: data)
       defer { window.close() }
       let content = window.contentPane
-      let inspector = WorkspaceProgramsInspector(storeService: state, appletData: data)
+      let inspector = WorkspaceProgramsInspector(
+        storeService: state, editingState: stateEditingState, appletData: data)
       #expect(inspector.programSelection.wrappedValue == nil)
       var first = Ldtx_Workspace_V4_ProgramDefinition()
       first.internalID = 11
       first.displayName = "Same Name"
       var second = first
       second.internalID = 22
-      state.definition.programs = [first, second]
+      state.workspaceDefinition.programs = [first, second]
       #expect(inspector.programSelection.wrappedValue == 11)
       data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
-      // AppKit Content reads the Window-local selection from the store, without
-      // needing a SwiftUI document environment.
-      #expect(content.storeService.selectedProgram?.internalID == 22)
+      // AppKit Content and the Inspector resolve the same local selection.
+      #expect(
+        content.appletData.selectedProgram(
+          in: content.storeService.workspaceDefinition, for: content.storeService.localStateURL)?
+          .internalID == 22)
       let binding = inspector.programSelection
       #expect(!inspector.canSelectProgram)
-      #expect(binding.wrappedValue == 11)
-      // A standalone Inspector has no live document environment. An attempted
-      // edit must not change the cached local selection.
+      #expect(binding.wrappedValue == 22)
+      // This standalone Store has no runtime. A rejected write preserves selection.
       binding.wrappedValue = 11
-      #expect(binding.wrappedValue == 11)
+      #expect(binding.wrappedValue == 22)
       #expect(data.state(for: url).selectedProgramInternalID == 22)
-      state.definition.programs = [first]
+      state.workspaceDefinition.programs = [first]
       #expect(binding.wrappedValue == 11)
       #expect(inspector.programSelection.wrappedValue == 11)
       #expect(data.state(for: url).selectedProgramInternalID == 22)
-      state.definition.programs = []
+      state.workspaceDefinition.programs = []
       #expect(inspector.programSelection.wrappedValue == nil)
       #expect(binding.wrappedValue == nil)
       binding.wrappedValue = nil
-      #expect(content.storeService.selectedProgram == nil)
+      #expect(
+        content.appletData.selectedProgram(
+          in: content.storeService.workspaceDefinition, for: content.storeService.localStateURL)
+          == nil)
       #expect(data.state(for: url).selectedProgramInternalID == 22)
     }
 
@@ -142,7 +144,7 @@ extension AppUIComponentTestSuite {
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
       let state = WorkspaceStoreService(definition: .init(), preferences: .init())
-      state.definition.videoComponents = [
+      state.workspaceDefinition.videoComponents = [
         WorkspaceResourceFactory.makeVFXSource(id: 101, name: "Camera"),
         WorkspaceResourceFactory.makeVFXSource(id: 102, name: "Other Camera"),
       ]
@@ -152,10 +154,10 @@ extension AppUIComponentTestSuite {
       let field = WorkspacePhysicalDeviceField(
         title: "Camera", internalID: 101, isAudio: false, storeService: state,
         appletData: data, deviceRegistry: DeviceRegistryService())
-      let before = state.definition
+      let before = state.workspaceDefinition
       _ = field.body
       #expect(data.physicalDeviceID(for: 101) == unavailable)
-      #expect(state.definition == before)
+      #expect(state.workspaceDefinition == before)
       state.isOutputActive = true
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
       #expect(data.physicalDeviceID(for: 101) == unavailable)
@@ -166,7 +168,7 @@ extension AppUIComponentTestSuite {
       #expect(WorkspaceAppletData(userDefaults: defaults).physicalDeviceID(for: 101) == nil)
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(unavailable) }
       #expect(data.physicalDeviceID(for: 101) == nil)
-      state.definition.videoComponents.removeAll()
+      state.workspaceDefinition.videoComponents.removeAll()
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
@@ -486,26 +488,28 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.storeService.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-      first.storeService.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+      first.storeService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
+        "sdr-landscape-1080p60"
+      first.storeService.workspaceDefinition.canvasConfiguration.portraitProfileID =
+        "sdr-portrait-1080p60"
       let firstWindow = WorkspaceWindowController(
-        storeService: first.storeService,
+        storeService: first.storeService, editingState: first.editingState,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         documentReference: DocumentReference(first))
       first.addWindowController(firstWindow)
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
-      second.storeService.definition = first.storeService.definition
-      second.storeService.preferences = first.storeService.preferences
+      second.storeService.workspaceDefinition = first.storeService.workspaceDefinition
+      second.storeService.workspacePreferences = first.storeService.workspacePreferences
       let secondWindow = WorkspaceWindowController(
-        storeService: second.storeService,
+        storeService: second.storeService, editingState: second.editingState,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         documentReference: DocumentReference(second))
       second.addWindowController(secondWindow)
       try secondWindow.selectProgram(internalID: a)
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
-      let definition = first.storeService.definition
+      let definition = first.storeService.workspaceDefinition
       first.storeService.inspectorSelector = .init(kind: .workspacePrograms)
       try firstWindow.selectProgram(internalID: b)
       #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
@@ -514,14 +518,17 @@ extension AppUIComponentTestSuite {
       #expect(data.state(for: second.storeService.localStateURL!).selectedProgramInternalID == a)
       // Content is now the live AppKit controller connected to this document.
       #expect(
-        (firstWindow.window as? WorkspaceWindow)?.contentPane.storeService.selectedProgram?
+        data.selectedProgram(
+          in: first.storeService.workspaceDefinition, for: first.storeService.localStateURL)?
           .internalID == b)
       #expect(first.storeService.inspectorSelector == .init(kind: .workspacePrograms))
-      let inspector = WorkspaceProgramsInspector(storeService: first.storeService, appletData: data)
-      #expect(!inspector.canSelectProgram)
-      #expect(inspector.programSelection.wrappedValue == a)
+      let inspector = WorkspaceProgramsInspector(
+        storeService: first.storeService, editingState: first.editingState, appletData: data,
+        runtimeActions: { firstWindow })
+      #expect(inspector.canSelectProgram)
+      #expect(inspector.programSelection.wrappedValue == b)
       #expect(second.storeService.inspectorSelector == nil)
-      #expect(first.storeService.definition == definition)
+      #expect(first.storeService.workspaceDefinition == definition)
       #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: Int64.max) }
       for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
         firstWindow.windowRuntime.setRecordingState(state)
@@ -545,17 +552,19 @@ extension AppUIComponentTestSuite {
       let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
       defer { reopened.close() }
       let reopenedWindow = WorkspaceWindowController(
-        storeService: reopened.storeService,
+        storeService: reopened.storeService, editingState: reopened.editingState,
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
         documentReference: DocumentReference(reopened))
       reopened.addWindowController(reopenedWindow)
       let reopenedInspector = WorkspaceProgramsInspector(
-        storeService: reopened.storeService, appletData: data)
+        storeService: reopened.storeService, editingState: reopened.editingState, appletData: data,
+        runtimeActions: { reopenedWindow })
       #expect(data.state(for: url).selectedProgramInternalID == b)
-      #expect(!reopenedInspector.canSelectProgram)
-      #expect(reopenedInspector.programSelection.wrappedValue == a)
+      #expect(reopenedInspector.canSelectProgram)
+      #expect(reopenedInspector.programSelection.wrappedValue == b)
       #expect(
-        (reopenedWindow.window as? WorkspaceWindow)?.contentPane.storeService.selectedProgram?
+        data.selectedProgram(
+          in: reopened.storeService.workspaceDefinition, for: reopened.storeService.localStateURL)?
           .internalID == b)
       #expect(reopened.storeService.inspectorSelector == nil)
       await reopenedWindow.shutdown()
@@ -574,10 +583,12 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.storeService.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-      first.storeService.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+      first.storeService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
+        "sdr-landscape-1080p60"
+      first.storeService.workspaceDefinition.canvasConfiguration.portraitProfileID =
+        "sdr-portrait-1080p60"
       let firstWindow = WorkspaceWindowController(
-        storeService: first.storeService,
+        storeService: first.storeService, editingState: first.editingState,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         documentReference: DocumentReference(first))
       first.addWindowController(firstWindow)
@@ -588,10 +599,10 @@ extension AppUIComponentTestSuite {
       data.updateState(for: first.storeService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
-      second.storeService.definition = first.storeService.definition
-      second.storeService.preferences = first.storeService.preferences
+      second.storeService.workspaceDefinition = first.storeService.workspaceDefinition
+      second.storeService.workspacePreferences = first.storeService.workspacePreferences
       let secondWindow = WorkspaceWindowController(
-        storeService: second.storeService,
+        storeService: second.storeService, editingState: second.editingState,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         documentReference: DocumentReference(second))
       second.addWindowController(secondWindow)
@@ -634,7 +645,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test("UCT-1016.12: Dock badges follow registered Documents")
-    func dockBadgeFollowsRegisteredDocuments() {
+    func dockBadgeFollowsRegisteredDocuments() async {
       let dockTile = NSApplication.shared.dockTile
       let originalBadge = dockTile.badgeLabel
       let controller = NSDocumentController.shared
@@ -650,16 +661,21 @@ extension AppUIComponentTestSuite {
       first.storeService.isOutputActive = true
       first.storeService.isOutputActive = true
       second.storeService.isOutputActive = true
+      await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       first.storeService.isOutputActive = false
+      await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       second.storeService.isOutputActive = false
+      await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == nil)
       first.storeService.isOutputActive = true
       second.storeService.isOutputActive = true
       first.close()
+      await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       second.close()
+      await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == nil)
       #expect(!controller.documents.contains { $0 === first || $0 === second })
     }
@@ -678,8 +694,8 @@ extension AppUIComponentTestSuite {
         other.close()
       }
       try await saveWorkspaceDocument(document, to: url)
-      let savedDefinition = document.storeService.definition
-      let otherDefinition = other.storeService.definition
+      let savedDefinition = document.storeService.workspaceDefinition
+      let otherDefinition = other.storeService.workspaceDefinition
       var draft = WorkspaceAddDraft()
       draft.name = "Camera"
       draft.componentKind = .vfxSource
@@ -693,42 +709,46 @@ extension AppUIComponentTestSuite {
       draft.videoComponentID = inputID
       try WorkspaceResourceAddition.add(
         sheet: .vision, draft: draft, devices: [], storeService: document.storeService)
-      #expect(other.storeService.definition == otherDefinition)
+      #expect(other.storeService.workspaceDefinition == otherDefinition)
       #expect(document.isDocumentEdited)
       #expect(try WorkspaceBundleReaderV4(at: url).read().definition == savedDefinition)
-      let expected = document.storeService.definition
+      let expected = document.storeService.workspaceDefinition
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       #expect(!document.isDocumentEdited)
       let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
       defer { reopened.close() }
-      #expect(reopened.storeService.definition == expected)
+      #expect(reopened.storeService.workspaceDefinition == expected)
       #expect(
-        reopened.storeService.definition.visions.first?.ocrVision.videoComponentInternalID
+        reopened.storeService.workspaceDefinition.visions.first?.ocrVision.videoComponentInternalID
           == inputID
       )
     }
 
     @Test("UCT-1016.14: Sidebar Preview uses its provided state")
     func workspaceSidebarUsesPreviewState() {
+      let storeServiceEditingState = WorkspaceEditingState()
       let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
       let sidebar = WorkspaceSidebar(
-        storeService: storeService, deviceRegistry: DeviceRegistryService(),
+        storeService: storeService, editingState: storeServiceEditingState,
+        deviceRegistry: DeviceRegistryService(),
         appletData: WorkspaceAppletData())
 
-      #expect(storeService.definition.displayName == "Workspace Sidebar Preview")
+      #expect(storeService.workspaceDefinition.displayName == "Workspace Sidebar Preview")
       _ = sidebar.body
     }
     @Test(
       "UCT-1016.15: Sidebar additions require a live Document",
       arguments: [WorkspaceAddSheet.device, .videoComponent, .vision])
     func workspaceSidebarRejectsAdditionWithoutLiveDocument(sheet: WorkspaceAddSheet) {
+      let storeServiceEditingState = WorkspaceEditingState()
       let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
-      let definition = storeService.definition
+      let definition = storeService.workspaceDefinition
       let selection = storeService.inspectorSelector
       let data = WorkspaceAppletData()
       let assignments = data.physicalDeviceIDsByResourceInternalID
       let sidebar = WorkspaceSidebar(
-        storeService: storeService, deviceRegistry: DeviceRegistryService(), appletData: data)
+        storeService: storeService, editingState: storeServiceEditingState,
+        deviceRegistry: DeviceRegistryService(), appletData: data)
       var draft = WorkspaceAddDraft()
       draft.name = "New component"
       draft.componentKind = .solidColor
@@ -740,7 +760,7 @@ extension AppUIComponentTestSuite {
       } catch {
         #expect(error.localizedDescription == "The Workspace document is unavailable.")
       }
-      #expect(storeService.definition == definition)
+      #expect(storeService.workspaceDefinition == definition)
       #expect(storeService.inspectorSelector == selection)
       #expect(data.physicalDeviceIDsByResourceInternalID == assignments)
     }
