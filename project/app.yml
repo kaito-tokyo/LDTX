@@ -53,6 +53,7 @@ targets:
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
       - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceBundleFormat
       - target: LDTXProtos
       - target: LDTXProtosMacOSExtra
       - package: SwiftProtobuf

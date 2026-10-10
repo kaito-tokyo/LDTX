@@ -6,14 +6,28 @@ SPDX-License-Identifier: Apache-2.0
 
 # Workspace v4
 
-Workspace v4 persists exactly two protobuf documents in each
-`.ldtxworkspace` package: `definition.pb` and `preferences.pb`. Its `Info.plist`
+Workspace v4 persists three protobuf documents in each
+`.ldtxworkspace` package: `definition.pb`, `preferences.pb`, and
+`output_settings.pb`. Its `Info.plist`
 contains `CFBundlePackageType` with the value `BNDL`, `LDTXWorkspaceVersion`
 with the integer value `4`, and `LDTXWorkspaceBundleVersion` with the string
 value `4.0`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
 `LDTXWorkspaceBundleVersion` is an extensibility field and does not imply a
 compatibility rule. JSON mirrors are not part of the package format. The current
 format does not define `Assets` or `Extensions` resources.
+Imported standalone Core ML models are stored in
+`VisionModels/<Vision internal_id>/<original basename>.mlmodel`.
+`model_file_name` contains only the basename with its extension. The selected
+`modelURL` is UI state separate from the saved model reference. On load and after
+successful Document saving, it equals the resolved `savedModelURL` in the bundle.
+Choosing a different model does not read it or change the saved filename.
+Command+S reads the selected external model in the Document save snapshot and
+writes resources before protobuf documents. Only a successful save updates the
+saved basename and selection; failures preserve both. A selection made while a
+save is in progress remains pending. Models with the same basename in different
+Visions are stored in separate directories. Existing resources are retained.
+Importing a model does not compile it or execute inference.
+
 `LDTXProtos` owns the in-memory package values, protobuf message types, and the
 independent `WorkspaceV4IntegrityValidator` for cross-document Workspace
 consistency. It does not add validator methods to generated message types.

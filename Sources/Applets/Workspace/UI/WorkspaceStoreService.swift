@@ -11,6 +11,8 @@ import Observation
 @MainActor
 @Observable
 public final class WorkspaceStoreService {
+  public var modelURLs: [Int64: URL?] = [:]
+  public var workspaceModels: [String: Data] = [:]
   public var workspaceDefinition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   public var workspaceOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
   public var workspacePreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4

@@ -5,13 +5,15 @@ import Foundation
 import LDTXProtos
 import SwiftProtobuf
 
-/// Serializes model files without materializing package resources in memory.
+/// Serializes Workspace documents and imported model resources.
 public enum WorkspaceDocumentPackage {
   public static func write(
     _ workspace: WorkspaceV4Bundle, to destination: URL,
     createsPackage: Bool = false
   ) throws {
+    let workspace = try WorkspaceModelFiles.preparedForSaving(workspace)
     try WorkspaceV4IntegrityValidator.validate(workspace)
+    try WorkspaceModelFiles.validate(workspace)
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     definition.externalIDAsUUID = try envelopeIdentifier(workspace.definitionExternalID)
     definition.workspaceDefinitionV4 = workspace.definition
@@ -34,6 +36,18 @@ public enum WorkspaceDocumentPackage {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .xml
         try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+      }
+    }
+    if !workspace.models.isEmpty {
+      let modelsURL = destination.appendingPathComponent("VisionModels", isDirectory: true)
+      try WorkspaceModelFiles.validateDirectory(modelsURL)
+      try manager.createDirectory(at: modelsURL, withIntermediateDirectories: true)
+      for (name, data) in workspace.models {
+        let url = modelsURL.appendingPathComponent(name)
+        try WorkspaceModelFiles.validateDirectory(url.deletingLastPathComponent())
+        try manager.createDirectory(
+          at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
       }
     }
     try definitionData.write(

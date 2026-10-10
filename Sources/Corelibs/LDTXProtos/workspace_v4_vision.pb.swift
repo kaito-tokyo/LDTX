@@ -319,6 +319,18 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   /// The conditions that automatically trigger this Vision.
   public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
 
+  /// The saved model's basename, including the .mlmodel extension, without directories.
+  /// The model is stored at VisionModels/<this Vision's internal_id>/<model_file_name>
+  /// inside the Workspace bundle. Empty means no saved model is assigned.
+  public var modelFileName: String {
+    get {_modelFileName ?? String()}
+    set {_modelFileName = newValue}
+  }
+  /// Returns true if `modelFileName` has been explicitly set.
+  public var hasModelFileName: Bool {self._modelFileName != nil}
+  /// Clears the value of `modelFileName`. Subsequent reads from it will return its default value.
+  public mutating func clearModelFileName() {self._modelFileName = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -327,6 +339,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   fileprivate var _displayName: String? = nil
   fileprivate var _videoComponentInternalID: Int64? = nil
   fileprivate var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
+  fileprivate var _modelFileName: String? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -657,7 +670,7 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateMlImageClassifierVision"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}model_file_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -670,6 +683,7 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
       case 3: try { try decoder.decodeSingularSFixed64Field(value: &self._videoComponentInternalID) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._regionOfInterest) }()
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.triggers) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._modelFileName) }()
       default: break
       }
     }
@@ -695,6 +709,9 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
     if !self.triggers.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.triggers, fieldNumber: 5)
     }
+    try { if let v = self._modelFileName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -704,6 +721,7 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
     if lhs._videoComponentInternalID != rhs._videoComponentInternalID {return false}
     if lhs._regionOfInterest != rhs._regionOfInterest {return false}
     if lhs.triggers != rhs.triggers {return false}
+    if lhs._modelFileName != rhs._modelFileName {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

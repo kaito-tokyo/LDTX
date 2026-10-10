@@ -20,8 +20,11 @@ public final class WorkspaceDocument: NSDocument {
   private struct SaveSnapshot: Sendable {
     let workspace: WorkspaceV4Bundle
     let formalURL: URL?
+    let modelURLs: [Int64: URL?]
   }
   private nonisolated let writingSnapshot = OSAllocatedUnfairLock<SaveSnapshot?>(initialState: nil)
+  private nonisolated let savedModelSnapshot = OSAllocatedUnfairLock<WorkspaceV4Bundle?>(
+    initialState: nil)
   private var preferencesExternalID: String? = WorkspaceBundleWriterV4.makeExternalID().uuidString
     .lowercased()
   private var outputStateObservationTask: Task<Void, Never>?
@@ -45,7 +48,7 @@ public final class WorkspaceDocument: NSDocument {
       preferencesExternalID: preferencesExternalID,
       definition: storeService.workspaceDefinition, preferences: storeService.workspacePreferences,
       outputSettingsExternalID: outputSettingsExternalID,
-      outputSettings: storeService.workspaceOutputSettings)
+      outputSettings: storeService.workspaceOutputSettings, models: storeService.workspaceModels)
   }
 
   public override init() {
@@ -71,6 +74,8 @@ public final class WorkspaceDocument: NSDocument {
   private func observeWorkspaceContents() {
     guard !hasShutDown else { return }
     withObservationTracking {
+      _ = storeService.modelURLs
+      _ = storeService.workspaceModels
       _ = storeService.workspaceDefinition
       _ = storeService.workspacePreferences
       _ = storeService.workspaceOutputSettings
@@ -130,6 +135,8 @@ public final class WorkspaceDocument: NSDocument {
   private func replaceContents(_ workspace: WorkspaceV4Bundle) throws {
     isReading = true
     defer { isReading = false }
+    storeService.modelURLs = [:]
+    storeService.workspaceModels = workspace.models
     storeService.workspaceDefinition = workspace.definition
     storeService.workspacePreferences = workspace.preferences
     storeService.workspaceOutputSettings = workspace.outputSettings
@@ -163,7 +170,7 @@ public final class WorkspaceDocument: NSDocument {
   ) -> Bool {
     writingChangeCountToken = (super.changeCountToken(for: saveOperation), saveOperation)
     let contents = SaveSnapshot(
-      workspace: snapshot, formalURL: fileURL)
+      workspace: snapshot, formalURL: fileURL, modelURLs: storeService.modelURLs)
     writingSnapshot.withLock { $0 = contents }
     return true
   }
@@ -181,7 +188,7 @@ public final class WorkspaceDocument: NSDocument {
     let contents: SaveSnapshot
     if Thread.isMainThread {
       contents = MainActor.assumeIsolated {
-        SaveSnapshot(workspace: snapshot, formalURL: fileURL)
+        SaveSnapshot(workspace: snapshot, formalURL: fileURL, modelURLs: storeService.modelURLs)
       }
     } else {
       guard let saved = writingSnapshot.withLock({ $0 }) else {
@@ -205,7 +212,9 @@ public final class WorkspaceDocument: NSDocument {
     default:
       throw CocoaError(.featureUnsupported)
     }
-    try Self.validateForSaving(contents.workspace)
+    let savedWorkspace = try WorkspaceModelFiles.preparedForSaving(
+      contents.workspace, modelURLs: contents.modelURLs)
+    try Self.validateForSaving(savedWorkspace)
     unblockUserInteraction()
     try writeProbe.withLock { $0 }?()
     let coordinator = NSFileCoordinator(filePresenter: self)
@@ -215,7 +224,7 @@ public final class WorkspaceDocument: NSDocument {
       destination in
       do {
         try WorkspaceDocumentPackage.write(
-          contents.workspace, to: destination, createsPackage: createsPackage)
+          savedWorkspace, to: destination, createsPackage: createsPackage)
       } catch { writeError = error }
     }
     if let error = coordinationError ?? writeError as NSError? {
@@ -223,6 +232,7 @@ public final class WorkspaceDocument: NSDocument {
         "Saving Workspace failed: \(error.localizedDescription, privacy: .public)")
       throw error
     }
+    savedModelSnapshot.withLock { $0 = savedWorkspace }
   }
 
   public override func save(
@@ -264,6 +274,7 @@ public final class WorkspaceDocument: NSDocument {
       completionHandler(CocoaError(.userCancelled))
       return
     }
+    savedModelSnapshot.withLock { $0 = nil }
     super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
       writingChangeCountToken = nil
       if let error {
@@ -274,6 +285,35 @@ public final class WorkspaceDocument: NSDocument {
         }
         completionHandler(error)
         return
+      }
+      if let saved = savedModelSnapshot.withLock({ $0 }),
+        let original = writingSnapshot.withLock({ $0 })
+      {
+        isReading = true
+        for wrapper in saved.definition.visions {
+          guard case .createMlImageClassifierVision(let savedVision) = wrapper.vision,
+            let index = storeService.workspaceDefinition.visions.firstIndex(where: {
+              $0.internalID == savedVision.internalID
+            }),
+            case .createMlImageClassifierVision(var current) = storeService.workspaceDefinition
+              .visions[index].vision,
+            original.modelURLs.keys.contains(current.internalID),
+            original.workspace.definition.visions.contains(where: {
+              guard case .createMlImageClassifierVision(let vision) = $0.vision else { return false }
+              return vision.internalID == current.internalID
+                && vision.modelFileName == current.modelFileName
+            })
+          else { continue }
+          let key = "\(savedVision.internalID)/\(savedVision.modelFileName)"
+          if let data = saved.models[key] { storeService.workspaceModels[key] = data }
+          if storeService.modelURLs[current.internalID] == original.modelURLs[current.internalID] {
+            storeService.modelURLs.removeValue(forKey: current.internalID)
+          }
+          current.modelFileName = savedVision.modelFileName
+          storeService.workspaceDefinition.visions[index].vision = .createMlImageClassifierVision(
+            current)
+        }
+        isReading = false
       }
       adoptDocumentURL(url)
       completionHandler(nil)

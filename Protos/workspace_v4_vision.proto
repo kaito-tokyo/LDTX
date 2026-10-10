@@ -86,4 +86,8 @@ message CreateMlImageClassifierVision {
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
   repeated VisionTriggerWrapper triggers = 5;
+  // The saved model's basename, including the .mlmodel extension, without directories.
+  // The model is stored at VisionModels/<this Vision's internal_id>/<model_file_name>
+  // inside the Workspace bundle. Empty means no saved model is assigned.
+  string model_file_name = 6;
 }

@@ -157,8 +157,23 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID,
         let vision = $storeService.createMlImageClassifierVision(internalID: internalID)
       {
+        let name = vision.wrappedValue.modelFileName
+        let savedModelURL: URL? =
+          name.isEmpty
+          ? nil
+          : workspaceURL?.appendingPathComponent(
+            "VisionModels/\(internalID)/\(name)")
         CreateMlImageClassifierVisionInspector(
-          videoComponents: storeService.workspaceDefinition.videoComponents, vision: vision
+          videoComponents: storeService.workspaceDefinition.videoComponents,
+          inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in
+            storeService.workspaceDefinition.videoComponents.first { $0.internalID == inputID }?
+              .renderingSize
+          },
+          vision: vision,
+          modelURL: Binding(
+            get: { storeService.modelURLs[internalID] ?? savedModelURL },
+            set: { storeService.modelURLs[internalID] = .some($0) }),
+          savedModelURL: savedModelURL
         )
         .environment(\.outputActive, storeService.isOutputActive)
       } else {

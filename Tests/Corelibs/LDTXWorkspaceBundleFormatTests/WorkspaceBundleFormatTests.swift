@@ -304,6 +304,109 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
+  @Test("Saving imports basename-only references into each Vision directory")
+  func savesExternalModelReference() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Original.mlmodel")
+    let data = Data([0, 1, 255])
+    try data.write(to: source)
+    var workspace = makeWorkspace()
+    for id: Int64 in [5, 7] {
+      workspace.definition.visions.append(
+        .with {
+          $0.createMlImageClassifierVision = .with {
+            $0.internalID = id
+            $0.displayName = "Classifier \(id)"
+            $0.videoComponentInternalID = 2
+          }
+        })
+    }
+    let prepared = try WorkspaceModelFiles.preparedForSaving(
+      workspace, modelURLs: [5: source, 7: source])
+    #expect(workspace.definition.visions.last?.createMlImageClassifierVision.modelFileName == "")
+    #expect(
+      prepared.definition.visions.last?.createMlImageClassifierVision.modelFileName
+        == "Original.mlmodel")
+    #expect(prepared.models["5/Original.mlmodel"] == data)
+    #expect(prepared.models["7/Original.mlmodel"] == data)
+    let bundle = root.appendingPathComponent("Saved.ldtxworkspace")
+    try WorkspaceDocumentPackage.write(prepared, to: bundle, createsPackage: true)
+    try FileManager.default.removeItem(at: source)
+    let reloaded = try WorkspaceBundleReaderV4(at: bundle).read()
+    #expect(reloaded == prepared)
+    #expect(
+      try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/Original.mlmodel")) == data
+    )
+    try WorkspaceDocumentPackage.write(reloaded, to: bundle)
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read() == prepared)
+    let cleared = try WorkspaceModelFiles.preparedForSaving(reloaded, modelURLs: [5: nil])
+    #expect(cleared.definition.visions[1].createMlImageClassifierVision.modelFileName == "")
+    #expect(
+      cleared.definition.visions[2].createMlImageClassifierVision.modelFileName
+        == "Original.mlmodel")
+  }
+
+  @Test("Failed model imports preserve the saved reference and resources")
+  func failedModelImportPreservesWorkspace() throws {
+    var workspace = makeWorkspace()
+    workspace.definition.visions.append(
+      .with {
+        $0.createMlImageClassifierVision = .with {
+          $0.internalID = 5
+          $0.videoComponentInternalID = 2
+          $0.modelFileName = "Saved.mlmodel"
+        }
+      })
+    workspace.models["5/Saved.mlmodel"] = Data([1])
+    let original = workspace
+    #expect(throws: (any Error).self) {
+      try WorkspaceModelFiles.preparedForSaving(
+        workspace, modelURLs: [5: URL(fileURLWithPath: "/nonexistent/model.mlmodel")])
+    }
+    #expect(workspace == original)
+    for name in ["../model.mlmodel", "/model.mlmodel", "folder/model.mlmodel"] {
+      workspace.definition.visions[1].createMlImageClassifierVision.modelFileName = name
+      #expect(throws: (any Error).self) { try WorkspaceModelFiles.preparedForSaving(workspace) }
+    }
+  }
+
+  @Test("Model imports reject directories and unsupported extensions")
+  func rejectsUnsupportedModelImports() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Classifier.txt")
+    try Data([1]).write(to: source)
+    #expect(throws: (any Error).self) { try WorkspaceModelFiles.importModel(at: source) }
+    let directory = root.appendingPathComponent("Classifier.mlmodel")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    #expect(throws: (any Error).self) { try WorkspaceModelFiles.importModel(at: directory) }
+  }
+
+  @Test("Model resources reject traversal and symlink directories")
+  func rejectsUnsafeModelPaths() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var workspace = makeWorkspace()
+    workspace.models = ["../Outside.mlmodel": Data([1])]
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    #expect(throws: (any Error).self) {
+      try WorkspaceDocumentPackage.write(workspace, to: bundle, createsPackage: true)
+    }
+    #expect(
+      !FileManager.default.fileExists(atPath: root.appendingPathComponent("Outside.mlmodel").path))
+    workspace.models = [:]
+    try WorkspaceDocumentPackage.write(workspace, to: bundle, createsPackage: true)
+    let outside = root.appendingPathComponent("Outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
+    try FileManager.default.createSymbolicLink(
+      at: bundle.appendingPathComponent("VisionModels"), withDestinationURL: outside)
+    workspace.models = ["5/Classifier.mlmodel": Data([1])]
+    #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: bundle) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleReaderV4(at: bundle).read() }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
+  }
+
   private func makeWorkspace() -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Unite"

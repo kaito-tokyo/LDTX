@@ -84,13 +84,7 @@ struct OcrVisionInspector: View {
           }
         }
         .pickerStyle(.menu)
-        Picker("Update Interval", selection: $vision.triggers) {
-          Text("Manual").tag([Ldtx_Workspace_V4_VisionTriggerWrapper]())
-          Text("Every 1 Second").tag([intervalTrigger(seconds: 1)])
-          Text("Every 5 Seconds").tag([intervalTrigger(seconds: 5)])
-          Text("Every 10 Seconds").tag([intervalTrigger(seconds: 10)])
-          Text("Every 30 Seconds").tag([intervalTrigger(seconds: 30)])
-        }
+        TriggerEditor(triggers: $vision.triggers)
       }
       .disabled(storeService.isOutputActive)
       Section("Text Recognition") {
@@ -162,11 +156,6 @@ struct OcrVisionInspector: View {
     .onDisappear { editingState.removeInspectorEditValidator(id: validatorID) }
   }
 
-  func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
-    var trigger = Ldtx_Workspace_V4_VisionTriggerWrapper()
-    trigger.intervalTrigger.intervalSeconds.set(num: seconds, den: 1)
-    return trigger
-  }
 
   var inputs: [String] {
     [

@@ -289,7 +289,10 @@ p, td { white-space: pre-wrap; }
 <tr><td><code>video_component_internal_id</code></td><td>3</td><td><code>sfixed64</code></td><td></td><td><code>0</code></td><td>The LdtxInternalId of the Video Component analyzed after effects and
  before Program placement.</td></tr>
 <tr><td><code>region_of_interest</code></td><td>4</td><td><a href="#ldtx.workspace.v4.VisionRegionOfInterest"><code>VisionRegionOfInterest</code></a></td><td></td><td>—</td><td>The region of the input image in which Vision performs the request.</td></tr>
-<tr><td><code>triggers</code></td><td>5</td><td><a href="#ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></a></td><td>repeated</td><td>—</td><td>The conditions that automatically trigger this Vision.</td></tr></tbody></table></article>
+<tr><td><code>triggers</code></td><td>5</td><td><a href="#ldtx.workspace.v4.VisionTriggerWrapper"><code>VisionTriggerWrapper</code></a></td><td>repeated</td><td>—</td><td>The conditions that automatically trigger this Vision.</td></tr>
+<tr><td><code>model_file_name</code></td><td>6</td><td><code>string</code></td><td></td><td>—</td><td>The saved model's basename, including the .mlmodel extension, without directories.
+ The model is stored at VisionModels/&lt;this Vision's internal_id&gt;/&lt;model_file_name&gt;
+ inside the Workspace bundle. Empty means no saved model is assigned.</td></tr></tbody></table></article>
 
 
 </section>
