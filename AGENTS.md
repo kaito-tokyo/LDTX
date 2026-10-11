@@ -82,7 +82,7 @@ When an agent creates an issue:
 
 ## PRJ: Design Principles
 
-Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. Other documentation may be consulted at the agent's discretion when relevant.
+Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. UI-specific rules are maintained in [`docs/ui-rules.md`](docs/ui-rules.md). Treat that document as the source of truth for implementation, tests, and reviews involving UI rules. Other documentation may be consulted at the agent's discretion when relevant.
 
 ## PRJ: Logging
 

@@ -64,4 +64,5 @@ for Docker verification and test placement.
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
 
-See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership.
+See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership,
+and [`docs/ui-rules.md`](docs/ui-rules.md) for UI behavior rules.

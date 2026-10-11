@@ -8,6 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This document is the source of truth for cross-cutting design decisions in
 LDTX. Implementation, tests, and reviews should follow these principles.
+UI-specific rules are maintained in [UI Rules](ui-rules.md).
 
 Design Principles (DP) define the project-wide invariants and decision rules
 that must remain consistent across modules. They are normative guidance for
@@ -78,17 +79,6 @@ the relevant design or feature documentation instead.
   must not block the main actor.
 - Such work should use a serialized background executor when ordering is
   significant.
-
-## Dynamic selection starts unselected
-
-- Selection controls populated from dynamic resources must start with no selection.
-- Restored assignments and asynchronously resolved references are displayed separately from editing controls.
-- Editing sheets must not preselect a saved value or the first available candidate. Only an explicit user selection may be applied.
-- Candidate removal clears the editing selection without replacing it or changing the saved assignment.
-- The Program list is a static set of candidates defined by the authoritative
-  Workspace definition. Its selection control may display the currently
-  resolved Program, including a restored selection. This does not change the
-  unselected-draft policy for dynamic resource editing sheets.
 
 ## Protobuf defaults and Rational values
 
