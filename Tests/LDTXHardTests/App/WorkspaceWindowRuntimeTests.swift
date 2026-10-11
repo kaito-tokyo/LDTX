@@ -506,6 +506,22 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       try runtime.removeVideoComponent(internalID: source)
     }
     try runtime.removeVision(internalID: vision)
+    let classifierID = source + 1
+    try runtime.editDefinition {
+      $0.visions.append(.with {
+        $0.createMlImageClassifierVision = .with {
+          $0.internalID = classifierID
+          $0.displayName = "Classifier"
+          $0.videoComponentInternalID = source
+        }
+      })
+    }
+    let before = runtime.definition
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    #expect(runtime.definition == before)
+    try runtime.removeVision(internalID: classifierID)
     try runtime.editDefinition { $0.canvasConfiguration.ptsMasterVfxSourceInternalID = source }
     #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
       try runtime.removeVideoComponent(internalID: source)

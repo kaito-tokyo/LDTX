@@ -331,7 +331,7 @@ public enum WorkspaceRuntimeError: Error, LocalizedError, Equatable, Sendable {
   public var errorDescription: String? {
     switch self {
     case .resourceInUse:
-      "Remove this Video Component from Programs, OCR Visions, and the PTS master before deleting it."
+      "Remove this Video Component from Programs, Visions, and the PTS master before deleting it."
     default: "The Workspace operation could not be completed: \(self)."
     }
   }

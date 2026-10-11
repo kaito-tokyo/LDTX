@@ -314,8 +314,11 @@ extension WorkspaceWindowRuntime {
           }
         }
         let usedByVision = definition.visions.contains {
-          guard case .ocrVision(let vision) = $0.vision else { return false }
-          return vision.videoComponentInternalID == id
+          switch $0.vision {
+          case .ocrVision(let vision): vision.videoComponentInternalID == id
+          case .createMlImageClassifierVision(let vision): vision.videoComponentInternalID == id
+          case nil: false
+          }
         }
         guard !usedByProgram, !usedByVision,
           definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id

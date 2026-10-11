@@ -4,6 +4,7 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletService
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
@@ -52,6 +53,22 @@ extension AppUIComponentTestSuite {
       }
       #expect(errors.count == 1)
       #expect(window.attachedSheet == nil)
+    }
+
+    @Test("A component in use is presented as an operation error")
+    func componentInUsePresentsError() async throws {
+      let (document, controller, window) = makeController()
+      defer {
+        if let sheet = window.attachedSheet { dismiss(sheet) }
+        window.close()
+        document.close()
+      }
+      var inputErrors = 0
+      document.editingState.inputValidationErrorHandler = { _ in inputErrors += 1 }
+      controller.reportError(WorkspaceRuntimeError.resourceInUse(1))
+      let sheet = try await waitForSheet(on: window)
+      #expect(displayedText(in: sheet.contentView).contains("Visions"))
+      #expect(inputErrors == 0)
     }
 
     private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
