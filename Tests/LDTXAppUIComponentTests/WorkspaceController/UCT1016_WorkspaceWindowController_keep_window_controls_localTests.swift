@@ -243,13 +243,15 @@ extension AppUIComponentTestSuite {
         (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0), (.init("workspace.toggleInspector"), 2),
       ] {
         let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
+        #expect(item.target === split)
+        #expect(!item.autovalidates)
         let width = split.splitView.arrangedSubviews[index].frame.width
         try performWorkspaceToolbarAction(item)
-        if index == 2 { try await Task.sleep(for: .milliseconds(350)) }
+        try await Task.sleep(for: .milliseconds(350))
         #expect(split.splitViewItems[index].isCollapsed)
         #expect(!other.splitViewItems[index].isCollapsed)
         try performWorkspaceToolbarAction(item)
-        if index == 2 { try await Task.sleep(for: .milliseconds(350)) }
+        try await Task.sleep(for: .milliseconds(350))
         split.view.layoutSubtreeIfNeeded()
         #expect(!split.splitViewItems[index].isCollapsed)
         #expect(
@@ -327,8 +329,8 @@ extension AppUIComponentTestSuite {
       ] {
         state.recordingState = value
         await settleWorkspaceToolbar(first)
-        #expect(stop.isEnabled == stopEnabled)
-        #expect(toggle.isEnabled == toggleEnabled)
+        #expect(first.validateToolbarItem(stop) == stopEnabled)
+        #expect(first.validateToolbarItem(toggle) == toggleEnabled)
         #expect(toggle.label == label)
       }
       state.recordingState = .idle

@@ -40,16 +40,16 @@ extension AppUIComponentTestSuite {
         items.firstIndex { $0.itemIdentifier.rawValue == "workspace.runInference" })
       let item = items[index]
       #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
-      #expect(item.image != nil && !item.isEnabled)
+      #expect(item.image != nil && !window.validateToolbarItem(item))
       store.modelURLs[2] = .some(URL(fileURLWithPath: "/tmp/model.mlmodel"))
       await settleWorkspaceToolbar(window)
-      #expect(item.isEnabled)
+      #expect(window.validateToolbarItem(item))
       try performWorkspaceToolbarAction(item)
       await settleWorkspaceToolbar(window)
       #expect(store.visionResults[2] == "Test classification")
       store.inspectorSelector = .init(kind: .workspaceCanvas)
       await settleWorkspaceToolbar(window)
-      #expect(!item.isEnabled)
+      #expect(!window.validateToolbarItem(item))
     }
 
     @Test("ROI numerator editing uses the image size only when the denominator is unset")

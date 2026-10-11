@@ -38,6 +38,10 @@ public final class WorkspaceWindow: NSWindow {
   let pendingEditsPopover = NSPopover()
   private var expandedSidebarWidth: CGFloat = 240
 
+  var inspectorSplitViewItem: NSSplitViewItem? {
+    splitViewController.splitViewItems[2]
+  }
+
   init(
     document: NSDocument,
     appletData: WorkspaceAppletData,
@@ -102,7 +106,7 @@ public final class WorkspaceWindow: NSWindow {
     self.contentViewController = splitViewController
     self.titleVisibility = .visible
     self.toolbarStyle = .unified
-    toolbarCoordinator.configureToolbar(target: self)
+    configureToolbar()
     self.toolbar = toolbarCoordinator.toolbar
     refreshToolbarState()
     // Installing the content controller replaces the initial size with its fitting size.
@@ -161,13 +165,66 @@ public final class WorkspaceWindow: NSWindow {
     invalidateRestorableState()
   }
 
+  private func configureToolbar() {
+    toolbarCoordinator.sidebarItem.label = String(localized: "Toggle Sidebar")
+    toolbarCoordinator.sidebarItem.image = NSImage(
+      systemSymbolName: "sidebar.left", accessibilityDescription: nil)
+    toolbarCoordinator.sidebarItem.target = splitViewController
+    toolbarCoordinator.sidebarItem.action = #selector(NSSplitViewController.toggleSidebar(_:))
+    toolbarCoordinator.sidebarItem.isNavigational = true
+    toolbarCoordinator.sidebarItem.autovalidates = false
+
+    toolbarCoordinator.stopOutputItem.label = String(localized: "Stop Output")
+    toolbarCoordinator.stopOutputItem.image = NSImage(
+      systemSymbolName: "stop.fill", accessibilityDescription: nil)
+    toolbarCoordinator.stopOutputItem.target = self
+    toolbarCoordinator.stopOutputItem.action = #selector(stopOutput)
+    toolbarCoordinator.stopOutputItem.isNavigational = true
+
+    let startOutputLabel = String(localized: "Start Output")
+    toolbarCoordinator.startPauseOutputItem.possibleLabels = [
+      startOutputLabel,
+      String(localized: "Pause Output"),
+    ]
+    toolbarCoordinator.startPauseOutputItem.label = startOutputLabel
+    toolbarCoordinator.startPauseOutputItem.image = NSImage(
+      systemSymbolName: "play.fill", accessibilityDescription: nil)
+    toolbarCoordinator.startPauseOutputItem.target = self
+    toolbarCoordinator.startPauseOutputItem.action = #selector(toggleOutput)
+    toolbarCoordinator.startPauseOutputItem.isNavigational = true
+
+    toolbarCoordinator.captureScreenshotsItem.label = String(localized: "Capture Screenshot(s)")
+    toolbarCoordinator.captureScreenshotsItem.image = NSImage(
+      systemSymbolName: "camera", accessibilityDescription: nil)
+    toolbarCoordinator.captureScreenshotsItem.target = self
+    toolbarCoordinator.captureScreenshotsItem.action = #selector(captureScreenshots)
+    toolbarCoordinator.captureScreenshotsItem.isNavigational = true
+
+    toolbarCoordinator.runInferenceItem.label = String(localized: "Run Inference")
+    toolbarCoordinator.runInferenceItem.image = NSImage(
+      systemSymbolName: "sparkles", accessibilityDescription: nil)
+    toolbarCoordinator.runInferenceItem.target = self
+    toolbarCoordinator.runInferenceItem.action = #selector(runInference)
+
+    toolbarCoordinator.toggleInspectorItem.label = String(localized: "Toggle Inspector")
+    toolbarCoordinator.toggleInspectorItem.image = NSImage(
+      systemSymbolName: "sidebar.right", accessibilityDescription: nil)
+    toolbarCoordinator.toggleInspectorItem.target = splitViewController
+    toolbarCoordinator.toggleInspectorItem.action = #selector(NSSplitViewController.toggleInspector(_:))
+    toolbarCoordinator.toggleInspectorItem.autovalidates = false
+
+    toolbarCoordinator.toolbar.autosavesConfiguration = false
+    toolbarCoordinator.toolbar.allowsUserCustomization = false
+    toolbarCoordinator.toolbar.displayMode = .iconOnly
+    toolbarCoordinator.toolbar.delegate = toolbarCoordinator
+  }
+
   private func refreshToolbarState() {
     if !editingState.hasUnconfirmedChanges { pendingEditsPopover.close() }
-    toolbarCoordinator.updateToolbarItems(
-      canRunInference: inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil,
-      canStopOutput: storeService.recordingState.canStop,
-      canStartOutput: storeService.recordingState.canStart,
-      isRecording: storeService.recordingState == .recording)
+    toolbarCoordinator.startPauseOutputItem.label =
+      storeService.recordingState == .recording
+      ? String(localized: "Pause Output") : String(localized: "Start Output")
+
   }
 
   private var inferenceRequest: (vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, url: URL)?
@@ -219,6 +276,7 @@ public final class WorkspaceWindow: NSWindow {
         if !Task.isCancelled { storeService.visionFailureMessages[id] = error.localizedDescription }
       }
     }
+
     refreshToolbarState()
   }
 
@@ -229,19 +287,6 @@ public final class WorkspaceWindow: NSWindow {
     } onChange: { [weak self] in
       Task { @MainActor [weak self] in self?.observeToolbarState() }
     }
-  }
-
-  @objc func toggleSidebar() {
-    let sidebar = splitViewController.splitViewItems[0]
-    if !sidebar.isCollapsed {
-      expandedSidebarWidth = splitViewController.splitView.arrangedSubviews[0].frame.width
-    }
-    sidebar.isCollapsed.toggle()
-  }
-
-  @objc func toggleInspector() {
-    let inspector = splitViewController.splitViewItems[2]
-    inspector.animator().isCollapsed = !inspector.isCollapsed
   }
 
   private func showPendingEditsPopover(
@@ -362,6 +407,23 @@ public final class WorkspaceWindow: NSWindow {
     }
   }
 
+}
+
+extension WorkspaceWindow: NSToolbarItemValidation {
+  public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+    guard !isClosed,
+      let identifier = WorkspaceToolbarCoordinator.Identifiers(rawValue: item.itemIdentifier.rawValue)
+    else { return false }
+    return switch identifier {
+    case .captureScreenshots: true
+    case .stopOutput: storeService.recordingState.canStop
+    case .startPauseOutput:
+      storeService.recordingState.canStart || storeService.recordingState == .recording
+    case .runInference:
+      inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil
+    default: false
+    }
+  }
 }
 
 struct ScreenshotResultView: View {
