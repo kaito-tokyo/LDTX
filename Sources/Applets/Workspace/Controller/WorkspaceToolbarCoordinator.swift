@@ -5,6 +5,7 @@
 import AppKit
 
 final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
+  let toolbar: NSToolbar
   private let sidebarItem: NSToolbarItem
   private let stopOutputItem: NSToolbarItem
   private let startPauseOutputItem: NSToolbarItem
@@ -14,6 +15,7 @@ final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
 
   @MainActor
   override init() {
+    toolbar = NSToolbar(identifier: "workspace")
     sidebarItem = NSToolbarItem(itemIdentifier: Identifiers.sidebar.itemIdentifier)
     stopOutputItem = NSToolbarItem(itemIdentifier: Identifiers.stopOutput.itemIdentifier)
     startPauseOutputItem = NSToolbarItem(itemIdentifier: Identifiers.startPauseOutput.itemIdentifier)
@@ -57,7 +59,7 @@ final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
   }
 
   @MainActor
-  func configureToolbarItems(target: WorkspaceWindow) {
+  func configureToolbar(target: WorkspaceWindow) {
     sidebarItem.label = "Toggle Sidebar"
     sidebarItem.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: nil)
     sidebarItem.target = target
@@ -93,6 +95,11 @@ final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
     toggleInspectorItem.target = target
     toggleInspectorItem.action = #selector(WorkspaceWindow.toggleInspector)
     toggleInspectorItem.autovalidates = false
+
+    toolbar.autosavesConfiguration = false
+    toolbar.allowsUserCustomization = false
+    toolbar.displayMode = .iconOnly
+    toolbar.delegate = self
   }
 
   @MainActor

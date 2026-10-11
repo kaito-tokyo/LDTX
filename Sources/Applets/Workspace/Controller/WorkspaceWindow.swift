@@ -102,13 +102,8 @@ public final class WorkspaceWindow: NSWindow {
     self.contentViewController = splitViewController
     self.titleVisibility = .visible
     self.toolbarStyle = .unified
-    toolbarCoordinator.configureToolbarItems(target: self)
-    let toolbar = NSToolbar(identifier: "workspace")
-    toolbar.autosavesConfiguration = false
-    toolbar.allowsUserCustomization = false
-    toolbar.displayMode = .iconOnly
-    toolbar.delegate = toolbarCoordinator
-    self.toolbar = toolbar
+    toolbarCoordinator.configureToolbar(target: self)
+    self.toolbar = toolbarCoordinator.toolbar
     refreshToolbarState()
     // Installing the content controller replaces the initial size with its fitting size.
     let toolbarHeight = frame.height - contentLayoutRect.height
