@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import Foundation
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
@@ -14,6 +15,42 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1027CreateMlImageClassifierVisionIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
+
+    @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")
+    func toolbarInference() async throws {
+      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      store.workspaceDefinition.videoComponents = [
+        .with {
+          $0.vfxSource.internalID = 7
+          $0.vfxSource.deviceWidth = 1920
+          $0.vfxSource.deviceHeight = 1080
+        }
+      ]
+      store.workspaceDefinition.visions = [
+        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+          id: 2, name: "Scene", componentID: 7)
+      ]
+      store.inspectorSelector = .init(kind: .createMlImageClassifierVision, internalID: 2)
+      let dispatcher = ToolbarDispatcher()
+      let window = makeWorkspaceTestWindow(storeService: store, dispatcher: dispatcher)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let items = try #require(window.toolbar).items
+      let index = try #require(
+        items.firstIndex { $0.itemIdentifier.rawValue == "workspace.runInference" })
+      let item = items[index]
+      #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
+      #expect(item.image != nil && !item.isEnabled)
+      store.modelURLs[2] = .some(URL(fileURLWithPath: "/tmp/model.mlmodel"))
+      await settleWorkspaceToolbar(window)
+      #expect(item.isEnabled)
+      try performWorkspaceToolbarAction(item)
+      await settleWorkspaceToolbar(window)
+      #expect(store.visionResults[2] == "Test classification")
+      store.inspectorSelector = .init(kind: .workspaceCanvas)
+      await settleWorkspaceToolbar(window)
+      #expect(!item.isEnabled)
+    }
 
     @Test("ROI numerator editing uses the image size only when the denominator is unset")
     func roiNumeratorDefaults() {

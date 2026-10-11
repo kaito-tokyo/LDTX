@@ -456,6 +456,12 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 }
 
 extension WorkspaceWindowController {
+  public func classify(
+    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+  ) async throws -> String {
+    try await windowRuntime.classify(vision: vision, modelURL: modelURL)
+  }
+
   public func synchronizeVision() {
     let ids = Set(
       windowRuntime.definition.visions.compactMap {

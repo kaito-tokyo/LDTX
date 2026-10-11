@@ -64,11 +64,12 @@ public final class WorkspaceEditingState {
     refreshUnconfirmedChanges()
     try validateInspectorEdits()
     guard !hasUnconfirmedChanges else {
-      throw WorkspaceSelectionError(message: "Apply the pending edits before switching views.")
+      throw WorkspaceSelectionError(
+        message: "Press Return to confirm the pending edits before switching views.")
     }
   }
 
-  // The Window is the only consumer. Validate every owner before invoking any writeback.
+  // Validate every owner before invoking any writeback.
   public func submitPendingEdits(isOutputActive: Bool) {
     defer { refreshUnconfirmedChanges() }
     guard !isOutputActive else { return }

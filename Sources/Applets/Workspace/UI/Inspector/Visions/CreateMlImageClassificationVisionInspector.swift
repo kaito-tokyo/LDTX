@@ -11,6 +11,8 @@ struct CreateMlImageClassifierVisionInspector: View {
   @Binding var vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision
   @Binding var modelURL: URL?
   let savedModelURL: URL?
+  var inferenceResult: String? = nil
+  var inferenceFailure: String? = nil
 
   @Environment(\.outputActive) var outputActive
 
@@ -47,6 +49,13 @@ struct CreateMlImageClassifierVisionInspector: View {
         }
       }
       .disabled(outputActive)
+      Section("Inference") {
+        if let inferenceFailure { Text(inferenceFailure).foregroundStyle(.red) }
+        if let inferenceResult {
+          Text(inferenceResult.isEmpty ? "No classifications returned." : inferenceResult)
+            .textSelection(.enabled)
+        }
+      }
     }
     .formStyle(.grouped)
   }

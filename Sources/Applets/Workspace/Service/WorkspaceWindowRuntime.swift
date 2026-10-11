@@ -11,6 +11,7 @@ import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
 import LDTXTaskQueue
+import LDTXVision
 import LDTXWorkspaceAppletModel
 import OSLog
 import Observation
@@ -247,8 +248,42 @@ public final class WorkspaceWindowRuntime {
   private func frameForVision(
     _ vision: Ldtx_Workspace_V4_OcrVision
   ) async throws -> WorkspaceVisionAnalysisFrame {
-    let componentID = vision.videoComponentInternalID
-    let size = try visionInputSize(componentID: componentID)
+    try await frameForVision(
+      componentID: vision.videoComponentInternalID,
+      region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil)
+  }
+
+  public func classify(
+    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+  ) async throws -> String {
+    guard
+      let size = definition.videoComponents.first(where: {
+        $0.internalID == vision.videoComponentInternalID && $0.canBeVisionInput
+      })?.renderingSize, size.width > 0, size.height > 0
+    else {
+      throw WorkspaceVisionFeatureError.referencedVideoComponentMissing
+    }
+    guard
+      case .avCaptureDevice(let cameraID)? =
+        physicalDeviceIDsProvider()[vision.videoComponentInternalID]
+    else {
+      throw WorkspaceVisionFeatureError.vfxSourceHasNoPhysicalCamera
+    }
+    guard captureSessionCoordinator.latestVisionFrame(forCameraID: cameraID) != nil else {
+      throw WorkspaceVisionFeatureError.frameUnavailable
+    }
+    let frame = try await frameForVision(
+      componentID: vision.videoComponentInternalID,
+      region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil,
+      inputSize: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)))
+    return try await VisionImageClassifierService().classify(image: frame.image, modelURL: modelURL)
+  }
+
+  private func frameForVision(
+    componentID: Int64, region: Ldtx_Workspace_V4_VisionRegionOfInterest?,
+    inputSize: CGSize? = nil
+  ) async throws -> WorkspaceVisionAnalysisFrame {
+    let size = try inputSize ?? visionInputSize(componentID: componentID)
     let width = Int(size.width)
     let height = Int(size.height)
     guard let renderer = componentFrameRenderer else {
@@ -263,9 +298,21 @@ public final class WorkspaceWindowRuntime {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
-    guard vision.hasRegionOfInterest else { return WorkspaceVisionAnalysisFrame(image: image) }
-    let region = vision.regionOfInterest.rect(in: image.extent)
-    return WorkspaceVisionAnalysisFrame(image: image.cropped(to: region))
+    guard let region else { return WorkspaceVisionAnalysisFrame(image: image) }
+    let rect = region.rect(in: image.extent)
+    if inputSize != nil {
+      guard !rect.isNull, !rect.isEmpty,
+        rect.origin.x.isFinite, rect.origin.y.isFinite,
+        rect.width.isFinite, rect.height.isFinite, image.extent.contains(rect)
+      else {
+        throw CocoaError(
+          .validationMissingMandatoryProperty,
+          userInfo: [
+            NSLocalizedDescriptionKey: "The region of interest must be inside the input image."
+          ])
+      }
+    }
+    return WorkspaceVisionAnalysisFrame(image: image.cropped(to: rect))
   }
 
 }

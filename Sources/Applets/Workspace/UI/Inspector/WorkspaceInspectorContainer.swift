@@ -173,7 +173,9 @@ public struct WorkspaceInspectorContainer: View {
           modelURL: Binding(
             get: { storeService.modelURLs[internalID] ?? savedModelURL },
             set: { storeService.modelURLs[internalID] = .some($0) }),
-          savedModelURL: savedModelURL
+          savedModelURL: savedModelURL,
+          inferenceResult: storeService.visionResults[internalID],
+          inferenceFailure: storeService.visionFailureMessages[internalID]
         )
         .environment(\.outputActive, storeService.isOutputActive)
       } else {

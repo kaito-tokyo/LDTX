@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 
 public protocol WorkspaceRuntimeActions: AnyObject {
+  @MainActor func classify(
+    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+  ) async throws -> String
   @MainActor func synchronizeAudioMonitor()
   @MainActor func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,

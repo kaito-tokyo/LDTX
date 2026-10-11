@@ -183,7 +183,7 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(first)
       let item = try #require(
         first.toolbar?.items.first {
-          $0.itemIdentifier.rawValue == "workspace.sidebar"
+          $0.itemIdentifier.rawValue == "workspace.toggleSidebar"
         })
       let split = first.splitViewController
       #expect(first.contentViewController === split)
@@ -240,17 +240,21 @@ extension AppUIComponentTestSuite {
           "Actual: \(pane.frame.width), expected: \(expectedWidth)")
       }
       for (identifier, index) in [
-        (NSToolbarItem.Identifier("workspace.sidebar"), 0), (.init("workspace.inspector"), 2),
+        (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0), (.init("workspace.toggleInspector"), 2),
       ] {
         let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
         let width = split.splitView.arrangedSubviews[index].frame.width
         try performWorkspaceToolbarAction(item)
+        if index == 2 { try await Task.sleep(for: .milliseconds(350)) }
         #expect(split.splitViewItems[index].isCollapsed)
         #expect(!other.splitViewItems[index].isCollapsed)
         try performWorkspaceToolbarAction(item)
+        if index == 2 { try await Task.sleep(for: .milliseconds(350)) }
         split.view.layoutSubtreeIfNeeded()
         #expect(!split.splitViewItems[index].isCollapsed)
-        #expect(abs(split.splitView.arrangedSubviews[index].frame.width - width) <= 1)
+        #expect(
+          abs(split.splitView.arrangedSubviews[index].frame.width - width) <= 1,
+          "Pane \(index): \(split.splitView.arrangedSubviews[index].frame.width), before \(width)")
       }
     }
 
@@ -282,54 +286,17 @@ extension AppUIComponentTestSuite {
       let separatorItem = try #require(
         toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator })
       let applyID = NSToolbarItem.Identifier("workspace.inspector.apply")
-      let applyItem = try #require(toolbar.items.first { $0.itemIdentifier == applyID })
-      #expect(toolbar.items.filter { $0.itemIdentifier == applyID }.count == 1)
+      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
       window.splitViewController.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(!state.isInspectorVisible)
-      #expect(toolbar.items.first { $0.itemIdentifier == applyID }?.isHidden == true)
+      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
       window.splitViewController.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(state.isInspectorVisible)
-      #expect(toolbar.items.first { $0.itemIdentifier == applyID } === applyItem)
+      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
       #expect(
         toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator } === separatorItem)
-    }
-
-    @Test("OCR Apply follows Inspector selection, collapse, and output state")
-    func ocrApplyFollowsInspectorState() async throws {
-      let state = WorkspaceSidebarPreviewFixtures.makeUIState(
-        inspectorSelector: .init(kind: .ocrVision, internalID: 10))
-      let otherState = WorkspaceSidebarPreviewFixtures.makeUIState(
-        inspectorSelector: .init(kind: .ocrVision, internalID: 10))
-      let window = makeWorkspaceTestWindow(storeService: state)
-      let other = makeWorkspaceTestWindow(storeService: otherState)
-      defer {
-        window.close()
-        other.close()
-      }
-      let identifier = NSToolbarItem.Identifier("workspace.inspector.apply")
-      for _ in 0..<3 {
-        await settleWorkspaceToolbar(window)
-        let toolbar = try #require(window.toolbar)
-        #expect(toolbar.items.filter { $0.itemIdentifier == identifier }.count == 1)
-        let apply = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
-        #expect(apply.isEnabled == false)
-        state.isOutputActive = true
-        await settleWorkspaceToolbar(window)
-        #expect(apply.isEnabled == false)
-        state.isOutputActive = false
-        let split = try #require(window.contentViewController as? NSSplitViewController)
-        split.toggleInspector(nil)
-        await settleWorkspaceToolbar(window)
-        #expect(toolbar.items.first { $0.itemIdentifier == identifier }?.isHidden == true)
-        #expect(other.toolbar?.items.contains { $0.itemIdentifier == identifier } == true)
-        split.toggleInspector(nil)
-        state.inspectorSelector = .init(kind: .workspaceCanvas)
-        await settleWorkspaceToolbar(window)
-        #expect(toolbar.items.contains { $0.itemIdentifier == identifier })
-        state.inspectorSelector = .init(kind: .ocrVision, internalID: 10)
-      }
     }
 
     @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
@@ -348,7 +315,7 @@ extension AppUIComponentTestSuite {
       let items = try #require(first.toolbar).items
       let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
       let toggle = try #require(
-        items.first { $0.itemIdentifier.rawValue == "workspace.toggleOutput" })
+        items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
       for (value, stopEnabled, toggleEnabled, label) in [
         (WorkspaceRecordingState.idle, false, true, "Start Output"),
         (.starting, false, false, "Start Output"),

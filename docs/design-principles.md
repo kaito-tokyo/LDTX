@@ -129,7 +129,7 @@ the relevant design or feature documentation instead.
 
 - A screen containing unconfirmed edited values cannot be left. Attempted navigation
   must preserve the current screen and draft and indicate the pending edits.
-  Sidebar selection shows a popover at Apply instead of presenting an error dialog. Same-selection
+  Sidebar selection shows a popover at the Inspector toggle instead of presenting an error dialog. Same-selection
   assignments and pane opening or closing are allowed.
 - Validate at multiple layers. Ordinary edits that were allowed to leave their
   screen must not become latent validation failures discovered only on save.

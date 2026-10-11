@@ -199,11 +199,9 @@ extension AppUIComponentTestSuite {
       }
       await settleWorkspaceToolbar(first)
       let toolbar = try #require(first.toolbar)
-      let apply = try #require(
-        toolbar.items.first { $0.itemIdentifier.rawValue == "workspace.inspector.apply" })
+      #expect(!toolbar.items.contains { $0.itemIdentifier.rawValue == "workspace.inspector.apply" })
       let separator = try #require(
         toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator })
-      #expect(!apply.isEnabled)
       firstStoreEditingState.submitPendingEdits(isOutputActive: firstStore.isOutputActive)
       let firstEditor = try #require(
         first.contentPane.children.first { $0 is MasterVolumeEditor } as? MasterVolumeEditor)
@@ -216,16 +214,15 @@ extension AppUIComponentTestSuite {
         field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       }
       await settleWorkspaceToolbar(first)
-      #expect(apply.isEnabled)
       firstStore.isOutputActive = true
       await settleWorkspaceToolbar(first)
-      #expect(!apply.isEnabled)
       firstStoreEditingState.submitPendingEdits(isOutputActive: firstStore.isOutputActive)
       #expect(firstStoreEditingState.hasUnconfirmedChanges)
       firstStore.isOutputActive = false
       await settleWorkspaceToolbar(first)
-      try performWorkspaceToolbarAction(apply)
-      #expect(!firstStoreEditingState.hasUnconfirmedChanges && !apply.isEnabled)
+      try firstEditor.masterFields[0].submit()
+      firstStoreEditingState.refreshUnconfirmedChanges()
+      #expect(!firstStoreEditingState.hasUnconfirmedChanges)
       await settleWorkspaceToolbar(first)
       #expect(!firstStoreEditingState.hasUnconfirmedChanges)
       #expect(secondStoreEditingState.hasUnconfirmedChanges)
@@ -238,9 +235,9 @@ extension AppUIComponentTestSuite {
           .hasAudioMasterVolumeDecibels)
       for collapsed in [true, false, true, false] {
         first.splitViewController.splitViewItems[2].isCollapsed = collapsed
-        #expect(apply.isHidden == collapsed)
-        #expect(toolbar.items.last?.itemIdentifier.rawValue == "workspace.inspector")
-        #expect(toolbar.items.first { $0.itemIdentifier == apply.itemIdentifier } === apply)
+        #expect(toolbar.items.last?.itemIdentifier.rawValue == "workspace.toggleInspector")
+        #expect(
+          !toolbar.items.contains { $0.itemIdentifier.rawValue == "workspace.inspector.apply" })
         #expect(
           toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator } === separator)
       }
