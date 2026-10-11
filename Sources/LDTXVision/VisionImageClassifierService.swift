@@ -4,23 +4,23 @@
 
 @preconcurrency import CoreImage
 import CoreML
+import CryptoKit
 import Foundation
 import Vision
 
-/// Serializes model loading and image classification off the main actor.
+/// Performs image classification off the main actor.
 public actor VisionImageClassifierService {
-  public init() {}
+  private let modelContainer: CoreMLModelContainer
 
-  public func classify(image: CIImage, modelURL: URL) async throws -> String {
-    let compiledURL = try await MLModel.compileModel(at: modelURL)
-    defer { try? FileManager.default.removeItem(at: compiledURL) }
-    try Task.checkCancellation()
-    let model = try MLModel(contentsOf: compiledURL)
-    let request = VNCoreMLRequest(model: try VNCoreMLModel(for: model))
-    request.imageCropAndScaleOption = .centerCrop
-    try VNImageRequestHandler(ciImage: image).perform([request])
-    try Task.checkCancellation()
-    guard let results = request.results as? [VNClassificationObservation] else {
+  public init(model: sending MLModel) throws {
+    self.modelContainer = try CoreMLModelContainer(model: model)
+  }
+
+  public func classify(image: CIImage) async throws -> String {
+    var request = CoreMLRequest(model: modelContainer)
+    request.cropAndScaleAction = .scaleToFit
+    let observations = try await request.perform(on: image)
+    guard let results = observations as? [ClassificationObservation] else {
       throw CocoaError(
         .coderInvalidValue,
         userInfo: [NSLocalizedDescriptionKey: "The model did not return image classifications."])
@@ -28,5 +28,28 @@ public actor VisionImageClassifierService {
     return results.map {
       "\($0.identifier): \(String(format: "%.1f%%", $0.confidence * 100))"
     }.joined(separator: "\n")
+  }
+
+  public static func loadModel(
+    at url: URL,
+    configuration: MLModelConfiguration = .init(),
+    noCompile: Bool = false,
+    cachesDirectory: URL = URL.cachesDirectory.appending(
+      path: "tokyo.kaito.LDTX", directoryHint: .isDirectory),
+    fileManager: FileManager = .default
+  ) async throws -> MLModel {
+    let digest = SHA384.hash(data: try Data(contentsOf: url, options: .mappedIfSafe))
+    let hexString = digest.map { String(format: "%02x", $0) }.joined()
+    let targetURL = cachesDirectory.appending(
+      path: "\(hexString).mlmodelc", directoryHint: .isDirectory)
+
+    if !noCompile, !fileManager.fileExists(atPath: targetURL.path(percentEncoded: false)) {
+      let compiledURL = try await MLModel.compileModel(at: url)
+      try fileManager.createDirectory(
+        at: cachesDirectory, withIntermediateDirectories: true)
+      try fileManager.moveItem(at: compiledURL, to: targetURL)
+    }
+
+    return try MLModel(contentsOf: targetURL, configuration: configuration)
   }
 }

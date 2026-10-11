@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
+import CoreML
 import CoreVideo
 import Foundation
 import LDTXBackgroundSegmentation
@@ -254,7 +255,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func classify(
-    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, model: sending MLModel
   ) async throws -> String {
     guard
       let size = definition.videoComponents.first(where: {
@@ -276,7 +277,7 @@ public final class WorkspaceWindowRuntime {
       componentID: vision.videoComponentInternalID,
       region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil,
       inputSize: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)))
-    return try await VisionImageClassifierService().classify(image: frame.image, modelURL: modelURL)
+    return try await VisionImageClassifierService(model: model).classify(image: frame.image)
   }
 
   private func frameForVision(
@@ -293,7 +294,6 @@ public final class WorkspaceWindowRuntime {
       definition: definition, componentID: componentID,
       physicalDeviceIDs: physicalDeviceIDsProvider(), width: width, height: height)
     let frame = try await renderer.render(componentID: componentID, configuration: configuration)
-    try Task.checkCancellation()
     guard !frame.isPreparingRenderResources else {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }

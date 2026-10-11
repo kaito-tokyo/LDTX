@@ -11,6 +11,7 @@ import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXTaskQueue
+import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -459,7 +460,9 @@ extension WorkspaceWindowController {
   public func classify(
     vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
   ) async throws -> String {
-    try await windowRuntime.classify(vision: vision, modelURL: modelURL)
+    let model = try await VisionImageClassifierService.loadModel(
+      at: modelURL, noCompile: storeService.isOutputActive)
+    return try await windowRuntime.classify(vision: vision, model: model)
   }
 
   public func synchronizeVision() {

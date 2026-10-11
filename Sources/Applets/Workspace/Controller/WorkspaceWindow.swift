@@ -267,11 +267,9 @@ public final class WorkspaceWindow: NSWindow {
       }
       do {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
-        try Task.checkCancellation()
         storeService.visionResults[id] = result
-      } catch is CancellationError {
       } catch {
-        if !Task.isCancelled { storeService.visionFailureMessages[id] = error.localizedDescription }
+        storeService.visionFailureMessages[id] = error.localizedDescription
       }
     }
 
@@ -366,7 +364,6 @@ public final class WorkspaceWindow: NSWindow {
 
   public override func close() {
     isClosed = true
-    inferenceTask?.cancel()
     pendingEditsPopover.close()
     editingState.inputValidationErrorHandler = nil
     inspectorCollapseObservation?.invalidate()
