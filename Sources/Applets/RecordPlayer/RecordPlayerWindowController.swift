@@ -18,25 +18,22 @@ public final class RecordPlayerWindowController: NSWindowController, NSWindowDel
   private let split: PaneSplitViewController
   private var started = false
 
-  init(model: LDTXRecordPlayerModel, documentReference: DocumentReference) {
+  init(model: LDTXRecordPlayerModel, document: RecordPlayerDocument) {
     self.model = model
     let presentation = RecordingPresentationState()
     split = PaneSplitViewController(
       sidebar: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .sidebar
-        )
-        .environment(\.documentReference, documentReference)),
+          model: model, presentation: presentation, pane: .sidebar, document: document
+        )),
       content: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .content
-        )
-        .environment(\.documentReference, documentReference)),
+          model: model, presentation: presentation, pane: .content, document: document
+        )),
       inspector: paneHost(
         LDTXRecordPlayerView(
-          model: model, presentation: presentation, pane: .inspector
-        )
-        .environment(\.documentReference, documentReference)),
+          model: model, presentation: presentation, pane: .inspector, document: document
+        )),
       sidebarCanCollapse: true, inspectorMaximum: 360)
     let window = PaneWindow(contentViewController: split)
     window.restorationKind = "recording"

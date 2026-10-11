@@ -92,7 +92,7 @@ extension AppUIComponentTestSuite {
       let controller = WorkspaceWindowController(
         storeService: document.storeService, editingState: document.editingState,
         persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
+        appletData: WorkspaceAppletData(), document: document)
       let window = try #require(controller.window as? WorkspaceWindow)
       #expect(
         window.contentPane.testPairedPreview.metalView.delegate === controller.previewRenderer)

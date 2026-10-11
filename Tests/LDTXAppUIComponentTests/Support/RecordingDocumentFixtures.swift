@@ -48,14 +48,14 @@ func saveRecordingTestDocument(
 }
 
 @MainActor
-func hostRecordingMarkerProbe(_ reference: DocumentReference, probe: MarkerPaneProbe) -> NSWindow {
+func hostRecordingMarkerProbe(_ document: RecordPlayerDocument, probe: MarkerPaneProbe) -> NSWindow {
   let window = NSWindow(
     contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
     styleMask: [.titled, .closable], backing: .buffered, defer: false)
   window.isReleasedWhenClosed = false
   window.contentViewController = NSHostingController(
     rootView:
-      MarkerProbeView(probe: probe).environment(\.documentReference, reference))
+      MarkerProbeView(document: document, probe: probe))
   window.orderFront(nil)
   return window
 }
@@ -98,10 +98,10 @@ final class MarkerPaneProbe {
 }
 
 struct MarkerProbeView: View {
-  @Environment(\.documentReference) private var reference
+  weak var document: RecordPlayerDocument?
   let probe: MarkerPaneProbe
   private var notes: [String] {
-    (reference?.document as? RecordPlayerDocument)?.markers.map(\.note) ?? []
+    document?.markers.map(\.note) ?? []
   }
   var body: some View {
     Text(notes.joined(separator: ", "))

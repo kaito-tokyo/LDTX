@@ -9,9 +9,7 @@ import LDTXTaskQueue
 import LDTXYouTubeRTMPS
 import SwiftUI
 
-#if DEBUG
-  import AppKit
-#endif
+import AppKit
 
 public struct WorkspaceInspectorContainer: View {
   @Environment(\.workspaceReportError) private var reportError
@@ -20,14 +18,17 @@ public struct WorkspaceInspectorContainer: View {
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var storeService: WorkspaceStoreService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private weak var document: NSDocument?
   let editingState: WorkspaceEditingState
 
   public init(
     deviceRegistry: DeviceRegistryService,
     storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
     appletData: WorkspaceAppletData,
+    document: NSDocument? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.document = document
     self.editingState = editingState
     self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
@@ -80,7 +81,7 @@ public struct WorkspaceInspectorContainer: View {
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          storeService: storeService, internalID: internalID,
+          document: document, storeService: storeService, internalID: internalID,
           deviceRegistry: deviceRegistry,
           appletData: appletData, runtimeActions: runtimeActions)
       } else {

@@ -16,7 +16,7 @@ public struct WorkspaceSidebar: View {
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
   private let onSelectionBlocked: () -> Void
-  @Environment(\.documentReference) private var documentReference
+  private weak var document: NSDocument?
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
   @State private var additionFailure: String?
@@ -26,9 +26,11 @@ public struct WorkspaceSidebar: View {
     storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
     deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
+    document: NSDocument? = nil,
     onSelectionBlocked: @escaping () -> Void = {},
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.document = document
     self.editingState = editingState
     self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
@@ -225,7 +227,7 @@ public struct WorkspaceSidebar: View {
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
         videoComponents: storeService.workspaceDefinition.videoComponents,
-        validationMessage: documentReference?.document == nil
+        validationMessage: document == nil
           ? "The Workspace document is unavailable."
           : additionFailure
             ?? WorkspaceResourceAddition.validationMessage(
@@ -244,7 +246,7 @@ public struct WorkspaceSidebar: View {
     }
   }
 
-  var canAddResource: Bool { documentReference?.document != nil && !storeService.isOutputActive }
+  var canAddResource: Bool { document != nil && !storeService.isOutputActive }
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
@@ -266,7 +268,7 @@ public struct WorkspaceSidebar: View {
   }
 
   func addResource(_ sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft) throws {
-    guard documentReference?.document != nil else {
+    guard document != nil else {
       throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
     }
     if sheet == .device {

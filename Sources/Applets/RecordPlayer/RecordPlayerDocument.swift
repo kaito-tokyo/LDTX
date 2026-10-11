@@ -67,14 +67,13 @@ public final class RecordPlayerDocument: NSDocument {
 
   public override func makeWindowControllers() {
     guard windowControllers.isEmpty, fileURL != nil else { return }
-    let reference = DocumentReference(self)
     let model = LDTXRecordPlayerModel(
-      documentReference: reference, scenarioFixture: scenarioFixture,
+      document: self, scenarioFixture: scenarioFixture,
       assetLoader: assetLoader)
     self.model = model
     addWindowController(
       RecordPlayerWindowController(
-        model: model, documentReference: reference))
+        model: model, document: self))
   }
 
   public var canModifyMarkers: Bool {

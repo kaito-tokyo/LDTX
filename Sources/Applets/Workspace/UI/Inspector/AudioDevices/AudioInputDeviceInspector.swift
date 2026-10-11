@@ -8,7 +8,7 @@ import LDTXProtos
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {
-  @Environment(\.documentReference) private var documentReference
+  weak var document: NSDocument? = nil
   let storeService: WorkspaceStoreService
   let internalID: Int64
   let deviceRegistry: DeviceRegistryService
@@ -29,7 +29,7 @@ struct AudioInputDeviceInspector: View {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
           .disabled(storeService.isOutputActive)
-        if documentReference?.document != nil {
+        if document != nil {
           WorkspacePhysicalDeviceField(
             title: "Physical Device", internalID: internalID, isAudio: true,
             storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry,

@@ -171,8 +171,8 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      let firstReference = DocumentReference(first)
-      let secondReference = DocumentReference(second)
+      let firstReference = first
+      let secondReference = second
       let firstProbe = MarkerPaneProbe()
       let secondProbe = MarkerPaneProbe()
       let otherProbe = MarkerPaneProbe()

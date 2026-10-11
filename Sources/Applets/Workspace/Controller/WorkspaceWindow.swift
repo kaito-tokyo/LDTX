@@ -18,7 +18,6 @@ import SwiftUI
 
 public final class WorkspaceWindow: NSWindow {
   private weak var document: NSDocument?
-  private let documentReference: DocumentReference
   let appletData: WorkspaceAppletData
   let storeService: WorkspaceStoreService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
@@ -54,7 +53,6 @@ public final class WorkspaceWindow: NSWindow {
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.document = document
-    self.documentReference = DocumentReference(document)
     self.appletData = appletData
     self.storeService = storeService
     self.runtimeActions = runtimeActions
@@ -312,11 +310,10 @@ public final class WorkspaceWindow: NSWindow {
   private var sidebarView: some View {
     WorkspaceSidebar(
       storeService: storeService, editingState: editingState, deviceRegistry: deviceRegistry,
-      appletData: appletData,
+      appletData: appletData, document: document,
       onSelectionBlocked: { [weak self] in self?.showPendingEditsPopover() },
       runtimeActions: runtimeActions
     )
-    .environment(\.documentReference, documentReference)
     .environment(\.workspaceReportError, reportError)
   }
 
@@ -324,9 +321,8 @@ public final class WorkspaceWindow: NSWindow {
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
       storeService: storeService, editingState: editingState,
-      appletData: appletData, runtimeActions: runtimeActions
+      appletData: appletData, document: document, runtimeActions: runtimeActions
     )
-    .environment(\.documentReference, documentReference)
     .environment(\.workspaceReportError, reportError)
   }
 

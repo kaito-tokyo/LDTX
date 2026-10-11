@@ -85,7 +85,7 @@ extension AppUIComponentTestSuite {
       let controller = WorkspaceWindowController(
         storeService: service, editingState: document.editingState,
         persistenceCoordinator: document.persistenceCoordinator,
-        appletData: document.appletData, documentReference: DocumentReference(document))
+        appletData: document.appletData, document: document)
       document.addWindowController(controller)
       service.isOutputActive = true
       #expect(throws: (any Error).self) { try controller.removeProgram(internalID: 101) }

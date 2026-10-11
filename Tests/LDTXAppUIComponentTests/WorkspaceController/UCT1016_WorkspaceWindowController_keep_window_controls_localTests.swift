@@ -464,7 +464,7 @@ extension AppUIComponentTestSuite {
       let firstWindow = WorkspaceWindowController(
         storeService: first.storeService, editingState: first.editingState,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
-        documentReference: DocumentReference(first))
+        document: first)
       first.addWindowController(firstWindow)
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
@@ -473,7 +473,7 @@ extension AppUIComponentTestSuite {
       let secondWindow = WorkspaceWindowController(
         storeService: second.storeService, editingState: second.editingState,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
-        documentReference: DocumentReference(second))
+        document: second)
       second.addWindowController(secondWindow)
       try secondWindow.selectProgram(internalID: a)
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
@@ -523,7 +523,7 @@ extension AppUIComponentTestSuite {
       let reopenedWindow = WorkspaceWindowController(
         storeService: reopened.storeService, editingState: reopened.editingState,
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
-        documentReference: DocumentReference(reopened))
+        document: reopened)
       reopened.addWindowController(reopenedWindow)
       let reopenedInspector = WorkspaceProgramsInspector(
         storeService: reopened.storeService, editingState: reopened.editingState, appletData: data,
@@ -559,7 +559,7 @@ extension AppUIComponentTestSuite {
       let firstWindow = WorkspaceWindowController(
         storeService: first.storeService, editingState: first.editingState,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
-        documentReference: DocumentReference(first))
+        document: first)
       first.addWindowController(firstWindow)
       let input = try firstWindow.windowRuntime.addVFXSource(displayName: "Camera")
       let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
@@ -573,7 +573,7 @@ extension AppUIComponentTestSuite {
       let secondWindow = WorkspaceWindowController(
         storeService: second.storeService, editingState: second.editingState,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
-        documentReference: DocumentReference(second))
+        document: second)
       second.addWindowController(secondWindow)
       data.updateState(for: second.storeService.localStateURL!) {
         $0.selectedProgramInternalID = program

@@ -30,10 +30,7 @@ public struct LDTXRecordPlayerView: View {
     result.displayedPane = pane
     return result
   }
-  @Environment(\.documentReference) private var documentReference
-  private var document: RecordPlayerDocument? {
-    documentReference?.document as? RecordPlayerDocument
-  }
+  private weak var document: RecordPlayerDocument?
   private var markers: [RecordingMarker] { document?.markers ?? [] }
   private var canModifyMarkers: Bool { document?.canModifyMarkers == true }
   @State private var pendingMarkerDeletion: RecordingMarker?
@@ -58,8 +55,10 @@ public struct LDTXRecordPlayerView: View {
   }
 
   init(
-    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane
+    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane,
+    document: RecordPlayerDocument? = nil
   ) {
+    self.document = document
     self.presentation = presentation
     _model = State(initialValue: model)
     self.displayedPane = pane
@@ -805,17 +804,17 @@ final class LDTXRecordPlayerModel {
   var availableCanvases: [RecordingCanvas] = []
   var selectedCanvas: RecordingCanvas = .landscape
 
-  private let documentReference: DocumentReference
+  private weak var document: RecordPlayerDocument?
   private let scenarioFixture: RecordingPreviewScenarioFixture?
   private let assetLoader: LDTXRecordPlayerAssetLoader
   private var loadTask: Task<Void, Never>?
 
   init(
-    documentReference: DocumentReference,
+    document: RecordPlayerDocument,
     scenarioFixture: RecordingPreviewScenarioFixture?,
     assetLoader: @escaping LDTXRecordPlayerAssetLoader
   ) {
-    self.documentReference = documentReference
+    self.document = document
     self.scenarioFixture = scenarioFixture
     self.assetLoader = assetLoader
   }
@@ -851,7 +850,7 @@ final class LDTXRecordPlayerModel {
   }
 
   private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {
-    guard let recordingURL = documentReference.document?.fileURL else {
+    guard let recordingURL = document?.fileURL else {
       isLoading = false
       return
     }

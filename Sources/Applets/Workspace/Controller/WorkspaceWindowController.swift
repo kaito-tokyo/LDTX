@@ -145,7 +145,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     editingState: WorkspaceEditingState,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
-    documentReference: DocumentReference
+    document: NSDocument
   ) {
     let url = storeService.localStateURL!
     self.storeService = storeService
@@ -228,7 +228,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     let deviceRegistry = DeviceRegistryService()
     deviceRegistry.errorHandler = reportOperationError
     let window = WorkspaceWindow(
-      document: documentReference.document!,
+      document: document,
       appletData: appletData,
       storeService: storeService, editingState: editingState,
       peakMeter: audioCoordinator.peakMeter, reportError: reportOperationError,

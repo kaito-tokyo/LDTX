@@ -114,7 +114,7 @@ public final class WorkspaceDocument: NSDocument {
     let windowController = WorkspaceWindowController(
       storeService: storeService, editingState: editingState,
       persistenceCoordinator: persistenceCoordinator,
-      appletData: appletData, documentReference: DocumentReference(self))
+      appletData: appletData, document: self)
     addWindowController(windowController)
   }
 

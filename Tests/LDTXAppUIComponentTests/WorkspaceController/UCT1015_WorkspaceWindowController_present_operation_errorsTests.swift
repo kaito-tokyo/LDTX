@@ -60,7 +60,7 @@ extension AppUIComponentTestSuite {
       let controller = WorkspaceWindowController(
         storeService: document.storeService, editingState: document.editingState,
         persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
+        appletData: WorkspaceAppletData(), document: document)
       let window = controller.window!
       window.orderFront(nil)
       return (document, controller, window)
