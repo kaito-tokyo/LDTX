@@ -52,6 +52,40 @@ extension AppUIComponentTestSuite {
       #expect(try WorkspaceBundleReaderV4(at: fixture.url).read().definition.displayName == "Close")
     }
 
+    @Test("Valid unconfirmed edits prevent closing", arguments: [false, true])
+    func validUnconfirmedEditsPreventClosing(inspector: Bool) async throws {
+      let document = WorkspaceDocument()
+      defer { document.close() }
+      var pending = true
+      var reportedErrors = 0
+      document.editingState.inputValidationErrorHandler = { _ in reportedErrors += 1 }
+      if inspector {
+        document.editingState.registerInspectorEditValidator(
+          id: UUID(), hasChanges: { pending }) {}
+      } else {
+        document.editingState.registerContentEditValidator(hasChanges: { pending }) {}
+      }
+      #expect(!document.isDocumentEdited)
+      let probe = WorkspaceCloseProbe()
+      document.canClose(
+        withDelegate: probe,
+        shouldClose: #selector(WorkspaceCloseProbe.document(_:shouldClose:contextInfo:)),
+        contextInfo: nil)
+      for _ in 0..<100 where probe.result == nil { try await Task.sleep(for: .milliseconds(10)) }
+      #expect(probe.result == false)
+      #expect(pending)
+      #expect(reportedErrors == 1)
+      pending = false
+      probe.result = nil
+      document.canClose(
+        withDelegate: probe,
+        shouldClose: #selector(WorkspaceCloseProbe.document(_:shouldClose:contextInfo:)),
+        contextInfo: nil)
+      for _ in 0..<100 where probe.result == nil { try await Task.sleep(for: .milliseconds(10)) }
+      #expect(probe.result == true)
+      #expect(reportedErrors == 1)
+    }
+
     private func clickCloseSheetButton(_ title: String, in window: NSWindow) async throws {
       func find(_ view: NSView) -> NSButton? {
         if let button = view as? NSButton {

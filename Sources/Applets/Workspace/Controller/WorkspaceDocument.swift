@@ -397,7 +397,7 @@ public final class WorkspaceDocument: NSDocument {
       delegate: delegate as AnyObject, selector: shouldCloseSelector, context: contextInfo
     ) { [weak self] callback in self?.closeCallbacks.removeAll { $0 === callback } }
     closeCallbacks.append(callback)
-    do { try editingState.validateInspectorEdits() } catch {
+    do { try editingState.requireConfirmedEdits() } catch {
       editingState.reportInputValidationError(error)
       callback.reviewed(self, shouldClose: false, contextInfo: nil)
       return
