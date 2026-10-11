@@ -17,23 +17,12 @@ struct CreateMlImageClassifierVisionInspector: View {
   @Environment(\.outputActive) var outputActive
 
   var body: some View {
-    let visionInputOptions = videoComponents.enumerated().compactMap {
-      $1.canBeVisionInput ? (id: $1.internalID ?? -Int64($0 + 1), name: $1.displayName) : nil
-    }
-
     Form {
       Section("Vision - Create ML Image Classifier") {
         TextField("Name", text: $vision.displayName)
-        Picker("Input video", selection: $vision.videoComponentInternalIDIfPresent) {
-          Text("Unassigned").tag(Int64?.none)
-          ForEach(visionInputOptions, id: \.0) { (id, name) in
-            if let name {
-              Text(name).tag(id)
-            } else {
-              Text("(invalid video component)").tag(id)
-            }
-          }
-        }
+        VisionInputVideoComponentDropdown(
+          videoComponents: videoComponents, selection: $vision.videoComponentInternalIDIfPresent,
+          title: "Input video")
         LabeledContent("Model") {
           ModelPathPicker(
             fileURL: $modelURL)

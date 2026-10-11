@@ -243,6 +243,10 @@ public struct WorkspaceSidebar: View {
   private var deviceOptions: [WorkspaceAddDeviceOption] {
     deviceRegistry.audioInputDevices.map {
       .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
+    } + deviceRegistry.cameras.map {
+      .init(
+        id: .avCaptureDevice(uniqueID: $0.id), name: $0.name,
+        width: UInt32(exactly: $0.width) ?? 0, height: UInt32(exactly: $0.height) ?? 0)
     }
   }
 
@@ -250,7 +254,7 @@ public struct WorkspaceSidebar: View {
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
-    if sheet == .device { deviceRegistry.refresh() }
+    if sheet == .device || sheet == .videoComponent { deviceRegistry.refresh() }
     additionFailure = nil
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
@@ -271,14 +275,15 @@ public struct WorkspaceSidebar: View {
     guard document != nil else {
       throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
     }
-    if sheet == .device {
+    let selectsCamera = sheet == .videoComponent && draft.componentKind == .vfxSource
+    if sheet == .device || selectsCamera {
       deviceRegistry.refresh(reportErrors: false)
-      if let error = deviceRegistry.error { throw error }
+      if sheet == .device, let error = deviceRegistry.error { throw error }
     }
     let id = try WorkspaceResourceAddition.add(
       sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
       audioDiscoveryError: deviceRegistry.errorMessage)
-    if sheet == .device {
+    if sheet == .device || selectsCamera {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
       runtimeActions()?.synchronizeCaptureInputs(
         availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))

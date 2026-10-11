@@ -59,31 +59,13 @@ struct OcrVisionInspector: View {
     self._heightDenominator = State(initialValue: heightFields.denominator)
   }
 
-  private var videoComponentOptions: [WorkspaceSelectionOption<Int64>] {
-    storeService.workspaceDefinition.videoComponents.compactMap { component in
-      guard let id = component.internalID,
-        let name = component.displayName
-      else { return nil }
-      return .init(id: id, name: name)
-    }
-  }
-
   var body: some View {
     Form {
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
-        Picker("Video Component", selection: $vision.videoComponentInternalIDIfPresent) {
-          Text("Unassigned").tag(Int64?.none)
-          ForEach(videoComponentOptions) { option in
-            Text(option.name).tag(Optional(option.id))
-          }
-          if let selected = vision.videoComponentInternalIDIfPresent,
-            !videoComponentOptions.contains(where: { $0.id == selected })
-          {
-            Text("Unavailable").tag(Optional(selected))
-          }
-        }
-        .pickerStyle(.menu)
+        VisionInputVideoComponentDropdown(
+          videoComponents: storeService.workspaceDefinition.videoComponents,
+          selection: $vision.videoComponentInternalIDIfPresent)
         TriggerEditor(triggers: $vision.triggers)
       }
       .disabled(storeService.isOutputActive)

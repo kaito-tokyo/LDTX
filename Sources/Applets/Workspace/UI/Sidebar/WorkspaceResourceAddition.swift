@@ -73,6 +73,8 @@ struct WorkspaceAddDraft: Equatable {
 struct WorkspaceAddDeviceOption: Identifiable {
   let id: WorkspacePhysicalDeviceID
   let name: String
+  var width: UInt32 = 0
+  var height: UInt32 = 0
   var isAudio: Bool {
     if case .coreAudioDevice = id { return true }
     return false
@@ -107,10 +109,17 @@ enum WorkspaceResourceAddition {
     {
       return "Select an available audio device."
     }
+    if sheet == .videoComponent, draft.componentKind == .vfxSource {
+      guard let device = devices.first(where: {
+        $0.id == draft.physicalDeviceID && !$0.isAudio
+      }), device.width > 0, device.height > 0 else {
+        return "Select an available camera with a valid image size."
+      }
+    }
     if sheet == .vision {
       guard let componentID = draft.videoComponentID,
         storeService.workspaceDefinition.videoComponents.contains(where: {
-          $0.internalID == componentID
+          $0.internalID == componentID && $0.canBeVisionInput
         })
       else {
         return "Select a video component."
@@ -143,8 +152,14 @@ enum WorkspaceResourceAddition {
       definition.audioDevices.append(WorkspaceResourceFactory.makeAudioInput(id: id, name: name))
       inspectorKind = .audioInputDevice
     case .videoComponent:
-      definition.videoComponents.append(
-        draft.componentKind.make(id: id, name: name))
+      var component = draft.componentKind.make(id: id, name: name)
+      if draft.componentKind == .vfxSource,
+        let device = devices.first(where: { $0.id == draft.physicalDeviceID && !$0.isAudio })
+      {
+        component.vfxSource.deviceWidth = device.width
+        component.vfxSource.deviceHeight = device.height
+      }
+      definition.videoComponents.append(component)
       inspectorKind = draft.componentKind.inspectorKind
     case .vision:
       let vision: Ldtx_Workspace_V4_VisionWrapper

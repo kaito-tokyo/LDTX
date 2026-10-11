@@ -45,6 +45,42 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     #expect(inspector.uniqueProgramDisplayName("Other") == "Other")
   }
 
+  @Test func vfxRequiresAnAvailableCameraWithPositiveDimensions() {
+    let store = WorkspaceStoreService()
+    var draft = WorkspaceAddDraft()
+    draft.name = "Camera"
+    let camera = WorkspaceAddDeviceOption(
+      id: .avCaptureDevice(uniqueID: "camera"), name: "Camera", width: 1920, height: 1080)
+    #expect(WorkspaceResourceAddition.validationMessage(
+      sheet: .videoComponent, draft: draft, devices: [camera], storeService: store) != nil)
+    draft.physicalDeviceID = camera.id
+    #expect(WorkspaceResourceAddition.validationMessage(
+      sheet: .videoComponent, draft: draft, devices: [], storeService: store) != nil)
+    var invalidCamera = camera
+    invalidCamera.width = 0
+    #expect(WorkspaceResourceAddition.validationMessage(
+      sheet: .videoComponent, draft: draft, devices: [invalidCamera], storeService: store) != nil)
+    #expect(WorkspaceResourceAddition.validationMessage(
+      sheet: .videoComponent, draft: draft, devices: [camera], storeService: store) == nil)
+  }
+
+  @Test(arguments: WorkspaceAddVisionKind.allCases)
+  func visionRejectsGeneratedInputs(kind: WorkspaceAddVisionKind) {
+    let store = WorkspaceStoreService()
+    store.workspaceDefinition.videoComponents = [
+      WorkspaceResourceFactory.makeSolidColor(id: 1, name: "Fill")
+    ]
+    var draft = WorkspaceAddDraft()
+    draft.name = "Vision"
+    draft.visionKind = kind
+    draft.videoComponentID = 1
+    #expect(throws: (any Error).self) {
+      try WorkspaceResourceAddition.add(
+        sheet: .vision, draft: draft, devices: [], storeService: store)
+    }
+    #expect(store.workspaceDefinition.visions.isEmpty)
+  }
+
   @Test func cameraCannotBeAddedAsAudioDevice() {
     let state = WorkspaceStoreService(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
@@ -173,12 +209,18 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     draft.componentKind = kind
     draft.name = kind.rawValue
     draft.videoComponentID = 1
+    let camera = WorkspaceAddDeviceOption(
+      id: .avCaptureDevice(uniqueID: "camera"), name: "Camera", width: 1920, height: 1080)
+    draft.physicalDeviceID = camera.id
     let id = try WorkspaceResourceAddition.add(
-      sheet: .videoComponent, draft: draft, devices: [], storeService: state)
+      sheet: .videoComponent, draft: draft, devices: [camera], storeService: state)
     #expect(state.inspectorSelector == .init(kind: kind.inspectorKind, internalID: id))
     let component = try #require(state.workspaceDefinition.videoComponents.first)
     switch kind {
-    case .vfxSource: #expect(component.vfxSource.internalID == id)
+    case .vfxSource:
+      #expect(component.vfxSource.internalID == id)
+      #expect(component.vfxSource.deviceWidth == 1920)
+      #expect(component.vfxSource.deviceHeight == 1080)
     case .solidColor: #expect(component.solidColorFill.extendedSrgbColor.alpha == 1)
     case .linearGradient:
       #expect(

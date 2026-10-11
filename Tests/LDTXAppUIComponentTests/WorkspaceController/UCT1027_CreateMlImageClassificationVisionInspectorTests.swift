@@ -118,7 +118,7 @@ extension AppUIComponentTestSuite {
       defer { document.close() }
       let store = document.storeService
       store.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeSolidColor(id: 1, name: "Source")
+        WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
       ]
       var draft = WorkspaceAddDraft()
       draft.name = "Scene"
