@@ -15,17 +15,27 @@ value `4.0`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
 `LDTXWorkspaceBundleVersion` is an extensibility field and does not imply a
 compatibility rule. JSON mirrors are not part of the package format. The current
 format does not define `Assets` or `Extensions` resources.
-Imported standalone Core ML models are stored in
-`VisionModels/<Vision internal_id>/<original basename>.mlmodel`.
-`model_file_name` contains only the basename with its extension. The selected
+Imported Core ML models are stored in
+`VisionModels/<Vision internal_id>/<model_revision>/<original basename>.{mlmodel|mlpackage}`.
+`model_revision` is an LdtxInternalId identifying the assigned model revision;
+zero means no model is assigned. Within the assigned revision, the first
+`.mlmodel` file or `.mlpackage` directory in lexicographic basename order is
+used. The selected
 `modelURL` is UI state separate from the saved model reference. On load and after
 successful Document saving, it equals the resolved `savedModelURL` in the bundle.
-Choosing a different model does not read it or change the saved filename.
+Choosing a different model does not read it or change the saved revision.
 Command+S reads the selected external model in the Document save snapshot and
 writes resources before protobuf documents. Only a successful save updates the
-saved basename and selection; failures preserve both. A selection made while a
-save is in progress remains pending. Models with the same basename in different
-Visions are stored in separate directories. Existing resources are retained.
+saved revision and selection; failures preserve both. A selection made while a
+save is in progress remains pending. Each imported model receives a new revision,
+so replacement never overwrites a previously saved model, even when basenames
+match. Existing model resources are not rewritten.
+
+Historical model revisions are intentionally retained in the Workspace bundle.
+Replacing or clearing a model assignment does not delete previous revisions or
+their files. Clearing an assignment sets `model_revision` to zero. Automatic
+pruning of unreferenced models is not part of the save operation.
+
 Importing a model does not compile it or execute inference.
 
 `LDTXProtos` owns the in-memory package values, protobuf message types, and the
