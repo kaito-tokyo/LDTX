@@ -6,23 +6,30 @@ SPDX-License-Identifier: Apache-2.0
 # Application and pane ownership
 
 LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
-`WorkspaceScene`, `RecordPlayerScene`, `SettingsScene`, and
-`VisionProgrammerScene`. App initialization configures authentication storage and
-initializes the shared NSDocumentController. No diagnostic sampling session is
+`RecordPlayerScene`, `WorkspaceScene`, `SettingsScene`, and
+`VisionProgrammerScene`. App initialization configures authentication storage.
+DocumentGroup initializes document infrastructure before Workspace commands use
+the shared NSDocumentController. No diagnostic sampling session is
 started by the App. No custom application delegate is
 installed. SwiftUI owns the application lifecycle, main menu, and Scene presentation.
-WorkspaceScene and RecordPlayerScene currently register commands without
-creating SwiftUI document windows; SettingsScene supplies the standard Settings
+RecordPlayerScene is the first Scene and declares a DocumentGroup using the
+macOS 27 Document API. WorkspaceScene registers commands without creating
+SwiftUI document windows; SettingsScene supplies the standard Settings
 scene and VisionProgrammerScene supplies its training windows. Vision Programmer
 is suppressed as a default launch window in LDTXApp, but opens normally in the
-standalone test app. DocumentGroup adoption is a separate migration.
+standalone test app.
 
-Workspace and recording files remain NSDocument instances managed by the shared
+LDTXApp groups these Scenes and installs VisionProgrammerCommands and RecordPlayerCommands on
+the Group so the shared menu remains available across windows and without an
+open document. Standard Open and editing commands come from SwiftUI.
+
+Workspace files remain NSDocument instances managed by
 NSDocumentController.shared. AppKit creates the standard controller and uses
 the first Editor type in Info.plist (Workspace) as the default New document type.
 AppKit initializes each document and selects
-the registered document class for each file type. File menu Open uses the shared
-document controller's standard action. New uses WorkspaceScene to create a hidden
+the registered Workspace document class. File menu Open uses the standard
+document controller to select the registered recording or Workspace document
+type. New uses WorkspaceScene to create a hidden
 document through the shared controller and requests standard document saving.
 File > Open presents the standard Open panel. The App does not present an Open
 panel from launch or restoration callbacks. Cancelling the panel leaves the
@@ -86,18 +93,25 @@ WorkspaceWindow configures its NSSplitViewController directly with hosted SwiftU
 Inspector panes and an AppKit WorkspaceContentPane in the center.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
-RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
-in-memory marker edits and the playback model. It registers a thin
-RecordPlayerWindowController that installs one NSHostingController and configures
-the window. The SwiftUI root uses NavigationSplitView, an inspector, a toolbar,
+RecordPlayerDocument conforms to SwiftUI's macOS 27 Document API and is
+Observable. Its URLDocumentConfiguration supplies the recording location, and
+the Document owns in-memory marker edits and the playback model. DocumentGroup
+opens existing recordings with allowCreating set to false and creates their
+SwiftUI roots directly, without a custom WindowController. The root uses
+NavigationSplitView, an inspector, a toolbar,
 and alerts. VideoPlayer supplies playback controls; marker navigation performs
 exact seeks through the Document-owned model. Inspector commands use the focused
-SwiftUI binding rather than finding a WindowController. Document closure stops
+SwiftUI binding rather than finding a WindowController. Document release stops
 playback; rebuilding the UI does not stop or recreate the playback model.
-Marker additions and replacements notify NSDocument and stay in memory until Save.
+Marker additions and replacements register undo actions with the document's
+environment UndoManager. DocumentGroup manages saving and autosaving using
+SwiftUI's standard document commands.
 Markers are auxiliary information without strict conflict detection. A coordinated
 save atomically writes individual marker files, then reads the disk contents under
-the same coordination and updates the document's observable marker list. Disk-only
+the same coordination. The Writer uses the coordinated staging package supplied
+by DocumentGroup and does not start a nested file-coordination operation.
+Subsequent reader snapshots update the observable marker
+list while preserving edits made since the previous snapshot. Disk-only
 markers and unknown files remain intact; media and required metadata are untouched.
 There is no baseline comparison, whole-directory replacement, or rollback. A failed
 write or reread preserves the document's edits and change state for retry, even if
@@ -105,16 +119,14 @@ some files were already written. Timestamp identity uses millisecond precision a
 reuses the first existing filename in filename order. Other same-time files remain
 untouched. Existing empty notes can be saved; new empty notes are rejected.
 Deletion requires a separate confirmation and immediately removes the file before
-updating memory. Missing files count as deleted. Deleting does not add a save change
-count or clear pending edits, and choosing Don't Save on close cannot restore deleted
-markers. Marker Undo/Redo is not provided. Active recordings reject writes.
-Recording documents support explicit Save without autosave or versions. Standard
-UI validation disables Revert, Save As, Duplicate, Move, and Rename; their inherited
-implementations are not overridden.
-The save hook rejects operations other than saving markers to the current package.
-Closing uses AppKit’s save/discard/
-cancel confirmation before playback stops. PaneWindow retains existing pane state
-keys; document and window restoration use AppKit’s standard document path.
+updating memory. Missing files count as deleted. Deletion does not clear pending
+edits and cannot be undone. Active recordings reject writes.
+The reader and writer perform URL-based I/O off the main actor. The writer
+requires an existing valid recording package at its destination. DocumentGroup
+prepares and replaces the staging package; the writer updates only marker files.
+The applet Commands do not replace the standard Close, Save, or related document commands.
+SwiftUI owns window closing, document presentation, and restoration. Playback
+stops when the Document is released; UI disappearance alone does not stop it.
 
 Workspace Save and Revert use AppKit's lifecycle and change-count tracking.
 Autosaving and version preservation are disabled. Definition and preferences
@@ -187,18 +199,19 @@ with their existing bundle copy destinations preserved.
 Record Player panes and the playback model do not cache the document location.
 The model uses the shared weak DocumentReference to read fileURL at the start of
 an asset load. Existing playback resources remain alive across external moves;
-subsequent canvas loads use the current document URL. AppKit manages document
+subsequent canvas loads use the current document URL. DocumentGroup manages document
 access, without a separate security-scope lifetime or application move observer.
 Marker identity is a package-relative filename, never an absolute URL. Save
-writes the in-memory snapshot at the URL supplied by AppKit, then synchronizes
-from disk without comparing a baseline and without deleting unknown files. Access failures preserve
+writes the in-memory snapshot at the URL supplied to the DocumentWriter without
+deleting unknown files. Reader snapshots synchronize external changes while preserving
+current edits. Access failures preserve
 pending marker edits and are reported through the existing error paths.
 
 RecordPlayerDocument is observable and is the sole owner of marker contents.
-Player panes observe its markers through the weak document environment; playback
+Player panes observe its markers through an explicitly supplied weak Document reference; playback
 models contain no marker copies or editing callbacks. Marker edits enter through
-the document methods, which maintain AppKit change counts separately from
-Observation notifications. Lifecycle bookkeeping is excluded from Observation.
+the document methods, which register marker editing with the UndoManager supplied
+by DocumentGroup. Lifecycle bookkeeping is excluded from Observation.
 Missing documents disable marker actions. Save synchronization and immediate
 deletion clear selections whose marker filenames no longer exist.
 

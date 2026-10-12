@@ -17,7 +17,7 @@ Editor** for building user-defined Programs.
 
 ## Vision Programmer
 
-Open **File → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
+Open **LDTX → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
 containing one subfolder per class, set the maximum iteration count (25 by default),
 then select **Start training**. Training uses Image Feature Print V2 with aspect-ratio-preserving
 scale-to-fit, no augmentation, and a fixed 95% training / 5% validation split using

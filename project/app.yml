@@ -82,7 +82,7 @@ targets:
     type: framework
     platform: macOS
     sources:
-      - Sources/LDTXSettingsApplet
+      - Sources/Applets/Settings
     dependencies:
       - target: LDTXProgramRuntime
       - target: LDTXWorkspaceAppletModel

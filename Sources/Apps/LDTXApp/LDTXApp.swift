@@ -14,7 +14,6 @@ import SwiftUI
 @MainActor
 struct LDTXApp: App {
   init() {
-    _ = NSDocumentController.shared
     if let bundleIdentifier = Bundle.main.bundleIdentifier,
       let directory = FileManager.default.urls(
         for: .applicationSupportDirectory, in: .userDomainMask
@@ -26,14 +25,17 @@ struct LDTXApp: App {
   }
 
   var body: some Scene {
-    WorkspaceScene()
-    RecordPlayerScene()
-    SettingsScene()
-      .defaultLaunchBehavior(.suppressed)
-    VisionProgrammerScene()
-      .defaultLaunchBehavior(.suppressed)
-      .commands {
-        AppCommands()
-      }
+    Group {
+      RecordPlayerScene()
+      WorkspaceScene()
+      SettingsScene()
+        .defaultLaunchBehavior(.suppressed)
+      VisionProgrammerScene()
+        .defaultLaunchBehavior(.suppressed)
+    }
+    .commands {
+      VisionProgrammerCommands()
+      RecordPlayerCommands()
+    }
   }
 }

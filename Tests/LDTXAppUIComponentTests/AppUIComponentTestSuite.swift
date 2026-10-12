@@ -25,8 +25,6 @@ final class UIComponentDocumentController: NSDocumentController {
   override func documentClass(forType typeName: String) -> AnyClass? {
     switch typeName {
     case "tokyo.kaito.ldtx.workspace": WorkspaceDocument.self
-    case RecordPlayerDocument.typeName, RecordingPackageInfo.legacyTypeIdentifier:
-      RecordPlayerDocument.self
     default: super.documentClass(forType: typeName)
     }
   }
@@ -34,7 +32,6 @@ final class UIComponentDocumentController: NSDocumentController {
   override func typeForContents(of url: URL) throws -> String {
     switch url.pathExtension {
     case "ldtxworkspace": "tokyo.kaito.ldtx.workspace"
-    case "ldtxrecord": RecordPlayerDocument.typeName
     default: try super.typeForContents(of: url)
     }
   }

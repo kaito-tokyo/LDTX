@@ -32,24 +32,15 @@ SPDX-License-Identifier: Apache-2.0
 			</array>
 		</dict>
 		<dict>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>ldtxrecord</string>
-			</array>
 			<key>CFBundleTypeName</key>
-			<string>LDTX Recording</string>
+			<string>tokyo.kaito.ldtx.record</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
-			<key>NSDocumentClass</key>
-			<string>RecordPlayerDocument</string>
 			<key>LSHandlerRank</key>
 			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
-			<key>LSTypeIsPackage</key>
-			<true/>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>tokyo.kaito.ldtx.record</string>
-				<string>tokyo.kaito.ldtx.recording</string>
 			</array>
 		</dict>
 		</array>

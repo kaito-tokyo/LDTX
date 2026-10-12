@@ -28,6 +28,7 @@ public struct LDTXRecordPlayerView: View {
   @State private var isInspectorPresented = true
   @State private var selectedFeature: PlayerFeature? = .markers
   private let requestClose: () -> Void
+  @Environment(\.undoManager) private var undoManager
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
   @State private var markerNote = ""
@@ -210,7 +211,8 @@ public struct LDTXRecordPlayerView: View {
 
     guard let document else { return }
     do {
-      try document.createMarker(note: markerNote, at: pendingMarkerTime ?? player.currentTime())
+      try document.createMarker(
+        note: markerNote, at: pendingMarkerTime ?? player.currentTime(), undoManager: undoManager)
     } catch {
       presentMarkerFileError(title: "Marker Could Not Be Added", error: error)
       return

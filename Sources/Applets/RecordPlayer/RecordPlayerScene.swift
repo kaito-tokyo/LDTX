@@ -8,10 +8,23 @@ public struct RecordPlayerScene: Scene {
   public init() {}
 
   public var body: some Scene {
-    documentScene.commands { RecordPlayerCommands() }
+    DocumentGroup(allowCreating: false) { (document: RecordPlayerDocument) in
+      RecordPlayerDocumentContent(document: document)
+    } makeDocument: { configuration, _ in
+      RecordPlayerDocument(configuration: configuration)
+    }
+    .defaultSize(width: 960, height: 600)
+    .windowToolbarStyle(.unified)
   }
+}
 
-  @SceneBuilder private var documentScene: some Scene {}
+private struct RecordPlayerDocumentContent: View {
+  let document: RecordPlayerDocument
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    LDTXRecordPlayerView(model: document.model, document: document, requestClose: { dismiss() })
+  }
 }
 
 private struct RecordPlayerInspectorKey: FocusedValueKey {
@@ -25,10 +38,12 @@ extension FocusedValues {
   }
 }
 
-private struct RecordPlayerCommands: Commands {
+public struct RecordPlayerCommands: Commands {
   @FocusedBinding(\.recordPlayerInspector) private var isInspectorPresented
 
-  var body: some Commands {
+  public init() {}
+
+  public var body: some Commands {
     CommandGroup(after: .sidebar) {
       Button("Toggle Inspector") { isInspectorPresented?.toggle() }
         .disabled(isInspectorPresented == nil)

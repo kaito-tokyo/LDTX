@@ -138,42 +138,47 @@ public struct RecordingMarkerStore: Sendable {
     _ snapshot: [RecordingMarker], filePresenter: (any NSFilePresenter)? = nil
   ) throws -> [RecordingMarker] {
     try coordinatedWrite(filePresenter: filePresenter) { store in
-      let directory = try store.markerDirectory(create: true)
-      let manager = FileManager.default
-      var names: [String: String] = [:]
-      for url in try manager.contentsOfDirectory(
-        at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
-      ).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true,
-          url.pathExtension.lowercased() == "txt",
-          let time = Self.time(fromMarkerFileName: url.lastPathComponent)
-        else { continue }
-        let key = try Self.fileName(for: time)
-        if names[key] == nil { names[key] = url.lastPathComponent }
-      }
-      var writtenTimes = Set<String>()
-      for marker in snapshot.sorted(by: { $0.fileName < $1.fileName }) {
-        try Self.validateFileName(marker.fileName)
-        let key = try Self.fileName(for: marker.time)
-        guard let storedTime = Self.time(fromMarkerFileName: marker.fileName),
-          try Self.fileName(for: storedTime) == key
-        else { throw RecordingMarkerError.invalidMarkerFile }
-        guard writtenTimes.insert(key).inserted else { continue }
-        let name = names[key] ?? marker.fileName
-        names[key] = name
-        let target = directory.appendingPathComponent(name)
-        if manager.fileExists(atPath: target.path) {
-          let values = try target.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-          guard values.isRegularFile == true, values.isSymbolicLink != true else {
-            throw RecordingMarkerError.invalidMarkerFile
-          }
-        }
-        let contents = marker.note.hasSuffix("\n") ? marker.note : marker.note + "\n"
-        try Data(contents.utf8).write(to: target, options: .atomic)
-      }
-      return try store.markers()
+      try store.saveWithinCoordinatedAccess(snapshot)
     }
+  }
+
+  /// The caller must already hold coordinated write access to the recording.
+  func saveWithinCoordinatedAccess(_ snapshot: [RecordingMarker]) throws -> [RecordingMarker] {
+    let directory = try markerDirectory(create: true)
+    let manager = FileManager.default
+    var names: [String: String] = [:]
+    for url in try manager.contentsOfDirectory(
+      at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+    ).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+      let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+      guard values.isRegularFile == true, values.isSymbolicLink != true,
+        url.pathExtension.lowercased() == "txt",
+        let time = Self.time(fromMarkerFileName: url.lastPathComponent)
+      else { continue }
+      let key = try Self.fileName(for: time)
+      if names[key] == nil { names[key] = url.lastPathComponent }
+    }
+    var writtenTimes = Set<String>()
+    for marker in snapshot.sorted(by: { $0.fileName < $1.fileName }) {
+      try Self.validateFileName(marker.fileName)
+      let key = try Self.fileName(for: marker.time)
+      guard let storedTime = Self.time(fromMarkerFileName: marker.fileName),
+        try Self.fileName(for: storedTime) == key
+      else { throw RecordingMarkerError.invalidMarkerFile }
+      guard writtenTimes.insert(key).inserted else { continue }
+      let name = names[key] ?? marker.fileName
+      names[key] = name
+      let target = directory.appendingPathComponent(name)
+      if manager.fileExists(atPath: target.path) {
+        let values = try target.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else {
+          throw RecordingMarkerError.invalidMarkerFile
+        }
+      }
+      let contents = marker.note.hasSuffix("\n") ? marker.note : marker.note + "\n"
+      try Data(contents.utf8).write(to: target, options: .atomic)
+    }
+    return try markers()
   }
 
   private func markerDirectory(create: Bool) throws -> URL {

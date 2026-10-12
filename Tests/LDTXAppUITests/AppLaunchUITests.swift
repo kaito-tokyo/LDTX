@@ -2,12 +2,47 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import XCTest
+import LDTXRecordBundleFormat
 
 @MainActor
 final class AppLaunchUITests: XCTestCase {
+  func testRecordingOpensThroughDocumentGroup() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension("ldtxrecord")
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: url) }
+    try RecordingPackageInfo.data(
+      identifier: "documentgroup-ui-test", mainMediaFile: "main.mp4", audioTracks: [], formatVersion: 2
+    ).write(to: url.appendingPathComponent(RecordingPackageInfo.fileName))
+    try Data().write(to: url.appendingPathComponent("main.mp4"))
+    try Data().write(to: url.appendingPathComponent("manifest.mpd"))
+
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
+    ]
+    app.launch()
+    defer { app.terminate() }
+    XCTAssertTrue(app.menuBars.menuBarItems["File"].waitForExistence(timeout: 15))
+    app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+    app.typeKey("o", modifierFlags: .command)
+    let open = app.dialogs.firstMatch
+    XCTAssertTrue(open.waitForExistence(timeout: 5))
+    app.typeKey("g", modifierFlags: [.command, .shift])
+    app.typeText(url.path)
+    app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+    open.buttons["Open"].click()
+    // Valid package metadata reaches the player; deliberately invalid media uses its SwiftUI alert.
+    XCTAssertTrue(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 10))
+    app.buttons["OK"].firstMatch.click()
+    XCTAssertFalse(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 2))
+  }
+
   func testApplicationLaunchesWithFileActions() {
     let app = XCUIApplication()
-    app.launchArguments = ["-ApplePersistenceIgnoreState", "YES"]
+    app.launchArguments = [
+      "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
+    ]
     app.launch()
     defer { app.terminate() }
     let file = app.menuBars.menuBarItems["File"]
@@ -16,8 +51,10 @@ final class AppLaunchUITests: XCTestCase {
     file.click()
     XCTAssertTrue(app.menuItems["New Workspace"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.menuItems["New Workspace"].isEnabled)
-    XCTAssertTrue(app.menuItems["Open File…"].exists)
-    XCTAssertTrue(app.menuItems["Open File…"].isEnabled)
+    XCTAssertTrue(app.menuItems["Open…"].exists)
+    XCTAssertTrue(app.menuItems["Open…"].isEnabled)
+    app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+    app.menuBars.menuBarItems["LDTX"].click()
     let programmer = app.menuItems["Vision Programmer…"]
     XCTAssertTrue(programmer.isEnabled)
     programmer.click()
