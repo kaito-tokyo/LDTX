@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
 import Combine
+import Foundation
 import LDTXYouTube
 import LDTXYouTubeAuth
-import SwiftUI
 
 @MainActor
 protocol SettingsAccountProviding: ObservableObject {
@@ -254,43 +253,5 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
   private static func redactedChannelID(_ channelID: String) -> String {
     guard channelID.count > 8 else { return channelID }
     return "\(channelID.prefix(8))..."
-  }
-}
-
-public final class SettingsApplet: NSWindowController, NSWindowDelegate {
-  public static func open(
-    completionHandler: @escaping (NSWindow?, (any Error)?) -> Void
-  ) {
-    let applet = SettingsApplet()
-    applet.showWindow(nil)
-    applet.window?.makeKeyAndOrderFront(nil)
-    completionHandler(applet.window, nil)
-  }
-
-  private let account: SettingsAccountModel
-  private let monitorSettings = MonitorDeviceSettingsModel()
-
-  public init() {
-    let authorizationService = SettingsAuthorizationServiceFactory.make()
-    account = SettingsAccountModel(authorizationService: authorizationService)
-    let content = SettingsContent(account: account, monitorSettings: monitorSettings)
-    let window = NSWindow(contentViewController: NSHostingController(rootView: content))
-    window.title = "Settings"
-    window.setContentSize(NSSize(width: 600, height: 480))
-    window.center()
-    window.isReleasedWhenClosed = false
-    super.init(window: window)
-    window.delegate = self
-    monitorSettings.reportError = { [weak self] error in
-      guard let self, let window = self.window, window.isVisible else { return }
-      presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
-    }
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  public func windowWillClose(_ notification: Notification) {
-    account.cancelAuthorization()
   }
 }

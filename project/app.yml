@@ -21,6 +21,7 @@ targets:
     sources:
       - Sources/Applets/RecordPlayer
     dependencies:
+      - sdk: AVKit.framework
       - target: LDTXAppletSupport
       - target: LDTXRecording
       - target: LDTXRecordBundleFormat

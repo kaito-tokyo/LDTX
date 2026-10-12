@@ -4,13 +4,10 @@
 
 @preconcurrency import AVFoundation
 import AVKit
-import AppKit
-import LDTXAppletSupport
 import LDTXRecordBundleFormat
 import LDTXRecording
 import OSLog
 import Observation
-import QuartzCore
 import SwiftUI
 
 private let recordingPreviewLogger = Logger(
@@ -21,59 +18,79 @@ private let recordingPreviewLogger = Logger(
 public typealias LDTXRecordPlayerAssetLoader =
   @MainActor @Sendable (URL, RecordingCanvas?) async throws -> AVAsset
 
-public enum RecordingPane { case sidebar, content, inspector }
-
 public struct LDTXRecordPlayerView: View {
-  private var displayedPane: RecordingPane = .content
-  public func pane(_ pane: RecordingPane) -> Self {
-    var result = self
-    result.displayedPane = pane
-    return result
-  }
   private weak var document: RecordPlayerDocument?
   private var markers: [RecordingMarker] { document?.markers ?? [] }
   private var canModifyMarkers: Bool { document?.canModifyMarkers == true }
   @State private var pendingMarkerDeletion: RecordingMarker?
-  @State private var model: LDTXRecordPlayerModel
+  @Bindable private var model: LDTXRecordPlayerModel
+  @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
+  @State private var isInspectorPresented = true
+  @State private var selectedFeature: PlayerFeature? = .markers
+  private let requestClose: () -> Void
   @State private var pendingMarkerTime: CMTime?
   @State private var pendingTimecodeText = ""
   @State private var markerNote = ""
   @State private var markerError: String?
-  @Bindable private var presentation: RecordingPresentationState
-  private var selectedFeature: PlayerFeature? {
-    get { presentation.selectedFeature }
-    nonmutating set { presentation.selectedFeature = newValue }
-  }
   @State private var selectedMarkerID: String?
   @FocusState private var focusedMarkerField: MarkerField?
 
   public var body: some View {
-    paneContent.frame(minHeight: 360)
+    NavigationSplitView(columnVisibility: $columnVisibility) {
+      featureSidebar
+        .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+    } detail: {
+      playerContent
+        .frame(minWidth: 400, minHeight: 360)
+    }
+      .inspector(isPresented: $isInspectorPresented) {
+        featureDetail
+          .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
+      }
+      .toolbar {
+        ToolbarItem(placement: .primaryAction) {
+          Button {
+            isInspectorPresented.toggle()
+          } label: {
+            Label("Toggle Inspector", systemImage: "sidebar.right")
+          }
+        }
+      }
+      .focusedSceneValue(\.recordPlayerInspector, $isInspectorPresented)
+      .task { model.start() }
+      .onChange(of: model.shouldClose, initial: true) { _, shouldClose in
+        if shouldClose { requestClose() }
+      }
+      .alert(
+        model.alert?.title ?? "Error",
+        isPresented: Binding(
+          get: { model.alert != nil },
+          set: { if !$0 { model.alert = nil } }),
+        presenting: model.alert
+      ) { pending in
+        Button("OK") {
+          model.alert = nil
+          if pending.closeAfterDismissal { requestClose() }
+        }
+      } message: { pending in
+        Text(pending.message)
+      }
       .onChange(of: markers.map(\.fileName)) { _, names in
         if let selectedMarkerID, !names.contains(selectedMarkerID) { self.selectedMarkerID = nil }
       }
   }
 
   init(
-    model: LDTXRecordPlayerModel, presentation: RecordingPresentationState, pane: RecordingPane,
-    document: RecordPlayerDocument? = nil
+    model: LDTXRecordPlayerModel, document: RecordPlayerDocument,
+    requestClose: @escaping () -> Void
   ) {
     self.document = document
-    self.presentation = presentation
-    _model = State(initialValue: model)
-    self.displayedPane = pane
-  }
-
-  @ViewBuilder private var paneContent: some View {
-    switch displayedPane {
-    case .sidebar: featureSidebar
-    case .content: playerContent
-    case .inspector: featureDetail
-    }
+    self.model = model
+    self.requestClose = requestClose
   }
 
   private var featureSidebar: some View {
-    List(selection: $presentation.selectedFeature) {
+    List(selection: $selectedFeature) {
       Label("Markers", systemImage: "bookmark")
         .tag(PlayerFeature.markers)
     }
@@ -97,11 +114,17 @@ public struct LDTXRecordPlayerView: View {
         }
       }
       ZStack {
-        LDTXPlaybackPane(
-          player: model.player,
-          durationSeconds: model.durationSeconds,
-          seekRequest: model.playbackSeekRequest
-        )
+        VideoPlayer(player: model.player)
+          .overlay(alignment: .topLeading) {
+            TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+              Text(Self.displayTimecode(model.player?.currentTime() ?? .zero) ?? "00:00:00.000")
+                .font(.caption.monospacedDigit())
+                .padding(4)
+                .background(.black.opacity(0.6), in: .rect(cornerRadius: 4))
+                .foregroundStyle(.white)
+                .padding(8)
+            }
+          }
 
         if model.isLoading {
           ProgressView("Loading Recording…")
@@ -357,446 +380,11 @@ public struct LDTXRecordPlayerView: View {
 
 }
 
-struct LDTXPlaybackSeekRequest: Identifiable {
-  let id = UUID()
-  let time: CMTime
-}
-
-private struct LDTXPlaybackPane: NSViewControllerRepresentable {
-  let player: AVPlayer?
-  let durationSeconds: Double
-  let seekRequest: LDTXPlaybackSeekRequest?
-
-  func makeNSViewController(context: Context) -> LDTXPlaybackViewController {
-    LDTXPlaybackViewController()
-  }
-
-  func updateNSViewController(
-    _ viewController: LDTXPlaybackViewController,
-    context: Context
-  ) {
-    viewController.update(
-      player: player,
-      durationSeconds: durationSeconds,
-      seekRequest: seekRequest
-    )
-  }
-
-  static func dismantleNSViewController(
-    _ viewController: LDTXPlaybackViewController,
-    coordinator: Void
-  ) {
-    viewController.stop()
-  }
-}
-
-@MainActor
-private final class LDTXPlaybackViewController: NSViewController {
-  private let playerView = LDTXFocusablePlayerView()
-  private let timecodeLabel = NSTextField(labelWithString: "00:00:00.000")
-  private let playPauseButton = NSButton()
-  private let scrubber = LDTXPlaybackScrubber()
-  private var player: AVPlayer?
-  private var timeControlStatusObservation: NSKeyValueObservation?
-  private var durationSeconds = 0.0
-  private var displayLink: CADisplayLink?
-  private var resumesPlaybackAfterScrubbing = false
-  private var isScrubbing = false
-  private var requestedPreviewSeekTime: CMTime?
-  private var isPreviewSeekInFlight = false
-  private var seekGeneration = 0
-  private var lastHandledSeekRequestID: UUID?
-
-  override func loadView() {
-    let rootView = NSView()
-
-    configurePlayerView()
-    let playbackBar = makePlaybackBar()
-
-    for subview in [playerView, playbackBar] {
-      subview.translatesAutoresizingMaskIntoConstraints = false
-      rootView.addSubview(subview)
-    }
-    NSLayoutConstraint.activate([
-      playerView.topAnchor.constraint(equalTo: rootView.topAnchor),
-      playerView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
-      playerView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-      playerView.bottomAnchor.constraint(equalTo: playbackBar.topAnchor),
-      playbackBar.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
-      playbackBar.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-      playbackBar.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
-    ])
-    view = rootView
-  }
-
-  func update(
-    player: AVPlayer?,
-    durationSeconds: Double,
-    seekRequest: LDTXPlaybackSeekRequest?
-  ) {
-    self.durationSeconds = max(durationSeconds, 0)
-    scrubber.maxValue = max(self.durationSeconds, 0.001)
-    scrubber.isEnabled = player != nil && self.durationSeconds > 0
-    if self.player !== player {
-      timeControlStatusObservation = nil
-      stopDisplayLink()
-      self.player = player
-      playerView.player = player
-      scrubber.doubleValue = Self.validSeconds(player?.currentTime() ?? .zero)
-      updateTimecode(scrubber.doubleValue, includesMilliseconds: true)
-      updatePlayPauseButton()
-      if let player {
-        startDisplayLink()
-        observeTimeControlStatus(of: player)
-      }
-    }
-    if let seekRequest, player != nil, seekRequest.id != lastHandledSeekRequestID {
-      lastHandledSeekRequestID = seekRequest.id
-      seek(to: seekRequest.time)
-    }
-  }
-
-  func stop() {
-    seekGeneration += 1
-    requestedPreviewSeekTime = nil
-    isPreviewSeekInFlight = false
-    stopDisplayLink()
-    timeControlStatusObservation = nil
-    playerView.player = nil
-    player = nil
-    lastHandledSeekRequestID = nil
-  }
-
-  private func seek(to time: CMTime) {
-    guard let player else { return }
-    seekGeneration += 1
-    let generation = seekGeneration
-    requestedPreviewSeekTime = nil
-    isPreviewSeekInFlight = false
-    player.currentItem?.cancelPendingSeeks()
-    player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) {
-      [weak self, weak player] finished in
-      Task { @MainActor in
-        guard let self, let player, finished, generation == self.seekGeneration else { return }
-        self.updatePlaybackPosition(player.currentTime())
-        self.updatePlayPauseButton(player: player)
-      }
-    }
-  }
-
-  private func configurePlayerView() {
-    playerView.controlsStyle = .none
-    playerView.videoGravity = .resizeAspect
-    playerView.allowsMagnification = true
-    playerView.allowsPictureInPicturePlayback = false
-    playerView.updatesNowPlayingInfoCenter = false
-    playerView.allowsVideoFrameAnalysis = false
-    let focusGestureRecognizer = NSClickGestureRecognizer(
-      target: self,
-      action: #selector(focusPlayerView)
-    )
-    focusGestureRecognizer.delaysPrimaryMouseButtonEvents = false
-    playerView.addGestureRecognizer(focusGestureRecognizer)
-
-    timecodeLabel.font = .monospacedDigitSystemFont(
-      ofSize: NSFont.smallSystemFontSize,
-      weight: .medium
-    )
-    timecodeLabel.textColor = .white
-    timecodeLabel.drawsBackground = true
-    timecodeLabel.backgroundColor = NSColor.black.withAlphaComponent(0.6)
-    timecodeLabel.isBordered = false
-    timecodeLabel.translatesAutoresizingMaskIntoConstraints = false
-    playerView.contentOverlayView?.addSubview(timecodeLabel)
-    if let overlayView = playerView.contentOverlayView {
-      NSLayoutConstraint.activate([
-        timecodeLabel.leadingAnchor.constraint(equalTo: overlayView.leadingAnchor, constant: 12),
-        timecodeLabel.bottomAnchor.constraint(equalTo: overlayView.bottomAnchor, constant: -12),
-      ])
-    }
-  }
-
-  @objc private func focusPlayerView() {
-    playerView.window?.makeFirstResponder(playerView)
-  }
-
-  private func makePlaybackBar() -> NSView {
-    playPauseButton.image = NSImage(
-      systemSymbolName: "play.fill",
-      accessibilityDescription: "Play"
-    )
-    playPauseButton.bezelStyle = .accessoryBarAction
-    playPauseButton.isBordered = false
-    playPauseButton.target = self
-    playPauseButton.action = #selector(togglePlayback)
-    playPauseButton.isEnabled = false
-
-    scrubber.minValue = 0
-    scrubber.maxValue = 0.001
-    scrubber.isContinuous = true
-    scrubber.isEnabled = false
-    scrubber.target = self
-    scrubber.action = #selector(scrubberChanged)
-    scrubber.beginTracking = { [weak self] in self?.beginScrubbing() }
-    scrubber.endTracking = { [weak self] in self?.endScrubbing() }
-
-    let stack = NSStackView(views: [playPauseButton, scrubber])
-    stack.orientation = .horizontal
-    stack.alignment = .centerY
-    stack.spacing = 10
-    stack.edgeInsets = NSEdgeInsets(top: 7, left: 12, bottom: 7, right: 12)
-
-    let bar = NSVisualEffectView()
-    bar.material = .headerView
-    bar.blendingMode = .withinWindow
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    bar.addSubview(stack)
-    NSLayoutConstraint.activate([
-      stack.topAnchor.constraint(equalTo: bar.topAnchor),
-      stack.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
-      stack.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
-      stack.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
-    ])
-    return bar
-  }
-
-  @objc private func togglePlayback() {
-    guard let player else { return }
-    if player.timeControlStatus == .playing {
-      player.pause()
-      updatePlaybackPosition(player.currentTime())
-      displayLink?.isPaused = true
-    } else {
-      if durationSeconds > 0, Self.validSeconds(player.currentTime()) >= durationSeconds {
-        player.seek(to: .zero)
-      }
-      player.play()
-      displayLink?.isPaused = false
-    }
-    updatePlayPauseButton()
-  }
-
-  @objc private func scrubberChanged() {
-    guard let player else { return }
-    let target = CMTime(seconds: scrubber.doubleValue, preferredTimescale: 600)
-    updateTimecode(scrubber.doubleValue, includesMilliseconds: true)
-    if isScrubbing {
-      requestedPreviewSeekTime = target
-    } else {
-      player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-    }
-  }
-
-  private func beginScrubbing() {
-    guard let player else { return }
-    seekGeneration += 1
-    isScrubbing = true
-    requestedPreviewSeekTime = nil
-    isPreviewSeekInFlight = false
-    resumesPlaybackAfterScrubbing = player.timeControlStatus == .playing
-    player.pause()
-    configureDisplayLinkForScrubbing()
-    displayLink?.isPaused = false
-    updatePlayPauseButton()
-  }
-
-  private func endScrubbing() {
-    guard let player else { return }
-    isScrubbing = false
-    requestedPreviewSeekTime = nil
-    isPreviewSeekInFlight = false
-    seekGeneration += 1
-    let generation = seekGeneration
-    displayLink?.isPaused = true
-    let shouldResume = resumesPlaybackAfterScrubbing
-    resumesPlaybackAfterScrubbing = false
-    let target = CMTime(seconds: scrubber.doubleValue, preferredTimescale: 600)
-    player.currentItem?.cancelPendingSeeks()
-    player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) {
-      [weak self, weak player] finished in
-      Task { @MainActor in
-        guard let self, let player, generation == self.seekGeneration else { return }
-        self.updatePlaybackPosition(target)
-        if finished, shouldResume {
-          player.play()
-          self.configureDisplayLinkForPlayback()
-          self.displayLink?.isPaused = false
-        }
-        self.updatePlayPauseButton()
-      }
-    }
-  }
-
-  private func startDisplayLink() {
-    let displayLink = playerView.displayLink(
-      target: self,
-      selector: #selector(displayLinkDidFire(_:))
-    )
-    configureDisplayLinkForPlayback(displayLink)
-    displayLink.add(to: .main, forMode: .common)
-    self.displayLink = displayLink
-  }
-
-  private func stopDisplayLink() {
-    displayLink?.invalidate()
-    displayLink = nil
-  }
-
-  private func observeTimeControlStatus(of player: AVPlayer) {
-    timeControlStatusObservation = player.observe(
-      \.timeControlStatus,
-      options: [.initial, .new]
-    ) { [weak self, weak player] _, _ in
-      Task { @MainActor in
-        guard let self, let player, self.player === player else { return }
-        self.updatePlayPauseButton(player: player)
-        if self.isScrubbing {
-          self.configureDisplayLinkForScrubbing()
-          self.displayLink?.isPaused = false
-          return
-        }
-        if player.timeControlStatus == .paused {
-          self.displayLink?.isPaused = true
-          self.updatePlaybackPosition(player.currentTime())
-        } else {
-          self.configureDisplayLinkForPlayback()
-          self.displayLink?.isPaused = false
-        }
-      }
-    }
-  }
-
-  @objc private func displayLinkDidFire(_ displayLink: CADisplayLink) {
-    guard let player else { return }
-    if isScrubbing {
-      performLatestPreviewSeekIfPossible(on: player)
-      return
-    }
-    if !scrubber.isActivelyTracking {
-      updatePlaybackPosition(player.currentTime())
-    }
-    updatePlayPauseButton(player: player)
-    if player.timeControlStatus == .paused {
-      displayLink.isPaused = true
-      updatePlaybackPosition(player.currentTime())
-    }
-  }
-
-  private func performLatestPreviewSeekIfPossible(on player: AVPlayer) {
-    guard !isPreviewSeekInFlight, let target = requestedPreviewSeekTime else { return }
-    requestedPreviewSeekTime = nil
-    isPreviewSeekInFlight = true
-    let generation = seekGeneration
-    let tolerance = CMTime(seconds: 0.08, preferredTimescale: 600)
-    player.seek(
-      to: target,
-      toleranceBefore: tolerance,
-      toleranceAfter: tolerance
-    ) { [weak self] _ in
-      Task { @MainActor in
-        guard let self, generation == self.seekGeneration else { return }
-        self.isPreviewSeekInFlight = false
-      }
-    }
-  }
-
-  private func configureDisplayLinkForPlayback(_ displayLink: CADisplayLink? = nil) {
-    (displayLink ?? self.displayLink)?.preferredFrameRateRange = CAFrameRateRange(
-      minimum: 30,
-      maximum: 60,
-      preferred: 60
-    )
-  }
-
-  private func configureDisplayLinkForScrubbing() {
-    displayLink?.preferredFrameRateRange = CAFrameRateRange(
-      minimum: 30,
-      maximum: 30,
-      preferred: 30
-    )
-  }
-
-  private func updateTimecode(_ seconds: Double, includesMilliseconds: Bool) {
-    let time = CMTime(seconds: seconds, preferredTimescale: 1_000)
-    let timecode =
-      (try? RecordingMarkerStore.displayTimecode(for: time)) ?? "00:00:00.000"
-    timecodeLabel.stringValue =
-      includesMilliseconds
-      ? timecode
-      : String(timecode.dropLast(4))
-  }
-
-  private func updatePlaybackPosition(_ time: CMTime) {
-    let seconds = Self.validSeconds(time)
-    scrubber.doubleValue = min(seconds, durationSeconds)
-    updateTimecode(
-      seconds,
-      includesMilliseconds: player?.timeControlStatus != .playing
-    )
-  }
-
-  private func updatePlayPauseButton(player: AVPlayer? = nil) {
-    let player = player ?? self.player
-    let isPlaying = player?.timeControlStatus == .playing
-    let symbolName = isPlaying ? "pause.fill" : "play.fill"
-    let description = isPlaying ? "Pause" : "Play"
-    playPauseButton.image = NSImage(
-      systemSymbolName: symbolName,
-      accessibilityDescription: description
-    )
-    playPauseButton.toolTip = description
-    playPauseButton.isEnabled = player != nil
-  }
-
-  private static func validSeconds(_ time: CMTime) -> Double {
-    let seconds = time.seconds
-    return seconds.isFinite && seconds >= 0 ? seconds : 0
-  }
-
-}
-
-@MainActor
-private final class LDTXFocusablePlayerView: AVPlayerView {
-  override var acceptsFirstResponder: Bool { true }
-}
-
-@MainActor
-private final class LDTXPlaybackScrubber: NSSlider {
-  var beginTracking: (() -> Void)?
-  var endTracking: (() -> Void)?
-  private(set) var isActivelyTracking = false
-
-  override func mouseDown(with event: NSEvent) {
-    isActivelyTracking = true
-    beginTracking?()
-    moveImmediatelyToClickIfNeeded(event)
-    super.mouseDown(with: event)
-    endTracking?()
-    isActivelyTracking = false
-  }
-
-  private func moveImmediatelyToClickIfNeeded(_ event: NSEvent) {
-    guard let sliderCell = cell as? NSSliderCell else { return }
-    let location = convert(event.locationInWindow, from: nil)
-    let knobRect = sliderCell.knobRect(flipped: isFlipped)
-    guard !knobRect.contains(location) else { return }
-
-    let barRect = sliderCell.barRect(flipped: isFlipped)
-    let lowerBound = barRect.minX + knobRect.width / 2
-    let upperBound = barRect.maxX - knobRect.width / 2
-    guard upperBound > lowerBound else { return }
-
-    let fraction = Swift.min(Swift.max((location.x - lowerBound) / (upperBound - lowerBound), 0), 1)
-    doubleValue = minValue + Double(fraction) * (maxValue - minValue)
-    sendAction(action, to: target)
-  }
-}
 
 @MainActor
 @Observable
 final class LDTXRecordPlayerModel {
   var player: AVPlayer?
-  var playbackSeekRequest: LDTXPlaybackSeekRequest?
   var alert: LDTXRecordPlayerAlert?
   var isLoading = true
   var shouldClose = false
@@ -808,6 +396,7 @@ final class LDTXRecordPlayerModel {
   private let scenarioFixture: RecordingPreviewScenarioFixture?
   private let assetLoader: LDTXRecordPlayerAssetLoader
   private var loadTask: Task<Void, Never>?
+  private var isStopped = false
 
   init(
     document: RecordPlayerDocument,
@@ -824,18 +413,19 @@ final class LDTXRecordPlayerModel {
   }
 
   func start() {
-    guard loadTask == nil else { return }
+    guard !isStopped, loadTask == nil else { return }
     loadTask = Task { await load() }
   }
 
   func stop() {
+    isStopped = true
     loadTask?.cancel()
     player?.pause()
     player = nil
   }
 
   func selectCanvas(_ canvas: RecordingCanvas) {
-    guard availableCanvases.contains(canvas) else { return }
+    guard !isStopped, availableCanvases.contains(canvas) else { return }
     let resumeTime = player?.currentTime() ?? .zero
     let resumesPlayback = player?.timeControlStatus == .playing
     player?.pause()
@@ -846,7 +436,8 @@ final class LDTXRecordPlayerModel {
   }
 
   func seek(to time: CMTime) {
-    playbackSeekRequest = LDTXPlaybackSeekRequest(time: time)
+    player?.currentItem?.cancelPendingSeeks()
+    player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
   }
 
   private func load(resumeAt: CMTime = .zero, startsPlaying: Bool = true) async {
@@ -934,10 +525,4 @@ struct LDTXRecordPlayerAlert: Identifiable {
   let title: String
   let message: String
   var closeAfterDismissal = false
-}
-
-@MainActor
-@Observable
-final class RecordingPresentationState {
-  var selectedFeature: LDTXRecordPlayerView.PlayerFeature? = .markers
 }

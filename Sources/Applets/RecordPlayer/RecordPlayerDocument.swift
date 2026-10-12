@@ -25,7 +25,7 @@ public final class RecordPlayerDocument: NSDocument {
   @ObservationIgnored
   var scenarioFixture: RecordingPreviewScenarioFixture?
   @ObservationIgnored
-  var assetLoader: LDTXRecordPlayerAssetLoader = RecordPlayerWindowController.loadAsset
+  var assetLoader: LDTXRecordPlayerAssetLoader = LDTXRecordPlayerModel.loadAsset
   @ObservationIgnored
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "RecordPlayerDocument")
 

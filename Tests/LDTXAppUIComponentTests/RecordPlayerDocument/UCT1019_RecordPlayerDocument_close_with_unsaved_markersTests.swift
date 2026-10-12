@@ -21,6 +21,38 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
+    @Test("Rebuilding the SwiftUI root preserves the Document-owned playback model")
+    func rebuildingRootPreservesPlayback() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try openRecordingTestDocument(url)
+      defer { document.close() }
+      var loadCount = 0
+      document.assetLoader = { _, _ in
+        loadCount += 1
+        return AVMutableComposition()
+      }
+      document.makeWindowControllers()
+      let model = try #require(document.model)
+      let window = try #require(document.windowControllers.first?.window)
+      window.orderFront(nil)
+      for _ in 0..<100 where model.player == nil {
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      let player = try #require(model.player)
+      #expect(window.toolbar != nil)
+      window.contentViewController = NSHostingController(
+        rootView: LDTXRecordPlayerView(model: model, document: document, requestClose: {}))
+      for _ in 0..<10 { await Task.yield() }
+      #expect(model.player === player)
+      #expect(loadCount == 1)
+      document.close()
+      model.start()
+      for _ in 0..<10 { await Task.yield() }
+      #expect(model.player == nil)
+      #expect(loadCount == 1)
+    }
+
     @Test("UCT-1019.1: Closing a clean recording stops playback")
     func closingCleanWindowClosesDocumentAndStopsPlayback() throws {
       let url = try makeRecordingTestPackage()

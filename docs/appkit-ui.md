@@ -5,22 +5,28 @@ SPDX-License-Identifier: Apache-2.0
 
 # Application and pane ownership
 
-LDTX enters through a single NSApplication and application delegate. Workspace
-and recording files are NSDocument instances managed by the shared
+LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
+`WorkspaceScene`, `RecordPlayerScene`, `SettingsScene`, and
+`VisionProgrammerScene`. App initialization configures authentication storage and
+initializes the shared NSDocumentController. No diagnostic sampling session is
+started by the App. No custom application delegate is
+installed. SwiftUI owns the application lifecycle, main menu, and Scene presentation.
+WorkspaceScene and RecordPlayerScene currently register commands without
+creating SwiftUI document windows; SettingsScene supplies the standard Settings
+scene and VisionProgrammerScene supplies its training windows. Vision Programmer
+is suppressed as a default launch window in LDTXApp, but opens normally in the
+standalone test app. DocumentGroup adoption is a separate migration.
+
+Workspace and recording files remain NSDocument instances managed by the shared
 NSDocumentController.shared. AppKit creates the standard controller and uses
 the first Editor type in Info.plist (Workspace) as the default New document type.
 AppKit initializes each document and selects
 the registered document class for each file type. File menu Open uses the shared
-document controller's standard action. New uses AppDelegate to create a hidden
+document controller's standard action. New uses WorkspaceScene to create a hidden
 document through the shared controller and requests standard document saving.
-AppDelegate handles `applicationShouldOpenUntitledFile(_:)` by presenting the
-standard Open panel only when the shared document controller has no documents,
-then returning `false` to suppress automatic untitled document creation.
-AppKit determines when to request this behavior during launch or reopening;
-launch and restoration notifications do not independently present the panel.
-Reopening uses AppKit's default window handling. No separate startup flags,
-restoration observer, or delayed presentation are needed.
-Cancelling the panel leaves the application running; File > New creates a
+File > Open presents the standard Open panel. The App does not present an Open
+panel from launch or restoration callbacks. Cancelling the panel leaves the
+application running; File > New creates a
 Workspace and immediately requests its first save location. Cancelling this save
 closes only the new document. A write failure is presented and also closes the
 new document, leaving any incomplete package on disk. Window controllers are
@@ -81,8 +87,13 @@ Inspector panes and an AppKit WorkspaceContentPane in the center.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument uses NSDocument.fileURL as the recording location and owns
-in-memory marker edits. It registers a
-RecordPlayerWindowController that composes the panes and owns playback lifetime.
+in-memory marker edits and the playback model. It registers a thin
+RecordPlayerWindowController that installs one NSHostingController and configures
+the window. The SwiftUI root uses NavigationSplitView, an inspector, a toolbar,
+and alerts. VideoPlayer supplies playback controls; marker navigation performs
+exact seeks through the Document-owned model. Inspector commands use the focused
+SwiftUI binding rather than finding a WindowController. Document closure stops
+playback; rebuilding the UI does not stop or recreate the playback model.
 Marker additions and replacements notify NSDocument and stay in memory until Save.
 Markers are auxiliary information without strict conflict detection. A coordinated
 save atomically writes individual marker files, then reads the disk contents under
@@ -284,13 +295,13 @@ Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Expli
 
 Physical assignments, VFX/OCR inputs, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
 
-Monitor output selection is application-wide and belongs to SettingsApplet's
+Monitor output selection is application-wide and belongs to SettingsScene's
 Audio tab. The current device is displayed separately from an initially
 unselected candidate list. Selecting a candidate rechecks availability and
 immediately persists it, without Apply or Cancel. System Default is an explicit candidate.
 Device changes refresh the candidates without
-rewriting the saved assignment. Discovery errors use the Settings Window's
-presentError path, with repeated failures suppressed until recovery. Workspace
+rewriting the saved assignment. Discovery errors use the Settings Scene's
+SwiftUI alert, with repeated failures suppressed until recovery. Workspace
 editors expose monitor volume and input routing, not output-device selection.
 Monitoring uses Workspace audio devices and their shared gains independently of
 Program selection. It remains available with no Programs; Program master volume
@@ -310,7 +321,7 @@ The NSHostingController uses `.preferredContentSize` sizing, allowing SwiftUI's
 ideal content size to size the popover without manually laying out or resizing
 the hosting view. See Apple's [Use SwiftUI with AppKit](https://developer.apple.com/videos/play/wwdc2022/10075/).
 
-SettingsApplet's Output tab configures the application-wide screenshots folder,
+SettingsScene's Output tab configures the application-wide screenshots folder,
 defaulting to ~/Pictures. Captures save there regardless of recording state and
 also save identical images in the active local recording's Screenshots folder.
 The toolbar folder action opens the global folder; the result counts images,

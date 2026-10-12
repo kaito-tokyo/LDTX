@@ -21,8 +21,11 @@ final class AppLaunchUITests: XCTestCase {
     let programmer = app.menuItems["Vision Programmer…"]
     XCTAssertTrue(programmer.isEnabled)
     programmer.click()
-    let window = app.windows["Vision Programmer"]
+    let window = app.windows["Scene Detector"]
     XCTAssertTrue(window.waitForExistence(timeout: 5))
+    app.typeKey(",", modifierFlags: .command)
+    XCTAssertTrue(app.windows["Audio"].waitForExistence(timeout: 5)
+      || app.windows["Account"].exists || app.windows["Output"].exists)
   }
 
 }
