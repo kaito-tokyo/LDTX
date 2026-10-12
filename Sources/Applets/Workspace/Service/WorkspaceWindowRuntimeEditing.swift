@@ -316,7 +316,7 @@ extension WorkspaceWindowRuntime {
         let usedByVision = definition.visions.contains {
           switch $0.vision {
           case .ocrVision(let vision): vision.videoComponentInternalID == id
-          case .createMlImageClassifierVision(let vision): vision.videoComponentInternalID == id
+          case .ldtxSceneDetectorVision(let vision): vision.videoComponentInternalID == id
           case nil: false
           }
         }

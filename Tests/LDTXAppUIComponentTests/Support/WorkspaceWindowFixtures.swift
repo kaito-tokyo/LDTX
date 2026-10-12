@@ -75,7 +75,7 @@ func makeWorkspaceTestWindow(
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
   func classify(
-    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String { "Test classification" }
 
   var failScreenshot = false

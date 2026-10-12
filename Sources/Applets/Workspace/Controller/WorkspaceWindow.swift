@@ -225,13 +225,13 @@ public final class WorkspaceWindow: NSWindow {
 
   }
 
-  private var inferenceRequest: (vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, url: URL)?
+  private var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)?
   {
-    guard storeService.inspectorSelector?.kind == .createMlImageClassifierVision,
+    guard storeService.inspectorSelector?.kind == .ldtxSceneDetectorVision,
       let id = storeService.inspectorSelector?.internalID,
       let vision = storeService.workspaceDefinition.visions.compactMap({
-        wrapper -> Ldtx_Workspace_V4_CreateMlImageClassifierVision? in
-        if case .createMlImageClassifierVision(let vision)? = wrapper.vision,
+        wrapper -> Ldtx_Workspace_V4_LdtxSceneDetectorVision? in
+        if case .ldtxSceneDetectorVision(let vision)? = wrapper.vision,
           vision.internalID == id
         {
           return vision

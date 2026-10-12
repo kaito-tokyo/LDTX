@@ -186,11 +186,11 @@ public struct WorkspaceSidebar: View {
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .ocrVision, internalID: ocrVision.internalID))
-              case .createMlImageClassifierVision(let classifierVision):
+              case .ldtxSceneDetectorVision(let classifierVision):
                 Label(classifierVision.displayName, systemImage: "eye")
                   .tag(
                     WorkspaceInspectorSelector(
-                      kind: .createMlImageClassifierVision,
+                      kind: .ldtxSceneDetectorVision,
                       internalID: classifierVision.internalID))
               case nil:
                 Label("(invalid)", systemImage: "questionmark.square.dashed")

@@ -87,69 +87,7 @@ public struct VisionProgrammerScene: Scene {
         Button {
           guard let datasetURL else { return }
           let iterations = iterations
-          Task {
-            let hasAccess = datasetURL.startAccessingSecurityScopedResource()
-            defer { if hasAccess { datasetURL.stopAccessingSecurityScopedResource() } }
-            modelFile = nil
-            error = nil
-            modelFileName = "\(datasetURL.lastPathComponent).mlpackage"
-            status = "Preparing training…"
-            isBusy = true
-            defer { isBusy = false }
-            do {
-              let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-                UUID().uuidString, isDirectory: true)
-              try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-              defer { try? FileManager.default.removeItem(at: directory) }
-              let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: datasetURL, type: .image)
-              var trainer = LDTXSceneDetectorTrainer(files: files)
-              trainer.maxIterations = iterations
-              let progress = Progress.discreteProgress(totalUnitCount: 100)
-              progress.isCancellable = false
-              progress.isPausable = false
-              progress.localizedDescription = String(localized: "Extracting features…")
-              let extraction = Progress(
-                totalUnitCount: Int64(files.count), parent: progress, pendingUnitCount: 70)
-              let fitting = Progress(totalUnitCount: -1, parent: progress, pendingUnitCount: 25)
-              let exporting = Progress(totalUnitCount: 1, parent: progress, pendingUnitCount: 5)
-              for child in [extraction, fitting, exporting] {
-                child.isCancellable = false
-                child.isPausable = false
-              }
-              trainingProgress = progress
-              isShowingTrainingSheet = true
-              let url = try await trainer.fit(to: directory.appendingPathComponent("SceneDetector.mlpackage", isDirectory: true)) {
-                event in
-                if event.origin.contains("ImageFeaturePrint") {
-                  extraction.completedUnitCount = min(
-                    extraction.totalUnitCount, extraction.completedUnitCount + 1)
-                } else {
-                  extraction.completedUnitCount = extraction.totalUnitCount
-                  progress.localizedDescription = String(localized: "Training classifier…")
-                  if let total = event.totalItemCount, total > 0 {
-                    fitting.totalUnitCount = Int64(total)
-                    fitting.completedUnitCount = Int64(min(total, max(0, event.itemCount)))
-                  }
-                }
-              }
-              extraction.completedUnitCount = extraction.totalUnitCount
-              if fitting.totalUnitCount <= 0 { fitting.totalUnitCount = 1 }
-              fitting.completedUnitCount = fitting.totalUnitCount
-              exporting.completedUnitCount = 1
-              progress.localizedDescription = String(localized: "Training completed.")
-              modelFile = try ModelFile(url: url)
-              status = "Training completed."
-              isShowingTrainingSheet = false
-            } catch {
-              status = "Training failed."
-              self.error = error
-              if isShowingTrainingSheet {
-                isShowingTrainingSheet = false
-              } else {
-                isShowingError = true
-              }
-            }
-          }
+          Task { await train(datasetURL: datasetURL, iterations: iterations) }
         } label: {
           Label("Start training", systemImage: "play.fill")
         }
@@ -189,6 +127,77 @@ public struct VisionProgrammerScene: Scene {
     .navigationTitle("Scene Detector")
   }
 
+  private func train(datasetURL: URL, iterations: Int) async {
+    let hasAccess = datasetURL.startAccessingSecurityScopedResource()
+    defer { if hasAccess { datasetURL.stopAccessingSecurityScopedResource() } }
+    modelFile = nil
+    error = nil
+    modelFileName = "\(datasetURL.lastPathComponent).mlpackage"
+    status = "Preparing training…"
+    isBusy = true
+    defer { isBusy = false }
+    do {
+      let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString, isDirectory: true)
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: datasetURL, type: .image)
+      let trainer = LDTXSceneDetectorTrainer(
+        files: files, maxIterations: iterations, cropAndScale: .scaleFit)
+      let progress = Progress.discreteProgress(totalUnitCount: 100)
+      progress.isCancellable = false
+      progress.isPausable = false
+      progress.localizedDescription = String(localized: "Extracting features…")
+      let extraction = Progress(
+        totalUnitCount: Int64(files.count), parent: progress, pendingUnitCount: 70)
+      let fitting = Progress(totalUnitCount: -1, parent: progress, pendingUnitCount: 25)
+      let exporting = Progress(totalUnitCount: 1, parent: progress, pendingUnitCount: 5)
+      for child in [extraction, fitting, exporting] {
+        child.isCancellable = false
+        child.isPausable = false
+      }
+
+      let eventHandler: EventHandler = { event in
+        if event.origin.contains("ImageFeaturePrint") {
+          progress.localizedDescription = String(localized: "Extracting features…")
+          extraction.completedUnitCount = min(
+            extraction.totalUnitCount, Int64(max(0, event.itemCount)))
+        } else {
+          extraction.completedUnitCount = extraction.totalUnitCount
+          progress.localizedDescription = String(localized: "Training classifier…")
+          if let total = event.totalItemCount, total > 0 {
+            fitting.totalUnitCount = Int64(total)
+            fitting.completedUnitCount = Int64(min(total, max(0, event.itemCount)))
+          } else {
+            fitting.totalUnitCount = -1
+          }
+        }
+      }
+
+      trainingProgress = progress
+      isShowingTrainingSheet = true
+      let url = try await trainer.fit(
+        to: directory.appendingPathComponent("SceneDetector.mlpackage", isDirectory: true),
+        eventHandler: eventHandler)
+      modelFile = try ModelFile(url: url)
+      extraction.completedUnitCount = extraction.totalUnitCount
+      if fitting.totalUnitCount <= 0 { fitting.totalUnitCount = 1 }
+      fitting.completedUnitCount = fitting.totalUnitCount
+      exporting.completedUnitCount = 1
+      progress.localizedDescription = String(localized: "Training completed.")
+      status = "Training completed."
+      isShowingTrainingSheet = false
+    } catch {
+      status = "Training failed."
+      self.error = error
+      if isShowingTrainingSheet {
+        isShowingTrainingSheet = false
+      } else {
+        isShowingError = true
+      }
+    }
+  }
+
   struct TrainingSheet: View {
     let progress: Progress
     var isBusy = true
@@ -213,7 +222,7 @@ public struct VisionProgrammerScene: Scene {
   }
 
   private struct ModelFile: FileDocument {
-    static let contentType = UTType(filenameExtension: "mlpackage")!
+    static let contentType = UTType(filenameExtension: "mlpackage", conformingTo: .package)!
     static var readableContentTypes: [UTType] { [contentType] }
     let wrapper: FileWrapper
 

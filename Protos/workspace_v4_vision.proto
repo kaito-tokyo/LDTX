@@ -13,8 +13,8 @@ message VisionWrapper {
   oneof vision {
     // The OCR Vision definition. Mutually exclusive with the other fields.
     OcrVision ocr_vision = 1;
-    // The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.
-    CreateMlImageClassifierVision create_ml_image_classifier_vision = 2;
+    // The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+    LdtxSceneDetectorVision ldtx_scene_detector_vision = 2;
   }
 }
 
@@ -73,8 +73,8 @@ message OcrVision {
   Rational32 minimum_text_height = 9;
 }
 
-// An image-analysis request that classifies an image using a Create ML model.
-message CreateMlImageClassifierVision {
+// An image-analysis request that detects a scene using an LDTX Scene Detector model.
+message LdtxSceneDetectorVision {
   // An LdtxInternalId for this entity.
   sfixed64 internal_id = 1 [default = 0];
   // The name of this Vision shown in the Workspace sidebar.
@@ -86,7 +86,7 @@ message CreateMlImageClassifierVision {
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
   repeated VisionTriggerWrapper triggers = 5;
-  // The saved model's basename, including the .mlmodel extension, without directories.
+  // The saved model's basename, including the .mlmodel or .mlpackage extension, without directories.
   // The model is stored at VisionModels/<this Vision's internal_id>/<model_file_name>
   // inside the Workspace bundle. Empty means no saved model is assigned.
   string model_file_name = 6;

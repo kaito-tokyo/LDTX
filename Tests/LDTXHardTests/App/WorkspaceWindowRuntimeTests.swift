@@ -509,7 +509,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let classifierID = source + 1
     try runtime.editDefinition {
       $0.visions.append(.with {
-        $0.createMlImageClassifierVision = .with {
+        $0.ldtxSceneDetectorVision = .with {
           $0.internalID = classifierID
           $0.displayName = "Classifier"
           $0.videoComponentInternalID = source

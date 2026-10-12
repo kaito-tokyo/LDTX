@@ -315,7 +315,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     for id: Int64 in [5, 7] {
       workspace.definition.visions.append(
         .with {
-          $0.createMlImageClassifierVision = .with {
+          $0.ldtxSceneDetectorVision = .with {
             $0.internalID = id
             $0.displayName = "Classifier \(id)"
             $0.videoComponentInternalID = 2
@@ -324,9 +324,9 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
     let prepared = try WorkspaceModelFiles.preparedForSaving(
       workspace, modelURLs: [5: source, 7: source])
-    #expect(workspace.definition.visions.last?.createMlImageClassifierVision.modelFileName == "")
+    #expect(workspace.definition.visions.last?.ldtxSceneDetectorVision.modelFileName == "")
     #expect(
-      prepared.definition.visions.last?.createMlImageClassifierVision.modelFileName
+      prepared.definition.visions.last?.ldtxSceneDetectorVision.modelFileName
         == "Original.mlmodel")
     #expect(prepared.models["5/Original.mlmodel"] == data)
     #expect(prepared.models["7/Original.mlmodel"] == data)
@@ -341,10 +341,51 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     try WorkspaceDocumentPackage.write(reloaded, to: bundle)
     #expect(try WorkspaceBundleReaderV4(at: bundle).read() == prepared)
     let cleared = try WorkspaceModelFiles.preparedForSaving(reloaded, modelURLs: [5: nil])
-    #expect(cleared.definition.visions[1].createMlImageClassifierVision.modelFileName == "")
+    #expect(cleared.definition.visions[1].ldtxSceneDetectorVision.modelFileName == "")
     #expect(
-      cleared.definition.visions[2].createMlImageClassifierVision.modelFileName
+      cleared.definition.visions[2].ldtxSceneDetectorVision.modelFileName
         == "Original.mlmodel")
+  }
+
+  @Test("Model packages preserve their tree through save and reload")
+  func savesExternalModelPackage() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Classifier.mlpackage", isDirectory: true)
+    let weights = source.appendingPathComponent("Data/weights/weights.bin")
+    try FileManager.default.createDirectory(at: weights.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("{}".utf8).write(to: source.appendingPathComponent("Manifest.json"))
+    try Data([1, 2, 3]).write(to: weights)
+    var workspace = makeWorkspace()
+    workspace.definition.visions.append(.with {
+      $0.ldtxSceneDetectorVision = .with {
+        $0.internalID = 5
+        $0.displayName = "Classifier"
+        $0.videoComponentInternalID = 2
+      }
+    })
+    let prepared = try WorkspaceModelFiles.preparedForSaving(workspace, modelURLs: [5: source])
+    #expect(prepared.definition.visions.last?.ldtxSceneDetectorVision.modelFileName == "Classifier.mlpackage")
+    let bundle = root.appendingPathComponent("Saved.ldtxworkspace")
+    try WorkspaceDocumentPackage.write(prepared, to: bundle, createsPackage: true)
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read() == prepared)
+    let saved = bundle.appendingPathComponent("VisionModels/5/Classifier.mlpackage")
+    #expect(try Data(contentsOf: saved.appendingPathComponent("Data/weights/weights.bin")) == Data([1, 2, 3]))
+    try FileManager.default.removeItem(at: weights)
+    try Data([4]).write(to: source.appendingPathComponent("replacement.bin"))
+    let replacement = try WorkspaceModelFiles.preparedForSaving(prepared, modelURLs: [5: source])
+    try WorkspaceDocumentPackage.write(replacement, to: bundle)
+    #expect(!FileManager.default.fileExists(atPath: saved.appendingPathComponent("Data/weights/weights.bin").path))
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read() == replacement)
+    let external = root.appendingPathComponent("outside.bin")
+    try Data([9]).write(to: external)
+    try FileManager.default.createSymbolicLink(at: source.appendingPathComponent("link.bin"), withDestinationURL: external)
+    #expect(throws: (any Error).self) { try WorkspaceModelFiles.importModel(at: source) }
+    let encoder = JSONEncoder()
+    workspace.models = ["5/Classifier.mlpackage": try encoder.encode([
+      "Manifest.json": Data("{}".utf8), "../outside.bin": Data([9]),
+    ])]
+    #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: bundle) }
   }
 
   @Test("Failed model imports preserve the saved reference and resources")
@@ -352,7 +393,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     var workspace = makeWorkspace()
     workspace.definition.visions.append(
       .with {
-        $0.createMlImageClassifierVision = .with {
+        $0.ldtxSceneDetectorVision = .with {
           $0.internalID = 5
           $0.videoComponentInternalID = 2
           $0.modelFileName = "Saved.mlmodel"
@@ -366,7 +407,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
     #expect(workspace == original)
     for name in ["../model.mlmodel", "/model.mlmodel", "folder/model.mlmodel"] {
-      workspace.definition.visions[1].createMlImageClassifierVision.modelFileName = name
+      workspace.definition.visions[1].ldtxSceneDetectorVision.modelFileName = name
       #expect(throws: (any Error).self) { try WorkspaceModelFiles.preparedForSaving(workspace) }
     }
   }

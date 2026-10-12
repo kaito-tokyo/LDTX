@@ -458,7 +458,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
 
 extension WorkspaceWindowController {
   public func classify(
-    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
     let model = try await VisionImageClassifierService.loadModel(
       at: modelURL, noCompile: storeService.isOutputActive)

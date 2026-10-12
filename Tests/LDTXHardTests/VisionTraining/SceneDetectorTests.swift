@@ -6,12 +6,28 @@ import CoreML
 import CreateMLComponents
 import Foundation
 import LDTXVisionTraining
+import LDTXVision
 import Synchronization
 import Testing
 import Vision
 
 @Suite("Scene Detector", .serialized)
 struct SceneDetectorIntegrationTestSuite {
+  @Test func cropAndScaleUsesCreatorDefinedMetadata() {
+    let cases: [(String, ImageCropAndScaleAction)] = [
+      ("centerCrop", .centerCrop), ("scaleFit", .scaleToFit), ("scaleFill", .scaleToFill),
+      ("scaleFitRotate90CCW", .scaleToFitPlus90CCWRotation),
+      ("scaleFillRotate90CCW", .scaleToFillPlus90CCWRotation),
+      ("", .centerCrop), ("unknown", .centerCrop),
+    ]
+    for (value, expected) in cases {
+      let information = VisionImageClassifierService.ModelInformation(
+        creatorDefined: ["tokyo.kaito.LDTX.cropAndScale": value])
+      #expect(information.cropAndScaleAction == expected)
+    }
+    #expect(VisionImageClassifierService.ModelInformation(creatorDefined: [:]).cropAndScaleAction == .centerCrop)
+  }
+
   @Test func readsClassFoldersAndExportsModel()
     async throws
   {
@@ -29,8 +45,7 @@ struct SceneDetectorIntegrationTestSuite {
       }
     }
     let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: directory, type: .image)
-    var trainer = LDTXSceneDetectorTrainer(files: files)
-    trainer.maxIterations = 10
+    let trainer = LDTXSceneDetectorTrainer(files: files, maxIterations: 10, cropAndScale: .scaleFit)
     let events = Mutex<[Event]>([])
     let savedURL = directory.appendingPathComponent("SceneDetector.mlpackage", isDirectory: true)
     let exportedURL = try await trainer.fit(to: savedURL) { event in
@@ -46,5 +61,26 @@ struct SceneDetectorIntegrationTestSuite {
       on: CIImage(contentsOf: directory.appendingPathComponent("red/0.png"))!)
     let classifications = observations.compactMap { $0 as? ClassificationObservation }
     #expect(classifications.first?.identifier == "red")
+    let caches = directory.appendingPathComponent("Caches", isDirectory: true)
+    let loaded = try await VisionImageClassifierService.loadModel(at: savedURL, cachesDirectory: caches)
+    #expect(loaded.modelDescription.predictedFeatureName != nil)
+    let metadata = loaded.modelDescription.metadata[.creatorDefinedKey] as? [String: String] ?? [:]
+    let service = try VisionImageClassifierService(model: loaded)
+    #expect(service.modelInformation.cropAndScaleAction
+      == VisionImageClassifierService.ModelInformation(creatorDefined: metadata).cropAndScaleAction)
+    #expect(service.modelInformation.inputWidth == 360)
+    #expect(service.modelInformation.inputHeight == 360)
+    _ = try await VisionImageClassifierService.loadModel(
+      at: savedURL, noCompile: true, cachesDirectory: caches)
+    let copied = directory.appendingPathComponent("Copied.mlpackage", isDirectory: true)
+    try FileManager.default.copyItem(at: savedURL, to: copied)
+    _ = try await VisionImageClassifierService.loadModel(at: copied, noCompile: true, cachesDirectory: caches)
+    try Data([1]).write(to: copied.appendingPathComponent("content-change.bin"))
+    await #expect(throws: (any Error).self) {
+      _ = try await VisionImageClassifierService.loadModel(at: copied, noCompile: true, cachesDirectory: caches)
+    }
+    let standalone = directory.appendingPathComponent("FeaturePrint.mlmodel")
+    try ImageFeaturePrint(revision: 2, cropAndScale: .scaleFit).export(to: standalone)
+    _ = try await VisionImageClassifierService.loadModel(at: standalone, cachesDirectory: caches)
   }
 }

@@ -6,7 +6,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
   public var displayName: String? {
     switch vision {
     case .ocrVision(let value): value.hasDisplayName ? value.displayName : nil
-    case .createMlImageClassifierVision(let value):
+    case .ldtxSceneDetectorVision(let value):
       value.hasDisplayName ? value.displayName : nil
     case nil: nil
     }
@@ -14,7 +14,7 @@ extension Ldtx_Workspace_V4_VisionWrapper {
   public var internalID: Int64? {
     switch vision {
     case .ocrVision(let value): value.hasInternalID ? value.internalID : nil
-    case .createMlImageClassifierVision(let value): value.hasInternalID ? value.internalID : nil
+    case .ldtxSceneDetectorVision(let value): value.hasInternalID ? value.internalID : nil
     case nil: nil
     }
   }
@@ -36,7 +36,7 @@ extension Ldtx_Workspace_V4_OcrVision {
   }
 }
 
-extension Ldtx_Workspace_V4_CreateMlImageClassifierVision {
+extension Ldtx_Workspace_V4_LdtxSceneDetectorVision {
   public var videoComponentInternalIDIfPresent: Int64? {
     get {
       guard hasVideoComponentInternalID, videoComponentInternalID != 0 else { return nil }

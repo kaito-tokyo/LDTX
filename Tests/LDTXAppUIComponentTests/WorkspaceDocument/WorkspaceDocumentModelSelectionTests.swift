@@ -36,7 +36,7 @@ extension AppUIComponentTestSuite {
       ]
       document.storeService.workspaceDefinition.visions = [
         .with {
-          $0.createMlImageClassifierVision = .with {
+          $0.ldtxSceneDetectorVision = .with {
             $0.internalID = 5
             $0.displayName = "Classifier"
             $0.videoComponentInternalID = 7
@@ -46,14 +46,14 @@ extension AppUIComponentTestSuite {
       document.storeService.modelURLs[5] = source
       #expect(document.isDocumentEdited)
       #expect(
-        document.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "")
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
       let savedURL = url.appendingPathComponent("VisionModels/5/Original.mlmodel")
       #expect(try Data(contentsOf: savedURL) == bytes)
       #expect(
-        document.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "Original.mlmodel")
       #expect(!document.storeService.modelURLs.keys.contains(5))
       #expect(!document.isDocumentEdited)
@@ -65,7 +65,7 @@ extension AppUIComponentTestSuite {
       } catch {}
       #expect(document.storeService.modelURLs[5] == .some(missing))
       #expect(
-        document.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "Original.mlmodel")
       #expect(try Data(contentsOf: savedURL) == bytes)
       #expect(document.isDocumentEdited)
@@ -74,7 +74,7 @@ extension AppUIComponentTestSuite {
       try reloaded.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
       #expect(reloaded.storeService.modelURLs.isEmpty)
       #expect(
-        reloaded.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        reloaded.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "Original.mlmodel")
     }
 
@@ -101,7 +101,7 @@ extension AppUIComponentTestSuite {
       ]
       document.storeService.workspaceDefinition.visions = [
         .with {
-          $0.createMlImageClassifierVision = .with {
+          $0.ldtxSceneDetectorVision = .with {
             $0.internalID = 5
             $0.displayName = "Classifier"
             $0.videoComponentInternalID = 7
@@ -129,16 +129,16 @@ extension AppUIComponentTestSuite {
       document.writeProbe.withLock { $0 = nil }
       #expect(document.storeService.modelURLs[5] == .some(second))
       #expect(
-        document.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "First.mlmodel")
       #expect(
         try WorkspaceBundleReaderV4(at: url).read().definition.visions[0]
-          .createMlImageClassifierVision.modelFileName == "First.mlmodel")
+          .ldtxSceneDetectorVision.modelFileName == "First.mlmodel")
       #expect(document.isDocumentEdited)
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       #expect(!document.storeService.modelURLs.keys.contains(5))
       #expect(
-        document.storeService.workspaceDefinition.visions[0].createMlImageClassifierVision
+        document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
           .modelFileName == "Second.mlmodel")
       #expect(!document.isDocumentEdited)
     }

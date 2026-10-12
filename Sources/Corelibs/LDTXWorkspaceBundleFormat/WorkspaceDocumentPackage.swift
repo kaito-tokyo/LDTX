@@ -47,7 +47,7 @@ public enum WorkspaceDocumentPackage {
         try WorkspaceModelFiles.validateDirectory(url.deletingLastPathComponent())
         try manager.createDirectory(
           at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: url, options: .atomic)
+        try WorkspaceModelFiles.writeModel(data, to: url)
       }
     }
     try definitionData.write(

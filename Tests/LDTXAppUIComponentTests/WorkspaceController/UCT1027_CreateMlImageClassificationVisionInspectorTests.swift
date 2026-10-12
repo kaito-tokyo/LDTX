@@ -13,7 +13,7 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1027: Create ML Image Classifier UI", .serialized)
   @MainActor
-  struct UCT1027CreateMlImageClassifierVisionIntegrationTestSuite {
+  struct UCT1027LdtxSceneDetectorVisionIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
     @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")
@@ -27,10 +27,10 @@ extension AppUIComponentTestSuite {
         }
       ]
       store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: 2, name: "Scene", componentID: 7)
       ]
-      store.inspectorSelector = .init(kind: .createMlImageClassifierVision, internalID: 2)
+      store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
       let dispatcher = ToolbarDispatcher()
       let window = makeWorkspaceTestWindow(storeService: store, dispatcher: dispatcher)
       defer { window.close() }
@@ -77,10 +77,10 @@ extension AppUIComponentTestSuite {
       let videoComponents = [
         configuredSource, WorkspaceResourceFactory.makeSolidColor(id: 8, name: "Fill"),
       ]
-      let vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision = .with {
+      let vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision = .with {
         $0.videoComponentInternalID = 7
       }
-      let inspector = CreateMlImageClassifierVisionInspector(
+      let inspector = LdtxSceneDetectorVisionInspector(
         videoComponents: videoComponents, inputSize: configuredSource.renderingSize,
         vision: .constant(vision),
         modelURL: .constant(nil), savedModelURL: nil)
@@ -97,15 +97,15 @@ extension AppUIComponentTestSuite {
     func immediateROIBindings() throws {
       let store = WorkspaceStoreService(definition: .init(), preferences: .init())
       store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: 2, name: "Scene", componentID: 1)
       ]
       let boundStore = Bindable(wrappedValue: store)
-      let binding = try #require(boundStore.createMlImageClassifierVision(internalID: 2))
+      let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
       binding.regionOfInterest.width.num.wrappedValue = 3
       binding.regionOfInterest.width.den.wrappedValue = 4
       #expect(
-        store.workspaceDefinition.visions[0].createMlImageClassifierVision.regionOfInterest.width
+        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.width
           .double
           == 0.75)
     }
@@ -127,9 +127,9 @@ extension AppUIComponentTestSuite {
       let id = try WorkspaceResourceAddition.add(
         sheet: .vision, draft: draft, devices: [], storeService: store)
       #expect(
-        store.inspectorSelector == .init(kind: .createMlImageClassifierVision, internalID: id))
+        store.inspectorSelector == .init(kind: .ldtxSceneDetectorVision, internalID: id))
       let boundStore = Bindable(wrappedValue: store)
-      let binding = try #require(boundStore.createMlImageClassifierVision(internalID: id))
+      let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: id))
       binding.wrappedValue.regionOfInterest = .with {
         $0.x.set(num: 2, den: 10)
         $0.y.set(num: 1, den: 10)
@@ -150,11 +150,11 @@ extension AppUIComponentTestSuite {
     func rejectInvalidRegionAndRemovedBinding() throws {
       let store = WorkspaceStoreService(definition: .init(), preferences: .init())
       store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: 2, name: "Scene", componentID: 1)
       ]
       let boundStore = Bindable(wrappedValue: store)
-      let binding = try #require(boundStore.createMlImageClassifierVision(internalID: 2))
+      let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
       let invalidRegion: Ldtx_Workspace_V4_VisionRegionOfInterest = .with {
         $0.x.set(num: 8, den: 10)
         $0.y.set(num: 0, den: 10)
@@ -169,7 +169,7 @@ extension AppUIComponentTestSuite {
       ]
       binding.wrappedValue.displayName = "Removed classifier"
       #expect(store.workspaceDefinition.visions.first?.ocrVision.displayName == "OCR")
-      #expect(boundStore.createMlImageClassifierVision(internalID: 2) == nil)
+      #expect(boundStore.ldtxSceneDetectorVision(internalID: 2) == nil)
     }
   }
 }

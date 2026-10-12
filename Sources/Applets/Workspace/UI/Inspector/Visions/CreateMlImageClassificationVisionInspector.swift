@@ -3,18 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXVision
 import SwiftUI
 
-struct CreateMlImageClassifierVisionInspector: View {
+struct LdtxSceneDetectorVisionInspector: View {
   let videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper]
   let inputSize: (width: UInt32, height: UInt32)?
-  @Binding var vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision
+  @Binding var vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision
   @Binding var modelURL: URL?
   let savedModelURL: URL?
   var inferenceResult: String? = nil
   var inferenceFailure: String? = nil
 
   @Environment(\.outputActive) var outputActive
+  @State private var modelInformation: VisionImageClassifierService.ModelInformation?
+  @State private var modelInformationFailure: String?
 
   var body: some View {
     Form {
@@ -30,6 +33,26 @@ struct CreateMlImageClassifierVisionInspector: View {
         TriggerEditor(triggers: $vision.triggers)
       }
       .disabled(outputActive)
+      if modelURL != nil {
+        Section("Model Information") {
+          if let modelInformation {
+            LabeledContent("Crop and Scale", value: String(localized: cropAndScaleLabel(modelInformation)))
+            if let width = modelInformation.inputWidth, let height = modelInformation.inputHeight {
+              LabeledContent("Model Input Size", value: "\(width) × \(height)")
+            }
+            if let author = modelInformation.author, !author.isEmpty {
+              LabeledContent("Author", value: author)
+            }
+            if let description = modelInformation.description, !description.isEmpty {
+              Text(description).textSelection(.enabled)
+            }
+          } else if let modelInformationFailure {
+            Text(modelInformationFailure).foregroundStyle(.secondary)
+          } else {
+            ProgressView("Loading model information…")
+          }
+        }
+      }
       Section("Region of Interest") {
         if let inputSize {
           RegionOfInterestEditor(inputSize: inputSize, roi: $vision.regionOfInterest)
@@ -47,6 +70,39 @@ struct CreateMlImageClassifierVisionInspector: View {
       }
     }
     .formStyle(.grouped)
+    .task(id: ModelInformationRequest(url: modelURL, noCompile: outputActive)) {
+      modelInformation = nil
+      modelInformationFailure = nil
+      guard let url = modelURL else { return }
+      let noCompile = outputActive
+      do {
+        let information = try await VisionImageClassifierService.readModelInformation(
+          at: url, noCompile: noCompile)
+        guard modelURL == url, outputActive == noCompile else { return }
+        modelInformation = information
+      } catch {
+        guard modelURL == url, outputActive == noCompile else { return }
+        modelInformationFailure = error.localizedDescription
+      }
+    }
+  }
+
+  private struct ModelInformationRequest: Equatable {
+    let url: URL?
+    let noCompile: Bool
+  }
+
+  private func cropAndScaleLabel(
+    _ information: VisionImageClassifierService.ModelInformation
+  ) -> LocalizedStringResource {
+    switch information.cropAndScaleAction {
+    case .centerCrop: "Center Crop"
+    case .scaleToFit: "Scale to Fit"
+    case .scaleToFill: "Scale to Fill"
+    case .scaleToFitPlus90CCWRotation: "Scale to Fit + 90° CCW"
+    case .scaleToFillPlus90CCWRotation: "Scale to Fill + 90° CCW"
+    @unknown default: "Center Crop"
+    }
   }
 }
 
@@ -54,7 +110,7 @@ struct CreateMlImageClassifierVisionInspector: View {
   #Preview {
     @Previewable @State var modelURL: URL?
     @Previewable @State var vision =
-      Ldtx_Workspace_V4_CreateMlImageClassifierVision.with {
+      Ldtx_Workspace_V4_LdtxSceneDetectorVision.with {
         $0.videoComponentInternalID = 7
       }
 
@@ -65,7 +121,7 @@ struct CreateMlImageClassifierVisionInspector: View {
       $0.vfxSource.deviceHeight = 1080
     }
 
-    CreateMlImageClassifierVisionInspector(
+    LdtxSceneDetectorVisionInspector(
       videoComponents: [videoComponent],
       inputSize: vision.videoComponentInternalIDIfPresent == 7 ? videoComponent.renderingSize : nil,
       vision: $vision, modelURL: $modelURL, savedModelURL: nil)

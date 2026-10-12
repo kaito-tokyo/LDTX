@@ -57,7 +57,7 @@ enum WorkspaceAddVisionKind: String, CaseIterable, Identifiable {
   var inspectorKind: WorkspaceInspectorKind {
     switch self {
     case .ocr: .ocrVision
-    case .createMlImageClassifier: .createMlImageClassifierVision
+    case .createMlImageClassifier: .ldtxSceneDetectorVision
     }
   }
 }
@@ -168,7 +168,7 @@ enum WorkspaceResourceAddition {
         vision = WorkspaceResourceFactory.makeOcrVision(
           id: id, name: name, componentID: draft.videoComponentID!)
       case .createMlImageClassifier:
-        vision = WorkspaceResourceFactory.makeCreateMlImageClassifierVision(
+        vision = WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: id, name: name, componentID: draft.videoComponentID!)
       }
       definition.visions.append(vision)

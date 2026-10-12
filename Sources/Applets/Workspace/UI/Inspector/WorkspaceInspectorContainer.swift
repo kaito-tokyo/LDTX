@@ -154,9 +154,9 @@ public struct WorkspaceInspectorContainer: View {
       } else {
         emptyInspector
       }
-    case .createMlImageClassifierVision:
+    case .ldtxSceneDetectorVision:
       if let internalID = selector.internalID,
-        let vision = $storeService.createMlImageClassifierVision(internalID: internalID)
+        let vision = $storeService.ldtxSceneDetectorVision(internalID: internalID)
       {
         let name = vision.wrappedValue.modelFileName
         let savedModelURL: URL? =
@@ -164,7 +164,7 @@ public struct WorkspaceInspectorContainer: View {
           ? nil
           : workspaceURL?.appendingPathComponent(
             "VisionModels/\(internalID)/\(name)")
-        CreateMlImageClassifierVisionInspector(
+        LdtxSceneDetectorVisionInspector(
           videoComponents: storeService.workspaceDefinition.videoComponents,
           inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in
             storeService.workspaceDefinition.videoComponents.first { $0.internalID == inputID }?

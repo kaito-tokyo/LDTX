@@ -41,13 +41,13 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
     set {vision = .ocrVision(newValue)}
   }
 
-  /// The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.
-  public var createMlImageClassifierVision: Ldtx_Workspace_V4_CreateMlImageClassifierVision {
+  /// The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+  public var ldtxSceneDetectorVision: Ldtx_Workspace_V4_LdtxSceneDetectorVision {
     get {
-      if case .createMlImageClassifierVision(let v)? = vision {return v}
-      return Ldtx_Workspace_V4_CreateMlImageClassifierVision()
+      if case .ldtxSceneDetectorVision(let v)? = vision {return v}
+      return Ldtx_Workspace_V4_LdtxSceneDetectorVision()
     }
-    set {vision = .createMlImageClassifierVision(newValue)}
+    set {vision = .ldtxSceneDetectorVision(newValue)}
   }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -55,8 +55,8 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
   public nonisolated enum OneOf_Vision: Equatable, Sendable {
     /// The OCR Vision definition. Mutually exclusive with the other fields.
     case ocrVision(Ldtx_Workspace_V4_OcrVision)
-    /// The Create ML Image Classifier Vision definition. Mutually exclusive with the other fields.
-    case createMlImageClassifierVision(Ldtx_Workspace_V4_CreateMlImageClassifierVision)
+    /// The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+    case ldtxSceneDetectorVision(Ldtx_Workspace_V4_LdtxSceneDetectorVision)
 
   }
 
@@ -269,8 +269,8 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-/// An image-analysis request that classifies an image using a Create ML model.
-public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Sendable {
+/// An image-analysis request that detects a scene using an LDTX Scene Detector model.
+public nonisolated struct Ldtx_Workspace_V4_LdtxSceneDetectorVision: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -319,7 +319,7 @@ public nonisolated struct Ldtx_Workspace_V4_CreateMlImageClassifierVision: Senda
   /// The conditions that automatically trigger this Vision.
   public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
 
-  /// The saved model's basename, including the .mlmodel extension, without directories.
+  /// The saved model's basename, including the .mlmodel or .mlpackage extension, without directories.
   /// The model is stored at VisionModels/<this Vision's internal_id>/<model_file_name>
   /// inside the Workspace bundle. Empty means no saved model is assigned.
   public var modelFileName: String {
@@ -348,7 +348,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionWrapper"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0\u{3}create_ml_image_classifier_vision\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0\u{3}ldtx_scene_detector_vision\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -370,16 +370,16 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
         }
       }()
       case 2: try {
-        var v: Ldtx_Workspace_V4_CreateMlImageClassifierVision?
+        var v: Ldtx_Workspace_V4_LdtxSceneDetectorVision?
         var hadOneofValue = false
         if let current = self.vision {
           hadOneofValue = true
-          if case .createMlImageClassifierVision(let m) = current {v = m}
+          if case .ldtxSceneDetectorVision(let m) = current {v = m}
         }
         try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
           if hadOneofValue {try decoder.handleConflictingOneOf()}
-          self.vision = .createMlImageClassifierVision(v)
+          self.vision = .ldtxSceneDetectorVision(v)
         }
       }()
       default: break
@@ -397,8 +397,8 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
       guard case .ocrVision(let v)? = self.vision else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     }()
-    case .createMlImageClassifierVision?: try {
-      guard case .createMlImageClassifierVision(let v)? = self.vision else { preconditionFailure() }
+    case .ldtxSceneDetectorVision?: try {
+      guard case .ldtxSceneDetectorVision(let v)? = self.vision else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
     case nil: break
@@ -668,8 +668,8 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
   }
 }
 
-nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CreateMlImageClassifierVision"
+nonisolated extension Ldtx_Workspace_V4_LdtxSceneDetectorVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LdtxSceneDetectorVision"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}model_file_name\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -715,7 +715,7 @@ nonisolated extension Ldtx_Workspace_V4_CreateMlImageClassifierVision: SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Ldtx_Workspace_V4_CreateMlImageClassifierVision, rhs: Ldtx_Workspace_V4_CreateMlImageClassifierVision) -> Bool {
+  public static func ==(lhs: Ldtx_Workspace_V4_LdtxSceneDetectorVision, rhs: Ldtx_Workspace_V4_LdtxSceneDetectorVision) -> Bool {
     if lhs._internalID != rhs._internalID {return false}
     if lhs._displayName != rhs._displayName {return false}
     if lhs._videoComponentInternalID != rhs._videoComponentInternalID {return false}

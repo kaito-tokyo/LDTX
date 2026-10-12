@@ -17,6 +17,9 @@ struct ModelPathPicker: NSViewRepresentable {
     let control = NSPathControl()
     control.pathStyle = .popUp
     control.isEditable = true
+    control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    control.cell?.lineBreakMode = .byTruncatingMiddle
     control.allowedTypes = Self.allowedTypes.map(\.identifier)
     control.delegate = context.coordinator
     control.target = context.coordinator
@@ -34,7 +37,17 @@ struct ModelPathPicker: NSViewRepresentable {
 
   func makeCoordinator() -> Coordinator { Coordinator(fileURL: $fileURL) }
 
-  private static let allowedTypes: [UTType] = [UTType(filenameExtension: "mlmodel") ?? .data]
+  func sizeThatFits(
+    _ proposal: ProposedViewSize, nsView: NSPathControl, context: Context
+  ) -> CGSize? {
+    guard let width = proposal.width, width.isFinite else { return nil }
+    return CGSize(width: width, height: nsView.intrinsicContentSize.height)
+  }
+
+  private static let allowedTypes: [UTType] = [
+    UTType(filenameExtension: "mlmodel") ?? .data,
+    UTType(filenameExtension: "mlpackage", conformingTo: .package) ?? .package,
+  ]
 
   final class Coordinator: NSObject, NSPathControlDelegate {
     var fileURL: Binding<URL?>
@@ -46,10 +59,11 @@ struct ModelPathPicker: NSViewRepresentable {
     }
 
     func pathControl(_ pathControl: NSPathControl, willDisplay openPanel: NSOpenPanel) {
+      openPanel.allowedContentTypes = ModelPathPicker.allowedTypes
+      openPanel.treatsFilePackagesAsDirectories = false
       openPanel.canChooseFiles = true
       openPanel.canChooseDirectories = false
       openPanel.allowsMultipleSelection = false
-      openPanel.allowedContentTypes = ModelPathPicker.allowedTypes
     }
   }
 }

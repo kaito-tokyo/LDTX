@@ -8,7 +8,7 @@ import LDTXWorkspaceAppletModel
 
 public protocol WorkspaceRuntimeActions: AnyObject {
   @MainActor func classify(
-    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, modelURL: URL
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String
   @MainActor func synchronizeAudioMonitor()
   @MainActor func synchronizeCaptureInputs(

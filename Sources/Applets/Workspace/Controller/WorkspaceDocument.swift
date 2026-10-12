@@ -291,15 +291,15 @@ public final class WorkspaceDocument: NSDocument {
       {
         isReading = true
         for wrapper in saved.definition.visions {
-          guard case .createMlImageClassifierVision(let savedVision) = wrapper.vision,
+          guard case .ldtxSceneDetectorVision(let savedVision) = wrapper.vision,
             let index = storeService.workspaceDefinition.visions.firstIndex(where: {
               $0.internalID == savedVision.internalID
             }),
-            case .createMlImageClassifierVision(var current) = storeService.workspaceDefinition
+            case .ldtxSceneDetectorVision(var current) = storeService.workspaceDefinition
               .visions[index].vision,
             original.modelURLs.keys.contains(current.internalID),
             original.workspace.definition.visions.contains(where: {
-              guard case .createMlImageClassifierVision(let vision) = $0.vision else { return false }
+              guard case .ldtxSceneDetectorVision(let vision) = $0.vision else { return false }
               return vision.internalID == current.internalID
                 && vision.modelFileName == current.modelFileName
             })
@@ -310,7 +310,7 @@ public final class WorkspaceDocument: NSDocument {
             storeService.modelURLs.removeValue(forKey: current.internalID)
           }
           current.modelFileName = savedVision.modelFileName
-          storeService.workspaceDefinition.visions[index].vision = .createMlImageClassifierVision(
+          storeService.workspaceDefinition.visions[index].vision = .ldtxSceneDetectorVision(
             current)
         }
         isReading = false

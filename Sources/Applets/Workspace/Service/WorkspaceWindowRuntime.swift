@@ -255,7 +255,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func classify(
-    vision: Ldtx_Workspace_V4_CreateMlImageClassifierVision, model: sending MLModel
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, model: sending MLModel
   ) async throws -> String {
     guard
       let size = definition.videoComponents.first(where: {
