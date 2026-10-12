@@ -301,15 +301,17 @@ public final class WorkspaceDocument: NSDocument {
             original.workspace.definition.visions.contains(where: {
               guard case .ldtxSceneDetectorVision(let vision) = $0.vision else { return false }
               return vision.internalID == current.internalID
-                && vision.modelFileName == current.modelFileName
+                && vision.modelRevision == current.modelRevision
             })
           else { continue }
-          let key = "\(savedVision.internalID)/\(savedVision.modelFileName)"
-          if let data = saved.models[key] { storeService.workspaceModels[key] = data }
+          let prefix = "\(savedVision.internalID)/\(savedVision.modelRevision)/"
+          for (key, data) in saved.models where key.hasPrefix(prefix) {
+            storeService.workspaceModels[key] = data
+          }
           if storeService.modelURLs[current.internalID] == original.modelURLs[current.internalID] {
             storeService.modelURLs.removeValue(forKey: current.internalID)
           }
-          current.modelFileName = savedVision.modelFileName
+          current.modelRevision = savedVision.modelRevision
           storeService.workspaceDefinition.visions[index].vision = .ldtxSceneDetectorVision(
             current)
         }

@@ -14,7 +14,7 @@ extension AppUIComponentTestSuite {
   struct WorkspaceDocumentModelSelectionIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Selected URLs become saved basenames only after successful saving")
+    @Test("Selected URLs become saved revisions only after successful saving")
     func savesSelectedModelURL() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -47,14 +47,15 @@ extension AppUIComponentTestSuite {
       #expect(document.isDocumentEdited)
       #expect(
         document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "")
+          .modelRevision == 0)
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
-      let savedURL = url.appendingPathComponent("VisionModels/5/Original.mlmodel")
+      let revision = document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelRevision
+      let savedURL = url.appendingPathComponent("VisionModels/5/\(revision)/Original.mlmodel")
       #expect(try Data(contentsOf: savedURL) == bytes)
       #expect(
         document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "Original.mlmodel")
+          .modelRevision == revision)
       #expect(!document.storeService.modelURLs.keys.contains(5))
       #expect(!document.isDocumentEdited)
       let missing = root.appendingPathComponent("Missing.mlmodel")
@@ -66,7 +67,7 @@ extension AppUIComponentTestSuite {
       #expect(document.storeService.modelURLs[5] == .some(missing))
       #expect(
         document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "Original.mlmodel")
+          .modelRevision == revision)
       #expect(try Data(contentsOf: savedURL) == bytes)
       #expect(document.isDocumentEdited)
       let reloaded = WorkspaceDocument()
@@ -75,10 +76,10 @@ extension AppUIComponentTestSuite {
       #expect(reloaded.storeService.modelURLs.isEmpty)
       #expect(
         reloaded.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "Original.mlmodel")
+          .modelRevision == revision)
     }
 
-    @Test("A newer selection stays pending while the saved basename reflects the completed save")
+    @Test("A newer selection stays pending while the saved revision reflects the completed save")
     func preservesSelectionDuringSaving() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -127,19 +128,21 @@ extension AppUIComponentTestSuite {
       }
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       document.writeProbe.withLock { $0 = nil }
+      let revision = document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelRevision
+      #expect(revision > 0)
       #expect(document.storeService.modelURLs[5] == .some(second))
       #expect(
         document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "First.mlmodel")
+          .modelRevision == revision)
       #expect(
         try WorkspaceBundleReaderV4(at: url).read().definition.visions[0]
-          .ldtxSceneDetectorVision.modelFileName == "First.mlmodel")
+          .ldtxSceneDetectorVision.modelRevision == revision)
       #expect(document.isDocumentEdited)
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
       #expect(!document.storeService.modelURLs.keys.contains(5))
       #expect(
         document.storeService.workspaceDefinition.visions[0].ldtxSceneDetectorVision
-          .modelFileName == "Second.mlmodel")
+          .modelRevision != revision)
       #expect(!document.isDocumentEdited)
     }
   }

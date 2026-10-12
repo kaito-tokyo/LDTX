@@ -304,7 +304,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Saving imports basename-only references into each Vision directory")
+  @Test("Saving imports models into new revisions and retains history")
   func savesExternalModelReference() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -324,27 +324,30 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
     let prepared = try WorkspaceModelFiles.preparedForSaving(
       workspace, modelURLs: [5: source, 7: source])
-    #expect(workspace.definition.visions.last?.ldtxSceneDetectorVision.modelFileName == "")
+    #expect(workspace.definition.visions.last?.ldtxSceneDetectorVision.modelRevision == 0)
+    let revision = prepared.definition.visions[1].ldtxSceneDetectorVision.modelRevision
+    let otherRevision = prepared.definition.visions[2].ldtxSceneDetectorVision.modelRevision
     #expect(
-      prepared.definition.visions.last?.ldtxSceneDetectorVision.modelFileName
-        == "Original.mlmodel")
-    #expect(prepared.models["5/Original.mlmodel"] == data)
-    #expect(prepared.models["7/Original.mlmodel"] == data)
+      prepared.definition.visions.last?.ldtxSceneDetectorVision.modelRevision != 0)
+    #expect(prepared.models["5/\(revision)/Original.mlmodel"] == data)
+    #expect(prepared.models["7/\(otherRevision)/Original.mlmodel"] == data)
     let bundle = root.appendingPathComponent("Saved.ldtxworkspace")
     try WorkspaceDocumentPackage.write(prepared, to: bundle, createsPackage: true)
     try FileManager.default.removeItem(at: source)
     let reloaded = try WorkspaceBundleReaderV4(at: bundle).read()
     #expect(reloaded == prepared)
     #expect(
-      try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/Original.mlmodel")) == data
+      try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/\(revision)/Original.mlmodel")) == data
     )
     try WorkspaceDocumentPackage.write(reloaded, to: bundle)
     #expect(try WorkspaceBundleReaderV4(at: bundle).read() == prepared)
     let cleared = try WorkspaceModelFiles.preparedForSaving(reloaded, modelURLs: [5: nil])
-    #expect(cleared.definition.visions[1].ldtxSceneDetectorVision.modelFileName == "")
+    #expect(cleared.definition.visions[1].ldtxSceneDetectorVision.modelRevision == 0)
+    #expect(cleared.models == reloaded.models)
+    try WorkspaceDocumentPackage.write(cleared, to: bundle)
+    #expect(try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/\(revision)/Original.mlmodel")) == data)
     #expect(
-      cleared.definition.visions[2].ldtxSceneDetectorVision.modelFileName
-        == "Original.mlmodel")
+      cleared.definition.visions[2].ldtxSceneDetectorVision.modelRevision == otherRevision)
   }
 
   @Test("Model packages preserve their tree through save and reload")
@@ -365,27 +368,60 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       }
     })
     let prepared = try WorkspaceModelFiles.preparedForSaving(workspace, modelURLs: [5: source])
-    #expect(prepared.definition.visions.last?.ldtxSceneDetectorVision.modelFileName == "Classifier.mlpackage")
+    let revision = prepared.definition.visions.last!.ldtxSceneDetectorVision.modelRevision
+    #expect(revision > 0)
     let bundle = root.appendingPathComponent("Saved.ldtxworkspace")
     try WorkspaceDocumentPackage.write(prepared, to: bundle, createsPackage: true)
     #expect(try WorkspaceBundleReaderV4(at: bundle).read() == prepared)
-    let saved = bundle.appendingPathComponent("VisionModels/5/Classifier.mlpackage")
+    let saved = bundle.appendingPathComponent("VisionModels/5/\(revision)/Classifier.mlpackage")
     #expect(try Data(contentsOf: saved.appendingPathComponent("Data/weights/weights.bin")) == Data([1, 2, 3]))
     try FileManager.default.removeItem(at: weights)
     try Data([4]).write(to: source.appendingPathComponent("replacement.bin"))
     let replacement = try WorkspaceModelFiles.preparedForSaving(prepared, modelURLs: [5: source])
     try WorkspaceDocumentPackage.write(replacement, to: bundle)
-    #expect(!FileManager.default.fileExists(atPath: saved.appendingPathComponent("Data/weights/weights.bin").path))
+    #expect(try Data(contentsOf: saved.appendingPathComponent("Data/weights/weights.bin")) == Data([1, 2, 3]))
+    let newRevision = replacement.definition.visions.last!.ldtxSceneDetectorVision.modelRevision
+    #expect(newRevision != revision)
+    #expect(try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/\(newRevision)/Classifier.mlpackage/replacement.bin")) == Data([4]))
     #expect(try WorkspaceBundleReaderV4(at: bundle).read() == replacement)
     let external = root.appendingPathComponent("outside.bin")
     try Data([9]).write(to: external)
     try FileManager.default.createSymbolicLink(at: source.appendingPathComponent("link.bin"), withDestinationURL: external)
     #expect(throws: (any Error).self) { try WorkspaceModelFiles.importModel(at: source) }
     let encoder = JSONEncoder()
-    workspace.models = ["5/Classifier.mlpackage": try encoder.encode([
+    workspace.models = ["5/9/Classifier.mlpackage": try encoder.encode([
       "Manifest.json": Data("{}".utf8), "../outside.bin": Data([9]),
     ])]
     #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: bundle) }
+  }
+
+  @Test("The assigned revision selects its first model by lexicographic basename")
+  func selectsModelWithinRevision() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var workspace = makeWorkspace()
+    let vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with {
+      $0.internalID = 5
+      $0.displayName = "Classifier"
+      $0.videoComponentInternalID = 2
+      $0.modelRevision = 9
+    }
+    workspace.definition.visions.append(.with { $0.ldtxSceneDetectorVision = vision })
+    workspace.models = [
+      "5/9/Z.mlmodel": Data([1]), "5/9/A.mlmodel": Data([2]),
+      "5/7/Before.mlmodel": Data([3]),
+    ]
+    #expect(WorkspaceModelFiles.modelPath(for: vision, in: workspace.models) == "5/9/A.mlmodel")
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try WorkspaceDocumentPackage.write(workspace, to: bundle, createsPackage: true)
+    try Data([4]).write(to: bundle.appendingPathComponent("VisionModels/5/9/000.txt"))
+    let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
+    #expect(loaded.models == workspace.models)
+    #expect(WorkspaceModelFiles.modelPath(for: vision, in: loaded.models) == "5/9/A.mlmodel")
+    var changed = workspace
+    changed.models["5/7/Before.mlmodel"] = Data([99])
+    try WorkspaceDocumentPackage.write(changed, to: bundle)
+    #expect(try Data(contentsOf: bundle.appendingPathComponent("VisionModels/5/7/Before.mlmodel")) == Data([3]))
   }
 
   @Test("Failed model imports preserve the saved reference and resources")
@@ -396,18 +432,18 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         $0.ldtxSceneDetectorVision = .with {
           $0.internalID = 5
           $0.videoComponentInternalID = 2
-          $0.modelFileName = "Saved.mlmodel"
+          $0.modelRevision = 9
         }
       })
-    workspace.models["5/Saved.mlmodel"] = Data([1])
+    workspace.models["5/9/Saved.mlmodel"] = Data([1])
     let original = workspace
     #expect(throws: (any Error).self) {
       try WorkspaceModelFiles.preparedForSaving(
         workspace, modelURLs: [5: URL(fileURLWithPath: "/nonexistent/model.mlmodel")])
     }
     #expect(workspace == original)
-    for name in ["../model.mlmodel", "/model.mlmodel", "folder/model.mlmodel"] {
-      workspace.definition.visions[1].ldtxSceneDetectorVision.modelFileName = name
+    for revision: Int64 in [-1, 11] {
+      workspace.definition.visions[1].ldtxSceneDetectorVision.modelRevision = revision
       #expect(throws: (any Error).self) { try WorkspaceModelFiles.preparedForSaving(workspace) }
     }
   }
@@ -442,7 +478,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: false)
     try FileManager.default.createSymbolicLink(
       at: bundle.appendingPathComponent("VisionModels"), withDestinationURL: outside)
-    workspace.models = ["5/Classifier.mlmodel": Data([1])]
+    workspace.models = ["5/9/Classifier.mlmodel": Data([1])]
     #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: bundle) }
     #expect(throws: (any Error).self) { try WorkspaceBundleReaderV4(at: bundle).read() }
     #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)

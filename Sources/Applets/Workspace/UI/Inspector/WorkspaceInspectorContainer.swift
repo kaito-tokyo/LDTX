@@ -5,6 +5,7 @@
 import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
+import LDTXWorkspaceBundleFormat
 import LDTXTaskQueue
 import LDTXYouTubeRTMPS
 import SwiftUI
@@ -158,12 +159,9 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID,
         let vision = $storeService.ldtxSceneDetectorVision(internalID: internalID)
       {
-        let name = vision.wrappedValue.modelFileName
-        let savedModelURL: URL? =
-          name.isEmpty
-          ? nil
-          : workspaceURL?.appendingPathComponent(
-            "VisionModels/\(internalID)/\(name)")
+        let savedModelURL = WorkspaceModelFiles.modelPath(
+          for: vision.wrappedValue, in: storeService.workspaceModels)
+          .flatMap { workspaceURL?.appendingPathComponent("VisionModels/\($0)") }
         LdtxSceneDetectorVisionInspector(
           videoComponents: storeService.workspaceDefinition.videoComponents,
           inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in

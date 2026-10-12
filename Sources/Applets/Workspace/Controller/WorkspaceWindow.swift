@@ -11,6 +11,7 @@ import LDTXProtos
 import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import Observation
 import QuickLookThumbnailing
@@ -243,11 +244,8 @@ public final class WorkspaceWindow: NSWindow {
           && $0.renderingSize != nil
       })
     else { return nil }
-    let savedURL =
-      vision.modelFileName.isEmpty
-      ? nil
-      : storeService.localStateURL?
-        .appendingPathComponent("VisionModels/\(id)/\(vision.modelFileName)")
+    let savedURL = WorkspaceModelFiles.modelPath(for: vision, in: storeService.workspaceModels)
+      .flatMap { storeService.localStateURL?.appendingPathComponent("VisionModels/\($0)") }
     guard let url = storeService.modelURLs[id] ?? savedURL else { return nil }
     return (vision, url)
   }

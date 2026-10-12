@@ -42,10 +42,16 @@ public enum WorkspaceModelFiles {
           defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         #endif
         let imported = try importModel(at: url)
-        vision.modelFileName = imported.name
-        saved.models["\(vision.internalID)/\(imported.name)"] = imported.data
+        var revision: Int64
+        repeat {
+          let milliseconds = Int64(max(0, Date().timeIntervalSince1970 * 1_000))
+          revision = ((milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15)
+            | (Int64.random(in: 0...0x3fff) << 1) | 1
+        } while saved.models.keys.contains(where: { $0.hasPrefix("\(vision.internalID)/\(revision)/") })
+        vision.modelRevision = revision
+        saved.models["\(vision.internalID)/\(revision)/\(imported.name)"] = imported.data
       } else {
-        vision.modelFileName = ""
+        vision.modelRevision = 0
       }
       saved.definition.visions[index].vision = .ldtxSceneDetectorVision(vision)
     }
@@ -60,8 +66,17 @@ public enum WorkspaceModelFiles {
 
   static func isValidName(_ name: String) -> Bool {
     let parts = name.split(separator: "/", omittingEmptySubsequences: false)
-    return parts.count == 2 && (Int64(parts[0]) ?? 0) > 0
-      && isValidBaseName(String(parts[1]))
+    return parts.count == 3 && (Int64(parts[0]) ?? 0) > 0
+      && (Int64(parts[1]) ?? 0) > 0 && isValidBaseName(String(parts[2]))
+  }
+
+  /// Selects the lexicographically first model in the assigned revision.
+  public static func modelPath(
+    for vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, in models: [String: Data]
+  ) -> String? {
+    guard vision.modelRevision > 0 else { return nil }
+    let prefix = "\(vision.internalID)/\(vision.modelRevision)/"
+    return models.keys.filter { $0.hasPrefix(prefix) && isValidName($0) }.sorted().first
   }
 
   static func validateDirectory(_ url: URL) throws {
@@ -82,10 +97,9 @@ public enum WorkspaceModelFiles {
     }
     for wrapper in workspace.definition.visions {
       guard case .ldtxSceneDetectorVision(let vision) = wrapper.vision,
-        !vision.modelFileName.isEmpty
+        vision.modelRevision != 0
       else { continue }
-      guard isValidBaseName(vision.modelFileName),
-        workspace.models["\(vision.internalID)/\(vision.modelFileName)"] != nil
+      guard modelPath(for: vision, in: workspace.models) != nil
       else {
         throw CocoaError(.fileReadCorruptFile)
       }
@@ -104,14 +118,21 @@ public enum WorkspaceModelFiles {
         throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: modelDirectory])
       }
       try validateDirectory(modelDirectory)
-      for url in try FileManager.default.contentsOfDirectory(
-        at: modelDirectory, includingPropertiesForKeys: nil)
+      for revisionDirectory in try FileManager.default.contentsOfDirectory(
+        at: modelDirectory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
       {
-        let name = modelDirectory.lastPathComponent + "/" + url.lastPathComponent
-        guard isValidName(name) else {
-          throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
+        guard (Int64(revisionDirectory.lastPathComponent) ?? 0) > 0 else {
+          throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: revisionDirectory])
         }
-        models[name] = try importModel(at: url).data
+        try validateDirectory(revisionDirectory)
+        for url in try FileManager.default.contentsOfDirectory(
+          at: revisionDirectory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
+        {
+          guard isValidBaseName(url.lastPathComponent) else { continue }
+          let name = modelDirectory.lastPathComponent + "/" + revisionDirectory.lastPathComponent
+            + "/" + url.lastPathComponent
+          models[name] = try importModel(at: url).data
+        }
       }
     }
     return models

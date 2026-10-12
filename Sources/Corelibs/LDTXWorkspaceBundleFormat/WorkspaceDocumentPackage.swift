@@ -44,10 +44,16 @@ public enum WorkspaceDocumentPackage {
       try manager.createDirectory(at: modelsURL, withIntermediateDirectories: true)
       for (name, data) in workspace.models {
         let url = modelsURL.appendingPathComponent(name)
+        let entityURL = url.deletingLastPathComponent().deletingLastPathComponent()
+        try WorkspaceModelFiles.validateDirectory(entityURL)
+        try manager.createDirectory(at: entityURL, withIntermediateDirectories: true)
         try WorkspaceModelFiles.validateDirectory(url.deletingLastPathComponent())
         try manager.createDirectory(
           at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try WorkspaceModelFiles.writeModel(data, to: url)
+        // Previously written revisions are immutable, including after a failed save.
+        if !manager.fileExists(atPath: url.path) {
+          try WorkspaceModelFiles.writeModel(data, to: url)
+        }
       }
     }
     try definitionData.write(
