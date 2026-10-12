@@ -94,11 +94,42 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
+  LDTXVisionProgrammerApplet:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/VisionProgrammer
+    dependencies:
+      - target: LDTXVisionTraining
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVisionProgrammerApplet
+        PRODUCT_MODULE_NAME: LDTXVisionProgrammerApplet
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: "YES"
+  LDTXVisionProgrammerApp:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/Apps/LDTXVisionProgrammerApp
+    dependencies:
+      - target: LDTXVisionProgrammerApplet
+        embed: true
+        codeSign: true
+      - target: LDTXVisionTraining
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVisionProgrammerApp
+        PRODUCT_MODULE_NAME: LDTXVisionProgrammerApp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
   LDTXApp:
     type: application
     platform: macOS
     sources:
-      - Sources/LDTXApp
+      - Sources/Apps/LDTXApp
       - path: Resources/LDTX/MCP/server.json
         buildPhase:
           copyFiles:
@@ -122,6 +153,12 @@ targets:
         embed: true
         codeSign: true
       - target: LDTXRecordPlayerApplet
+        embed: true
+        codeSign: true
+      - target: LDTXVisionProgrammerApplet
+        embed: true
+        codeSign: true
+      - target: LDTXVisionTraining
         embed: true
         codeSign: true
       - target: LDTXSettingsApplet
@@ -241,8 +278,8 @@ targets:
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.app-automation
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper
-        INFOPLIST_FILE: Sources/LDTXApp/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Sources/LDTXApp/LDTX.entitlements
+        INFOPLIST_FILE: Sources/Apps/LDTXApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/Apps/LDTXApp/LDTX.entitlements
         DEAD_CODE_STRIPPING: "YES"
         DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
         DEFINES_MODULE: "YES"
@@ -255,6 +292,14 @@ targets:
           EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) LDTXQuickLookPreview.appex LDTXQuickLookThumbnail.appex"
 
 schemes:
+  LDTXVisionProgrammerApp:
+    build:
+      targets:
+        LDTXVisionProgrammerApp: all
+    run:
+      config: Debug
+    management:
+      shared: true
   LDTXWorkspaceAppletUI:
     build:
       targets:

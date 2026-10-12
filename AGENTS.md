@@ -106,8 +106,8 @@ in CI separately from its classification.
   and **CoreImage**, plus non-View **SwiftUI** value APIs, unless they exercise a
   framework listed under HardTests.
 - **HardTests target:** Tests that exercise **Vision**, **VideoToolbox**,
-  **CoreML**, **Metal**, or **AVFoundation**. Medium and Hard tests may have the
-  same Unit or Integration scope; their framework dependencies distinguish them.
+  **CoreML**, **CreateMLComponents**, **Metal**, or **AVFoundation**. Medium and Hard
+  tests may have the same Unit or Integration scope; their framework dependencies distinguish them.
   Run this hostless unit-test target directly in Xcode Cloud; do not add XCUI
   automation.
 

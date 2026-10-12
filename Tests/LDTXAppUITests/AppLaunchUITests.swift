@@ -18,6 +18,11 @@ final class AppLaunchUITests: XCTestCase {
     XCTAssertTrue(app.menuItems["New Workspace"].isEnabled)
     XCTAssertTrue(app.menuItems["Open File…"].exists)
     XCTAssertTrue(app.menuItems["Open File…"].isEnabled)
+    let programmer = app.menuItems["Vision Programmer…"]
+    XCTAssertTrue(programmer.isEnabled)
+    programmer.click()
+    let window = app.windows["Vision Programmer"]
+    XCTAssertTrue(window.waitForExistence(timeout: 5))
   }
 
 }

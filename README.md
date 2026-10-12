@@ -15,6 +15,17 @@ Editor** for building user-defined Programs.
 - Place shapes, text, and images on it
 - Remove the background from your portrait
 
+## Vision Programmer
+
+Open **File → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
+containing one subfolder per class, set the maximum iteration count (25 by default),
+then select **Start training**. Training uses Image Feature Print V2 with aspect-ratio-preserving
+scale-to-fit, no augmentation, and a fixed 95% training / 5% validation split using
+Create ML Components' `randomSplit`.
+When training completes, the progress sheet closes and the standard file exporter
+opens to save the `.mlpackage`.
+For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
+
 ## Internal Framework Modules
 
 This table lists the non-test library targets declared in `project.yml` and generated
@@ -46,6 +57,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
+| LDTXVisionProgrammerApplet | Vision Programmer windows and training UI. |
+| LDTXVisionTraining | Scene detector training and Core ML model export using Create ML Components. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
 | LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
 | LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |

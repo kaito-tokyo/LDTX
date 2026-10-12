@@ -9,6 +9,17 @@ schemes:
         LDTXWorkspaceBundleFormat: all
 
 targets:
+  LDTXVisionTraining:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVisionTraining
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVisionTraining
+        PRODUCT_MODULE_NAME: LDTXVisionTraining
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXProtosMacOSExtra:
     type: framework
     platform: macOS

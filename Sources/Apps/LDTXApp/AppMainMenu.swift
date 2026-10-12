@@ -77,6 +77,10 @@ final class AppMainMenu: NSMenu {
       newWorkspaceItem,
       openFileItem,
       NSMenuItem(
+        title: "Vision Programmer…",
+        action: #selector(AppDelegate.showVisionProgrammer(_:)),
+        keyEquivalent: ""),
+      NSMenuItem(
         title: "Close",
         action: #selector(NSWindow.performClose(_:)),
         keyEquivalent: "w"),

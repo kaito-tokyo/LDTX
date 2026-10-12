@@ -7,12 +7,17 @@ import LDTXDiagnostics
 import LDTXRecordPlayerApplet
 import LDTXRecording
 import LDTXSettingsApplet
+import LDTXVisionProgrammerApplet
 import LDTXWorkspaceAppletController
 import LDTXYouTubeAuth
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   private lazy var applicationMainMenu = AppMainMenu()
+  private let visionProgrammer = NSHostingSceneRepresentation {
+    VisionProgrammerScene()
+  }
   private var settings: SettingsApplet?
   private var settingsClosingObserver: NSObjectProtocol?
   private let launchID = UUID()
@@ -58,6 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     settings?.window?.makeKeyAndOrderFront(nil)
   }
 
+  @objc func showVisionProgrammer(_ sender: Any?) {
+    visionProgrammer.environment.openWindow(id: VisionProgrammerScene.id)
+  }
+
   @objc func toggleInspector(_ sender: Any?) {
     (NSApp.keyWindow?.windowController as? RecordPlayerWindowController)?.toggleInspector(sender)
   }
@@ -85,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
+    NSApp.addSceneRepresentation(visionProgrammer)
     NSApp.mainMenu = applicationMainMenu
   }
 
