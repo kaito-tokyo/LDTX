@@ -52,6 +52,49 @@ extension AppUIComponentTestSuite {
       #expect(!window.validateToolbarItem(item))
     }
 
+    @Test("Inference discards obsolete results and failures", arguments: ["model", "input", "roi", "failure"])
+    func discardObsoleteInference(change: String) async throws {
+      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      store.workspaceDefinition.videoComponents = [7, 9].map { id in
+        .with {
+          $0.vfxSource.internalID = Int64(id)
+          $0.vfxSource.deviceWidth = 1920
+          $0.vfxSource.deviceHeight = 1080
+        }
+      }
+      store.workspaceDefinition.visions = [
+        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(id: 2, name: "Scene", componentID: 7)
+      ]
+      store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
+      store.modelURLs[2] = URL(fileURLWithPath: "/tmp/model.mlmodel")
+      let dispatcher = ToolbarDispatcher()
+      var completion: CheckedContinuation<String, any Error>?
+      dispatcher.classificationHandler = {
+        try await withCheckedThrowingContinuation { completion = $0 }
+      }
+      let window = makeWorkspaceTestWindow(storeService: store, dispatcher: dispatcher)
+      defer { window.close() }
+      window.runInference()
+      await settleWorkspaceToolbar(window)
+      let pending = try #require(completion)
+      switch change {
+      case "input":
+        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.videoComponentInternalID = 9
+      case "roi":
+        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(num: 1, den: 10)
+      default:
+        store.modelURLs[2] = URL(fileURLWithPath: "/tmp/replacement.mlmodel")
+      }
+      if change == "failure" {
+        pending.resume(throwing: CocoaError(.fileReadUnknown))
+      } else {
+        pending.resume(returning: "Obsolete result")
+      }
+      await settleWorkspaceToolbar(window)
+      #expect(store.visionResults[2] == nil)
+      #expect(store.visionFailureMessages[2] == nil)
+    }
+
     @Test("ROI numerator editing uses the image size only when the denominator is unset")
     func roiNumeratorDefaults() {
       var rational = Ldtx_Workspace_V4_Rational32()

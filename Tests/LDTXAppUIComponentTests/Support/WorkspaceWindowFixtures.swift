@@ -74,9 +74,13 @@ func makeWorkspaceTestWindow(
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  var classificationHandler: (() async throws -> String)?
   func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
-  ) async throws -> String { "Test classification" }
+  ) async throws -> String {
+    if let classificationHandler { return try await classificationHandler() }
+    return "Test classification"
+  }
 
   var failScreenshot = false
   var screenshotFiles: [WorkspaceScreenshot] = []

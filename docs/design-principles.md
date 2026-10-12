@@ -30,6 +30,23 @@ the relevant design or feature documentation instead.
 - Documents observe these properties to track unsaved changes. The Store must
   not own document-change callbacks or hide persistence notifications in setters.
 
+## Definition changes reach the runtime only after persistence
+
+- This rule applies across the entire Workspace runtime, including
+  ProgramRuntime and Vision inference. Changes to the Store's
+  `workspaceDefinition` must not reach the runtime until they have been
+  successfully written to disk.
+- The runtime uses the last successfully persisted Definition. A failed save
+  leaves that runtime Definition unchanged. If editing continues during a save,
+  only the successfully saved Definition is applied; subsequent edits remain
+  pending for a later save.
+- The Store's `workspaceDefinition` retains the current edits. Editing UI and
+  prospective range previews may use those values before saving, but runtime
+  execution must use the persisted Definition. In particular, Vision ROI edits
+  are validated on save and are not passed to inference before persistence.
+- `workspacePreferences` may reach the runtime before they are written to disk,
+  subject to the runtime's supported operations and output restrictions.
+
 ## Preferences are permissive input
 
 - Preferences may contain values that are not meaningful for every component

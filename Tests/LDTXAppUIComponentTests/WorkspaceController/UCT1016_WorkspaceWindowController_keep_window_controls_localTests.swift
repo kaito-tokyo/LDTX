@@ -332,6 +332,9 @@ extension AppUIComponentTestSuite {
         #expect(first.validateToolbarItem(stop) == stopEnabled)
         #expect(first.validateToolbarItem(toggle) == toggleEnabled)
         #expect(toggle.label == label)
+        #expect(toggle.image?.tiffRepresentation == NSImage(
+          systemSymbolName: value == .recording ? "pause.fill" : "play.fill",
+          accessibilityDescription: nil)?.tiffRepresentation)
       }
       state.recordingState = .idle
       try performWorkspaceToolbarAction(toggle)

@@ -223,6 +223,9 @@ public final class WorkspaceWindow: NSWindow {
     toolbarCoordinator.startPauseOutputItem.label =
       storeService.recordingState == .recording
       ? String(localized: "Pause Output") : String(localized: "Start Output")
+    toolbarCoordinator.startPauseOutputItem.image = NSImage(
+      systemSymbolName: storeService.recordingState == .recording ? "pause.fill" : "play.fill",
+      accessibilityDescription: nil)
 
   }
 
@@ -265,8 +268,14 @@ public final class WorkspaceWindow: NSWindow {
       }
       do {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
+        guard !isClosed, let current = inferenceRequest,
+          current.vision == request.vision, current.url == request.url
+        else { return }
         storeService.visionResults[id] = result
       } catch {
+        guard !isClosed, let current = inferenceRequest,
+          current.vision == request.vision, current.url == request.url
+        else { return }
         storeService.visionFailureMessages[id] = error.localizedDescription
       }
     }
