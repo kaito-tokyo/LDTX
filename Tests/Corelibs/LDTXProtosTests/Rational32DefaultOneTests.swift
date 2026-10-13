@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite struct Rational32DefaultOneUnitTestSuite {
@@ -22,7 +23,7 @@ import Testing
     let region = Ldtx_Workspace_V4_VisionRegionOfInterest()
     #expect(region.x.double == 0 && region.y.double == 0)
     #expect(region.width.double == 1 && region.height.double == 1)
-    try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
+    try WorkspaceBundleValidatorV4.validateRegionOfInterest(region)
   }
 
   @Test func explicitZeroRoundTripsAndClearsBackToOne() throws {

@@ -65,7 +65,7 @@ struct WorkspaceClockOCRIntegrationTestSuite {
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace },
       replaceWorkspace: {
-        try WorkspaceV4IntegrityValidator.validate($0)
+        try WorkspaceBundleValidatorV4.validate($0)
         box.workspace = $0
       }, url: nil)
     return WorkspaceWindowRuntime(

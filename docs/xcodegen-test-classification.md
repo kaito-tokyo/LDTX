@@ -155,7 +155,8 @@ its serialized MainActor parent. Application UI automation remains in
 | `LDTXCorelibsTests` | `ProgramComponentPersistenceUnitTestSuite` | `Tests/Corelibs/LDTXProgramTests/ProgramComponentPersistenceTests.swift` |
 | `LDTXCorelibsTests` | `ProgramPreferencesUnitTestSuite` | `Tests/Corelibs/LDTXProgramTests/ProgramPreferencesTests.swift` |
 | `LDTXCorelibsTests` | `Rational32UnitTestSuite` | `Tests/Corelibs/LDTXProtosTests/Rational32Tests.swift` |
-| `LDTXCorelibsTests` | `WorkspaceV4IntegrityValidatorUnitTestSuite` | `Tests/Corelibs/LDTXProtosTests/WorkspaceV4IntegrityValidatorTests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceBundleValidatorV4UnitTestSuite` | `Tests/Corelibs/LDTXWorkspaceBundleFormatTests/WorkspaceBundleValidatorTests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceV4DiagnosticsIntegrationTestSuite` | `Tests/Corelibs/LDTXWorkspaceBundleFormatTests/WorkspaceV4DiagnosticsTests.swift` |
 | `LDTXCorelibsTests` | `WorkspaceBundleFormatIntegrationTestSuite` | `Tests/Corelibs/LDTXWorkspaceBundleFormatTests/WorkspaceBundleFormatTests.swift` |
 
 Output suites share the serialized `OutputTestSuite` parent to coordinate

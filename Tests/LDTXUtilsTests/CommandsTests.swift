@@ -260,7 +260,7 @@ struct CommandsSystemTestSuite {
   }
 
   private func writeWorkspace(_ workspace: WorkspaceV4Bundle, to packageURL: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
     let definitionExternalID = writer.makeExternalID()
     try writer.write(definition: workspace.definition, externalID: definitionExternalID)

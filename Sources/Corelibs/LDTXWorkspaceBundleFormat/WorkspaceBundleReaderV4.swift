@@ -63,7 +63,7 @@ public struct WorkspaceBundleReaderV4 {
       outputSettingsExternalID: outputSettingsExternalID.uuidString.lowercased(),
       outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4,
       visionModels: try WorkspaceModelFiles.read(at: bundleURL))
-    try WorkspaceModelFiles.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     return workspace
   }
   private func isUUIDv7(_ value: UUID) -> Bool {

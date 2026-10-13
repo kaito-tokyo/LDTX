@@ -51,7 +51,6 @@ extension WorkspaceDocument: ReadableDocument {
       -> sending Snapshot
     {
       let workspace = try WorkspaceBundleReaderV4(at: source).read()
-      try WorkspaceV4IntegrityValidator.validate(workspace)
       return workspace
     }
 

@@ -216,7 +216,7 @@ extension AppUIComponentTestSuite {
         $0.height.set(num: 10, den: 10)
       }
       #expect(throws: (any Error).self) {
-        try WorkspaceV4IntegrityValidator.validateRegionOfInterest(invalidRegion)
+        try WorkspaceBundleValidatorV4.validateRegionOfInterest(invalidRegion)
       }
       store.workspaceDefinition.visions = [
         WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1)

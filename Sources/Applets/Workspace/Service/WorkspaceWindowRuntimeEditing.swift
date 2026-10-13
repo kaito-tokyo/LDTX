@@ -325,7 +325,7 @@ extension WorkspaceWindowRuntime {
         else { throw WorkspaceRuntimeError.resourceInUse(id) }
         let before = workspace.definition.videoComponents.count
         workspace.definition.videoComponents.removeAll {
-          (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == id
+          $0.internalID == id
         }
         guard before != workspace.definition.videoComponents.count else {
           throw WorkspaceRuntimeError.missingResource(id)
@@ -333,7 +333,7 @@ extension WorkspaceWindowRuntime {
       case .vision:
         let before = workspace.definition.visions.count
         workspace.definition.visions.removeAll {
-          (try? WorkspaceV4IntegrityValidator.visionID($0)) == id
+          $0.internalID == id
         }
         guard before != workspace.definition.visions.count else {
           throw WorkspaceRuntimeError.missingResource(id)

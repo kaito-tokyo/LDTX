@@ -340,7 +340,7 @@ public final class WorkspaceWindowController: NSWindowController,
     }
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
-        try? WorkspaceV4IntegrityValidator.visionID($0)
+        $0.internalID
       })
     stateService.visionResults = stateService.visionResults.filter { ids.contains($0.key) }
     stateService.visionFailureMessages = stateService.visionFailureMessages.filter {
@@ -565,7 +565,7 @@ extension WorkspaceWindowController {
   public func synchronizeVision() {
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
-        try? WorkspaceV4IntegrityValidator.visionID($0)
+        $0.internalID
       })
     stateService.visionResults = stateService.visionResults.filter { ids.contains($0.key) }
     stateService.visionFailureMessages = stateService.visionFailureMessages.filter {

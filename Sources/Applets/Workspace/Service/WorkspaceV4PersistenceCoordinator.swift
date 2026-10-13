@@ -68,7 +68,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   public func open(_ workspace: WorkspaceV4Bundle, at packageURL: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     url = packageURL.standardizedFileURL
   }
 

@@ -90,17 +90,4 @@ public final class WorkspaceStateService {
     self.isLocalRecording = isLocalRecording
     self.outputFailureMessage = outputFailureMessage
   }
-
-}
-
-public struct WorkspaceSaveValidationError: LocalizedError, Sendable {
-  public let messages: [String]
-
-  public init(messages: [String]) { self.messages = messages }
-
-  public var errorDescription: String? { "The Workspace could not be saved." }
-  public var failureReason: String? { messages.joined(separator: "\n\n") }
-  public var recoverySuggestion: String? {
-    messages.joined(separator: "\n\n") + "\n\nCorrect these settings and save again."
-  }
 }

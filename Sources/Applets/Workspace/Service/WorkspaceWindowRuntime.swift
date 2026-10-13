@@ -118,7 +118,7 @@ public final class WorkspaceWindowRuntime {
     componentFrameRenderer?.retainComponents(
       Set(
         definition.videoComponents.compactMap {
-          try? WorkspaceV4IntegrityValidator.videoComponentID($0)
+          $0.internalID
         }))
     updateRuntime(landscapeRuntime, target: .landscape)
     updateRuntime(portraitRuntime, target: .portrait)
@@ -223,7 +223,7 @@ public final class WorkspaceWindowRuntime {
   public func visionInputSize(componentID: Int64) throws -> CGSize {
     guard
       let wrapper = definition.videoComponents.first(where: {
-        (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == componentID
+        $0.internalID == componentID
       })
     else { throw WorkspaceVisionFeatureError.referencedVideoComponentMissing }
     var width = 1920

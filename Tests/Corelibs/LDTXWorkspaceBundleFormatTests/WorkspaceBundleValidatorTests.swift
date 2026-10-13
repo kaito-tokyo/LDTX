@@ -7,7 +7,7 @@ import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Workspace V4 integrity validation")
-struct WorkspaceV4IntegrityValidatorUnitTestSuite {
+struct WorkspaceBundleValidatorV4UnitTestSuite {
   @Test("round trips independent canvas preferences through Protobuf")
   func canvasPreferencesRoundTrip() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
@@ -60,9 +60,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       $0.den = 1
     }
     let workspace = WorkspaceV4Bundle(definition: .init(), preferences: preferences)
-    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(99)) {
-      try WorkspaceV4IntegrityValidator.validate(workspace)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(workspace)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingAudioInputDevice(99)
+        } == true
+      })
   }
 
   @Test("rejects a Program that references a missing video layer")
@@ -73,14 +79,20 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     program.displayName = "Main"
     definition.programs = [program]
 
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(99)) {
-      try WorkspaceV4IntegrityValidator.validate(
-        WorkspaceV4Bundle(
-          definition: definition,
-          preferences: .with {
-            $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [99] }
-          }))
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(
+          WorkspaceV4Bundle(
+            definition: definition,
+            preferences: .with {
+              $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [99] }
+            }))
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingVideoLayer(99)
+        } == true
+      })
   }
 
   @Test("allows an unassigned VFX Source")
@@ -94,7 +106,7 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         }
       }
     ]
-    try WorkspaceV4IntegrityValidator.validate(definition)
+    try WorkspaceBundleValidatorV4.validate(definition)
   }
 
   @Test("PTS master must reference a VFX Source")
@@ -109,9 +121,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       }
     ]
     definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 1
-    #expect(throws: WorkspaceV4IntegrityError.missingVfxSource(1)) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingVfxSource(1)
+        } == true
+      })
   }
 
   @Test("OCR can reference a generated Video Component")
@@ -134,7 +152,7 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         }
       }
     ]
-    try WorkspaceV4IntegrityValidator.validate(definition)
+    try WorkspaceBundleValidatorV4.validate(definition)
   }
 
   @Test("rejects entity IDs reused across resource kinds")
@@ -147,9 +165,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     definition.videoComponents = [input]
     definition.programs = [program]
 
-    #expect(throws: WorkspaceV4IntegrityError.duplicateInternalID) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .duplicateInternalID
+        } == true
+      })
   }
 
   @Test("rejects an OCR Vision without a video component")
@@ -162,9 +186,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.visions = [wrapper]
 
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoComponent(1)) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingVideoComponent(1)
+        } == true
+      })
   }
 
   @Test("rejects dangling program preferences in both maps")
@@ -180,9 +210,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         preferences: preferences
       )
 
-      #expect(throws: WorkspaceV4IntegrityError.missingProgram(99)) {
-        try WorkspaceV4IntegrityValidator.validate(workspace)
-      }
+      #expect(
+        performing: {
+          try WorkspaceBundleValidatorV4.validate(workspace)
+        },
+        throws: {
+          ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+            $0.error == .missingProgram(99)
+          } == true
+        })
     }
   }
 
@@ -191,9 +227,15 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.canvasConfiguration.landscapeProfileID = "custom-4k"
 
-    #expect(throws: WorkspaceV4IntegrityError.unsupportedOutputProfile("custom-4k")) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .unsupportedOutputProfile("custom-4k")
+        } == true
+      })
   }
 
   @Test("signed fixed-width IDs and reference keys round trip without loss")
@@ -220,9 +262,14 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.programs = [.with { $0.internalID = id }]
     }
-    #expect(throws: WorkspaceV4IntegrityError.invalidInternalID) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidInternalID }
+          == true
+      })
   }
 
   @Test("negative references cannot be persisted")
@@ -238,11 +285,17 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4.with {
       $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [-1] }
     }
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(-1)) {
-      try WorkspaceV4IntegrityValidator.validate(
-        WorkspaceV4Bundle(
-          definition: definition, preferences: preferences))
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(
+          WorkspaceV4Bundle(
+            definition: definition, preferences: preferences))
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingVideoLayer(-1)
+        } == true
+      })
   }
 
   @Test("rejects an internal ID with the sign bit set")
@@ -252,9 +305,14 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     program.internalID = Int64.min
     definition.programs = [program]
 
-    #expect(throws: WorkspaceV4IntegrityError.invalidInternalID) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidInternalID }
+          == true
+      })
   }
 
   @Test("rejects duplicate video layers in one Program")
@@ -271,14 +329,20 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
     definition.videoComponents = [input]
     definition.programs = [program]
 
-    #expect(throws: WorkspaceV4IntegrityError.duplicateVideoLayer(2)) {
-      try WorkspaceV4IntegrityValidator.validate(
-        WorkspaceV4Bundle(
-          definition: definition,
-          preferences: .with {
-            $0.landscapeProgramPreferences[2] = .with { $0.videoLayerInternalIds = [1, 1] }
-          }))
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(
+          WorkspaceV4Bundle(
+            definition: definition,
+            preferences: .with {
+              $0.landscapeProgramPreferences[2] = .with { $0.videoLayerInternalIds = [1, 1] }
+            }))
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .duplicateVideoLayer(2)
+        } == true
+      })
   }
   @Test("collects definition and preferences issues in both canvases")
   func collectsAllSaveIssues() {
@@ -320,16 +384,16 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         $0.den = 1
       }
     }
-    let issues = WorkspaceV4IntegrityValidator.validationIssues(
+    let issues = WorkspaceBundleValidatorV4.validationIssues(
       in: WorkspaceV4Bundle(definition: definition, preferences: preferences))
-    #expect(issues.count == 4)
+    #expect(issues.count == 5)
     #expect(
-      issues.map { $0.error as? WorkspaceV4IntegrityError } == [
-        .duplicateDisplayName("Main"), .missingAudioInputDevice(99),
+      issues.map { $0.error } == [
+        .duplicateDisplayName("Main"), .duplicateDisplayName("Main"), .missingAudioInputDevice(99),
         .invalidBasicTransform, .invalidBasicTransform,
       ])
-    #expect(issues[2].context.contains("Landscape"))
-    #expect(issues[3].context.contains("Portrait"))
+    #expect(issues[3].path.contains("Landscape"))
+    #expect(issues[4].path.contains("Portrait"))
   }
 
   @Test("retained preferences reference existing components rather than membership")
@@ -361,13 +425,19 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         $0.den = 1
       }
     }
-    try WorkspaceV4IntegrityValidator.validate(
+    try WorkspaceBundleValidatorV4.validate(
       WorkspaceV4Bundle(definition: definition, preferences: preferences))
     definition.videoComponents = []
-    #expect(throws: WorkspaceV4IntegrityError.missingVideoLayer(2)) {
-      try WorkspaceV4IntegrityValidator.validate(
-        WorkspaceV4Bundle(definition: definition, preferences: preferences))
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(
+          WorkspaceV4Bundle(definition: definition, preferences: preferences))
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingVideoLayer(2)
+        } == true
+      })
   }
 
   @Test("transform range validation preserves boundary and identity values")
@@ -444,11 +514,17 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
         transform
       let workspace = WorkspaceV4Bundle(definition: definition, preferences: preferences)
       if valid {
-        try WorkspaceV4IntegrityValidator.validate(workspace)
+        try WorkspaceBundleValidatorV4.validate(workspace)
       } else {
-        #expect(throws: WorkspaceV4IntegrityError.invalidBasicTransform) {
-          try WorkspaceV4IntegrityValidator.validate(workspace)
-        }
+        #expect(
+          performing: {
+            try WorkspaceBundleValidatorV4.validate(workspace)
+          },
+          throws: {
+            ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+              $0.error == .invalidBasicTransform
+            } == true
+          })
       }
     }
   }
@@ -472,12 +548,17 @@ struct WorkspaceV4IntegrityValidatorUnitTestSuite {
       ]
     }
     let bytes = try definition.serializedData()
-    try WorkspaceV4IntegrityValidator.validate(definition)
+    try WorkspaceBundleValidatorV4.validate(definition)
     #expect(try definition.serializedData() == bytes)
     definition.videoComponents[0].solidColorFill.extendedSrgbColor.alpha = 1.5
-    #expect(throws: WorkspaceV4IntegrityError.invalidColor) {
-      try WorkspaceV4IntegrityValidator.validate(definition)
-    }
+    #expect(
+      performing: {
+        try WorkspaceBundleValidatorV4.validate(definition)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidColor }
+          == true
+      })
   }
 
 }

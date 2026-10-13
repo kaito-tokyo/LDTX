@@ -3,6 +3,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Rational32")
@@ -84,9 +85,9 @@ struct Rational32UnitTestSuite {
   @Test func invalidStoredDenominator() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.scaleY = .with { $0.set(num: 1, den: 0) }
-    #expect(throws: WorkspaceV4IntegrityError.invalidRational) {
-      try WorkspaceV4IntegrityValidator.validateTransform(transform)
-    }
+    #expect(performing: {
+      try WorkspaceBundleValidatorV4.validateTransform(transform)
+    }, throws: { ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidRational } == true })
   }
 
   @Test func castsDoubleToFloat() {
@@ -119,9 +120,9 @@ struct Rational32UnitTestSuite {
       $0.den = UInt32(Int32.max - 1)
     }
     #expect(transform.translationX.double > 1)
-    #expect(throws: WorkspaceV4IntegrityError.invalidBasicTransform) {
-      try WorkspaceV4IntegrityValidator.validateTransform(transform)
-    }
+    #expect(performing: {
+      try WorkspaceBundleValidatorV4.validateTransform(transform)
+    }, throws: { ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidBasicTransform } == true })
   }
   @Test func decimalRoundTripAndEncodingLimits() throws {
     var value = Ldtx_Workspace_V4_Rational32()

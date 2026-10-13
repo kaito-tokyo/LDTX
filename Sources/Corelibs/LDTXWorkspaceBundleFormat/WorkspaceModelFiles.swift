@@ -18,19 +18,6 @@ public enum WorkspaceModelFiles {
     return models[vision.modelInternalID]
   }
 
-  public static func validate(_ workspace: WorkspaceV4Bundle) throws {
-    for (id, url) in workspace.visionModels {
-      guard id > 0 else { throw CocoaError(.fileReadCorruptFile) }
-      try validateModel(at: url)
-    }
-    for wrapper in workspace.definition.visions {
-      guard case .ldtxSceneDetectorVision(let vision) = wrapper.vision else { continue }
-      guard vision.modelInternalID >= 0,
-        vision.modelInternalID == 0 || workspace.visionModels[vision.modelInternalID] != nil
-      else { throw CocoaError(.fileReadCorruptFile) }
-    }
-  }
-
   static func validateDirectory(_ url: URL) throws {
     if FileManager.default.fileExists(atPath: url.path) {
       let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -40,7 +27,7 @@ public enum WorkspaceModelFiles {
     }
   }
 
-  private static func validateModel(at url: URL) throws {
+  static func validateModel(at url: URL) throws {
     #if os(macOS)
       let accessed = url.startAccessingSecurityScopedResource()
       defer { if accessed { url.stopAccessingSecurityScopedResource() } }
@@ -97,7 +84,6 @@ public enum WorkspaceModelFiles {
       .filter { isValidBaseName($0.lastPathComponent) }
       .sorted { $0.lastPathComponent < $1.lastPathComponent }
       if let selected = candidates.first {
-        try validateModel(at: selected)
         models[id] = selected
       }
     }

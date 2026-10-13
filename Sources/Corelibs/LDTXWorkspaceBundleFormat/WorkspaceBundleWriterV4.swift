@@ -76,8 +76,7 @@ public struct WorkspaceBundleWriterV4 {
 
   /// Validates and serializes all documents before changing the destination.
   public func write(_ workspace: WorkspaceV4Bundle, to destination: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace)
-    try WorkspaceModelFiles.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     let definitionData = try Self.encode(
       definition: workspace.definition,
       externalID: Self.envelopeIdentifier(workspace.definitionExternalID))

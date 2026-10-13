@@ -89,7 +89,7 @@ extension AppUIComponentTestSuite {
       do {
         try await saveWorkspaceDocument(document, to: url)
         Issue.record("Expected validation error")
-      } catch { #expect(error is WorkspaceV4IntegrityError) }
+      } catch { #expect(error is WorkspaceV4ValidationError) }
       #expect(!FileManager.default.fileExists(atPath: url.path))
       #expect(document.fileURL == nil)
     }

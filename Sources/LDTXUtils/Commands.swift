@@ -125,7 +125,7 @@ public struct WorkspaceCommand: ParsableCommand {
               },
               preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
           }
-          try WorkspaceV4IntegrityValidator.validate(workspace)
+          try WorkspaceBundleValidatorV4.validate(workspace)
           guard var writer = WorkspaceBundleWriterV4(at: url) else {
             throw ValidationError("Could not initialize Workspace writer: \(url.path)")
           }
@@ -185,7 +185,7 @@ public struct WorkspaceCommand: ParsableCommand {
           throw ValidationError("Unsupported Workspace format")
         }
         let workspace = try reader.read()
-        try WorkspaceV4IntegrityValidator.validate(workspace)
+        try WorkspaceBundleValidatorV4.validate(workspace)
         print("OK: Workspace v4 \(url.path)")
       }
     }

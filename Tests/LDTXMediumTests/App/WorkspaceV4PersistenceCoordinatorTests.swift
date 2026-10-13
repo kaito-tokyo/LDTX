@@ -226,7 +226,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
       self.workspace = workspace
     }
     func replace(_ value: WorkspaceV4Bundle) throws {
-      try WorkspaceV4IntegrityValidator.validate(value)
+      try WorkspaceBundleValidatorV4.validate(value)
       workspace = value
     }
   }

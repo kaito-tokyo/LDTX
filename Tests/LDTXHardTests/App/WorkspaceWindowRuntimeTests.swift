@@ -152,13 +152,13 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         == Ldtx_Workspace_V4_Rational32.with {
           $0.set(num: 13, den: 10)
         })
-    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
+    #expect(performing: {
       try runtime.setAudioChannelGain(
         .with {
           $0.num = -6
           $0.den = 1
         }, forAudioInputDeviceInternalID: 999)
-    }
+    }, throws: { ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .missingAudioInputDevice(999) } == true })
     try runtime.removeProgram(internalID: id)
     #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
     #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
@@ -537,7 +537,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       self.workspace = workspace
     }
     func replace(_ value: WorkspaceV4Bundle) throws {
-      try WorkspaceV4IntegrityValidator.validate(value)
+      try WorkspaceBundleValidatorV4.validate(value)
       workspace = value
     }
   }

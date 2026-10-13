@@ -36,11 +36,15 @@ part of saving.
 
 Importing a model does not compile it or execute inference.
 
-`LDTXProtos` owns protobuf message types and the
-independent `WorkspaceV4IntegrityValidator` for cross-document Workspace
-consistency. It does not add validator methods to generated message types.
-`LDTXWorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and on-disk format
-validation, and depends on `LDTXProtos`.
+`LDTXProtos` owns protobuf message types and attribute accessors.
+`LDTXWorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and
+`WorkspaceBundleValidatorV4`. The validator is the Read/Write content gate:
+it returns all independent diagnostics with field paths, entity IDs and violation
+codes, without correcting values. Reader and Writer reject invalid content with
+`WorkspaceV4ValidationError`, which retains the diagnostic array and presents all
+violations together. Invalid fractions stop dependent comparisons only; validation
+continues for other fields and resources. Editing and Snapshot capture do not run
+this gate.
 
 `makeWorkspaceBundleReader(at:)` independently reads
 `LDTXWorkspaceVersion` from `Info.plist` and selects a Reader using that logical

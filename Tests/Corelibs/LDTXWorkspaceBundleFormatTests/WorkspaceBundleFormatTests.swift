@@ -77,8 +77,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       ))
   }
 
-  @Test("Reader decodes documents without applying Workspace integrity validation")
-  func readerDoesNotValidateWorkspaceIntegrity() throws {
+  @Test("Reader gates decoded documents on Workspace integrity diagnostics")
+  func readerValidatesWorkspaceIntegrity() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
@@ -100,8 +100,9 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     )
 
     try writer.write(outputSettings: .init(), externalID: writer.makeExternalID())
-    let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
-    #expect(workspace.definition == invalidDefinition)
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleReaderV4(at: packageURL).read()
+    }
   }
 
   @Test("refuses to open a package in an unsupported format")
@@ -274,7 +275,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     case 1: workspace.preferencesExternalID = identifier
     default: workspace.outputSettingsExternalID = identifier
     }
-    #expect(throws: CocoaError(.fileWriteInvalidFileName)) {
+    #expect(throws: WorkspaceV4ValidationError.self) {
       try WorkspaceBundleWriterV4().write(workspace, to: destination)
     }
     #expect(!FileManager.default.fileExists(atPath: destination.path))
@@ -423,7 +424,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let source = root.appendingPathComponent("Valid.mlmodel")
     try Data([1]).write(to: source)
     workspace.visionModels = [-1: source]
-    #expect(throws: (any Error).self) { try WorkspaceModelFiles.validate(workspace) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
   }
 
   @Test("Model resources reject unsupported types, incomplete packages and symlinks")
@@ -434,19 +435,19 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let unsupported = root.appendingPathComponent("Classifier.txt")
     try Data([1]).write(to: unsupported)
     workspace.visionModels = [9: unsupported]
-    #expect(throws: (any Error).self) { try WorkspaceModelFiles.validate(workspace) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
     let directory = root.appendingPathComponent("Directory.mlmodel")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     workspace.visionModels = [9: directory]
-    #expect(throws: (any Error).self) { try WorkspaceModelFiles.validate(workspace) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
     let package = root.appendingPathComponent("Classifier.mlpackage")
     try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
     workspace.visionModels = [9: package]
-    #expect(throws: (any Error).self) { try WorkspaceModelFiles.validate(workspace) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
     try Data("{}".utf8).write(to: package.appendingPathComponent("Manifest.json"))
     try FileManager.default.createSymbolicLink(
       at: package.appendingPathComponent("outside"), withDestinationURL: unsupported)
-    #expect(throws: (any Error).self) { try WorkspaceModelFiles.validate(workspace) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
   }
 
   @Test("Model resources reject symlink destination directories")

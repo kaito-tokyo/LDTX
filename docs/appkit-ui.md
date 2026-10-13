@@ -407,10 +407,11 @@ disconnects the service's runtime actions before releasing resources.
 
 ## Validation before saving
 
-The document writer validates the definition and both canvas preference maps
-with WorkspaceV4IntegrityValidator before writing its captured snapshot. Validation
-collects independent issues with resource and canvas context into one localized
-error. The document framework presents the save error.
+Reader and Writer use WorkspaceBundleValidatorV4 in LDTXWorkspaceBundleFormat
+as their content gate. Validation collects independent field-level issues,
+including model resource references, into one error containing the diagnostic
+array. Invalid values are rejected without normalization. The document framework
+presents every diagnostic together; Snapshot capture itself does not validate.
 A rejected save retains the edited model and leaves the existing package intact.
 
 Transforms and hidden flags may remain for detached layers, as long as their
