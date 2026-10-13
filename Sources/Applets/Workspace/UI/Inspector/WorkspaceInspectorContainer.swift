@@ -156,9 +156,6 @@ public struct WorkspaceInspectorContainer: View {
       if let internalID = selector.internalID,
         let vision = $stateService.ldtxSceneDetectorVision(internalID: internalID)
       {
-        let savedModelURL = WorkspaceModelFiles.modelPath(
-          for: vision.wrappedValue, in: stateService.workspaceModels)
-          .flatMap { workspaceURL?.appendingPathComponent("VisionModels/\($0)") }
         LdtxSceneDetectorVisionInspector(
           videoComponents: stateService.workspaceDefinition.videoComponents,
           inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in
@@ -167,9 +164,8 @@ public struct WorkspaceInspectorContainer: View {
           },
           vision: vision,
           modelURL: Binding(
-            get: { stateService.modelURLs[internalID] ?? savedModelURL },
-            set: { stateService.modelURLs[internalID] = .some($0) }),
-          savedModelURL: savedModelURL,
+            get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
+            set: { stateService.setVisionModelURL($0, for: internalID) }),
           inferenceResult: stateService.visionResults[internalID],
           inferenceFailure: stateService.visionFailureMessages[internalID]
         )

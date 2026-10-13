@@ -15,33 +15,31 @@ value `4.0`. `LDTXWorkspaceVersion` identifies the logical Workspace version;
 `LDTXWorkspaceBundleVersion` is an extensibility field and does not imply a
 compatibility rule. JSON mirrors are not part of the package format. The current
 format does not define `Assets` or `Extensions` resources.
-Imported Core ML models are stored in
-`VisionModels/<Vision internal_id>/<model_revision>/<original basename>.{mlmodel|mlpackage}`.
-`model_revision` is an LdtxInternalId identifying the assigned model revision;
-zero means no model is assigned. Within the assigned revision, the first
-`.mlmodel` file or `.mlpackage` directory in lexicographic basename order is
-used. The selected
-`modelURL` is UI state separate from the saved model reference. On load and after
-successful Document saving, it equals the resolved `savedModelURL` in the bundle.
-Choosing a different model does not read it or change the saved revision.
-Command+S reads the selected external model in the Document save snapshot and
-writes resources before protobuf documents. Only a successful save updates the
-saved revision and selection; failures preserve both. A selection made while a
-save is in progress remains pending. Each imported model receives a new revision,
-so replacement never overwrites a previously saved model, even when basenames
-match. Existing model resources are not rewritten.
+Imported Core ML models are stored at
+`VisionModels/<model_internal_id>/<original basename>.{mlmodel|mlpackage}`.
+`model_internal_id` identifies a model resource independently of its referencing
+Vision. Zero means no assignment. Reader selects the first supported basename in
+lexicographic order within each model directory. WorkspaceV4Bundle and StateService
+hold `visionModels: [Int64: URL]`, including retained historical models.
 
-Historical model revisions are intentionally retained in the Workspace bundle.
-Replacing or clearing a model assignment does not delete previous revisions or
-their files. Clearing an assignment sets `model_revision` to zero. Automatic
-pruning of unreferenced models is not part of the save operation.
+Choosing a new model allocates its ID immediately and records its source URL.
+Reselecting the same current URL preserves the ID. A Snapshot captures source URLs,
+not a copy of the file bytes. Writer copies native model files or package trees
+before writing protobuf documents, without assigning IDs or modifying references.
+Saving preserves the source URLs in Document and StateService. Reader constructs
+bundle-local URLs when the package is read again. Inference uses the runtime
+copy's bundle-local URL and matches the saved model ID and Vision settings rather
+than requiring the editing source URL to equal the runtime URL.
+Existing models are not rewritten or deleted. Clearing an assignment sets
+`model_internal_id` to zero and retains past resources. Automatic pruning is not
+part of saving.
 
 Importing a model does not compile it or execute inference.
 
-`LDTXProtos` owns the in-memory package values, protobuf message types, and the
+`LDTXProtos` owns protobuf message types and the
 independent `WorkspaceV4IntegrityValidator` for cross-document Workspace
 consistency. It does not add validator methods to generated message types.
-`LDTXWorkspaceBundleFormat` owns package reads, writes, and on-disk format
+`LDTXWorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and on-disk format
 validation, and depends on `LDTXProtos`.
 
 `makeWorkspaceBundleReader(at:)` independently reads
@@ -62,18 +60,28 @@ The `.v4` case wraps `WorkspaceBundleReaderV4`, which is initialized with the
 package URL and reads that package with `read()`. Create a Reader for each read operation; it does not
 represent reusable Workspace state. Missing or unsupported packages are
 reported as read errors rather than through a separate existence query.
-`WorkspaceBundleWriterV4` is likewise initialized with one package URL. Its
+`WorkspaceBundleWriterV4` supports both individual document writes and complete
+WorkspaceV4Bundle writes. Its destination-independent initializer performs no
+filesystem work; `write(_:to:)` validates the bundle and serializes all three
+envelopes before creating metadata, placing models, and writing the documents.
+Existing model revisions and unknown package resources are preserved.
+WorkspaceDocument defines inline Reader and Writer wrappers that choose their
+async execution behavior and delegate package I/O to Corelibs. WriterV4 has no
+SwiftUI dependency or retroactive DocumentWriter conformance.
+
+For individual document writes, WriterV4 can be initialized with a package URL. Its
 failable initializer creates the package directory and writes `Info.plist`;
 failure to create or write that metadata returns `nil`. Its
 `write(definition:)` and `write(preferences:)` methods atomically write their
 respective protobuf documents independently; neither replaces the package or
-validates the other document. The persistence coordinator validates the
-in-memory bundle before writing both documents. The Writer accepts UUID values
+validates the other document. Destination URL accessors throw if the Writer has
+no bound package URL. The Writer accepts UUID values
 for document identifiers and writes their 16-byte RFC 9562 network byte order
 representation into each protobuf envelope. Its `makeExternalID()` operation creates UUIDv7 values
 for callers that need new document identifiers.
-The Workspace persistence coordinator and CLI orchestrate their document
-writes; the Writer does not combine them into a package-level replacement.
+Individual writes remain available for CLI operations. DocumentWriter delegates
+complete-bundle saves to WriterV4 at the framework-supplied staging destination;
+WriterV4 does not replace the entire package directory.
 Shared bundle values are defined by
 `LDTXWorkspaceBundleFormat`; read and write operations propagate Foundation and
 Protobuf errors. `WorkspaceLockService` belongs to Workspace runtime

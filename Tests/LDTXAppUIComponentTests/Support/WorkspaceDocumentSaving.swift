@@ -17,22 +17,33 @@ func saveWorkspaceDocument(
 ) async throws {
   _ = document.testCoordinator
   let snapshot = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
-  let writer = document.packageWriter
+  let writer = WorkspaceDocument.Writer()
   let progress = ProgressManager(totalCount: 1)
   try await writer.write(
     snapshot: snapshot, to: url, previous: nil, progress: progress.subprogress(assigningCount: 1))
-  document.adoptDocumentURL(url)
-  await document.acceptPersistedWrite()
+  document.testSavedURL = url
+  document.controller.adoptDocumentURL(url)
+  document.testCoordinator.synchronizeDocument()
+  await document.refreshTestPersistedWorkspace()
   document.testSavedWorkspace = document.workspace
 }
 
 @MainActor
 func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
   let document = WorkspaceDocument()
+  document.testSavedURL = url
   let progress = ProgressManager(totalCount: 1)
   let snapshot = try await WorkspaceDocument.Reader().read(
     from: url, progress: progress.subprogress(assigningCount: 1))
   try await document.apply(snapshot: snapshot, previous: nil)
+  let state = document.stateService
+  state.workspaceDefinition = snapshot.definition
+  state.workspacePreferences = snapshot.preferences
+  state.workspaceOutputSettings = snapshot.outputSettings
+  state.visionModels = snapshot.visionModels
+  state.externalID = snapshot.definitionExternalID
+  state.preferencesExternalID = snapshot.preferencesExternalID
+  state.outputSettingsExternalID = snapshot.outputSettingsExternalID
   document.testSavedWorkspace = document.workspace
   return document
 }
@@ -40,6 +51,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
 // Component tests supply their own window; DocumentGroup owns production windows.
 @MainActor
 private final class WorkspaceTestHost {
+  var savedURL: URL?
   var coordinator: WorkspaceViewControllerRepresentation.Coordinator?
   var controllers: [WorkspaceWindowController] = []
   var windows: [NSWindow] = []
@@ -48,6 +60,15 @@ private final class WorkspaceTestHost {
 
 @MainActor
 extension WorkspaceDocument {
+  // The test host owns IO destinations; a standalone Document has no SwiftUI URL configuration.
+  var testSavedURL: URL? {
+    get { testHost.savedURL }
+    set { testHost.savedURL = newValue }
+  }
+  func refreshTestPersistedWorkspace() async {
+    guard let url = testSavedURL else { return }
+    await controller.refreshPersistedWorkspace(at: url) { self.testSavedURL == url }
+  }
   private var testHost: WorkspaceTestHost {
     if let host = objc_getAssociatedObject(self, &workspaceTestHostKey) as? WorkspaceTestHost {
       return host
@@ -60,7 +81,7 @@ extension WorkspaceDocument {
     get { testHost.saved }
     set { testHost.saved = newValue }
   }
-  // Test-only conveniences retain the same editing connection as a production Rep.
+  // Test-only conveniences host the production Representable and its runtime controller.
   var testCoordinator: WorkspaceViewControllerRepresentation.Coordinator {
     if let coordinator = testHost.coordinator { return coordinator }
     let coordinator = WorkspaceViewControllerRepresentation.Coordinator(document: self)
@@ -68,7 +89,6 @@ extension WorkspaceDocument {
     return coordinator
   }
   var controller: WorkspaceWindowController { testCoordinator.windowController }
-  var stateService: WorkspaceStateService { controller.stateService }
   var appletData: WorkspaceAppletData { controller.appletData }
   var persistenceCoordinator: WorkspaceV4PersistenceCoordinator { controller.persistenceCoordinator }
   var workspace: WorkspaceV4Bundle { stateService.editingWorkspace }

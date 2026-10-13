@@ -86,11 +86,12 @@ message LdtxSceneDetectorVision {
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
   repeated VisionTriggerWrapper triggers = 5;
-  // An LdtxInternalId identifying the assigned model revision.
+  // The LdtxInternalId of the assigned model resource.
   // Zero means no model is assigned.
-  // Models are stored at VisionModels/<internal_id>/<model_revision>/ inside
+  // Models are stored at VisionModels/<model_internal_id>/ inside
   // the Workspace bundle. Use the first .mlmodel file or .mlpackage directory
-  // in lexicographic basename order within that revision. Previous revisions
+  // in lexicographic basename order within that model directory. Model IDs
+  // are assigned when selecting models, not when saving. Previous models
   // are retained and are not overwritten when a new model is saved.
-  sfixed64 model_revision = 6 [default = 0];
+  sfixed64 model_internal_id = 6 [default = 0];
 }

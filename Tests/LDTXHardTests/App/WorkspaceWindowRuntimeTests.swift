@@ -242,7 +242,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: capture)
     let programID = try runtime.addProgram(displayName: "Main")
 
-    try WorkspaceDocumentPackage.write(runtime.workspace, to: packageURL, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(runtime.workspace, to: packageURL)
     runtime.persistenceCoordinator.setDocumentURL(packageURL)
     #expect(runtime.url == packageURL)
 

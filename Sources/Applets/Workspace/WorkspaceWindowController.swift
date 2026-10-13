@@ -148,29 +148,32 @@ public final class WorkspaceWindowController: NSWindowController,
   public convenience init(
     document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared
   ) {
-    let stateService = WorkspaceStateService()
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.displayName = "Untitled"
-    let initial = document.confirmedWorkspace ?? WorkspaceV4Bundle(
-      definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
-      preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
-      definition: definition, preferences: .init(),
-      outputSettingsExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased())
-    stateService.replaceEditingWorkspace(initial)
+    let stateService = document.stateService
     stateService.localStateURL = document.fileURL
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { stateService.editingWorkspace },
       replaceWorkspace: { stateService.replaceEditingWorkspace($0) }, url: document.fileURL,
-      runtimeSnapshot: { [weak document] in
-        var workspace = document?.confirmedWorkspace ?? WorkspaceV4Bundle(
+      runtimeSnapshot: {
+        var workspace = WorkspaceV4Bundle(
           definition: .init(), preferences: .init())
         workspace.preferences = stateService.workspacePreferences
         workspace.outputSettings = stateService.workspaceOutputSettings
         return workspace
       })
+    if let workspace = document.workspaceSnapshot { persistence.adoptRuntimeWorkspace(workspace) }
     self.init(stateService: stateService, persistenceCoordinator: persistence,
       appletData: appletData, document: document)
     if let url = document.fileURL { adoptDocumentURL(url) }
+    let changes = Observations { [weak document, weak stateService] in
+      (document?.workspaceSnapshot, document?.fileURL,
+        document?.lastContentModificationDate, stateService?.isOutputActive)
+    }
+    documentObservationTask = Task { @MainActor [weak self] in
+      for await _ in changes {
+        guard let self, !Task.isCancelled else { return }
+        await self.refreshPersistedWorkspace()
+      }
+    }
   }
 
   public init(
@@ -268,7 +271,7 @@ public final class WorkspaceWindowController: NSWindowController,
       runtimeActions: {
         guard let owner = errorOwner, owner.shutdownTask == nil else { return nil }
         return owner
-      })
+      }, runtimeWorkspace: { [weak runtime = windowRuntime] in runtime?.workspace })
     self.contentController = content
     content.didAttachWindow = { [weak self] window in self?.attachWindow(window) }
     appletData.registerTransientState(at: transientURL)
@@ -362,10 +365,45 @@ public final class WorkspaceWindowController: NSWindowController,
   isolated deinit {
     if let audioStatusObserver { NotificationCenter.default.removeObserver(audioStatusObserver) }
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    documentObservationTask?.cancel()
     outputObservationTask?.cancel()
     deviceAssignmentsObservationTask?.cancel()
     preferencesObservationTask?.cancel()
     appletData.removeTransientState(at: transientURL)
+  }
+
+  private var documentObservationTask: Task<Void, Never>?
+
+  // Runtime adoption is independent of Document's in-memory confirmation.
+  func refreshPersistedWorkspace() async {
+    guard let url = workspaceDocument?.fileURL else { return }
+    await refreshPersistedWorkspace(at: url) { [weak self] in
+      self?.workspaceDocument?.fileURL == url
+    }
+  }
+
+  func refreshPersistedWorkspace(at url: URL, isCurrent: () -> Bool) async {
+    guard shutdownTask == nil, !stateService.isOutputActive else { return }
+    do {
+      let workspace = try await Self.readPersistedWorkspace(at: url)
+      guard shutdownTask == nil, !stateService.isOutputActive,
+        isCurrent() else { return }
+      guard workspace != windowRuntime.workspace else { return }
+      persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+      confirmedContentsDidChange()
+    } catch { reportError(error) }
+  }
+
+  @concurrent private static func readPersistedWorkspace(at url: URL) async throws -> WorkspaceV4Bundle {
+    let coordinator = NSFileCoordinator()
+    var coordinationError: NSError?
+    var result: Result<WorkspaceV4Bundle, Error>?
+    coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { source in
+      result = Result { try WorkspaceBundleReaderV4(at: source).read() }
+    }
+    if let coordinationError { throw coordinationError }
+    guard let result else { throw CocoaError(.fileReadUnknown) }
+    return try result.get()
   }
 
   private static let activeControllers = NSHashTable<WorkspaceWindowController>.weakObjects()
@@ -460,6 +498,7 @@ public final class WorkspaceWindowController: NSWindowController,
     closeErrorPresentation()
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     closeObserver = nil
+    documentObservationTask?.cancel()
     outputObservationTask?.cancel()
     let task = Task { @MainActor in
       contentController.tearDown()
@@ -515,8 +554,7 @@ extension WorkspaceWindowController {
   ) async throws -> String {
     guard windowRuntime.definition.visions.contains(where: {
       $0.vision == .ldtxSceneDetectorVision(vision)
-    }), let path = WorkspaceModelFiles.modelPath(for: vision, in: windowRuntime.workspace.models),
-      let url = windowRuntime.url?.appendingPathComponent("VisionModels/\(path)"),
+    }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
       url.standardizedFileURL == modelURL.standardizedFileURL
     else { throw CocoaError(.fileReadNoSuchFile) }
     let model = try await VisionImageClassifierService.loadModel(

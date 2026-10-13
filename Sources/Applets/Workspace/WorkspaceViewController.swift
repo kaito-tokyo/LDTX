@@ -22,6 +22,7 @@ public final class WorkspaceViewController: NSViewController {
   let appletData: WorkspaceAppletData
   let stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let runtimeWorkspace: () -> WorkspaceV4Bundle?
   private let reportError: (Error) -> Void
   let deviceRegistry: DeviceRegistryService
 
@@ -49,12 +50,14 @@ public final class WorkspaceViewController: NSViewController {
     reportError: @escaping (Error) -> Void,
     deviceRegistry: DeviceRegistryService,
     pairedPreview: ProgramCanvasPairedPreview,
-    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil },
+    runtimeWorkspace: (() -> WorkspaceV4Bundle?)? = nil
   ) {
     self.document = document
     self.appletData = appletData
     self.stateService = stateService
     self.runtimeActions = runtimeActions
+    self.runtimeWorkspace = runtimeWorkspace ?? { [weak document] in document?.runtimeWorkspace }
     self.reportError = reportError
     self.deviceRegistry = deviceRegistry
 
@@ -223,7 +226,8 @@ public final class WorkspaceViewController: NSViewController {
 
   private var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)? {
     guard stateService.inspectorSelector?.kind == .ldtxSceneDetectorVision,
-      let workspace = document?.runtimeWorkspace, let workspaceURL = document?.fileURL,
+      let workspace = runtimeWorkspace(),
+      document?.fileURL != nil,
       let id = stateService.inspectorSelector?.internalID,
       let vision = workspace.definition.visions.compactMap({
         wrapper -> Ldtx_Workspace_V4_LdtxSceneDetectorVision? in
@@ -234,7 +238,7 @@ public final class WorkspaceViewController: NSViewController {
         }
         return nil
       }).first,
-      !stateService.modelURLs.keys.contains(id),
+      vision.modelInternalID > 0,
       stateService.workspaceDefinition.visions.contains(where: {
         $0.vision == .ldtxSceneDetectorVision(vision)
       }),
@@ -243,8 +247,7 @@ public final class WorkspaceViewController: NSViewController {
           && $0.renderingSize != nil
       })
     else { return nil }
-    guard let path = WorkspaceModelFiles.modelPath(for: vision, in: workspace.models) else { return nil }
-    let url = workspaceURL.appendingPathComponent("VisionModels/\(path)")
+    guard let url = workspace.visionModels[vision.modelInternalID] else { return nil }
     return (vision, url)
   }
 
@@ -254,7 +257,6 @@ public final class WorkspaceViewController: NSViewController {
     else { return }
     let id = request.vision.internalID
     let editingVision = stateService.workspaceDefinition.visions.first { $0.internalID == id }
-    let pendingModelURL = stateService.modelURLs[id]
     stateService.visionResults.removeValue(forKey: id)
     stateService.visionFailureMessages.removeValue(forKey: id)
     inferenceTask = Task { [weak self] in
@@ -267,14 +269,12 @@ public final class WorkspaceViewController: NSViewController {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
         guard !isClosed, let current = inferenceRequest,
           stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
-          stateService.modelURLs[id] == pendingModelURL,
           current.vision == request.vision, current.url == request.url
         else { return }
         stateService.visionResults[id] = result
       } catch {
         guard !isClosed, let current = inferenceRequest,
           stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
-          stateService.modelURLs[id] == pendingModelURL,
           current.vision == request.vision, current.url == request.url
         else { return }
         stateService.visionFailureMessages[id] = error.localizedDescription

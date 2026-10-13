@@ -25,24 +25,39 @@ and the document window. New presents an untitled editable Workspace; saving
 chooses its location through the standard document flow. Info.plist registers
 its content type without an NSDocumentClass.
 
-The Document owns confirmed content and file persistence. WorkspaceWindowController
-owns WorkspaceStateService's editable values and UI state, the runtime projection
-coordinator, and runtime resources. The NSViewControllerRepresentable's Coordinator
-retains that controller and connects it to Document through a weak editing
-connection. Reconstructing the SwiftUI wrapper reuses the same controller and runtime.
+Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
+state, and file persistence. WorkspaceWindowController owns the runtime projection
+coordinator and runtime resources, and receives the Document-owned StateService.
+The NSViewControllerRepresentable receives Document and its Coordinator retains
+WindowController. SwiftUI editing views receive StateService through Bindable.
+Reconstructing the SwiftUI wrapper reuses the same controller and runtime.
 The runtime controller holds the framework's window weakly and does not replace
 its delegate or install its own restoration policy. Window closure finalizes
 output and tears down capture, audio, Vision, and preview resources asynchronously.
-Representable dismantling disconnects editing and initiates idempotent shutdown;
+Representable dismantling stops UI observation and initiates idempotent shutdown;
 its Coordinator also initiates cleanup if released without explicit dismantling.
 
-The editing connection registers Undo/Redo for content changes, including pending
+The Representable Coordinator registers Undo/Redo for content changes, including pending
 model selections. UI selections and runtime results are not undoable document
-changes. Reads and save-result synchronization do not register Undo. Saving
-captures the connected editor's values without maintaining an editing copy in
-Document. With no connected editor, snapshot capture fails instead of saving
-stale confirmed values. A save updates confirmed content only after its receipt
-matches the formal package. Edits made during saving remain in StateService.
+changes. Reads and confirmation synchronization do not register Undo. Saving
+captures Document's StateService values without requiring a represented editor.
+Removing the UI does not discard editing values or prevent saving. Snapshot
+preparation validates and confirms content in
+Document before writing. Write failure preserves that confirmed content as
+unsaved. Edits made during preparation or writing remain in StateService.
+
+Reader and Writer use WorkspaceV4Bundle directly as their Snapshot. Reader does
+not attach its source URL to that content. Applying a read replaces only the
+Document's workspaceSnapshot; it never restores an earlier URL or calls UI or
+runtime update hooks. The Representable Coordinator observes read generations
+and directly assigns StateService fields using full overwrite. Full overwrite replaces all document
+values and model URLs, while preserving UI and runtime status. The alternative
+URL-only operation changes only URLs for IDs already in StateService; it preserves
+other edits and does not add or remove models. There is no implicit merge. The
+Coordinator observes content and URL changes for Undo baselines and UI routing.
+WindowController independently observes content, URL, persistence notifications,
+and output state. It adopts persisted runtime content while idle and defers that
+adoption during output. Document does not keep a second runtime bundle.
 
 UI receives the document explicitly as a weak WorkspaceDocumentContext whose
 fileURL is supplied by URLDocumentConfiguration. No document environment box is
@@ -117,22 +132,24 @@ The applet Commands do not replace the standard Close, Save, or related document
 SwiftUI owns window closing, document presentation, and restoration. Playback
 stops when the Document is released; UI disappearance alone does not stop it.
 
-Workspace snapshots capture the three authoritative protobuf documents and
-pending model URLs on the main actor. The DocumentWriter performs validation,
-model import, and package I/O off the main actor, using DocumentGroup's coordinated
+Document captures protobuf documents and model source URLs
+on the main actor and reflects them into Document without validation.
+The DocumentWriter validates the snapshot off the main actor before writing. It copies native
+model files and package directories under their assigned IDs and performs package I/O off the main actor, using DocumentGroup's coordinated
 staging destination without nesting a file coordinator. It preserves unknown
-files and past model revisions. Save failure leaves the current edits intact.
+files and past models. Save failure leaves the current edits intact.
 Snapshots exclude edits made after their capture.
 
 Writing the staging package alone does not update runtime definitions. After
-URLDocumentConfiguration reports a committed URL/modification date, the Document
-matches the formal package against its completed write receipt and adopts that
+URLDocumentConfiguration reports a committed URL/modification date, WindowController
+reads the formal package independently and adopts that
 persisted Definition for ProgramRuntime and Vision. Newer edits and model
 selections remain pending. Preferences can reach the runtime immediately.
-External Reader snapshots preserve documents edited since the prior read while
-adopting the actual on-disk Definition for runtime execution.
+External Reader snapshots overwrite the editing documents through the full
+synchronization mode. The runtime independently adopts the on-disk Definition
+when its execution state permits that update.
 
-Pending editing owners prevent dismissal and save snapshots. The framework
+Invalid content prevents snapshot confirmation. The framework
 handles its normal unsaved-change review; pane visibility does not own runtime
 lifetime. Output uses the last successfully persisted Definition and requires a
 formal document URL.

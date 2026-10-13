@@ -11,7 +11,6 @@ struct LdtxSceneDetectorVisionInspector: View {
   let inputSize: (width: UInt32, height: UInt32)?
   @Binding var vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision
   @Binding var modelURL: URL?
-  let savedModelURL: URL?
   var inferenceResult: String? = nil
   var inferenceFailure: String? = nil
 
@@ -124,6 +123,6 @@ struct LdtxSceneDetectorVisionInspector: View {
     LdtxSceneDetectorVisionInspector(
       videoComponents: [videoComponent],
       inputSize: vision.videoComponentInternalIDIfPresent == 7 ? videoComponent.renderingSize : nil,
-      vision: $vision, modelURL: $modelURL, savedModelURL: nil)
+      vision: $vision, modelURL: $modelURL)
   }
 #endif

@@ -62,7 +62,7 @@ public struct WorkspaceBundleReaderV4 {
       preferences: preferencesEnvelope.workspacePreferencesV4,
       outputSettingsExternalID: outputSettingsExternalID.uuidString.lowercased(),
       outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4,
-      models: try WorkspaceModelFiles.read(at: bundleURL))
+      visionModels: try WorkspaceModelFiles.read(at: bundleURL))
     try WorkspaceModelFiles.validate(workspace)
     return workspace
   }

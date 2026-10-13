@@ -43,7 +43,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     let coordinator = makeCoordinator(box)
 
-    try WorkspaceDocumentPackage.write(box.workspace, to: packageURL, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(box.workspace, to: packageURL)
     let reloaded = try coordinator.load(at: packageURL)
 
     #expect(reloaded.definition.displayName == "Unite")

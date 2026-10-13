@@ -44,10 +44,12 @@ extension AppUIComponentTestSuite {
       let item = items[index]
       #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
       #expect(item.image != nil && !window.validateToolbarItem(item))
-      store.modelURLs[2] = .some(URL(fileURLWithPath: "/tmp/model.mlmodel"))
+      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2)
       await settleWorkspaceToolbar(window)
       #expect(!window.validateToolbarItem(item))
       context.adopt(store)
+      // Source and persisted URLs differ, but both refer to the same model ID.
+      store.visionModels[5] = URL(fileURLWithPath: "/tmp/model.mlmodel")
       await settleWorkspaceToolbar(window)
       #expect(window.validateToolbarItem(item))
       try performWorkspaceToolbarAction(item)
@@ -72,7 +74,7 @@ extension AppUIComponentTestSuite {
         WorkspaceResourceFactory.makeLdtxSceneDetectorVision(id: 2, name: "Scene", componentID: 7)
       ]
       store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
-      store.modelURLs[2] = URL(fileURLWithPath: "/tmp/model.mlmodel")
+      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2)
       let dispatcher = ToolbarDispatcher()
       let context = InferenceDocumentContext()
       context.adopt(store)
@@ -92,7 +94,7 @@ extension AppUIComponentTestSuite {
       case "roi":
         store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(num: 1, den: 10)
       default:
-        store.modelURLs[2] = URL(fileURLWithPath: "/tmp/replacement.mlmodel")
+        store.setVisionModelURL(URL(fileURLWithPath: "/tmp/replacement.mlmodel"), for: 2)
       }
       if change == "failure" {
         pending.resume(throwing: CocoaError(.fileReadUnknown))
@@ -135,7 +137,7 @@ extension AppUIComponentTestSuite {
       let inspector = LdtxSceneDetectorVisionInspector(
         videoComponents: videoComponents, inputSize: configuredSource.renderingSize,
         vision: .constant(vision),
-        modelURL: .constant(nil), savedModelURL: nil)
+        modelURL: .constant(nil))
       #expect(inspector.inputSize?.width == 1280)
       #expect(inspector.inputSize?.height == 720)
       let value: Ldtx_Workspace_V4_Rational32 = .with { $0.set(num: 1, den: 7) }

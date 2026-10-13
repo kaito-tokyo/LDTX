@@ -27,24 +27,41 @@ the relevant design or feature documentation instead.
   properties. Assignments must remain transparent: setters must not silently
   reject, reinterpret, or replace an assigned value. Editing restrictions and
   validation belong to explicit editing operations and their UI owners.
-- The editing connection registers undo actions for content changes to participate
+- The Representable Coordinator registers undo actions for content changes to participate
   in SwiftUI's unsaved-change tracking. StateService must not hide document-change
   callbacks or persistence notifications in its setters.
 
-## Confirmed document content and editing state have separate owners
+## Document content, editing state and runtime state have distinct roles
 
-- WorkspaceDocument owns the confirmed Workspace content. It changes after a
-  successful read or after a successful write is verified at the formal document
-  URL. A write to a staging location alone does not confirm the content.
-- WorkspaceWindowController owns WorkspaceStateService, its temporary editing
-  values and UI state, and the runtime resources. Document does not own the
-  controller or a continuously synchronized copy of its edits.
-- The Representable's Coordinator owns the controller and the connection to
-  Document. Document holds that connection weakly. Snapshot capture reads the
-  editor only when saving; saving without a connected editor fails explicitly.
-- A failed save preserves the edits and confirmed content. Successful saves
-  confirm only their captured values; newer edits stay in StateService. Import
-  results reconcile model revisions without replacing newer editing selections.
+- WorkspaceDocument owns the confirmed in-memory Workspace content.
+  StateService values are confirmed in Document before their snapshot is validated and written
+  to disk. The direction is StateService → Document → Disk; write failure does
+  not roll back the confirmed content, which remains unsaved.
+- WorkspaceDocument owns WorkspaceStateService and its temporary editing values
+  and UI state. Document captures those values directly when saving; Writer
+  validates them before writing. Saving does not require a represented UI or an editing connection.
+- The Representable receives Document and owns the WindowController through its
+  Coordinator. UI receives Document's StateService through Bindable. Runtime
+  resources remain WindowController-owned; Document does not own the controller.
+- Snapshot preparation confirms only captured values; newer edits stay in
+  StateService. Model IDs are assigned on selection and remain unchanged during
+  saving. Snapshots contain model source URLs; Writer copies those resources
+  without modifying the Definition and holds no shared
+  receipts or callbacks into Document. Runtime persistence tracking is separate
+  from in-memory document confirmation.
+- Reader and Writer snapshots are WorkspaceV4Bundle values. Configuration owns
+  the document location separately. Model resource URLs are keyed by their model
+  IDs within the Bundle and Document's StateService.
+- Applying a Reader snapshot only replaces Document's content. UI and runtime
+  consumers observe Document changes and independently adopt or defer
+  updates. A consumer's output state must not prevent Document from updating.
+- The connection updates StateService fields directly. Full overwrite
+  replaces Definition, Preferences, OutputSettings, envelope IDs and model URLs.
+  URL-only synchronization updates URLs for model IDs already present in
+  StateService; it does not add or remove models or change Vision references or
+  other editing values. There is no implicit three-way or field-level merge.
+- Reader content is adopted with full overwrite by the Representable Coordinator.
+  URL-only synchronization is an explicit operation, not a side effect of saving.
 
 ## Definition changes reach the runtime only after persistence
 

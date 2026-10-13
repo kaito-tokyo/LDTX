@@ -467,6 +467,7 @@ extension AppUIComponentTestSuite {
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
       first.addWindowController(firstWindow)
+      firstWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/First-\(UUID()).ldtxworkspace"))
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
       second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
@@ -476,6 +477,7 @@ extension AppUIComponentTestSuite {
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
       second.addWindowController(secondWindow)
+      secondWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/Second-\(UUID()).ldtxworkspace"))
       let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: savedRoot) }
       try await saveWorkspaceDocument(first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
@@ -520,6 +522,9 @@ extension AppUIComponentTestSuite {
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
         document: reopened)
       reopened.addWindowController(reopenedWindow)
+      // Opening an existing file supplies its URL without moving transient window state.
+      reopened.stateService.localStateURL = nil
+      reopenedWindow.adoptDocumentURL(url)
       let reopenedInspector = WorkspaceProgramsInspector(
         stateService: reopened.stateService, appletData: data,
         runtimeActions: { reopenedWindow })
@@ -557,6 +562,7 @@ extension AppUIComponentTestSuite {
         document: first)
       first.addWindowController(firstWindow)
       let input = try firstWindow.windowRuntime.addVFXSource(displayName: "Camera")
+      firstWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/First-\(UUID()).ldtxworkspace"))
       let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
       try firstWindow.windowRuntime.setVideoLayerOrder(
         [input], forProgramInternalID: program, target: .landscape)
@@ -570,6 +576,7 @@ extension AppUIComponentTestSuite {
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
       second.addWindowController(secondWindow)
+      secondWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/Second-\(UUID()).ldtxworkspace"))
       data.updateState(for: second.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
@@ -592,7 +599,7 @@ extension AppUIComponentTestSuite {
         firstRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
       #expect(
         secondRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
-      first.adoptDocumentURL(
+      firstWindow.adoptDocumentURL(
         URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
       try await Task.sleep(for: .milliseconds(20))
       #expect(
@@ -612,13 +619,14 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.12: Dock badges follow registered Documents")
-    func dockBadgeFollowsRegisteredDocuments() async {
+    @Test("UCT-1016.12: Dock badges follow registered runtime controllers")
+    func dockBadgeFollowsRegisteredControllers() async {
       let dockTile = NSApplication.shared.dockTile
       let originalBadge = dockTile.badgeLabel
-      let controller = NSDocumentController.shared
       let first = WorkspaceDocument()
       let second = WorkspaceDocument()
+      _ = first.controller
+      _ = second.controller
       defer {
         first.close()
         second.close()

@@ -5,15 +5,14 @@
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceBundleFormat
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceBundleFormat
 import Observation
 
 @MainActor
 @Observable
 public final class WorkspaceStateService {
-  public var modelURLs: [Int64: URL?] = [:]
-  public var workspaceModels: [String: Data] = [:]
+  public var visionModels: [Int64: URL] = [:]
   public var workspaceDefinition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   public var workspaceOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
   public var workspacePreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
@@ -39,17 +38,39 @@ public final class WorkspaceStateService {
       definitionExternalID: externalID, preferencesExternalID: preferencesExternalID,
       definition: workspaceDefinition, preferences: workspacePreferences,
       outputSettingsExternalID: outputSettingsExternalID,
-      outputSettings: workspaceOutputSettings, models: workspaceModels)
+      outputSettings: workspaceOutputSettings, visionModels: visionModels)
   }
 
   public func replaceEditingWorkspace(_ workspace: WorkspaceV4Bundle) {
     workspaceDefinition = workspace.definition
     workspacePreferences = workspace.preferences
     workspaceOutputSettings = workspace.outputSettings
-    workspaceModels = workspace.models
+    visionModels = workspace.visionModels
     externalID = workspace.definitionExternalID
     preferencesExternalID = workspace.preferencesExternalID
     outputSettingsExternalID = workspace.outputSettingsExternalID
+  }
+
+  public func setVisionModelURL(_ url: URL?, for visionID: Int64) {
+    guard let index = workspaceDefinition.visions.firstIndex(where: { $0.internalID == visionID }),
+      case .ldtxSceneDetectorVision(var vision) = workspaceDefinition.visions[index].vision
+    else { return }
+    if let url {
+      guard visionModels[vision.modelInternalID] != url else { return }
+      let resourceIDs = Set(workspaceDefinition.audioDevices.map(\.internalID))
+        .union(workspaceDefinition.videoComponents.compactMap(\.internalID))
+        .union(workspaceDefinition.visions.compactMap(\.internalID))
+        .union(workspaceDefinition.programs.map(\.internalID))
+      var id: Int64
+      repeat {
+        id = WorkspaceResourceFactory.nextInternalID()
+      } while visionModels[id] != nil || resourceIDs.contains(id)
+      visionModels[id] = url
+      vision.modelInternalID = id
+    } else {
+      vision.modelInternalID = 0
+    }
+    workspaceDefinition.visions[index].vision = .ldtxSceneDetectorVision(vision)
   }
 
   public init(

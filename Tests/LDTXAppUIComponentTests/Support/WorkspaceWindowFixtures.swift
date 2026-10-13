@@ -62,13 +62,20 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
-  document.adoptDocumentURL(url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
+  let context = documentContext ?? WorkspaceTestDocumentContext(
+    fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
   let content = WorkspaceViewController(
-    document: documentContext ?? document, appletData: data, stateService: state,
+    document: context, appletData: data, stateService: state,
     peakMeter: .init(), reportError: { _ in },
     deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
 
-  return WorkspaceTestWindow(content: content, document: documentContext ?? document)
+  return WorkspaceTestWindow(content: content, document: context)
+}
+
+@MainActor
+private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
+  let fileURL: URL?
+  init(fileURL: URL?) { self.fileURL = fileURL }
 }
 
 @MainActor

@@ -90,7 +90,7 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Medium | `RationalFormatStyleUnitTestSuite` | `Tests/LDTXMediumTests/App/RationalFormatStyleTests.swift` |
 | Medium | `RecordingMarkerStoreIntegrationTestSuite` | `Tests/LDTXMediumTests/App/RecordingMarkerStoreTests.swift` |
 | Medium | `ScreenCaptureServiceIntegrationTestSuite` | `Tests/LDTXMediumTests/App/ScreenCaptureServiceTests.swift` |
-| Medium | `WorkspaceDocumentPackageIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceDocumentPackageTests.swift` |
+| Medium | `WorkspaceBundleWriterIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceBundleWriterTests.swift` |
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
 | Output | `DASHLocalFilePipelineIntegrationTestSuite` | `Tests/LDTXOutputTests/Dash/DASHLocalFilePipelineTests.swift` |

@@ -6,13 +6,13 @@ import Foundation
 import LDTXProtos
 
 public struct WorkspaceV4Bundle: Equatable, Sendable {
-  public var models: [String: Data]
   public var definitionExternalID: String?
   public var preferencesExternalID: String?
   public var outputSettingsExternalID: String?
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
   public var outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
+  public var visionModels: [Int64: URL]
 
   public init(
     definitionExternalID: String? = nil,
@@ -21,15 +21,15 @@ public struct WorkspaceV4Bundle: Equatable, Sendable {
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     outputSettingsExternalID: String? = nil,
     outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .init(),
-    models: [String: Data] = [:]
+    visionModels: [Int64: URL] = [:]
   ) {
-    self.models = models
     self.definitionExternalID = definitionExternalID
     self.preferencesExternalID = preferencesExternalID
     self.definition = definition
     self.preferences = preferences
     self.outputSettingsExternalID = outputSettingsExternalID
     self.outputSettings = outputSettings
+    self.visionModels = visionModels
   }
 }
 

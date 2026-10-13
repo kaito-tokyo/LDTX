@@ -15,12 +15,12 @@ final class InferenceDocumentContext: WorkspaceDocumentContext {
   func adopt(_ store: WorkspaceStateService) {
     var definition = store.workspaceDefinition
     for index in definition.visions.indices {
-      definition.visions[index].ldtxSceneDetectorVision.modelRevision = 5
+      definition.visions[index].ldtxSceneDetectorVision.modelInternalID = 5
     }
     store.workspaceDefinition = definition
-    store.modelURLs = [:]
+    store.visionModels[5] = fileURL!.appendingPathComponent("VisionModels/5/model.mlmodel")
     runtimeWorkspace = WorkspaceV4Bundle(
       definition: definition, preferences: store.workspacePreferences,
-      models: ["2/5/model.mlmodel": Data([1])])
+      visionModels: store.visionModels)
   }
 }

@@ -17,6 +17,7 @@ import Observation
 public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
   private let runtimeSnapshot: () -> WorkspaceV4Bundle
+  private var adoptedRuntimeWorkspace: WorkspaceV4Bundle?
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
@@ -43,7 +44,17 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
-  var runtimeWorkspace: WorkspaceV4Bundle { runtimeSnapshot() }
+  var runtimeWorkspace: WorkspaceV4Bundle {
+    let live = runtimeSnapshot()
+    guard var adopted = adoptedRuntimeWorkspace else { return live }
+    adopted.preferences = live.preferences
+    adopted.outputSettings = live.outputSettings
+    return adopted
+  }
+
+  public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) {
+    adoptedRuntimeWorkspace = workspace
+  }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)

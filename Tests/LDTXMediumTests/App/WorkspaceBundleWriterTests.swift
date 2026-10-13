@@ -9,7 +9,7 @@ import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite
-struct WorkspaceDocumentPackageIntegrationTestSuite {
+struct WorkspaceBundleWriterIntegrationTestSuite {
   @Test func preservesResourcesAndEnvelopeIdentifiers() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -19,7 +19,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
       definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       definition: .init(), preferences: .init())
-    try WorkspaceDocumentPackage.write(snapshot, to: original, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(snapshot, to: original)
     let infoURL = original.appendingPathComponent("Info.plist")
     var info = try #require(
       PropertyListSerialization.propertyList(
@@ -35,7 +35,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try resource.write(to: resourceURL)
     var changed = snapshot
     changed.definition.displayName = "Edited"
-    try WorkspaceDocumentPackage.write(changed, to: original)
+    try WorkspaceBundleWriterV4().write(changed, to: original)
     let reloaded = try WorkspaceBundleReaderV4(at: original).read()
     let copiedInfo = try #require(
       PropertyListSerialization.propertyList(
@@ -57,7 +57,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
       definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       definition: .init(), preferences: .init())
-    try WorkspaceDocumentPackage.write(workspace, to: url, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(workspace, to: url)
     let info = url.appendingPathComponent("Info.plist")
     let resource = url.appendingPathComponent("unknown.bin")
     try Data("Resource".utf8).write(to: resource)
@@ -68,7 +68,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
     try FileManager.default.removeItem(at: preferences)
     try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: false)
     workspace.definition.displayName = "Updated"
-    #expect(throws: (any Error).self) { try WorkspaceDocumentPackage.write(workspace, to: url) }
+    #expect(throws: (any Error).self) { try WorkspaceBundleWriterV4().write(workspace, to: url) }
     #expect(try Data(contentsOf: info) == oldInfo)
     #expect(try Data(contentsOf: resource) == Data("Resource".utf8))
     #expect(
@@ -77,7 +77,7 @@ struct WorkspaceDocumentPackageIntegrationTestSuite {
         == oldResourceAttributes[.systemFileNumber] as? NSNumber)
     try FileManager.default.removeItem(at: preferences)
     try oldPreferences.write(to: preferences)
-    try WorkspaceDocumentPackage.write(workspace, to: url)
+    try WorkspaceBundleWriterV4().write(workspace, to: url)
     let saved = try WorkspaceBundleReaderV4(at: url).read()
     #expect(saved.definition == workspace.definition)
     #expect(saved.preferences == workspace.preferences)
