@@ -450,9 +450,11 @@ extension WorkspaceBundleValidatorV4 {
           for audioID in preference.audioChannelMuted.keys.sorted() where !audio.contains(audioID) {
             add(p + ".audio_channel_muted[\(audioID)]", .missingAudioInputDevice(audioID), id: id)
           }
-          for component in Set(preference.videoLayerTransforms.keys).union(
-            preference.videoLayerHidden.keys
-          ).sorted() {
+          for component in preference.videoLayerHidden.keys.sorted()
+          where !components.contains(component) {
+            add(p + ".video_layer_hidden[\(component)]", .missingVideoLayer(component), id: id)
+          }
+          for component in preference.videoLayerTransforms.keys.sorted() {
             let layer = p + ".video_layer_transforms[\(component)]"
             if !components.contains(component) { add(layer, .missingVideoLayer(component), id: id) }
             if let value = preference.videoLayerTransforms[component] {

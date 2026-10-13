@@ -8,6 +8,32 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func reportsMissingLayerAtEachReferencingMap() {
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.programs = [
+        .with {
+          $0.internalID = 1
+          $0.displayName = "Program"
+        }
+      ]
+    }
+    var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[3] = true
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[5] = .init()
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[7] = true
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[7] = .init()
+    let paths = WorkspaceBundleValidatorV4.validationIssues(in: bundle).filter {
+      if case .missingVideoLayer = $0.error { return true }
+      return false
+    }.map(\.path).sorted()
+    #expect(paths == [
+      "preferences.Landscape[1].video_layer_hidden[3]",
+      "preferences.Landscape[1].video_layer_hidden[7]",
+      "preferences.Landscape[1].video_layer_transforms[5]",
+      "preferences.Landscape[1].video_layer_transforms[7]",
+    ])
+  }
+
   @Test func rejectsUnsupportedAndZeroSizedSceneDetectorInputs() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.visions = [
