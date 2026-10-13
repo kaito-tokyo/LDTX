@@ -68,7 +68,7 @@ public actor VisionImageClassifierService {
     }.joined(separator: "\n")
   }
 
-  public static func loadModel(
+  @concurrent public static func loadModel(
     at url: URL,
     configuration: MLModelConfiguration = .init(),
     noCompile: Bool = false,

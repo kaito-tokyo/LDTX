@@ -192,7 +192,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   public var visionFeatureContext: WorkspaceV4VisionFeatureContext {
-    WorkspaceV4VisionFeatureContext(
+    var context = WorkspaceV4VisionFeatureContext(
       vision: { internalID in
         self.workspace.definition.visions.compactMap {
           wrapper -> Ldtx_Workspace_V4_OcrVision? in
@@ -218,6 +218,18 @@ public final class WorkspaceWindowRuntime {
         self?.visionArchiveTimelineProvider?()
       }
     )
+    context.sceneDetector = { [weak self] id in
+      guard case .ldtxSceneDetectorVision(let vision)? =
+        self?.definition.visions.first(where: { $0.internalID == id })?.vision
+      else { return nil }
+      return vision
+    }
+    context.modelURL = { [weak self] id in self?.workspace.visionModels[id] }
+    context.frameForSceneDetector = { [weak self] vision in
+      guard let self else { throw WorkspaceVisionFeatureError.frameUnavailable }
+      return try await frameForSceneDetector(vision)
+    }
+    return context
   }
 
   public func visionInputSize(componentID: Int64) throws -> CGSize {
@@ -258,6 +270,13 @@ public final class WorkspaceWindowRuntime {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, model: sending MLModel
   ) async throws -> String {
+    let frame = try await frameForSceneDetector(vision)
+    return try await VisionImageClassifierService(model: model).classify(image: frame.image)
+  }
+
+  private func frameForSceneDetector(
+    _ vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision
+  ) async throws -> WorkspaceVisionAnalysisFrame {
     guard
       let size = definition.videoComponents.first(where: {
         $0.internalID == vision.videoComponentInternalID && $0.canBeVisionInput
@@ -274,11 +293,10 @@ public final class WorkspaceWindowRuntime {
     guard captureSessionCoordinator.latestVisionFrame(forCameraID: cameraID) != nil else {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
-    let frame = try await frameForVision(
+    return try await frameForVision(
       componentID: vision.videoComponentInternalID,
       region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil,
       inputSize: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)))
-    return try await VisionImageClassifierService(model: model).classify(image: frame.image)
   }
 
   private func frameForVision(

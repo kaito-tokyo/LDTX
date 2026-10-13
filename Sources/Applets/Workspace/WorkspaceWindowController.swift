@@ -282,6 +282,7 @@ public final class WorkspaceWindowController: NSWindowController,
         guard let self, !Task.isCancelled else { return }
         Self.activeControllers.add(self)
         Self.updateRecordingDockBadge()
+        visionFeature.outputStateDidChange()
       }
     }
 
@@ -347,6 +348,7 @@ public final class WorkspaceWindowController: NSWindowController,
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
+    context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
     context.reportResult = { [weak stateService] id, output in
@@ -359,7 +361,9 @@ public final class WorkspaceWindowController: NSWindowController,
       stateService?.visionResults.removeValue(forKey: id)
       stateService?.visionFailureMessages[id] = error.localizedDescription
     }
-    visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
+    visionFeature.synchronize(
+      visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace ? windowRuntime.definition.visions : [],
+      context: context)
   }
 
   isolated deinit {
@@ -514,7 +518,7 @@ public final class WorkspaceWindowController: NSWindowController,
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
       preferencesObservationTask?.cancel()
-      visionFeature.stop()
+      await visionFeature.stop()
       let priorFailure = stateService.outputFailureMessage
       await recordingSession.stop()
       if stateService.outputFailureMessage != priorFailure {
@@ -580,6 +584,7 @@ extension WorkspaceWindowController {
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
+    context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
     context.reportResult = { [weak stateService] id, output in
@@ -592,7 +597,9 @@ extension WorkspaceWindowController {
       stateService?.visionResults.removeValue(forKey: id)
       stateService?.visionFailureMessages[id] = error.localizedDescription
     }
-    visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
+    visionFeature.synchronize(
+      visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace ? windowRuntime.definition.visions : [],
+      context: context)
   }
 
   private func synchronizeDeviceAssignments() {

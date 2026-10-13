@@ -88,6 +88,23 @@ the relevant design or feature documentation instead.
 - `workspacePreferences` may reach the runtime before they are written to disk,
   subject to the runtime's supported operations and output restrictions.
 
+## Vision interval execution is best effort
+
+- OCR and Scene Detector interval triggers use the successfully persisted
+  Definition while the Workspace window is open, including while output is idle.
+- Automatic requests share one execution lane per Workspace. Each 30-second
+  frame is planned in 1 ms units with a fixed 3 ms budget for either request
+  type. This is an initial placement budget, not a measured execution guarantee.
+- Initial phases are randomized. Collisions move forward within the frame;
+  requests that cannot fit are randomly thinned. Busy or overdue occurrences
+  are skipped without queuing catch-up work or cancelling an active request.
+- Models are prepared separately and reused. Output-active preparation never
+  compiles a missing cache, and corrupt caches fail without recompilation.
+  Preparation failures retry after configuration or output-state changes.
+- Manual inference remains independent and may overlap automatic work. Stops
+  drain active automatic requests and model preparation; stale generations
+  cannot publish results. Scheduling statistics are logged per frame.
+
 ## Preferences are permissive input
 
 - Preferences may contain values that are not meaningful for every component

@@ -15,6 +15,11 @@ public struct WorkspaceV4VisionFeatureContext {
   public var reportFailure: (Int64, Error) -> Void
   public var archiveResult: ((Int64, CIImage, String) -> Void)?
   public var recordingTimelineMilliseconds: (() -> UInt64?)?
+  public var sceneDetector: (Int64) -> Ldtx_Workspace_V4_LdtxSceneDetectorVision? = { _ in nil }
+  public var modelURL: (Int64) -> URL? = { _ in nil }
+  public var isOutputActive: () -> Bool = { false }
+  public var frameForSceneDetector:
+    ((Ldtx_Workspace_V4_LdtxSceneDetectorVision) async throws -> WorkspaceVisionAnalysisFrame)?
 
   public init(
     vision: @escaping (Int64) -> Ldtx_Workspace_V4_OcrVision?,
