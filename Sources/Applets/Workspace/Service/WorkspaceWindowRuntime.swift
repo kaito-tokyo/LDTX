@@ -321,7 +321,8 @@ public final class WorkspaceWindowRuntime {
     }
     let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
     guard let region else { return WorkspaceVisionAnalysisFrame(image: image) }
-    let rect = region.rect(in: image.extent)
+    let resolved = try region.resolved(inputSize: (UInt32(width), UInt32(height)))
+    let rect = resolved.rect(in: image.extent)
     if inputSize != nil {
       guard !rect.isNull, !rect.isEmpty,
         rect.origin.x.isFinite, rect.origin.y.isFinite,

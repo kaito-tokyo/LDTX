@@ -106,15 +106,17 @@ extension AppUIComponentTestSuite {
       #expect(store.visionFailureMessages[2] == nil)
     }
 
-    @Test("ROI numerator editing uses the image size only when the denominator is unset")
-    func roiNumeratorDefaults() {
+    @Test("ROI editing preserves absent fields for image-size defaults")
+    func roiNumeratorDefaults() throws {
       var rational = Ldtx_Workspace_V4_Rational32()
       let binding = Binding(get: { rational }, set: { rational = $0 })
-      let numerator = RegionOfInterestEditor.numeratorBinding(binding, defaultDenominator: 1920)
+      let numerator = RegionOfInterestEditor.numeratorBinding(binding)
       #expect(numerator.wrappedValue == nil && !rational.hasDen)
       numerator.wrappedValue = 320
-      #expect(rational.num == 320 && rational.den == 1920)
-      #expect(rational.double == 1.0 / 6)
+      #expect(rational.num == 320 && !rational.hasDen)
+      var region = Ldtx_Workspace_V4_VisionRegionOfInterest()
+      region.x = rational
+      #expect(try region.resolved(inputSize: (1920, 1080)).x.double == 1.0 / 6)
       rational.den = 1080
       numerator.wrappedValue = 180
       #expect(rational.den == 1080)
@@ -174,6 +176,8 @@ extension AppUIComponentTestSuite {
       store.workspaceDefinition.videoComponents = [
         WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
       ]
+      store.workspaceDefinition.videoComponents[0].vfxSource.deviceWidth = 1920
+      store.workspaceDefinition.videoComponents[0].vfxSource.deviceHeight = 1080
       var draft = WorkspaceAddDraft()
       draft.name = "Scene"
       draft.visionKind = .createMlImageClassifier

@@ -90,11 +90,13 @@ extension WorkspaceBundleValidatorV4 {
     try requireNoIssues(collector.issues)
   }
 
-  public static func validateRegionOfInterest(_ region: Ldtx_Workspace_V4_VisionRegionOfInterest)
+  public static func validateRegionOfInterest(
+    _ region: Ldtx_Workspace_V4_VisionRegionOfInterest,
+    inputSize: (width: UInt32, height: UInt32) = (1, 1))
     throws
   {
     var collector = Collector()
-    collector.region(region, path: "region_of_interest", id: nil)
+    collector.region(region, path: "region_of_interest", id: nil, inputSize: inputSize)
     try requireNoIssues(collector.issues)
   }
 
@@ -163,8 +165,13 @@ extension WorkspaceBundleValidatorV4 {
     }
 
     mutating func region(
-      _ region: Ldtx_Workspace_V4_VisionRegionOfInterest, path: String, id: Int64?
+      _ region: Ldtx_Workspace_V4_VisionRegionOfInterest, path: String, id: Int64?,
+      inputSize: (width: UInt32, height: UInt32) = (1, 1)
     ) {
+      guard let region = try? region.resolved(inputSize: inputSize) else {
+        add(path, .invalidVisionRegionOfInterest, id: id)
+        return
+      }
       let x = unit(region.x, path: path + ".x", id: id, error: .invalidVisionRegionOfInterest)
       let y = unit(region.y, path: path + ".y", id: id, error: .invalidVisionRegionOfInterest)
       let w = unit(
@@ -409,7 +416,10 @@ extension WorkspaceBundleValidatorV4 {
           add(p + ".interval_seconds", .invalidVisionInterval, id: id)
         }
       }
-      if let roi { region(roi, path: path + ".region_of_interest", id: id) }
+      if let roi {
+        let size = components.first(where: { $0.internalID == input })?.renderingSize
+        region(roi, path: path + ".region_of_interest", id: id, inputSize: size ?? (1, 1))
+      }
     }
 
     mutating func preferences(

@@ -93,6 +93,13 @@ the relevant design or feature documentation instead.
 
 ## Vision interval execution is best effort
 
+- Absent ROI fields use input-pixel defaults: X/Y numerators are zero,
+  Width/Height numerators are the input width/height, and denominators are
+  the corresponding input dimension. UI placeholders, persistence validation,
+  and inference share this interpretation. Missing fields remain absent on disk;
+  explicit zero denominators remain invalid. Defaults are resolved without changing
+  the editable or saved protobuf values.
+
 - OCR and Scene Detector interval triggers use the successfully persisted
   Definition while the Workspace window is open, including while output is idle.
 - Automatic requests share one execution lane per Workspace. Each 30-second

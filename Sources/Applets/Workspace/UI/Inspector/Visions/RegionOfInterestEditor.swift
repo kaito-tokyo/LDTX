@@ -18,16 +18,13 @@ struct RegionOfInterestEditor: View {
   }
 
   static func numeratorBinding<Value: Rational32Value>(
-    _ value: Binding<Value>, defaultDenominator: UInt32
+    _ value: Binding<Value>
   ) -> Binding<Int32?> {
     Binding(
       get: { value.wrappedValue.numIfPresent },
       set: { numerator in
         var rational = value.wrappedValue
         rational.numIfPresent = numerator
-        if numerator != nil && !rational.hasDen {
-          rational.den = defaultDenominator
-        }
         value.wrappedValue = rational
       })
   }
@@ -42,7 +39,7 @@ struct RegionOfInterestEditor: View {
     HStack(alignment: .firstTextBaseline) {
       TextField(
         numeratorLabel,
-        value: Self.numeratorBinding(value, defaultDenominator: defaultDenominator),
+        value: Self.numeratorBinding(value),
         formatter: NullableIntegerFormatter<Int32>(),
         prompt: numeratorPrompt
       )

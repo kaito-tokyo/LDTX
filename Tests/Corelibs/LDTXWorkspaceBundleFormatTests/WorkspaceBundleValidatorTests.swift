@@ -8,6 +8,55 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func roiDefaultsUseInputPixelsWithoutMutatingStoredPresence() throws {
+    var roi = Ldtx_Workspace_V4_VisionRegionOfInterest()
+    let full = try roi.resolved(inputSize: (1920, 1080))
+    #expect(full.x.num == 0 && full.x.den == 1920)
+    #expect(full.y.num == 0 && full.y.den == 1080)
+    #expect(full.width.num == 1920 && full.width.den == 1920)
+    #expect(full.height.num == 1080 && full.height.den == 1080)
+    roi.width.set(num: 1, den: 2)
+    roi.width.clearDen()
+    let bytes = try roi.serializedData()
+    #expect(try roi.resolved(inputSize: (1920, 1080)).width.double == 1.0 / 1920)
+    try WorkspaceBundleValidatorV4.validateRegionOfInterest(roi, inputSize: (1920, 1080))
+    #expect(try roi.serializedData() == bytes)
+    roi.width.clearNum()
+    roi.width.den = 1920
+    #expect(try roi.resolved(inputSize: (1920, 1080)).width.double == 1)
+    roi.width.den = 0
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleValidatorV4.validateRegionOfInterest(roi, inputSize: (1920, 1080))
+    }
+  }
+
+  @Test func bundleValidationUsesReferencedInputSizeForAbsentRoiFields() throws {
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.videoComponents = [.with {
+        $0.vfxSource = .with {
+          $0.internalID = 1
+          $0.displayName = "Camera"
+          $0.deviceWidth = 1920
+          $0.deviceHeight = 1080
+        }
+      }]
+      $0.visions = [.with {
+        $0.ldtxSceneDetectorVision = .with {
+          $0.internalID = 3
+          $0.displayName = "Detector"
+          $0.videoComponentInternalID = 1
+          $0.regionOfInterest.width.num = 320
+          $0.regionOfInterest.height.num = 180
+        }
+      }]
+    }
+    try WorkspaceBundleValidatorV4.validate(definition)
+    let roi = definition.visions[0].ldtxSceneDetectorVision.regionOfInterest
+    let resolved = try roi.resolved(inputSize: (1920, 1080))
+    #expect(resolved.width.double == 1.0 / 6 && resolved.height.double == 1.0 / 6)
+    #expect(!roi.width.hasDen && !roi.height.hasDen)
+  }
+
   @Test func reportsMissingLayerAtEachReferencingMap() {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.programs = [
