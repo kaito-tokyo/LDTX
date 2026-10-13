@@ -64,8 +64,8 @@
       pairedPreview.metalView.isPaused = true
       pairedPreview.metalView.enableSetNeedsDisplay = true
       pane = WorkspaceContentPane(
-        storeService: service, appletData: WorkspaceAppletData(),
-        editingState: WorkspaceEditingState(), peakMeter: ProgramAudioPeakMeter(),
+        stateService: service, appletData: WorkspaceAppletData(),
+        peakMeter: ProgramAudioPeakMeter(),
         reportError: { _ in }, pairedPreview: pairedPreview)
       super.init(nibName: nil, bundle: nil)
       addChild(pane)

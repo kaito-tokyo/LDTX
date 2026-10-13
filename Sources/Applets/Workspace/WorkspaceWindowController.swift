@@ -10,6 +10,7 @@ import LDTXDeviceRegistry
 import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel
@@ -21,12 +22,23 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class WorkspaceWindowController: NSWindowController, NSWindowDelegate,
+public final class WorkspaceWindowController: NSWindowController,
   WorkspaceRuntimeActions
 {
-  private let storeService: WorkspaceStoreService
-  private let editingState: WorkspaceEditingState
-  private let appletData: WorkspaceAppletData
+  private weak var hostedWindow: NSWindow?
+  public override var window: NSWindow? {
+    get { hostedWindow }
+    set { hostedWindow = newValue }
+  }
+  private weak var workspaceDocument: (any WorkspaceDocumentContext)?
+  public private(set) var contentController: WorkspaceViewController!
+  public let stateService: WorkspaceStateService
+  public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
+  public let appletData: WorkspaceAppletData
+  private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID())")!
+  private var closeObserver: NSObjectProtocol?
+  private weak var observedWindow: NSWindow?
+  private var outputObservationTask: Task<Void, Never>?
 
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
@@ -38,7 +50,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var shutdownTask: Task<Void, Never>?
   public private(set) var shutdownFailureMessage: String?
   private var deviceAssignmentsObservationTask: Task<Void, Never>?
-  private var definitionObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
 
   private var pendingErrors: [Error] = []
@@ -49,10 +60,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   private var captureFailureIDs: Set<String> = []
 
   func reportError(_ error: Error) {
-    if WorkspaceEditingState.isInputValidationError(error) {
-      editingState.reportInputValidationError(error)
-      return
-    }
+
     guard !errorPresentationClosed, shutdownTask == nil else { return }
     pendingErrors.append(error)
     presentNextError()
@@ -96,10 +104,6 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
   }
 
-  public func windowWillClose(_ notification: Notification) {
-    closeErrorPresentation()
-  }
-
   func updateMonitorFailure(_ status: Int32?) {
     guard !errorPresentationClosed, shutdownTask == nil else { return }
     defer { monitorFailureStatus = status }
@@ -121,7 +125,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     captureFailureIDs = failures
     guard !newlyFailed.isEmpty else { return }
     let descriptions = newlyFailed.sorted().map { uid in
-      let names = storeService.workspaceDefinition.videoComponents.compactMap {
+      let names = stateService.workspaceDefinition.videoComponents.compactMap {
         component -> String? in
         guard case .vfxSource(let source) = component.videoComponent,
           appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
@@ -141,16 +145,43 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         ]))
   }
 
+  public convenience init(
+    document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared
+  ) {
+    let stateService = WorkspaceStateService()
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.displayName = "Untitled"
+    let initial = document.confirmedWorkspace ?? WorkspaceV4Bundle(
+      definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      definition: definition, preferences: .init(),
+      outputSettingsExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased())
+    stateService.replaceEditingWorkspace(initial)
+    stateService.localStateURL = document.fileURL
+    let persistence = WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { stateService.editingWorkspace },
+      replaceWorkspace: { stateService.replaceEditingWorkspace($0) }, url: document.fileURL,
+      runtimeSnapshot: { [weak document] in
+        var workspace = document?.confirmedWorkspace ?? WorkspaceV4Bundle(
+          definition: .init(), preferences: .init())
+        workspace.preferences = stateService.workspacePreferences
+        workspace.outputSettings = stateService.workspaceOutputSettings
+        return workspace
+      })
+    self.init(stateService: stateService, persistenceCoordinator: persistence,
+      appletData: appletData, document: document)
+    if let url = document.fileURL { adoptDocumentURL(url) }
+  }
+
   public init(
-    storeService: WorkspaceStoreService,
-    editingState: WorkspaceEditingState,
+    stateService: WorkspaceStateService,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
-    document: NSDocument
+    document: any WorkspaceDocumentContext
   ) {
-    let url = storeService.localStateURL!
-    self.storeService = storeService
-    self.editingState = editingState
+    self.workspaceDocument = document
+    self.stateService = stateService
+    self.persistenceCoordinator = persistenceCoordinator
     self.appletData = appletData
 
     let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
@@ -160,11 +191,11 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
         appletData.state(
-          for: storeService.localStateURL,
-          externalID: storeService.externalID.flatMap(UUID.init(uuidString:)))
+          for: stateService.localStateURL,
+          externalID: stateService.externalID.flatMap(UUID.init(uuidString:)))
       },
       selectProgram: { internalID in
-        guard let url = storeService.localStateURL else { return }
+        guard let url = stateService.localStateURL else { return }
         appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       })
 
@@ -173,8 +204,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       physicalDeviceIDs: { appletData.physicalDeviceIDsByResourceInternalID },
       localState: {
         appletData.state(
-          for: storeService.localStateURL,
-          externalID: storeService.externalID.flatMap(UUID.init(uuidString:)))
+          for: stateService.localStateURL,
+          externalID: stateService.externalID.flatMap(UUID.init(uuidString:)))
       },
       streamKeyConfigurations: { try appletData.loadYouTubeStreamKeyConfigurations() })
     let audioCoordinator = WorkspaceAudioCoordinator(
@@ -215,8 +246,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     self.previewRenderer = previewRenderer
     let pairedPreview = ProgramCanvasPairedPreview(
       device: previewRenderer.device, delegate: previewRenderer,
-      onSelectLandscape: { storeService.selectedAudioMix = .landscape },
-      onSelectPortrait: { storeService.selectedAudioMix = .portrait })
+      onSelectLandscape: { stateService.selectedAudioMix = .landscape },
+      onSelectPortrait: { stateService.selectedAudioMix = .portrait })
     self.pairedPreview = pairedPreview
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
@@ -228,18 +259,28 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     let reportOperationError: (Error) -> Void = { errorOwner?.reportError($0) }
     let deviceRegistry = DeviceRegistryService()
     deviceRegistry.errorHandler = reportOperationError
-    let window = WorkspaceWindow(
+    let content = WorkspaceViewController(
       document: document,
       appletData: appletData,
-      storeService: storeService, editingState: editingState,
-      peakMeter: audioCoordinator.peakMeter, reportError: reportOperationError,
+      stateService: stateService, peakMeter: audioCoordinator.peakMeter, reportError: reportOperationError,
       deviceRegistry: deviceRegistry,
       pairedPreview: pairedPreview,
       runtimeActions: {
         guard let owner = errorOwner, owner.shutdownTask == nil else { return nil }
         return owner
       })
-    self.window = window
+    self.contentController = content
+    content.didAttachWindow = { [weak self] window in self?.attachWindow(window) }
+    appletData.registerTransientState(at: transientURL)
+    if stateService.localStateURL == nil { stateService.localStateURL = transientURL }
+    let outputChanges = Observations { stateService.isOutputActive }
+    outputObservationTask = Task { @MainActor [weak self] in
+      for await _ in outputChanges {
+        guard let self, !Task.isCancelled else { return }
+        Self.activeControllers.add(self)
+        Self.updateRecordingDockBadge()
+      }
+    }
 
     let engine = captureSessionCoordinator.audioEngine
     let engineID = engine.statusIdentifier
@@ -263,21 +304,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       }
     }
 
-    let definitionChanges = Observations { storeService.workspaceDefinition }
-    self.definitionObservationTask = Task { @MainActor [weak self] in
-      var isInitialValue = true
-      for await _ in definitionChanges {
-        guard !Task.isCancelled, let self, shutdownTask == nil else { return }
-        guard !isInitialValue else {
-          isInitialValue = false
-          continue
-        }
-        updateProgramRuntimes()
-        synchronizeVision()
-      }
-    }
-
-    let preferencesChanges = Observations { storeService.workspacePreferences }
+    let preferencesChanges = Observations { stateService.workspacePreferences }
     self.preferencesObservationTask = Task { @MainActor [weak self] in
       var isInitialValue = true
       for await _ in preferencesChanges {
@@ -292,62 +319,90 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       }
     }
 
-    window.delegate = self
-    window.identifier = NSUserInterfaceItemIdentifier(
-      "WorkspaceV4.AppKit.v1." + UUID().uuidString)
-    window.isRestorable = true
-    window.setFrameAutosaveName("WorkspaceV4.AppKit.v1")
-
     recordingSession.stateDidChange = { [weak self] (state: WorkspaceRecordingState) in
       guard let self else { return }
-      self.storeService.recordingState = state
-      self.storeService.isOutputActive = state.isOutputActive
-      self.storeService.isLocalRecording = self.recordingSession.isLocalRecording
-      self.storeService.outputFailureMessage = {
+      self.stateService.recordingState = state
+      self.stateService.isOutputActive = state.isOutputActive
+      self.stateService.isLocalRecording = self.recordingSession.isLocalRecording
+      self.stateService.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
       }()
     }
-    storeService.recordingState = recordingSession.state
-    storeService.isOutputActive = recordingSession.isRecording
-    storeService.isLocalRecording = recordingSession.isLocalRecording
+    stateService.recordingState = recordingSession.state
+    stateService.isOutputActive = recordingSession.isRecording
+    stateService.isLocalRecording = recordingSession.isLocalRecording
     if case .failed(let message) = recordingSession.state {
-      storeService.outputFailureMessage = message
+      stateService.outputFailureMessage = message
     }
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
         try? WorkspaceV4IntegrityValidator.visionID($0)
       })
-    storeService.visionResults = storeService.visionResults.filter { ids.contains($0.key) }
-    storeService.visionFailureMessages = storeService.visionFailureMessages.filter {
+    stateService.visionResults = stateService.visionResults.filter { ids.contains($0.key) }
+    stateService.visionFailureMessages = stateService.visionFailureMessages.filter {
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
-    context.reportResult = { [weak storeService] id, output in
+    context.reportResult = { [weak stateService] id, output in
       reportResult(id, output)
-      storeService?.visionResults[id] = output
-      storeService?.visionFailureMessages.removeValue(forKey: id)
+      stateService?.visionResults[id] = output
+      stateService?.visionFailureMessages.removeValue(forKey: id)
     }
-    context.reportFailure = { [weak storeService] id, error in
+    context.reportFailure = { [weak stateService] id, error in
       reportFailure(id, error)
-      storeService?.visionResults.removeValue(forKey: id)
-      storeService?.visionFailureMessages[id] = error.localizedDescription
+      stateService?.visionResults.removeValue(forKey: id)
+      stateService?.visionFailureMessages[id] = error.localizedDescription
     }
     visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
 
   isolated deinit {
     if let audioStatusObserver { NotificationCenter.default.removeObserver(audioStatusObserver) }
+    if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    outputObservationTask?.cancel()
+    deviceAssignmentsObservationTask?.cancel()
+    preferencesObservationTask?.cancel()
+    appletData.removeTransientState(at: transientURL)
+  }
+
+  private static let activeControllers = NSHashTable<WorkspaceWindowController>.weakObjects()
+  private static func updateRecordingDockBadge() {
+    NSApplication.shared.dockTile.badgeLabel = activeControllers.allObjects.contains {
+      $0.stateService.isOutputActive
+    } ? "REC" : nil
+  }
+
+  func attachWindow(_ window: NSWindow?) {
+    self.window = window
+    guard let window, observedWindow !== window else { return }
+    if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    observedWindow = window
+    closeObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.willCloseNotification, object: window, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { Task { await self?.shutdown() } }
+    }
+  }
+
+  func adoptDocumentURL(_ url: URL) {
+    if let previous = stateService.localStateURL, previous != url {
+      appletData.copyState(from: previous, to: url)
+    }
+    stateService.localStateURL = url
+    if let id = stateService.externalID.flatMap(UUID.init(uuidString:)) {
+      appletData.migrateOutputData(from: url, externalID: id)
+    }
+    persistenceCoordinator.setDocumentURL(url)
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   public func removeProgram(internalID: Int64) throws {
-    try editingState.requireConfirmedEdits()
-    guard shutdownTask == nil, !storeService.isOutputActive else {
+    guard shutdownTask == nil, !stateService.isOutputActive else {
       throw NSError(
         domain: "WorkspaceProgramDeletion", code: 1,
         userInfo: [
@@ -361,13 +416,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   }
 
   public func selectProgram(internalID: Int64) throws {
-    if appletData.selectedProgram(
-      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
-      != internalID
-    {
-      try editingState.requireConfirmedEdits()
-    }
-    guard let document = document as? NSDocument else {
+    guard let document = workspaceDocument else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The Workspace document is unavailable."])
@@ -380,7 +429,7 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
         ])
     }
     guard windowRuntime.definition.programs.contains(where: { $0.internalID == internalID }),
-      let url = document.fileURL ?? storeService.localStateURL
+      let url = document.fileURL ?? stateService.localStateURL
     else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
@@ -397,9 +446,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
   }
 
   public func startOutput() async throws {
-    try editingState.requireConfirmedEdits()
     guard recordingSession.state.canStart else { return }
-    guard document?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
+    guard workspaceDocument?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
     windowRuntime.updateRuntimes()
     await recordingSession.start()
   }
@@ -410,17 +458,20 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
       return
     }
     closeErrorPresentation()
+    if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    closeObserver = nil
+    outputObservationTask?.cancel()
     let task = Task { @MainActor in
+      contentController.tearDown()
       pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
-      definitionObservationTask?.cancel()
       preferencesObservationTask?.cancel()
       visionFeature.stop()
-      let priorFailure = storeService.outputFailureMessage
+      let priorFailure = stateService.outputFailureMessage
       await recordingSession.stop()
-      if storeService.outputFailureMessage != priorFailure {
-        shutdownFailureMessage = storeService.outputFailureMessage
+      if stateService.outputFailureMessage != priorFailure {
+        shutdownFailureMessage = stateService.outputFailureMessage
       }
       await withCheckedContinuation { continuation in
         windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
@@ -431,6 +482,8 @@ public final class WorkspaceWindowController: NSWindowController, NSWindowDelega
     }
     shutdownTask = task
     await task.value
+    Self.activeControllers.remove(self)
+    Self.updateRecordingDockBadge()
   }
 
   public func pauseOutput() async {
@@ -460,8 +513,14 @@ extension WorkspaceWindowController {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
+    guard windowRuntime.definition.visions.contains(where: {
+      $0.vision == .ldtxSceneDetectorVision(vision)
+    }), let path = WorkspaceModelFiles.modelPath(for: vision, in: windowRuntime.workspace.models),
+      let url = windowRuntime.url?.appendingPathComponent("VisionModels/\(path)"),
+      url.standardizedFileURL == modelURL.standardizedFileURL
+    else { throw CocoaError(.fileReadNoSuchFile) }
     let model = try await VisionImageClassifierService.loadModel(
-      at: modelURL, noCompile: storeService.isOutputActive)
+      at: modelURL, noCompile: stateService.isOutputActive)
     return try await windowRuntime.classify(vision: vision, model: model)
   }
 
@@ -470,22 +529,22 @@ extension WorkspaceWindowController {
       windowRuntime.definition.visions.compactMap {
         try? WorkspaceV4IntegrityValidator.visionID($0)
       })
-    storeService.visionResults = storeService.visionResults.filter { ids.contains($0.key) }
-    storeService.visionFailureMessages = storeService.visionFailureMessages.filter {
+    stateService.visionResults = stateService.visionResults.filter { ids.contains($0.key) }
+    stateService.visionFailureMessages = stateService.visionFailureMessages.filter {
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
-    context.reportResult = { [weak storeService] id, output in
+    context.reportResult = { [weak stateService] id, output in
       reportResult(id, output)
-      storeService?.visionResults[id] = output
-      storeService?.visionFailureMessages.removeValue(forKey: id)
+      stateService?.visionResults[id] = output
+      stateService?.visionFailureMessages.removeValue(forKey: id)
     }
-    context.reportFailure = { [weak storeService] id, error in
+    context.reportFailure = { [weak stateService] id, error in
       reportFailure(id, error)
-      storeService?.visionResults.removeValue(forKey: id)
-      storeService?.visionFailureMessages[id] = error.localizedDescription
+      stateService?.visionResults.removeValue(forKey: id)
+      stateService?.visionFailureMessages[id] = error.localizedDescription
     }
     visionFeature.synchronize(visions: windowRuntime.definition.visions, context: context)
   }
@@ -501,6 +560,12 @@ extension WorkspaceWindowController {
     windowRuntime.updateRuntimes()
   }
 
+  func confirmedContentsDidChange() {
+    guard shutdownTask == nil else { return }
+    synchronizeDeviceAssignments()
+    synchronizeVision()
+  }
+
   public func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
@@ -514,10 +579,10 @@ extension WorkspaceWindowController {
   }
 
   public func synchronizeAudioMonitor() {
-    let localState = storeService.localStateURL.map { appletData.state(for: $0) } ?? .init()
+    let localState = stateService.localStateURL.map { appletData.state(for: $0) } ?? .init()
     let audioChannels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
     let programInternalID = appletData.selectedProgram(
-      in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
+      in: windowRuntime.definition, for: stateService.localStateURL)?.internalID
     let projection = programInternalID.flatMap {
       try? windowRuntime.runtimeProjection(programInternalID: $0, target: .landscape)
     }
@@ -546,7 +611,7 @@ extension WorkspaceWindowController {
       landscape: projection?.preferences ?? .init(),
       portrait: portraitProjection?.preferences ?? .init())
     let preferences = WorkspaceV4RenderGraph.monitorPreferences(
-      definition: windowRuntime.definition, preferences: storeService.workspacePreferences,
+      definition: windowRuntime.definition, preferences: stateService.workspacePreferences,
       volumeDecibels: localState.monitorVolume ?? 0)
     _ = audioCoordinator.restart(
       audioChannels: audioChannels,

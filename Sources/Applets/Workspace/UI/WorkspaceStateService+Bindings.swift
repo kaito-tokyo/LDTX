@@ -5,7 +5,7 @@
 import LDTXProtos
 import SwiftUI
 
-extension Bindable where Value == WorkspaceStoreService {
+extension Bindable where Value == WorkspaceStateService {
   @MainActor
   func ocrVision(internalID: Int64) -> Binding<Ldtx_Workspace_V4_OcrVision>? {
     let store = wrappedValue

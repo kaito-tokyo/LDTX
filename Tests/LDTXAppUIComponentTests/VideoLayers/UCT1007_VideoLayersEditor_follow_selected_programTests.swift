@@ -29,8 +29,7 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1007.2: Editor rows use available width")
     func editorRowsUseAvailableWidth() throws {
       let serviceAppletData = WorkspaceAppletData()
-      let serviceEditingState = WorkspaceEditingState()
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       service.workspaceDefinition.programs = [program]
@@ -38,7 +37,7 @@ extension AppUIComponentTestSuite {
         .videoLayerInternalIds =
         [1, 2]
       let editor = VideoLayersEditor(
-        storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+        stateService: service, appletData: serviceAppletData,
         target: .landscape)
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
@@ -62,17 +61,15 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1007.3: Editor owns observation without loading view until used")
     func editorOwnsObservationWithoutLoadingViewUntilUsed() async throws {
-      let storeServiceAppletData = WorkspaceAppletData()
-      let storeServiceEditingState = WorkspaceEditingState()
-      let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let stateServiceAppletData = WorkspaceAppletData()
+      let stateService = WorkspaceStateService(definition: .init(), preferences: .init())
       let editor = VideoLayersEditor(
-        storeService: storeService, appletData: storeServiceAppletData,
-        editingState: storeServiceEditingState, target: .landscape)
+        stateService: stateService, appletData: stateServiceAppletData, target: .landscape)
       #expect(!editor.isViewLoaded)
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
-      storeService.workspaceDefinition.programs = [program]
-      storeService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+      stateService.workspaceDefinition.programs = [program]
+      stateService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
         .videoLayerInternalIds = [1]
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
@@ -83,7 +80,7 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       window.contentView?.layoutSubtreeIfNeeded()
       #expect(editor.table.layerIDs == [1])
-      storeService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+      stateService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
         .videoLayerInternalIds = [1, 2]
       for _ in 0..<50 {
         if editor.table.layerIDs == [1, 2] { break }
@@ -95,9 +92,8 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1007.4: Hidden video tab uses latest state when shown")
     func hiddenVideoTabUsesLatestStateWhenShown() async throws {
       let serviceAppletData = WorkspaceAppletData()
-      let serviceEditingState = WorkspaceEditingState()
       _ = NSApplication.shared
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       service.workspaceDefinition.programs = [program]
@@ -108,10 +104,10 @@ extension AppUIComponentTestSuite {
         .videoLayerInternalIds =
         [2]
       let landscape = VideoLayersEditor(
-        storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+        stateService: service, appletData: serviceAppletData,
         target: .landscape)
       let portrait = VideoLayersEditor(
-        storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+        stateService: service, appletData: serviceAppletData,
         target: .portrait)
       let tabs = NSTabViewController()
       tabs.addTabViewItem(NSTabViewItem(viewController: landscape))
@@ -149,7 +145,7 @@ extension AppUIComponentTestSuite {
       let row = try #require(editor.table.rows[1])
       #expect(row.delegate === editor)
       row.state.strings[0] = "960"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       editor.update(
         definition: .init(), programPreferences: .init(), layerIDs: [2, 1],
         canvasWidth: 1920, canvasHeight: 1080,
@@ -168,7 +164,7 @@ extension AppUIComponentTestSuite {
       #expect(replacement !== row)
       #expect(replacement.rootView.canvasWidth == 1080)
       #expect(replacement.rootView.canvasHeight == 1920)
-      #expect(!row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
     }
 
     @Test("UCT-1007.6: Resolves and updates names from definition")
@@ -207,18 +203,17 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1007.7: Changing program discards transform draft")
     func changingProgramDiscardsTransformDraft() throws {
       let stateAppletData = WorkspaceAppletData()
-      let stateEditingState = WorkspaceEditingState()
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.programs = [program]
-      let state = WorkspaceStoreService(definition: definition, preferences: .init())
+      let state = WorkspaceStateService(definition: definition, preferences: .init())
       state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .videoLayerInternalIds = [
           1, 2, 3,
         ]
       let content = VideoLayersEditor(
-        storeService: state, appletData: stateAppletData, editingState: stateEditingState,
+        stateService: state, appletData: stateAppletData,
         target: .landscape)
       let editor = content
       let window = NSWindow(
@@ -232,13 +227,13 @@ extension AppUIComponentTestSuite {
       content.refresh()
       let old = try #require(editor.table.rows[1])
       old.state.strings[0] = "draft"
-      old.state.hasUnconfirmedChanges = true
+      old.state.hasLocalTextChanges = true
       state.workspacePreferences.landscapeProgramPreferences[2] =
         state.workspacePreferences.landscapeProgramPreferences[1]
       state.workspaceDefinition.programs[0].internalID = 2
       content.refresh()
       #expect(editor.table.rows[1] !== old)
-      #expect(editor.table.rows[1]?.state.hasUnconfirmedChanges == false)
+      #expect(editor.table.rows[1]?.state.hasLocalTextChanges == false)
     }
 
   }

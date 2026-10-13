@@ -553,7 +553,12 @@ targets:
     sources:
       - path: Sources/Applets/Workspace
         includes:
-          - Controller
+          - WorkspaceDocument.swift
+          - WorkspaceScene.swift
+          - WorkspaceToolbarCoordinator.swift
+          - WorkspaceViewController.swift
+          - WorkspaceViewControllerRepresentation.swift
+          - WorkspaceWindowController.swift
     dependencies:
       - target: LDTXProtos
       - target: LDTXWorkspaceBundleFormat

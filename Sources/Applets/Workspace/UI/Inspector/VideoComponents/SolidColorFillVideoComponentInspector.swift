@@ -7,7 +7,7 @@ import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct SolidColorFillVideoComponentInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
@@ -17,14 +17,14 @@ struct SolidColorFillVideoComponentInspector: View {
   @State private var color: Color
 
   init(
-    storeService: WorkspaceStoreService,
+    stateService: WorkspaceStateService,
     appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
-    self.storeService = storeService
+    self.stateService = stateService
     self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = storeService.workspaceDefinition.videoComponents
+    self.component = stateService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .solidColorFill(let component) = wrapper.videoComponent else { return nil }
@@ -39,7 +39,7 @@ struct SolidColorFillVideoComponentInspector: View {
   var body: some View {
     Form {
       VideoComponentProgramLayers(
-        storeService: storeService, appletData: appletData, componentID: videoComponentID)
+        stateService: stateService, appletData: appletData, componentID: videoComponentID)
       Section("Solid Color Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -57,7 +57,7 @@ struct SolidColorFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(storeService.isOutputActive || component == nil)
+    .disabled(stateService.isOutputActive || component == nil)
     .onChange(of: name) { updateComponent { $0.displayName = name } }
     .onChange(of: color) {
       guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color) else { return }
@@ -68,8 +68,8 @@ struct SolidColorFillVideoComponentInspector: View {
   private func updateComponent(
     _ mutation: (inout Ldtx_Workspace_V4_FillSolidColorComponent) -> Void
   ) {
-    guard !storeService.isOutputActive else { return }
-    var definition = storeService.workspaceDefinition
+    guard !stateService.isOutputActive else { return }
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
       ),
@@ -77,17 +77,17 @@ struct SolidColorFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .solidColorFill(component)
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
 }
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 4
+      stateService: stateService, appletData: WorkspaceAppletData(), videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -95,11 +95,11 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4),
       isOutputActive: true)
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 4
+      stateService: stateService, appletData: WorkspaceAppletData(), videoComponentID: 4
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -107,10 +107,10 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   #Preview("Invalid") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
     SolidColorFillVideoComponentInspector(
-      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 404
+      stateService: stateService, appletData: WorkspaceAppletData(), videoComponentID: 404
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

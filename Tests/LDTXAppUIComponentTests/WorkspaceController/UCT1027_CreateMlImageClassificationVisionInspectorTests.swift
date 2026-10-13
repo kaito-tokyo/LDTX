@@ -5,6 +5,7 @@
 import AppKit
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
@@ -18,7 +19,7 @@ extension AppUIComponentTestSuite {
 
     @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")
     func toolbarInference() async throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.videoComponents = [
         .with {
           $0.vfxSource.internalID = 7
@@ -32,7 +33,9 @@ extension AppUIComponentTestSuite {
       ]
       store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
       let dispatcher = ToolbarDispatcher()
-      let window = makeWorkspaceTestWindow(storeService: store, dispatcher: dispatcher)
+      let context = InferenceDocumentContext()
+      let window = makeWorkspaceTestWindow(
+        stateService: store, dispatcher: dispatcher, documentContext: context)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       let items = try #require(window.toolbar).items
@@ -42,6 +45,9 @@ extension AppUIComponentTestSuite {
       #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
       #expect(item.image != nil && !window.validateToolbarItem(item))
       store.modelURLs[2] = .some(URL(fileURLWithPath: "/tmp/model.mlmodel"))
+      await settleWorkspaceToolbar(window)
+      #expect(!window.validateToolbarItem(item))
+      context.adopt(store)
       await settleWorkspaceToolbar(window)
       #expect(window.validateToolbarItem(item))
       try performWorkspaceToolbarAction(item)
@@ -54,7 +60,7 @@ extension AppUIComponentTestSuite {
 
     @Test("Inference discards obsolete results and failures", arguments: ["model", "input", "roi", "failure"])
     func discardObsoleteInference(change: String) async throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.videoComponents = [7, 9].map { id in
         .with {
           $0.vfxSource.internalID = Int64(id)
@@ -68,11 +74,14 @@ extension AppUIComponentTestSuite {
       store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
       store.modelURLs[2] = URL(fileURLWithPath: "/tmp/model.mlmodel")
       let dispatcher = ToolbarDispatcher()
+      let context = InferenceDocumentContext()
+      context.adopt(store)
       var completion: CheckedContinuation<String, any Error>?
       dispatcher.classificationHandler = {
         try await withCheckedThrowingContinuation { completion = $0 }
       }
-      let window = makeWorkspaceTestWindow(storeService: store, dispatcher: dispatcher)
+      let window = makeWorkspaceTestWindow(
+        stateService: store, dispatcher: dispatcher, documentContext: context)
       defer { window.close() }
       window.runInference()
       await settleWorkspaceToolbar(window)
@@ -138,7 +147,7 @@ extension AppUIComponentTestSuite {
 
     @Test("Nested ROI bindings update the Store directly")
     func immediateROIBindings() throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.visions = [
         WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: 2, name: "Scene", componentID: 1)
@@ -159,7 +168,7 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
       defer { document.close() }
-      let store = document.storeService
+      let store = document.stateService
       store.workspaceDefinition.videoComponents = [
         WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
       ]
@@ -168,7 +177,7 @@ extension AppUIComponentTestSuite {
       draft.visionKind = .createMlImageClassifier
       draft.videoComponentID = 1
       let id = try WorkspaceResourceAddition.add(
-        sheet: .vision, draft: draft, devices: [], storeService: store)
+        sheet: .vision, draft: draft, devices: [], stateService: store)
       #expect(
         store.inspectorSelector == .init(kind: .ldtxSceneDetectorVision, internalID: id))
       let boundStore = Bindable(wrappedValue: store)
@@ -181,17 +190,17 @@ extension AppUIComponentTestSuite {
       }
       let url = root.appendingPathComponent("Classifier.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
-      let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+      let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
       #expect(
-        reopened.storeService.workspaceDefinition.visions == store.workspaceDefinition.visions)
+        reopened.stateService.workspaceDefinition.visions == store.workspaceDefinition.visions)
       #expect(binding.wrappedValue.videoComponentInternalID == 1)
       #expect(binding.wrappedValue.triggers.first?.intervalTrigger.intervalSeconds.double == 5)
     }
 
     @Test("Invalid classifier ROI is rejected; bindings do not overwrite a different Vision")
     func rejectInvalidRegionAndRemovedBinding() throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.visions = [
         WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
           id: 2, name: "Scene", componentID: 1)

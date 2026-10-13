@@ -96,9 +96,9 @@ enum WorkspaceResourceAddition {
 
   static func validationMessage(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
+    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
   ) -> String? {
-    if storeService.isOutputActive { return "Stop output before adding a resource." }
+    if stateService.isOutputActive { return "Stop output before adding a resource." }
     if sheet == .device, case .coreAudioDevice? = draft.physicalDeviceID,
       let audioDiscoveryError
     {
@@ -118,7 +118,7 @@ enum WorkspaceResourceAddition {
     }
     if sheet == .vision {
       guard let componentID = draft.videoComponentID,
-        storeService.workspaceDefinition.videoComponents.contains(where: {
+        stateService.workspaceDefinition.videoComponents.contains(where: {
           $0.internalID == componentID && $0.canBeVisionInput
         })
       else {
@@ -127,7 +127,7 @@ enum WorkspaceResourceAddition {
     }
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
     if name.isEmpty { return "Enter a name." }
-    if existingNames(storeService.workspaceDefinition).contains(name) {
+    if existingNames(stateService.workspaceDefinition).contains(name) {
       return "This name is already in use."
     }
     return nil
@@ -135,17 +135,17 @@ enum WorkspaceResourceAddition {
 
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
+    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
   ) throws -> Int64 {
     if let message = validationMessage(
-      sheet: sheet, draft: draft, devices: devices, storeService: storeService,
+      sheet: sheet, draft: draft, devices: devices, stateService: stateService,
       audioDiscoveryError: audioDiscoveryError)
     {
       throw AdditionError(message: message)
     }
     let id = WorkspaceResourceFactory.nextInternalID()
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
-    var definition = storeService.workspaceDefinition
+    var definition = stateService.workspaceDefinition
     let inspectorKind: WorkspaceInspectorKind
     switch sheet {
     case .device:
@@ -174,8 +174,8 @@ enum WorkspaceResourceAddition {
       definition.visions.append(vision)
       inspectorKind = draft.visionKind.inspectorKind
     }
-    storeService.workspaceDefinition = definition
-    storeService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
+    stateService.workspaceDefinition = definition
+    stateService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
     return id
   }
 

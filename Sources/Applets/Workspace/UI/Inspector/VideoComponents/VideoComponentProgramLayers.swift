@@ -11,13 +11,13 @@ import SwiftUI
 
 struct VideoComponentProgramLayers: View {
   @Environment(\.workspaceReportError) private var reportError
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let componentID: Int64
 
   private var internalID: Int64? {
     guard
-      let component = storeService.workspaceDefinition.videoComponents.first(where: {
+      let component = stateService.workspaceDefinition.videoComponents.first(where: {
         $0.internalID == componentID
       })
     else { return nil }
@@ -27,7 +27,7 @@ struct VideoComponentProgramLayers: View {
   var body: some View {
     Section("Video Layers") {
       if let program = appletData.selectedProgram(
-        in: storeService.workspaceDefinition, for: storeService.localStateURL)
+        in: stateService.workspaceDefinition, for: stateService.localStateURL)
       {
         LabeledContent("Program", value: program.displayName)
         Toggle("Landscape", isOn: membership(for: program.internalID, target: .landscape))
@@ -38,16 +38,16 @@ struct VideoComponentProgramLayers: View {
         Toggle("Portrait", isOn: .constant(false)).disabled(true)
       }
     }
-    .disabled(storeService.isOutputActive || internalID == nil)
+    .disabled(stateService.isOutputActive || internalID == nil)
   }
 
   func setIncluded(_ included: Bool, programID: Int64, target: WorkspaceCanvasTarget) throws {
-    guard !storeService.isOutputActive,
-      storeService.workspaceDefinition.programs.contains(where: { $0.internalID == programID }),
+    guard !stateService.isOutputActive,
+      stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID }),
       internalID != nil
     else { throw WorkspaceSelectionError(message: "Video layer membership cannot be changed now.") }
     var ids =
-      storeService.workspacePreferences[keyPath: target.preferences][programID]?
+      stateService.workspacePreferences[keyPath: target.preferences][programID]?
       .videoLayerInternalIds ?? []
     if included {
       guard !ids.contains(componentID) else { return }
@@ -56,7 +56,7 @@ struct VideoComponentProgramLayers: View {
       guard ids.contains(componentID) else { return }
       ids.removeAll { $0 == componentID }
     }
-    storeService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
+    stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
       .videoLayerInternalIds = ids
   }
 
@@ -64,19 +64,19 @@ struct VideoComponentProgramLayers: View {
     Binding(
       get: {
         guard let id = internalID,
-          let program = storeService.workspaceDefinition.programs.first(where: {
+          let program = stateService.workspaceDefinition.programs.first(where: {
             $0.internalID == programID
           }
           )
         else { return false }
-        return storeService.workspacePreferences[keyPath: target.preferences][program.internalID]?
+        return stateService.workspacePreferences[keyPath: target.preferences][program.internalID]?
           .videoLayerInternalIds.contains(id) ?? false
       },
       set: { value in
         do {
           guard internalID != nil,
             appletData.selectedProgram(
-              in: storeService.workspaceDefinition, for: storeService.localStateURL)?.internalID
+              in: stateService.workspaceDefinition, for: stateService.localStateURL)?.internalID
               == programID
           else {
             throw WorkspaceSelectionError(message: "The Program or Video Component is unavailable.")
@@ -92,7 +92,7 @@ struct VideoComponentProgramLayers: View {
     @Previewable @State var service = WorkspaceSidebarPreviewFixtures.makeUIState()
     Form {
       VideoComponentProgramLayers(
-        storeService: service, appletData: WorkspaceAppletData(), componentID: 4)
+        stateService: service, appletData: WorkspaceAppletData(), componentID: 4)
     }
     .formStyle(.grouped)
     .frame(width: 320, height: 240)

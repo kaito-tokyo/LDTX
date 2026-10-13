@@ -146,7 +146,7 @@ extension AppUIComponentTestSuite {
       for index in 0..<4 { _ = table.view(atColumn: 0, row: index, makeIfNecessary: true) }
       let retained = try #require(table.rows[3])
       retained.state.strings[0] = "draft"
-      retained.state.hasUnconfirmedChanges = true
+      retained.state.hasLocalTextChanges = true
       for ids: [Int64] in [[4, 3, 1, 2], [5, 3, 2], [2, 5, 3, 6], []] {
         fixture.update(table, ids: ids)
         container.scrollView.layoutSubtreeIfNeeded()

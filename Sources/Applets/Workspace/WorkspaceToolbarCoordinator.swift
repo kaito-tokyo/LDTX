@@ -59,11 +59,6 @@ final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
   }
 
   @MainActor
-  func showPendingEditsPopover(_ popover: NSPopover) {
-    popover.show(relativeTo: toggleInspectorItem)
-  }
-
-  @MainActor
   func showScreenshotResultPopover(_ popover: NSPopover) {
     popover.show(relativeTo: captureScreenshotsItem)
   }

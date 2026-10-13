@@ -14,31 +14,28 @@ import AppKit
 
 public struct WorkspaceInspectorContainer: View {
   @Environment(\.workspaceReportError) private var reportError
-  private var workspaceURL: URL? { storeService.localStateURL }
+  private var workspaceURL: URL? { stateService.localStateURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
-  @Bindable var storeService: WorkspaceStoreService
+  @Bindable var stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  private weak var document: NSDocument?
-  let editingState: WorkspaceEditingState
+  private weak var document: (any WorkspaceDocumentContext)?
 
   public init(
     deviceRegistry: DeviceRegistryService,
-    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
-    appletData: WorkspaceAppletData,
-    document: NSDocument? = nil,
+    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    document: (any WorkspaceDocumentContext)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.document = document
-    self.editingState = editingState
     self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
-    self._storeService = Bindable(wrappedValue: storeService)
+    self._stateService = Bindable(wrappedValue: stateService)
   }
 
   public var body: some View {
-    if let selector = storeService.inspectorSelector {
+    if let selector = stateService.inspectorSelector {
       inspector(for: selector)
         .id(selector)
     } else {
@@ -66,15 +63,15 @@ public struct WorkspaceInspectorContainer: View {
       emptyInspector
     case .workspacePrograms:
       WorkspaceProgramsInspector(
-        storeService: storeService, editingState: editingState, appletData: appletData,
+        stateService: stateService, appletData: appletData,
         runtimeActions: runtimeActions)
     case .workspaceCanvas:
-      WorkspaceCanvasInspector(storeService: storeService)
+      WorkspaceCanvasInspector(stateService: stateService)
     case .workspaceOutput:
-      if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+      if let externalID = stateService.externalID.flatMap(UUID.init(uuidString:)) {
         WorkspaceOutputInspector(
-          outputSettings: $storeService.workspaceOutputSettings, externalID: externalID,
-          isOutputActive: storeService.isOutputActive, appletData: appletData,
+          outputSettings: $stateService.workspaceOutputSettings, externalID: externalID,
+          isOutputActive: stateService.isOutputActive, appletData: appletData,
           reportError: reportError)
       } else {
         unavailablePreviewInspector
@@ -82,7 +79,7 @@ public struct WorkspaceInspectorContainer: View {
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          document: document, storeService: storeService, internalID: internalID,
+          document: document, stateService: stateService, internalID: internalID,
           deviceRegistry: deviceRegistry,
           appletData: appletData, runtimeActions: runtimeActions)
       } else {
@@ -91,7 +88,7 @@ public struct WorkspaceInspectorContainer: View {
     case .vfxVideoComponent:
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
-          storeService: storeService, internalID: internalID,
+          stateService: stateService, internalID: internalID,
           deviceRegistry: deviceRegistry, appletData: appletData, runtimeActions: runtimeActions)
       } else {
         emptyInspector
@@ -99,7 +96,7 @@ public struct WorkspaceInspectorContainer: View {
     case .solidColorFillVideoComponent:
       if let internalID = selector.internalID {
         SolidColorFillVideoComponentInspector(
-          storeService: storeService,
+          stateService: stateService,
           appletData: appletData,
           videoComponentID: internalID)
       } else {
@@ -108,7 +105,7 @@ public struct WorkspaceInspectorContainer: View {
     case .linearGradientFillVideoComponent:
       if let internalID = selector.internalID {
         LinearGradientFillVideoComponentInspector(
-          storeService: storeService,
+          stateService: stateService,
           appletData: appletData,
           videoComponentID: internalID)
       } else {
@@ -117,7 +114,7 @@ public struct WorkspaceInspectorContainer: View {
     case .radialGradientFillVideoComponent:
       if let internalID = selector.internalID {
         RadialGradientFillVideoComponentInspector(
-          storeService: storeService,
+          stateService: stateService,
           appletData: appletData,
           videoComponentID: internalID)
       } else {
@@ -126,7 +123,7 @@ public struct WorkspaceInspectorContainer: View {
     case .conicGradientFillVideoComponent:
       if let internalID = selector.internalID {
         ConicGradientFillVideoComponentInspector(
-          storeService: storeService,
+          stateService: stateService,
           appletData: appletData,
           videoComponentID: internalID)
       } else {
@@ -135,48 +132,48 @@ public struct WorkspaceInspectorContainer: View {
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(
-          storeService: storeService, appletData: appletData, internalID: internalID)
+          stateService: stateService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
     case .testPatternVideoComponent:
       if let internalID = selector.internalID {
         TestPatternInspector(
-          storeService: storeService, appletData: appletData, internalID: internalID)
+          stateService: stateService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
     case .ocrVision:
       if let internalID = selector.internalID,
-        let vision = $storeService.ocrVision(internalID: internalID)
+        let vision = $stateService.ocrVision(internalID: internalID)
       {
         OcrVisionInspector(
-          storeService: storeService, editingState: editingState, vision: vision)
+          stateService: stateService, vision: vision)
       } else {
         emptyInspector
       }
     case .ldtxSceneDetectorVision:
       if let internalID = selector.internalID,
-        let vision = $storeService.ldtxSceneDetectorVision(internalID: internalID)
+        let vision = $stateService.ldtxSceneDetectorVision(internalID: internalID)
       {
         let savedModelURL = WorkspaceModelFiles.modelPath(
-          for: vision.wrappedValue, in: storeService.workspaceModels)
+          for: vision.wrappedValue, in: stateService.workspaceModels)
           .flatMap { workspaceURL?.appendingPathComponent("VisionModels/\($0)") }
         LdtxSceneDetectorVisionInspector(
-          videoComponents: storeService.workspaceDefinition.videoComponents,
+          videoComponents: stateService.workspaceDefinition.videoComponents,
           inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in
-            storeService.workspaceDefinition.videoComponents.first { $0.internalID == inputID }?
+            stateService.workspaceDefinition.videoComponents.first { $0.internalID == inputID }?
               .renderingSize
           },
           vision: vision,
           modelURL: Binding(
-            get: { storeService.modelURLs[internalID] ?? savedModelURL },
-            set: { storeService.modelURLs[internalID] = .some($0) }),
+            get: { stateService.modelURLs[internalID] ?? savedModelURL },
+            set: { stateService.modelURLs[internalID] = .some($0) }),
           savedModelURL: savedModelURL,
-          inferenceResult: storeService.visionResults[internalID],
-          inferenceFailure: storeService.visionFailureMessages[internalID]
+          inferenceResult: stateService.visionResults[internalID],
+          inferenceFailure: stateService.visionFailureMessages[internalID]
         )
-        .environment(\.outputActive, storeService.isOutputActive)
+        .environment(\.outputActive, stateService.isOutputActive)
       } else {
         emptyInspector
       }
@@ -198,14 +195,12 @@ public struct WorkspaceInspectorContainer: View {
 
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
-    @Previewable @State var editingState = WorkspaceEditingState()
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        storeService: storeService, editingState: editingState,
-        deviceRegistry: DeviceRegistryService(),
+        stateService: stateService, deviceRegistry: DeviceRegistryService(),
         appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
@@ -213,8 +208,8 @@ public struct WorkspaceInspectorContainer: View {
       Divider()
 
       WorkspaceInspectorContainer(
-        deviceRegistry: DeviceRegistryService(), storeService: storeService,
-        editingState: editingState, appletData: WorkspaceAppletData()
+        deviceRegistry: DeviceRegistryService(), stateService: stateService,
+        appletData: WorkspaceAppletData()
       )
       .padding(16)
       .frame(width: 260)

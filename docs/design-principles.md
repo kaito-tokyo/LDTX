@@ -23,12 +23,28 @@ the relevant design or feature documentation instead.
   of a V4 Workspace.
 - Runtime state, editor state, and persistence code must project from that
   model rather than maintaining an independent parallel representation.
-- The Workspace Store exposes its authoritative documents as ordinary stored
+- WorkspaceStateService exposes its editable protobuf values as ordinary stored
   properties. Assignments must remain transparent: setters must not silently
   reject, reinterpret, or replace an assigned value. Editing restrictions and
   validation belong to explicit editing operations and their UI owners.
-- Documents observe these properties to track unsaved changes. The Store must
-  not own document-change callbacks or hide persistence notifications in setters.
+- The editing connection registers undo actions for content changes to participate
+  in SwiftUI's unsaved-change tracking. StateService must not hide document-change
+  callbacks or persistence notifications in its setters.
+
+## Confirmed document content and editing state have separate owners
+
+- WorkspaceDocument owns the confirmed Workspace content. It changes after a
+  successful read or after a successful write is verified at the formal document
+  URL. A write to a staging location alone does not confirm the content.
+- WorkspaceWindowController owns WorkspaceStateService, its temporary editing
+  values and UI state, and the runtime resources. Document does not own the
+  controller or a continuously synchronized copy of its edits.
+- The Representable's Coordinator owns the controller and the connection to
+  Document. Document holds that connection weakly. Snapshot capture reads the
+  editor only when saving; saving without a connected editor fails explicitly.
+- A failed save preserves the edits and confirmed content. Successful saves
+  confirm only their captured values; newer edits stay in StateService. Import
+  results reconcile model revisions without replacing newer editing selections.
 
 ## Definition changes reach the runtime only after persistence
 
@@ -132,23 +148,17 @@ the relevant design or feature documentation instead.
 - Reject non-finite or unrepresentable decibel edits before changing the model,
   preserving the previous value and the invalid editing draft.
 
-## Unconfirmed edits prevent leaving their screen
+## Editing writes directly to WorkspaceStateService
 
-- A screen containing unconfirmed edited values cannot be left. Attempted navigation
-  must preserve the current screen and draft and indicate the pending edits.
-  Sidebar selection shows a popover at the Inspector toggle instead of presenting an error dialog. Same-selection
-  assignments and pane opening or closing are allowed.
-- Validate at multiple layers. Ordinary edits that were allowed to leave their
-  screen must not become latent validation failures discovered only on save.
-- OCR ROI text remains a draft until the whole rectangle is valid. Inspector
-  selection, Program changes, output start, save, and document close must respect
-  pending invalid edits.
-- Content Editors register weakly captured draft validators with the Workspace
-  editing state owned by the Workspace Document. Master-volume and layer-transform
-  drafts participate in the same
-  navigation, output-start, save, and close validation as OCR ROI drafts.
-  Validation checks the current text without committing or discarding it. Window-wide
-  Submit validates all pending owners before any writeback; Enter may commit locally.
+- Representable edits update the Store's authoritative documents directly. There
+  is no separate Submit or Apply operation and no window-wide draft registry.
+- Input controls may retain incomplete or unrepresentable numeric text locally;
+  they must write representable values without requiring Return. Navigation does
+  not require a separate confirmation operation.
+- Semantic validation, including Vision ROI bounds and rational denominators,
+  occurs when saving. Failed validation preserves the edits in the Store and
+  leaves the persisted Definition and runtime unchanged.
+- Changing screens or starting output does not implicitly save the Definition.
 
 ## Video visibility terminology
 

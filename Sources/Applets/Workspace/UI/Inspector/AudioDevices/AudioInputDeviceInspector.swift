@@ -8,8 +8,8 @@ import LDTXProtos
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {
-  weak var document: NSDocument? = nil
-  let storeService: WorkspaceStoreService
+  weak var document: (any WorkspaceDocumentContext)? = nil
+  let stateService: WorkspaceStateService
   let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
@@ -28,11 +28,11 @@ struct AudioInputDeviceInspector: View {
     if device != nil {
       Section("Audio Input Device") {
         TextField("Name", text: nameBinding)
-          .disabled(storeService.isOutputActive)
+          .disabled(stateService.isOutputActive)
         if document != nil {
           WorkspacePhysicalDeviceField(
             title: "Physical Device", internalID: internalID, isAudio: true,
-            storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry,
+            stateService: stateService, appletData: appletData, deviceRegistry: deviceRegistry,
             runtimeActions: runtimeActions)
         }
       }
@@ -43,7 +43,7 @@ struct AudioInputDeviceInspector: View {
   }
 
   private var device: Ldtx_Workspace_V4_AudioInputDevice? {
-    storeService.workspaceDefinition.audioDevices.first { $0.internalID == internalID }
+    stateService.workspaceDefinition.audioDevices.first { $0.internalID == internalID }
   }
 
   private var nameBinding: Binding<String> {
@@ -64,12 +64,12 @@ struct AudioInputDeviceInspector: View {
     }
   }
   private func updateInputDevice(_ mutation: (inout Ldtx_Workspace_V4_AudioInputDevice) -> Void) {
-    var definition = storeService.workspaceDefinition
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.audioDevices.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.audioDevices[index])
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
 }

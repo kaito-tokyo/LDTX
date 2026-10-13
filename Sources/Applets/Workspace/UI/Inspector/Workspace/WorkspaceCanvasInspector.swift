@@ -7,7 +7,7 @@ import LDTXProtos
 import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
 
   var body: some View {
     Form {
@@ -20,7 +20,7 @@ struct WorkspaceCanvasInspector: View {
   private var formContent: some View {
     Section("Canvas") {
       Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
-        .disabled(storeService.isOutputActive)
+        .disabled(stateService.isOutputActive)
       LabeledContent("Landscape Profile", value: canvas.landscapeProfileID)
       LabeledContent("Portrait Profile", value: canvas.portraitProfileID)
       LabeledContent("Landscape Bit Rate") {
@@ -46,23 +46,23 @@ struct WorkspaceCanvasInspector: View {
       }
       .pickerStyle(.menu)
     }
-    .disabled(storeService.isOutputActive)
+    .disabled(stateService.isOutputActive)
 
   }
 
   private var canvas: Ldtx_Workspace_V4_CanvasConfiguration {
-    storeService.workspaceDefinition.canvasConfiguration
+    stateService.workspaceDefinition.canvasConfiguration
   }
 
   private var videoDevices: [Ldtx_Workspace_V4_VfxSourceComponent] {
-    storeService.workspaceDefinition.videoComponents.compactMap { wrapper in
+    stateService.workspaceDefinition.videoComponents.compactMap { wrapper in
       guard case .vfxSource(let device) = wrapper.videoComponent else { return nil }
       return device
     }
   }
 
   private var frameRate: Int {
-    let value = storeService.workspaceDefinition.canvasConfiguration.frameRate
+    let value = stateService.workspaceDefinition.canvasConfiguration.frameRate
     return value == 0 ? 60 : Int(value)
   }
 
@@ -70,9 +70,9 @@ struct WorkspaceCanvasInspector: View {
     Binding(
       get: { frameRate },
       set: { value in
-        var definition = storeService.workspaceDefinition
+        var definition = stateService.workspaceDefinition
         definition.canvasConfiguration.frameRate = UInt32(value)
-        storeService.workspaceDefinition = definition
+        stateService.workspaceDefinition = definition
       }
     )
   }
@@ -92,9 +92,9 @@ struct WorkspaceCanvasInspector: View {
       get: { Int(canvas[keyPath: keyPath]) },
       set: { value in
         let rate = UInt32(min(max(value, 100_000), 100_000_000))
-        var definition = storeService.workspaceDefinition
+        var definition = stateService.workspaceDefinition
         definition.canvasConfiguration[keyPath: keyPath] = rate
-        storeService.workspaceDefinition = definition
+        stateService.workspaceDefinition = definition
       }
     )
   }
@@ -106,13 +106,13 @@ struct WorkspaceCanvasInspector: View {
           ? canvas.ptsMasterVfxSourceInternalID : nil
       },
       set: { internalID in
-        var definition = storeService.workspaceDefinition
+        var definition = stateService.workspaceDefinition
         if let internalID {
           definition.canvasConfiguration.ptsMasterVfxSourceInternalID = internalID
         } else {
           definition.canvasConfiguration.clearPtsMasterVfxSourceInternalID()
         }
-        storeService.workspaceDefinition = definition
+        stateService.workspaceDefinition = definition
       }
     )
   }

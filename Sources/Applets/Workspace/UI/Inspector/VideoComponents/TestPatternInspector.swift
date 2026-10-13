@@ -6,14 +6,14 @@ import LDTXProtos
 import SwiftUI
 
 struct TestPatternInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let internalID: Int64
 
   var body: some View {
     Form {
       VideoComponentProgramLayers(
-        storeService: storeService, appletData: appletData, componentID: internalID)
+        stateService: stateService, appletData: appletData, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)
@@ -24,7 +24,7 @@ struct TestPatternInspector: View {
     Section("Test Pattern") {
       if component != nil {
         TextField("Name", text: nameBinding)
-          .disabled(storeService.isOutputActive)
+          .disabled(stateService.isOutputActive)
       } else {
         Text("This item is no longer present in the Workspace.")
           .foregroundStyle(.secondary)
@@ -34,7 +34,7 @@ struct TestPatternInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_TestPatternComponent? {
-    storeService.workspaceDefinition.videoComponents.compactMap { wrapper in
+    stateService.workspaceDefinition.videoComponents.compactMap { wrapper in
       guard case .testPattern(let value) = wrapper.videoComponent,
         value.internalID == internalID
       else { return nil }
@@ -57,12 +57,12 @@ struct TestPatternInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = storeService.workspaceDefinition
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
 }

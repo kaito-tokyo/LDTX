@@ -7,7 +7,7 @@ import LDTXProtos
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   let appletData: WorkspaceAppletData
@@ -17,7 +17,7 @@ struct VfxVideoComponentInspector: View {
   var body: some View {
     Form {
       VideoComponentProgramLayers(
-        storeService: storeService, appletData: appletData, componentID: internalID)
+        stateService: stateService, appletData: appletData, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)
@@ -28,19 +28,19 @@ struct VfxVideoComponentInspector: View {
     Section("VFX Source") {
       if let component {
         TextField("Name", text: nameBinding)
-          .disabled(storeService.isOutputActive)
+          .disabled(stateService.isOutputActive)
         WorkspacePhysicalDeviceField(
           title: "Physical Device", internalID: internalID, isAudio: false,
-          storeService: storeService, appletData: appletData, deviceRegistry: deviceRegistry,
+          stateService: stateService, appletData: appletData, deviceRegistry: deviceRegistry,
           runtimeActions: runtimeActions)
         Toggle("Background Removal", isOn: backgroundRemovalBinding)
-          .disabled(storeService.isOutputActive)
+          .disabled(stateService.isOutputActive)
         Picker("Model", selection: backgroundRemovalModelBinding) {
           Text("MediaPipe Landscape").tag(
             Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.mediapipeLandscape)
           Text("Unspecified").tag(Ldtx_Workspace_V4_BackgroundRemovalVfxEffect.Model.unspecified)
         }
-        .disabled(storeService.isOutputActive || !hasBackgroundRemoval)
+        .disabled(stateService.isOutputActive || !hasBackgroundRemoval)
         Text("Effects: \(component.effects.count)")
           .foregroundStyle(.secondary)
       } else {
@@ -52,7 +52,7 @@ struct VfxVideoComponentInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_VfxSourceComponent? {
-    storeService.workspaceDefinition.videoComponents.compactMap { wrapper in
+    stateService.workspaceDefinition.videoComponents.compactMap { wrapper in
       guard case .vfxSource(let component) = wrapper.videoComponent,
         component.internalID == internalID
       else { return nil }
@@ -130,12 +130,12 @@ struct VfxVideoComponentInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = storeService.workspaceDefinition
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
 }

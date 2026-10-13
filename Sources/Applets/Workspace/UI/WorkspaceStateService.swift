@@ -10,13 +10,15 @@ import Observation
 
 @MainActor
 @Observable
-public final class WorkspaceStoreService {
+public final class WorkspaceStateService {
   public var modelURLs: [Int64: URL?] = [:]
   public var workspaceModels: [String: Data] = [:]
   public var workspaceDefinition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
   public var workspaceOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4
   public var workspacePreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
   public var externalID: String?
+  public var preferencesExternalID: String?
+  public var outputSettingsExternalID: String?
   public var localStateURL: URL?
 
   public var selectedAudioMix: ProgramAudioPeakMeter.Master = .landscape
@@ -30,6 +32,24 @@ public final class WorkspaceStoreService {
   public var outputFailureMessage: String?
   public var visionResults: [Int64: String] = [:]
   public var visionFailureMessages: [Int64: String] = [:]
+
+  public var editingWorkspace: WorkspaceV4Bundle {
+    WorkspaceV4Bundle(
+      definitionExternalID: externalID, preferencesExternalID: preferencesExternalID,
+      definition: workspaceDefinition, preferences: workspacePreferences,
+      outputSettingsExternalID: outputSettingsExternalID,
+      outputSettings: workspaceOutputSettings, models: workspaceModels)
+  }
+
+  public func replaceEditingWorkspace(_ workspace: WorkspaceV4Bundle) {
+    workspaceDefinition = workspace.definition
+    workspacePreferences = workspace.preferences
+    workspaceOutputSettings = workspace.outputSettings
+    workspaceModels = workspace.models
+    externalID = workspace.definitionExternalID
+    preferencesExternalID = workspace.preferencesExternalID
+    outputSettingsExternalID = workspace.outputSettingsExternalID
+  }
 
   public init(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 = .init(),

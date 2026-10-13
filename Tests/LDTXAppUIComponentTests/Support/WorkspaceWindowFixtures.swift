@@ -37,16 +37,16 @@ func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
 
 @MainActor
 func makeWorkspaceTestWindow(
-  storeService: WorkspaceStoreService? = nil,
-  editingState: WorkspaceEditingState? = nil,
+  stateService: WorkspaceStateService? = nil,
   dispatcher: (any WorkspaceRuntimeActions)? = nil,
   reportError: @escaping (Error) -> Void = { _ in },
   appletData: WorkspaceAppletData? = nil,
   url: URL? = nil,
+  documentContext: (any WorkspaceDocumentContext)? = nil,
   externalID: String = UUID().uuidString.lowercased()
-) -> WorkspaceWindow {
+) -> WorkspaceTestWindow {
   let document = WorkspaceDocument()
-  let state = storeService ?? document.storeService
+  let state = stateService ?? document.stateService
   state.externalID = externalID
   let data = appletData ?? WorkspaceAppletData()
   let renderer = ProgramPairPreviewRenderer(
@@ -62,13 +62,13 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
-  document.fileURL = url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace")
-  return WorkspaceWindow(
-    document: document, appletData: data, storeService: state,
-    editingState: editingState ?? document.editingState,
+  document.adoptDocumentURL(url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
+  let content = WorkspaceViewController(
+    document: documentContext ?? document, appletData: data, stateService: state,
     peakMeter: .init(), reportError: { _ in },
     deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
 
+  return WorkspaceTestWindow(content: content, document: documentContext ?? document)
 }
 
 @MainActor

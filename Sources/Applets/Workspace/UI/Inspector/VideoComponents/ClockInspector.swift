@@ -6,14 +6,14 @@ import LDTXProtos
 import SwiftUI
 
 struct ClockInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let internalID: Int64
 
   var body: some View {
     Form {
       VideoComponentProgramLayers(
-        storeService: storeService, appletData: appletData, componentID: internalID)
+        stateService: stateService, appletData: appletData, componentID: internalID)
       formContent
     }
     .formStyle(.grouped)
@@ -76,7 +76,7 @@ struct ClockInspector: View {
   }
 
   private var component: Ldtx_Workspace_V4_ClockComponent? {
-    storeService.workspaceDefinition.videoComponents.compactMap {
+    stateService.workspaceDefinition.videoComponents.compactMap {
       wrapper -> Ldtx_Workspace_V4_ClockComponent? in
       guard case .clock(let component) = wrapper.videoComponent,
         component.internalID == internalID
@@ -85,7 +85,7 @@ struct ClockInspector: View {
     }.first
   }
 
-  private var isRecording: Bool { storeService.isOutputActive }
+  private var isRecording: Bool { stateService.isOutputActive }
 
   private func componentBinding<Value>(
     _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Value>, initial: Value
@@ -175,12 +175,12 @@ struct ClockInspector: View {
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
-    var definition = storeService.workspaceDefinition
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
 }

@@ -231,7 +231,7 @@ private struct RecordingFolderPicker: NSViewRepresentable {
 
   @MainActor
   private enum WorkspaceOutputInspectorPreviewFixtures {
-    static func makeStore(isOutputActive: Bool = false) -> WorkspaceStoreService {
+    static func makeStore(isOutputActive: Bool = false) -> WorkspaceStateService {
       let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       var outputSettings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
       outputSettings.recordingEnabled = true
@@ -242,7 +242,7 @@ private struct RecordingFolderPicker: NSViewRepresentable {
         "game": "Pokémon UNITE",
         "player": "Preview Player",
       ]
-      return WorkspaceStoreService(
+      return WorkspaceStateService(
         definition: definition, preferences: .init(), isOutputActive: isOutputActive,
         outputSettings: outputSettings)
     }
@@ -258,27 +258,27 @@ private struct RecordingFolderPicker: NSViewRepresentable {
   }
 
   #Preview("Output Settings") {
-    @Previewable @State var storeService = WorkspaceOutputInspectorPreviewFixtures.makeStore()
+    @Previewable @State var stateService = WorkspaceOutputInspectorPreviewFixtures.makeStore()
     @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
 
-    @Bindable var boundStore = storeService
+    @Bindable var boundStore = stateService
     WorkspaceOutputInspector(
       outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
-      isOutputActive: storeService.isOutputActive, appletData: appletData,
+      isOutputActive: stateService.isOutputActive, appletData: appletData,
       reportError: { _ in }
     )
     .frame(width: 480, height: 640)
   }
 
   #Preview("Output Active") {
-    @Previewable @State var storeService = WorkspaceOutputInspectorPreviewFixtures.makeStore(
+    @Previewable @State var stateService = WorkspaceOutputInspectorPreviewFixtures.makeStore(
       isOutputActive: true)
     @Previewable @State var appletData = WorkspaceOutputInspectorPreviewFixtures.makeAppletData()
 
-    @Bindable var boundStore = storeService
+    @Bindable var boundStore = stateService
     WorkspaceOutputInspector(
       outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
-      isOutputActive: storeService.isOutputActive, appletData: appletData,
+      isOutputActive: stateService.isOutputActive, appletData: appletData,
       reportError: { _ in }
     )
     .frame(width: 480, height: 640)

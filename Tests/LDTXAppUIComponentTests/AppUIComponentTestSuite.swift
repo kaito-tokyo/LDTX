@@ -17,22 +17,5 @@ struct AppUIComponentTestSuite {
 
 @MainActor
 enum UIComponentTestEnvironment {
-  static let documentController = UIComponentDocumentController()
-}
-
-@MainActor
-final class UIComponentDocumentController: NSDocumentController {
-  override func documentClass(forType typeName: String) -> AnyClass? {
-    switch typeName {
-    case "tokyo.kaito.ldtx.workspace": WorkspaceDocument.self
-    default: super.documentClass(forType: typeName)
-    }
-  }
-
-  override func typeForContents(of url: URL) throws -> String {
-    switch url.pathExtension {
-    case "ldtxworkspace": "tokyo.kaito.ldtx.workspace"
-    default: try super.typeForContents(of: url)
-    }
-  }
+  static let documentController = NSDocumentController()
 }

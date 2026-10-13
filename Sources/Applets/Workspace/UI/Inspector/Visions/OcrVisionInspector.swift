@@ -10,109 +10,53 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OcrVisionInspector: View {
-  @Bindable var storeService: WorkspaceStoreService
-  let editingState: WorkspaceEditingState
+  @Bindable var stateService: WorkspaceStateService
   @Binding var vision: Ldtx_Workspace_V4_OcrVision
-
-  @State var languages: String
-  @State var customWords: String
-  @State var minimumTextHeight: String
-  @State var x: String
-  @State var xDenominator: String
-  @State var y: String
-  @State var yDenominator: String
-  @State var width: String
-  @State var widthDenominator: String
-  @State var height: String
-  @State var heightDenominator: String
-  @State var validatorID = UUID()
-  @State var submittedInputs: [String] = []
-
-  init(
-    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
-    vision: Binding<Ldtx_Workspace_V4_OcrVision>
-  ) {
-    self.editingState = editingState
-    self.storeService = storeService
-    self._vision = vision
-    let value = vision.wrappedValue
-    self._languages = State(initialValue: value.recognitionLanguages.joined(separator: ", "))
-    self._customWords = State(initialValue: value.customWords.joined(separator: ", "))
-    self._minimumTextHeight = State(
-      initialValue: RationalFormatStyle().format(value.minimumTextHeight))
-    let profile = WorkspaceCanvasTarget.landscape.defaultProfile
-    let xFields = RationalFractionInput.fields(
-      for: value.regionOfInterest.x, defaultDenominator: UInt32(profile.width))
-    self._x = State(initialValue: xFields.numerator)
-    self._xDenominator = State(initialValue: xFields.denominator)
-    let yFields = RationalFractionInput.fields(
-      for: value.regionOfInterest.y, defaultDenominator: UInt32(profile.height))
-    self._y = State(initialValue: yFields.numerator)
-    self._yDenominator = State(initialValue: yFields.denominator)
-    let widthFields = RationalFractionInput.fields(
-      for: value.regionOfInterest.width, defaultDenominator: UInt32(profile.width))
-    self._width = State(initialValue: widthFields.numerator)
-    self._widthDenominator = State(initialValue: widthFields.denominator)
-    let heightFields = RationalFractionInput.fields(
-      for: value.regionOfInterest.height, defaultDenominator: UInt32(profile.height))
-    self._height = State(initialValue: heightFields.numerator)
-    self._heightDenominator = State(initialValue: heightFields.denominator)
-  }
 
   var body: some View {
     Form {
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
         VisionInputVideoComponentDropdown(
-          videoComponents: storeService.workspaceDefinition.videoComponents,
+          videoComponents: stateService.workspaceDefinition.videoComponents,
           selection: $vision.videoComponentInternalIDIfPresent)
         TriggerEditor(triggers: $vision.triggers)
       }
-      .disabled(storeService.isOutputActive)
+      .disabled(stateService.isOutputActive)
       Section("Text Recognition") {
         LabeledContent("Recognition", value: "Accurate")
         Toggle(
           "Language Correction",
           isOn: $vision.usesLanguageCorrection
         )
-        TextField("Languages (comma separated)", text: $languages)
-        TextField("Custom Words (comma separated)", text: $customWords)
+        TextField(
+          "Languages (comma separated)", text: Binding(
+            get: { vision.recognitionLanguages.joined(separator: ", ") },
+            set: { vision.recognitionLanguages = Self.commaSeparatedValues($0) }))
+        TextField(
+          "Custom Words (comma separated)", text: Binding(
+            get: { vision.customWords.joined(separator: ", ") },
+            set: { vision.customWords = Self.commaSeparatedValues($0) }))
         LabeledContent("Minimum Text Height") {
           TextField(
-            "Fraction", text: $minimumTextHeight
+            "Fraction", value: $vision.minimumTextHeight, format: RationalFormatStyle()
           )
           .multilineTextAlignment(.trailing)
           .frame(width: 90)
         }
       }
-      .disabled(storeService.isOutputActive)
+      .disabled(stateService.isOutputActive)
       Section("Region of Interest") {
-        LabeledContent("X") {
-          Rational32TextField(
-            numerator: $x, denominator: $xDenominator,
-            accessibilityLabel: "X", onSubmit: submitEdits)
-        }
-        LabeledContent("Y") {
-          Rational32TextField(
-            numerator: $y, denominator: $yDenominator,
-            accessibilityLabel: "Y", onSubmit: submitEdits)
-        }
-        LabeledContent("Width") {
-          Rational32TextField(
-            numerator: $width, denominator: $widthDenominator,
-            accessibilityLabel: "Width", onSubmit: submitEdits)
-        }
-        LabeledContent("Height") {
-          Rational32TextField(
-            numerator: $height, denominator: $heightDenominator,
-            accessibilityLabel: "Height", onSubmit: submitEdits)
-        }
+        RegionOfInterestEditor(
+          inputSize: stateService.workspaceDefinition.videoComponents.first {
+            $0.internalID == vision.videoComponentInternalID
+          }?.renderingSize ?? (1920, 1080), roi: $vision.regionOfInterest)
       }
-      .disabled(storeService.isOutputActive)
+      .disabled(stateService.isOutputActive)
       Section("Recognition Result") {
-        if let failure = storeService.visionFailureMessages[vision.internalID] {
+        if let failure = stateService.visionFailureMessages[vision.internalID] {
           Text(failure).foregroundStyle(.red)
-        } else if let result = storeService.visionResults[vision.internalID] {
+        } else if let result = stateService.visionResults[vision.internalID] {
           Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
         } else {
           Text("Waiting for recognition.").foregroundStyle(.secondary)
@@ -120,86 +64,6 @@ struct OcrVisionInspector: View {
       }
     }
     .formStyle(.grouped)
-    .onSubmit { submitEdits() }
-    .onAppear {
-      if submittedInputs.isEmpty { submittedInputs = inputs }
-      editingState.registerInspectorEditValidator(
-        id: validatorID, hasChanges: { inputs != submittedInputs },
-        submit: { try commitEdits() }
-      ) {
-        _ = try Self.validatedRegion(
-          x: x, y: y, width: width, height: height, xDenominator: xDenominator,
-          yDenominator: yDenominator,
-          widthDenominator: widthDenominator, heightDenominator: heightDenominator)
-        _ = try validatedMinimumTextHeight()
-      }
-    }
-    .onChange(of: inputs) { editingState.refreshUnconfirmedChanges() }
-    .onDisappear { editingState.removeInspectorEditValidator(id: validatorID) }
-  }
-
-
-  var inputs: [String] {
-    [
-      languages, customWords, minimumTextHeight, x, xDenominator, y, yDenominator, width,
-      widthDenominator, height, heightDenominator,
-    ]
-  }
-
-  func submitEdits() {
-    guard !storeService.isOutputActive else { return }
-    do { try commitEdits() } catch { editingState.reportInputValidationError(error) }
-  }
-
-  func commitEdits() throws {
-    let region = try Self.validatedRegion(
-      x: x, y: y, width: width, height: height, xDenominator: xDenominator,
-      yDenominator: yDenominator,
-      widthDenominator: widthDenominator, heightDenominator: heightDenominator)
-    let minimumHeight = try validatedMinimumTextHeight()
-    var updated = vision
-    updated.recognitionLanguages = Self.commaSeparatedValues(languages)
-    updated.customWords = Self.commaSeparatedValues(customWords)
-    updated.minimumTextHeight = minimumHeight
-    updated.regionOfInterest = region
-    vision = updated
-    submittedInputs = inputs
-    editingState.refreshUnconfirmedChanges()
-  }
-
-  static func validatedRegion(
-    x: String, y: String, width: String, height: String,
-    xDenominator: String = "1", yDenominator: String = "1",
-    widthDenominator: String = "1", heightDenominator: String = "1"
-  ) throws
-    -> Ldtx_Workspace_V4_VisionRegionOfInterest
-  {
-    do {
-      var region = Ldtx_Workspace_V4_VisionRegionOfInterest()
-      region.x = try RationalFractionInput.parse(
-        numerator: x, denominator: xDenominator, as: Ldtx_Workspace_V4_Rational32.self)
-      region.y = try RationalFractionInput.parse(
-        numerator: y, denominator: yDenominator, as: Ldtx_Workspace_V4_Rational32.self)
-      region.width = try RationalFractionInput.parse(
-        numerator: width, denominator: widthDenominator,
-        as: Ldtx_Workspace_V4_Rational32DefaultOne.self)
-      region.height = try RationalFractionInput.parse(
-        numerator: height, denominator: heightDenominator,
-        as: Ldtx_Workspace_V4_Rational32DefaultOne.self)
-      try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
-      return region
-    } catch {
-      throw WorkspaceSelectionError(
-        message: "Correct the OCR ROI before leaving this Inspector. " + error.localizedDescription)
-    }
-  }
-
-  func validatedMinimumTextHeight() throws -> Ldtx_Workspace_V4_Rational32 {
-    let value = try RationalParseStrategy().parse(minimumTextHeight)
-    guard value.double.isFinite, (0...1).contains(value.double) else {
-      throw WorkspaceSelectionError(message: "Minimum Text Height must be between 0 and 1.")
-    }
-    return value
   }
 
   static func commaSeparatedValues(_ text: String) -> [String] {
@@ -212,27 +76,25 @@ struct OcrVisionInspector: View {
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var editingState = WorkspaceEditingState()
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .ocrVision, internalID: 10))
-    @Bindable var boundStore = storeService
+    @Bindable var boundStore = stateService
     if let vision = $boundStore.ocrVision(internalID: 10) {
       OcrVisionInspector(
-        storeService: storeService, editingState: editingState, vision: vision
+        stateService: stateService, vision: vision
       )
       .frame(width: 480, height: 800, alignment: .topLeading)
     }
   }
 
   #Preview("Output Active") {
-    @Previewable @State var editingState = WorkspaceEditingState()
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .ocrVision, internalID: 10),
       isOutputActive: true)
-    @Bindable var boundStore = storeService
+    @Bindable var boundStore = stateService
     if let vision = $boundStore.ocrVision(internalID: 10) {
       OcrVisionInspector(
-        storeService: storeService, editingState: editingState, vision: vision
+        stateService: stateService, vision: vision
       )
       .frame(width: 480, height: 800, alignment: .topLeading)
     }

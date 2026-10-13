@@ -16,8 +16,7 @@ extension AppUIComponentTestSuite {
     @Test("Active output allows reordering but rejects membership and count changes")
     func activeOutputPreservesLayerMembership() throws {
       let serviceAppletData = WorkspaceAppletData()
-      let serviceEditingState = WorkspaceEditingState()
-      let service = WorkspaceStoreService(
+      let service = WorkspaceStateService(
         definition: .with {
           $0.programs = [.with { $0.internalID = 100 }]
         }, preferences: .init())
@@ -27,7 +26,7 @@ extension AppUIComponentTestSuite {
       service.isOutputActive = true
       preferences.videoLayerInternalIds = [20, 10]
       try VideoLayersEditor(
-        storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+        stateService: service, appletData: serviceAppletData,
         target: .landscape
       ).commitLayerOrder(
         preferences.videoLayerInternalIds, programID: 100)
@@ -35,7 +34,7 @@ extension AppUIComponentTestSuite {
         preferences.videoLayerInternalIds = ids
         #expect(throws: WorkspaceSelectionError.self) {
           try VideoLayersEditor(
-            storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+            stateService: service, appletData: serviceAppletData,
             target: .landscape
           ).commitLayerOrder(
             preferences.videoLayerInternalIds, programID: 100)
@@ -50,7 +49,7 @@ extension AppUIComponentTestSuite {
       "UCT-1010.1: Component inspector membership uses latest program and preserves preferences")
     func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {
       let serviceAppletData = WorkspaceAppletData()
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       var first = Ldtx_Workspace_V4_ProgramDefinition()
       first.internalID = 100
       var second = Ldtx_Workspace_V4_ProgramDefinition()
@@ -68,7 +67,7 @@ extension AppUIComponentTestSuite {
         true
       let preferences = service.workspacePreferences
       let controls = VideoComponentProgramLayers(
-        storeService: service, appletData: serviceAppletData, componentID: 10)
+        stateService: service, appletData: serviceAppletData, componentID: 10)
       let landscape = controls.membership(for: 100, target: .landscape)
       let portrait = controls.membership(for: 100, target: .portrait)
       #expect(!landscape.wrappedValue && !portrait.wrappedValue)
@@ -115,13 +114,13 @@ extension AppUIComponentTestSuite {
           == [10])
       #expect(throws: WorkspaceSelectionError.self) {
         try VideoComponentProgramLayers(
-          storeService: service, appletData: serviceAppletData, componentID: 999
+          stateService: service, appletData: serviceAppletData, componentID: 999
         ).setIncluded(
           true, programID: 200, target: .landscape)
       }
       #expect(throws: WorkspaceSelectionError.self) {
         try VideoComponentProgramLayers(
-          storeService: service, appletData: serviceAppletData, componentID: 20
+          stateService: service, appletData: serviceAppletData, componentID: 20
         ).setIncluded(
           true, programID: 999, target: .landscape)
       }
@@ -130,7 +129,7 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1010.2: Canvas membership and ordering remain local during output")
     func videoLayersEditorEditsBothCanvases() throws {
       _ = NSApplication.shared
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       program.displayName = "Main"
@@ -138,9 +137,9 @@ extension AppUIComponentTestSuite {
       state.workspaceDefinition.videoComponents = [10, 20, 30].map {
         WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
       }
-      let other = WorkspaceStoreService(definition: state.workspaceDefinition, preferences: .init())
-      let first = makeWorkspaceTestWindow(storeService: state)
-      let second = makeWorkspaceTestWindow(storeService: other)
+      let other = WorkspaceStateService(definition: state.workspaceDefinition, preferences: .init())
+      let first = makeWorkspaceTestWindow(stateService: state)
+      let second = makeWorkspaceTestWindow(stateService: other)
       defer {
         first.close()
         second.close()
@@ -149,13 +148,12 @@ extension AppUIComponentTestSuite {
         let content = first.contentPane
         for id: Int64 in [10, 20, 30] {
           try VideoComponentProgramLayers(
-            storeService: content.storeService, appletData: content.appletData, componentID: id
+            stateService: content.stateService, appletData: content.appletData, componentID: id
           )
           .setIncluded(true, programID: 100, target: target)
         }
         try VideoLayersEditor(
-          storeService: content.storeService, appletData: content.appletData,
-          editingState: content.editingState, target: target
+          stateService: content.stateService, appletData: content.appletData, target: target
         ).commitLayerOrder(
           [30, 10, 20], programID: 100)
         #expect(
@@ -164,22 +162,21 @@ extension AppUIComponentTestSuite {
             == [30, 10, 20])
         #expect(throws: WorkspaceSelectionError.self) {
           try VideoLayersEditor(
-            storeService: content.storeService, appletData: content.appletData,
-            editingState: content.editingState, target: target
+            stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([10], programID: 100)
         }
         try VideoComponentProgramLayers(
-          storeService: content.storeService, appletData: content.appletData, componentID: 30
+          stateService: content.stateService, appletData: content.appletData, componentID: 30
         )
         .setIncluded(false, programID: 100, target: target)
         var preference =
-          (content.storeService.workspacePreferences[keyPath: target.preferences][100] ?? .init())
+          (content.stateService.workspacePreferences[keyPath: target.preferences][100] ?? .init())
         preference.audioMasterVolumeDecibels = .with {
           $0.set(num: -80, den: 10)
         }
         preference.videoLayerHidden[10] = true
-        content.storeService.workspacePreferences[keyPath: target.preferences][100] = preference
+        content.stateService.workspacePreferences[keyPath: target.preferences][100] = preference
         #expect(
           state.workspacePreferences[keyPath: target.preferences][100]?.videoLayerHidden[10] == true
         )
@@ -192,24 +189,22 @@ extension AppUIComponentTestSuite {
           state.isOutputActive = value.isOutputActive
           #expect(throws: WorkspaceSelectionError.self) {
             try VideoComponentProgramLayers(
-              storeService: content.storeService, appletData: content.appletData, componentID: 20
+              stateService: content.stateService, appletData: content.appletData, componentID: 20
             )
             .setIncluded(false, programID: 100, target: target)
           }
           try VideoLayersEditor(
-            storeService: content.storeService, appletData: content.appletData,
-            editingState: content.editingState, target: target
+            stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([20, 10], programID: 100)
           try VideoLayersEditor(
-            storeService: content.storeService, appletData: content.appletData,
-            editingState: content.editingState, target: target
+            stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([10, 20], programID: 100)
         }
         state.isOutputActive = false
         try VideoComponentProgramLayers(
-          storeService: content.storeService, appletData: content.appletData, componentID: 20
+          stateService: content.stateService, appletData: content.appletData, componentID: 20
         )
         .setIncluded(false, programID: 100, target: target)
       }

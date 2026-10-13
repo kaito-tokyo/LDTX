@@ -16,7 +16,7 @@ extension AppUIComponentTestSuite {
     @Test("Fill inspectors edit the component with the requested internal ID", arguments: 0..<4)
     func editsByInternalID(_ kind: Int) async throws {
       let storeAppletData = WorkspaceAppletData()
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       let component: Ldtx_Workspace_V4_VideoComponentWrapper
       let root: AnyView
       switch kind {
@@ -25,25 +25,25 @@ extension AppUIComponentTestSuite {
         store.workspaceDefinition.videoComponents = [component]
         root = AnyView(
           SolidColorFillVideoComponentInspector(
-            storeService: store, appletData: storeAppletData, videoComponentID: 11))
+            stateService: store, appletData: storeAppletData, videoComponentID: 11))
       case 1:
         component = WorkspaceResourceFactory.makeLinearGradient(id: 11, name: "Source")
         store.workspaceDefinition.videoComponents = [component]
         root = AnyView(
           LinearGradientFillVideoComponentInspector(
-            storeService: store, appletData: storeAppletData, videoComponentID: 11))
+            stateService: store, appletData: storeAppletData, videoComponentID: 11))
       case 2:
         component = WorkspaceResourceFactory.makeRadialGradient(id: 11, name: "Source")
         store.workspaceDefinition.videoComponents = [component]
         root = AnyView(
           RadialGradientFillVideoComponentInspector(
-            storeService: store, appletData: storeAppletData, videoComponentID: 11))
+            stateService: store, appletData: storeAppletData, videoComponentID: 11))
       default:
         component = WorkspaceResourceFactory.makeConicGradient(id: 11, name: "Source")
         store.workspaceDefinition.videoComponents = [component]
         root = AnyView(
           ConicGradientFillVideoComponentInspector(
-            storeService: store, appletData: storeAppletData, videoComponentID: 11))
+            stateService: store, appletData: storeAppletData, videoComponentID: 11))
       }
       store.workspaceDefinition.videoComponents.append(
         WorkspaceResourceFactory.makeSolidColor(id: 21, name: "Other"))

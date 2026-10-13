@@ -10,9 +10,9 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("Workspace Vision Binding")
   @MainActor
-  struct WorkspaceStoreVisionBindingUnitTestSuite {
+  struct WorkspaceStateVisionBindingUnitTestSuite {
     @Test func bindingFollowsIDAndDoesNotRestoreRemovedVision() throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.visions = [
         WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1),
         WorkspaceResourceFactory.makeOcrVision(id: 3, name: "Other", componentID: 1),

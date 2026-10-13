@@ -49,8 +49,11 @@ final class AppLaunchUITests: XCTestCase {
     XCTAssertTrue(file.waitForExistence(timeout: 15))
     app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
     file.click()
-    XCTAssertTrue(app.menuItems["New Workspace"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.menuItems["New Workspace"].isEnabled)
+    let new = app.menuItems["New"]
+    XCTAssertTrue(new.waitForExistence(timeout: 5))
+    new.hover()
+    XCTAssertTrue(app.menuItems["New Document"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.menuItems["New Document"].isEnabled)
     XCTAssertTrue(app.menuItems["Open…"].exists)
     XCTAssertTrue(app.menuItems["Open…"].isEnabled)
     app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])

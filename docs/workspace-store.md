@@ -4,40 +4,40 @@ SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# Workspace Store responsibility inventory
+# Workspace state responsibility inventory
 
-The Store is the observable source of truth. Its Workspace documents are
-ordinary stored properties; direct Bindable access must not invoke hidden
-editing policies. The Store retains Workspace documents and observable UI/runtime
-facts. Editing policy, persistence and operations belong to explicit owners.
+WorkspaceStateService holds editable protobuf values and observable UI/runtime
+facts for one Workspace editor. WorkspaceWindowController owns it. Document holds
+confirmed content and file persistence, not the editor or an editing copy.
+Assignments to StateService's stored properties remain transparent; direct
+Bindable access does not hide validation, persistence, or runtime synchronization.
 
-| Responsibility | Current status | Owner |
-| --- | --- | --- |
-| Workspace definition, preferences, output settings | Transparent stored properties | Store |
-| Local state URL | Document updates its adopted or transient URL explicitly; Store has no Document reference | Document |
-| Unsaved document changes | Observed outside the Store | Document |
-| Audio monitor, runtime and mix synchronization; output pause/stop | Redundant forwarding methods removed | Controller/runtime actions |
-| Screenshot-directory forwarding and audio-mix selection helper | Unused Store methods removed | Owning controller and direct UI state binding |
-| Inspector selection | Transparent stored property; Sidebar owns rejection and its callback | Sidebar |
-| Apply invocation | Request flag and its observation removed; Window invokes Submit directly | Window |
-| Unconfirmed edits | Document owns WorkspaceEditingState; Window, Controller, Sidebar and editors receive it explicitly | Document and editing UI |
-| Program rename | Validation and writeback moved to its Inspector | Program editor |
-| Program selection | Store forwarding and selectedProgram projection removed; all consumers resolve selection through injected AppletData | Program Inspector/controller |
-| Program deletion | Store forwarding removed; Controller owns validation and deletion | Controller |
-| Program preferences and layer membership/transform editing | Store methods removed; editors write their fields directly | Bindings and editor-owned validation |
-| Audio gain, master volume and mute edits | Generic Store update removed; editors write the model directly | Audio editors with explicit quantization |
-| Runtime operations | Store runtimeActions reference removed; owning UI receives the Controller directly through weak providers | Controller and composition root |
-| App-local state | Store AppletData reference and localState projection removed; owners receive AppletData directly | AppletData and composition roots |
-| Monitor configuration | Audio editors receive AppletData directly and use localStateURL; Document reference and monitor eligibility helper removed | Monitor editor/AppletData |
-| Capture synchronization | Store forwarding removed | Controller and invoking UI |
-| Screenshots | Store forwarding removed; Window handles availability | Window/controller |
-| Output start | Store forwarding removed | Window/controller |
-| Save validation | Store methods removed; Document validates its snapshot | Document and integrity validator |
-| Audio peak meter | Coordinator owns it; injected directly through Window and Content Pane | Audio coordinator/editors |
-| Error presentation | Store error APIs removed; AppKit callbacks and SwiftUI Environment route errors to Controller | Window/document presentation owners |
-| Output, recording and Vision status | Observable facts remain; Dock observes output state in Document | Store, populated by runtime owner |
+| Responsibility | Owner |
+| --- | --- |
+| Confirmed definition, preferences, output settings and embedded models | WorkspaceDocument |
+| Editable definition, preferences, output settings and pending model selections | WorkspaceStateService, owned by WindowController |
+| UI selection, Inspector visibility, output and Vision status | WorkspaceStateService |
+| Reading, snapshot validation, writing and verification at the formal URL | WorkspaceDocument and its Reader/Writer |
+| Snapshot capture and read/save reconciliation with the editor | Representable Coordinator; weak connection from Document |
+| Undo/Redo and standard unsaved-change tracking | Representable Coordinator and the window's UndoManager |
+| Runtime projection and recording/capture/audio/Vision lifetimes | WorkspaceWindowController and its runtime services |
+| ProgramRuntime and Vision definition/model inputs | Document's confirmed content |
+| Live preferences | StateService, projected by the runtime coordinator |
+| Local state URL and transient state migration | WorkspaceWindowController |
+| Device assignments, output folders, stream keys and monitor assignments | Shared AppletData |
+| Program selection | Program Inspector and controller, using injected AppletData |
+| Program deletion, layer membership and resource operations | Explicit controller/runtime editing operations |
+| Layer transforms, audio gains, master volumes and mute edits | Direct bindings and editors with explicit numeric encoding |
+| Output, screenshot and inference commands | ViewController and runtime actions |
+| Runtime error presentation | WorkspaceWindowController |
+| Dock recording badge | WindowController observes output state through weakly registered controllers |
 
-No migration references or operational forwarding methods remain in the Store.
-Model editing uses the same authoritative Proto documents; Bindable access does
-not perform validation, persistence or runtime synchronization. Document and
-Controller observe those values, and editing owners validate their own inputs.
+There is no Apply/Submit registry or navigation guard for unconfirmed input.
+Representable edits update StateService; incomplete numeric text may remain local
+to its input control. Semantic validation runs when saving. A failed save retains
+the edits and leaves confirmed content unchanged. On success, only the saved
+snapshot becomes confirmed; later edits remain pending in StateService.
+
+The Coordinator is retained by the Representable, not Document. Dismantling the
+representation disconnects the editing endpoint and starts idempotent async
+shutdown. Document can retain confirmed content independently of that UI lifetime.

@@ -59,7 +59,7 @@ public final class WorkspaceWindowRuntime {
 
   var physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
 
-  public var workspace: WorkspaceV4Bundle { persistenceCoordinator.workspace }
+  public var workspace: WorkspaceV4Bundle { persistenceCoordinator.runtimeWorkspace }
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
   public var preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4 { workspace.preferences }
   public var url: URL? { persistenceCoordinator.url }
@@ -86,7 +86,7 @@ public final class WorkspaceWindowRuntime {
   func editWorkspace(
     _ mutation: (inout WorkspaceV4Bundle) throws -> Void
   ) throws {
-    var editedWorkspace = workspace
+    var editedWorkspace = persistenceCoordinator.workspace
     try mutation(&editedWorkspace)
     try replaceWorkspace(editedWorkspace)
     updateRuntimes()
@@ -124,9 +124,9 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func removeProgram(internalID: Int64) throws {
-    var workspace = self.workspace
+    var workspace = persistenceCoordinator.workspace
     workspace.definition.programs.removeAll { $0.internalID == internalID }
-    guard workspace.definition.programs.count != self.workspace.definition.programs.count else {
+    guard workspace.definition.programs.count != persistenceCoordinator.workspace.definition.programs.count else {
       throw WorkspaceRuntimeError.missingProgram(internalID)
     }
     workspace.preferences.landscapeProgramPreferences.removeValue(forKey: internalID)

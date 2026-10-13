@@ -12,20 +12,12 @@ SPDX-License-Identifier: Apache-2.0
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>ldtxworkspace</string>
-			</array>
 			<key>CFBundleTypeName</key>
-			<string>LDTX Workspace</string>
-			<key>NSDocumentClass</key>
-			<string>WorkspaceDocument</string>
+			<string>tokyo.kaito.ldtx.workspace</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>$(LDTX_DOCUMENT_HANDLER_RANK)</string>
-			<key>LSTypeIsPackage</key>
-			<true/>
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>tokyo.kaito.ldtx.workspace</string>

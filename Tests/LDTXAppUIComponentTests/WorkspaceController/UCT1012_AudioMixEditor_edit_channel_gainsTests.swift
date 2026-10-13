@@ -26,13 +26,13 @@ extension AppUIComponentTestSuite {
     func audioMixEditsWorkspaceGainWithoutCanvasOrProgramSelection() throws {
       let serviceAppletData = WorkspaceAppletData()
       _ = NSApplication.shared
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       service.workspaceDefinition.audioDevices = [
         WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
       ]
       service.selectedAudioMix = .portrait
       let editor = AudioMixEditor(
-        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
         reportError: { _ in })
       func descendants(_ view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants($0) }
@@ -80,7 +80,7 @@ extension AppUIComponentTestSuite {
         }, enabled: true
       ) { _ in false }
       #expect(field.stringValue == "-12.5")
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(field.dirty)
       var committed = 0.0
       field.configure(
@@ -92,7 +92,7 @@ extension AppUIComponentTestSuite {
         committed = $0.double
         return true
       }
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(committed == -12.5)
       #expect(!field.dirty)
     }

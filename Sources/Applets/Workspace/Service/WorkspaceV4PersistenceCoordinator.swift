@@ -16,15 +16,18 @@ import Observation
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
+  private let runtimeSnapshot: () -> WorkspaceV4Bundle
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
   public init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
-    url: URL? = nil
+    url: URL? = nil,
+    runtimeSnapshot: (() -> WorkspaceV4Bundle)? = nil
   ) {
     self.workspaceSnapshot = workspaceSnapshot
+    self.runtimeSnapshot = runtimeSnapshot ?? workspaceSnapshot
     self.replaceWorkspace = replaceWorkspace
     self.url = url
   }
@@ -40,6 +43,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
+  var runtimeWorkspace: WorkspaceV4Bundle { runtimeSnapshot() }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)
@@ -57,7 +61,7 @@ public final class WorkspaceV4PersistenceCoordinator {
     url = packageURL.standardizedFileURL
   }
 
-  /// Synchronizes the formal NSDocument URL without changing content or save state.
+  /// Synchronizes the formal document URL without changing content or save state.
   public func setDocumentURL(_ url: URL?) { self.url = url }
 
   /// Resolves the concrete capture hardware selected for the V4 input devices.
@@ -69,11 +73,12 @@ public final class WorkspaceV4PersistenceCoordinator {
     physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
+    let workspace = runtimeWorkspace
     let canvas = try WorkspaceProgramCanvasSnapshot(
-      definition: currentWorkspace.definition, preferences: currentWorkspace.preferences,
+      definition: workspace.definition, preferences: workspace.preferences,
       programInternalID: programInternalID, target: target)
     return try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: currentWorkspace.definition, canvas: canvas,
+      definition: workspace.definition, canvas: canvas,
       physicalDeviceIDs: physicalDeviceIDs, timeSeconds: timeSeconds)
   }
 

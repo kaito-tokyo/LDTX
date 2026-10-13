@@ -40,29 +40,29 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   var isHidden = false
   var supportsPlacement = true
   var strings = ["0", "0", "1", "1"]
-  @ObservationIgnored var onEditsChanged: () -> Void = {}
-  @ObservationIgnored private var submittedStrings = ["0", "0", "1", "1"]
-  var hasUnconfirmedChanges = false {
-    didSet { if oldValue != hasUnconfirmedChanges { onEditsChanged() } }
-  }
+  var transform = Ldtx_Workspace_V4_BasicTransform()
+  @ObservationIgnored private var displayedStrings = ["0", "0", "1", "1"]
+  var hasLocalTextChanges = false
 
   func edit(_ text: String, at index: Int) {
     strings[index] = text
-    hasUnconfirmedChanges = strings != submittedStrings
+    hasLocalTextChanges = strings != displayedStrings
+    onCommit()
   }
   var isEditing = false
 
   func display(
     _ transform: Ldtx_Workspace_V4_BasicTransform, canvasWidth: Double, canvasHeight: Double
   ) {
+    self.transform = transform
     strings = [
       pixelPosition(transform.translationX, size: canvasWidth),
       pixelPosition(transform.translationY, size: canvasHeight),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleX),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleY),
     ]
-    submittedStrings = strings
-    hasUnconfirmedChanges = false
+    displayedStrings = strings
+    hasLocalTextChanges = false
   }
 
   private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32, size: Double) -> String {
@@ -113,7 +113,6 @@ struct VideoLayersTableRowContent: View {
     .writingToolsBehavior(.disabled)
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 2)
-    .onSubmit { state.onCommit() }
     .onChange(of: focusedField) { _, new in
       state.isEditing = new != nil
     }

@@ -18,42 +18,9 @@ extension AppUIComponentTestSuite {
   struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Input validation is routed to the document editing state without a modal sheet")
-    func inputValidationUsesEditingOwner() {
-      let (document, controller, window) = makeController()
-      defer { window.close() }
-      var errors: [Error] = []
-      document.editingState.inputValidationErrorHandler = { errors.append($0) }
-      controller.reportError(WorkspaceSelectionError(message: "Invalid input"))
-      controller.reportError(RationalInputError.invalidNumber)
-      let workspaceWindow = window as! WorkspaceWindow
-      #expect(
-        !workspaceWindow.contentPane.testAudioMixEditor.setAudioChannelGain(
-          0, forAudioInputDeviceInternalID: 999))
-      #expect(errors.count == 3)
-      #expect(window.attachedSheet == nil)
-    }
 
-    @Test("SwiftUI Environment routes input errors to the document editing owner")
-    func swiftUIErrorEnvironmentRoutesToController() async throws {
-      let (document, controller, window) = makeController()
-      defer { window.close() }
-      var errors: [Error] = []
-      document.editingState.inputValidationErrorHandler = { errors.append($0) }
-      let probe = NSHostingView(
-        rootView: WorkspaceErrorEnvironmentProbe()
-          .environment(\.workspaceReportError, { [weak controller] in controller?.reportError($0) })
-      )
-      probe.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
-      window.contentView!.addSubview(probe)
-      defer { probe.removeFromSuperview() }
-      for _ in 0..<100 {
-        if !errors.isEmpty { break }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      #expect(errors.count == 1)
-      #expect(window.attachedSheet == nil)
-    }
+
+
 
     @Test("A component in use is presented as an operation error")
     func componentInUsePresentsError() async throws {
@@ -63,21 +30,19 @@ extension AppUIComponentTestSuite {
         window.close()
         document.close()
       }
-      var inputErrors = 0
-      document.editingState.inputValidationErrorHandler = { _ in inputErrors += 1 }
       controller.reportError(WorkspaceRuntimeError.resourceInUse(1))
       let sheet = try await waitForSheet(on: window)
       #expect(displayedText(in: sheet.contentView).contains("Visions"))
-      #expect(inputErrors == 0)
     }
 
     private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
       _ = NSApplication.shared
       let document = WorkspaceDocument()
       let controller = WorkspaceWindowController(
-        storeService: document.storeService, editingState: document.editingState,
+        stateService: document.stateService,
         persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), document: document)
+      document.addWindowController(controller)
       let window = controller.window!
       window.orderFront(nil)
       return (document, controller, window)

@@ -29,7 +29,7 @@ extension AppUIComponentTestSuite {
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
       let url = URL(fileURLWithPath: "/tmp/InjectedProgramSelection.ldtxworkspace")
       store.localStateURL = url
       store.workspaceDefinition.programs = [
@@ -37,13 +37,13 @@ extension AppUIComponentTestSuite {
       ]
       data.updateState(for: url) { $0.selectedProgramInternalID = 200 }
       let editor = MasterVolumeEditor(
-        storeService: store, appletData: data, peakMeter: .init(),
-        reportError: { _ in }, editingState: WorkspaceEditingState())
+        stateService: store, appletData: data, peakMeter: .init(),
+        reportError: { _ in })
       _ = editor.view
       let field = editor.masterFields[0]
       field.stringValue = "-12"
       field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(store.workspacePreferences.landscapeProgramPreferences[100] == nil)
       #expect(
         store.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
@@ -52,7 +52,7 @@ extension AppUIComponentTestSuite {
       editor.refresh()
       field.stringValue = "-6"
       field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(
         store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
           .double == -6)
@@ -61,39 +61,36 @@ extension AppUIComponentTestSuite {
           .double == -12)
     }
 
-    @Test("UCT-1011.3: Invalid volume drafts block navigation until corrected")
-    func invalidVolumeBlocksNavigation() throws {
-      let storeAppletData = WorkspaceAppletData()
-      let storeEditingState = WorkspaceEditingState()
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
+    @Test("Master volume writes on text change without Return")
+    func volumeWritesImmediately() throws {
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      store.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
       let editor = MasterVolumeEditor(
-        storeService: store, appletData: storeAppletData, peakMeter: .init(),
-        reportError: { _ in }, editingState: storeEditingState)
+        stateService: store, appletData: WorkspaceAppletData(), peakMeter: .init(), reportError: { _ in })
       _ = editor.view
-      let original = store.workspacePreferences
-      for field in editor.masterFields {
-        field.stringValue = "invalid"
-        field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-        #expect(throws: (any Error).self) { try storeEditingState.validateInspectorEdits() }
-        #expect(field.stringValue == "invalid" && field.dirty)
-        #expect(store.workspacePreferences == original)
-        field.stringValue = "-12"
-        try storeEditingState.validateInspectorEdits()
-      }
+      let field = editor.masterFields[0]
+      field.stringValue = "-12.5"
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+      #expect(store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels.double == -12.5)
+      let previous = store.workspacePreferences
+      field.stringValue = "-"
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+      #expect(store.workspacePreferences == previous)
+      #expect(field.stringValue == "-")
     }
+
 
     @Test("UCT-1011.1: Master volume edits and model updates are reflected independently")
     func masterEditorObservesAndEditsVolumesIndependently() async throws {
       let serviceAppletData = WorkspaceAppletData()
-      let serviceEditingState = WorkspaceEditingState()
       _ = NSApplication.shared
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       service.workspaceDefinition.programs = [program]
       let editor = MasterVolumeEditor(
-        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in }, editingState: serviceEditingState)
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
       #expect(!editor.isViewLoaded)
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
@@ -106,7 +103,7 @@ extension AppUIComponentTestSuite {
       let field = editor.masterFields[0]
       field.stringValue = "-12.04"
       field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(
         (service.workspacePreferences.landscapeProgramPreferences[100] ?? .init())
           .audioMasterVolumeDecibels
@@ -124,7 +121,7 @@ extension AppUIComponentTestSuite {
       let previous = service.workspacePreferences
       field.stringValue = "invalid"
       field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      #expect(throws: (any Error).self) { try field.submit() }
+      #expect(field.dirty)
       #expect(service.workspacePreferences == previous)
     }
 
@@ -136,21 +133,21 @@ extension AppUIComponentTestSuite {
       let data = WorkspaceAppletData(userDefaults: defaults)
       let document = WorkspaceDocument()
       defer { document.close() }
-      let preferences = document.storeService.workspacePreferences
-      let url = try #require(document.storeService.localStateURL)
+      let preferences = document.stateService.workspacePreferences
+      let url = try #require(document.stateService.localStateURL)
       data.updateState(for: url) { $0.monitorVolume = -12.5 }
       #expect(data.state(for: url).monitorVolume == -12.5)
-      #expect(document.storeService.workspacePreferences == preferences)
-      #expect(!document.isDocumentEdited)
+      #expect(document.stateService.workspacePreferences == preferences)
+      #expect(!document.hasTestModelChanges)
       let editor = MasterVolumeEditor(
-        storeService: document.storeService, appletData: data, peakMeter: .init(),
-        reportError: { _ in }, editingState: document.editingState)
+        stateService: document.stateService, appletData: data, peakMeter: .init(),
+        reportError: { _ in })
       #expect(editor.setMonitorVolume(-11.899999999999999))
       #expect(data.state(for: url).monitorVolume == -11.9)
       #expect(!editor.setMonitorVolume(.infinity))
       #expect(data.state(for: url).monitorVolume == -11.9)
-      #expect(document.storeService.workspacePreferences == preferences)
-      #expect(!document.isDocumentEdited)
+      #expect(document.stateService.workspacePreferences == preferences)
+      #expect(!document.hasTestModelChanges)
     }
 
   }

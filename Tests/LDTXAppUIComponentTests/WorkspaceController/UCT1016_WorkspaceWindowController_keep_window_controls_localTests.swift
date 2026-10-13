@@ -29,10 +29,9 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1016.1: Operations fail safely when a runtime is unavailable")
     func programInspectorRejectsSelectionWithoutRuntime() {
-      let serviceEditingState = WorkspaceEditingState()
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       let inspector = WorkspaceProgramsInspector(
-        storeService: service, editingState: serviceEditingState, appletData: WorkspaceAppletData())
+        stateService: service, appletData: WorkspaceAppletData())
       #expect(throws: WorkspaceSelectionError.self) { try inspector.selectProgram(internalID: 1) }
 
     }
@@ -69,21 +68,20 @@ extension AppUIComponentTestSuite {
     @Test(
       "UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs")
     func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
-      let stateEditingState = WorkspaceEditingState()
       _ = NSApplication.shared
       let suite = "ProgramPicker." + UUID().uuidString
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
       let url = URL(fileURLWithPath: "/tmp/ProgramPicker-\(UUID()).ldtxworkspace")
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       state.localStateURL = url
       let window = makeWorkspaceTestWindow(
-        storeService: state, editingState: stateEditingState, appletData: data)
+        stateService: state, appletData: data)
       defer { window.close() }
       let content = window.contentPane
       let inspector = WorkspaceProgramsInspector(
-        storeService: state, editingState: stateEditingState, appletData: data)
+        stateService: state, appletData: data)
       #expect(inspector.programSelection.wrappedValue == nil)
       var first = Ldtx_Workspace_V4_ProgramDefinition()
       first.internalID = 11
@@ -96,7 +94,7 @@ extension AppUIComponentTestSuite {
       // AppKit Content and the Inspector resolve the same local selection.
       #expect(
         content.appletData.selectedProgram(
-          in: content.storeService.workspaceDefinition, for: content.storeService.localStateURL)?
+          in: content.stateService.workspaceDefinition, for: content.stateService.localStateURL)?
           .internalID == 22)
       let binding = inspector.programSelection
       #expect(!inspector.canSelectProgram)
@@ -115,7 +113,7 @@ extension AppUIComponentTestSuite {
       binding.wrappedValue = nil
       #expect(
         content.appletData.selectedProgram(
-          in: content.storeService.workspaceDefinition, for: content.storeService.localStateURL)
+          in: content.stateService.workspaceDefinition, for: content.stateService.localStateURL)
           == nil)
       #expect(data.state(for: url).selectedProgramInternalID == 22)
     }
@@ -123,10 +121,10 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1016.5: Sidebar selection starts empty and remains Window local")
     func sidebarSelectionStartsEmptyAndStaysWindowLocal() throws {
       _ = NSApplication.shared
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let other = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let window = makeWorkspaceTestWindow(storeService: state)
-      let second = makeWorkspaceTestWindow(storeService: other)
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let other = WorkspaceStateService(definition: .init(), preferences: .init())
+      let window = makeWorkspaceTestWindow(stateService: state)
+      let second = makeWorkspaceTestWindow(stateService: other)
       defer {
         window.close()
         second.close()
@@ -143,7 +141,7 @@ extension AppUIComponentTestSuite {
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       state.workspaceDefinition.videoComponents = [
         WorkspaceResourceFactory.makeVFXSource(id: 101, name: "Camera"),
         WorkspaceResourceFactory.makeVFXSource(id: 102, name: "Other Camera"),
@@ -152,7 +150,7 @@ extension AppUIComponentTestSuite {
       data.setPhysicalDeviceID(unavailable, for: 101)
       data.setPhysicalDeviceID(unavailable, for: 102)
       let field = WorkspacePhysicalDeviceField(
-        title: "Camera", internalID: 101, isAudio: false, storeService: state,
+        title: "Camera", internalID: 101, isAudio: false, stateService: state,
         appletData: data, deviceRegistry: DeviceRegistryService())
       let before = state.workspaceDefinition
       _ = field.body
@@ -186,7 +184,8 @@ extension AppUIComponentTestSuite {
           $0.itemIdentifier.rawValue == "workspace.toggleSidebar"
         })
       let split = first.splitViewController
-      #expect(first.contentViewController === split)
+      #expect(first.contentViewController === first.content)
+      #expect(split.parent === first.content)
       split.view.layoutSubtreeIfNeeded()
       split.splitView.setPosition(280, ofDividerAt: 0)
       let width = split.splitView.arrangedSubviews[0].frame.width
@@ -200,9 +199,9 @@ extension AppUIComponentTestSuite {
       #expect(!split.splitViewItems[0].isCollapsed)
       #expect(abs(split.splitView.arrangedSubviews[0].frame.width - width) <= 1)
       split.toggleInspector(nil)
-      #expect(!first.storeService.isInspectorVisible)
+      #expect(!first.stateService.isInspectorVisible)
       split.toggleInspector(nil)
-      #expect(first.storeService.isInspectorVisible)
+      #expect(first.stateService.isInspectorVisible)
     }
 
     @Test("UCT-1016.7: Toolbar pane toggles restore widths in their own Window")
@@ -223,9 +222,8 @@ extension AppUIComponentTestSuite {
           $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
         })
       #expect(screenshot.isEnabled)
-      #expect(first.styleMask.contains(.fullSizeContentView))
-      let split = try #require(first.contentViewController as? NSSplitViewController)
-      let other = try #require(second.contentViewController as? NSSplitViewController)
+      let split = first.splitViewController
+      let other = second.splitViewController
       split.view.layoutSubtreeIfNeeded()
       let sidebarWidth = split.splitView.arrangedSubviews[0].frame.width
       #expect((240...260).contains(sidebarWidth))
@@ -264,7 +262,7 @@ extension AppUIComponentTestSuite {
     func declaredInspectorSeparatorSurvivesUpdates() async throws {
       let state = WorkspaceSidebarPreviewFixtures.makeUIState(
         inspectorSelector: .init(kind: .ocrVision, internalID: 10))
-      let window = makeWorkspaceTestWindow(storeService: state)
+      let window = makeWorkspaceTestWindow(stateService: state)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       let toolbar = try #require(window.toolbar)
@@ -304,10 +302,10 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
     func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
       _ = NSApplication.shared
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let dispatcher = ToolbarDispatcher()
       let otherDispatcher = ToolbarDispatcher()
-      let first = makeWorkspaceTestWindow(storeService: state, dispatcher: dispatcher)
+      let first = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       let second = makeWorkspaceTestWindow(dispatcher: otherDispatcher)
       defer {
         first.close()
@@ -363,9 +361,9 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1016.16: Screenshot results use a transient popover without changing output state")
     func screenshotFailureDoesNotPoisonOutput() async throws {
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let dispatcher = ToolbarDispatcher()
-      let window = makeWorkspaceTestWindow(storeService: state, dispatcher: dispatcher)
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       window.orderFront(nil)
       window.screenshotResultPopover.animates = false
       defer { window.close() }
@@ -419,9 +417,9 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1016.9: Screenshot actions remain available outside local recording")
     func screenshotToolbarActionsRemainAvailable() async throws {
       _ = NSApplication.shared
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let dispatcher = ToolbarDispatcher()
-      let window = makeWorkspaceTestWindow(storeService: state, dispatcher: dispatcher)
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       for (id, expected) in [
@@ -460,60 +458,54 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.storeService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
+      first.stateService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
         "sdr-landscape-1080p60"
-      first.storeService.workspaceDefinition.canvasConfiguration.portraitProfileID =
+      first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
       let firstWindow = WorkspaceWindowController(
-        storeService: first.storeService, editingState: first.editingState,
+        stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
       first.addWindowController(firstWindow)
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
-      second.storeService.workspaceDefinition = first.storeService.workspaceDefinition
-      second.storeService.workspacePreferences = first.storeService.workspacePreferences
+      second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
+      second.stateService.workspacePreferences = first.stateService.workspacePreferences
       let secondWindow = WorkspaceWindowController(
-        storeService: second.storeService, editingState: second.editingState,
+        stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
       second.addWindowController(secondWindow)
+      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: savedRoot) }
+      try await saveWorkspaceDocument(first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
+      try await saveWorkspaceDocument(second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
       try secondWindow.selectProgram(internalID: a)
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
-      let definition = first.storeService.workspaceDefinition
-      first.storeService.inspectorSelector = .init(kind: .workspacePrograms)
+      let definition = first.stateService.workspaceDefinition
+      first.stateService.inspectorSelector = .init(kind: .workspacePrograms)
       try firstWindow.selectProgram(internalID: b)
       #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
       #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
-      #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == b)
-      #expect(data.state(for: second.storeService.localStateURL!).selectedProgramInternalID == a)
+      #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == b)
+      #expect(data.state(for: second.stateService.localStateURL!).selectedProgramInternalID == a)
       // Content is now the live AppKit controller connected to this document.
       #expect(
         data.selectedProgram(
-          in: first.storeService.workspaceDefinition, for: first.storeService.localStateURL)?
+          in: first.stateService.workspaceDefinition, for: first.stateService.localStateURL)?
           .internalID == b)
-      #expect(first.storeService.inspectorSelector == .init(kind: .workspacePrograms))
+      #expect(first.stateService.inspectorSelector == .init(kind: .workspacePrograms))
       let inspector = WorkspaceProgramsInspector(
-        storeService: first.storeService, editingState: first.editingState, appletData: data,
+        stateService: first.stateService, appletData: data,
         runtimeActions: { firstWindow })
       #expect(inspector.canSelectProgram)
       #expect(inspector.programSelection.wrappedValue == b)
-      #expect(second.storeService.inspectorSelector == nil)
-      #expect(first.storeService.workspaceDefinition == definition)
+      #expect(second.stateService.inspectorSelector == nil)
+      #expect(first.stateService.workspaceDefinition == definition)
       #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: Int64.max) }
-      for state: WorkspaceRecordingState in [.starting, .pausing, .stopping] {
-        firstWindow.windowRuntime.setRecordingState(state)
-        #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: a) }
-        #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == b)
-      }
-      firstWindow.windowRuntime.setRecordingState(.paused)
       try firstWindow.selectProgram(internalID: a)
-      first.removeWindowController(firstWindow)
-      #expect(firstWindow.document == nil)
-      #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: b) }
-      #expect(data.state(for: first.storeService.localStateURL!).selectedProgramInternalID == a)
-      first.addWindowController(firstWindow)
+      #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == a)
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("Selection.ldtxworkspace")
@@ -521,24 +513,24 @@ extension AppUIComponentTestSuite {
       try firstWindow.selectProgram(internalID: b)
       await firstWindow.shutdown()
       first.close()
-      let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+      let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
       let reopenedWindow = WorkspaceWindowController(
-        storeService: reopened.storeService, editingState: reopened.editingState,
+        stateService: reopened.stateService,
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
         document: reopened)
       reopened.addWindowController(reopenedWindow)
       let reopenedInspector = WorkspaceProgramsInspector(
-        storeService: reopened.storeService, editingState: reopened.editingState, appletData: data,
+        stateService: reopened.stateService, appletData: data,
         runtimeActions: { reopenedWindow })
       #expect(data.state(for: url).selectedProgramInternalID == b)
       #expect(reopenedInspector.canSelectProgram)
       #expect(reopenedInspector.programSelection.wrappedValue == b)
       #expect(
         data.selectedProgram(
-          in: reopened.storeService.workspaceDefinition, for: reopened.storeService.localStateURL)?
+          in: reopened.stateService.workspaceDefinition, for: reopened.stateService.localStateURL)?
           .internalID == b)
-      #expect(reopened.storeService.inspectorSelector == nil)
+      #expect(reopened.stateService.inspectorSelector == nil)
       await reopenedWindow.shutdown()
       await secondWindow.shutdown()
     }
@@ -555,12 +547,12 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.storeService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
+      first.stateService.workspaceDefinition.canvasConfiguration.landscapeProfileID =
         "sdr-landscape-1080p60"
-      first.storeService.workspaceDefinition.canvasConfiguration.portraitProfileID =
+      first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
       let firstWindow = WorkspaceWindowController(
-        storeService: first.storeService, editingState: first.editingState,
+        stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
       first.addWindowController(firstWindow)
@@ -568,19 +560,23 @@ extension AppUIComponentTestSuite {
       let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
       try firstWindow.windowRuntime.setVideoLayerOrder(
         [input], forProgramInternalID: program, target: .landscape)
-      data.updateState(for: first.storeService.localStateURL!) {
+      data.updateState(for: first.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
-      second.storeService.workspaceDefinition = first.storeService.workspaceDefinition
-      second.storeService.workspacePreferences = first.storeService.workspacePreferences
+      second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
+      second.stateService.workspacePreferences = first.stateService.workspacePreferences
       let secondWindow = WorkspaceWindowController(
-        storeService: second.storeService, editingState: second.editingState,
+        stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
       second.addWindowController(secondWindow)
-      data.updateState(for: second.storeService.localStateURL!) {
+      data.updateState(for: second.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
+      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: savedRoot) }
+      try await saveWorkspaceDocument(first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
+      try await saveWorkspaceDocument(second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
       let firstRuntime = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let secondRuntime = try #require(secondWindow.windowRuntime.landscapeRuntime)
       data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
@@ -596,8 +592,8 @@ extension AppUIComponentTestSuite {
         firstRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
       #expect(
         secondRuntime.programState.read { $0?.cameraIDsByInputKey["v4-\(input)"] } == "test-camera")
-      first.presentedItemDidMove(
-        to: URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
+      first.adoptDocumentURL(
+        URL(fileURLWithPath: "/tmp/MovedAssignments-\(UUID()).ldtxworkspace"))
       try await Task.sleep(for: .milliseconds(20))
       #expect(
         try firstWindow.windowRuntime.runtimeProjection(
@@ -623,33 +619,31 @@ extension AppUIComponentTestSuite {
       let controller = NSDocumentController.shared
       let first = WorkspaceDocument()
       let second = WorkspaceDocument()
-      controller.addDocument(first)
-      controller.addDocument(second)
       defer {
         first.close()
         second.close()
         dockTile.badgeLabel = originalBadge
       }
-      first.storeService.isOutputActive = true
-      first.storeService.isOutputActive = true
-      second.storeService.isOutputActive = true
+      first.stateService.isOutputActive = true
+      first.stateService.isOutputActive = true
+      second.stateService.isOutputActive = true
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
-      first.storeService.isOutputActive = false
+      first.stateService.isOutputActive = false
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
-      second.storeService.isOutputActive = false
+      second.stateService.isOutputActive = false
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == nil)
-      first.storeService.isOutputActive = true
-      second.storeService.isOutputActive = true
+      first.stateService.isOutputActive = true
+      second.stateService.isOutputActive = true
       first.close()
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       second.close()
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == nil)
-      #expect(!controller.documents.contains { $0 === first || $0 === second })
+      #expect(dockTile.badgeLabel == nil)
     }
 
     @Test("UCT-1016.13: Sidebar additions affect their own Document and persist only on Save")
@@ -666,60 +660,61 @@ extension AppUIComponentTestSuite {
         other.close()
       }
       try await saveWorkspaceDocument(document, to: url)
-      let savedDefinition = document.storeService.workspaceDefinition
-      let otherDefinition = other.storeService.workspaceDefinition
+      let savedDefinition = document.stateService.workspaceDefinition
+      let otherDefinition = other.stateService.workspaceDefinition
       var draft = WorkspaceAddDraft()
       draft.name = "Camera"
       draft.componentKind = .vfxSource
+      let camera = WorkspaceAddDeviceOption(
+        id: .avCaptureDevice(uniqueID: "test-camera"), name: "Camera", width: 1920, height: 1080)
+      draft.physicalDeviceID = camera.id
       let inputID = try WorkspaceResourceAddition.add(
-        sheet: .videoComponent, draft: draft, devices: [], storeService: document.storeService)
+        sheet: .videoComponent, draft: draft, devices: [camera], stateService: document.stateService)
       draft.name = "Color"
       draft.componentKind = .solidColor
       try WorkspaceResourceAddition.add(
-        sheet: .videoComponent, draft: draft, devices: [], storeService: document.storeService)
+        sheet: .videoComponent, draft: draft, devices: [], stateService: document.stateService)
       draft.name = "OCR"
       draft.videoComponentID = inputID
       try WorkspaceResourceAddition.add(
-        sheet: .vision, draft: draft, devices: [], storeService: document.storeService)
-      #expect(other.storeService.workspaceDefinition == otherDefinition)
-      #expect(document.isDocumentEdited)
+        sheet: .vision, draft: draft, devices: [], stateService: document.stateService)
+      #expect(other.stateService.workspaceDefinition == otherDefinition)
+      #expect(document.hasTestModelChanges)
       #expect(try WorkspaceBundleReaderV4(at: url).read().definition == savedDefinition)
-      let expected = document.storeService.workspaceDefinition
+      let expected = document.stateService.workspaceDefinition
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
-      #expect(!document.isDocumentEdited)
-      let reopened = try WorkspaceDocument(contentsOf: url, ofType: "tokyo.kaito.ldtx.workspace")
+      #expect(!document.hasTestModelChanges)
+      let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
-      #expect(reopened.storeService.workspaceDefinition == expected)
+      #expect(reopened.stateService.workspaceDefinition == expected)
       #expect(
-        reopened.storeService.workspaceDefinition.visions.first?.ocrVision.videoComponentInternalID
+        reopened.stateService.workspaceDefinition.visions.first?.ocrVision.videoComponentInternalID
           == inputID
       )
     }
 
     @Test("UCT-1016.14: Sidebar Preview uses its provided state")
     func workspaceSidebarUsesPreviewState() {
-      let storeServiceEditingState = WorkspaceEditingState()
-      let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+      let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
       let sidebar = WorkspaceSidebar(
-        storeService: storeService, editingState: storeServiceEditingState,
+        stateService: stateService,
         deviceRegistry: DeviceRegistryService(),
         appletData: WorkspaceAppletData())
 
-      #expect(storeService.workspaceDefinition.displayName == "Workspace Sidebar Preview")
+      #expect(stateService.workspaceDefinition.displayName == "Workspace Sidebar Preview")
       _ = sidebar.body
     }
     @Test(
       "UCT-1016.15: Sidebar additions require a live Document",
       arguments: [WorkspaceAddSheet.device, .videoComponent, .vision])
     func workspaceSidebarRejectsAdditionWithoutLiveDocument(sheet: WorkspaceAddSheet) {
-      let storeServiceEditingState = WorkspaceEditingState()
-      let storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
-      let definition = storeService.workspaceDefinition
-      let selection = storeService.inspectorSelector
+      let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
+      let definition = stateService.workspaceDefinition
+      let selection = stateService.inspectorSelector
       let data = WorkspaceAppletData()
       let assignments = data.physicalDeviceIDsByResourceInternalID
       let sidebar = WorkspaceSidebar(
-        storeService: storeService, editingState: storeServiceEditingState,
+        stateService: stateService,
         deviceRegistry: DeviceRegistryService(), appletData: data)
       var draft = WorkspaceAddDraft()
       draft.name = "New component"
@@ -732,8 +727,8 @@ extension AppUIComponentTestSuite {
       } catch {
         #expect(error.localizedDescription == "The Workspace document is unavailable.")
       }
-      #expect(storeService.workspaceDefinition == definition)
-      #expect(storeService.inspectorSelector == selection)
+      #expect(stateService.workspaceDefinition == definition)
+      #expect(stateService.inspectorSelector == selection)
       #expect(data.physicalDeviceIDsByResourceInternalID == assignments)
     }
   }

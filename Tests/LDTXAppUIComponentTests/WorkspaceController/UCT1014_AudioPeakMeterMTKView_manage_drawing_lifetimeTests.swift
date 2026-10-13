@@ -25,7 +25,6 @@ extension AppUIComponentTestSuite {
       "UCT-1014.1: Drawing follows Window attachment and UI releases without external stop calls")
     func meterOwnsDrawingLifetimeAndEditorsReleaseWithoutStop() async throws {
       let serviceAppletData = WorkspaceAppletData()
-      let serviceEditingState = WorkspaceEditingState()
       _ = NSApplication.shared
       let first = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled],
@@ -57,15 +56,15 @@ extension AppUIComponentTestSuite {
       }
       #expect(releasedMeter == nil)
 
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       var audio: AudioMixEditor? = AudioMixEditor(
-        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
         reportError: { _ in })
       var master: MasterVolumeEditor? = MasterVolumeEditor(
-        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in }, editingState: serviceEditingState)
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
       var layers: VideoLayersEditor? = VideoLayersEditor(
-        storeService: service, appletData: serviceAppletData, editingState: serviceEditingState,
+        stateService: service, appletData: serviceAppletData,
         target: .landscape)
       weak var releasedAudio = audio
       weak var releasedMaster = master

@@ -28,9 +28,9 @@ extension AppUIComponentTestSuite {
     func editorsObserveStoreThroughAppKitLayout() async throws {
       let serviceAppletData = WorkspaceAppletData()
       _ = NSApplication.shared
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
       let content = AudioMixEditor(
-        storeService: service, appletData: serviceAppletData, peakMeter: .init(),
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
         reportError: { _ in })
       #expect(!content.isViewLoaded)
       service.outputFailureMessage = "Initial failure"
@@ -68,9 +68,9 @@ extension AppUIComponentTestSuite {
         first.contentPane.testAudioMixEditor.view.isDescendant(
           of: first.contentPane.view))
       first.contentPane.testVideoTabs.selectedTabViewItemIndex = 1
-      #expect(first.contentPane.storeService.selectedAudioMix == .landscape)
-      first.contentPane.storeService.selectedAudioMix = .portrait
-      #expect(first.contentPane.storeService.selectedAudioMix == .portrait)
+      #expect(first.contentPane.stateService.selectedAudioMix == .landscape)
+      first.contentPane.stateService.selectedAudioMix = .portrait
+      #expect(first.contentPane.stateService.selectedAudioMix == .portrait)
       #expect(first.contentPane.testVideoTabs.selectedTabViewItemIndex == 1)
       #expect(second.contentPane.testVideoTabs.selectedTabViewItemIndex == 0)
     }
@@ -90,10 +90,11 @@ extension AppUIComponentTestSuite {
         }
       }
       let controller = WorkspaceWindowController(
-        storeService: document.storeService, editingState: document.editingState,
+        stateService: document.stateService,
         persistenceCoordinator: document.persistenceCoordinator,
         appletData: WorkspaceAppletData(), document: document)
-      let window = try #require(controller.window as? WorkspaceWindow)
+      document.addWindowController(controller)
+      let window = try #require(controller.window as? WorkspaceTestWindow)
       #expect(
         window.contentPane.testPairedPreview.metalView.delegate === controller.previewRenderer)
       #expect(
@@ -109,10 +110,10 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1017.4: Preview uses injected runtimes and its own Program selection")
     func contentPreviewUsesInjectedRuntimesAndTracksItsOwnProgram() {
       _ = NSApplication.shared
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let otherState = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let first = makeWorkspaceTestWindow(storeService: state)
-      let second = makeWorkspaceTestWindow(storeService: otherState)
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let otherState = WorkspaceStateService(definition: .init(), preferences: .init())
+      let first = makeWorkspaceTestWindow(stateService: state)
+      let second = makeWorkspaceTestWindow(stateService: otherState)
       defer {
         first.close()
         second.close()
@@ -123,34 +124,34 @@ extension AppUIComponentTestSuite {
       #expect(firstDelegate !== second.contentPane.testPairedPreview.metalView.delegate)
       #expect(
         first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.storeService.workspaceDefinition,
-          for: first.contentPane.storeService.localStateURL) == nil)
+          in: first.contentPane.stateService.workspaceDefinition,
+          for: first.contentPane.stateService.localStateURL) == nil)
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 42
       program.displayName = "Preview"
       state.workspaceDefinition.programs = [program]
       #expect(
         first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.storeService.workspaceDefinition,
-          for: first.contentPane.storeService.localStateURL) != nil)
+          in: first.contentPane.stateService.workspaceDefinition,
+          for: first.contentPane.stateService.localStateURL) != nil)
       #expect(
         second.contentPane.appletData.selectedProgram(
-          in: second.contentPane.storeService.workspaceDefinition,
-          for: second.contentPane.storeService.localStateURL) == nil)
+          in: second.contentPane.stateService.workspaceDefinition,
+          for: second.contentPane.stateService.localStateURL) == nil)
       for value in [WorkspaceRecordingState.idle, .recording, .paused] {
         state.recordingState = value
         #expect(
           first.contentPane.appletData.selectedProgram(
-            in: first.contentPane.storeService.workspaceDefinition,
-            for: first.contentPane.storeService.localStateURL) != nil)
+            in: first.contentPane.stateService.workspaceDefinition,
+            for: first.contentPane.stateService.localStateURL) != nil)
         #expect(first.contentPane.testPairedPreview === firstPreview)
         #expect(firstPreview.metalView.delegate === firstDelegate)
       }
       state.workspaceDefinition.programs = []
       #expect(
         first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.storeService.workspaceDefinition,
-          for: first.contentPane.storeService.localStateURL) == nil)
+          in: first.contentPane.stateService.workspaceDefinition,
+          for: first.contentPane.stateService.localStateURL) == nil)
     }
 
     @Test("UCT-1017.5: Preview selection and Divider position remain Window local")
@@ -161,7 +162,7 @@ extension AppUIComponentTestSuite {
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let definition = state.workspaceDefinition
       let preferences = state.workspacePreferences
       let outputSettings = state.workspaceOutputSettings
@@ -176,7 +177,7 @@ extension AppUIComponentTestSuite {
         }
       }
       let first = makeWorkspaceTestWindow(
-        storeService: state, appletData: data, url: url, externalID: externalID)
+        stateService: state, appletData: data, url: url, externalID: externalID)
       defer { first.close() }
       let pane = first.contentPane
       #expect(!pane.testSplitView.isVertical)
@@ -223,7 +224,7 @@ extension AppUIComponentTestSuite {
       #expect(editorDocument.frame.minY == 0)
       #expect(pane.testEditorScrollView.contentView.bounds.minY == 0)
       let reopened = makeWorkspaceTestWindow(
-        storeService: state, appletData: data,
+        stateService: state, appletData: data,
         url: URL(fileURLWithPath: "/tmp/Renamed-\(UUID()).ldtxworkspace"), externalID: externalID)
       defer { reopened.close() }
       let split = reopened.contentPane.testSplitView
@@ -319,23 +320,23 @@ extension AppUIComponentTestSuite {
     }
     @Test("UCT-1017.8: Output status preserves failure information")
     func storesOutputStatusForWorkspaceUI() {
-      let storeService = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let stateService = WorkspaceStateService(definition: .init(), preferences: .init())
 
-      storeService.isOutputActive = true
-      storeService.isLocalRecording = true
-      storeService.outputFailureMessage = nil
+      stateService.isOutputActive = true
+      stateService.isLocalRecording = true
+      stateService.outputFailureMessage = nil
 
-      #expect(storeService.isOutputActive)
-      #expect(storeService.isLocalRecording)
-      #expect(storeService.outputFailureMessage == nil)
+      #expect(stateService.isOutputActive)
+      #expect(stateService.isLocalRecording)
+      #expect(stateService.outputFailureMessage == nil)
 
-      storeService.isOutputActive = false
-      storeService.isLocalRecording = false
-      storeService.outputFailureMessage = "Output failed."
+      stateService.isOutputActive = false
+      stateService.isLocalRecording = false
+      stateService.outputFailureMessage = "Output failed."
 
-      #expect(!storeService.isOutputActive)
-      #expect(!storeService.isLocalRecording)
-      #expect(storeService.outputFailureMessage == "Output failed.")
+      #expect(!stateService.isOutputActive)
+      #expect(!stateService.isLocalRecording)
+      #expect(stateService.outputFailureMessage == "Output failed.")
     }
   }
 }

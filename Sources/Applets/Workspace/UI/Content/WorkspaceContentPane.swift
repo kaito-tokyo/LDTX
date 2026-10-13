@@ -10,8 +10,7 @@ private let kBelowDividerDragPriority10 = NSLayoutConstraint.Priority(260)
 
 public final class WorkspaceContentPane: NSViewController {
   let appletData: WorkspaceAppletData
-  let storeService: WorkspaceStoreService
-  let editingState: WorkspaceEditingState
+  let stateService: WorkspaceStateService
 
   let splitView = NSSplitView()
   let pairedPreview: ProgramCanvasPairedPreview
@@ -26,9 +25,8 @@ public final class WorkspaceContentPane: NSViewController {
   let portraitLayersTab: NSTabViewItem
 
   public init(
-    storeService: WorkspaceStoreService,
+    stateService: WorkspaceStateService,
     appletData: WorkspaceAppletData,
-    editingState: WorkspaceEditingState,
     peakMeter: ProgramAudioPeakMeter,
     reportError: @escaping (Error) -> Void,
     pairedPreview: ProgramCanvasPairedPreview,
@@ -36,22 +34,19 @@ public final class WorkspaceContentPane: NSViewController {
   ) {
     self.pairedPreview = pairedPreview
     self.appletData = appletData
-    self.storeService = storeService
-    self.editingState = editingState
-    self.videoLayersEditorTabs = EditorTabViewController(editingState: editingState)
+    self.stateService = stateService
+    self.videoLayersEditorTabs = NSTabViewController()
     self.masterVolumeEditor = MasterVolumeEditor(
-      storeService: storeService, appletData: appletData, peakMeter: peakMeter,
-      reportError: reportError, editingState: editingState, runtimeActions: runtimeActions)
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+      reportError: reportError, runtimeActions: runtimeActions)
     self.audioMixEditor = AudioMixEditor(
-      storeService: storeService, appletData: appletData, peakMeter: peakMeter,
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter,
       reportError: reportError, runtimeActions: runtimeActions)
     self.landscapeLayersEditor = VideoLayersEditor(
-      storeService: storeService, appletData: appletData, editingState: editingState,
-      target: .landscape)
+      stateService: stateService, appletData: appletData, target: .landscape)
     self.landscapeLayersTab = NSTabViewItem(viewController: landscapeLayersEditor)
     self.portraitLayersEditor = VideoLayersEditor(
-      storeService: storeService, appletData: appletData, editingState: editingState,
-      target: .portrait)
+      stateService: stateService, appletData: appletData, target: .portrait)
     self.portraitLayersTab = NSTabViewItem(viewController: portraitLayersEditor)
     super.init(nibName: nil, bundle: nil)
     videoLayersEditorTabs.addTabViewItem(landscapeLayersTab)
@@ -119,27 +114,10 @@ public final class WorkspaceContentPane: NSViewController {
   public func configureAfterEstablished() {
     splitView.layoutSubtreeIfNeeded()
     splitView.setPosition(280, ofDividerAt: 0)
-    splitView.autosaveName = storeService.externalID.map { "WorkspaceContentPane.\($0)" }
+    splitView.autosaveName = stateService.externalID.map { "WorkspaceContentPane.\($0)" }
   }
 
-  private final class EditorTabViewController: NSTabViewController {
-    let editingState: WorkspaceEditingState
-    init(editingState: WorkspaceEditingState) {
-      self.editingState = editingState
-      super.init(nibName: nil, bundle: nil)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override func tabView(_ tabView: NSTabView, shouldSelect tabViewItem: NSTabViewItem?) -> Bool {
-      guard tabViewItem !== tabView.selectedTabViewItem else { return true }
-      do {
-        try editingState.requireConfirmedEdits()
-        return true
-      } catch {
-        editingState.reportInputValidationError(error)
-        return false
-      }
-    }
-  }
+
 
   private final class FlipedStackView: NSStackView {
     override var isFlipped: Bool { true }

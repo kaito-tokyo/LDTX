@@ -10,50 +10,26 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  @Bindable var storeService: WorkspaceStoreService
+  @Bindable var stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  let editingState: WorkspaceEditingState
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
-  private let onSelectionBlocked: () -> Void
-  private weak var document: NSDocument?
+  private weak var document: (any WorkspaceDocumentContext)?
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
   @State private var additionFailure: String?
-  @State private var displayedSelection: WorkspaceInspectorSelector?
 
   public init(
-    storeService: WorkspaceStoreService, editingState: WorkspaceEditingState,
-    deviceRegistry: DeviceRegistryService,
+    stateService: WorkspaceStateService, deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
-    document: NSDocument? = nil,
-    onSelectionBlocked: @escaping () -> Void = {},
+    document: (any WorkspaceDocumentContext)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.document = document
-    self.editingState = editingState
     self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
-    self.onSelectionBlocked = onSelectionBlocked
-    self._storeService = Bindable(wrappedValue: storeService)
-    self._displayedSelection = State(initialValue: storeService.inspectorSelector)
-  }
-
-  @discardableResult
-  static func select(
-    _ selection: WorkspaceInspectorSelector?, storeService: WorkspaceStoreService,
-    editingState: WorkspaceEditingState,
-    onBlocked: () -> Void = {}
-  ) -> Bool {
-    guard selection != storeService.inspectorSelector else { return true }
-    editingState.refreshUnconfirmedChanges()
-    guard !editingState.hasUnconfirmedChanges else {
-      onBlocked()
-      return false
-    }
-    storeService.inspectorSelector = selection
-    return true
+    self._stateService = Bindable(wrappedValue: stateService)
   }
 
   static func rows<Value>(
@@ -71,16 +47,16 @@ public struct WorkspaceSidebar: View {
   }
 
   public var body: some View {
-    let inputDevices = Self.rows(storeService.workspaceDefinition.audioDevices) {
+    let inputDevices = Self.rows(stateService.workspaceDefinition.audioDevices) {
       $0.hasInternalID ? $0.internalID : nil
     }
-    let videoComponents = Self.rows(storeService.workspaceDefinition.videoComponents) {
+    let videoComponents = Self.rows(stateService.workspaceDefinition.videoComponents) {
       $0.internalID
     }
-    let visions = Self.rows(storeService.workspaceDefinition.visions) { $0.internalID }
+    let visions = Self.rows(stateService.workspaceDefinition.visions) { $0.internalID }
 
     VStack {
-      List(selection: $displayedSelection) {
+      List(selection: $stateService.inspectorSelector) {
         Section {
           Label("Programs", systemImage: "rectangle.stack")
             .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
@@ -214,24 +190,15 @@ public struct WorkspaceSidebar: View {
       }
     }
     .listStyle(.sidebar)
-    .onChange(of: displayedSelection) { _, selection in
-      Self.select(
-        selection, storeService: storeService, editingState: editingState,
-        onBlocked: onSelectionBlocked)
-      displayedSelection = storeService.inspectorSelector
-    }
-    .onChange(of: storeService.inspectorSelector) { _, selection in
-      displayedSelection = selection
-    }
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoComponents: storeService.workspaceDefinition.videoComponents,
+        videoComponents: stateService.workspaceDefinition.videoComponents,
         validationMessage: document == nil
           ? "The Workspace document is unavailable."
           : additionFailure
             ?? WorkspaceResourceAddition.validationMessage(
-              sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
+              sheet: sheet, draft: draft, devices: deviceOptions, stateService: stateService,
               audioDiscoveryError: deviceRegistry.errorMessage),
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
@@ -250,7 +217,7 @@ public struct WorkspaceSidebar: View {
     }
   }
 
-  var canAddResource: Bool { document != nil && !storeService.isOutputActive }
+  var canAddResource: Bool { document != nil && !stateService.isOutputActive }
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
@@ -281,7 +248,7 @@ public struct WorkspaceSidebar: View {
       if sheet == .device, let error = deviceRegistry.error { throw error }
     }
     let id = try WorkspaceResourceAddition.add(
-      sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
+      sheet: sheet, draft: draft, devices: deviceOptions, stateService: stateService,
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device || selectsCamera {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
@@ -296,11 +263,9 @@ public struct WorkspaceSidebar: View {
 
 #if DEBUG
   #Preview("Workspace Sidebar") {
-    @Previewable @State var editingState = WorkspaceEditingState()
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
     WorkspaceSidebar(
-      storeService: storeService, editingState: editingState,
-      deviceRegistry: DeviceRegistryService(),
+      stateService: stateService, deviceRegistry: DeviceRegistryService(),
       appletData: WorkspaceAppletData()
     )
     .frame(width: 260, height: 640)

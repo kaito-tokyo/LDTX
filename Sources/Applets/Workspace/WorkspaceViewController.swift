@@ -17,13 +17,12 @@ import Observation
 import QuickLookThumbnailing
 import SwiftUI
 
-public final class WorkspaceWindow: NSWindow {
-  private weak var document: NSDocument?
+public final class WorkspaceViewController: NSViewController {
+  private weak var document: (any WorkspaceDocumentContext)?
   let appletData: WorkspaceAppletData
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private let reportError: (Error) -> Void
-  private let editingState: WorkspaceEditingState
   let deviceRegistry: DeviceRegistryService
 
   let splitViewController: NSSplitViewController
@@ -35,18 +34,17 @@ public final class WorkspaceWindow: NSWindow {
   private let toolbarCoordinator: WorkspaceToolbarCoordinator
   private var inferenceTask: Task<Void, Never>?
   private var isClosed = false
-  let pendingEditsPopover = NSPopover()
   private var expandedSidebarWidth: CGFloat = 240
+  private var didSetInitialLayout = false
 
   var inspectorSplitViewItem: NSSplitViewItem? {
     splitViewController.splitViewItems[2]
   }
 
   init(
-    document: NSDocument,
+    document: any WorkspaceDocumentContext,
     appletData: WorkspaceAppletData,
-    storeService: WorkspaceStoreService,
-    editingState: WorkspaceEditingState,
+    stateService: WorkspaceStateService,
     peakMeter: ProgramAudioPeakMeter,
     reportError: @escaping (Error) -> Void,
     deviceRegistry: DeviceRegistryService,
@@ -55,28 +53,18 @@ public final class WorkspaceWindow: NSWindow {
   ) {
     self.document = document
     self.appletData = appletData
-    self.storeService = storeService
+    self.stateService = stateService
     self.runtimeActions = runtimeActions
     self.reportError = reportError
-    self.editingState = editingState
     self.deviceRegistry = deviceRegistry
 
     self.splitViewController = NSSplitViewController()
     self.contentPane = WorkspaceContentPane(
-      storeService: storeService, appletData: appletData, editingState: editingState,
-      peakMeter: peakMeter, reportError: reportError, pairedPreview: pairedPreview,
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter, reportError: reportError, pairedPreview: pairedPreview,
       runtimeActions: runtimeActions)
 
     toolbarCoordinator = WorkspaceToolbarCoordinator()
-    super.init(
-      contentRect: NSRect(x: 0, y: 0, width: 1062, height: 700),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-      backing: .buffered,
-      defer: false)
-
-    self.representedURL = document.fileURL
-    self.title = document.fileURL?.lastPathComponent ?? "(Untitled)"
-    self.isReleasedWhenClosed = false
+    super.init(nibName: nil, bundle: nil)
 
     let sidebarController = NSHostingController(rootView: sidebarView)
     sidebarController.sizingOptions = [.minSize]
@@ -102,22 +90,11 @@ public final class WorkspaceWindow: NSWindow {
       splitViewController.addSplitViewItem(item)
     }
 
-    self.contentViewController = splitViewController
-    self.titleVisibility = .visible
-    self.toolbarStyle = .unified
+    addChild(splitViewController)
+    view = splitViewController.view
     configureToolbar()
-    self.toolbar = toolbarCoordinator.toolbar
     refreshToolbarState()
-    // Installing the content controller replaces the initial size with its fitting size.
-    let toolbarHeight = frame.height - contentLayoutRect.height
-    self.setFrame(
-      NSRect(origin: frame.origin, size: NSSize(width: 1062, height: 700 + toolbarHeight)),
-      display: false)
-
-    splitViewController.view.layoutSubtreeIfNeeded()
     let splitView = splitViewController.splitView
-    splitView.setPosition(240, ofDividerAt: 0)
-    splitView.setPosition(240 + 480 + splitView.dividerThickness, ofDividerAt: 1)
     NotificationCenter.default.addObserver(
       self, selector: #selector(paneLayoutChanged(_:)),
       name: NSSplitView.didResizeSubviewsNotification, object: splitView)
@@ -131,10 +108,9 @@ public final class WorkspaceWindow: NSWindow {
           self.splitViewController.view.layoutSubtreeIfNeeded()
           self.splitViewController.splitView.setPosition(width, ofDividerAt: 0)
         }
-        self.invalidateRestorableState()
+        self.view.window?.invalidateRestorableState()
       }
     }
-    contentPane.configureAfterEstablished()
 
     inspectorCollapseObservation = splitViewController.splitViewItems[2].observe(
       \.isCollapsed, options: [.initial, .new]
@@ -142,17 +118,33 @@ public final class WorkspaceWindow: NSWindow {
       let isCollapsed = item.isCollapsed
       MainActor.assumeIsolated {
         guard let self else { return }
-        self.storeService.isInspectorVisible = !isCollapsed
-        self.invalidateRestorableState()
+        self.stateService.isInspectorVisible = !isCollapsed
+        self.view.window?.invalidateRestorableState()
       }
     }
 
-    editingState.inputValidationErrorHandler = { [weak self] error in
-      self?.showPendingEditsPopover(message: error.localizedDescription)
-    }
     observeToolbarState()
-    self.center()
+
   }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+  public override func viewDidAppear() {
+    super.viewDidAppear()
+    view.window?.toolbar = toolbarCoordinator.toolbar
+    view.window?.toolbarStyle = .unified
+    didAttachWindow?(view.window)
+    guard !didSetInitialLayout else { return }
+    didSetInitialLayout = true
+    view.layoutSubtreeIfNeeded()
+    let splitView = splitViewController.splitView
+    splitView.setPosition(240, ofDividerAt: 0)
+    splitView.setPosition(240 + 480 + splitView.dividerThickness, ofDividerAt: 1)
+    contentPane.configureAfterEstablished()
+  }
+
+  var didAttachWindow: ((NSWindow?) -> Void)?
 
   @objc private func paneLayoutChanged(_ notification: Notification) {
     let split = splitViewController.splitView
@@ -161,7 +153,7 @@ public final class WorkspaceWindow: NSWindow {
       let width = split.arrangedSubviews[0].frame.width
       if width > 0 { expandedSidebarWidth = width }
     }
-    invalidateRestorableState()
+    view.window?.invalidateRestorableState()
   }
 
   private func configureToolbar() {
@@ -209,7 +201,8 @@ public final class WorkspaceWindow: NSWindow {
     toolbarCoordinator.toggleInspectorItem.image = NSImage(
       systemSymbolName: "sidebar.right", accessibilityDescription: nil)
     toolbarCoordinator.toggleInspectorItem.target = splitViewController
-    toolbarCoordinator.toggleInspectorItem.action = #selector(NSSplitViewController.toggleInspector(_:))
+    toolbarCoordinator.toggleInspectorItem.action = #selector(
+      NSSplitViewController.toggleInspector(_:))
     toolbarCoordinator.toggleInspectorItem.autovalidates = false
 
     toolbarCoordinator.toolbar.autosavesConfiguration = false
@@ -219,21 +212,20 @@ public final class WorkspaceWindow: NSWindow {
   }
 
   private func refreshToolbarState() {
-    if !editingState.hasUnconfirmedChanges { pendingEditsPopover.close() }
     toolbarCoordinator.startPauseOutputItem.label =
-      storeService.recordingState == .recording
+      stateService.recordingState == .recording
       ? String(localized: "Pause Output") : String(localized: "Start Output")
     toolbarCoordinator.startPauseOutputItem.image = NSImage(
-      systemSymbolName: storeService.recordingState == .recording ? "pause.fill" : "play.fill",
+      systemSymbolName: stateService.recordingState == .recording ? "pause.fill" : "play.fill",
       accessibilityDescription: nil)
 
   }
 
-  private var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)?
-  {
-    guard storeService.inspectorSelector?.kind == .ldtxSceneDetectorVision,
-      let id = storeService.inspectorSelector?.internalID,
-      let vision = storeService.workspaceDefinition.visions.compactMap({
+  private var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)? {
+    guard stateService.inspectorSelector?.kind == .ldtxSceneDetectorVision,
+      let workspace = document?.runtimeWorkspace, let workspaceURL = document?.fileURL,
+      let id = stateService.inspectorSelector?.internalID,
+      let vision = workspace.definition.visions.compactMap({
         wrapper -> Ldtx_Workspace_V4_LdtxSceneDetectorVision? in
         if case .ldtxSceneDetectorVision(let vision)? = wrapper.vision,
           vision.internalID == id
@@ -242,14 +234,17 @@ public final class WorkspaceWindow: NSWindow {
         }
         return nil
       }).first,
-      storeService.workspaceDefinition.videoComponents.contains(where: {
+      !stateService.modelURLs.keys.contains(id),
+      stateService.workspaceDefinition.visions.contains(where: {
+        $0.vision == .ldtxSceneDetectorVision(vision)
+      }),
+      workspace.definition.videoComponents.contains(where: {
         $0.internalID == vision.videoComponentInternalID && $0.canBeVisionInput
           && $0.renderingSize != nil
       })
     else { return nil }
-    let savedURL = WorkspaceModelFiles.modelPath(for: vision, in: storeService.workspaceModels)
-      .flatMap { storeService.localStateURL?.appendingPathComponent("VisionModels/\($0)") }
-    guard let url = storeService.modelURLs[id] ?? savedURL else { return nil }
+    guard let path = WorkspaceModelFiles.modelPath(for: vision, in: workspace.models) else { return nil }
+    let url = workspaceURL.appendingPathComponent("VisionModels/\(path)")
     return (vision, url)
   }
 
@@ -258,8 +253,10 @@ public final class WorkspaceWindow: NSWindow {
       let actions = runtimeActions()
     else { return }
     let id = request.vision.internalID
-    storeService.visionResults.removeValue(forKey: id)
-    storeService.visionFailureMessages.removeValue(forKey: id)
+    let editingVision = stateService.workspaceDefinition.visions.first { $0.internalID == id }
+    let pendingModelURL = stateService.modelURLs[id]
+    stateService.visionResults.removeValue(forKey: id)
+    stateService.visionFailureMessages.removeValue(forKey: id)
     inferenceTask = Task { [weak self] in
       guard let self else { return }
       defer {
@@ -269,14 +266,18 @@ public final class WorkspaceWindow: NSWindow {
       do {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
         guard !isClosed, let current = inferenceRequest,
+          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
+          stateService.modelURLs[id] == pendingModelURL,
           current.vision == request.vision, current.url == request.url
         else { return }
-        storeService.visionResults[id] = result
+        stateService.visionResults[id] = result
       } catch {
         guard !isClosed, let current = inferenceRequest,
+          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
+          stateService.modelURLs[id] == pendingModelURL,
           current.vision == request.vision, current.url == request.url
         else { return }
-        storeService.visionFailureMessages[id] = error.localizedDescription
+        stateService.visionFailureMessages[id] = error.localizedDescription
       }
     }
 
@@ -292,31 +293,12 @@ public final class WorkspaceWindow: NSWindow {
     }
   }
 
-  private func showPendingEditsPopover(
-    message: String = "Press Return to confirm pending changes before selecting another item."
-  ) {
-    guard !isClosed else { return }
-    splitViewController.splitViewItems[2].isCollapsed = false
-    Task { @MainActor [weak self] in
-      await Task.yield()
-      guard let self, !isClosed else { return }
-      contentView?.superview?.layoutSubtreeIfNeeded()
-      pendingEditsPopover.close()
-      pendingEditsPopover.behavior = .transient
-      let controller = NSHostingController(
-        rootView: Text(message)
-          .padding().frame(width: 280))
-      controller.sizingOptions = .preferredContentSize
-      pendingEditsPopover.contentViewController = controller
-      toolbarCoordinator.showPendingEditsPopover(pendingEditsPopover)
-    }
-  }
+
 
   private var sidebarView: some View {
     WorkspaceSidebar(
-      storeService: storeService, editingState: editingState, deviceRegistry: deviceRegistry,
+      stateService: stateService, deviceRegistry: deviceRegistry,
       appletData: appletData, document: document,
-      onSelectionBlocked: { [weak self] in self?.showPendingEditsPopover() },
       runtimeActions: runtimeActions
     )
     .environment(\.workspaceReportError, reportError)
@@ -325,8 +307,7 @@ public final class WorkspaceWindow: NSWindow {
   private var inspectorView: some View {
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
-      storeService: storeService, editingState: editingState,
-      appletData: appletData, document: document, runtimeActions: runtimeActions
+      stateService: stateService, appletData: appletData, document: document, runtimeActions: runtimeActions
     )
     .environment(\.workspaceReportError, reportError)
   }
@@ -369,39 +350,36 @@ public final class WorkspaceWindow: NSWindow {
     return true
   }
 
-  public override func close() {
+  func tearDown() {
     isClosed = true
-    pendingEditsPopover.close()
-    editingState.inputValidationErrorHandler = nil
     inspectorCollapseObservation?.invalidate()
     sidebarCollapseObservation?.invalidate()
     NotificationCenter.default.removeObserver(
       self, name: NSSplitView.didResizeSubviewsNotification,
       object: splitViewController.splitView)
     screenshotResultPopover.close()
-    super.close()
+
   }
 
   @objc func stopOutput() {
-    guard storeService.recordingState.canStop else { return }
+    guard stateService.recordingState.canStop else { return }
     Task { await runtimeActions()?.stopOutput() }
   }
 
   @objc func toggleOutput() {
-    let state = storeService.recordingState
+    let state = stateService.recordingState
     guard state.canStart || state == .recording else { return }
     Task {
       if state == .recording {
         await runtimeActions()?.pauseOutput()
       } else {
         do {
-          try editingState.requireConfirmedEdits()
           guard let runtimeActions = runtimeActions() else {
             throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
           }
           try await runtimeActions.startOutput()
         } catch {
-          storeService.outputFailureMessage = error.localizedDescription
+          stateService.outputFailureMessage = error.localizedDescription
         }
       }
     }
@@ -409,16 +387,17 @@ public final class WorkspaceWindow: NSWindow {
 
 }
 
-extension WorkspaceWindow: NSToolbarItemValidation {
+extension WorkspaceViewController: NSToolbarItemValidation {
   public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
     guard !isClosed,
-      let identifier = WorkspaceToolbarCoordinator.Identifiers(rawValue: item.itemIdentifier.rawValue)
+      let identifier = WorkspaceToolbarCoordinator.Identifiers(
+        rawValue: item.itemIdentifier.rawValue)
     else { return false }
     return switch identifier {
     case .captureScreenshots: true
-    case .stopOutput: storeService.recordingState.canStop
+    case .stopOutput: stateService.recordingState.canStop
     case .startPauseOutput:
-      storeService.recordingState.canStart || storeService.recordingState == .recording
+      stateService.recordingState.canStart || stateService.recordingState == .recording
     case .runInference:
       inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil
     default: false

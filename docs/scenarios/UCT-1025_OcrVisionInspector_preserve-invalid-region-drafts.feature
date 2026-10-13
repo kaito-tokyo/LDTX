@@ -5,7 +5,7 @@
 Feature: Invalid ROI prevents leaving
   Invalid input stays visible in its editing screen until corrected.
 
-  @UCT-1025.1 @WorkspaceStoreService
+  @UCT-1025.1 @WorkspaceStateService
   Scenario: Invalid drafts block navigation without corrupting the model
     Given an OCR Inspector has a valid saved ROI
     When invalid or unparseable coordinates are entered
@@ -14,7 +14,7 @@ Feature: Invalid ROI prevents leaving
     And the text draft is preserved and the saved model is unchanged
     And validation prevents saving or leaving with pending invalid edits
 
-  @UCT-1025.2 @WorkspaceStoreService
+  @UCT-1025.2 @WorkspaceStateService
   Scenario: Correcting the complete rectangle allows navigation
     Given an ROI draft extends beyond the image
     When the remaining fields are corrected so the whole rectangle fits

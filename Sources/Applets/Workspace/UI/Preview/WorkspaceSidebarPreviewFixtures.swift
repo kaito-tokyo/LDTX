@@ -10,8 +10,8 @@
     static func makeUIState(
       inspectorSelector: WorkspaceInspectorSelector? = nil,
       isOutputActive: Bool = false
-    ) -> WorkspaceStoreService {
-      WorkspaceStoreService(
+    ) -> WorkspaceStateService {
+      WorkspaceStateService(
         definition: makeWorkspaceDefinition(),
         preferences: .init(),
         inspectorSelector: inspectorSelector,

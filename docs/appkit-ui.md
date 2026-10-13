@@ -8,14 +8,10 @@ SPDX-License-Identifier: Apache-2.0
 LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
 `RecordPlayerScene`, `WorkspaceScene`, `SettingsScene`, and
 `VisionProgrammerScene`. App initialization configures authentication storage.
-DocumentGroup initializes document infrastructure before Workspace commands use
-the shared NSDocumentController. No diagnostic sampling session is
-started by the App. No custom application delegate is
+DocumentGroup initializes and manages both Workspace and Record Player documents. No diagnostic sampling session is started by the App. No custom application delegate is
 installed. SwiftUI owns the application lifecycle, main menu, and Scene presentation.
 RecordPlayerScene is the first Scene and declares a DocumentGroup using the
-macOS 27 Document API. WorkspaceScene registers commands without creating
-SwiftUI document windows; SettingsScene supplies the standard Settings
-scene and VisionProgrammerScene supplies its training windows. Vision Programmer
+macOS 27 Document API. WorkspaceScene also declares a DocumentGroup. SettingsScene supplies the standard Settings scene and VisionProgrammerScene supplies its training windows. Vision Programmer
 is suppressed as a default launch window in LDTXApp, but opens normally in the
 standalone test app.
 
@@ -23,45 +19,38 @@ LDTXApp groups these Scenes and installs VisionProgrammerCommands and RecordPlay
 the Group so the shared menu remains available across windows and without an
 open document. Standard Open and editing commands come from SwiftUI.
 
-Workspace files remain NSDocument instances managed by
-NSDocumentController.shared. AppKit creates the standard controller and uses
-the first Editor type in Info.plist (Workspace) as the default New document type.
-AppKit initializes each document and selects
-the registered Workspace document class. File menu Open uses the standard
-document controller to select the registered recording or Workspace document
-type. New uses WorkspaceScene to create a hidden
-document through the shared controller and requests standard document saving.
-File > Open presents the standard Open panel. The App does not present an Open
-panel from launch or restoration callbacks. Cancelling the panel leaves the
-application running; File > New creates a
-Workspace and immediately requests its first save location. Cancelling this save
-closes only the new document. A write failure is presented and also closes the
-new document, leaving any incomplete package on disk. Window controllers are
-constructed and shown only after initial saving succeeds. Workspace UI
-validation disables Save As, Save To, and Duplicate. Their inherited actions are
-not overridden, while the save path rejects copying an already-saved document.
-WorkspaceDocument projects the registered documents' output state into
-NSApplication.shared.dockTile.badgeLabel. The Dock is a write-only display sink;
-no independent recording identifiers or activity store are maintained. The badge
-remains active until all output stops.
-WorkspaceDocument owns the V4 model and persistence coordinator. It uses
-WorkspaceAppletData.shared from initialization. No lifetime package lock or sidecar
-lock file is used. Restoration reads the formal package only; a missing, nil, or
-unreadable formal URL is an error even when legacy recovery contents exist.
-Legacy recovery data, versions, and lock files are not deleted or adopted.
-It creates and registers WorkspaceWindowController with addWindowController;
-AppKit owns document and window-controller lifetime. The controller constructs
-window-scoped runtime resources and injects operations into the pane views.
-Each document creates one DocumentReference from LDTXAppletSupport when constructing
-its window controller. All SwiftUI pane roots receive that same box through the
-documentReference environment value. The box weakly references NSDocument; views
-and hosting controllers do not extend the document's lifetime. UI actions query
-NSDocument.fileURL when they run, including Binding getters and setters. Workspace
-local settings use storeService.localStateURL only as the transient key while fileURL
-is nil. Missing environments and released documents disable document-dependent
-settings operations. Existing observable models drive presentation updates;
-the weak reference is not a change-observation mechanism. Read and write hooks
-continue to use AppKit's supplied URLs rather than the environment.
+WorkspaceDocument conforms to the macOS 27 Document API. DocumentGroup owns
+creation, opening, standard Save and Close commands, autosaving, restoration,
+and the document window. New presents an untitled editable Workspace; saving
+chooses its location through the standard document flow. Info.plist registers
+its content type without an NSDocumentClass.
+
+The Document owns confirmed content and file persistence. WorkspaceWindowController
+owns WorkspaceStateService's editable values and UI state, the runtime projection
+coordinator, and runtime resources. The NSViewControllerRepresentable's Coordinator
+retains that controller and connects it to Document through a weak editing
+connection. Reconstructing the SwiftUI wrapper reuses the same controller and runtime.
+The runtime controller holds the framework's window weakly and does not replace
+its delegate or install its own restoration policy. Window closure finalizes
+output and tears down capture, audio, Vision, and preview resources asynchronously.
+Representable dismantling disconnects editing and initiates idempotent shutdown;
+its Coordinator also initiates cleanup if released without explicit dismantling.
+
+The editing connection registers Undo/Redo for content changes, including pending
+model selections. UI selections and runtime results are not undoable document
+changes. Reads and save-result synchronization do not register Undo. Saving
+captures the connected editor's values without maintaining an editing copy in
+Document. With no connected editor, snapshot capture fails instead of saving
+stale confirmed values. A save updates confirmed content only after its receipt
+matches the formal package. Edits made during saving remain in StateService.
+
+UI receives the document explicitly as a weak WorkspaceDocumentContext whose
+fileURL is supplied by URLDocumentConfiguration. No document environment box is
+used. Applet-local state uses the transient URL until the framework assigns a
+formal URL. URL changes copy local state and update persistence routing. The
+Dock badge observes weakly registered Workspace documents and remains active
+while any Workspace has active output.
+
 The Workspace sidebar owns one SwiftUI `.sheet(item:)` presentation for adding
 input devices, video components, and OCR or Create ML image-classification visions. The window injects its device
 registry and app-local data. Form drafts do not change the document until Add
@@ -79,7 +68,7 @@ WorkspaceContentPane is an NSViewController containing the configured AppKit pre
 and the editors in a vertical NSSplitView. It does not subclass NSSplitViewController.
 MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
 Layers and Portrait Video Layers tabs, which use VideoLayersEditor controllers.
-Each editor owns its Observation task and reads the shared WorkspaceStoreService.
+Each editor owns its Observation task and reads the shared WorkspaceStateService.
 The editor stack is the vertical NSScrollView's document view directly. Its
 flipped coordinates keep the controls at the top, and its width tracks the
 viewport without an intermediate container. Reducing the lower pane height scrolls the controls rather
@@ -89,7 +78,7 @@ under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
 WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 
-WorkspaceWindow configures its NSSplitViewController directly with hosted SwiftUI sidebar and
+WorkspaceViewController configures its NSSplitViewController directly with hosted SwiftUI sidebar and
 Inspector panes and an AppKit WorkspaceContentPane in the center.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
@@ -128,33 +117,25 @@ The applet Commands do not replace the standard Close, Save, or related document
 SwiftUI owns window closing, document presentation, and restoration. Playback
 stops when the Document is released; UI disappearance alone does not stop it.
 
-Workspace Save and Revert use AppKit's lifecycle and change-count tracking.
-Autosaving and version preservation are disabled. Definition and preferences
-edits remain in memory until an explicit Save, including saving selected during
-standard close and termination confirmation. WorkspaceDocument captures an
-immutable V4 snapshot, releases interaction before filesystem work, and writes
-on AppKit's background saving thread. A captured AppKit change-count token keeps
-edits made during writing unsaved when the non-autosaving save completes.
-Coordinated ordinary saves atomically
-replace only definition.pb and preferences.pb, leaving Info.plist, resources, and
-unknown files untouched. Initial saving creates Info.plist and the two model
-files. The two writes are individually atomic, not a transaction: a failure can
-leave mixed revisions on disk and retains unsaved edits. No journal, rollback,
-backup, or recovery-package copying is added. The save hook rejects autosave,
-export, and subsequent Save As operations.
-WorkspaceV4PersistenceCoordinator projects the document's model for runtimes;
-it has no independent save API. WorkspaceWindowRuntime and UI dispatchers do not
-write definition or preferences. CLI package operations use file coordination
-instead of the former lifetime lock. Ordinary document opening, duplicate URL
-reuse, external-change detection, and file coordination remain AppKit-managed.
+Workspace snapshots capture the three authoritative protobuf documents and
+pending model URLs on the main actor. The DocumentWriter performs validation,
+model import, and package I/O off the main actor, using DocumentGroup's coordinated
+staging destination without nesting a file coordinator. It preserves unknown
+files and past model revisions. Save failure leaves the current edits intact.
+Snapshots exclude edits made after their capture.
 
-Recording or streaming starts from the current in-memory model without saving
-pending edits. A formal document URL is required. Revert, Move, and Rename remain
-disabled during output. Closing uses NSDocument's standard save decision and
-waits for runtime shutdown before granting permission.
-Application termination uses AppKit's per-document review. Cancelling does not
-reopen documents that have already closed. Pane visibility does not own resource
-lifetime.
+Writing the staging package alone does not update runtime definitions. After
+URLDocumentConfiguration reports a committed URL/modification date, the Document
+matches the formal package against its completed write receipt and adopts that
+persisted Definition for ProgramRuntime and Vision. Newer edits and model
+selections remain pending. Preferences can reach the runtime immediately.
+External Reader snapshots preserve documents edited since the prior read while
+adopting the actual on-disk Definition for runtime execution.
+
+Pending editing owners prevent dismissal and save snapshots. The framework
+handles its normal unsaved-change review; pane visibility does not own runtime
+lifetime. Output uses the last successfully persisted Definition and requires a
+formal document URL.
 
 Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
 
@@ -167,7 +148,7 @@ so the pane's background shows through; the drawable uses linear
 `BGRA8Unorm`.
 
 Menus and toolbars route commands to their owning window. Workspace restoration
-uses NSDocument's standard document reopening and window restoration. Workspace
+uses DocumentGroup's document reopening and window restoration. Workspace
 Inspector selection starts at nil and is neither encoded nor restored; the former
 versioned selection key is ignored. AppKit owns frame and pane state.
 
@@ -230,43 +211,21 @@ relocation cleanup for those fields is a separate change. Landscape and Portrait
 master volumes and audio mute settings are independent. There is no mix
 synchronization setting between the canvases.
 
-The Workspace window uses the unified toolbar style. WorkspaceWindow owns its
-NSToolbar, implements its delegate and handles target/action directly. Both
-hosting controllers use `sceneBridgingOptions = []`; Workspace pane roots do not use
-the SwiftUI toolbar modifier. Independent sheets retain their own controls. The fixed order is Sidebar, Stop, Start/Pause,
-Screenshot, flexible space, the native `inspectorTrackingSeparator`, Inspector
-title, flexible space, Apply, Inspector. The title follows the selected Inspector
-kind and hides when the Inspector is collapsed. Inspector stays at the trailing edge when Apply is hidden.
-Output state updates existing item labels, images and
-enabled state. Inspector collapse changes Apply's `isHidden` without removing
-its item or the separator. Pane toggles directly change `isCollapsed`, without
-animation. Toolbar customization and layout persistence are disabled.
+The Workspace window uses the unified toolbar style. WorkspaceToolbarCoordinator
+owns the NSToolbar and its items; WorkspaceViewController configures labels and
+target/action and attaches the toolbar to the framework window. Pane roots do not
+use the SwiftUI toolbar modifier. Output state updates existing labels and images.
+The toolbar has no Apply item or Inspector title. Sidebar and Inspector use the
+split view controller's standard toggle actions. Toolbar customization and layout
+persistence are disabled.
 
-Sidebar selection changes with pending edits preserve the current selection and
-draft without displaying an error dialog. The store's non-persisted
-`pendingEditsDidBlockSelection` callback asks the owning Window to open the
-Inspector without animation and show a transient NSPopover anchored to Apply.
-Repeated attempts reuse the popover. Apply, confirmed edits, and Window closure
-dismiss it. Input validation uses the same non-modal popover; inline selection controls display
-their validation messages inline.
-
-Apply requests Window-wide Submit through the non-persisted, Window-local
-`WorkspaceStoreService.hasPendingSubmit`. The Window has one request observer.
-Existing edit-validation registrations also supply change status and writeback;
-OCR owns its seven input States, Create ML Image Classification owns its four
-ROI input States, Video Layers owns transform drafts, and Master Volume owns its
-numeric drafts. Submit first validates every pending owner. Any
-validation failure reports the existing error and leaves all drafts and models
-unchanged. Once every validation succeeds, each owner commits its values and
-clears its change status. The request is cleared after either outcome, allowing
-retry. Enter retains its existing local commit behavior; leaving a Master Volume
-text field preserves its draft until Enter or Apply. Direct Bindings,
-immediate controls, and independently confirmed sheets keep their behavior.
-
-Apply is disabled with no pending changes, during output, or while a request is
-pending, and hidden while the Inspector is collapsed. Unconfirmed changes block
-Inspector selection, Program selection, and Content editor tab switches; assigning
-the current selection or opening and closing panes is allowed and retains input.
+Editors write representable values directly to WorkspaceStateService. OCR ROI
+uses the same bound RegionOfInterestEditor as Scene Detector ROI. Master-volume
+and transform fields write numeric values as they change; incomplete numeric text
+remains local to the control. There is no separate WorkspaceEditingState, Apply,
+or window-wide Submit. Inspector, Program, and tab selection are not gated by
+pending drafts. Saving validates the authoritative documents and preserves edits
+on failure; Definition changes reach execution only after persistence succeeds.
 
 Toolbar controls project the V4 recording session state. Pause drains
 and finalizes the current output and leaves the session paused; the next Start
@@ -297,7 +256,7 @@ keeps its height when resizing the window, with the editor taking the size chang
 first. The content split uses AppKit default divider limits and collapse behavior.
 `NSSplitView.autosaveName`, keyed by the definition envelope external
 ID, lets AppKit save and restore divider configuration in application preferences.
-`WorkspaceStoreService.externalID` holds that ID, and `WorkspaceContentPane`
+`WorkspaceStateService.externalID` holds that ID, and `WorkspaceContentPane`
 constructs the autosave name internally. Divider
 configuration is not stored in Workspace-local state. Shutdown pauses the MTKView, detaches its delegate,
 and stops the renderer before shutting down the runtimes.
@@ -354,10 +313,10 @@ Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
 The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
 AppKit controls retain their default selection, background, and focus behavior.
-Each layer operation copies the latest ProgramPreferences and submits the complete
+Each layer operation copies the latest ProgramPreferences and updates the complete
 value, preserving unrelated fields. Reordering submits the complete ID array and
-must preserve the current membership. Tab changes require confirmed drafts; Program changes
-discard field editors. Editors update from
+must preserve the current membership. Tab and Program changes need no Submit;
+Program changes discard incomplete local text. Editors update from
 `viewWillLayout()` using AppKit automatic Observation, without observation Tasks
 or an externally invoked `stop()`.
 Audio meters pause themselves when detached or when their window closes.
@@ -388,13 +347,13 @@ open across the change; output failures follow the normal finalization path.
 Video layer tables always allow ordering, visibility, and transform editing,
 including during output. Reordering uses the drag handle and is restricted to
 a single layer from the same table. The table keeps
-cell identity and unconfirmed transform text across ordinary model updates.
+cell identity and incomplete transform text across ordinary model updates.
 
 Each Video Component Inspector has separate Landscape and Portrait membership
 Toggles and displays the selected Program name. Turning a Toggle on appends the
 component to that canvas; turning it off removes the layer without deleting the
 component or its saved preferences. The controls read current membership and
-commit immediately through WorkspaceStoreService. They are unavailable without
+commit immediately through WorkspaceStateService. They are unavailable without
 a Program or while output is active. Submission revalidates the Program,
 component, and output state. Content retains ordering, visibility, and transform
 editing; it has no membership management button or sheet.
@@ -408,12 +367,12 @@ default folder, then the built-in default.
 
 ## Workspace state and cross-layer operations
 
-WorkspaceDocument owns one Observable `WorkspaceStoreService`. It connects UI,
-document, and runtime layers through both observable variables and method calls.
+WorkspaceWindowController owns one Observable `WorkspaceStateService` for editable
+values and UI/runtime status. Document owns confirmed content separately.
 Simple state changes may assign variables directly; operations that require
 validation or coordinated updates use methods. There is no separate UI Dispatcher.
-The service weakly references `WorkspaceRuntimeActions`, implemented by the window
-controller, and does not assemble capture, rendering, or output resources.
+The service does not reference runtime actions or assemble capture, rendering,
+or output resources. UI owners receive runtime actions through weak providers.
 Disconnected runtime operations that need a result report an explicit error.
 
 Content view controllers receive the service and construct their editors where
@@ -431,13 +390,11 @@ disconnects the service's runtime actions before releasing resources.
 
 ## Validation before saving
 
-WorkspaceStoreService validates the definition and both canvas preference maps
-with WorkspaceV4IntegrityValidator before a document save begins. Validation
+The document writer validates the definition and both canvas preference maps
+with WorkspaceV4IntegrityValidator before writing its captured snapshot. Validation
 collects independent issues with resource and canvas context into one localized
-error. The Window displays the messages in its Apply popover and cancels the
-save with `CocoaError.userCancelled`, suppressing AppKit error sheets.
+error. The document framework presents the save error.
 A rejected save retains the edited model and leaves the existing package intact.
-The asynchronous writer validates its captured snapshot again before any I/O.
 
 Transforms and hidden flags may remain for detached layers, as long as their
 Video Components still exist. Their values remain subject to normal validation.
@@ -464,17 +421,11 @@ exact Rational32 ranges before writing the Workspace. Workspace Version remains
 
 ## Workspace operation errors
 
-Input validation uses `reportInputValidationError(_:)` and an Observation-ignored
-Window callback; it never calls `presentError`. Known validation error types
-reported through `reportError(_:)` are routed to this same callback. Enter,
-Submit, navigation, save, and close preserve invalid drafts.
-
-`WorkspaceStoreService.reportError(_:)` passes runtime operation errors to an
-Observation-ignored closure installed by the owning WorkspaceWindowController.
-Editors and Inspectors report failed commits through this boundary and retain
-unconfirmed input and open editing sheets. Pre-submit validation and candidate
-availability remain in the editing UI. Output-session failures and continuous
-OCR diagnostics retain their existing state and display paths.
+Save validation errors are surfaced by the document framework. Runtime operation
+errors use WorkspaceWindowController's queued error presentation. Editors and
+Inspectors receive the error-reporting boundary explicitly or through the SwiftUI
+error environment. Output-session failures and continuous OCR diagnostics retain
+their existing state and display paths.
 
 The Window Controller presents errors using AppKit `presentError`, targeting
 the Workspace Window or its active editing sheet. It queues further errors
@@ -526,9 +477,9 @@ credentials, including refresh tokens, and is not encrypted by this mechanism.
 The Add Vision sheet selects OCR or Create ML Image Classification and requires
 an explicit Video Component selection. Classification Visions have their own
 Sidebar selection and Inspector with name, Video Component, update interval,
-and ROI settings. Name, input, and interval use direct Bindings. ROI uses four
-local text States and joins Window-wide Apply and local Enter submission; an
-invalid rectangle preserves its draft. Editing is disabled during output.
+and ROI settings. Name, input, interval, and ROI use direct Bindings to the Store.
+An invalid ROI remains in the Store until corrected and is rejected on save.
+Editing is disabled during output.
 The Inspector includes Default and Output Active previews. Classification
 settings are validated and saved in Workspace V4. Model import and classification
 execution are separate work; this UI does not select or compile a model.

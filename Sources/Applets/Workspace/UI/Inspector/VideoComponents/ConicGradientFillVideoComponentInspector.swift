@@ -7,7 +7,7 @@ import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct ConicGradientFillVideoComponentInspector: View {
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
@@ -21,14 +21,14 @@ struct ConicGradientFillVideoComponentInspector: View {
   @State private var endColor: Color
 
   init(
-    storeService: WorkspaceStoreService,
+    stateService: WorkspaceStateService,
     appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
-    self.storeService = storeService
+    self.stateService = stateService
     self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = storeService.workspaceDefinition.videoComponents
+    self.component = stateService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .conicGradientFill(let component) = wrapper.videoComponent else { return nil }
@@ -59,7 +59,7 @@ struct ConicGradientFillVideoComponentInspector: View {
   var body: some View {
     Form {
       VideoComponentProgramLayers(
-        storeService: storeService, appletData: appletData, componentID: videoComponentID)
+        stateService: stateService, appletData: appletData, componentID: videoComponentID)
       Section("Conic Gradient Fill") {
         HStack(alignment: .center, spacing: 4) {
           Rectangle()
@@ -87,7 +87,7 @@ struct ConicGradientFillVideoComponentInspector: View {
       }
     }
     .formStyle(.grouped)
-    .disabled(storeService.isOutputActive || component == nil)
+    .disabled(stateService.isOutputActive || component == nil)
     .onChange(of: name) { updateComponent { $0.displayName = name } }
     .onChange(of: centerX) { updateComponent { $0.centerX = centerX } }
     .onChange(of: centerY) { updateComponent { $0.centerY = centerY } }
@@ -109,8 +109,8 @@ struct ConicGradientFillVideoComponentInspector: View {
   private func updateComponent(
     _ mutation: (inout Ldtx_Workspace_V4_FillConicGradientComponent) -> Void
   ) {
-    guard !storeService.isOutputActive else { return }
-    var definition = storeService.workspaceDefinition
+    guard !stateService.isOutputActive else { return }
+    var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == videoComponentID }
       ),
@@ -118,7 +118,7 @@ struct ConicGradientFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .conicGradientFill(component)
-    storeService.workspaceDefinition = definition
+    stateService.workspaceDefinition = definition
   }
 
   private var gradient: AngularGradient {
@@ -132,10 +132,10 @@ struct ConicGradientFillVideoComponentInspector: View {
 
 #if DEBUG
   #Preview("Default") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7))
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 7
+      stateService: stateService, appletData: WorkspaceAppletData(), videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)
@@ -143,11 +143,11 @@ struct ConicGradientFillVideoComponentInspector: View {
   }
 
   #Preview("Output Active") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .conicGradientFillVideoComponent, internalID: 7),
       isOutputActive: true)
     ConicGradientFillVideoComponentInspector(
-      storeService: storeService, appletData: WorkspaceAppletData(), videoComponentID: 7
+      stateService: stateService, appletData: WorkspaceAppletData(), videoComponentID: 7
     )
     .padding(16)
     .frame(width: 480, height: 640, alignment: .topLeading)

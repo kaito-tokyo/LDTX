@@ -10,7 +10,7 @@ struct WorkspacePhysicalDeviceField: View {
   let title: String
   let internalID: Int64
   let isAudio: Bool
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let deviceRegistry: DeviceRegistryService
   var isEditable = true
@@ -56,7 +56,7 @@ struct WorkspacePhysicalDeviceField: View {
         }
       }
       .pickerStyle(.menu)
-      .disabled(!isEditable || storeService.isOutputActive)
+      .disabled(!isEditable || stateService.isOutputActive)
       .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
       if isAudio, let message = deviceRegistry.errorMessage {
         Text(message).font(.caption).foregroundStyle(.red)
@@ -65,13 +65,13 @@ struct WorkspacePhysicalDeviceField: View {
   }
 
   func applySelection(_ proposed: WorkspacePhysicalDeviceID?) throws {
-    guard isEditable, !storeService.isOutputActive else {
+    guard isEditable, !stateService.isOutputActive else {
       throw WorkspaceSelectionError(message: "Stop output before changing an assignment.")
     }
     let exists =
       isAudio
-      ? storeService.workspaceDefinition.audioDevices.contains { $0.internalID == internalID }
-      : storeService.workspaceDefinition.videoComponents.contains {
+      ? stateService.workspaceDefinition.audioDevices.contains { $0.internalID == internalID }
+      : stateService.workspaceDefinition.videoComponents.contains {
         guard case .vfxSource(let source) = $0.videoComponent else { return false }
         return source.internalID == internalID
       }
