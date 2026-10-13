@@ -44,13 +44,17 @@ Representable dismantling stops UI observation and initiates idempotent shutdown
 its Coordinator also initiates cleanup if released without explicit dismantling.
 
 The Representable Coordinator registers Undo/Redo for content changes, including pending
-model selections. UI selections and runtime results are not undoable document
+model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
+Workspace Undo and Redo menu commands and their keyboard shortcuts are temporarily
+disabled while a Workspace scene is active. Other scenes retain their standard
+commands. Undo registration itself remains enabled for document change tracking.
+UI selections and runtime results are not undoable document
 changes. Reads and confirmation synchronization do not register Undo. Saving
 captures Document's StateService values without requiring a represented editor.
 Removing the UI does not discard editing values or prevent saving. Snapshot
-preparation validates and confirms content in
-Document before writing. Write failure preserves that confirmed content as
-unsaved. Edits made during preparation or writing remain in StateService.
+capture reflects content into Document; Writer validates it before writing.
+Write failure preserves that content as unsaved. Edits made during writing
+remain in StateService.
 
 Reader and Writer use WorkspaceV4Bundle directly as their Snapshot. Reader does
 not attach its source URL to that content. Applying a read replaces only the
@@ -113,7 +117,7 @@ and alerts. VideoPlayer supplies playback controls; marker navigation performs
 exact seeks through the Document-owned model. Inspector commands use the focused
 SwiftUI binding rather than finding a WindowController. Document release stops
 playback; rebuilding the UI does not stop or recreate the playback model.
-Marker additions and replacements register undo actions with the document's
+Marker additions, replacements and deletions register undo actions with the document's
 environment UndoManager. DocumentGroup manages saving and autosaving using
 SwiftUI's standard document commands.
 Markers are auxiliary information without strict conflict detection. A coordinated
@@ -128,9 +132,11 @@ write or reread preserves the document's edits and change state for retry, even 
 some files were already written. Timestamp identity uses millisecond precision and
 reuses the first existing filename in filename order. Other same-time files remain
 untouched. Existing empty notes can be saved; new empty notes are rejected.
-Deletion requires a separate confirmation and immediately removes the file before
-updating memory. Missing files count as deleted. Deletion does not clear pending
-edits and cannot be undone. Active recordings reject writes.
+Deletion requires a separate confirmation and updates only the in-memory marker
+list. Undo restores the removed marker; Redo removes it again. The captured save
+snapshot includes explicit deleted filenames, and Writer removes only those files
+from its coordinated staging copy. Other pending edits and externally added
+markers are retained. Missing files count as deleted. Active recordings reject writes.
 The reader and writer perform URL-based I/O off the main actor. The writer
 requires an existing valid recording package at its destination. DocumentGroup
 prepares and replaces the staging package; the writer updates only marker files.
@@ -216,7 +222,7 @@ Player panes observe its markers through an explicitly supplied weak Document re
 models contain no marker copies or editing callbacks. Marker edits enter through
 the document methods, which register marker editing with the UndoManager supplied
 by DocumentGroup. Lifecycle bookkeeping is excluded from Observation.
-Missing documents disable marker actions. Save synchronization and immediate
+Missing documents disable marker actions. Save synchronization and in-memory
 deletion clear selections whose marker filenames no longer exist.
 
 Physical input assignments are app-wide and keyed only by InputDevice internalID.

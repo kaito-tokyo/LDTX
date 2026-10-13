@@ -6,10 +6,11 @@
 Feature: Persist marker edits
 
   @UCT-1020.1
-  Scenario: Marker additions await Save and deletion is immediate
+  Scenario: Marker additions and deletions await Save
     Given a recording has no saved markers
     When a marker is added, saved, and deleted
-    Then addition remains pending until Save and deletion immediately updates disk without resetting playback
+    Then both addition and deletion remain pending until Save without resetting playback
+    And deletion can be undone and redone before or after saving
 
   @UCT-1020.2
   Scenario: Observers follow marker edits and disk synchronization
@@ -30,10 +31,10 @@ Feature: Persist marker edits
     Then pending edits are retained and successful retry includes the repaired disk-only marker
 
   @UCT-1020.5
-  Scenario: A failed deletion retains a clean marker list
+  Scenario: A failed deletion save retains pending removal
     Given a saved marker file has been replaced by a directory
-    When the user attempts to delete the marker
-    Then deletion reports failure while the marker remains and the Document stays clean
+    When the user deletes the marker and saving fails
+    Then the pending removal is retained and Undo can restore the marker in memory
 
   @UCT-1020.6
   Scenario: Hosted panes observe only their own recording markers

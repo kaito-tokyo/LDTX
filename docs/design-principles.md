@@ -30,6 +30,9 @@ the relevant design or feature documentation instead.
 - The Representable Coordinator registers undo actions for content changes to participate
   in SwiftUI's unsaved-change tracking. StateService must not hide document-change
   callbacks or persistence notifications in its setters.
+  Workspace Undo/Redo menu commands and shortcuts are temporarily disabled;
+  registration remains enabled for change tracking. Other Applets keep their
+  standard Undo/Redo commands.
 
 ## Document content, editing state and runtime state have distinct roles
 

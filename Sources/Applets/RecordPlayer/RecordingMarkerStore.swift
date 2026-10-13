@@ -115,20 +115,24 @@ public struct RecordingMarkerStore: Sendable {
     _ marker: RecordingMarker, filePresenter: (any NSFilePresenter)? = nil
   ) throws {
     try coordinatedWrite(filePresenter: filePresenter) { store in
-      try Self.validateFileName(marker.fileName)
-      let directory = try store.markerDirectory(create: false)
-      let url = directory.appendingPathComponent(marker.fileName)
-      do {
-        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-        guard values.isRegularFile == true, values.isSymbolicLink != true else {
-          throw RecordingMarkerError.invalidMarkerFile
-        }
-        try FileManager.default.removeItem(at: url)
-      } catch let error as CocoaError
-        where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
-      {
-        // Unsaved or already deleted markers have no file to remove.
+      try store.deleteMarkerWithinCoordinatedAccess(fileName: marker.fileName)
+    }
+  }
+
+  private func deleteMarkerWithinCoordinatedAccess(fileName: String) throws {
+    try Self.validateFileName(fileName)
+    let directory = try markerDirectory(create: false)
+    let url = directory.appendingPathComponent(fileName)
+    do {
+      let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+      guard values.isRegularFile == true, values.isSymbolicLink != true else {
+        throw RecordingMarkerError.invalidMarkerFile
       }
+      try FileManager.default.removeItem(at: url)
+    } catch let error as CocoaError
+      where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
+    {
+      // Unsaved or already deleted markers have no file to remove.
     }
   }
 
@@ -143,7 +147,14 @@ public struct RecordingMarkerStore: Sendable {
   }
 
   /// The caller must already hold coordinated write access to the recording.
-  func saveWithinCoordinatedAccess(_ snapshot: [RecordingMarker]) throws -> [RecordingMarker] {
+  func saveWithinCoordinatedAccess(
+    _ snapshot: [RecordingMarker], deleting deletedFileNames: Set<String> = []
+  ) throws -> [RecordingMarker] {
+    // Only explicit deletions are removed; externally added marker files remain intact.
+    let remaining = Set(snapshot.map(\.fileName))
+    for name in deletedFileNames.subtracting(remaining).sorted() {
+      try deleteMarkerWithinCoordinatedAccess(fileName: name)
+    }
     let directory = try markerDirectory(create: true)
     let manager = FileManager.default
     var names: [String: String] = [:]

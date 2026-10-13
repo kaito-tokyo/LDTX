@@ -36,6 +36,7 @@ struct LDTXApp: App {
     .commands {
       VisionProgrammerCommands()
       RecordPlayerCommands()
+      WorkspaceCommands()
     }
   }
 }

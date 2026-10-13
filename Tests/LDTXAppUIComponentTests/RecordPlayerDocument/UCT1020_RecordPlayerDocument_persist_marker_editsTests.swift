@@ -31,6 +31,8 @@ extension AppUIComponentTestSuite {
       #expect(reopened.markers.map(\.note) == ["Saved"])
       try document.deleteMarker(try #require(document.markers.first))
       #expect(document.markers.isEmpty)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Saved"])
+      try await saveRecordingTestDocument(document, to: url)
       #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
     }
 
@@ -115,7 +117,7 @@ extension AppUIComponentTestSuite {
       #expect(document.markers.map(\.note) == ["Pending", "External"])
     }
 
-    @Test("Failed deletion preserves the marker")
+    @Test("Failed deletion save preserves pending removal and can be undone")
     func failedDeletion() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -126,8 +128,67 @@ extension AppUIComponentTestSuite {
       let path = url.appendingPathComponent("Markers").appendingPathComponent(marker.fileName)
       try FileManager.default.removeItem(at: path)
       try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
-      #expect(throws: RecordingMarkerError.invalidMarkerFile) { try document.deleteMarker(marker) }
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      undo.beginUndoGrouping()
+      try document.deleteMarker(marker, undoManager: undo)
+      undo.endUndoGrouping()
+      #expect(document.markers.isEmpty)
+      await #expect(throws: RecordingMarkerError.invalidMarkerFile) {
+        try await saveRecordingTestDocument(document, to: url)
+      }
+      #expect(document.markers.isEmpty)
+      undo.undo()
       #expect(document.markers == [marker])
+      undo.removeAllActions()
+    }
+
+    @Test("Deletion participates in edit Undo and Redo before and after saving")
+    func deletionUndoRedoAndPersistence() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try await openRecordingTestDocument(url)
+      try document.createMarker(note: "Original", at: .zero)
+      try await saveRecordingTestDocument(document, to: url)
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      defer { undo.removeAllActions() }
+      undo.beginUndoGrouping()
+      try document.createMarker(note: "Updated", at: .zero, undoManager: undo)
+      undo.endUndoGrouping()
+      undo.beginUndoGrouping()
+      try document.deleteMarker(try #require(document.markers.first), undoManager: undo)
+      undo.endUndoGrouping()
+      #expect(document.markers.isEmpty)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Original"])
+      undo.undo()
+      #expect(document.markers.map(\.note) == ["Updated"])
+      undo.undo()
+      #expect(document.markers.map(\.note) == ["Original"])
+      undo.redo()
+      #expect(document.markers.map(\.note) == ["Updated"])
+      undo.redo()
+      #expect(document.markers.isEmpty)
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
+      undo.undo()
+      #expect(document.markers.map(\.note) == ["Updated"])
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Updated"])
+    }
+
+    @Test("Saving a deletion preserves unrelated external markers")
+    func deletionPreservesExternalMarker() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try await openRecordingTestDocument(url)
+      try document.createMarker(note: "Delete", at: .zero)
+      try await saveRecordingTestDocument(document, to: url)
+      try document.deleteMarker(try #require(document.markers.first))
+      _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
+        at: CMTime(seconds: 1, preferredTimescale: 1000), note: "External")
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["External"])
     }
   }
 }

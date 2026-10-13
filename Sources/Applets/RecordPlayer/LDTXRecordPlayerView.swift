@@ -342,7 +342,7 @@ public struct LDTXRecordPlayerView: View {
       Button("Delete", role: .destructive) { deleteMarker(marker) }
       Button("Cancel", role: .cancel) {}
     } message: { _ in
-      Text("This marker will be deleted immediately. This action cannot be undone.")
+      Text("You can undo this deletion. The marker file is removed when the document is saved.")
     }
   }
 
@@ -359,7 +359,7 @@ public struct LDTXRecordPlayerView: View {
     guard canModifyMarkers else { return }
     guard let document else { return }
     do {
-      try document.deleteMarker(marker)
+      try document.deleteMarker(marker, undoManager: undoManager)
     } catch {
       presentMarkerFileError(title: "Marker Could Not Be Deleted", error: error)
       return

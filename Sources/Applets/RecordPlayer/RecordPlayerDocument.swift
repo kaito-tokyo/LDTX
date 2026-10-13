@@ -21,6 +21,7 @@ public final class RecordPlayerDocument: Document {
   }()
 
   public private(set) var markers: [RecordingMarker] = []
+  private var deletedMarkerFileNames: Set<String> = []
   @ObservationIgnored private let configuration: URLDocumentConfiguration?
   private var initialURL: URL?
   @ObservationIgnored private var markerReadError: (any Error)?
@@ -67,7 +68,9 @@ public final class RecordPlayerDocument: Document {
       markers = incoming.values.sorted { CMTimeCompare($0.time, $1.time) < 0 }
     } else {
       markers = snapshot.markers
+      deletedMarkerFileNames.removeAll()
     }
+    deletedMarkerFileNames.subtract(markers.map(\.fileName))
     initialURL = snapshot.url
     markerReadError = snapshot.markerReadError
     hasReadContents = true
@@ -79,7 +82,8 @@ public final class RecordPlayerDocument: Document {
     }
     if let markerReadError { throw markerReadError }
     guard let fileURL else { throw RecordingMarkerError.unsupportedOperation }
-    return Writer.Snapshot(url: fileURL, markers: markers)
+    return Writer.Snapshot(
+      url: fileURL, markers: markers, deletedMarkerFileNames: deletedMarkerFileNames)
   }
 
   public func createMarker(note: String, at time: CMTime, undoManager: UndoManager? = nil) throws {
@@ -97,22 +101,31 @@ public final class RecordPlayerDocument: Document {
     replaceMarkers(updated, undoManager: undoManager)
   }
 
-  private func replaceMarkers(_ updated: [RecordingMarker], undoManager: UndoManager?) {
+  private func replaceMarkers(
+    _ updated: [RecordingMarker], undoManager: UndoManager?,
+    actionName: String = String(localized: "Edit Marker")
+  ) {
     let previous = markers
     undoManager?.registerUndo(withTarget: self) { target in
-      MainActor.assumeIsolated { target.replaceMarkers(previous, undoManager: undoManager) }
+      MainActor.assumeIsolated {
+        target.replaceMarkers(previous, undoManager: undoManager, actionName: actionName)
+      }
     }
-    undoManager?.setActionName(String(localized: "Edit Marker"))
+    undoManager?.setActionName(actionName)
+    let remaining = Set(updated.map(\.fileName))
+    deletedMarkerFileNames.formUnion(Set(previous.map(\.fileName)).subtracting(remaining))
+    deletedMarkerFileNames.subtract(remaining)
     markers = updated
   }
 
-  public func deleteMarker(_ marker: RecordingMarker) throws {
-    guard let fileURL else { throw RecordingMarkerError.unsupportedOperation }
+  public func deleteMarker(_ marker: RecordingMarker, undoManager: UndoManager? = nil) throws {
+    guard canModifyMarkers else { throw RecordingMarkerError.unsupportedOperation }
     guard let index = markers.firstIndex(of: marker) else {
       throw RecordingMarkerError.invalidMarkerFile
     }
-    try RecordingMarkerStore(recordingDirectoryURL: fileURL).deleteMarker(marker)
-    markers.remove(at: index)
+    var updated = markers
+    updated.remove(at: index)
+    replaceMarkers(updated, undoManager: undoManager, actionName: String(localized: "Delete Marker"))
   }
 
   public struct Reader: DocumentReader {
@@ -145,6 +158,7 @@ public final class RecordPlayerDocument: Document {
     public struct Snapshot: Sendable {
       let url: URL
       let markers: [RecordingMarker]
+      let deletedMarkerFileNames: Set<String>
     }
 
     @concurrent public func write(
@@ -155,7 +169,8 @@ public final class RecordPlayerDocument: Document {
       _ = try RecordingPackage(contentsOf: destination)
       let progress = progress.start(totalCount: 1)
       _ = try RecordingMarkerStore(recordingDirectoryURL: destination)
-        .saveWithinCoordinatedAccess(snapshot.markers)
+        .saveWithinCoordinatedAccess(
+          snapshot.markers, deleting: snapshot.deletedMarkerFileNames)
       progress.complete(count: 1)
     }
   }

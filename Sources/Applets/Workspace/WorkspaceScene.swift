@@ -10,9 +10,40 @@ public struct WorkspaceScene: Scene {
   public var body: some Scene {
     DocumentGroup { (document: WorkspaceDocument) in
       WorkspaceViewControllerRepresentation(document: document)
+        .focusedSceneValue(\.workspaceUndoDisabled, true)
     } makeDocument: { configuration, _ in
       WorkspaceDocument(configuration: configuration)
     }
     .windowToolbarStyle(.unified)
+  }
+}
+
+private struct WorkspaceUndoDisabledKey: FocusedValueKey {
+  typealias Value = Bool
+}
+
+extension FocusedValues {
+  var workspaceUndoDisabled: Bool? {
+    get { self[WorkspaceUndoDisabledKey.self] }
+    set { self[WorkspaceUndoDisabledKey.self] = newValue }
+  }
+}
+
+public struct WorkspaceCommands: Commands {
+  @FocusedValue(\.workspaceUndoDisabled) private var isUndoDisabled
+
+  public init() {}
+
+  public var body: some Commands {
+    if isUndoDisabled == true {
+      CommandGroup(replacing: .undoRedo) {
+        Button("Undo") {}
+          .keyboardShortcut("z", modifiers: .command)
+          .disabled(true)
+        Button("Redo") {}
+          .keyboardShortcut("z", modifiers: [.command, .shift])
+          .disabled(true)
+      }
+    }
   }
 }
