@@ -36,7 +36,7 @@ public struct VisionProgrammerScene: Scene {
   }
 
   public var body: some Scene {
-    WindowGroup("Vision Programmer", id: Self.id) {
+    Window("Vision Programmer", id: Self.id) {
       content
     }
     .defaultSize(width: 700, height: 500)

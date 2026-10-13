@@ -24,6 +24,9 @@ creation, opening, standard Save and Close commands, autosaving, restoration,
 and the document window. New presents an untitled editable Workspace; saving
 chooses its location through the standard document flow. Info.plist registers
 its content type without an NSDocumentClass.
+The external ID is assigned before the first save. Output controls stay disabled
+until a document location exists, and the output controller also requires a
+persisted runtime snapshot before starting.
 
 Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
 state, and file persistence. WorkspaceWindowController owns the runtime projection

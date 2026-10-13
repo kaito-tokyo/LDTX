@@ -44,6 +44,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
+  public var hasPersistedWorkspace: Bool { adoptedRuntimeWorkspace != nil }
   var runtimeWorkspace: WorkspaceV4Bundle {
     let live = runtimeSnapshot()
     guard var adopted = adoptedRuntimeWorkspace else { return live }

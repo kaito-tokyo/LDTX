@@ -14,6 +14,38 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {
+    @Test("New Workspaces can be created and edited without saving")
+    func unsavedCreationAndEditing() async throws {
+      let first = WorkspaceDocument()
+      let second = WorkspaceDocument()
+      let firstID = try #require(first.stateService.externalID.flatMap(UUID.init(uuidString:)))
+      let secondID = try #require(second.stateService.externalID.flatMap(UUID.init(uuidString:)))
+      #expect(firstID != secondID)
+      #expect(firstID.uuid.6 >> 4 == 7)
+      let coordinator = WorkspaceViewControllerRepresentation(document: first).makeCoordinator()
+      let state = first.stateService
+      state.workspaceDefinition.displayName = "Draft"
+      state.workspaceDefinition.programs = [.with {
+        $0.internalID = 7; $0.displayName = "Program"
+      }]
+      coordinator.recordEdits()
+      try coordinator.windowController.selectProgram(internalID: 7)
+      let localURL = try #require(state.localStateURL)
+      #expect(coordinator.windowController.appletData.state(for: localURL)
+        .selectedProgramInternalID == 7)
+      #expect(first.fileURL == nil)
+      #expect(first.workspaceSnapshot == nil)
+      #expect(state.workspaceDefinition.programs.count == 1)
+      #expect(state.externalID == firstID.uuidString.lowercased())
+      #expect(!coordinator.windowController.persistenceCoordinator.hasPersistedWorkspace)
+      await #expect(throws: (any Error).self) {
+        try await coordinator.windowController.startOutput()
+      }
+      #expect(state.recordingState == .idle)
+      #expect(state.workspaceDefinition.displayName == "Draft")
+      await coordinator.shutdown()
+    }
+
     @Test("Saved documents round-trip all three protobuf documents")
     func roundTrip() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

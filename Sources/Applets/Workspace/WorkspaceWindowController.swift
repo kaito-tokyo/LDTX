@@ -466,12 +466,16 @@ public final class WorkspaceWindowController: NSWindowController,
           NSLocalizedDescriptionKey: "Program selection is unavailable during an output transition."
         ])
     }
-    guard windowRuntime.definition.programs.contains(where: { $0.internalID == internalID }),
+    guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == internalID }),
       let url = document.fileURL ?? stateService.localStateURL
     else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
+    }
+    if !persistenceCoordinator.hasPersistedWorkspace {
+      appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+      return
     }
     for target in [WorkspaceCanvasTarget.landscape, .portrait] {
       _ = try windowRuntime.runtimeProjection(programInternalID: internalID, target: target)
@@ -485,7 +489,11 @@ public final class WorkspaceWindowController: NSWindowController,
 
   public func startOutput() async throws {
     guard recordingSession.state.canStart else { return }
-    guard workspaceDocument?.fileURL != nil else { throw CocoaError(.fileReadNoSuchFile) }
+    guard workspaceDocument?.fileURL != nil, persistenceCoordinator.hasPersistedWorkspace else {
+      throw NSError(
+        domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Save the Workspace before starting output."])
+    }
     windowRuntime.updateRuntimes()
     await recordingSession.start()
   }

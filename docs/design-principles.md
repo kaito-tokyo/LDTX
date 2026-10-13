@@ -65,6 +65,11 @@ the relevant design or feature documentation instead.
 
 ## Definition changes reach the runtime only after persistence
 
+- New Workspaces open and accept edits before their first save. Their external
+  IDs are allocated at creation, independently of a package location. Output
+  requires a saved document URL and a successfully persisted runtime snapshot;
+  creating a snapshot or completing a staging write alone does not enable it.
+
 - This rule applies across the entire Workspace runtime, including
   ProgramRuntime and Vision inference. Changes to the Store's
   `workspaceDefinition` must not reach the runtime until they have been

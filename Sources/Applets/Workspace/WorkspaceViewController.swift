@@ -368,7 +368,7 @@ public final class WorkspaceViewController: NSViewController {
 
   @objc func toggleOutput() {
     let state = stateService.recordingState
-    guard state.canStart || state == .recording else { return }
+    guard (state.canStart && document?.fileURL != nil) || state == .recording else { return }
     Task {
       if state == .recording {
         await runtimeActions()?.pauseOutput()
@@ -397,7 +397,8 @@ extension WorkspaceViewController: NSToolbarItemValidation {
     case .captureScreenshots: true
     case .stopOutput: stateService.recordingState.canStop
     case .startPauseOutput:
-      stateService.recordingState.canStart || stateService.recordingState == .recording
+      (stateService.recordingState.canStart && document?.fileURL != nil)
+        || stateService.recordingState == .recording
     case .runInference:
       inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil
     default: false

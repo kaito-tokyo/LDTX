@@ -299,6 +299,26 @@ extension AppUIComponentTestSuite {
         toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator } === separatorItem)
     }
 
+    @Test("An unsaved Workspace disables output without disabling editing")
+    func unsavedOutputIsUnavailable() async throws {
+      let document = WorkspaceDocument()
+      let dispatcher = ToolbarDispatcher()
+      let window = makeWorkspaceTestWindow(
+        stateService: document.stateService, dispatcher: dispatcher, documentContext: document)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let toggle = try #require(window.toolbar?.items.first {
+        $0.itemIdentifier.rawValue == "workspace.startPauseOutput"
+      })
+      #expect(!window.validateToolbarItem(toggle))
+      window.toggleOutput()
+      await drainWorkspaceTestTasks()
+      #expect(dispatcher.actions.isEmpty)
+      document.stateService.workspaceDefinition.displayName = "Still editable"
+      #expect(document.stateService.workspaceDefinition.displayName == "Still editable")
+      #expect(document.fileURL == nil)
+    }
+
     @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
     func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
       _ = NSApplication.shared

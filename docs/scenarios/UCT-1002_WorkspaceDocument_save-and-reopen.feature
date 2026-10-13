@@ -24,10 +24,12 @@ Feature: Save and reopen
     Then the explicit Workspace name is preserved
 
   @UCT-1002.4 @WorkspaceWindowController
-  Scenario: Creation shows windows only after saving succeeds
-    Given a request to create a new Workspace package
-    When initial saving succeeds or fails
-    Then windows appear only after successful saving and failed creation releases the Document
+  Scenario: Creation opens an unsaved editable Workspace
+    Given a request to create a new Workspace
+    When the Document and its window are created
+    Then editing is available without choosing a save destination
+    And the Workspace has a unique external ID before saving
+    And output remains unavailable until content is successfully saved
 
   @UCT-1002.5 @WorkspaceWindowController
   Scenario: Autosave operations are disabled and rejected
