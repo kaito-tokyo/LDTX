@@ -4,6 +4,7 @@
 
 import AppKit
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import Observation
 import SwiftUI
 

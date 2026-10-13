@@ -198,32 +198,28 @@ public enum WorkspaceV4IntegrityValidator {
     wrapper.displayName ?? ""
   }
 
-  /// Validates both documents before they are persisted or used by a runtime.
-  public static func validate(_ workspace: WorkspaceV4Bundle) throws {
-    if let issue = validationIssues(in: workspace).first { throw issue.error }
-  }
-
-  public static func validationIssues(in workspace: WorkspaceV4Bundle)
-    -> [WorkspaceV4ValidationIssue]
-  {
-    let definition = workspace.definition
+  /// Validates Definition and Preferences before persistence or runtime use.
+  public static func validationIssues(
+    in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4
+  ) -> [WorkspaceV4ValidationIssue] {
     var issues = validationIssues(in: definition)
     let audioInputIDs = Set(definition.audioDevices.map(\.internalID))
     let videoComponentIDs = Set(definition.videoComponents.compactMap { try? videoComponentID($0) })
-    for id in workspace.preferences.audioChannelGainsDecibels.keys.sorted()
+    for id in preferences.audioChannelGainsDecibels.keys.sorted()
     where !audioInputIDs.contains(id) {
       issues.append(
         .init(context: "Audio Mix", error: WorkspaceV4IntegrityError.missingAudioInputDevice(id)))
     }
-    for (id, gain) in workspace.preferences.audioChannelGainsDecibels.sorted(by: { $0.key < $1.key }
+    for (id, gain) in preferences.audioChannelGainsDecibels.sorted(by: { $0.key < $1.key }
     ) {
       do { try validateRationals([gain]) } catch {
         issues.append(.init(context: "Audio device \(id)", error: error))
       }
     }
     for (canvas, preferences) in [
-      ("Landscape", workspace.preferences.landscapeProgramPreferences),
-      ("Portrait", workspace.preferences.portraitProgramPreferences),
+      ("Landscape", preferences.landscapeProgramPreferences),
+      ("Portrait", preferences.portraitProgramPreferences),
     ] {
       for programID in preferences.keys.sorted() {
         guard let program = definition.programs.first(where: { $0.internalID == programID }) else {

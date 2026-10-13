@@ -3,6 +3,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 
 /// The document information needed by Workspace UI, independent of its persistence API.
 @MainActor

@@ -7,6 +7,7 @@ import LDTXCapture
 import LDTXInternalProtocols
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import LDTXVision
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore

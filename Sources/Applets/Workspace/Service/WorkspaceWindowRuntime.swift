@@ -10,6 +10,7 @@ import LDTXBackgroundSegmentation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import LDTXProtosMacOSExtra
 import LDTXTaskQueue
 import LDTXVision

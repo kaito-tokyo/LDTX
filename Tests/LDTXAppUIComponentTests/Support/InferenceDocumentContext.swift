@@ -3,6 +3,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import LDTXWorkspaceAppletUI
 import Observation
 

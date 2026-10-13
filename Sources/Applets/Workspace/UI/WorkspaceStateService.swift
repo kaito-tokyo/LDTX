@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import LDTXWorkspaceAppletModel
 import Observation
 

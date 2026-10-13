@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 
 public struct WorkspaceV4Bundle: Equatable, Sendable {
   public var models: [String: Data]
@@ -29,5 +30,18 @@ public struct WorkspaceV4Bundle: Equatable, Sendable {
     self.preferences = preferences
     self.outputSettingsExternalID = outputSettingsExternalID
     self.outputSettings = outputSettings
+  }
+}
+
+
+extension WorkspaceV4IntegrityValidator {
+  public static func validate(_ workspace: WorkspaceV4Bundle) throws {
+    if let issue = validationIssues(in: workspace).first { throw issue.error }
+  }
+
+  public static func validationIssues(in workspace: WorkspaceV4Bundle)
+    -> [WorkspaceV4ValidationIssue]
+  {
+    validationIssues(in: workspace.definition, preferences: workspace.preferences)
   }
 }

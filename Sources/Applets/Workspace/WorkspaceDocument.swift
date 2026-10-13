@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
@@ -145,10 +146,7 @@ public final class WorkspaceDocument: Document, WorkspaceDocumentContext {
 
   public struct Writer: DocumentWriter {
     let receipts: OSAllocatedUnfairLock<[WriteReceipt]>
-    public struct Snapshot: Sendable, Equatable {
-      let workspace: WorkspaceV4Bundle
-      let modelURLs: [Int64: URL?]
-    }
+
     @concurrent public func write(
       snapshot: sending Snapshot, to destination: sending URL,
       previous: sending Snapshot?, progress: consuming Subprogress
@@ -166,5 +164,10 @@ public final class WorkspaceDocument: Document, WorkspaceDocumentContext {
       receipts.withLock { $0.append(receipt) }
       progress.complete(count: 1)
     }
+  }
+
+  public struct Snapshot: Sendable, Equatable {
+    let workspace: WorkspaceV4Bundle
+    let modelURLs: [Int64: URL?]
   }
 }

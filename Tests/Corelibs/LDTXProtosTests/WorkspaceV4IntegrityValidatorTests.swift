@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Workspace V4 integrity validation")
