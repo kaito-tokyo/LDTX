@@ -90,6 +90,10 @@ the relevant design or feature documentation instead.
   are validated on save and are not passed to inference before persistence.
 - `workspacePreferences` may reach the runtime before they are written to disk,
   subject to the runtime's supported operations and output restrictions.
+- RecordingSession captures OutputSettings before entering the starting state.
+  Service construction, subscriptions, and session reconfiguration use that
+  snapshot until cleanup, even if Document or StateService changes meanwhile.
+  The next start captures new settings; live mix preferences remain independent.
 
 ## Vision interval execution is best effort
 

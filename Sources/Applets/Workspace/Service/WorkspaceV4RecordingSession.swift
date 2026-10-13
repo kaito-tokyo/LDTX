@@ -43,6 +43,7 @@ public final class WorkspaceV4RecordingSession {
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
+  private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive")
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
@@ -107,6 +108,7 @@ public final class WorkspaceV4RecordingSession {
       return
     }
 
+    sessionOutputSettings = output
     state = .starting
     sleepInhibitor.start()
     let baseDirectory = outputDirectory()
@@ -369,7 +371,7 @@ public final class WorkspaceV4RecordingSession {
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub
   ) {
-    let output = windowRuntime.workspace.outputSettings
+    guard let output = sessionOutputSettings else { return }
     switch output.youtubeSettings.ingestMode {
     case .unspecified, .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
@@ -485,6 +487,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func clearSessionReferences() {
+    sessionOutputSettings = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
     activeSession = nil
