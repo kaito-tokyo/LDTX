@@ -13,6 +13,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   @Binding var modelURL: URL?
   var inferenceResult: String? = nil
   var inferenceFailure: String? = nil
+  var modelPreparationGeneration: UInt64 = 0
 
   @Environment(\.outputActive) var outputActive
   @State private var modelInformation: VisionImageClassifierService.ModelInformation?
@@ -69,18 +70,22 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
     }
     .formStyle(.grouped)
-    .task(id: ModelInformationRequest(url: modelURL, noCompile: outputActive)) {
+    .task(id: ModelInformationRequest(url: modelURL, noCompile: outputActive,
+      preparationGeneration: modelPreparationGeneration)) {
       modelInformation = nil
       modelInformationFailure = nil
       guard let url = modelURL else { return }
       let noCompile = outputActive
+      let generation = modelPreparationGeneration
       do {
         let information = try await VisionImageClassifierService.readModelInformation(
           at: url)
-        guard modelURL == url, outputActive == noCompile else { return }
+        guard modelURL == url, outputActive == noCompile,
+          modelPreparationGeneration == generation else { return }
         modelInformation = information
       } catch {
-        guard modelURL == url, outputActive == noCompile else { return }
+        guard modelURL == url, outputActive == noCompile,
+          modelPreparationGeneration == generation else { return }
         modelInformationFailure = error.localizedDescription
       }
     }
@@ -89,6 +94,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   private struct ModelInformationRequest: Equatable {
     let url: URL?
     let noCompile: Bool
+    let preparationGeneration: UInt64
   }
 
   private func cropAndScaleLabel(

@@ -122,13 +122,22 @@ public struct RecordingMarkerStore: Sendable {
   private func deleteMarkerWithinCoordinatedAccess(fileName: String) throws {
     try Self.validateFileName(fileName)
     let directory = try markerDirectory(create: false)
-    let url = directory.appendingPathComponent(fileName)
+    guard let time = Self.time(fromMarkerFileName: fileName) else {
+      throw RecordingMarkerError.invalidMarkerFile
+    }
+    let canonical = try Self.fileName(for: time)
     do {
-      let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-      guard values.isRegularFile == true, values.isSymbolicLink != true else {
-        throw RecordingMarkerError.invalidMarkerFile
+      for url in try FileManager.default.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) {
+        guard url.pathExtension.lowercased() == "txt",
+          let storedTime = Self.time(fromMarkerFileName: url.lastPathComponent),
+          try Self.fileName(for: storedTime) == canonical else { continue }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else {
+          throw RecordingMarkerError.invalidMarkerFile
+        }
+        try FileManager.default.removeItem(at: url)
       }
-      try FileManager.default.removeItem(at: url)
     } catch let error as CocoaError
       where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
     {
@@ -151,8 +160,11 @@ public struct RecordingMarkerStore: Sendable {
     _ snapshot: [RecordingMarker], deleting deletedFileNames: Set<String> = []
   ) throws -> [RecordingMarker] {
     // Only explicit deletions are removed; externally added marker files remain intact.
-    let remaining = Set(snapshot.map(\.fileName))
-    for name in deletedFileNames.subtracting(remaining).sorted() {
+    let remaining = Set(try snapshot.map { try Self.fileName(for: $0.time) })
+    for name in deletedFileNames.sorted() {
+      try Self.validateFileName(name)
+      guard let time = Self.time(fromMarkerFileName: name),
+        !remaining.contains(try Self.fileName(for: time)) else { continue }
       try deleteMarkerWithinCoordinatedAccess(fileName: name)
     }
     let directory = try markerDirectory(create: true)

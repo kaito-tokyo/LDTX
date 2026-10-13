@@ -349,6 +349,9 @@ public final class WorkspaceWindowController: NSWindowController,
     }
     var context = windowRuntime.visionFeatureContext
     context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
+    context.reportModelPrepared = { [weak stateService] _ in
+      stateService?.modelPreparationGeneration &+= 1
+    }
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
     context.reportResult = { [weak stateService] id, output in
@@ -412,7 +415,18 @@ public final class WorkspaceWindowController: NSWindowController,
   }
 
   private static let activeControllers = NSHashTable<WorkspaceWindowController>.weakObjects()
-  private static var pendingShutdownFailures: [String] = []
+  private let shutdownID = UUID()
+  private static var pendingShutdownFailures: [UUID: String] = [:]
+  private static var isTerminating = false
+
+  func queueShutdownFailure(_ message: String) {
+    Self.pendingShutdownFailures[shutdownID] = message
+  }
+
+  func takeShutdownFailureForPresentation() -> String? {
+    guard !Self.isTerminating else { return nil }
+    return Self.pendingShutdownFailures.removeValue(forKey: shutdownID)
+  }
 
   static var hasPendingApplicationShutdown: Bool {
     !activeControllers.allObjects.isEmpty || !pendingShutdownFailures.isEmpty
@@ -420,13 +434,15 @@ public final class WorkspaceWindowController: NSWindowController,
 
   /// Includes closed windows whose idempotent shutdown is still running.
   static func shutdownForApplicationTermination() async -> [String] {
+    isTerminating = true
+    defer { isTerminating = false }
     let controllers = activeControllers.allObjects
     await withTaskGroup(of: Void.self) { group in
       for controller in controllers {
         group.addTask { await controller.shutdown() }
       }
     }
-    let failures = pendingShutdownFailures
+    let failures = Array(pendingShutdownFailures.values)
     pendingShutdownFailures.removeAll()
     return failures
   }
@@ -553,7 +569,7 @@ public final class WorkspaceWindowController: NSWindowController,
       await audioCoordinator.stopAndReset()
       lowFrequencyUpdateRegistry.shutdown()
       windowRuntime.shutdown()
-      if let shutdownFailureMessage { Self.pendingShutdownFailures.append(shutdownFailureMessage) }
+      if let shutdownFailureMessage { queueShutdownFailure(shutdownFailureMessage) }
       Self.activeControllers.remove(self)
       Self.updateRecordingDockBadge()
     }

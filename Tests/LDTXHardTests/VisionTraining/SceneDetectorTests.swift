@@ -138,6 +138,7 @@ struct SceneDetectorIntegrationTestSuite {
     }
     let image = try #require(CIImage(contentsOf: imageURL))
     var results: [(Int64, String)] = []
+    var preparedModelIDs: [Int64] = []
     var failures: [Error] = []
     var archived: [Int64] = []
     var holdFrame = false
@@ -149,6 +150,7 @@ struct SceneDetectorIntegrationTestSuite {
       reportFailure: { _, error in failures.append(error) },
       archiveResult: { id, _, _ in archived.append(id) })
     context.sceneDetector = { $0 == 5 ? classifier : nil }
+    context.reportModelPrepared = { preparedModelIDs.append($0) }
     context.modelURL = { $0 == 7 ? modelURL : nil }
     context.frameForSceneDetector = { _ in
       if holdFrame { await withCheckedContinuation { frameContinuation = $0 } }
@@ -157,6 +159,7 @@ struct SceneDetectorIntegrationTestSuite {
     feature.synchronize(visions: wrappers(), context: context)
     try await waitUntil { prepared }
     await feature.prepareForOutput()
+    #expect(preparedModelIDs == [7])
     let loadedService = await feature.classifierService(modelID: 7, url: modelURL)
     context.isOutputActive = { true }
     feature.synchronize(visions: wrappers(), context: context)
@@ -175,6 +178,7 @@ struct SceneDetectorIntegrationTestSuite {
     #expect(archived == [5, 3])
     #expect(loads == 1)
     #expect(failures.isEmpty)
+    #expect(preparedModelIDs == [7])
     time = 1000
     holdFrame = true
     for _ in 0..<10 { await Task.yield() }

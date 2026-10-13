@@ -71,6 +71,30 @@ extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace termination lifecycle", .serialized)
   struct WorkspaceTerminationIntegrationTestSuite {
+    @Test func acknowledgingOneCloseDoesNotConsumeAnotherWindowsFailure() async {
+      let first = WorkspaceWindowController(document: WorkspaceDocument())
+      let second = WorkspaceWindowController(document: WorkspaceDocument())
+      await first.shutdown()
+      await second.shutdown()
+      first.queueShutdownFailure("Recording failed")
+      second.queueShutdownFailure("Recording failed")
+      #expect(first.takeShutdownFailureForPresentation() == "Recording failed")
+      #expect(await WorkspaceWindowController.shutdownForApplicationTermination() == ["Recording failed"])
+      #expect(second.takeShutdownFailureForPresentation() == nil)
+      #expect(await WorkspaceWindowController.shutdownForApplicationTermination().isEmpty)
+    }
+
+    @Test func ordinaryCloseAcknowledgesItsPresentedFailure() async {
+      let controller = WorkspaceWindowController(document: WorkspaceDocument())
+      await controller.shutdown()
+      controller.queueShutdownFailure("Recording failed")
+      #expect(WorkspaceWindowController.hasPendingApplicationShutdown)
+      #expect(controller.takeShutdownFailureForPresentation() == "Recording failed")
+      #expect(controller.takeShutdownFailureForPresentation() == nil)
+      #expect(!WorkspaceWindowController.hasPendingApplicationShutdown)
+      #expect(await WorkspaceWindowController.shutdownForApplicationTermination().isEmpty)
+    }
+
     @Test func allControllersIncludingExistingShutdownAreDrained() async {
       let first = WorkspaceWindowController(document: WorkspaceDocument())
       let second = WorkspaceWindowController(document: WorkspaceDocument())

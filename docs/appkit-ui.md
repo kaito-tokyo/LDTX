@@ -49,6 +49,8 @@ shutdown is running, and replies only after all controllers finish. This include
 controllers whose windows have already closed. Shutdown failures are retained
 until they can be presented before cancelling termination; another Quit may then
 proceed. Standard document save confirmation remains owned by SwiftUI.
+The ordinary-close presentation acknowledges its queued shutdown failure. If Quit
+is already waiting for shutdown, termination owns that presentation instead.
 
 The Representable Coordinator registers Undo/Redo for content changes, including pending
 model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
@@ -135,6 +137,8 @@ Deletion requests carry in-memory tokens. The Writer compares them with SwiftUI'
 previous successfully written snapshot, so an acknowledged deletion is not
 replayed against an externally recreated filename. Undo followed by Redo creates
 a fresh deletion token; a failed write does not acknowledge a token.
+Deletions resolve disk filenames by canonical timestamp, so filename reconciliation
+during a previous save does not leave a marker behind.
 Subsequent reader snapshots update the observable marker
 list while preserving edits made since the previous snapshot. Disk-only
 markers and unknown files remain intact; media and required metadata are untouched.

@@ -32,6 +32,7 @@ public final class WorkspaceStateService {
   public var outputFailureMessage: String?
   public var visionResults: [Int64: String] = [:]
   public var visionFailureMessages: [Int64: String] = [:]
+  public var modelPreparationGeneration: UInt64 = 0
 
   public var editingWorkspace: WorkspaceV4Bundle {
     WorkspaceV4Bundle(

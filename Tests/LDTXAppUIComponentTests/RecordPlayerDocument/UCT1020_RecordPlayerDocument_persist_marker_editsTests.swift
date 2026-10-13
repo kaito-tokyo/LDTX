@@ -12,6 +12,28 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1020: URL Document marker persistence", .serialized)
   @MainActor
   struct UCT1020RecordPlayerDocumentIntegrationTestSuite {
+    @Test("Deleting a marker resolves the filename adopted during an earlier save")
+    func deletesReconciledDiskFilename() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try await openRecordingTestDocument(url)
+      try document.createMarker(note: "Local", at: .zero)
+      let staleName = try #require(document.markers.first).fileName
+      let directory = url.appendingPathComponent("Markers")
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      let diskName = "00-00-00.000.TXT"
+      try Data("External\n".utf8).write(to: directory.appendingPathComponent(diskName))
+      _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
+        at: CMTime(value: 1, timescale: 1), note: "Unrelated")
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(document.markers.first?.fileName == staleName)
+      #expect(try String(contentsOf: directory.appendingPathComponent(diskName), encoding: .utf8) == "Local\n")
+      try document.deleteMarker(try #require(document.markers.first))
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent(diskName).path))
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Unrelated"])
+    }
+
     @Test("Successful deletion is acknowledged and does not delete an external recreation")
     func committedDeletionDoesNotRepeat() async throws {
       let url = try makeRecordingTestPackage()

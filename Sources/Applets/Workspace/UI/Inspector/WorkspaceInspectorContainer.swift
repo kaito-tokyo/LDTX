@@ -167,7 +167,8 @@ public struct WorkspaceInspectorContainer: View {
             get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
             set: { stateService.setVisionModelURL($0, for: internalID) }),
           inferenceResult: stateService.visionResults[internalID],
-          inferenceFailure: stateService.visionFailureMessages[internalID]
+          inferenceFailure: stateService.visionFailureMessages[internalID],
+          modelPreparationGeneration: stateService.modelPreparationGeneration
         )
         .environment(\.outputActive, stateService.isOutputActive)
       } else {

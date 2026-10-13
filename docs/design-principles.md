@@ -125,6 +125,8 @@ the relevant design or feature documentation instead.
 - Inspecting a selected model's information only queries an existing compiled
   asset; it does not compile or load an inference model. Information becomes
   available after normal model preparation.
+  Preparation completion notifies the editing UI to retry its metadata query,
+  even when the model URL and output state remain unchanged.
 
 ## Preferences are permissive input
 

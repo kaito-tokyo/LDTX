@@ -171,6 +171,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           let service = try await loadClassifier(url, noCompile)
           guard !stopped, generation == preparationGeneration else { return }
           models[key] = service
+          self.context?.reportModelPrepared(key.id)
         } catch {
           guard !stopped, generation == preparationGeneration else { return }
           modelFailures[key] = error

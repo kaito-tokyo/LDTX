@@ -141,7 +141,7 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
     func shutdown() async {
       disconnect()
       await windowController.shutdown()
-      if let message = windowController.shutdownFailureMessage {
+      if let message = windowController.takeShutdownFailureForPresentation() {
         NSApplication.shared.presentError(NSError(
           domain: "tokyo.kaito.ldtx.WorkspaceShutdown", code: 1,
           userInfo: [NSLocalizedDescriptionKey: message]))
