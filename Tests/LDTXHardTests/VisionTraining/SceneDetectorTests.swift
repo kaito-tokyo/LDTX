@@ -147,6 +147,13 @@ struct SceneDetectorIntegrationTestSuite {
     }
     feature.synchronize(visions: wrappers(), context: context)
     try await waitUntil { prepared }
+    await feature.prepareForOutput()
+    let loadedService = await feature.classifierService(modelID: 7, url: modelURL)
+    context.isOutputActive = { true }
+    feature.synchronize(visions: wrappers(), context: context)
+    let outputService = await feature.classifierService(modelID: 7, url: modelURL)
+    #expect(loadedService === outputService)
+    #expect(loads == 1)
     scheduler.tick()
     try await waitUntil { results.count == 1 || !failures.isEmpty }
     #expect(results.first?.0 == 5)
@@ -184,16 +191,38 @@ struct SceneDetectorIntegrationTestSuite {
     context.isOutputActive = { active }
     context.reportFailure = { _, _ in preparationErrors += 1 }
     cold.synchronize(visions: wrappers(), context: context)
-    try await waitUntil { preparationErrors > 0 }
+    await cold.prepareForOutput()
+    #expect(await cold.classifierService(modelID: 7, url: modelURL) == nil)
     cold.synchronize(visions: wrappers(), context: context)
     try await Task.sleep(for: .milliseconds(20))
-    #expect(attempts == [true])
+    #expect(attempts.isEmpty)
+    #expect(preparationErrors == 0)
     #expect(!FileManager.default.fileExists(atPath: missingCache.path))
     active = false
     cold.outputStateDidChange()
-    try await waitUntil { attempts.count == 2 }
+    await cold.prepareForOutput()
+    #expect(await cold.classifierService(modelID: 7, url: modelURL) != nil)
+    active = true
+    cold.outputStateDidChange()
+    #expect(await cold.classifierService(modelID: 7, url: modelURL) != nil)
     await cold.stop()
-    #expect(attempts == [true, false])
+    #expect(attempts == [false])
+
+    active = false
+    var failedLoads = 0
+    let failed = WorkspaceV4VisionFeature(scheduler: WorkspaceVisionScheduler(automaticTimer: false)) { _, noCompile in
+      #expect(!noCompile)
+      failedLoads += 1
+      throw CocoaError(.fileReadCorruptFile)
+    }
+    failed.synchronize(visions: wrappers(), context: context)
+    await failed.prepareForOutput()
+    let attemptsBeforeOutput = failedLoads
+    active = true
+    failed.outputStateDidChange()
+    #expect(await failed.classifierService(modelID: 7, url: modelURL) == nil)
+    #expect(failedLoads == attemptsBeforeOutput)
+    await failed.stop()
   }
 
   @MainActor

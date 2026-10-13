@@ -519,6 +519,8 @@ public final class WorkspaceWindowController: NSWindowController,
         userInfo: [NSLocalizedDescriptionKey: "Save the Workspace before starting output."])
     }
     windowRuntime.updateRuntimes()
+    await visionFeature.prepareForOutput()
+    guard shutdownTask == nil else { return }
     await recordingSession.start()
   }
 
@@ -591,9 +593,10 @@ extension WorkspaceWindowController {
     }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
       url.standardizedFileURL == modelURL.standardizedFileURL
     else { throw CocoaError(.fileReadNoSuchFile) }
-    let model = try await VisionImageClassifierService.loadModel(
-      at: modelURL, noCompile: stateService.isOutputActive)
-    return try await windowRuntime.classify(vision: vision, model: model)
+    guard let service = await visionFeature.classifierService(
+      modelID: vision.modelInternalID, url: modelURL)
+    else { throw CocoaError(.fileReadNoSuchFile) }
+    return try await windowRuntime.classify(vision: vision, service: service)
   }
 
   public func synchronizeVision() {

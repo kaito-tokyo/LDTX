@@ -101,8 +101,10 @@ the relevant design or feature documentation instead.
 - Initial phases are randomized. Collisions move forward within the frame;
   requests that cannot fit are randomly thinned. Busy or overdue occurrences
   are skipped without queuing catch-up work or cancelling an active request.
-- Models are prepared separately and reused. Output-active preparation never
-  compiles a missing cache, and corrupt caches fail without recompilation.
+- Models are prepared separately and reused. Output start waits for compilation
+  and loading of referenced models. During output, manual and automatic inference
+  use only loaded services and skip unavailable models; neither loads nor compilation
+  are started. Corrupt caches fail without recompilation.
   Preparation failures retry after configuration or output-state changes.
 - Manual inference remains independent and may overlap automatic work. Stops
   drain active automatic requests and model preparation; stale generations

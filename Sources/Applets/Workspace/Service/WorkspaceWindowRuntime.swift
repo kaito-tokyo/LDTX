@@ -271,10 +271,10 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func classify(
-    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, model: sending MLModel
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, service: VisionImageClassifierService
   ) async throws -> String {
     let frame = try await frameForSceneDetector(vision)
-    return try await VisionImageClassifierService(model: model).classify(image: frame.image)
+    return try await service.classify(image: frame.image)
   }
 
   private func frameForSceneDetector(

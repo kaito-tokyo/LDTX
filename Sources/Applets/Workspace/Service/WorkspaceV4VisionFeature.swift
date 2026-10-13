@@ -130,8 +130,26 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     )
   }
 
+  public func prepareForOutput() async {
+    guard let context, !context.isOutputActive(), !stopped else { return }
+    modelFailures.removeAll()
+    prepareModels()
+    while !preparations.isEmpty {
+      for task in Array(preparations.values) { await task.value }
+    }
+  }
+
+  public func classifierService(modelID: Int64, url: URL) async -> VisionImageClassifierService? {
+    let key = ModelKey(id: modelID, url: url)
+    if let context, !context.isOutputActive(), !stopped {
+      prepareModels()
+      await preparations[key]?.value
+    }
+    return stopped ? nil : models[key]
+  }
+
   private func prepareModels() {
-    guard let context, !stopped else { return }
+    guard let context, !context.isOutputActive(), !stopped else { return }
     for wrapper in visions {
       guard case .ldtxSceneDetectorVision(let vision)? = wrapper.vision,
         let url = context.modelURL(vision.modelInternalID)
