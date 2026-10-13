@@ -12,10 +12,12 @@ Feature: Save and reopen
     Then the saved content is restored and the Preview reconnects
 
   @UCT-1002.2 @WorkspaceWindowController
-  Scenario: The first save names an untitled Workspace and later Save As is unavailable
+  Scenario: SwiftUI manages document naming and Save As
     Given an untitled Workspace
     When the Workspace is saved to a named package for the first time
-    Then the package name becomes the Workspace name and subsequent Save As is unavailable
+    Then SwiftUI manages the document filename and window title
+    And the stored Workspace display name is not rewritten from the package name
+    And Save As uses the standard DocumentGroup behavior
 
   @UCT-1002.3 @WorkspaceWindowController
   Scenario: The first save preserves an explicit Workspace name
@@ -38,7 +40,7 @@ Feature: Save and reopen
     Then autosave is unavailable and the operation fails without writing the package
 
   @UCT-1002.6 @WorkspaceWindowController
-  Scenario: Duplicate is disabled and creates no Document
+  Scenario: Duplicate uses the standard document behavior
     Given an open Workspace
     When the Duplicate action is validated and requested
-    Then the action is unavailable and no duplicate Document is created
+    Then SwiftUI manages duplication through DocumentGroup

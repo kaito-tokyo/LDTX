@@ -24,6 +24,9 @@ creation, opening, standard Save and Close commands, autosaving, restoration,
 and the document window. New presents an untitled editable Workspace; saving
 chooses its location through the standard document flow. Info.plist registers
 its content type without an NSDocumentClass.
+Save As and Duplicate use the standard DocumentGroup behavior. SwiftUI manages
+document filenames and window titles; saving does not derive the stored Workspace
+display name from its package filename. An explicitly edited display name is preserved.
 The external ID is assigned before the first save. Output controls stay disabled
 until a document location exists, and the output controller also requires a
 persisted runtime snapshot before starting.
