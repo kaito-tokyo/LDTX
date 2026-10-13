@@ -43,6 +43,13 @@ output and tears down capture, audio, Vision, and preview resources asynchronous
 Representable dismantling stops UI observation and initiates idempotent shutdown;
 its Coordinator also initiates cleanup if released without explicit dismantling.
 
+The SwiftUI App connects a termination-only `NSApplicationDelegateAdaptor`.
+Quit returns `terminateLater` while any Workspace controller is alive or its
+shutdown is running, and replies only after all controllers finish. This includes
+controllers whose windows have already closed. Shutdown failures are retained
+until they can be presented before cancelling termination; another Quit may then
+proceed. Standard document save confirmation remains owned by SwiftUI.
+
 The Representable Coordinator registers Undo/Redo for content changes, including pending
 model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
 Workspace Undo and Redo menu commands and their keyboard shortcuts are temporarily

@@ -13,6 +13,8 @@ import SwiftUI
 @main
 @MainActor
 struct LDTXApp: App {
+  @NSApplicationDelegateAdaptor(WorkspaceTerminationDelegate.self) private var terminationDelegate
+
   init() {
     if let bundleIdentifier = Bundle.main.bundleIdentifier,
       let directory = FileManager.default.urls(

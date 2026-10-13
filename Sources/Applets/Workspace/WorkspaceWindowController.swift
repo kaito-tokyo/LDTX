@@ -364,6 +364,7 @@ public final class WorkspaceWindowController: NSWindowController,
     visionFeature.synchronize(
       visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace ? windowRuntime.definition.visions : [],
       context: context)
+    Self.activeControllers.add(self)
   }
 
   isolated deinit {
@@ -411,6 +412,24 @@ public final class WorkspaceWindowController: NSWindowController,
   }
 
   private static let activeControllers = NSHashTable<WorkspaceWindowController>.weakObjects()
+  private static var pendingShutdownFailures: [String] = []
+
+  static var hasPendingApplicationShutdown: Bool {
+    !activeControllers.allObjects.isEmpty || !pendingShutdownFailures.isEmpty
+  }
+
+  /// Includes closed windows whose idempotent shutdown is still running.
+  static func shutdownForApplicationTermination() async -> [String] {
+    let controllers = activeControllers.allObjects
+    await withTaskGroup(of: Void.self) { group in
+      for controller in controllers {
+        group.addTask { await controller.shutdown() }
+      }
+    }
+    let failures = pendingShutdownFailures
+    pendingShutdownFailures.removeAll()
+    return failures
+  }
   private static func updateRecordingDockBadge() {
     NSApplication.shared.dockTile.badgeLabel = activeControllers.allObjects.contains {
       $0.stateService.isOutputActive
@@ -530,11 +549,12 @@ public final class WorkspaceWindowController: NSWindowController,
       await audioCoordinator.stopAndReset()
       lowFrequencyUpdateRegistry.shutdown()
       windowRuntime.shutdown()
+      if let shutdownFailureMessage { Self.pendingShutdownFailures.append(shutdownFailureMessage) }
+      Self.activeControllers.remove(self)
+      Self.updateRecordingDockBadge()
     }
     shutdownTask = task
     await task.value
-    Self.activeControllers.remove(self)
-    Self.updateRecordingDockBadge()
   }
 
   public func pauseOutput() async {

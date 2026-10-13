@@ -555,6 +555,7 @@ targets:
         includes:
           - WorkspaceDocument.swift
           - WorkspaceScene.swift
+          - WorkspaceTerminationDelegate.swift
           - WorkspaceToolbarCoordinator.swift
           - WorkspaceViewController.swift
           - WorkspaceViewControllerRepresentation.swift
