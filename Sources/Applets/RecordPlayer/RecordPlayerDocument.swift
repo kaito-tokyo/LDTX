@@ -21,7 +21,7 @@ public final class RecordPlayerDocument: Document {
   }()
 
   public private(set) var markers: [RecordingMarker] = []
-  private var deletedMarkerFileNames: Set<String> = []
+  private var markerDeletions: [String: UUID] = [:]
   @ObservationIgnored private let configuration: URLDocumentConfiguration?
   private var initialURL: URL?
   @ObservationIgnored private var markerReadError: (any Error)?
@@ -68,9 +68,9 @@ public final class RecordPlayerDocument: Document {
       markers = incoming.values.sorted { CMTimeCompare($0.time, $1.time) < 0 }
     } else {
       markers = snapshot.markers
-      deletedMarkerFileNames.removeAll()
+      markerDeletions.removeAll()
     }
-    deletedMarkerFileNames.subtract(markers.map(\.fileName))
+    for marker in markers { markerDeletions.removeValue(forKey: marker.fileName) }
     initialURL = snapshot.url
     markerReadError = snapshot.markerReadError
     hasReadContents = true
@@ -83,7 +83,7 @@ public final class RecordPlayerDocument: Document {
     if let markerReadError { throw markerReadError }
     guard let fileURL else { throw RecordingMarkerError.unsupportedOperation }
     return Writer.Snapshot(
-      url: fileURL, markers: markers, deletedMarkerFileNames: deletedMarkerFileNames)
+      url: fileURL, markers: markers, markerDeletions: markerDeletions)
   }
 
   public func createMarker(note: String, at time: CMTime, undoManager: UndoManager? = nil) throws {
@@ -113,8 +113,10 @@ public final class RecordPlayerDocument: Document {
     }
     undoManager?.setActionName(actionName)
     let remaining = Set(updated.map(\.fileName))
-    deletedMarkerFileNames.formUnion(Set(previous.map(\.fileName)).subtracting(remaining))
-    deletedMarkerFileNames.subtract(remaining)
+    for name in Set(previous.map(\.fileName)).subtracting(remaining) {
+      markerDeletions[name] = UUID()
+    }
+    for name in remaining { markerDeletions.removeValue(forKey: name) }
     markers = updated
   }
 
@@ -158,7 +160,7 @@ public final class RecordPlayerDocument: Document {
     public struct Snapshot: Sendable {
       let url: URL
       let markers: [RecordingMarker]
-      let deletedMarkerFileNames: Set<String>
+      let markerDeletions: [String: UUID]
     }
 
     @concurrent public func write(
@@ -170,7 +172,13 @@ public final class RecordPlayerDocument: Document {
       let progress = progress.start(totalCount: 1)
       _ = try RecordingMarkerStore(recordingDirectoryURL: destination)
         .saveWithinCoordinatedAccess(
-          snapshot.markers, deleting: snapshot.deletedMarkerFileNames)
+          snapshot.markers,
+          deleting: Set(
+            snapshot.markerDeletions.compactMap { name, token in
+              // SwiftUI supplies the previous successfully written snapshot. A failed
+              // write does not acknowledge deletions; Undo/Redo generates a new token.
+              previous?.markerDeletions[name] == token ? nil : name
+            }))
       progress.complete(count: 1)
     }
   }

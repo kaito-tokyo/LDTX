@@ -18,9 +18,26 @@ extension AppUIComponentTestSuite {
   struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-
-
-
+    @Test("Errors queued before window attachment are presented after attachment")
+    func startupErrorIsPresentedAfterAttach() async throws {
+      let document = WorkspaceDocument()
+      let controller = WorkspaceWindowController(document: document)
+      controller.reportError(
+        NSError(
+          domain: "Startup", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Queued startup failure"]))
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+        styleMask: [.titled], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      window.orderFront(nil)
+      controller.attachWindow(window)
+      let sheet = try await waitForSheet(on: window)
+      #expect(displayedText(in: sheet.contentView).contains("Queued startup failure"))
+      dismiss(sheet)
+      await controller.shutdown()
+      window.close()
+    }
 
     @Test("A component in use is presented as an operation error")
     func componentInUsePresentsError() async throws {

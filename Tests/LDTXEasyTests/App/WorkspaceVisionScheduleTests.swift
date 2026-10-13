@@ -2,11 +2,51 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 @testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Vision schedule planning")
 struct WorkspaceVisionScheduleUnitTestSuite {
+  @Test func outputRetainsMembershipButAllowsOrderingAndMixChanges() {
+    var live = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    live.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [3, 5, 5]
+    let baseline = live
+    live.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [5, 3, 5]
+    #expect(
+      WorkspaceV4PersistenceCoordinator.preferencesDuringOutput(live, membership: baseline) == live)
+    live.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [3, 7]
+    live.landscapeProgramPreferences[1, default: .init()].audioMasterVolumeDecibels.set(
+      num: -100, den: 10)
+    live.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[3] = true
+    let safe = WorkspaceV4PersistenceCoordinator.preferencesDuringOutput(live, membership: baseline)
+    #expect(safe.landscapeProgramPreferences[1]?.videoLayerInternalIds == [3, 5, 5])
+    #expect(safe.landscapeProgramPreferences[1]?.audioMasterVolumeDecibels.num == -100)
+    #expect(safe.landscapeProgramPreferences[1]?.videoLayerHidden[3] == true)
+  }
+
+  @MainActor
+  @Test func structuralReloadIsDeferredUntilOutputIsIdle() {
+    var live = WorkspaceV4Bundle(definition: .init(), preferences: .init())
+    live.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
+      3, 5,
+    ]
+    let coordinator = WorkspaceV4PersistenceCoordinator(
+      workspaceSnapshot: { live }, replaceWorkspace: { live = $0 })
+    coordinator.adoptRuntimeWorkspace(live)
+    coordinator.setOutputActive(true)
+    live.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
+      3, 7,
+    ]
+    #expect(
+      coordinator.runtimeWorkspace.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds
+        == [3, 5])
+    coordinator.setOutputActive(false)
+    #expect(
+      coordinator.runtimeWorkspace.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds
+        == [3, 7])
+  }
   @Test func distributesPhasesAndPlacesWithoutOverlap() {
     var values = [0, 500_000]
     var schedule = WorkspaceVisionSchedule(

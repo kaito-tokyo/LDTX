@@ -16,6 +16,8 @@ struct WorkspacePhysicalDeviceField: View {
   var isEditable = true
 
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
+  @State private var isShowingPicker = false
+  @State private var draft: WorkspacePhysicalDeviceID?
 
   private var options: [WorkspaceSelectionOption<WorkspacePhysicalDeviceID>] {
     if isAudio {
@@ -30,36 +32,60 @@ struct WorkspacePhysicalDeviceField: View {
 
   var body: some View {
     VStack(alignment: .leading) {
-      Picker(
-        title,
-        selection: Binding(
-          get: { appletData.physicalDeviceID(for: internalID) },
-          set: { proposed in
-            do {
-              try applySelection(proposed)
-              runtimeActions()?.synchronizeCaptureInputs(
-                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-              ) { _ in }
-              runtimeActions()?.synchronizeAudioMonitor()
-            } catch { reportError(error) }
-          })
-      ) {
-        Text("Unassigned").tag(WorkspacePhysicalDeviceID?.none)
-        ForEach(options) { option in
-          Text(option.name).tag(Optional(option.id))
-        }
-        if let selected = appletData.physicalDeviceID(for: internalID),
-          !options.contains(where: { $0.id == selected })
-        {
-          Text(deviceRegistry.hasRefreshed ? "Unavailable" : "Checking…")
-            .tag(Optional(selected))
+      LabeledContent(title) {
+        HStack {
+          if let selected = appletData.physicalDeviceID(for: internalID) {
+            Text(
+              options.first { $0.id == selected }?.name
+                ?? String(localized: "Unavailable"))
+          } else {
+            Text("Unassigned")
+          }
+          Button("Choose…") {
+            deviceRegistry.refresh()
+            let current = appletData.physicalDeviceID(for: internalID)
+            draft = options.contains { $0.id == current } ? current : nil
+            isShowingPicker = true
+          }
         }
       }
-      .pickerStyle(.menu)
       .disabled(!isEditable || stateService.isOutputActive)
       .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
       if isAudio, let message = deviceRegistry.errorMessage {
         Text(message).font(.caption).foregroundStyle(.red)
+      }
+    }
+    .sheet(isPresented: $isShowingPicker) {
+      VStack {
+        Form {
+          Picker(title, selection: $draft) {
+            Text("Unassigned").tag(WorkspacePhysicalDeviceID?.none)
+            ForEach(options) { Text($0.name).tag(Optional($0.id)) }
+          }
+          .disabled(!isEditable || stateService.isOutputActive)
+        }
+        HStack {
+          Spacer()
+          Button("Cancel", role: .cancel) { isShowingPicker = false }
+            .keyboardShortcut(.cancelAction)
+          Button("Choose") {
+            do {
+              try applySelection(draft)
+              runtimeActions()?.synchronizeCaptureInputs(
+                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+              ) { _ in }
+              runtimeActions()?.synchronizeAudioMonitor()
+              isShowingPicker = false
+            } catch { reportError(error) }
+          }
+          .disabled(!isEditable || stateService.isOutputActive)
+          .keyboardShortcut(.defaultAction)
+        }
+      }
+      .padding()
+      .frame(width: 400)
+      .onChange(of: options.map(\.id)) { _, ids in
+        draft = WorkspaceSelectionRules.reconciled(draft, availableIDs: ids)
       }
     }
   }

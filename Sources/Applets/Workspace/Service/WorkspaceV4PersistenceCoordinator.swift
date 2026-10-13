@@ -18,6 +18,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
   private let runtimeSnapshot: () -> WorkspaceV4Bundle
   private var adoptedRuntimeWorkspace: WorkspaceV4Bundle?
+  private var outputPreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4?
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
@@ -48,13 +49,46 @@ public final class WorkspaceV4PersistenceCoordinator {
   var runtimeWorkspace: WorkspaceV4Bundle {
     let live = runtimeSnapshot()
     guard var adopted = adoptedRuntimeWorkspace else { return live }
-    adopted.preferences = live.preferences
+    adopted.preferences =
+      outputPreferences.map {
+        Self.preferencesDuringOutput(live.preferences, membership: $0)
+      } ?? live.preferences
     adopted.outputSettings = live.outputSettings
     return adopted
   }
 
   public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) {
     adoptedRuntimeWorkspace = workspace
+  }
+
+  func setOutputActive(_ active: Bool) {
+    if active {
+      if outputPreferences == nil { outputPreferences = runtimeSnapshot().preferences }
+    } else {
+      outputPreferences = nil
+    }
+  }
+
+  nonisolated static func preferencesDuringOutput(
+    _ proposed: Ldtx_Workspace_V4_WorkspacePreferencesV4,
+    membership: Ldtx_Workspace_V4_WorkspacePreferencesV4
+  ) -> Ldtx_Workspace_V4_WorkspacePreferencesV4 {
+    var result = proposed
+    func preserveMembership(
+      _ values: inout [Int64: Ldtx_Workspace_V4_ProgramPreferences],
+      _ baseline: [Int64: Ldtx_Workspace_V4_ProgramPreferences]
+    ) {
+      for id in Set(values.keys).union(baseline.keys) {
+        let expected = baseline[id]?.videoLayerInternalIds ?? []
+        let proposed = values[id]?.videoLayerInternalIds ?? []
+        if proposed.sorted() != expected.sorted() {
+          values[id, default: .init()].videoLayerInternalIds = expected
+        }
+      }
+    }
+    preserveMembership(&result.landscapeProgramPreferences, membership.landscapeProgramPreferences)
+    preserveMembership(&result.portraitProgramPreferences, membership.portraitProgramPreferences)
+    return result
   }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {

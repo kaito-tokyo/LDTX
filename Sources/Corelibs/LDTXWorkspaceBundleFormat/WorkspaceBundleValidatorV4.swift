@@ -275,7 +275,7 @@ extension WorkspaceBundleValidatorV4 {
           add("definition.canvas_configuration." + field, .unsupportedOutputProfile(profile))
         }
       }
-      let components = Set(definition.videoComponents.compactMap(\.internalID))
+      let components = definition.videoComponents
       let sources = Set(
         definition.videoComponents.compactMap { wrapper -> Int64? in
           if case .vfxSource(let source) = wrapper.videoComponent { return source.internalID }
@@ -357,7 +357,8 @@ extension WorkspaceBundleValidatorV4 {
     }
 
     mutating func vision(
-      _ wrapper: Ldtx_Workspace_V4_VisionWrapper, path: String, components: Set<Int64>
+      _ wrapper: Ldtx_Workspace_V4_VisionWrapper, path: String,
+      components: [Ldtx_Workspace_V4_VideoComponentWrapper]
     ) {
       let path = visionPath(wrapper, path)
       let input: Int64
@@ -385,7 +386,15 @@ extension WorkspaceBundleValidatorV4 {
       }
       if !present {
         add(path + ".video_component_internal_id", .missingVisionVideoComponent, id: id)
-      } else if !components.contains(input) {
+      } else if let component = components.first(where: { $0.internalID == input }) {
+        if case .ldtxSceneDetectorVision = wrapper.vision {
+          if !component.canBeVisionInput {
+            add(path + ".video_component_internal_id", .unsupportedVisionInput, id: id)
+          } else if component.renderingSize.map({ $0.width > 0 && $0.height > 0 }) != true {
+            add(path + ".video_component_internal_id", .invalidVisionInputSize, id: id)
+          }
+        }
+      } else {
         add(path + ".video_component_internal_id", .missingVideoComponent(input), id: id)
       }
       for (i, trigger) in triggers.enumerated() {
@@ -431,9 +440,12 @@ extension WorkspaceBundleValidatorV4 {
             add(p + ".video_layer_internal_ids[\(index)]", .missingVideoLayer(component), id: id)
           }
           if preference.hasAudioMasterVolumeDecibels {
-            _ = rational(
+            let valid = rational(
               preference.audioMasterVolumeDecibels, path: p + ".audio_master_volume_decibels",
               id: id)
+            if valid, !(-80...20).contains(preference.audioMasterVolumeDecibels.double) {
+              add(p + ".audio_master_volume_decibels", .invalidMasterVolume, id: id)
+            }
           }
           for audioID in preference.audioChannelMuted.keys.sorted() where !audio.contains(audioID) {
             add(p + ".audio_channel_muted[\(audioID)]", .missingAudioInputDevice(audioID), id: id)
@@ -491,6 +503,9 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case missingVisionVideoComponent
   case invalidVisionInterval
   case invalidVisionRegionOfInterest
+  case unsupportedVisionInput
+  case invalidVisionInputSize
+  case invalidMasterVolume
   case invalidMinimumTextHeight
   case unsupportedOutputProfile(String)
   case unsupportedFrameRate(UInt32)
@@ -524,6 +539,9 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .missingAudioInputDevice(let id):
       "Audio device \(id) referenced by preferences is missing."
     case .missingVisionVideoComponent: "Vision must reference a Video Component."
+    case .unsupportedVisionInput: "The Video Component cannot be used as a Vision input."
+    case .invalidMasterVolume: "Master volume must be between -80 and 20 dB."
+    case .invalidVisionInputSize: "The Vision input must define a positive image width and height."
     case .invalidVisionInterval: "Vision intervals must be finite and at least 0.1 seconds."
     case .invalidVisionRegionOfInterest:
       "The Vision region must have positive dimensions and fit within the image."

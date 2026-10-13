@@ -17,6 +17,7 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
   public private(set) var workspaceSnapshot: WorkspaceV4Bundle?
   private let configuration: URLDocumentConfiguration?
   private(set) var readGeneration = 0
+  private var editingReadGeneration = 0
   public var fileURL: URL? { configuration?.fileURL }
   public var lastContentModificationDate: Date? { configuration?.lastContentModificationDate }
   public var runtimeWorkspace: WorkspaceV4Bundle? { workspaceSnapshot }
@@ -37,6 +38,13 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
   @MainActor
   private func incrementReadGeneration() {
     readGeneration += 1
+  }
+
+  /// The editor and headless saves share adoption of the latest Reader content.
+  func adoptReadSnapshotForEditing() {
+    guard editingReadGeneration != readGeneration, let workspaceSnapshot else { return }
+    stateService.replaceEditingWorkspace(workspaceSnapshot)
+    editingReadGeneration = readGeneration
   }
 }
 
@@ -89,6 +97,7 @@ extension WorkspaceDocument: WritableDocument {
     guard Self.writableContentTypes.contains(contentType) else {
       throw CocoaError(.fileWriteUnsupportedScheme)
     }
+    adoptReadSnapshotForEditing()
     let snapshot = stateService.editingWorkspace
     workspaceSnapshot = snapshot
     return snapshot

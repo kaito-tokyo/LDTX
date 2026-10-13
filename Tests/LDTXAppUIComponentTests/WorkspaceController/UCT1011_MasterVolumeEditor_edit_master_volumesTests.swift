@@ -77,8 +77,20 @@ extension AppUIComponentTestSuite {
       field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(store.workspacePreferences == previous)
       #expect(field.stringValue == "-")
+      for text in ["100", "-81", "20.1"] {
+        field.stringValue = text
+        field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+        #expect(store.workspacePreferences == previous)
+        #expect(field.stringValue == text)
+      }
+      for text in ["-80", "20"] {
+        field.stringValue = text
+        field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+        #expect(
+          store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
+            .double == Double(text))
+      }
     }
-
 
     @Test("UCT-1011.1: Master volume edits and model updates are reflected independently")
     func masterEditorObservesAndEditsVolumesIndependently() async throws {
@@ -134,6 +146,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       defer { document.close() }
       let preferences = document.stateService.workspacePreferences
+      _ = document.testCoordinator
       let url = try #require(document.stateService.localStateURL)
       data.updateState(for: url) { $0.monitorVolume = -12.5 }
       #expect(data.state(for: url).monitorVolume == -12.5)

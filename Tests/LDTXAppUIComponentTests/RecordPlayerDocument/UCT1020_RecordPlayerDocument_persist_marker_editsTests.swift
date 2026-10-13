@@ -12,6 +12,44 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1020: URL Document marker persistence", .serialized)
   @MainActor
   struct UCT1020RecordPlayerDocumentIntegrationTestSuite {
+    @Test("Successful deletion is acknowledged and does not delete an external recreation")
+    func committedDeletionDoesNotRepeat() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try await openRecordingTestDocument(url)
+      try document.createMarker(note: "Original", at: .zero)
+      try await saveRecordingTestDocument(document, to: url)
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      undo.beginUndoGrouping()
+      try document.deleteMarker(try #require(document.markers.first), undoManager: undo)
+      undo.endUndoGrouping()
+      let deletion = try await document.snapshot(
+        contentType: RecordPlayerDocument.readableContentTypes[0])
+      func write(
+        _ snapshot: RecordPlayerDocument.Writer.Snapshot,
+        previous: RecordPlayerDocument.Writer.Snapshot?
+      ) async throws {
+        let manager = ProgressManager(totalCount: 1)
+        try await RecordPlayerDocument.Writer().write(
+          snapshot: snapshot, to: url, previous: previous,
+          progress: manager.subprogress(assigningCount: 1))
+      }
+      try await write(deletion, previous: nil)
+      _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
+        at: .zero, note: "External")
+      let next = try await document.snapshot(
+        contentType: RecordPlayerDocument.readableContentTypes[0])
+      try await write(next, previous: deletion)
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["External"])
+      undo.undo()
+      undo.redo()
+      let repeated = try await document.snapshot(
+        contentType: RecordPlayerDocument.readableContentTypes[0])
+      try await write(repeated, previous: next)
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
+    }
     @Test("The writer saves only markers and preserves media and unrelated files")
     func markerOnlyWrite() async throws {
       let url = try makeRecordingTestPackage()

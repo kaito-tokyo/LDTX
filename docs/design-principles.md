@@ -64,6 +64,9 @@ the relevant design or feature documentation instead.
   StateService; it does not add or remove models or change Vision references or
   other editing values. There is no implicit three-way or field-level merge.
 - Reader content is adopted with full overwrite by the Representable Coordinator.
+  Snapshot capture also adopts an unread Reader generation into StateService,
+  so headless saving cannot replace read content with initial editing values.
+  Adoption is shared and runs once per Reader generation.
   URL-only synchronization is an explicit operation, not a side effect of saving.
 
 ## Definition changes reach the runtime only after persistence
@@ -124,6 +127,9 @@ the relevant design or feature documentation instead.
 - Video layer IDs are ordered from back to front. During output, reordering is
   allowed, but layer membership and occurrence counts must remain unchanged.
 - Other preferences may change during output when the pipeline supports them.
+  Runtime preference projection retains the layer membership and occurrence
+  counts captured when output starts. Structural reloads stay pending until
+  output is idle; valid ordering, mix, transforms, and visibility remain live.
 - `outputSettings` is a separate persisted Workspace document for recording and
   streaming configuration. Editing controls may change it between sessions;
   each active output session uses the configuration captured at startup.

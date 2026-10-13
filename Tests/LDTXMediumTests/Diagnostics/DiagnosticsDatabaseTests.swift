@@ -8,6 +8,26 @@ import SQLite3
 import Testing
 
 @Suite struct DiagnosticsDatabaseIntegrationTestSuite {
+  @Test func samplerStopFlushesBufferedSamplesAndClosesDatabase() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let location = try DiagnosticsDatabaseLocation(
+      product: .ldtx,
+      bundleIdentifier: "tokyo.kaito.ldtx.SamplerTest", applicationVersion: "1",
+      applicationSupportDirectory: root)
+    let sampler = DiagnosticsSamplingService(location: location) { _ in
+      Issue.record("Unexpected schema failure")
+    }
+    sampler.start()
+    try await Task.sleep(for: .milliseconds(5400))
+    await sampler.stop()
+    let database = try DiagnosticsDatabase(location: location, createIfMissing: false)
+    var samples: [DiagnosticsLoadSample] = []
+    try database.forEachSample(from: 0, to: Int64.max) { samples.append($0) }
+    #expect(!samples.isEmpty)
+    #expect(samples.allSatisfy { $0.launchID == sampler.currentLaunchID })
+    database.close()
+  }
   @Test func createsInsertsAndQueriesHalfOpenRange() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

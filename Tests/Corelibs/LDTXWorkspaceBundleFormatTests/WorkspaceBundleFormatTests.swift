@@ -488,6 +488,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         $0.vfxSource = .with {
           $0.internalID = 2
           $0.displayName = "Camera"
+          $0.deviceWidth = 1920
+          $0.deviceHeight = 1080
         }
       }
     ]

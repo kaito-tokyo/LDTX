@@ -15,6 +15,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import Observation
+import Security
 import SwiftUI
 import Testing
 
@@ -22,6 +23,37 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
   struct UCT1016WorkspaceWindowControllerIntegrationTestSuite {
+    @Test("Stream-key candidate loss clears only the editing choice")
+    func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
+      let suite = "StreamKeyDraft.\(UUID())"
+      let defaults = try #require(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let data = WorkspaceAppletData(
+        userDefaults: defaults,
+        keychainClient: .init(
+          copyMatching: { _, _ in errSecItemNotFound }, update: { _, _ in errSecSuccess },
+          add: { _, _ in errSecSuccess }))
+      var assignment: String? = "restored"
+      var draft: String?
+      let assigned = Binding<String?>(get: { assignment }, set: { assignment = $0 })
+      let choice = Binding<String?>(get: { draft }, set: { draft = $0 })
+      let inspector = WorkspaceOutputInspector(
+        outputSettings: .constant(.init()), externalID: UUID(),
+        isOutputActive: false, appletData: data, reportError: { _ in })
+      _ = inspector.body
+      #expect(draft == nil)
+      #expect(assignment == "restored")
+      draft = "removed"
+      draft = WorkspaceSelectionRules.reconciled(draft, availableIDs: [])
+      #expect(draft == nil)
+      #expect(assignment == "restored")
+      #expect(throws: WorkspaceSelectionError.self) {
+        try inspector.selectStreamKey("missing", assignment: assigned, draft: choice)
+      }
+      #expect(assignment == "restored")
+      try inspector.selectStreamKey(nil, assignment: assigned, draft: choice)
+      #expect(assignment == nil)
+    }
     private static var controller: NSDocumentController {
       UIComponentTestEnvironment.documentController
     }

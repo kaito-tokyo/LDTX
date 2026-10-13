@@ -186,7 +186,9 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   func controlTextDidChange(_ notification: Notification) {
     dirty = stringValue != modelText
     if let value = try? RationalParseStrategy().parse(stringValue),
-      let encoded = try? Rational32DecibelEncoding.encode(value.double), commitValue(encoded) {
+      (-80...20).contains(value.double),
+      let encoded = try? Rational32DecibelEncoding.encode(value.double), commitValue(encoded)
+    {
       modelText = stringValue
       dirty = false
     }

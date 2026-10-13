@@ -36,14 +36,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
   let snapshot = try await WorkspaceDocument.Reader().read(
     from: url, progress: progress.subprogress(assigningCount: 1))
   try await document.apply(snapshot: snapshot, previous: nil)
-  let state = document.stateService
-  state.workspaceDefinition = snapshot.definition
-  state.workspacePreferences = snapshot.preferences
-  state.workspaceOutputSettings = snapshot.outputSettings
-  state.visionModels = snapshot.visionModels
-  state.externalID = snapshot.definitionExternalID
-  state.preferencesExternalID = snapshot.preferencesExternalID
-  state.outputSettingsExternalID = snapshot.outputSettingsExternalID
+  document.adoptReadSnapshotForEditing()
   document.testSavedWorkspace = document.workspace
   return document
 }

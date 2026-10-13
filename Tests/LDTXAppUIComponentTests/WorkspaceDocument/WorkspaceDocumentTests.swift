@@ -14,6 +14,24 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {
+    @Test("Headless capture adopts Reader content once and retains later edits")
+    func headlessReadThenSave() async throws {
+      let document = WorkspaceDocument()
+      var read = document.stateService.editingWorkspace
+      read.definition.displayName = "Read without UI"
+      try await document.apply(snapshot: read, previous: nil)
+      let first = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(first == read)
+      document.stateService.workspaceDefinition.displayName = "Later edit"
+      let second = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(second.definition.displayName == "Later edit")
+      let coordinator = WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      coordinator.synchronizeDocument()
+      #expect(document.stateService.workspaceDefinition.displayName == "Later edit")
+      await coordinator.shutdown()
+    }
     @Test("New Workspaces can be created and edited without saving")
     func unsavedCreationAndEditing() async throws {
       let first = WorkspaceDocument()

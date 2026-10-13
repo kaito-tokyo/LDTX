@@ -51,13 +51,25 @@ public final class DiagnosticsSamplingService: @unchecked Sendable {
 
   public func stopBestEffort() {
     queue.async { [weak self] in
-      guard let self else { return }
-      timer?.cancel()
-      timer = nil
-      flush()
-      database?.close()
-      database = nil
+      self?.stopOnQueue()
     }
+  }
+
+  public func stop() async {
+    await withCheckedContinuation { continuation in
+      queue.async { [self] in
+        stopOnQueue()
+        continuation.resume()
+      }
+    }
+  }
+
+  private func stopOnQueue() {
+    timer?.cancel()
+    timer = nil
+    flush()
+    database?.close()
+    database = nil
   }
 
   private func startOnQueue() {

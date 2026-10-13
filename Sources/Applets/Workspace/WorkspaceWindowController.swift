@@ -446,6 +446,7 @@ public final class WorkspaceWindowController: NSWindowController,
     ) { [weak self] _ in
       MainActor.assumeIsolated { Task { await self?.shutdown() } }
     }
+    presentNextError()
   }
 
   func adoptDocumentURL(_ url: URL) {

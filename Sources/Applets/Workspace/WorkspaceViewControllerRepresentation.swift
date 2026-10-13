@@ -122,15 +122,8 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
 
     func synchronizeDocument() {
       guard let document, !isDisconnected else { return }
-      if document.readGeneration != readGeneration, let workspace = document.workspaceSnapshot {
-        let state = windowController.stateService
-        state.workspaceDefinition = workspace.definition
-        state.workspacePreferences = workspace.preferences
-        state.workspaceOutputSettings = workspace.outputSettings
-        state.visionModels = workspace.visionModels
-        state.externalID = workspace.definitionExternalID
-        state.preferencesExternalID = workspace.preferencesExternalID
-        state.outputSettingsExternalID = workspace.outputSettingsExternalID
+      if document.readGeneration != readGeneration, document.workspaceSnapshot != nil {
+        document.adoptReadSnapshotForEditing()
         readGeneration = document.readGeneration
         lastObservedSnapshot = currentSnapshot
       }

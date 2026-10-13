@@ -8,6 +8,69 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func rejectsUnsupportedAndZeroSizedSceneDetectorInputs() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.visions = [
+      .with {
+        $0.ldtxSceneDetectorVision = .with {
+          $0.internalID = 3
+          $0.displayName = "Detector"
+          $0.videoComponentInternalID = 1
+        }
+      }
+    ]
+    definition.videoComponents = [
+      .with {
+        $0.solidColorFill = .with {
+          $0.internalID = 1
+          $0.displayName = "Fill"
+        }
+      }
+    ]
+    var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .unsupportedVisionInput
+      })
+    bundle.definition.videoComponents = [
+      .with {
+        $0.vfxSource = .with {
+          $0.internalID = 1
+          $0.displayName = "Camera"
+          $0.deviceWidth = 0
+          $0.deviceHeight = 1080
+        }
+      }
+    ]
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVisionInputSize
+      })
+    bundle.definition.videoComponents[0].vfxSource.deviceWidth = 1920
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVisionInputSize
+      })
+  }
+
+  @Test func rejectsMasterVolumeOutsideSupportedRange() {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [
+      .with {
+        $0.internalID = 1
+        $0.displayName = "Program"
+      }
+    ]
+    var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
+    for value in [Int32(-810), 201] {
+      bundle.preferences.landscapeProgramPreferences[1, default: .init()].audioMasterVolumeDecibels
+        .set(num: value, den: 10)
+      #expect(
+        WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+          $0.error == .invalidMasterVolume
+        })
+    }
+  }
   @Test("round trips independent canvas preferences through Protobuf")
   func canvasPreferencesRoundTrip() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()

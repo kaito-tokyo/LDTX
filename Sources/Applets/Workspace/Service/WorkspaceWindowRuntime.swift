@@ -77,7 +77,10 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func setRecordingState(_ state: WorkspaceRecordingState) {
+    let wasActive = recordingState.isOutputActive
+    persistenceCoordinator.setOutputActive(state.isOutputActive)
     recordingState = state
+    if wasActive, !state.isOutputActive { updateRuntimes() }
   }
 
   func replaceWorkspace(_ workspace: WorkspaceV4Bundle) throws {

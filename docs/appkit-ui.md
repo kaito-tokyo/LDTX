@@ -131,6 +131,10 @@ Markers are auxiliary information without strict conflict detection. A coordinat
 save atomically writes individual marker files, then reads the disk contents under
 the same coordination. The Writer uses the coordinated staging package supplied
 by DocumentGroup and does not start a nested file-coordination operation.
+Deletion requests carry in-memory tokens. The Writer compares them with SwiftUI's
+previous successfully written snapshot, so an acknowledged deletion is not
+replayed against an externally recreated filename. Undo followed by Redo creates
+a fresh deletion token; a failed write does not acknowledge a token.
 Subsequent reader snapshots update the observable marker
 list while preserving edits made since the previous snapshot. Disk-only
 markers and unknown files remain intact; media and required metadata are untouched.
