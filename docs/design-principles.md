@@ -107,6 +107,8 @@ the relevant design or feature documentation instead.
 - Manual inference remains independent and may overlap automatic work. Stops
   drain active automatic requests and model preparation; stale generations
   cannot publish results. Scheduling statistics are logged per frame.
+- Window shutdown waits for active manual inference before stopping its runtime.
+  Closed windows reject new requests and discard results without cancelling the work.
 
 ## Preferences are permissive input
 

@@ -252,7 +252,7 @@ public final class WorkspaceViewController: NSViewController {
   }
 
   @objc func runInference() {
-    guard inferenceTask == nil, let request = inferenceRequest,
+    guard !isClosed, inferenceTask == nil, let request = inferenceRequest,
       let actions = runtimeActions()
     else { return }
     let id = request.vision.internalID
@@ -348,6 +348,10 @@ public final class WorkspaceViewController: NSViewController {
       "\(title). \(message)")
     toolbarCoordinator.showScreenshotResultPopover(screenshotResultPopover)
     return true
+  }
+
+  func waitForInference() async {
+    await inferenceTask?.value
   }
 
   func tearDown() {

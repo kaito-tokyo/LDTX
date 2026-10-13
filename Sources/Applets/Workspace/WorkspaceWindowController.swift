@@ -534,6 +534,7 @@ public final class WorkspaceWindowController: NSWindowController,
     outputObservationTask?.cancel()
     let task = Task { @MainActor in
       contentController.tearDown()
+      await contentController.waitForInference()
       pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()
