@@ -79,7 +79,7 @@ public enum WorkspaceModelFiles {
       else { throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: directory]) }
       try validateDirectory(directory)
       let candidates = try FileManager.default.contentsOfDirectory(
-        at: directory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+        at: directory, includingPropertiesForKeys: nil
       )
       .filter { isValidBaseName($0.lastPathComponent) }
       .sorted { $0.lastPathComponent < $1.lastPathComponent }

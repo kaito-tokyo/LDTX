@@ -305,11 +305,12 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Saving uses assigned model IDs and clearing retains model resources")
-  func savesExternalModelReference() throws {
+  @Test("Saving uses assigned model IDs and clearing retains model resources",
+    arguments: ["Original.mlmodel", ".Original.mlmodel"])
+  func savesExternalModelReference(name: String) throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
-    let source = root.appendingPathComponent("Original.mlmodel")
+    let source = root.appendingPathComponent(name)
     let data = Data([0, 1, 255])
     try data.write(to: source)
     var workspace = makeWorkspace()
@@ -328,7 +329,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
     try WorkspaceBundleWriterV4().write(workspace, to: bundle)
     #expect(workspace.visionModels[9] == source)
-    let embedded = bundle.appendingPathComponent("VisionModels/9/Original.mlmodel")
+    let embedded = bundle.appendingPathComponent("VisionModels/9/\(name)")
     #expect(try Data(contentsOf: embedded) == data)
     let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
     #expect(loaded.definition == workspace.definition)
@@ -341,11 +342,12 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: bundle).read().visionModels == loaded.visionModels)
   }
 
-  @Test("Model packages copy their native directory tree through save and reload")
-  func nativeModelPackageRoundTrip() throws {
+  @Test("Model packages copy their native directory tree through save and reload",
+    arguments: ["Classifier.mlpackage", ".Classifier.mlpackage"])
+  func nativeModelPackageRoundTrip(name: String) throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
-    let source = root.appendingPathComponent("Classifier.mlpackage")
+    let source = root.appendingPathComponent(name)
     try FileManager.default.createDirectory(
       at: source.appendingPathComponent("Data"), withIntermediateDirectories: true)
     try Data("{}".utf8).write(to: source.appendingPathComponent("Manifest.json"))
@@ -356,7 +358,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     try WorkspaceBundleWriterV4().write(workspace, to: bundle)
     let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
     let embedded = try #require(loaded.visionModels[9])
-    #expect(embedded.lastPathComponent == "Classifier.mlpackage")
+    #expect(embedded.lastPathComponent == name)
     #expect(
       try Data(contentsOf: embedded.appendingPathComponent("Data/model.bin")) == Data([1, 2, 3]))
     let copied = root.appendingPathComponent("Copy.ldtxworkspace")
@@ -364,7 +366,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(
       try Data(
         contentsOf: copied.appendingPathComponent(
-          "VisionModels/9/Classifier.mlpackage/Data/model.bin")) == Data([1, 2, 3]))
+          "VisionModels/9/\(name)/Data/model.bin")) == Data([1, 2, 3]))
   }
 
   @Test("The first supported basename is selected and existing models stay immutable")
