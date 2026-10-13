@@ -120,6 +120,8 @@ enum WorkspaceResourceAddition {
       guard let componentID = draft.videoComponentID,
         stateService.workspaceDefinition.videoComponents.contains(where: {
           $0.internalID == componentID && $0.canBeVisionInput
+            && (draft.visionKind != .createMlImageClassifier
+              || $0.renderingSize.map { $0.width > 0 && $0.height > 0 } == true)
         })
       else {
         return "Select a video component."

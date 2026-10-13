@@ -76,6 +76,11 @@ public struct WorkspaceBundleWriterV4 {
 
   /// Validates and serializes all documents before changing the destination.
   public func write(_ workspace: WorkspaceV4Bundle, to destination: URL) throws {
+    var workspace = workspace
+    let embedded = try WorkspaceModelFiles.read(at: destination)
+    for id in workspace.visionModels.keys {
+      if let url = embedded[id] { workspace.visionModels[id] = url }
+    }
     try WorkspaceBundleValidatorV4.validate(workspace)
     let definitionData = try Self.encode(
       definition: workspace.definition,

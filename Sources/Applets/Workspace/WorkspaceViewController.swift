@@ -17,7 +17,7 @@ import Observation
 import QuickLookThumbnailing
 import SwiftUI
 
-public final class WorkspaceViewController: NSViewController {
+public final class WorkspaceViewController: NSViewController, NSUserInterfaceValidations {
   private weak var document: (any WorkspaceDocumentContext)?
   let appletData: WorkspaceAppletData
   let stateService: WorkspaceStateService
@@ -352,6 +352,24 @@ public final class WorkspaceViewController: NSViewController {
 
   func waitForInference() async {
     await inferenceTask?.value
+  }
+
+  @objc func revertDocumentToSaved(_ sender: Any?) {
+    guard !isClosed, !stateService.isOutputActive else { return }
+    nextResponder?.tryToPerform(#selector(revertDocumentToSaved(_:)), with: sender)
+  }
+
+  @objc func browseDocumentVersions(_ sender: Any?) {
+    guard !isClosed, !stateService.isOutputActive else { return }
+    nextResponder?.tryToPerform(#selector(browseDocumentVersions(_:)), with: sender)
+  }
+
+  public func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(revertDocumentToSaved(_:))
+      || item.action == #selector(browseDocumentVersions(_:)) {
+      return !isClosed && !stateService.isOutputActive
+    }
+    return true
   }
 
   func tearDown() {

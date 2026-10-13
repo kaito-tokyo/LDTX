@@ -335,6 +335,11 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(loaded.definition == workspace.definition)
     #expect(Set(loaded.visionModels.keys) == [9])
     #expect(loaded.visionModels[9]?.resolvingSymlinksInPath() == embedded.resolvingSymlinksInPath())
+    try FileManager.default.removeItem(at: source)
+    var edited = workspace
+    edited.definition.displayName = "Edited after removing the source"
+    try WorkspaceBundleWriterV4().write(edited, to: bundle)
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read().definition == edited.definition)
     var cleared = loaded
     cleared.definition.visions[1].ldtxSceneDetectorVision.modelInternalID = 0
     try WorkspaceBundleWriterV4().write(cleared, to: bundle)
@@ -359,6 +364,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
     let embedded = try #require(loaded.visionModels[9])
     #expect(embedded.lastPathComponent == name)
+    try FileManager.default.removeItem(at: source)
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
     #expect(
       try Data(contentsOf: embedded.appendingPathComponent("Data/model.bin")) == Data([1, 2, 3]))
     let copied = root.appendingPathComponent("Copy.ldtxworkspace")

@@ -38,7 +38,10 @@ public actor VisionImageClassifierService {
     }
 
     fileprivate init(model: MLModel) {
-      let description = model.modelDescription
+      self.init(description: model.modelDescription)
+    }
+
+    fileprivate init(description: MLModelDescription) {
       let input = description.inputDescriptionsByName.sorted(by: { $0.key < $1.key })
         .compactMap { $0.value.imageConstraint }.first
       self.init(
@@ -97,12 +100,16 @@ public actor VisionImageClassifierService {
   }
 
   @concurrent public static func readModelInformation(
-    at url: URL, noCompile: Bool = false
+    at url: URL,
+    cachesDirectory: URL = URL.cachesDirectory.appending(
+      path: "tokyo.kaito.LDTX", directoryHint: .isDirectory)
   ) async throws -> ModelInformation {
     let accessed = url.startAccessingSecurityScopedResource()
     defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-    let model = try await loadModel(at: url, noCompile: noCompile)
-    return ModelInformation(model: model)
+    let digest = try modelDigest(at: url, fileManager: .default)
+    let name = digest.map { String(format: "%02x", $0) }.joined() + ".mlmodelc"
+    let asset = try MLModelAsset(url: cachesDirectory.appendingPathComponent(name))
+    return try await ModelInformation(description: asset.modelDescription)
   }
 
   private static func modelDigest(at url: URL, fileManager: FileManager) throws -> SHA384.Digest {

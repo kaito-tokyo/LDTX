@@ -8,11 +8,13 @@ struct VisionInputVideoComponentDropdown: View {
   let videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper]
   @Binding var selection: Int64?
   var title: LocalizedStringResource = "Video Component"
+  var requiresPositiveSize = false
 
   private var options: [WorkspaceSelectionOption<Int64>] {
     videoComponents.compactMap {
       guard $0.canBeVisionInput, let id = $0.internalID, id > 0,
-        let name = $0.displayName
+        let name = $0.displayName,
+        !requiresPositiveSize || $0.renderingSize.map({ $0.width > 0 && $0.height > 0 }) == true
       else { return nil }
       return .init(id: id, name: name)
     }

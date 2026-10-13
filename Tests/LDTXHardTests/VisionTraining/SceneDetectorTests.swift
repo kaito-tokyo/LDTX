@@ -46,8 +46,9 @@ struct SceneDetectorIntegrationTestSuite {
           format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
       }
     }
-    let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: directory, type: .image)
-    let trainer = LDTXSceneDetectorTrainer(files: files, maxIterations: 10, cropAndScale: .scaleFit)
+    let trainer = try await LDTXSceneDetectorTrainer.prepare(
+      at: directory, maxIterations: 10, cropAndScale: .scaleFit)
+    #expect(trainer.files.count == 60)
     let events = Mutex<[Event]>([])
     let savedURL = directory.appendingPathComponent("SceneDetector.mlpackage", isDirectory: true)
     let exportedURL = try await trainer.fit(to: savedURL) { event in
@@ -64,10 +65,18 @@ struct SceneDetectorIntegrationTestSuite {
     let classifications = observations.compactMap { $0 as? ClassificationObservation }
     #expect(classifications.first?.identifier == "red")
     let caches = directory.appendingPathComponent("Caches", isDirectory: true)
+    await #expect(throws: (any Error).self) {
+      _ = try await VisionImageClassifierService.readModelInformation(
+        at: savedURL, cachesDirectory: caches)
+    }
+    #expect(!FileManager.default.fileExists(atPath: caches.path))
     let loaded = try await VisionImageClassifierService.loadModel(at: savedURL, cachesDirectory: caches)
+    let information = try await VisionImageClassifierService.readModelInformation(
+      at: savedURL, cachesDirectory: caches)
     #expect(loaded.modelDescription.predictedFeatureName != nil)
     let metadata = loaded.modelDescription.metadata[.creatorDefinedKey] as? [String: String] ?? [:]
     let service = try VisionImageClassifierService(model: loaded)
+    #expect(information.cropAndScaleAction == service.modelInformation.cropAndScaleAction)
     #expect(service.modelInformation.cropAndScaleAction
       == VisionImageClassifierService.ModelInformation(creatorDefined: metadata).cropAndScaleAction)
     #expect(service.modelInformation.inputWidth == 360)

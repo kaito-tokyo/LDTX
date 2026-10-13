@@ -141,15 +141,14 @@ public struct VisionProgrammerScene: Scene {
         UUID().uuidString, isDirectory: true)
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: directory) }
-      let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: datasetURL, type: .image)
-      let trainer = LDTXSceneDetectorTrainer(
-        files: files, maxIterations: iterations, cropAndScale: .scaleFit)
+      let trainer = try await LDTXSceneDetectorTrainer.prepare(
+        at: datasetURL, maxIterations: iterations, cropAndScale: .scaleFit)
       let progress = Progress.discreteProgress(totalUnitCount: 100)
       progress.isCancellable = false
       progress.isPausable = false
       progress.localizedDescription = String(localized: "Extracting features…")
       let extraction = Progress(
-        totalUnitCount: Int64(files.count), parent: progress, pendingUnitCount: 70)
+        totalUnitCount: Int64(trainer.files.count), parent: progress, pendingUnitCount: 70)
       let fitting = Progress(totalUnitCount: -1, parent: progress, pendingUnitCount: 25)
       let exporting = Progress(totalUnitCount: 1, parent: progress, pendingUnitCount: 5)
       for child in [extraction, fitting, exporting] {

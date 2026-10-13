@@ -17,6 +17,13 @@ public struct LDTXSceneDetectorTrainer {
   private let featureExtractor: ImageFeaturePrint
   private let classifier: LogisticRegressionClassifier<Float, String>
 
+  @concurrent
+  public static func prepare(at datasetURL: URL, maxIterations: Int = 25,
+    cropAndScale: VNImageCropAndScaleOption = .centerCrop) async throws -> sending Self {
+    let files = try AnnotatedFiles(labeledBySubdirectoryNamesAt: datasetURL, type: .image)
+    return Self(files: files, maxIterations: maxIterations, cropAndScale: cropAndScale)
+  }
+
   public init(
     files: AnnotatedFiles,
     maxIterations: Int = 25,

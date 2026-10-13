@@ -70,7 +70,8 @@ struct WorkspaceAddResourceSheet: View {
             if draft.name == oldKind.rawValue { draft.name = newKind.rawValue }
           }
           VisionInputVideoComponentDropdown(
-            videoComponents: videoComponents, selection: $draft.videoComponentID)
+            videoComponents: videoComponents, selection: $draft.videoComponentID,
+            requiresPositiveSize: draft.visionKind == .createMlImageClassifier)
         }
         TextField("Name", text: $draft.name, prompt: Text(selectedDeviceName))
           .focused($nameFocused)

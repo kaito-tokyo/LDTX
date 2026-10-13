@@ -118,6 +118,9 @@ the relevant design or feature documentation instead.
   cannot publish results. Scheduling statistics are logged per frame.
 - Window shutdown waits for active manual inference before stopping its runtime.
   Closed windows reject new requests and discard results without cancelling the work.
+- Inspecting a selected model's information only queries an existing compiled
+  asset; it does not compile or load an inference model. Information becomes
+  available after normal model preparation.
 
 ## Preferences are permissive input
 

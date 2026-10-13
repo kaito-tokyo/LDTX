@@ -5,6 +5,7 @@
 import AppKit
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
@@ -15,6 +16,43 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1027: Create ML Image Classifier UI", .serialized)
   @MainActor
   struct UCT1027LdtxSceneDetectorVisionIntegrationTestSuite {
+    @Test func classifierAdditionRejectsZeroSizedInput() throws {
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      store.workspaceDefinition.videoComponents = [
+        WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
+      ]
+      var draft = WorkspaceAddDraft()
+      draft.name = "Scene"
+      draft.visionKind = .createMlImageClassifier
+      draft.videoComponentID = 1
+      #expect(throws: (any Error).self) {
+        try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], stateService: store)
+      }
+      #expect(store.workspaceDefinition.visions.isEmpty)
+      store.workspaceDefinition.videoComponents[0].vfxSource.deviceWidth = 1920
+      store.workspaceDefinition.videoComponents[0].vfxSource.deviceHeight = 1080
+      _ = try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], stateService: store)
+      #expect(store.workspaceDefinition.visions.count == 1)
+    }
+
+    @Test func revertValidationFollowsOutputState() {
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
+      defer { window.close() }
+      for selector in [#selector(WorkspaceViewController.revertDocumentToSaved(_:)),
+        #selector(WorkspaceViewController.browseDocumentVersions(_:))] {
+        let item = NSMenuItem(title: "Revert", action: selector, keyEquivalent: "")
+        for state: WorkspaceRecordingState in [.starting, .recording, .pausing, .stopping] {
+          store.recordingState = state
+          store.isOutputActive = state.isOutputActive
+          #expect(!window.content.validateUserInterfaceItem(item))
+        }
+        store.recordingState = .idle
+        store.isOutputActive = false
+        #expect(window.content.validateUserInterfaceItem(item))
+      }
+    }
+
     init() { _ = UIComponentTestEnvironment.documentController }
 
     @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")

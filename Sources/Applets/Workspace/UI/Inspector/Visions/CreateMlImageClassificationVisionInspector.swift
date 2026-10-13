@@ -24,7 +24,7 @@ struct LdtxSceneDetectorVisionInspector: View {
         TextField("Name", text: $vision.displayName)
         VisionInputVideoComponentDropdown(
           videoComponents: videoComponents, selection: $vision.videoComponentInternalIDIfPresent,
-          title: "Input video")
+          title: "Input video", requiresPositiveSize: true)
         LabeledContent("Model") {
           ModelPathPicker(
             fileURL: $modelURL)
@@ -76,7 +76,7 @@ struct LdtxSceneDetectorVisionInspector: View {
       let noCompile = outputActive
       do {
         let information = try await VisionImageClassifierService.readModelInformation(
-          at: url, noCompile: noCompile)
+          at: url)
         guard modelURL == url, outputActive == noCompile else { return }
         modelInformation = information
       } catch {
