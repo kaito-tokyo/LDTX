@@ -231,6 +231,10 @@ public final class WorkspaceWindowRuntime {
       else { return nil }
       return vision
     }
+    context.videoComponents = definition.videoComponents
+    context.reportPreparationRecovered = { [weak self] id in
+      self?.visionFailureMessages.removeValue(forKey: id)
+    }
     context.modelURL = { [weak self] id in self?.workspace.visionModels[id] }
     context.frameForSceneDetector = { [weak self] vision in
       guard let self else { throw WorkspaceVisionFeatureError.frameUnavailable }

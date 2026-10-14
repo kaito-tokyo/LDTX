@@ -19,6 +19,8 @@ public struct WorkspaceV4VisionFeatureContext {
   public var modelURL: (Int64) -> URL? = { _ in nil }
   public var isOutputActive: () -> Bool = { false }
   public var reportModelPrepared: (Int64) -> Void = { _ in }
+  public var reportPreparationRecovered: (Int64) -> Void = { _ in }
+  public var videoComponents: [Ldtx_Workspace_V4_VideoComponentWrapper] = []
   public var frameForSceneDetector:
     ((Ldtx_Workspace_V4_LdtxSceneDetectorVision) async throws -> WorkspaceVisionAnalysisFrame)?
 

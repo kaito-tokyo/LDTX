@@ -613,6 +613,11 @@ extension WorkspaceWindowController {
     context.reportModelPrepared = { [weak stateService] _ in
       stateService?.modelPreparationGeneration &+= 1
     }
+    let reportPreparationRecovered = context.reportPreparationRecovered
+    context.reportPreparationRecovered = { [weak stateService] id in
+      reportPreparationRecovered(id)
+      stateService?.visionFailureMessages.removeValue(forKey: id)
+    }
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
     context.reportResult = { [weak stateService] id, output in

@@ -205,7 +205,7 @@ struct SceneDetectorIntegrationTestSuite {
     for _ in 0..<10 { await Task.yield() }
     scheduler.tick()
     try await waitUntil { frameContinuation != nil }
-    classifier.displayName = "Changed during inference"
+    context.videoComponents = [.with { $0.vfxSource.deviceWidth = 1280 }]
     feature.synchronize(visions: wrappers(), context: context)
     frameContinuation?.resume()
     await feature.stop()
@@ -246,12 +246,17 @@ struct SceneDetectorIntegrationTestSuite {
 
     active = false
     var failedLoads = 0
+    var recoveries: [Int64] = []
+    context.reportPreparationRecovered = { recoveries.append($0) }
     let failed = WorkspaceV4VisionFeature(
       scheduler: WorkspaceVisionScheduler(automaticTimer: false),
       loadClassifier: { _, noCompile in
         #expect(!noCompile)
         failedLoads += 1
-        throw CocoaError(.fileReadCorruptFile)
+        if failedLoads == 1 { throw CocoaError(.fileReadCorruptFile) }
+        return try VisionImageClassifierService(
+          model: await VisionImageClassifierService.loadModel(
+            at: modelURL, cachesDirectory: caches))
       })
     failed.synchronize(visions: wrappers(), context: context)
     await failed.prepareForOutput()
@@ -260,6 +265,11 @@ struct SceneDetectorIntegrationTestSuite {
     failed.outputStateDidChange()
     #expect(await failed.classifierService(modelID: 7, url: modelURL) == nil)
     #expect(failedLoads == attemptsBeforeOutput)
+    active = false
+    failed.outputStateDidChange()
+    await failed.prepareForOutput()
+    #expect(failedLoads == attemptsBeforeOutput + 1)
+    #expect(recoveries == [5])
     await failed.stop()
   }
 

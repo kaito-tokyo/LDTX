@@ -4,6 +4,7 @@
 
 import AVFoundation
 import Foundation
+import LDTXRecordBundleFormat
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import Testing
@@ -12,6 +13,21 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1020: URL Document marker persistence", .serialized)
   @MainActor
   struct UCT1020RecordPlayerDocumentIntegrationTestSuite {
+    @Test("Saving markers rejects an active recording without changing its files")
+    func rejectsActiveRecordingSave() async throws {
+      let url = try makeRecordingTestPackage()
+      defer { try? FileManager.default.removeItem(at: url) }
+      try FileManager.default.removeItem(
+        at: url.appendingPathComponent(RecordingPackage.finalizedMarkerFileName))
+      let document = try await openRecordingTestDocument(url)
+      try document.createMarker(note: "Pending", at: .zero)
+      await #expect(throws: (any Error).self) {
+        try await saveRecordingTestDocument(document, to: url)
+      }
+      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
+      #expect(document.markers.map(\.note) == ["Pending"])
+    }
+
     @Test("Deleting a marker resolves the filename adopted during an earlier save")
     func deletesReconciledDiskFilename() async throws {
       let url = try makeRecordingTestPackage()

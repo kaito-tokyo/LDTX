@@ -66,7 +66,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         else { return nil }
         return ModelKey(id: vision.modelInternalID, url: url)
       })
-    let changed = stopped || self.visions != visions || self.context == nil || keys != modelKeys
+    let changed =
+      stopped || self.visions != visions || self.context == nil || keys != modelKeys
+      || self.context?.videoComponents != context.videoComponents
     modelKeys = keys
     self.context = context
     self.visions = visions
@@ -177,6 +179,12 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           let service = try await loadClassifier(url, noCompile)
           guard !stopped, generation == preparationGeneration else { return }
           models[key] = service
+          for wrapper in visions {
+            guard case .ldtxSceneDetectorVision(let current)? = wrapper.vision,
+              current.modelInternalID == key.id, self.context?.modelURL(key.id) == key.url
+            else { continue }
+            self.context?.reportPreparationRecovered(current.internalID)
+          }
           self.context?.reportModelPrepared(key.id)
         } catch {
           guard !stopped, generation == preparationGeneration else { return }
@@ -210,6 +218,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     let url = classifier.flatMap { context.modelURL($0.modelInternalID) }
     func isCurrent() -> Bool {
       !stopped && (generation.map { scheduler.isCurrent($0) } ?? true)
+        && (self.context?.videoComponents ?? context.videoComponents) == context.videoComponents
         && context.vision(id) == ocr && context.sceneDetector(id) == classifier
         && (classifier.map { context.modelURL($0.modelInternalID) == url } ?? true)
     }

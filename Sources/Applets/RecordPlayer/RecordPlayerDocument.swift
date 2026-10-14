@@ -176,7 +176,7 @@ public final class RecordPlayerDocument: Document {
       previous: sending Snapshot?, progress: consuming Subprogress
     ) async throws {
       // DocumentGroup supplies a coordinated staging copy during safe saving.
-      _ = try RecordingPackage(contentsOf: destination)
+      try RecordingPackage(contentsOf: destination).requireFinalized()
       let progress = progress.start(totalCount: 1)
       _ = try RecordingMarkerStore(recordingDirectoryURL: destination)
         .saveWithinCoordinatedAccess(

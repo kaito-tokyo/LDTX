@@ -18,6 +18,7 @@ func makeRecordingTestPackage() throws -> URL {
   ).write(to: url.appendingPathComponent(RecordingPackageInfo.fileName))
   try Data().write(to: url.appendingPathComponent("main.mp4"))
   try Data().write(to: url.appendingPathComponent("manifest.mpd"))
+  try Data().write(to: url.appendingPathComponent(RecordingPackage.finalizedMarkerFileName))
   return url
 }
 
