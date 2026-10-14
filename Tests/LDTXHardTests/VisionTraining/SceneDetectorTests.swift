@@ -119,6 +119,7 @@ struct SceneDetectorIntegrationTestSuite {
 
   @MainActor
   private func verifyAutomaticRequests(modelURL: URL, caches: URL, imageURL: URL) async throws {
+    let image = try #require(CIImage(contentsOf: imageURL))
     var time = 0.0
     let scheduler = WorkspaceVisionScheduler(
       now: { time }, random: { _ in 0 }, automaticTimer: false)
@@ -126,16 +127,11 @@ struct SceneDetectorIntegrationTestSuite {
     var prepared = false
     let feature = WorkspaceV4VisionFeature(
       scheduler: scheduler,
-      recognizeText: { image, _ in
-        // Hosted macOS runners do not expose an ANE to Vision.
-        var request = RecognizeTextRequest()
-        for (stage, devices) in request.supportedComputeStageDevices {
-          if let cpu = devices.first(where: { if case .cpu = $0 { true } else { false } }) {
-            request.setComputeDevice(cpu, for: stage)
-          }
-        }
-        let observations = try await request.perform(on: image)
-        return observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+      recognizeText: { frame, configuration in
+        // Test scheduler coexistence independently of TextRecognition's unavailable CI backends.
+        #expect(frame.extent == image.extent)
+        #expect(configuration.recognitionLanguages == ["en-US"])
+        return "Scheduled OCR"
       },
       loadClassifier: { url, noCompile in
         loads += 1
@@ -161,7 +157,6 @@ struct SceneDetectorIntegrationTestSuite {
     func wrappers() -> [Ldtx_Workspace_V4_VisionWrapper] {
       [.with { $0.ldtxSceneDetectorVision = classifier }, .with { $0.ocrVision = ocr }]
     }
-    let image = try #require(CIImage(contentsOf: imageURL))
     var results: [(Int64, String)] = []
     var preparedModelIDs: [Int64] = []
     var failures: [Error] = []
@@ -200,6 +195,7 @@ struct SceneDetectorIntegrationTestSuite {
     scheduler.tick()
     try await waitUntil { results.count == 2 || !failures.isEmpty }
     #expect(results.last?.0 == 3)
+    #expect(results.last?.1 == "Scheduled OCR")
     #expect(archived == [5, 3])
     #expect(loads == 1)
     #expect(failures.isEmpty)
