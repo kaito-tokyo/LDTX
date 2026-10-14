@@ -7,6 +7,20 @@ import Testing
 
 @Suite
 struct WorkspaceBundleWriterIntegrationTestSuite {
+  private struct Metadata: Codable {
+    var packageType: String
+    var workspaceVersion: Int
+    var workspaceBundleVersion: String
+    var customMetadata: String?
+
+    enum CodingKeys: String, CodingKey {
+      case packageType = "CFBundlePackageType"
+      case workspaceVersion = "LDTXWorkspaceVersion"
+      case workspaceBundleVersion = "LDTXWorkspaceBundleVersion"
+      case customMetadata = "CustomMetadata"
+    }
+  }
+
   @Test func preservesResourcesAndEnvelopeIdentifiers() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -18,13 +32,12 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
       definition: .init(), preferences: .init())
     try WorkspaceBundleWriterV4().write(snapshot, to: original)
     let infoURL = original.appendingPathComponent("Info.plist")
-    var info = try #require(
-      PropertyListSerialization.propertyList(
-        from: Data(contentsOf: infoURL), options: [], format: nil)
-        as? [String: Any])
-    info["CustomMetadata"] = "Preserved"
-    try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(
-      to: infoURL)
+    let decoder = PropertyListDecoder()
+    var info = try decoder.decode(Metadata.self, from: Data(contentsOf: infoURL))
+    info.customMetadata = "Preserved"
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .xml
+    try encoder.encode(info).write(to: infoURL)
     let resourceURL = original.appendingPathComponent("Resources/image.bin")
     try FileManager.default.createDirectory(
       at: resourceURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -34,12 +47,11 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     changed.definition.displayName = "Edited"
     try WorkspaceBundleWriterV4().write(changed, to: original)
     let reloaded = try WorkspaceBundleReaderV4(at: original).read()
-    let copiedInfo = try #require(
-      PropertyListSerialization.propertyList(
-        from: Data(contentsOf: original.appendingPathComponent("Info.plist")), options: [],
-        format: nil)
-        as? [String: Any])
-    #expect(copiedInfo["CustomMetadata"] as? String == "Preserved")
+    let copiedInfo = try decoder.decode(Metadata.self, from: Data(contentsOf: infoURL))
+    #expect(copiedInfo.customMetadata == "Preserved")
+    #expect(copiedInfo.packageType == "BNDL")
+    #expect(copiedInfo.workspaceVersion == 4)
+    #expect(copiedInfo.workspaceBundleVersion == "4.0")
     #expect(reloaded.definition.displayName == "Edited")
     #expect(reloaded.definitionExternalID == snapshot.definitionExternalID)
     #expect(reloaded.preferencesExternalID == snapshot.preferencesExternalID)

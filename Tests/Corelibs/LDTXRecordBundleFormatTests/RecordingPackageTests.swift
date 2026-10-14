@@ -8,18 +8,48 @@ import Testing
 
 @Suite
 struct RecordingPackageIntegrationTestSuite {
+  private struct Metadata: Codable {
+    var bundleIdentifier: String
+    var infoDictionaryVersion: String
+    var bundleName: String
+    var packageType: String
+    var formatVersion: Int
+    var identifier: String
+    var manifestFile: String
+    var mainMediaFile: String?
+    var landscapeMediaFile: String?
+    var portraitMediaFile: String?
+    var audioTracks: [[String: String]]
+
+    enum CodingKeys: String, CodingKey {
+      case bundleIdentifier = "CFBundleIdentifier"
+      case infoDictionaryVersion = "CFBundleInfoDictionaryVersion"
+      case bundleName = "CFBundleName"
+      case packageType = "CFBundlePackageType"
+      case formatVersion = "LDTXRecordingFormatVersion"
+      case identifier = "LDTXRecordingIdentifier"
+      case manifestFile = "LDTXRecordingManifestFile"
+      case mainMediaFile = "LDTXRecordingMainMediaFile"
+      case landscapeMediaFile = "LDTXRecordingLandscapeMediaFile"
+      case portraitMediaFile = "LDTXRecordingPortraitMediaFile"
+      case audioTracks = "LDTXRecordingAudioTracks"
+    }
+  }
+
+  private func encodeMetadata(_ metadata: Metadata) throws -> Data {
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .xml
+    return try encoder.encode(metadata)
+  }
+
   @Test(arguments: ["tokyo.kaito.ldtx.recording", "tokyo.kaito.ldtx.record"])
   func readsPackagesWithLegacyAndCurrentBundleIdentifiers(_ bundleIdentifier: String) throws {
     let url = try makePackage()
     defer { try? FileManager.default.removeItem(at: url) }
     let infoURL = url.appendingPathComponent(RecordingPackageInfo.fileName)
-    var info = try #require(
-      PropertyListSerialization.propertyList(
-        from: Data(contentsOf: infoURL), options: .init(), format: nil)
-        as? [String: Any])
-    info["CFBundleIdentifier"] = bundleIdentifier
-    try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(
-      to: infoURL)
+    var info = try PropertyListDecoder().decode(Metadata.self, from: Data(contentsOf: infoURL))
+    info.bundleIdentifier = bundleIdentifier
+    try encodeMetadata(info).write(to: infoURL)
     #expect(try RecordingPackage(contentsOf: url).formatVersion == 2)
   }
 
@@ -49,15 +79,11 @@ struct RecordingPackageIntegrationTestSuite {
       mainMediaFile: "output-video.mp4",
       audioTracks: []
     )
-    let values = try #require(
-      PropertyListSerialization.propertyList(
-        from: data, options: PropertyListSerialization.ReadOptions(), format: nil
-      ) as? [String: Any]
-    )
+    let values = try PropertyListDecoder().decode(Metadata.self, from: data)
     #expect(
-      values["LDTXRecordingManifestFile"] as? String == RecordingPackage.manifestFileName
+      values.manifestFile == RecordingPackage.manifestFileName
     )
-    #expect(values["LDTXRecordingFormatVersion"] as? Int == 2)
+    #expect(values.formatVersion == 2)
   }
 
   @Test func versionThreeLoadsIndependentCanvasMediaWithoutMainMediaKey() throws {
@@ -77,12 +103,8 @@ struct RecordingPackageIntegrationTestSuite {
       landscapeMediaFile: "landscape.fragmented.mp4",
       portraitMediaFile: "portrait.fragmented.mp4"
     )
-    let values = try #require(
-      PropertyListSerialization.propertyList(
-        from: info, options: PropertyListSerialization.ReadOptions(), format: nil
-      ) as? [String: Any]
-    )
-    #expect(values[RecordingPackageInfo.mainMediaFileKey] == nil)
+    let values = try PropertyListDecoder().decode(Metadata.self, from: info)
+    #expect(values.mainMediaFile == nil)
     try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
 
     let package = try RecordingPackage(contentsOf: packageURL)
@@ -104,17 +126,14 @@ struct RecordingPackageIntegrationTestSuite {
       atPath: packageURL.appendingPathComponent(portraitName).path,
       contents: Data([0])
     )
-    var values = try #require(
-      PropertyListSerialization.propertyList(
-        from: RecordingPackageInfo.v3Data(
-          identifier: "portrait-only",
-          landscapeMediaFile: nil,
-          portraitMediaFile: portraitName),
-        options: PropertyListSerialization.ReadOptions(), format: nil) as? [String: Any]
-    )
-    values[RecordingPackageInfo.mainMediaFileKey] = "legacy.mp4"
-    let info = try PropertyListSerialization.data(
-      fromPropertyList: values, format: .xml, options: 0)
+    var values = try PropertyListDecoder().decode(
+      Metadata.self,
+      from: RecordingPackageInfo.v3Data(
+        identifier: "portrait-only",
+        landscapeMediaFile: nil,
+        portraitMediaFile: portraitName))
+    values.mainMediaFile = "legacy.mp4"
+    let info = try encodeMetadata(values)
     try info.write(to: packageURL.appendingPathComponent(RecordingPackageInfo.fileName))
 
     let package = try RecordingPackage(contentsOf: packageURL)
@@ -197,17 +216,9 @@ struct RecordingPackageIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: packageURL) }
     let infoURL = packageURL.appendingPathComponent(RecordingPackageInfo.fileName)
     let data = try Data(contentsOf: infoURL)
-    var values = try #require(
-      PropertyListSerialization.propertyList(
-        from: data, options: PropertyListSerialization.ReadOptions(), format: nil
-      ) as? [String: Any]
-    )
-    values[RecordingPackageInfo.formatVersionKey] = 1
-    try PropertyListSerialization.data(
-      fromPropertyList: values,
-      format: .xml,
-      options: 0
-    ).write(to: infoURL)
+    var values = try PropertyListDecoder().decode(Metadata.self, from: data)
+    values.formatVersion = 1
+    try encodeMetadata(values).write(to: infoURL)
 
     #expect(throws: RecordingPackageError.unsupportedFormatVersion(1)) {
       try RecordingPackage(contentsOf: packageURL)

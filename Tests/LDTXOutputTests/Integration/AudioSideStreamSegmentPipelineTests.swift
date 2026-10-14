@@ -13,6 +13,34 @@ import LDTXRecordBundleFormat
 import LDTXRecording
 import Testing
 
+private struct RecordingMetadata: Decodable {
+  var bundleIdentifier: String
+  var infoDictionaryVersion: String
+  var bundleName: String
+  var packageType: String
+  var formatVersion: Int
+  var identifier: String
+  var manifestFile: String
+  var masterPlaylist: String?
+  var mainPlaylist: String?
+  var mainMediaFile: String
+  var audioTracks: [[String: String]]
+
+  enum CodingKeys: String, CodingKey {
+    case bundleIdentifier = "CFBundleIdentifier"
+    case infoDictionaryVersion = "CFBundleInfoDictionaryVersion"
+    case bundleName = "CFBundleName"
+    case packageType = "CFBundlePackageType"
+    case formatVersion = "LDTXRecordingFormatVersion"
+    case identifier = "LDTXRecordingIdentifier"
+    case manifestFile = "LDTXRecordingManifestFile"
+    case masterPlaylist = "LDTXRecordingMasterPlaylist"
+    case mainPlaylist = "LDTXRecordingMainPlaylist"
+    case mainMediaFile = "LDTXRecordingMainMediaFile"
+    case audioTracks = "LDTXRecordingAudioTracks"
+  }
+}
+
 /// Owns the objects that AVAssetWriter uses to emit segmented output.
 ///
 /// AVAssetWriter holds its delegate weakly. Keep the delegate, input, and writer
@@ -907,21 +935,18 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(readme == RecordingPackage.remuxReadme)
 
       let infoData = try Data(contentsOf: directory.appendingPathComponent("Info.plist"))
-      let info = try #require(
-        PropertyListSerialization.propertyList(from: infoData, options: 0, format: nil)
-          as? [String: Any]
-      )
-      #expect(info["CFBundleIdentifier"] as? String == "tokyo.kaito.ldtx.record")
-      #expect(info["CFBundleInfoDictionaryVersion"] as? String == "6.0")
-      #expect(info["CFBundleName"] as? String == "test")
-      #expect(info["CFBundlePackageType"] as? String == "BNDL")
-      #expect(info["LDTXRecordingFormatVersion"] as? Int == 2)
-      #expect(info["LDTXRecordingIdentifier"] as? String == "test")
-      #expect(info["LDTXRecordingManifestFile"] as? String == "manifest.mpd")
-      #expect(info["LDTXRecordingMasterPlaylist"] == nil)
-      #expect(info["LDTXRecordingMainPlaylist"] == nil)
-      #expect(info["LDTXRecordingMainMediaFile"] as? String == "main.fragmented.mp4")
-      let audioTracks = try #require(info["LDTXRecordingAudioTracks"] as? [[String: String]])
+      let info = try PropertyListDecoder().decode(RecordingMetadata.self, from: infoData)
+      #expect(info.bundleIdentifier == "tokyo.kaito.ldtx.record")
+      #expect(info.infoDictionaryVersion == "6.0")
+      #expect(info.bundleName == "test")
+      #expect(info.packageType == "BNDL")
+      #expect(info.formatVersion == 2)
+      #expect(info.identifier == "test")
+      #expect(info.manifestFile == "manifest.mpd")
+      #expect(info.masterPlaylist == nil)
+      #expect(info.mainPlaylist == nil)
+      #expect(info.mainMediaFile == "main.fragmented.mp4")
+      let audioTracks = info.audioTracks
       #expect(
         audioTracks == [
           [

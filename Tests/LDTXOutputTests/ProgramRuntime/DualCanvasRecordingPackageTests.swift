@@ -9,6 +9,20 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DualCanvasRecordingPackageIntegrationTestSuite {
+    private struct Metadata: Decodable {
+      var formatVersion: Int
+      var landscapeMediaFile: String?
+      var portraitMediaFile: String?
+      var mainMediaFile: String?
+
+      enum CodingKeys: String, CodingKey {
+        case formatVersion = "LDTXRecordingFormatVersion"
+        case landscapeMediaFile = "LDTXRecordingLandscapeMediaFile"
+        case portraitMediaFile = "LDTXRecordingPortraitMediaFile"
+        case mainMediaFile = "LDTXRecordingMainMediaFile"
+      }
+    }
+
     @Test(arguments: [(true, false), (false, true), (true, true)])
     func versionThreeCreatesOnlyEnabledCanvasFiles(_ enabled: (Bool, Bool)) throws {
       let directory = URL(
@@ -38,15 +52,12 @@ extension OutputTestSuite {
         !FileManager.default.fileExists(
           atPath: directory.appendingPathComponent("main.fragmented.mp4").path))
 
-      let info = try #require(
-        PropertyListSerialization.propertyList(
-          from: Data(contentsOf: directory.appendingPathComponent("Info.plist")),
-          options: 0,
-          format: nil) as? [String: Any])
-      #expect(info["LDTXRecordingFormatVersion"] as? Int == 3)
-      #expect(((info["LDTXRecordingLandscapeMediaFile"] as? String) != nil) == enabled.0)
-      #expect(((info["LDTXRecordingPortraitMediaFile"] as? String) != nil) == enabled.1)
-      #expect(info["LDTXRecordingMainMediaFile"] == nil)
+      let info = try PropertyListDecoder().decode(
+        Metadata.self, from: Data(contentsOf: directory.appendingPathComponent("Info.plist")))
+      #expect(info.formatVersion == 3)
+      #expect((info.landscapeMediaFile != nil) == enabled.0)
+      #expect((info.portraitMediaFile != nil) == enabled.1)
+      #expect(info.mainMediaFile == nil)
     }
   }
 }
