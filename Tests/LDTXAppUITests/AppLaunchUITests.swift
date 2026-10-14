@@ -35,13 +35,58 @@ final class AppLaunchUITests: XCTestCase {
       return
     }
     app.typeKey("g", modifierFlags: [.command, .shift])
+    // Let Go to Folder select the exact package. Clicking its row can make XCUI
+    // try to scroll an off-screen Open panel on CI, where no hit point exists.
     app.typeText(url.path)
     app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
-    open.click()
+    let package = app.windows.textFields.matching(
+      NSPredicate(format: "value == %@", url.lastPathComponent)
+    ).firstMatch
+    guard package.waitForExistence(timeout: 10) else {
+      recordOpenFailure(app, message: "The recording package did not appear in the Open panel.")
+      return
+    }
+    guard
+      XCTWaiter.wait(
+        for: [
+          XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: open)
+        ],
+        timeout: 10
+      ) == .completed
+    else {
+      recordOpenFailure(app, message: "The Open button did not become enabled for the recording.")
+      return
+    }
+    app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+    guard open.waitForNonExistence(timeout: 10) else {
+      recordOpenFailure(app, message: "The Open panel did not close after opening the recording.")
+      return
+    }
     // Valid package metadata reaches the player; deliberately invalid media uses its SwiftUI alert.
-    XCTAssertTrue(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 10))
-    app.windows.buttons["OK"].firstMatch.click()
-    XCTAssertFalse(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 2))
+    guard app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 10) else {
+      recordOpenFailure(app, message: "The invalid-media alert did not appear.")
+      return
+    }
+    let ok = app.windows.buttons["OK"].firstMatch
+    guard ok.waitForExistence(timeout: 5) else {
+      recordOpenFailure(app, message: "The invalid-media alert's OK button did not appear.")
+      return
+    }
+    ok.click()
+    XCTAssertTrue(app.staticTexts["Recording Could Not Be Opened"].waitForNonExistence(timeout: 5))
+  }
+
+  private func recordOpenFailure(
+    _ app: XCUIApplication, message: String, file: StaticString = #filePath, line: UInt = #line
+  ) {
+    let hierarchy = XCTAttachment(string: app.debugDescription)
+    hierarchy.name = "Recording open accessibility hierarchy"
+    hierarchy.lifetime = .keepAlways
+    add(hierarchy)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    XCTFail(message, file: file, line: line)
   }
 
   func testApplicationLaunchesWithFileActions() {
