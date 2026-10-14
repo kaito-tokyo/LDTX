@@ -313,8 +313,10 @@ extension AppUIComponentTestSuite {
       document.makeWindowControllers()
       let window = try #require(document.windowControllers.first?.window)
       let contentSize = window.contentRect(forFrameRect: window.frame).size
-      #expect(contentSize.width >= 1062)
-      #expect(contentSize.height >= 700)
+      let visibleFrame = try #require(window.screen).visibleFrame
+      let availableSize = window.contentRect(forFrameRect: visibleFrame).size
+      #expect(contentSize.width >= min(1062, availableSize.width))
+      #expect(contentSize.height >= min(700, availableSize.height))
       await document.shutdown()
       document.close()
     }

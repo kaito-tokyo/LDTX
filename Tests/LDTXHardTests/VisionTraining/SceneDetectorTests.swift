@@ -124,14 +124,27 @@ struct SceneDetectorIntegrationTestSuite {
       now: { time }, random: { _ in 0 }, automaticTimer: false)
     var loads = 0
     var prepared = false
-    let feature = WorkspaceV4VisionFeature(scheduler: scheduler) { url, noCompile in
-      loads += 1
-      let model = try await VisionImageClassifierService.loadModel(
-        at: url, noCompile: noCompile, cachesDirectory: caches)
-      let service = try VisionImageClassifierService(model: model)
-      prepared = true
-      return service
-    }
+    let feature = WorkspaceV4VisionFeature(
+      scheduler: scheduler,
+      recognizeText: { image, _ in
+        // Hosted macOS runners do not expose an ANE to Vision.
+        var request = RecognizeTextRequest()
+        for (stage, devices) in request.supportedComputeStageDevices {
+          if let cpu = devices.first(where: { if case .cpu = $0 { true } else { false } }) {
+            request.setComputeDevice(cpu, for: stage)
+          }
+        }
+        let observations = try await request.perform(on: image)
+        return observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+      },
+      loadClassifier: { url, noCompile in
+        loads += 1
+        let model = try await VisionImageClassifierService.loadModel(
+          at: url, noCompile: noCompile, cachesDirectory: caches)
+        let service = try VisionImageClassifierService(model: model)
+        prepared = true
+        return service
+      })
     let trigger = Ldtx_Workspace_V4_VisionTriggerWrapper.with {
       $0.intervalTrigger.intervalSeconds.set(num: 1, den: 1)
     }
@@ -207,13 +220,14 @@ struct SceneDetectorIntegrationTestSuite {
     var attempts: [Bool] = []
     var preparationErrors = 0
     let missingCache = caches.appendingPathComponent("Missing")
-    let cold = WorkspaceV4VisionFeature(scheduler: WorkspaceVisionScheduler(automaticTimer: false))
-    { url, noCompile in
-      attempts.append(noCompile)
-      let model = try await VisionImageClassifierService.loadModel(
-        at: url, noCompile: noCompile, cachesDirectory: missingCache)
-      return try VisionImageClassifierService(model: model)
-    }
+    let cold = WorkspaceV4VisionFeature(
+      scheduler: WorkspaceVisionScheduler(automaticTimer: false),
+      loadClassifier: { url, noCompile in
+        attempts.append(noCompile)
+        let model = try await VisionImageClassifierService.loadModel(
+          at: url, noCompile: noCompile, cachesDirectory: missingCache)
+        return try VisionImageClassifierService(model: model)
+      })
     context.isOutputActive = { active }
     context.reportFailure = { _, _ in preparationErrors += 1 }
     cold.synchronize(visions: wrappers(), context: context)
@@ -237,12 +251,12 @@ struct SceneDetectorIntegrationTestSuite {
     active = false
     var failedLoads = 0
     let failed = WorkspaceV4VisionFeature(
-      scheduler: WorkspaceVisionScheduler(automaticTimer: false)
-    ) { _, noCompile in
-      #expect(!noCompile)
-      failedLoads += 1
-      throw CocoaError(.fileReadCorruptFile)
-    }
+      scheduler: WorkspaceVisionScheduler(automaticTimer: false),
+      loadClassifier: { _, noCompile in
+        #expect(!noCompile)
+        failedLoads += 1
+        throw CocoaError(.fileReadCorruptFile)
+      })
     failed.synchronize(visions: wrappers(), context: context)
     await failed.prepareForOutput()
     let attemptsBeforeOutput = failedLoads

@@ -514,6 +514,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     try runtime.removeVision(internalID: vision)
     let classifierID = source + 1
     try runtime.editDefinition {
+      let index = $0.videoComponents.firstIndex { $0.internalID == source }!
+      $0.videoComponents[index].vfxSource.deviceWidth = 1920
+      $0.videoComponents[index].vfxSource.deviceHeight = 1080
       $0.visions.append(
         .with {
           $0.ldtxSceneDetectorVision = .with {

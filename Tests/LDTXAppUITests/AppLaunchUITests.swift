@@ -26,16 +26,21 @@ final class AppLaunchUITests: XCTestCase {
     defer { app.terminate() }
     XCTAssertTrue(app.menuBars.menuBarItems["File"].waitForExistence(timeout: 15))
     app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
-    app.typeKey("o", modifierFlags: .command)
-    let open = app.dialogs.firstMatch
-    XCTAssertTrue(open.waitForExistence(timeout: 5))
+    app.menuBars.menuBarItems["File"].click()
+    app.menuItems["Open…"].click()
+    // NSOpenPanel may be exposed as a window or sheet rather than a dialog.
+    let open = app.windows.buttons["Open"].firstMatch
+    guard open.waitForExistence(timeout: 10) else {
+      XCTFail("The Open panel did not appear.")
+      return
+    }
     app.typeKey("g", modifierFlags: [.command, .shift])
     app.typeText(url.path)
     app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
-    open.buttons["Open"].click()
+    open.click()
     // Valid package metadata reaches the player; deliberately invalid media uses its SwiftUI alert.
     XCTAssertTrue(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 10))
-    app.buttons["OK"].firstMatch.click()
+    app.windows.buttons["OK"].firstMatch.click()
     XCTAssertFalse(app.staticTexts["Recording Could Not Be Opened"].waitForExistence(timeout: 2))
   }
 

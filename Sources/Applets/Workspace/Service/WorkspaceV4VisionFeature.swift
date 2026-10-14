@@ -13,7 +13,8 @@ import Observation
 @Observable
 public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
   public private(set) var resultsByVisionInternalID: [Int64: String] = [:]
-  @ObservationIgnored private let ocrService = VisionOCRService()
+  @ObservationIgnored private let recognizeText:
+    (CIImage, VisionOCRConfiguration) async throws -> String
   @ObservationIgnored private let scheduler: WorkspaceVisionScheduler
   @ObservationIgnored private let loadClassifier:
     (URL, Bool) async throws -> VisionImageClassifierService
@@ -40,6 +41,10 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
 
   init(
     scheduler: WorkspaceVisionScheduler,
+    recognizeText: @escaping (CIImage, VisionOCRConfiguration) async throws -> String = {
+      image, configuration in
+      try await VisionOCRService().recognizeText(in: image, configuration: configuration).output
+    },
     loadClassifier: @escaping (URL, Bool) async throws -> VisionImageClassifierService = {
       url, noCompile in
       let model = try await VisionImageClassifierService.loadModel(at: url, noCompile: noCompile)
@@ -47,6 +52,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     }
   ) {
     self.scheduler = scheduler
+    self.recognizeText = recognizeText
     self.loadClassifier = loadClassifier
   }
 
@@ -212,9 +218,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       let output: String
       if let ocr {
         frame = try await context.frameForVision(ocr)
-        output = try await ocrService.recognizeText(
-          in: frame.image, configuration: Self.ocrConfiguration(for: ocr)
-        ).output
+        output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
       } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
         guard let service = models[ModelKey(id: classifier.modelInternalID, url: url)] else {
           return
