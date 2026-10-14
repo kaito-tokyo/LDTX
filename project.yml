@@ -5,6 +5,7 @@
 name: LDTX
 
 fileGroups:
+  - Protos
   - pr.xctestplan
   - push-main.xctestplan
 
@@ -18,7 +19,7 @@ options:
   bundleIdPrefix: tokyo.kaito.ldtx
   defaultConfig: Debug
   deploymentTarget:
-    macOS: "26.0"
+    macOS: "27.0"
   createIntermediateGroups: true
   defaultSourceDirectoryType: syncedFolder
 
@@ -36,7 +37,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    MACOSX_DEPLOYMENT_TARGET: "27.0"
     CURRENT_PROJECT_VERSION: "1"
     MARKETING_VERSION: "0.2.3"
     DEVELOPMENT_TEAM: 4HMJS6J4MZ
@@ -46,6 +47,7 @@ settings:
     ENABLE_MODULE_VERIFIER: "YES"
     MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS: "gnu11 gnu++14"
     STRING_CATALOG_GENERATE_SYMBOLS: "YES"
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
     SWIFT_OBJC_INTEROP_MODE: objcxx
 
 include:

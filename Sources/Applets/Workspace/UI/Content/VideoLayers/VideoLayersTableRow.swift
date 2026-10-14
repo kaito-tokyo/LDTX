@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
 import Observation
 import SwiftUI
 
@@ -40,18 +40,29 @@ final class VideoLayersTableRow: NSHostingView<VideoLayersTableRowContent> {
   var isHidden = false
   var supportsPlacement = true
   var strings = ["0", "0", "1", "1"]
-  var hasUnconfirmedChanges = false
+  var transform = Ldtx_Workspace_V4_BasicTransform()
+  @ObservationIgnored private var displayedStrings = ["0", "0", "1", "1"]
+  var hasLocalTextChanges = false
+
+  func edit(_ text: String, at index: Int) {
+    strings[index] = text
+    hasLocalTextChanges = strings != displayedStrings
+    onCommit()
+  }
   var isEditing = false
 
   func display(
     _ transform: Ldtx_Workspace_V4_BasicTransform, canvasWidth: Double, canvasHeight: Double
   ) {
+    self.transform = transform
     strings = [
       pixelPosition(transform.translationX, size: canvasWidth),
       pixelPosition(transform.translationY, size: canvasHeight),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleX),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleY),
     ]
+    displayedStrings = strings
+    hasLocalTextChanges = false
   }
 
   private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32, size: Double) -> String {
@@ -89,8 +100,7 @@ struct VideoLayersTableRowContent: View {
                 get: { state.strings[index] },
                 set: {
                   guard state.strings[index] != $0 else { return }
-                  state.strings[index] = $0
-                  state.hasUnconfirmedChanges = true
+                  state.edit($0, at: index)
                 })
             )
             .focused($focusedField, equals: index)
@@ -103,7 +113,6 @@ struct VideoLayersTableRowContent: View {
     .writingToolsBehavior(.disabled)
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 2)
-    .onSubmit { state.onCommit() }
     .onChange(of: focusedField) { _, new in
       state.isEditing = new != nil
     }

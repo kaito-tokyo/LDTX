@@ -9,6 +9,17 @@ schemes:
         LDTXWorkspaceBundleFormat: all
 
 targets:
+  LDTXVisionTraining:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/LDTXVisionTraining
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVisionTraining
+        PRODUCT_MODULE_NAME: LDTXVisionTraining
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXProtosMacOSExtra:
     type: framework
     platform: macOS
@@ -45,7 +56,15 @@ targets:
     sources:
       - Sources/LDTXUtils
     dependencies:
-      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXCapture
+      - target: LDTXDiagnostics
+      - target: LDTXProgram
+      - target: LDTXVideoComposition
+      - target: LDTXVideoRendering
+      - target: LDTXYouTube
+      - target: LDTXYouTubeAuth
+      - target: LDTXYouTubeRTMPS
       - target: LDTXRecording
       - target: LDTXRecordBundleFormat
       - target: LDTXWorkspaceAppletModel
@@ -134,44 +153,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXInternalProtocols
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXWorkspaceAppletInterface:
-    type: framework
-    platform: macOS
-    sources:
-      - path: Sources/Applets/Workspace
-        includes:
-          - Interface
-    dependencies:
-      - target: LDTXAppletSupport
-      - target: LDTXAudioEngine
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXCapture
-      - target: LDTXDash
-      - target: LDTXDiagnostics
-      - target: LDTXInternalProtocols
-      - target: LDTXMediaTiming
-      - target: LDTXMP4
-      - target: LDTXProgram
-      - target: LDTXProgramRendering
-      - target: LDTXProgramRuntime
-      - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXVision
-      - target: LDTXWorkspaceAppletModel
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeOutputProtocol
-      - target: LDTXYouTubeRTMPS
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletInterface
-        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletInterface
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXCapture:
     type: framework
     platform: macOS
@@ -512,7 +493,6 @@ targets:
         includes:
           - Store
     dependencies:
-      - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXProtos
@@ -536,7 +516,8 @@ targets:
         includes:
           - Service
     dependencies:
-      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXBackgroundSegmentation
+      - target: LDTXDiagnostics
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceBundleFormat
@@ -572,9 +553,15 @@ targets:
     sources:
       - path: Sources/Applets/Workspace
         includes:
-          - Controller
+          - WorkspaceDocument.swift
+          - WorkspaceScene.swift
+          - WorkspaceTerminationDelegate.swift
+          - WorkspaceToolbarCoordinator.swift
+          - WorkspaceViewController.swift
+          - WorkspaceViewControllerRepresentation.swift
+          - WorkspaceWindowController.swift
     dependencies:
-      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXProtos
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

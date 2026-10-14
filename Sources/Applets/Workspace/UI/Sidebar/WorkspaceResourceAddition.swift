@@ -37,7 +37,7 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
     case .testPattern: .testPatternVideoComponent
     }
   }
-  func make(id: UInt64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  func make(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
     switch self {
     case .vfxSource: WorkspaceResourceFactory.makeVFXSource(id: id, name: name)
     case .solidColor: WorkspaceResourceFactory.makeSolidColor(id: id, name: name)
@@ -50,16 +50,31 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
   }
 }
 
+enum WorkspaceAddVisionKind: String, CaseIterable, Identifiable {
+  case ocr = "OCR Vision"
+  case createMlImageClassifier = "Create ML Image Classifier"
+  var id: Self { self }
+  var inspectorKind: WorkspaceInspectorKind {
+    switch self {
+    case .ocr: .ocrVision
+    case .createMlImageClassifier: .ldtxSceneDetectorVision
+    }
+  }
+}
+
 struct WorkspaceAddDraft: Equatable {
   var name = ""
   var physicalDeviceID: WorkspacePhysicalDeviceID?
   var componentKind: WorkspaceAddComponentKind = .vfxSource
-  var videoComponentID: UInt64?
+  var videoComponentID: Int64?
+  var visionKind: WorkspaceAddVisionKind = .ocr
 }
 
 struct WorkspaceAddDeviceOption: Identifiable {
   let id: WorkspacePhysicalDeviceID
   let name: String
+  var width: UInt32 = 0
+  var height: UInt32 = 0
   var isAudio: Bool {
     if case .coreAudioDevice = id { return true }
     return false
@@ -81,9 +96,9 @@ enum WorkspaceResourceAddition {
 
   static func validationMessage(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
+    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
   ) -> String? {
-    if storeService.isOutputActive { return "Stop output before adding a resource." }
+    if stateService.isOutputActive { return "Stop output before adding a resource." }
     if sheet == .device, case .coreAudioDevice? = draft.physicalDeviceID,
       let audioDiscoveryError
     {
@@ -94,16 +109,29 @@ enum WorkspaceResourceAddition {
     {
       return "Select an available audio device."
     }
+    if sheet == .videoComponent, draft.componentKind == .vfxSource {
+      guard
+        let device = devices.first(where: {
+          $0.id == draft.physicalDeviceID && !$0.isAudio
+        }), device.width > 0, device.height > 0
+      else {
+        return "Select an available camera with a valid image size."
+      }
+    }
     if sheet == .vision {
       guard let componentID = draft.videoComponentID,
-        storeService.definition.videoComponents.contains(where: { $0.internalID == componentID })
+        stateService.workspaceDefinition.videoComponents.contains(where: {
+          $0.internalID == componentID && $0.canBeVisionInput
+            && (draft.visionKind != .createMlImageClassifier
+              || $0.renderingSize.map { $0.width > 0 && $0.height > 0 } == true)
+        })
       else {
         return "Select a video component."
       }
     }
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
     if name.isEmpty { return "Enter a name." }
-    if existingNames(storeService.definition).contains(name) {
+    if existingNames(stateService.workspaceDefinition).contains(name) {
       return "This name is already in use."
     }
     return nil
@@ -111,35 +139,47 @@ enum WorkspaceResourceAddition {
 
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    storeService: WorkspaceStoreService, audioDiscoveryError: String? = nil
-  ) throws -> UInt64 {
+    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
+  ) throws -> Int64 {
     if let message = validationMessage(
-      sheet: sheet, draft: draft, devices: devices, storeService: storeService,
+      sheet: sheet, draft: draft, devices: devices, stateService: stateService,
       audioDiscoveryError: audioDiscoveryError)
     {
       throw AdditionError(message: message)
     }
     let id = WorkspaceResourceFactory.nextInternalID()
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
-    var definition = storeService.definition
+    var definition = stateService.workspaceDefinition
     let inspectorKind: WorkspaceInspectorKind
     switch sheet {
     case .device:
       definition.audioDevices.append(WorkspaceResourceFactory.makeAudioInput(id: id, name: name))
       inspectorKind = .audioInputDevice
     case .videoComponent:
-      definition.videoComponents.append(
-        draft.componentKind.make(id: id, name: name))
+      var component = draft.componentKind.make(id: id, name: name)
+      if draft.componentKind == .vfxSource,
+        let device = devices.first(where: { $0.id == draft.physicalDeviceID && !$0.isAudio })
+      {
+        component.vfxSource.deviceWidth = device.width
+        component.vfxSource.deviceHeight = device.height
+      }
+      definition.videoComponents.append(component)
       inspectorKind = draft.componentKind.inspectorKind
     case .vision:
-      definition.visions.append(
-        WorkspaceResourceFactory.makeOcrVision(
+      let vision: Ldtx_Workspace_V4_VisionWrapper
+      switch draft.visionKind {
+      case .ocr:
+        vision = WorkspaceResourceFactory.makeOcrVision(
           id: id, name: name, componentID: draft.videoComponentID!)
-      )
-      inspectorKind = .ocrVision
+      case .createMlImageClassifier:
+        vision = WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
+          id: id, name: name, componentID: draft.videoComponentID!)
+      }
+      definition.visions.append(vision)
+      inspectorKind = draft.visionKind.inspectorKind
     }
-    storeService.definition = definition
-    storeService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
+    stateService.workspaceDefinition = definition
+    stateService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
     return id
   }
 
@@ -148,7 +188,7 @@ enum WorkspaceResourceAddition {
     var errorDescription: String? { message }
   }
 
-  static func existingNames(_ definition: WorkspaceStoreService.WorkspaceDefinition) -> Set<
+  static func existingNames(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Set<
     String
   > {
     var names = Set(

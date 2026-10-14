@@ -3,9 +3,9 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
@@ -17,20 +17,20 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1024.1: Rename validates all resource names and preserves rejected edits")
     func renameValidatesResourceNames() throws {
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
-      service.definition.programs = [
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
+      service.workspaceDefinition.programs = [
         .with {
           $0.internalID = 1
           $0.displayName = "Program"
         }
       ]
-      service.definition.audioDevices = [
+      service.workspaceDefinition.audioDevices = [
         WorkspaceResourceFactory.makeAudioInput(id: 2, name: "Audio")
       ]
-      service.definition.videoComponents = [
+      service.workspaceDefinition.videoComponents = [
         WorkspaceResourceFactory.makeVFXSource(id: 3, name: "Video")
       ]
-      service.definition.visions = [
+      service.workspaceDefinition.visions = [
         .with {
           $0.ocrVision = .with {
             $0.internalID = 4
@@ -38,29 +38,31 @@ extension AppUIComponentTestSuite {
           }
         }
       ]
+      let inspector = WorkspaceProgramsInspector(
+        stateService: service, appletData: WorkspaceAppletData())
       for name in ["", "Audio", "Video", "Vision"] {
-        #expect(throws: (any Error).self) { try service.renameProgram(internalID: 1, name: name) }
-        #expect(service.definition.programs[0].displayName == "Program")
+        #expect(throws: (any Error).self) { try inspector.renameProgram(internalID: 1, name: name) }
+        #expect(service.workspaceDefinition.programs[0].displayName == "Program")
       }
-      try service.renameProgram(internalID: 1, name: "  Renamed  ")
-      #expect(service.definition.programs[0].displayName == "Renamed")
-      try service.renameProgram(internalID: 1, name: "Renamed")
+      try inspector.renameProgram(internalID: 1, name: "  Renamed  ")
+      #expect(service.workspaceDefinition.programs[0].displayName == "Renamed")
+      try inspector.renameProgram(internalID: 1, name: "Renamed")
       #expect(throws: (any Error).self) {
-        try service.renameProgram(internalID: 999, name: "Missing")
+        try inspector.renameProgram(internalID: 999, name: "Missing")
       }
       service.isOutputActive = true
       #expect(throws: (any Error).self) {
-        try service.renameProgram(internalID: 1, name: "Blocked")
+        try inspector.renameProgram(internalID: 1, name: "Blocked")
       }
-      #expect(service.definition.programs[0].displayName == "Renamed")
+      #expect(service.workspaceDefinition.programs[0].displayName == "Renamed")
     }
 
     @Test("UCT-1024.2: Delete removes only the requested Program and its preferences")
     func deleteUsesExistingRuntimeAndPreservesOtherPrograms() async throws {
       _ = NSApplication.shared
       let document = WorkspaceDocument()
-      let service = document.storeService
-      service.definition.programs = [
+      let service = document.stateService
+      service.workspaceDefinition.programs = [
         .with {
           $0.internalID = 100
           $0.displayName = "First"
@@ -70,54 +72,51 @@ extension AppUIComponentTestSuite {
           $0.displayName = "Second"
         },
       ]
-      service.preferences.landscapeProgramPreferences[101] = .init()
-      service.preferences.portraitProgramPreferences[101] = .init()
+      service.workspacePreferences.landscapeProgramPreferences[101] = .init()
+      service.workspacePreferences.portraitProgramPreferences[101] = .init()
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("DeletedProgram.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
-      document.updateChangeCount(.changeCleared)
-      #expect(!document.isDocumentEdited)
+      document.captureTestBaseline()
+      #expect(!document.hasTestModelChanges)
       let controller = WorkspaceWindowController(
-        storeService: service, persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
+        stateService: service,
+        persistenceCoordinator: document.persistenceCoordinator,
+        appletData: document.appletData, document: document)
       document.addWindowController(controller)
       service.isOutputActive = true
-      #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
-      #expect(service.definition.programs.count == 2)
-      #expect(!document.isDocumentEdited)
+      #expect(throws: (any Error).self) { try controller.removeProgram(internalID: 101) }
+      #expect(service.workspaceDefinition.programs.count == 2)
+      #expect(!document.hasTestModelChanges)
       service.isOutputActive = false
-      try service.selectProgram(internalID: 101)
-      let editor = MasterVolumeEditor(storeService: service)
+      try controller.selectProgram(internalID: 101)
+      let editor = MasterVolumeEditor(
+        stateService: service, appletData: document.appletData, peakMeter: .init(),
+        reportError: { _ in })
       _ = editor.view
       let field = editor.masterFields[0]
       field.stringValue = "invalid"
       field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      let definitionBeforeDeletion = service.definition
-      let preferencesBeforeDeletion = service.preferences
-      #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
-      #expect(service.definition == definitionBeforeDeletion)
-      #expect(service.preferences == preferencesBeforeDeletion)
-      #expect(service.selectedProgram?.internalID == 101)
       #expect(field.dirty && field.stringValue == "invalid")
-      #expect(!document.isDocumentEdited)
+      #expect(!document.hasTestModelChanges)
       field.stringValue = "-12"
-      try service.removeProgram(internalID: 101)
-      #expect(service.definition.programs.map(\.internalID) == [100])
-      #expect(service.preferences.landscapeProgramPreferences[101] == nil)
-      #expect(service.preferences.portraitProgramPreferences[101] == nil)
-      #expect(document.isDocumentEdited)
-      document.updateChangeCount(.changeCleared)
-      #expect(throws: (any Error).self) { try service.removeProgram(internalID: 101) }
-      #expect(!document.isDocumentEdited)
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+      try controller.removeProgram(internalID: 101)
+      #expect(service.workspaceDefinition.programs.map(\.internalID) == [100])
+      #expect(service.workspacePreferences.landscapeProgramPreferences[101] == nil)
+      #expect(service.workspacePreferences.portraitProgramPreferences[101] == nil)
+      #expect(document.hasTestModelChanges)
+      document.captureTestBaseline()
+      #expect(throws: (any Error).self) { try controller.removeProgram(internalID: 101) }
+      #expect(!document.hasTestModelChanges)
       try await saveWorkspaceDocument(document, to: url, operation: .saveOperation)
-      let reopened = WorkspaceDocument()
+      let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
-      try reopened.read(from: url, ofType: "tokyo.kaito.ldtx.workspace")
-      #expect(reopened.storeService.definition.programs.map(\.internalID) == [100])
-      #expect(reopened.storeService.preferences.landscapeProgramPreferences[101] == nil)
-      #expect(reopened.storeService.preferences.portraitProgramPreferences[101] == nil)
+      #expect(reopened.stateService.workspaceDefinition.programs.map(\.internalID) == [100])
+      #expect(reopened.stateService.workspacePreferences.landscapeProgramPreferences[101] == nil)
+      #expect(reopened.stateService.workspacePreferences.portraitProgramPreferences[101] == nil)
       await controller.shutdown()
       controller.window?.close()
       document.close()

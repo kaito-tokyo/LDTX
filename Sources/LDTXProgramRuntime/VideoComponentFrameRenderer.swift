@@ -12,7 +12,7 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
   private let coordinator: WorkspaceCaptureSessionCoordinator
   private let factory: BackgroundRemovalPreprocessorFactory?
   private let registry: LowFrequencyUpdateRegistry
-  private var renderers: [UInt64: ActiveProgramRenderer] = [:]
+  private var renderers: [Int64: ActiveProgramRenderer] = [:]
 
   public init(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
@@ -24,7 +24,7 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
     registry = lowFrequencyUpdateRegistry
   }
 
-  public func render(componentID: UInt64, configuration: ProgramRuntimeConfiguration) async throws
+  public func render(componentID: Int64, configuration: ProgramRuntimeConfiguration) async throws
     -> ProgramFrame
   {
     try Task.checkCancellation()
@@ -52,7 +52,7 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
     }
   }
 
-  public func retainComponents(_ ids: Set<UInt64>) {
+  public func retainComponents(_ ids: Set<Int64>) {
     queue.async { [self] in
       for id in Array(renderers.keys) where !ids.contains(id) {
         renderers.removeValue(forKey: id)?.endSession(1)

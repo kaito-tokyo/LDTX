@@ -19,14 +19,14 @@ struct WorkspaceAddResourceSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       Text(sheet.title).font(.title2).bold()
-      if sheet == .device {
+      if sheet == .device || (sheet == .videoComponent && draft.componentKind == .vfxSource) {
         Button("Refresh Devices", action: refresh)
         if let deviceDiscoveryMessage {
           Text(deviceDiscoveryMessage).font(.caption).foregroundStyle(.red)
         }
         ScrollView {
           VStack(alignment: .leading, spacing: 2) {
-            ForEach(devices) { device in
+            ForEach(availableDevices) { device in
               Button {
                 draft.physicalDeviceID = device.id
               } label: {
@@ -48,10 +48,10 @@ struct WorkspaceAddResourceSheet: View {
               )
               .accessibilityAddTraits(draft.physicalDeviceID == device.id ? [.isSelected] : [])
             }
-            if devices.isEmpty { Text("No audio devices available").foregroundStyle(.secondary) }
+            if availableDevices.isEmpty { Text("No devices available").foregroundStyle(.secondary) }
           }
         }
-        .frame(height: min(240, CGFloat(max(1, devices.count)) * 40))
+        .frame(height: min(240, CGFloat(max(1, availableDevices.count)) * 40))
         .accessibilityIdentifier("addInputPhysicalDeviceList")
       }
       Form {
@@ -62,19 +62,16 @@ struct WorkspaceAddResourceSheet: View {
           .accessibilityIdentifier("addVideoComponentKindPicker")
         }
         if sheet == .vision {
-          Text("Video Component")
-          ForEach(componentOptions) { input in
-            Button {
-              draft.videoComponentID = input.id
-            } label: {
-              HStack {
-                Text(input.name)
-                Spacer()
-                if draft.videoComponentID == input.id { Image(systemName: "checkmark") }
-              }
-            }.buttonStyle(.plain)
+          Picker("Kind", selection: $draft.visionKind) {
+            ForEach(WorkspaceAddVisionKind.allCases) { kind in Text(kind.rawValue).tag(kind) }
           }
-          if videoComponents.isEmpty { Text("No video components").foregroundStyle(.secondary) }
+          .accessibilityIdentifier("addVisionKindPicker")
+          .onChange(of: draft.visionKind) { oldKind, newKind in
+            if draft.name == oldKind.rawValue { draft.name = newKind.rawValue }
+          }
+          VisionInputVideoComponentDropdown(
+            videoComponents: videoComponents, selection: $draft.videoComponentID,
+            requiresPositiveSize: draft.visionKind == .createMlImageClassifier)
         }
         TextField("Name", text: $draft.name, prompt: Text(selectedDeviceName))
           .focused($nameFocused)
@@ -83,7 +80,11 @@ struct WorkspaceAddResourceSheet: View {
       }
       .formStyle(.grouped)
       if sheet == .vision {
-        Text("Recognize text locally with Apple Vision.").font(.caption).foregroundStyle(.secondary)
+        Text(
+          draft.visionKind == .ocr
+            ? "Recognize text locally with Apple Vision."
+            : "Classify images locally with a Create ML model."
+        ).font(.caption).foregroundStyle(.secondary)
       }
       if let message = validationMessage {
         Text(message).font(.caption).foregroundStyle(.red)
@@ -99,7 +100,7 @@ struct WorkspaceAddResourceSheet: View {
     .padding(24)
     .frame(width: 420)
     .onAppear { nameFocused = true }
-    .onChange(of: devices.map(\.id)) { _, ids in
+    .onChange(of: availableDevices.map(\.id)) { _, ids in
       draft.physicalDeviceID = WorkspaceSelectionRules.reconciled(
         draft.physicalDeviceID, availableIDs: ids)
     }
@@ -110,9 +111,13 @@ struct WorkspaceAddResourceSheet: View {
     .onChange(of: draft.componentKind) { _, kind in draft.name = kind.rawValue }
   }
 
-  private var componentOptions: [WorkspaceSelectionOption<UInt64>] {
+  private var availableDevices: [WorkspaceAddDeviceOption] {
+    devices.filter { sheet == .device ? $0.isAudio : !$0.isAudio }
+  }
+
+  private var componentOptions: [WorkspaceSelectionOption<Int64>] {
     videoComponents.compactMap {
-      guard let id = $0.internalID,
+      guard $0.canBeVisionInput, let id = $0.internalID, id > 0,
         let name = $0.displayName
       else { return nil }
       return .init(id: id, name: name)

@@ -8,16 +8,19 @@ import CoreImage
 import Foundation
 import ImageIO
 import LDTXAppletSupport
+import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
+import LDTXProtos
 import LDTXRecordBundleFormat
 import LDTXRecording
-import LDTXWorkspaceAppletInterface
+import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 import Observation
+import Synchronization
 import UniformTypeIdentifiers
 
 private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
@@ -28,6 +31,10 @@ private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
   }
 }
 
+private final class VisionArchiveFailure: Sendable {
+  let error = Mutex<(any Error)?>(nil)
+}
+
 /// Owns recording and streaming for one Version 4 Workspace Output.
 @MainActor
 @Observable
@@ -35,13 +42,15 @@ public final class WorkspaceV4RecordingSession {
   public typealias State = WorkspaceRecordingState
 
   private let windowRuntime: WorkspaceWindowRuntime
-  private let physicalDeviceIDsProvider: () -> [UInt64: WorkspacePhysicalDeviceID]
+  private let physicalDeviceIDsProvider: () -> [Int64: WorkspacePhysicalDeviceID]
   private let localStateProvider: () -> WorkspaceLocalState
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
-  private let visionArchiveQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive")
+  private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
+  private let visionArchiveQueue: DispatchQueue
+  @ObservationIgnored private let visionArchiveFailure = VisionArchiveFailure()
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
@@ -63,13 +72,15 @@ public final class WorkspaceV4RecordingSession {
 
   public init(
     windowRuntime: WorkspaceWindowRuntime,
-    physicalDeviceIDs: @escaping () -> [UInt64: WorkspacePhysicalDeviceID] = { [:] },
+    physicalDeviceIDs: @escaping () -> [Int64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
+    visionArchiveQueue: DispatchQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive"),
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.windowRuntime = windowRuntime
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
+    self.visionArchiveQueue = visionArchiveQueue
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
@@ -105,6 +116,7 @@ public final class WorkspaceV4RecordingSession {
       return
     }
 
+    sessionOutputSettings = output
     state = .starting
     sleepInhibitor.start()
     let baseDirectory = outputDirectory()
@@ -163,14 +175,12 @@ public final class WorkspaceV4RecordingSession {
           guard let recordService else { return }
           let timelineMilliseconds = recordService.recordingTimelineMilliseconds()
           let packageDirectory = recordService.packageDirectory
-          self.visionArchiveQueue.async {
-            Self.archiveVisionResult(
-              internalID: internalID, image: image, output: output,
-              timelineMilliseconds: timelineMilliseconds,
-              packageDirectory: packageDirectory)
-          }
+          self.enqueueVisionArchive(
+            internalID: internalID, image: image, output: output,
+            timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
         }
         windowRuntime.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
+        windowRuntime.visionArchivePackageURL = recordService.packageDirectory
         service = recordService
       } else {
         service = nil
@@ -260,8 +270,20 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func finishStopping(pausing: Bool) async {
+    windowRuntime.visionArchivePackageURL = nil
+    windowRuntime.visionArchiveHandler = nil
+    windowRuntime.visionArchiveTimelineProvider = nil
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
+    await withCheckedContinuation { continuation in
+      visionArchiveQueue.async { continuation.resume() }
+    }
+    if let error = visionArchiveFailure.error.withLock({ error in
+      defer { error = nil }
+      return error
+    }) {
+      terminalFailureMessage = error.localizedDescription
+    }
     if let recordService {
       await finalize(recordService)
     }
@@ -367,7 +389,7 @@ public final class WorkspaceV4RecordingSession {
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub
   ) {
-    let output = windowRuntime.workspace.outputSettings
+    guard let output = sessionOutputSettings else { return }
     switch output.youtubeSettings.ingestMode {
     case .unspecified, .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
@@ -483,6 +505,8 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func clearSessionReferences() {
+    windowRuntime.visionArchivePackageURL = nil
+    sessionOutputSettings = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
     activeSession = nil
@@ -497,30 +521,47 @@ public final class WorkspaceV4RecordingSession {
     portraitHub = nil
   }
 
-  private nonisolated static func archiveVisionResult(
-    internalID: UInt64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
+  func enqueueVisionArchive(
+    internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
     packageDirectory: URL
   ) {
+    visionArchiveQueue.async { [visionArchiveFailure] in
+      do {
+        try Self.archiveVisionResult(
+          internalID: internalID, image: image, output: output,
+          timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
+      } catch {
+        visionArchiveFailure.error.withLock { if $0 == nil { $0 = error } }
+      }
+    }
+  }
+
+  private nonisolated static func archiveVisionResult(
+    internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
+    packageDirectory: URL
+  ) throws {
     let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let stem = "vision-\(internalID)-\(UInt64(Date().timeIntervalSince1970 * 1_000))"
     let imageURL = directory.appendingPathComponent("\(stem).jpg")
     let metadataURL = directory.appendingPathComponent("\(stem).json")
     let context = CIContext(options: [.cacheIntermediates: false])
-    if let cgImage = context.createCGImage(image, from: image.extent),
+    guard let cgImage = context.createCGImage(image, from: image.extent),
       let destination = CGImageDestinationCreateWithURL(
         imageURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
-    {
-      CGImageDestinationAddImage(destination, cgImage, nil)
-      _ = CGImageDestinationFinalize(destination)
+    else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    guard CGImageDestinationFinalize(destination) else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
     }
     var metadata: [String: String] = ["visionID": String(internalID), "output": output]
     if let timelineMilliseconds {
       metadata["recordingTimelineMilliseconds"] = String(timelineMilliseconds)
     }
-    if let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]) {
-      try? data.write(to: metadataURL, options: .atomic)
-    }
+    let data = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
+    try data.write(to: metadataURL, options: .atomic)
   }
 
   private var isFailed: Bool {
@@ -538,7 +579,7 @@ public final class WorkspaceV4RecordingSession {
     return preferences(windowRuntime.preferences.landscapeProgramPreferences[id] ?? .init())
   }
 
-  private var selectedProgramInternalID: UInt64? {
+  private var selectedProgramInternalID: Int64? {
     let programs = windowRuntime.definition.programs
     guard let selectedID = localStateProvider().selectedProgramInternalID,
       programs.contains(where: { $0.internalID == selectedID })
@@ -546,7 +587,7 @@ public final class WorkspaceV4RecordingSession {
     return selectedID
   }
 
-  private func portraitPreferences(for programInternalID: UInt64) -> ProgramPreferences {
+  private func portraitPreferences(for programInternalID: Int64) -> ProgramPreferences {
     preferences(windowRuntime.preferences.portraitProgramPreferences[programInternalID] ?? .init())
   }
 
@@ -635,11 +676,11 @@ public final class WorkspaceV4RecordingSession {
     }
     let audioInputIDs = Set(
       configurations.flatMap { configuration in
-        configuration.audioChannels.compactMap { channel -> UInt64? in
+        configuration.audioChannels.compactMap { channel -> Int64? in
           guard case .inputAudioDevice(let input) = channel.component,
             let inputDeviceID = input.inputDeviceID,
             inputDeviceID.hasPrefix("v4-"),
-            let id = UInt64(inputDeviceID.dropFirst(3))
+            let id = Int64(inputDeviceID.dropFirst(3))
           else { return nil }
           return id
         }

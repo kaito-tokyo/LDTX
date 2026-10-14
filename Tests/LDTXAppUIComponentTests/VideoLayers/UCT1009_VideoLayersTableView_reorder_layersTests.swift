@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
@@ -51,7 +50,7 @@ extension AppUIComponentTestSuite {
     func acceptsSingleLocalMovesAndRejectsForeign() throws {
       let fixture = VideoLayersTestFixture()
       let table = fixture.makeTable()
-      var actions: [[UInt64]] = []
+      var actions: [[Int64]] = []
       fixture.update(table, order: { actions.append($0) })
       let info = LayerDraggingInfo(source: table, id: 3)
       #expect(
@@ -81,7 +80,7 @@ extension AppUIComponentTestSuite {
       let fixture = VideoLayersTestFixture()
       let table = DropRecordingTable()
       table.frame = NSRect(x: 0, y: 0, width: 720, height: 308)
-      var actions: [[UInt64]] = []
+      var actions: [[Int64]] = []
       fixture.update(table, order: { actions.append($0) })
       let info = LayerDraggingInfo(source: table, id: 1)
       info.draggingLocation = table.convert(
@@ -147,8 +146,8 @@ extension AppUIComponentTestSuite {
       for index in 0..<4 { _ = table.view(atColumn: 0, row: index, makeIfNecessary: true) }
       let retained = try #require(table.rows[3])
       retained.state.strings[0] = "draft"
-      retained.state.hasUnconfirmedChanges = true
-      for ids: [UInt64] in [[4, 3, 1, 2], [5, 3, 2], [2, 5, 3, 6], []] {
+      retained.state.hasLocalTextChanges = true
+      for ids: [Int64] in [[4, 3, 1, 2], [5, 3, 2], [2, 5, 3, 6], []] {
         fixture.update(table, ids: ids)
         container.scrollView.layoutSubtreeIfNeeded()
         #expect(table.numberOfRows == ids.count)

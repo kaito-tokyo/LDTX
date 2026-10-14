@@ -99,14 +99,14 @@ struct WrapperAttributesUnitTestSuite {
   @Test func identityDoesNotSubstituteZeroForAnUnsetID() {
     var video = Ldtx_Workspace_V4_VideoComponentWrapper()
     video.videoComponent = .clock(.init())
-    #expect(video.id == .invalid)
+    #expect(video.internalID == nil)
     video.videoComponent = .clock(.with { $0.internalID = 0 })
-    #expect(video.id == .clock(0))
+    #expect(video.internalID == 0)
     var vision = Ldtx_Workspace_V4_VisionWrapper()
     vision.vision = .ocrVision(.init())
-    #expect(vision.id == .invalid)
+    #expect(vision.internalID == nil)
     vision.vision = .ocrVision(.with { $0.internalID = 0 })
-    #expect(vision.id == .ocrVision(0))
+    #expect(vision.internalID == 0)
   }
 
 }

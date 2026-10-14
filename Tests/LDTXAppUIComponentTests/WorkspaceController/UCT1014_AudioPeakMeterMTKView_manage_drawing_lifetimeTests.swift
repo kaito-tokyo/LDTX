@@ -5,8 +5,8 @@ import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI
@@ -24,6 +24,7 @@ extension AppUIComponentTestSuite {
     @Test(
       "UCT-1014.1: Drawing follows Window attachment and UI releases without external stop calls")
     func meterOwnsDrawingLifetimeAndEditorsReleaseWithoutStop() async throws {
+      let serviceAppletData = WorkspaceAppletData()
       _ = NSApplication.shared
       let first = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled],
@@ -55,10 +56,16 @@ extension AppUIComponentTestSuite {
       }
       #expect(releasedMeter == nil)
 
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
-      var audio: AudioMixEditor? = AudioMixEditor(storeService: service)
-      var master: MasterVolumeEditor? = MasterVolumeEditor(storeService: service)
-      var layers: VideoLayersEditor? = VideoLayersEditor(storeService: service, target: .landscape)
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
+      var audio: AudioMixEditor? = AudioMixEditor(
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
+      var master: MasterVolumeEditor? = MasterVolumeEditor(
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
+      var layers: VideoLayersEditor? = VideoLayersEditor(
+        stateService: service, appletData: serviceAppletData,
+        target: .landscape)
       weak var releasedAudio = audio
       weak var releasedMaster = master
       weak var releasedLayers = layers

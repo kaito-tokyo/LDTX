@@ -24,7 +24,8 @@ Feature: Restrict edits during output
     Then the definition change is rejected while preferences update the edited state
 
   @UCT-1004.4 @WorkspaceWindowController
-  Scenario: Output disables Save As and Revert
+  Scenario: Output uses standard Save As behavior and prevents Revert
     Given a Workspace with active output
     When Save As and Revert menu actions are validated
-    Then both actions are unavailable
+    Then Save As uses the standard DocumentGroup behavior
+    And Revert is unavailable

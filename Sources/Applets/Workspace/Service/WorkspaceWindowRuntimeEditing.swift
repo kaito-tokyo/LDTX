@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProgram
+import LDTXProtos
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
@@ -15,10 +16,10 @@ public final class WorkspaceInternalIDGenerator {
 
   public init() {}
 
-  public func next(now: Date = Date()) -> UInt64 {
-    let milliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1_000))
+  public func next(now: Date = Date()) -> Int64 {
+    let milliseconds = Int64(max(0, now.timeIntervalSince1970 * 1_000))
     let timestamp = (milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15
-    return timestamp | UInt64.random(in: 0...0x7fff, using: &randomNumberGenerator)
+    return timestamp | (Int64.random(in: 0...0x3fff, using: &randomNumberGenerator) << 1) | 1
   }
 }
 
@@ -30,7 +31,7 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addAudioInputDevice(displayName: String) throws -> UInt64 {
+  public func addAudioInputDevice(displayName: String) throws -> Int64 {
     let id = internalIDGenerator.next()
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
@@ -40,7 +41,7 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addProgram(displayName: String) throws -> UInt64 {
+  public func addProgram(displayName: String) throws -> Int64 {
     let id = internalIDGenerator.next()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = id
@@ -50,7 +51,7 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addVFXSource(displayName: String) throws -> UInt64 {
+  public func addVFXSource(displayName: String) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
@@ -63,7 +64,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addSolidColorFill(displayName: String, color: Ldtx_Workspace_V4_Color)
-    throws -> UInt64
+    throws -> Int64
   {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillSolidColorComponent()
@@ -80,7 +81,7 @@ extension WorkspaceWindowRuntime {
   public func addLinearGradientFill(
     displayName: String, startColor: Ldtx_Workspace_V4_Color,
     endColor: Ldtx_Workspace_V4_Color
-  ) throws -> UInt64 {
+  ) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
@@ -109,7 +110,7 @@ extension WorkspaceWindowRuntime {
   public func addRadialGradientFill(
     displayName: String, innerColor: Ldtx_Workspace_V4_Color,
     outerColor: Ldtx_Workspace_V4_Color
-  ) throws -> UInt64 {
+  ) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
@@ -138,7 +139,7 @@ extension WorkspaceWindowRuntime {
   public func addConicGradientFill(
     displayName: String, startColor: Ldtx_Workspace_V4_Color,
     endColor: Ldtx_Workspace_V4_Color
-  ) throws -> UInt64 {
+  ) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
@@ -158,7 +159,7 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addClock(displayName: String) throws -> UInt64 {
+  public func addClock(displayName: String) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
@@ -182,7 +183,7 @@ extension WorkspaceWindowRuntime {
   }
 
   @discardableResult
-  public func addTestPattern(displayName: String) throws -> UInt64 {
+  public func addTestPattern(displayName: String) throws -> Int64 {
     let id = internalIDGenerator.next()
     var component = Ldtx_Workspace_V4_TestPatternComponent()
     component.internalID = id
@@ -195,11 +196,11 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addOcrVision(
-    displayName: String, videoComponentInternalID: UInt64,
+    displayName: String, videoComponentInternalID: Int64,
     intervalSeconds: Ldtx_Workspace_V4_Rational32 = .with {
       $0.set(num: 5, den: 1)
     }
-  ) throws -> UInt64 {
+  ) throws -> Int64 {
     let id = internalIDGenerator.next()
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
     trigger.intervalSeconds = intervalSeconds
@@ -217,18 +218,18 @@ extension WorkspaceWindowRuntime {
     return id
   }
 
-  public func removeVideoComponent(internalID: UInt64) throws {
+  public func removeVideoComponent(internalID: Int64) throws {
     try removeResource(internalID, kind: .component)
   }
-  public func removeVision(internalID: UInt64) throws {
+  public func removeVision(internalID: Int64) throws {
     try removeResource(internalID, kind: .vision)
   }
-  public func removeInputDevice(internalID: UInt64) throws {
+  public func removeInputDevice(internalID: Int64) throws {
     try removeResource(internalID, kind: .input)
   }
 
   public func setVideoLayerOrder(
-    _ ids: [UInt64], forProgramInternalID programID: UInt64, target: WorkspaceCanvasTarget
+    _ ids: [Int64], forProgramInternalID programID: Int64, target: WorkspaceCanvasTarget
   ) throws {
     try editProgramPreference(programID, target: target) {
       $0.videoLayerInternalIds = ids
@@ -236,8 +237,8 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setBasicTransform(
-    _ transform: Ldtx_Workspace_V4_BasicTransform, forVideoLayerInternalID id: UInt64,
-    programInternalID: UInt64, target: WorkspaceCanvasTarget
+    _ transform: Ldtx_Workspace_V4_BasicTransform, forVideoLayerInternalID id: Int64,
+    programInternalID: Int64, target: WorkspaceCanvasTarget
   ) throws {
     try editProgramPreference(programInternalID, target: target) {
       $0.videoLayerTransforms[id] = transform
@@ -245,7 +246,7 @@ extension WorkspaceWindowRuntime {
   }
 
   public func setAudioChannelGain(
-    _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: UInt64
+    _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: Int64
   ) throws {
     guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
@@ -255,7 +256,7 @@ extension WorkspaceWindowRuntime {
     }
   }
   public func setAudioChannelMuted(
-    _ value: Bool, forAudioInputDeviceInternalID id: UInt64, programInternalID: UInt64,
+    _ value: Bool, forAudioInputDeviceInternalID id: Int64, programInternalID: Int64,
     target: WorkspaceCanvasTarget
   ) throws {
     try editProgramPreference(programInternalID, target: target) {
@@ -263,7 +264,7 @@ extension WorkspaceWindowRuntime {
     }
   }
   public func setVideoLayerHidden(
-    _ value: Bool, forVideoLayerInternalID id: UInt64, programInternalID: UInt64,
+    _ value: Bool, forVideoLayerInternalID id: Int64, programInternalID: Int64,
     target: WorkspaceCanvasTarget
   ) throws {
     try editProgramPreference(programInternalID, target: target) {
@@ -271,7 +272,7 @@ extension WorkspaceWindowRuntime {
     }
   }
   public func setMasterVolume(
-    _ value: Ldtx_Workspace_V4_Rational32, programInternalID: UInt64, target: WorkspaceCanvasTarget
+    _ value: Ldtx_Workspace_V4_Rational32, programInternalID: Int64, target: WorkspaceCanvasTarget
   )
     throws
   {
@@ -283,7 +284,7 @@ extension WorkspaceWindowRuntime {
     }
   }
 
-  public func runtimeProjection(programInternalID: UInt64, target: WorkspaceCanvasTarget) throws
+  public func runtimeProjection(programInternalID: Int64, target: WorkspaceCanvasTarget) throws
     -> WorkspaceV4RuntimeProjection
   {
     try persistenceCoordinator.runtimeProjection(
@@ -301,7 +302,7 @@ extension WorkspaceWindowRuntime {
   }
 
   private enum ResourceKind { case component, vision, input }
-  private func removeResource(_ id: UInt64, kind: ResourceKind) throws {
+  private func removeResource(_ id: Int64, kind: ResourceKind) throws {
     try editWorkspace { workspace in
       let removedIDs = [id]
       switch kind {
@@ -313,15 +314,18 @@ extension WorkspaceWindowRuntime {
           }
         }
         let usedByVision = definition.visions.contains {
-          guard case .ocrVision(let vision) = $0.vision else { return false }
-          return vision.videoComponentInternalID == id
+          switch $0.vision {
+          case .ocrVision(let vision): vision.videoComponentInternalID == id
+          case .ldtxSceneDetectorVision(let vision): vision.videoComponentInternalID == id
+          case nil: false
+          }
         }
         guard !usedByProgram, !usedByVision,
           definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id
         else { throw WorkspaceRuntimeError.resourceInUse(id) }
         let before = workspace.definition.videoComponents.count
         workspace.definition.videoComponents.removeAll {
-          (try? WorkspaceV4IntegrityValidator.videoComponentID($0)) == id
+          $0.internalID == id
         }
         guard before != workspace.definition.videoComponents.count else {
           throw WorkspaceRuntimeError.missingResource(id)
@@ -329,7 +333,7 @@ extension WorkspaceWindowRuntime {
       case .vision:
         let before = workspace.definition.visions.count
         workspace.definition.visions.removeAll {
-          (try? WorkspaceV4IntegrityValidator.visionID($0)) == id
+          $0.internalID == id
         }
         guard before != workspace.definition.visions.count else {
           throw WorkspaceRuntimeError.missingResource(id)
@@ -365,7 +369,7 @@ extension WorkspaceWindowRuntime {
   }
 
   private func editProgramPreference(
-    _ id: UInt64, target: WorkspaceCanvasTarget,
+    _ id: Int64, target: WorkspaceCanvasTarget,
     _ mutation: (inout Ldtx_Workspace_V4_ProgramPreferences) -> Void
   ) throws {
     try editWorkspace { workspace in

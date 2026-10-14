@@ -6,7 +6,7 @@ import Foundation
 import LDTXProtos
 import SwiftProtobuf
 
-/// Reads and inspects protobuf-only Version 4 Workspace bundles.
+/// Reads Version 4 Workspace documents and imported model resources.
 public struct WorkspaceBundleReaderV4 {
   public let bundleURL: URL
 
@@ -55,13 +55,16 @@ public struct WorkspaceBundleReaderV4 {
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: bundleURL])
     }
 
-    return WorkspaceV4Bundle(
+    let workspace = WorkspaceV4Bundle(
       definitionExternalID: definitionExternalID.uuidString.lowercased(),
       preferencesExternalID: preferencesExternalID.uuidString.lowercased(),
       definition: definitionEnvelope.workspaceDefinitionV4,
       preferences: preferencesEnvelope.workspacePreferencesV4,
       outputSettingsExternalID: outputSettingsExternalID.uuidString.lowercased(),
-      outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4)
+      outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4,
+      visionModels: try WorkspaceModelFiles.read(at: bundleURL))
+    try WorkspaceBundleValidatorV4.validate(workspace)
+    return workspace
   }
   private func isUUIDv7(_ value: UUID) -> Bool {
     value.uuid.6 >> 4 == 7 && value.uuid.8 & 0xc0 == 0x80

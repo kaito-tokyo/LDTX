@@ -50,7 +50,7 @@ extension AppUIComponentTestSuite {
       secondEngine.configureMonitor(routes: [], master: 1)
       let document = WorkspaceDocument()
       defer { document.close() }
-      document.updateChangeCount(.changeCleared)
+      document.captureTestBaseline()
       model.refresh()
       #expect(model.currentUID == "")
       model.select("new")
@@ -68,7 +68,7 @@ extension AppUIComponentTestSuite {
       model.select("")
       restored.refresh()
       #expect(restored.currentName == "System Default")
-      #expect(!document.isDocumentEdited)
+      #expect(!document.hasTestModelChanges)
     }
 
     @Test("UCT-1013.3: Discovery failures preserve assignment and report once until recovery")

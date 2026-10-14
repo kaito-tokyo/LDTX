@@ -1,13 +1,28 @@
+import AppKit
+import LDTXProgram
+import LDTXProgramRuntime
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 
 final class AudioMixEditor: NSViewController {
-  private let storeService: WorkspaceStoreService
+  private let peakMeter: ProgramAudioPeakMeter
+  private let reportError: (Error) -> Void
+  private let appletData: WorkspaceAppletData
+  private let stateService: WorkspaceStateService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
 
-  init(storeService: WorkspaceStoreService) {
-    self.storeService = storeService
+  init(
+    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
+  ) {
+    self.reportError = reportError
+    self.peakMeter = peakMeter
+    self.appletData = appletData
+    self.runtimeActions = runtimeActions
+    self.stateService = stateService
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -15,7 +30,7 @@ final class AudioMixEditor: NSViewController {
 
   let outputErrorLabel = NSTextField(wrappingLabelWithString: "")
   private let channels = contentStack([])
-  private var rows: [UInt64: AudioInputRow] = [:]
+  private var rows: [Int64: AudioInputRow] = [:]
 
   override func loadView() {
     view = NSView()
@@ -47,12 +62,32 @@ final class AudioMixEditor: NSViewController {
     refresh()
   }
 
+  @discardableResult
+  func setAudioChannelGain(_ decibels: Double, forAudioInputDeviceInternalID id: Int64)
+    -> Bool
+  {
+    guard stateService.workspaceDefinition.audioDevices.contains(where: { $0.internalID == id })
+    else {
+      reportError(
+        WorkspaceSelectionError(message: "The audio device is no longer available."))
+      return false
+    }
+    do {
+      stateService.workspacePreferences.audioChannelGainsDecibels[id] =
+        try Rational32DecibelEncoding.encode(
+          decibels)
+    } catch {
+      reportError(error)
+      return false
+    }
+    return true
+  }
+
   func refresh() {
-    let peakMeter = storeService.audioPeakMeter
     _ = view
-    outputErrorLabel.stringValue = storeService.outputFailureMessage ?? ""
-    outputErrorLabel.isHidden = storeService.outputFailureMessage == nil
-    let inputs = storeService.definition.audioDevices
+    outputErrorLabel.stringValue = stateService.outputFailureMessage ?? ""
+    outputErrorLabel.isHidden = stateService.outputFailureMessage == nil
+    let inputs = stateService.workspaceDefinition.audioDevices
     let ids = Set(inputs.map(\.internalID))
     for id in Array(rows.keys) where !ids.contains(id) {
       if let row = rows.removeValue(forKey: id) {
@@ -71,7 +106,14 @@ final class AudioMixEditor: NSViewController {
         channels.removeArrangedSubview(row)
         channels.insertArrangedSubview(row, at: index)
       }
-      row.configure(input: input, storeService: storeService, peakMeter: peakMeter)
+      row.configure(
+        input: input, stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+        runtimeActions: runtimeActions
+      ) {
+        [weak self] decibels in
+        self?.setAudioChannelGain(decibels, forAudioInputDeviceInternalID: input.internalID)
+          ?? false
+      }
     }
   }
 
@@ -96,47 +138,61 @@ private final class AudioInputRow: NSStackView {
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
   func configure(
-    input: Ldtx_Workspace_V4_AudioInputDevice, storeService: WorkspaceStoreService,
-    peakMeter: ProgramAudioPeakMeter
+    input: Ldtx_Workspace_V4_AudioInputDevice, stateService: WorkspaceStateService,
+    appletData: WorkspaceAppletData, peakMeter: ProgramAudioPeakMeter,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)?,
+    setGain: @escaping (Double) -> Bool
   ) {
     let id = input.internalID
     name.stringValue = input.displayName
     for (target, button) in [(WorkspaceCanvasTarget.landscape, landscape), (.portrait, portrait)] {
       let preferences =
-        storeService.selectedProgram.flatMap {
-          try? storeService.preferences(for: $0.internalID, target: target)
+        appletData.selectedProgram(
+          in: stateService.workspaceDefinition, for: stateService.localStateURL
+        ).flatMap {
+          stateService.workspacePreferences[keyPath: target.preferences][$0.internalID]
         } ?? .init()
       button.state = preferences.audioChannelMuted[id] == true ? .off : .on
-      button.isEnabled = storeService.selectedProgram != nil
+      button.isEnabled =
+        appletData.selectedProgram(
+          in: stateService.workspaceDefinition, for: stateService.localStateURL) != nil
       button.setAccessibilityLabel(button.title + " " + input.displayName)
-      button.invoke = { [weak storeService, weak button] in
-        guard let button else { return }
-        let muted = button.state != .on
-        storeService?.updateAudio(target: target) { $0.audioChannelMuted[id] = muted }
+      button.invoke = { [weak stateService, weak appletData, weak button] in
+        guard let button, let stateService, let appletData,
+          let programID = appletData.selectedProgram(
+            in: stateService.workspaceDefinition, for: stateService.localStateURL)?.internalID
+        else { return }
+        stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
+          .audioChannelMuted[id] = button.state != .on
       }
     }
     monitor.state =
-      storeService.localState.monitorAudioInputDeviceInternalIDs.contains(id) ? .on : .off
-    monitor.isEnabled = storeService.canMonitor
-    monitor.invoke = { [weak storeService, weak monitor] in
+      (stateService.localStateURL.map { appletData.state(for: $0) }.map {
+        $0.monitorAudioInputDeviceInternalIDs.contains(id)
+      } ?? false) ? .on : .off
+    monitor.isEnabled = stateService.localStateURL != nil
+    monitor.invoke = { [weak stateService, weak appletData, weak monitor] in
+      guard let stateService, let appletData, let url = stateService.localStateURL else { return }
       let enabled = monitor?.state == .on
-      storeService?.updateMonitor { state in
+      appletData.updateState(for: url) { state in
         if enabled {
           state.monitorAudioInputDeviceInternalIDs.insert(id)
         } else {
           state.monitorAudioInputDeviceInternalIDs.remove(id)
         }
       }
+      runtimeActions()?.synchronizeAudioMonitor()
     }
     gain.configure(
       label: "",
       value: ProgramPreferences.linearAudioChannelGain(
-        fromDecibels: (storeService.preferences.audioChannelGainsDecibels[id]?.double ?? 0)),
+        fromDecibels: (stateService.workspacePreferences.audioChannelGainsDecibels[id]?.double ?? 0)
+      ),
       isEnabled: true,
       peakProvider: { peakMeter.peak(for: "v4-\(id)") },
-      onPreview: { [weak storeService] value in
+      onPreview: { value in
         let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: value)
-        storeService?.setAudioChannelGain(decibels, forAudioInputDeviceInternalID: id)
+        _ = setGain(decibels)
       }, onCommit: { _ in })
     gain.setAccessibilityLabel(input.displayName + " Gain")
   }

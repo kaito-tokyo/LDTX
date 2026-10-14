@@ -96,7 +96,7 @@ struct CommandsSystemTestSuite {
     #expect(await asyncThrows { try await command.run() })
   }
 
-  @Test("does not overwrite an existing package without replace")
+  @Test("does not overwrite an existing package")
   func rejectsExistingPackage() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
@@ -109,18 +109,19 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("replaces an existing package with replace")
-  func replacesExistingPackage() async throws {
+  @Test("rejects the removed replace option")
+  func rejectsReplaceOption() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
       try writeWorkspace(makeWorkspace(displayName: "Original"), to: packageURL)
-      var command = try WorkspaceCommand.Create.parse([
-        packageURL.path, "--name", "Replacement", "--replace",
-      ])
-      try await command.run()
+      #expect(throws: (any Error).self) {
+        try WorkspaceCommand.Create.parse([
+          packageURL.path, "--name", "Replacement", "--replace",
+        ])
+      }
       #expect(
         try WorkspaceBundleReaderV4(at: packageURL).read().definition.displayName
-          == "Replacement")
+          == "Original")
     }
   }
 
@@ -260,7 +261,7 @@ struct CommandsSystemTestSuite {
   }
 
   private func writeWorkspace(_ workspace: WorkspaceV4Bundle, to packageURL: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
     let definitionExternalID = writer.makeExternalID()
     try writer.write(definition: workspace.definition, externalID: definitionExternalID)

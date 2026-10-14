@@ -13,6 +13,8 @@ message VisionWrapper {
   oneof vision {
     // The OCR Vision definition. Mutually exclusive with the other fields.
     OcrVision ocr_vision = 1;
+    // The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+    LdtxSceneDetectorVision ldtx_scene_detector_vision = 2;
   }
 }
 
@@ -49,13 +51,13 @@ message IntervalVisionTrigger {
 
 // An image-analysis request that recognizes text in an image.
 message OcrVision {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Vision shown in the Workspace sidebar.
   string display_name = 2;
-  // The LDTXWorkspaceID of the Video Component analyzed after effects and
+  // The LdtxInternalId of the Video Component analyzed after effects and
   // before Program placement.
-  uint64 video_component_internal_id = 3 [default = 0];
+  sfixed64 video_component_internal_id = 3 [default = 0];
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
@@ -69,4 +71,27 @@ message OcrVision {
   repeated string custom_words = 8;
   // The minimum text height, normalized by the target image height, in [0, 1].
   Rational32 minimum_text_height = 9;
+}
+
+// An image-analysis request that detects a scene using an LDTX Scene Detector model.
+message LdtxSceneDetectorVision {
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
+  // The name of this Vision shown in the Workspace sidebar.
+  string display_name = 2;
+  // The LdtxInternalId of the Video Component analyzed after effects and
+  // before Program placement.
+  sfixed64 video_component_internal_id = 3 [default = 0];
+  // The region of the input image in which Vision performs the request.
+  VisionRegionOfInterest region_of_interest = 4;
+  // The conditions that automatically trigger this Vision.
+  repeated VisionTriggerWrapper triggers = 5;
+  // The LdtxInternalId of the assigned model resource.
+  // Zero means no model is assigned.
+  // Models are stored at VisionModels/<model_internal_id>/ inside
+  // the Workspace bundle. Use the first .mlmodel file or .mlpackage directory
+  // in lexicographic basename order within that model directory. Model IDs
+  // are assigned when selecting models, not when saving. Previous models
+  // are retained and are not overwritten when a new model is saved.
+  sfixed64 model_internal_id = 6 [default = 0];
 }

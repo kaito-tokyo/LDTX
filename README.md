@@ -15,6 +15,17 @@ Editor** for building user-defined Programs.
 - Place shapes, text, and images on it
 - Remove the background from your portrait
 
+## Vision Programmer
+
+Open **LDTX → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
+containing one subfolder per class, set the maximum iteration count (25 by default),
+then select **Start training**. Training uses Image Feature Print V2 with aspect-ratio-preserving
+scale-to-fit, no augmentation, and a fixed 95% training / 5% validation split using
+Create ML Components' `randomSplit`.
+When training completes, the progress sheet closes and the standard file exporter
+opens to save the `.mlpackage`.
+For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
+
 ## Internal Framework Modules
 
 This table lists the non-test library targets declared in `project.yml` and generated
@@ -34,9 +45,9 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program runtime definitions, output profiles, and clock backgrounds.        |
-| LDTXProtos                 | SwiftProtobuf messages, Workspace bundle values, and Workspace integrity validation. |
+| LDTXProtos                 | SwiftProtobuf messages and Workspace integrity validation. |
 | LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
-| LDTXWorkspaceBundleFormat  | `.ldtxworkspace` package IO and on-disk format validation. |
+| LDTXWorkspaceBundleFormat  | Workspace bundle values, `.ldtxworkspace` package IO, and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecordPlayerApplet      | Recording playback windows, pane UI, and marker persistence.       |
@@ -46,6 +57,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
+| LDTXVisionProgrammerApplet | Vision Programmer windows and training UI. |
+| LDTXVisionTraining | Scene detector training and Core ML model export using Create ML Components. |
 | LDTXVision                 | On-device OCR and classical computer-vision processing.            |
 | LDTXWorkspaceAppletModel    | Workspace app models and runtime configuration values.           |
 | LDTXWorkspaceAppletStore    | Active Workspace bundle state and application preferences.       |
@@ -64,4 +77,5 @@ for Docker verification and test placement.
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package
 layout, MPEG-DASH timing model, and remux requirements.
 
-See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership.
+See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership,
+and [`docs/ui-rules.md`](docs/ui-rules.md) for UI behavior rules.

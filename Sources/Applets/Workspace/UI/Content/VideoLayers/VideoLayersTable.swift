@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXProtos
 
 class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDelegate {
   static let dragRegionHeight: CGFloat = 28
   static let pasteboardType = NSPasteboard.PasteboardType("tokyo.kaito.ldtx.video-layer")
-  private(set) var layerIDs: [UInt64] = []
-  private(set) var rows: [UInt64: VideoLayersTableRow] = [:]
-  private var onCommitLayerOrder: ([UInt64]) throws -> Void = { _ in }
+  private(set) var layerIDs: [Int64] = []
+  private(set) var rows: [Int64: VideoLayersTableRow] = [:]
+  private var onCommitLayerOrder: ([Int64]) throws -> Void = { _ in }
   private var onError: (Error) -> Void = { _ in }
 
   init() {
@@ -45,8 +46,8 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
   }
 
   func update(
-    layerIDs: [UInt64], rows: [UInt64: VideoLayersTableRow],
-    onCommitLayerOrder: @escaping ([UInt64]) throws -> Void = { _ in },
+    layerIDs: [Int64], rows: [Int64: VideoLayersTableRow],
+    onCommitLayerOrder: @escaping ([Int64]) throws -> Void = { _ in },
     onError: @escaping (Error) -> Void = { _ in }
   ) {
     self.onCommitLayerOrder = onCommitLayerOrder
@@ -106,7 +107,7 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
       (0...layerIDs.count).contains(destination),
       info.draggingPasteboard.pasteboardItems?.count == 1,
       let value = info.draggingPasteboard.string(forType: Self.pasteboardType),
-      let id = UInt64(value), let source = layerIDs.firstIndex(of: id)
+      let id = Int64(value), let source = layerIDs.firstIndex(of: id)
     else { return nil }
     return source
   }
@@ -172,14 +173,14 @@ class VideoLayersTableView: NSTableView, NSTableViewDataSource, NSTableViewDeleg
 
   #Preview("Video Layers Table") {
     let editor = VideoLayersEditor(
-      storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
-      target: .landscape)
+      stateService: WorkspaceStateService(definition: .init(), preferences: .init()),
+      appletData: WorkspaceAppletData(), target: .landscape)
     _ = editor.view
     editor.view.frame = NSRect(x: 0, y: 0, width: 720, height: 560)
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var preferences = Ldtx_Workspace_V4_ProgramPreferences()
     for (index, name) in ["Camera", "Background", "Clock"].enumerated() {
-      let id = UInt64(index + 1)
+      let id = Int64(index + 1)
       var device = Ldtx_Workspace_V4_VfxSourceComponent()
       device.internalID = id
       device.displayName = name

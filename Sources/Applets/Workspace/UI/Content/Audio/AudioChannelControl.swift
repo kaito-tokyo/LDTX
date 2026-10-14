@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProgram
 import MetalKit
 
 final class AudioChannelControlView: NSView {

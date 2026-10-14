@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite struct Rational32DefaultOneUnitTestSuite {
@@ -13,7 +14,7 @@ import Testing
     #expect(zero.double == 0)
     #expect(one.double == 1)
     #expect(one.decimal == 1)
-    #expect(!one.hasNumerator && !one.hasDenominator)
+    #expect(!one.hasNum && !one.hasDen)
     #expect(try one.serializedData().isEmpty)
     let transform = Ldtx_Workspace_V4_BasicTransform()
     #expect(transform.translationX.double == 0)
@@ -22,12 +23,12 @@ import Testing
     let region = Ldtx_Workspace_V4_VisionRegionOfInterest()
     #expect(region.x.double == 0 && region.y.double == 0)
     #expect(region.width.double == 1 && region.height.double == 1)
-    try WorkspaceV4IntegrityValidator.validateRegionOfInterest(region)
+    try WorkspaceBundleValidatorV4.validateRegionOfInterest(region)
   }
 
   @Test func explicitZeroRoundTripsAndClearsBackToOne() throws {
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = .with { $0.numerator = 0 }
+    transform.scaleX = .with { $0.num = 0 }
     let restored = try Ldtx_Workspace_V4_BasicTransform(serializedBytes: transform.serializedData())
     #expect(restored.hasScaleX)
     #expect(restored.scaleX.double == 0)
@@ -51,7 +52,7 @@ import Testing
     #expect(value.double.isNaN && value.float.isNaN && value.decimal.isNaN)
     let restored = try Ldtx_Workspace_V4_Rational32DefaultOne(
       serializedBytes: value.serializedData())
-    #expect(restored.numerator == 0 && restored.denominator == 0)
+    #expect(restored.num == 0 && restored.den == 0)
     value.set(num: 1, den: 0)
     #expect(value.double == .infinity)
   }

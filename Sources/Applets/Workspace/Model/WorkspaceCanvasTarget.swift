@@ -6,10 +6,10 @@ import LDTXProtos
 
 /// Identifies the fields to read and update for one Program canvas.
 public struct WorkspaceCanvasTarget {
-  public let layerIDs: WritableKeyPath<Ldtx_Workspace_V4_ProgramPreferences, [UInt64]>
+  public let layerIDs: WritableKeyPath<Ldtx_Workspace_V4_ProgramPreferences, [Int64]>
   public let preferences:
     WritableKeyPath<
-      Ldtx_Workspace_V4_WorkspacePreferencesV4, [UInt64: Ldtx_Workspace_V4_ProgramPreferences]
+      Ldtx_Workspace_V4_WorkspacePreferencesV4, [Int64: Ldtx_Workspace_V4_ProgramPreferences]
     >
   public let profileID: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, String>
   public let videoBitRate: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, UInt32>
@@ -33,9 +33,9 @@ public struct WorkspaceCanvasTarget {
 
 /// A read-only projection of the current persisted values for one canvas.
 public struct WorkspaceProgramCanvasSnapshot: Sendable {
-  public let audioChannelGainsDecibels: [UInt64: Ldtx_Workspace_V4_Rational32]
-  public let programInternalID: UInt64
-  public let layerIDs: [UInt64]
+  public let audioChannelGainsDecibels: [Int64: Ldtx_Workspace_V4_Rational32]
+  public let programInternalID: Int64
+  public let layerIDs: [Int64]
   public let preferences: Ldtx_Workspace_V4_ProgramPreferences
   public let outputProfile: ProgramOutputProfile
   public let frameRate: Int
@@ -43,7 +43,7 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
   public init(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
-    programInternalID: UInt64, target: WorkspaceCanvasTarget
+    programInternalID: Int64, target: WorkspaceCanvasTarget
   ) throws {
     guard definition.programs.contains(where: { $0.internalID == programInternalID })
     else {
@@ -66,6 +66,6 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
 }
 
 public enum WorkspaceCanvasSnapshotError: Error, Equatable {
-  case missingProgram(UInt64)
+  case missingProgram(Int64)
   case unsupportedOutputProfile(String)
 }

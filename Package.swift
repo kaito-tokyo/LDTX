@@ -134,7 +134,7 @@ var dependencies: [Package.Dependency] = [
 
 let package = Package(
   name: "ldtx-cli",
-  platforms: [.macOS("26.0")],
+  platforms: [.macOS("27.0")],
   products: products,
   dependencies: dependencies,
   targets: targets

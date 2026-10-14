@@ -3,8 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
+  import LDTXProtos
   import AppKit
-  import LDTXWorkspaceAppletInterface
+
+  import LDTXProgramRuntime
+  import LDTXVideoRendering
+  import LDTXWorkspaceAppletModel
   import MetalKit
 
   @MainActor
@@ -17,15 +21,15 @@
       var secondInput = Ldtx_Workspace_V4_AudioInputDevice()
       secondInput.internalID = 11
       secondInput.displayName = "Game Audio"
-      service.definition.audioDevices.append(secondInput)
-      service.preferences.audioChannelGainsDecibels[2] = .with {
+      service.workspaceDefinition.audioDevices.append(secondInput)
+      service.workspacePreferences.audioChannelGainsDecibels[2] = .with {
         $0.set(num: -60, den: 10)
       }
       if hasProgram {
         var program = Ldtx_Workspace_V4_ProgramDefinition()
         program.internalID = 100
         program.displayName = "Studio"
-        service.definition.programs = [program]
+        service.workspaceDefinition.programs = [program]
         for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
           var preferences = Ldtx_Workspace_V4_ProgramPreferences()
           preferences.videoLayerInternalIds = index == 0 ? [4, 3, 8] : [3, 8]
@@ -38,7 +42,7 @@
               $0.set(num: -60, den: 10)
             }
           preferences.audioChannelMuted[11] = index == 1
-          for id: UInt64 in [3, 4, 8] {
+          for id: Int64 in [3, 4, 8] {
             var transform = Ldtx_Workspace_V4_BasicTransform()
             transform.scaleX = .with {
               $0.set(num: 1, den: 1)
@@ -49,7 +53,7 @@
             preferences.videoLayerTransforms[id] = transform
           }
           preferences.videoLayerHidden[8] = true
-          service.preferences[keyPath: target.preferences][100] = preferences
+          service.workspacePreferences[keyPath: target.preferences][100] = preferences
         }
       }
       let delegate = PreviewDelegate()
@@ -59,7 +63,10 @@
         onSelectPortrait: { service.selectedAudioMix = .portrait })
       pairedPreview.metalView.isPaused = true
       pairedPreview.metalView.enableSetNeedsDisplay = true
-      pane = WorkspaceContentPane(storeService: service, pairedPreview: pairedPreview)
+      pane = WorkspaceContentPane(
+        stateService: service, appletData: WorkspaceAppletData(),
+        peakMeter: ProgramAudioPeakMeter(),
+        reportError: { _ in }, pairedPreview: pairedPreview)
       super.init(nibName: nil, bundle: nil)
       addChild(pane)
     }

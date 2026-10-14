@@ -1,19 +1,30 @@
+import AppKit
+import LDTXProgram
+import LDTXProgramRuntime
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProtos
+import LDTXWorkspaceAppletModel
 
 final class MasterVolumeEditor: NSViewController {
-  private let storeService: WorkspaceStoreService
+  private let peakMeter: ProgramAudioPeakMeter
+  private let reportError: (Error) -> Void
+  private let appletData: WorkspaceAppletData
+  private let stateService: WorkspaceStateService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
 
-  init(storeService: WorkspaceStoreService) {
-    self.storeService = storeService
+  init(
+    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
+  ) {
+    self.reportError = reportError
+    self.peakMeter = peakMeter
+    self.appletData = appletData
+    self.runtimeActions = runtimeActions
+    self.stateService = stateService
     super.init(nibName: nil, bundle: nil)
-    storeService.registerContentEditValidator { [weak self] in
-      for field in self?.masterFields ?? [] {
-        if field.dirty { _ = try field.validatedValue() }
-      }
-    }
+
   }
 
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -23,7 +34,7 @@ final class MasterVolumeEditor: NSViewController {
   private let monitorVolume = NSSlider(
     value: 0, minValue: ProgramPreferences.minimumAudioChannelGainDecibels,
     maxValue: ProgramPreferences.maximumAudioChannelGainDecibels, target: nil, action: nil)
-  private var programID: UInt64?
+  private var programID: Int64?
 
   override func loadView() {
     view = NSView()
@@ -76,9 +87,9 @@ final class MasterVolumeEditor: NSViewController {
   }
 
   func refresh() {
-    let peakMeter = storeService.audioPeakMeter
     _ = view
-    let id = storeService.selectedProgram?.internalID
+    let id = appletData.selectedProgram(
+      in: stateService.workspaceDefinition, for: stateService.localStateURL)?.internalID
     if programID != id {
       for field in masterFields {
         field.discard()
@@ -89,51 +100,67 @@ final class MasterVolumeEditor: NSViewController {
     let enabled = id != nil
     for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
       let preferences =
-        id.flatMap { try? storeService.preferences(for: $0, target: target) } ?? .init()
+        id.flatMap { stateService.workspacePreferences[keyPath: target.preferences][$0] } ?? .init()
       let value =
         (preferences.hasAudioMasterVolumeDecibels
           ? preferences.audioMasterVolumeDecibels.double : 0)
       masters[index].configure(
         label: "", value: ProgramPreferences.linearAudioChannelGain(fromDecibels: value),
         showsValue: false, isEnabled: enabled,
-        peakProvider: { peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
-        onPreview: { [weak storeService] gain in
+        peakProvider: { [peakMeter] in peakMeter.peak(for: index == 0 ? .landscape : .portrait) },
+        onPreview: { [weak stateService] gain in
           let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: gain)
           guard let value = try? Rational32DecibelEncoding.encode(decibels) else {
             return
           }
-          storeService?.updateAudio(target: target) {
-            $0.audioMasterVolumeDecibels = value
-          }
+          guard let stateService, let id,
+            stateService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+          else { return }
+          stateService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+            .audioMasterVolumeDecibels = value
         }, onCommit: { _ in })
       masterFields[index].configure(
         value: preferences.hasAudioMasterVolumeDecibels
           ? preferences.audioMasterVolumeDecibels : .with { $0.set(num: 0, den: 10) },
         enabled: enabled
-      ) { [weak storeService] value in
-        storeService?.updateAudio(target: target) {
-          $0.audioMasterVolumeDecibels = value
-        } ?? false
-      }
-      masterFields[index].onInvalid = { [weak storeService] message in
-        storeService?.reportError(WorkspaceSelectionError(message: message))
+      ) { [weak stateService] value in
+        guard let stateService, let id,
+          stateService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
+        else { return false }
+        stateService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
+          .audioMasterVolumeDecibels = value
+        return true
       }
     }
-    monitorVolume.doubleValue = storeService.localState.monitorVolume ?? 0
-    monitorVolume.isEnabled = storeService.canMonitor
+    monitorVolume.doubleValue =
+      stateService.localStateURL.map { appletData.state(for: $0) }.flatMap(\.monitorVolume) ?? 0
+    monitorVolume.isEnabled = stateService.localStateURL != nil
   }
+  @discardableResult
+  func setMonitorVolume(_ value: Double) -> Bool {
+    guard let url = stateService.localStateURL else { return false }
+    do {
+      let volume = try Rational32DecibelEncoding.encode(value).double
+      appletData.updateState(for: url) { $0.monitorVolume = volume }
+      runtimeActions()?.synchronizeAudioMonitor()
+      return true
+    } catch {
+      reportError(error)
+      return false
+    }
+  }
+
   @objc private func monitorChanged() {
-    let value = monitorVolume.doubleValue
-    storeService.updateMonitor { $0.monitorVolume = value }
+    setMonitorVolume(monitorVolume.doubleValue)
   }
 
 }
 
 final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   private(set) var dirty = false
+  private var modelText = ""
   private var editing = false
   private var commitValue: (Ldtx_Workspace_V4_Rational32) -> Bool = { _ in false }
-  var onInvalid: (String) -> Void = { _ in }
   init() {
     super.init(frame: .zero)
     delegate = self
@@ -146,47 +173,27 @@ final class AudioDecibelField: NSTextField, NSTextFieldDelegate {
   ) {
     isEnabled = enabled
     commitValue = commit
-    if !dirty && !editing { stringValue = RationalFormatStyle().format(value) }
+    if !dirty && !editing {
+      stringValue = RationalFormatStyle().format(value)
+      modelText = stringValue
+    }
   }
   func discard() {
     dirty = false
     editing = false
   }
   func controlTextDidBeginEditing(_ notification: Notification) { editing = true }
-  func controlTextDidChange(_ notification: Notification) { dirty = true }
+  func controlTextDidChange(_ notification: Notification) {
+    dirty = stringValue != modelText
+    if let value = try? RationalParseStrategy().parse(stringValue),
+      (-80...20).contains(value.double),
+      let encoded = try? Rational32DecibelEncoding.encode(value.double), commitValue(encoded)
+    {
+      modelText = stringValue
+      dirty = false
+    }
+  }
   func controlTextDidEndEditing(_ notification: Notification) {
     editing = false
-    commit()
-  }
-  func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-    guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
-    commit()
-    return true
-  }
-  func commit() {
-    guard dirty else { return }
-    let value: Ldtx_Workspace_V4_Rational32
-    do {
-      value = try validatedValue()
-    } catch {
-      toolTip = error.localizedDescription
-      onInvalid(error.localizedDescription)
-      return
-    }
-    if commitValue(value) {
-      dirty = false
-      toolTip = nil
-    }
-  }
-  func validatedValue() throws -> Ldtx_Workspace_V4_Rational32 {
-    guard let parsed = try? RationalParseStrategy().parse(stringValue),
-      let value = try? Rational32DecibelEncoding.encode(parsed.double),
-      (ProgramPreferences
-        .minimumAudioChannelGainDecibels...ProgramPreferences.maximumAudioChannelGainDecibels)
-        .contains(value.double)
-    else {
-      throw WorkspaceSelectionError(message: "Invalid volume.")
-    }
-    return value
   }
 }

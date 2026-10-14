@@ -82,7 +82,7 @@ When an agent creates an issue:
 
 ## PRJ: Design Principles
 
-Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. Other documentation may be consulted at the agent's discretion when relevant.
+Cross-cutting design principles are maintained in [`docs/design-principles.md`](docs/design-principles.md). Treat that document as the source of truth for implementation, tests, and reviews involving those principles. UI-specific rules are maintained in [`docs/ui-rules.md`](docs/ui-rules.md). Treat that document as the source of truth for implementation, tests, and reviews involving UI rules. Other documentation may be consulted at the agent's discretion when relevant.
 
 ## PRJ: Logging
 
@@ -106,8 +106,8 @@ in CI separately from its classification.
   and **CoreImage**, plus non-View **SwiftUI** value APIs, unless they exercise a
   framework listed under HardTests.
 - **HardTests target:** Tests that exercise **Vision**, **VideoToolbox**,
-  **CoreML**, **Metal**, or **AVFoundation**. Medium and Hard tests may have the
-  same Unit or Integration scope; their framework dependencies distinguish them.
+  **CoreML**, **CreateMLComponents**, **Metal**, or **AVFoundation**. Medium and Hard
+  tests may have the same Unit or Integration scope; their framework dependencies distinguish them.
   Run this hostless unit-test target directly in Xcode Cloud; do not add XCUI
   automation.
 

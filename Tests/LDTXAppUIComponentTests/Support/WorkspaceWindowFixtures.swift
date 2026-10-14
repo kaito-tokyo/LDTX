@@ -4,9 +4,11 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
+import LDTXProgramRuntime
 import LDTXProtos
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI
@@ -19,18 +21,34 @@ func drainWorkspaceTestTasks() async {
 }
 
 @MainActor
+func settleWorkspaceToolbar(_ window: NSWindow) async {
+  // SwiftUI creates accessibility nodes lazily, even in hostless component tests.
+  NSApp.accessibilitySetValue(
+    true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
+  window.contentView?.layoutSubtreeIfNeeded()
+  try? await Task.sleep(for: .milliseconds(100))
+}
+
+@MainActor
+func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
+  let action = try #require(item.action)
+  #expect(NSApp.sendAction(action, to: item.target, from: item))
+}
+
+@MainActor
 func makeWorkspaceTestWindow(
-  storeService: WorkspaceStoreService? = nil,
+  stateService: WorkspaceStateService? = nil,
   dispatcher: (any WorkspaceRuntimeActions)? = nil,
+  reportError: @escaping (Error) -> Void = { _ in },
   appletData: WorkspaceAppletData? = nil,
   url: URL? = nil,
+  documentContext: (any WorkspaceDocumentContext)? = nil,
   externalID: String = UUID().uuidString.lowercased()
-) -> WorkspaceWindow {
+) -> WorkspaceTestWindow {
   let document = WorkspaceDocument()
-  let state = storeService ?? document.storeService
+  let state = stateService ?? document.stateService
   state.externalID = externalID
-  state.appletData = appletData ?? WorkspaceAppletData()
-  state.runtimeActions = dispatcher
+  let data = appletData ?? WorkspaceAppletData()
   let renderer = ProgramPairPreviewRenderer(
     landscapeRuntime: ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
@@ -44,16 +62,35 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
-  return WorkspaceWindow(
-    url: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"),
-    deviceRegistry: DeviceRegistryService(), appletData: state.appletData,
-    storeService: state, documentReference: DocumentReference(document), pairedPreview: preview)
+  let context =
+    documentContext
+    ?? WorkspaceTestDocumentContext(
+      fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
+  let content = WorkspaceViewController(
+    document: context, appletData: data, stateService: state,
+    peakMeter: .init(), reportError: { _ in },
+    deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
 
+  return WorkspaceTestWindow(content: content, document: context)
+}
+
+@MainActor
+private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
+  let fileURL: URL?
+  init(fileURL: URL?) { self.fileURL = fileURL }
 }
 
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  var classificationHandler: (() async throws -> String)?
+  func classify(
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
+  ) async throws -> String {
+    if let classificationHandler { return try await classificationHandler() }
+    return "Test classification"
+  }
+
   var failScreenshot = false
   var screenshotFiles: [WorkspaceScreenshot] = []
   var actions: [String] = []
@@ -64,13 +101,12 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   }
   func pauseOutput() async { actions.append("pause") }
   func stopOutput() async { actions.append("stop") }
-  func synchronizeVision() {}
   func synchronizeAudioMonitor() {}
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) { completionHandler([]) }
-  func removeProgram(internalID: UInt64) throws {}
-  func selectProgram(internalID: UInt64) throws {}
+  func removeProgram(internalID: Int64) throws {}
+  func selectProgram(internalID: Int64) throws {}
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
   func captureScreenshots() throws -> [WorkspaceScreenshot] {

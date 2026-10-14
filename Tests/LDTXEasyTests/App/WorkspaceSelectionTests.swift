@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
 import Testing
 
 @Suite struct WorkspaceSelectionUnitTestSuite {
@@ -32,12 +33,12 @@ import Testing
       #expect(!state.canSelectProgram)
     }
     let options = [
-      WorkspaceSelectionOption(id: UInt64(1), name: "Same"),
-      WorkspaceSelectionOption(id: UInt64(2), name: "Same"),
+      WorkspaceSelectionOption(id: Int64(1), name: "Same"),
+      WorkspaceSelectionOption(id: Int64(2), name: "Same"),
     ]
     #expect(options.map(\.id) == [1, 2])
     #expect(
-      WorkspaceSelectionRules.reconciled(nil as UInt64?, availableIDs: options.map(\.id)) == nil)
+      WorkspaceSelectionRules.reconciled(nil as Int64?, availableIDs: options.map(\.id)) == nil)
   }
 
   @Test func dynamicCandidatesNeverSelectThemselves() {
@@ -65,15 +66,15 @@ import Testing
     let draft = WorkspaceAddDraft()
     #expect(draft.physicalDeviceID == nil)
     #expect(draft.videoComponentID == nil)
-    let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+    let state = WorkspaceStateService(definition: .init(), preferences: .init())
     #expect(state.inspectorSelector == nil)
-    let before = state.definition
+    let before = state.workspaceDefinition
     #expect(
       WorkspaceResourceAddition.validationMessage(
-        sheet: .device, draft: draft, devices: [], storeService: state) != nil)
+        sheet: .device, draft: draft, devices: [], stateService: state) != nil)
     #expect(
       WorkspaceResourceAddition.validationMessage(
-        sheet: .vision, draft: draft, devices: [], storeService: state) != nil)
-    #expect(state.definition == before)
+        sheet: .vision, draft: draft, devices: [], stateService: state) != nil)
+    #expect(state.workspaceDefinition == before)
   }
 }

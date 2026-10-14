@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
 
 private let kBelowDividerDragPriority0 = NSLayoutConstraint.Priority(250)
 private let kBelowDividerDragPriority10 = NSLayoutConstraint.Priority(260)
 
 public final class WorkspaceContentPane: NSViewController {
-  let storeService: WorkspaceStoreService
+  let appletData: WorkspaceAppletData
+  let stateService: WorkspaceStateService
 
   let splitView = NSSplitView()
   let pairedPreview: ProgramCanvasPairedPreview
@@ -17,23 +18,35 @@ public final class WorkspaceContentPane: NSViewController {
   let editorStack: NSStackView = FlipedStackView()
   let masterVolumeEditor: MasterVolumeEditor
   let audioMixEditor: AudioMixEditor
-  let videoLayersEditorTabs = NSTabViewController()
+  let videoLayersEditorTabs: NSTabViewController
   let landscapeLayersEditor: VideoLayersEditor
   let landscapeLayersTab: NSTabViewItem
   let portraitLayersEditor: VideoLayersEditor
   let portraitLayersTab: NSTabViewItem
 
   public init(
-    storeService: WorkspaceStoreService,
-    pairedPreview: ProgramCanvasPairedPreview
+    stateService: WorkspaceStateService,
+    appletData: WorkspaceAppletData,
+    peakMeter: ProgramAudioPeakMeter,
+    reportError: @escaping (Error) -> Void,
+    pairedPreview: ProgramCanvasPairedPreview,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.pairedPreview = pairedPreview
-    self.storeService = storeService
-    self.masterVolumeEditor = MasterVolumeEditor(storeService: storeService)
-    self.audioMixEditor = AudioMixEditor(storeService: storeService)
-    self.landscapeLayersEditor = VideoLayersEditor(storeService: storeService, target: .landscape)
+    self.appletData = appletData
+    self.stateService = stateService
+    self.videoLayersEditorTabs = NSTabViewController()
+    self.masterVolumeEditor = MasterVolumeEditor(
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+      reportError: reportError, runtimeActions: runtimeActions)
+    self.audioMixEditor = AudioMixEditor(
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+      reportError: reportError, runtimeActions: runtimeActions)
+    self.landscapeLayersEditor = VideoLayersEditor(
+      stateService: stateService, appletData: appletData, target: .landscape)
     self.landscapeLayersTab = NSTabViewItem(viewController: landscapeLayersEditor)
-    self.portraitLayersEditor = VideoLayersEditor(storeService: storeService, target: .portrait)
+    self.portraitLayersEditor = VideoLayersEditor(
+      stateService: stateService, appletData: appletData, target: .portrait)
     self.portraitLayersTab = NSTabViewItem(viewController: portraitLayersEditor)
     super.init(nibName: nil, bundle: nil)
     videoLayersEditorTabs.addTabViewItem(landscapeLayersTab)
@@ -101,7 +114,7 @@ public final class WorkspaceContentPane: NSViewController {
   public func configureAfterEstablished() {
     splitView.layoutSubtreeIfNeeded()
     splitView.setPosition(280, ofDividerAt: 0)
-    splitView.autosaveName = storeService.externalID.map { "WorkspaceContentPane.\($0)" }
+    splitView.autosaveName = stateService.externalID.map { "WorkspaceContentPane.\($0)" }
   }
 
   private final class FlipedStackView: NSStackView {

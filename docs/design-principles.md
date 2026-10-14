@@ -8,6 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 This document is the source of truth for cross-cutting design decisions in
 LDTX. Implementation, tests, and reviews should follow these principles.
+UI-specific rules are maintained in [UI Rules](ui-rules.md).
 
 Design Principles (DP) define the project-wide invariants and decision rules
 that must remain consistent across modules. They are normative guidance for
@@ -22,6 +23,110 @@ the relevant design or feature documentation instead.
   of a V4 Workspace.
 - Runtime state, editor state, and persistence code must project from that
   model rather than maintaining an independent parallel representation.
+- WorkspaceStateService exposes its editable protobuf values as ordinary stored
+  properties. Assignments must remain transparent: setters must not silently
+  reject, reinterpret, or replace an assigned value. Editing restrictions and
+  validation belong to explicit editing operations and their UI owners.
+- The Representable Coordinator registers undo actions for content changes to participate
+  in SwiftUI's unsaved-change tracking. StateService must not hide document-change
+  callbacks or persistence notifications in its setters.
+  Workspace Undo/Redo menu commands and shortcuts are temporarily disabled;
+  registration remains enabled for change tracking. Other Applets keep their
+  standard Undo/Redo commands.
+
+## Document content, editing state and runtime state have distinct roles
+
+- WorkspaceDocument owns the confirmed in-memory Workspace content.
+  StateService values are confirmed in Document before their snapshot is validated and written
+  to disk. The direction is StateService → Document → Disk; write failure does
+  not roll back the confirmed content, which remains unsaved.
+- WorkspaceDocument owns WorkspaceStateService and its temporary editing values
+  and UI state. Document captures those values directly when saving; Writer
+  validates them before writing. Saving does not require a represented UI or an editing connection.
+- The Representable receives Document and owns the WindowController through its
+  Coordinator. UI receives Document's StateService through Bindable. Runtime
+  resources remain WindowController-owned; Document does not own the controller.
+- Snapshot preparation confirms only captured values; newer edits stay in
+  StateService. Model IDs are assigned on selection and remain unchanged during
+  saving. Snapshots contain model source URLs; Writer copies those resources
+  without modifying the Definition and holds no shared
+  receipts or callbacks into Document. Runtime persistence tracking is separate
+  from in-memory document confirmation.
+- Reader and Writer snapshots are WorkspaceV4Bundle values. Configuration owns
+  the document location separately. Model resource URLs are keyed by their model
+  IDs within the Bundle and Document's StateService.
+- Applying a Reader snapshot only replaces Document's content. UI and runtime
+  consumers observe Document changes and independently adopt or defer
+  updates. A consumer's output state must not prevent Document from updating.
+- The connection updates StateService fields directly. Full overwrite
+  replaces Definition, Preferences, OutputSettings, envelope IDs and model URLs.
+  URL-only synchronization updates URLs for model IDs already present in
+  StateService; it does not add or remove models or change Vision references or
+  other editing values. There is no implicit three-way or field-level merge.
+- Reader content is adopted with full overwrite by the Representable Coordinator.
+  Snapshot capture also adopts an unread Reader generation into StateService,
+  so headless saving cannot replace read content with initial editing values.
+  Adoption is shared and runs once per Reader generation.
+  URL-only synchronization is an explicit operation, not a side effect of saving.
+
+## Definition changes reach the runtime only after persistence
+
+- New Workspaces open and accept edits before their first save. Their external
+  IDs are allocated at creation, independently of a package location. Output
+  requires a saved document URL and a successfully persisted runtime snapshot;
+  creating a snapshot or completing a staging write alone does not enable it.
+
+- This rule applies across the entire Workspace runtime, including
+  ProgramRuntime and Vision inference. Changes to the Store's
+  `workspaceDefinition` must not reach the runtime until they have been
+  successfully written to disk.
+- The runtime uses the last successfully persisted Definition. A failed save
+  leaves that runtime Definition unchanged. If editing continues during a save,
+  only the successfully saved Definition is applied; subsequent edits remain
+  pending for a later save.
+- The Store's `workspaceDefinition` retains the current edits. Editing UI and
+  prospective range previews may use those values before saving, but runtime
+  execution must use the persisted Definition. In particular, Vision ROI edits
+  are validated on save and are not passed to inference before persistence.
+- `workspacePreferences` may reach the runtime before they are written to disk,
+  subject to the runtime's supported operations and output restrictions.
+- RecordingSession captures OutputSettings before entering the starting state.
+  Service construction, subscriptions, and session reconfiguration use that
+  snapshot until cleanup, even if Document or StateService changes meanwhile.
+  The next start captures new settings; live mix preferences remain independent.
+
+## Vision interval execution is best effort
+
+- Absent ROI fields use input-pixel defaults: X/Y numerators are zero,
+  Width/Height numerators are the input width/height, and denominators are
+  the corresponding input dimension. UI placeholders, persistence validation,
+  and inference share this interpretation. Missing fields remain absent on disk;
+  explicit zero denominators remain invalid. Defaults are resolved without changing
+  the editable or saved protobuf values.
+
+- OCR and Scene Detector interval triggers use the successfully persisted
+  Definition while the Workspace window is open, including while output is idle.
+- Automatic requests share one execution lane per Workspace. Each 30-second
+  frame is planned in 1 ms units with a fixed 3 ms budget for either request
+  type. This is an initial placement budget, not a measured execution guarantee.
+- Initial phases are randomized. Collisions move forward within the frame;
+  requests that cannot fit are randomly thinned. Busy or overdue occurrences
+  are skipped without queuing catch-up work or cancelling an active request.
+- Models are prepared separately and reused. Output start waits for compilation
+  and loading of referenced models. During output, manual and automatic inference
+  use only loaded services and skip unavailable models; neither loads nor compilation
+  are started. Corrupt caches fail without recompilation.
+  Preparation failures retry after configuration or output-state changes.
+- Manual inference remains independent and may overlap automatic work. Stops
+  drain active automatic requests and model preparation; stale generations
+  cannot publish results. Scheduling statistics are logged per frame.
+- Window shutdown waits for active manual inference before stopping its runtime.
+  Closed windows reject new requests and discard results without cancelling the work.
+- Inspecting a selected model's information only queries an existing compiled
+  asset; it does not compile or load an inference model. Information becomes
+  available after normal model preparation.
+  Preparation completion notifies the editing UI to retry its metadata query,
+  even when the model URL and output state remain unchanged.
 
 ## Preferences are permissive input
 
@@ -34,15 +139,20 @@ the relevant design or feature documentation instead.
 ## PERSISTENCE: Separate definition, preferences, and output settings
 
 - `definition` is the authoritative inventory of Workspace resources and Programs.
-  No definition field may change while recording or streaming is active.
+  Editing operations and UI controls must prevent definition edits while
+  recording or streaming is active; the Store does not enforce this by rejecting
+  property assignments.
 - `preferences` contain presentation and mix state, including each Program and
   canvas's video layer order, transforms, visibility, mute state, and gain.
 - Video layer IDs are ordered from back to front. During output, reordering is
   allowed, but layer membership and occurrence counts must remain unchanged.
 - Other preferences may change during output when the pipeline supports them.
+  Runtime preference projection retains the layer membership and occurrence
+  counts captured when output starts. Structural reloads stay pending until
+  output is idle; valid ordering, mix, transforms, and visibility remain live.
 - `outputSettings` is a separate persisted Workspace document for recording and
-  streaming configuration. It may change between sessions, but remains fixed
-  while output is active.
+  streaming configuration. Editing controls may change it between sessions;
+  each active output session uses the configuration captured at startup.
 - Device assignments, recording folder paths, and stream-key assignments belong
   to AppletData rather than the Workspace documents. Workspace-specific output
   assignments are keyed by the definition envelope's external ID.
@@ -70,17 +180,6 @@ the relevant design or feature documentation instead.
   must not block the main actor.
 - Such work should use a serialized background executor when ordering is
   significant.
-
-## Dynamic selection starts unselected
-
-- Selection controls populated from dynamic resources must start with no selection.
-- Restored assignments and asynchronously resolved references are displayed separately from editing controls.
-- Editing sheets must not preselect a saved value or the first available candidate. Only an explicit user selection may be applied.
-- Candidate removal clears the editing selection without replacing it or changing the saved assignment.
-- The Program list is a static set of candidates defined by the authoritative
-  Workspace definition. Its selection control may display the currently
-  resolved Program, including a restored selection. This does not change the
-  unselected-draft policy for dynamic resource editing sheets.
 
 ## Protobuf defaults and Rational values
 
@@ -117,19 +216,17 @@ the relevant design or feature documentation instead.
 - Reject non-finite or unrepresentable decibel edits before changing the model,
   preserving the previous value and the invalid editing draft.
 
-## Invalid edits prevent leaving their screen
+## Editing writes directly to WorkspaceStateService
 
-- A screen containing invalid edited values cannot be left. Attempted navigation
-  must report the validation error and preserve the current screen and draft.
-- Validate at multiple layers. Ordinary edits that were allowed to leave their
-  screen must not become latent validation failures discovered only on save.
-- OCR ROI text remains a draft until the whole rectangle is valid. Inspector
-  selection, Program changes, output start, save, and document close must respect
-  pending invalid edits.
-- Content Editors register weakly captured draft validators with the Workspace
-  store. Master-volume and layer-transform drafts participate in the same
-  navigation, output-start, save, and close validation as OCR ROI drafts.
-  Validation checks the current text without committing or discarding it.
+- Representable edits update the Store's authoritative documents directly. There
+  is no separate Submit or Apply operation and no window-wide draft registry.
+- Input controls may retain incomplete or unrepresentable numeric text locally;
+  they must write representable values without requiring Return. Navigation does
+  not require a separate confirmation operation.
+- Semantic validation, including Vision ROI bounds and rational denominators,
+  occurs when saving. Failed validation preserves the edits in the Store and
+  leaves the persisted Definition and runtime unchanged.
+- Changing screens or starting output does not implicitly save the Definition.
 
 ## Video visibility terminology
 

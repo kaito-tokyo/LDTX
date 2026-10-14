@@ -91,7 +91,6 @@ public struct WorkspaceCommand: ParsableCommand {
     @Option(help: "WorkspaceDefinitionV4 protobuf JSON to import.") var json: String?
     @Option(help: "WorkspacePreferencesV4 protobuf JSON to import with --json.")
     var preferencesJSON: String?
-    @Flag(help: "Replace an existing Workspace package at the destination.") var replace = false
 
     mutating func run() async throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
@@ -101,7 +100,7 @@ public struct WorkspaceCommand: ParsableCommand {
       let command = self
       try coordinateWorkspace(at: url, writing: true) { url in
         let createdPackageDirectory = !FileManager.default.fileExists(atPath: url.path)
-        guard command.replace || createdPackageDirectory else {
+        guard createdPackageDirectory else {
           throw ValidationError("Workspace already exists: \(url.path)")
         }
         do {
@@ -125,7 +124,7 @@ public struct WorkspaceCommand: ParsableCommand {
               },
               preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
           }
-          try WorkspaceV4IntegrityValidator.validate(workspace)
+          try WorkspaceBundleValidatorV4.validate(workspace)
           guard var writer = WorkspaceBundleWriterV4(at: url) else {
             throw ValidationError("Could not initialize Workspace writer: \(url.path)")
           }
@@ -185,7 +184,7 @@ public struct WorkspaceCommand: ParsableCommand {
           throw ValidationError("Unsupported Workspace format")
         }
         let workspace = try reader.read()
-        try WorkspaceV4IntegrityValidator.validate(workspace)
+        try WorkspaceBundleValidatorV4.validate(workspace)
         print("OK: Workspace v4 \(url.path)")
       }
     }
@@ -195,10 +194,10 @@ public struct WorkspaceCommand: ParsableCommand {
 public struct WorkspaceV4DebugDump: Codable, Equatable {
   static let format = "ldtx-workspace-debug-dump-v4"
   public struct Program: Codable, Equatable {
-    public var internalID: UInt64
+    public var internalID: Int64
     public var displayName: String
-    public var landscapeVideoLayerInternalIDs: [UInt64]
-    public var portraitVideoLayerInternalIDs: [UInt64]
+    public var landscapeVideoLayerInternalIDs: [Int64]
+    public var portraitVideoLayerInternalIDs: [Int64]
   }
   public var format: String
   public var definitionExternalID: String

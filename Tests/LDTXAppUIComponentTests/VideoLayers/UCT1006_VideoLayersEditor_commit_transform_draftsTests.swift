@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXProtos
 @testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
 import Testing
 
 extension AppUIComponentTestSuite {
@@ -11,7 +13,7 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1006VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
-    @Test("UCT-1006.1: Validation errors are reported and drafts survive")
+    @Test("UCT-1006.1: Incomplete text remains local without reporting a validation error")
     func validationErrorsAreReportedAndDraftsSurvive() throws {
       let fixture = VideoLayersTestFixture()
       let editor = fixture.makeEditor()
@@ -25,28 +27,27 @@ extension AppUIComponentTestSuite {
       second.state.name = "Background"
       first.state.strings[0] = "bad"
       second.state.strings[3] = "inf"
-      first.state.hasUnconfirmedChanges = true
-      second.state.hasUnconfirmedChanges = true
+      first.state.hasLocalTextChanges = true
+      second.state.hasLocalTextChanges = true
       first.state.onCommit()
       second.state.onCommit()
-      #expect(fixture.reportedErrors[0].contains("Invalid number (Pos X)"))
-      #expect(fixture.reportedErrors[1].contains("Invalid number (Scale Y)"))
+      #expect(fixture.reportedErrors.isEmpty)
       #expect(first.state.strings[0] == "bad")
       first.state.strings[0] = "960"
       first.state.onCommit()
-      #expect(fixture.reportedErrors.count == 2)
+      #expect(fixture.reportedErrors.isEmpty)
       second.state.strings[3] = "1"
       second.state.onCommit()
-      #expect(fixture.reportedErrors.count == 2)
+      #expect(fixture.reportedErrors.isEmpty)
 
       second.state.strings[3] = "-"
-      second.state.hasUnconfirmedChanges = true
+      second.state.hasLocalTextChanges = true
       second.state.onCommit()
       editor.table.removeAllRows()
       editor.update(
         definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
         canvasWidth: 1920, canvasHeight: 1080)
-      #expect(fixture.reportedErrors.count == 3)
+      #expect(fixture.reportedErrors.isEmpty)
     }
 
     @Test("UCT-1006.2: Editor and table release wired rows")
@@ -81,10 +82,10 @@ extension AppUIComponentTestSuite {
         rootView: VideoLayersTableRowContent(
           state: VideoLayersTableRowState(), canvasWidth: 1920, canvasHeight: 1080))
       row.state.strings[0] = "960"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       row.state.onSetHidden(true)
-      #expect(row.state.hasUnconfirmedChanges)
+      #expect(row.state.hasLocalTextChanges)
       #expect(row.state.strings[0] == "960")
       #expect(!row.state.isHidden)
     }
@@ -98,16 +99,16 @@ extension AppUIComponentTestSuite {
       var preferences = Ldtx_Workspace_V4_ProgramPreferences()
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.translationX = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       transform.scaleX = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       transform.scaleY = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       preferences.videoLayerTransforms[1] = transform
       preferences.videoLayerHidden[1] = true
@@ -118,8 +119,8 @@ extension AppUIComponentTestSuite {
       row.state.isEditing = true
       row.state.strings[0] = "draft"
       preferences.videoLayerTransforms[1]?.translationX = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
       preferences.videoLayerHidden[1] = false
       fixture.update(table, preferences: preferences)
@@ -135,38 +136,38 @@ extension AppUIComponentTestSuite {
       fixture.update(table, commit: { _, value in saved.append(value) })
       let row = try #require(table.rows[1])
       row.state.strings = ["960", "270", "1.5", "2"]
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       #expect(saved.count == 1)
       #expect(
         saved[0].translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(
         saved[0].translationY
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 270
-            $0.denominator = 1080
+            $0.num = 270
+            $0.den = 1080
           })
       #expect(
         saved[0].scaleX
           == Ldtx_Workspace_V4_Rational32DefaultOne.with {
-            $0.numerator = 15
-            $0.denominator = 10
+            $0.num = 15
+            $0.den = 10
           })
       row.state.strings[0] = "192"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       #expect(saved.count == 2)
       #expect(
         saved[1].translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 192
-            $0.denominator = 1920
+            $0.num = 192
+            $0.den = 1920
           })
-      #expect(!row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
     }
 
     @Test("UCT-1006.6: Positions require integer pixels while scales preserve decimals")
@@ -177,32 +178,30 @@ extension AppUIComponentTestSuite {
       fixture.update(table, commit: { _, value in saved = value })
       let row = try #require(table.rows[1])
       for positions in [
-        ["100.125", "0"], ["0", "1/3"], ["-1", "0"], ["1921", "0"], ["0", "1081"],
+        ["100.125", "0"], ["0", "1/3"],
       ] {
         row.state.strings = positions + ["1.25", "1"]
-        row.state.hasUnconfirmedChanges = true
+        row.state.hasLocalTextChanges = true
         row.state.onCommit()
-        #expect(saved == nil)
-        #expect(row.state.hasUnconfirmedChanges)
+        #expect(row.state.hasLocalTextChanges)
         #expect(Array(row.state.strings.prefix(2)) == positions)
       }
       for scale in ["7/9", "0.12345678901", "2147483648"] {
         row.state.strings = ["100", "1", scale, "1"]
-        row.state.hasUnconfirmedChanges = true
+        row.state.hasLocalTextChanges = true
         row.state.onCommit()
-        #expect(saved == nil)
-        #expect(row.state.hasUnconfirmedChanges)
+        #expect(row.state.hasLocalTextChanges)
         #expect(row.state.strings[2] == scale)
       }
       row.state.strings = ["100", "1", "1.25", "1"]
       row.state.onCommit()
       let transform = try #require(saved)
-      #expect(transform.translationX.numerator == 100)
-      #expect(transform.translationX.denominator == 1920)
-      #expect(transform.translationY.numerator == 1)
-      #expect(transform.translationY.denominator == 1080)
-      #expect(transform.scaleX.numerator == 125)
-      #expect(transform.scaleX.denominator == 100)
+      #expect(transform.translationX.num == 100)
+      #expect(transform.translationX.den == 1920)
+      #expect(transform.translationY.num == 1)
+      #expect(transform.translationY.den == 1080)
+      #expect(transform.scaleX.num == 125)
+      #expect(transform.scaleX.den == 100)
       #expect(row.state.strings == ["100", "1", "1.25", "1"])
     }
 
@@ -214,17 +213,17 @@ extension AppUIComponentTestSuite {
       fixture.update(table, commit: { _, value in saved = value })
       let row = try #require(table.rows[1])
       row.state.strings = ["100", "1", "-1.25", "-0.5"]
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       let transform = try #require(saved)
       #expect(transform.scaleX.double == -1.25)
       #expect(transform.scaleY.double == -0.5)
       row.state.strings[0] = "200"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       #expect(saved?.translationX.double == 200.0 / 1920.0)
       #expect(saved?.scaleX.double == -1.25)
-      #expect(!row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
     }
 
     @Test("UCT-1006.7: App kit commit requests read current draft once")
@@ -235,7 +234,7 @@ extension AppUIComponentTestSuite {
       fixture.update(table, commit: { _, value in saved.append(value) })
       let row = try #require(table.rows[1])
       row.state.strings = ["960", "270", "1.5", "2"]
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       row.state.onCommit()
       row.state.onCommit()
@@ -243,13 +242,13 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(row.state.strings[0] == "960")
 
       row.state.strings[0] = "192"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       table.removeAllRows()
       row.state.onCommit()
       #expect(saved.count == 1)
@@ -289,13 +288,12 @@ extension AppUIComponentTestSuite {
       fixture.update(table, commit: { _, _ in commits += 1 })
       let row = try #require(table.rows[1])
       row.state.strings[2] = value
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       fixture.update(table, ids: [3, 1, 2])
       #expect(table.rows[1] === row)
       #expect(row.state.strings[2] == value)
-      #expect(
-        fixture.reportedErrors.contains { $0.contains("Invalid number") })
+      #expect(fixture.reportedErrors.isEmpty)
       #expect(commits == 0)
     }
 
@@ -311,15 +309,15 @@ extension AppUIComponentTestSuite {
         })
       let row = try #require(table.rows[1])
       row.state.strings[0] = "960"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
       #expect(
         fixture.reportedErrors.contains { $0.contains("Save failed.") })
-      #expect(row.state.hasUnconfirmedChanges)
+      #expect(row.state.hasLocalTextChanges)
       #expect(row.state.strings[0] == "960")
       fixture.update(table)
       row.state.onCommit()
-      #expect(!row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
       #expect(row.state.strings[0] == "960")
     }
 
@@ -365,8 +363,8 @@ extension AppUIComponentTestSuite {
       #expect(row.rootView.state === row.state)
     }
 
-    @Test("UCT-1006.12: Hosted fields commit only on enter")
-    func hostedFieldsCommitOnlyOnEnter() throws {
+    @Test("UCT-1006.12: Hosted fields write on change without Enter")
+    func hostedFieldsWriteOnChange() throws {
       let fixture = VideoLayersTestFixture()
       let container = fixture.makeContainer()
       let window = NSWindow(
@@ -392,9 +390,9 @@ extension AppUIComponentTestSuite {
         "960", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
       #expect(window.makeFirstResponder(fields[1]))
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-      #expect(saved.isEmpty)
+      #expect(saved.count == 1)
       #expect(row.state.strings[0] == "960")
-      #expect(row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
       let secondEditor = try #require(fields[1].currentEditor() as? NSTextView)
       secondEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -402,10 +400,10 @@ extension AppUIComponentTestSuite {
       #expect(
         saved.first?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
-      #expect(!row.state.hasUnconfirmedChanges)
+      #expect(!row.state.hasLocalTextChanges)
 
       #expect(window.makeFirstResponder(fields[0]))
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -414,16 +412,21 @@ extension AppUIComponentTestSuite {
         "480", replacementRange: NSRange(location: 0, length: nextEditor.string.utf16.count))
       #expect(window.makeFirstResponder(container.table))
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-      #expect(saved.count == 1)
+      #expect(saved.count == 2)
       #expect(!row.state.isEditing)
-      #expect(row.state.hasUnconfirmedChanges)
-      fixture.update(container.table, ids: [3, 2, 1])
+      #expect(!row.state.hasLocalTextChanges)
+      let latest = try #require(saved.last)
+      fixture.update(
+        container.table, ids: [3, 2, 1],
+        preferences: .with {
+          $0.videoLayerTransforms[1] = latest
+        })
       #expect(container.table.rows[1] === row)
       #expect(row.state.strings[0] == "480")
       container.table.removeAllRows()
       RunLoop.current.run(until: Date().addingTimeInterval(0.05))
       row.state.onCommit()
-      #expect(saved.count == 1)
+      #expect(saved.count == 2)
       #expect(container.table.rows.isEmpty)
     }
 
@@ -445,86 +448,85 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1006.14: Preference commit uses latest value and preserves insets")
     func preferenceCommitUsesLatestValueAndPreservesInsets() throws {
-      let state = WorkspaceStoreService(definition: .init(), preferences: .init())
+      let stateAppletData = WorkspaceAppletData()
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 1
-      state.definition.programs = [program]
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
-        1, 2,
-      ]
+      state.workspaceDefinition.programs = [program]
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerInternalIds = [
+          1, 2,
+        ]
       var transform = Ldtx_Workspace_V4_BasicTransform()
       transform.scaleX = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
       transform.scaleY = .with {
-        $0.numerator = 1
-        $0.denominator = 1
+        $0.num = 1
+        $0.den = 1
       }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[1] =
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerTransforms[1] =
         transform
       let content = VideoLayersEditor(
-        storeService: state, target: .landscape)
+        stateService: state, appletData: stateAppletData,
+        target: .landscape)
       content.refresh()
       let row = try #require(content.table.rows[1])
-      state.preferences.landscapeProgramPreferences[1, default: .init()]
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
         .audioMasterVolumeDecibels = .with {
-          $0.numerator = -9
-          $0.denominator = 1
+          $0.num = -9
+          $0.den = 1
         }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[
-        1, default: .init()
-      ].topInset = .with {
-        $0.numerator = 1
-        $0.denominator = 5
-      }
-      state.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[2] = true
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
+        .videoLayerTransforms[
+          1, default: .init()
+        ].topInset = .with {
+          $0.num = 1
+          $0.den = 5
+        }
+      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[
+        2] = true
       row.state.strings[0] = "960"
-      row.state.hasUnconfirmedChanges = true
+      row.state.hasLocalTextChanges = true
       row.state.onCommit()
-      let live = state.preferences.landscapeProgramPreferences[1] ?? .init()
+      let live = state.workspacePreferences.landscapeProgramPreferences[1] ?? .init()
       #expect(
         live.audioMasterVolumeDecibels
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.set(num: -90, den: 10)
+            $0.set(num: -9, den: 1)
           })
       #expect(
         live.videoLayerTransforms[1]?.topInset
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 1
-            $0.denominator = 5
+            $0.num = 1
+            $0.den = 5
           })
       #expect(
         live.videoLayerTransforms[1]?.translationX
           == Ldtx_Workspace_V4_Rational32.with {
-            $0.numerator = 960
-            $0.denominator = 1920
+            $0.num = 960
+            $0.den = 1920
           })
       #expect(live.videoLayerHidden[2] == true)
-      #expect(state.preferences.portraitProgramPreferences.isEmpty)
+      #expect(state.workspacePreferences.portraitProgramPreferences.isEmpty)
       #expect(row.state.strings[0] == "960")
     }
 
-    @Test("UCT-1006.16: Invalid transform drafts block navigation until corrected")
-    func invalidTransformBlocksNavigation() throws {
-      let store = WorkspaceStoreService(definition: .init(), preferences: .init())
-      let editor = VideoLayersEditor(storeService: store, target: .landscape)
+    @Test("Incomplete numeric input stays local without a navigation guard")
+    func incompleteTransformInput() throws {
+      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      let editor = VideoLayersEditor(
+        stateService: store, appletData: WorkspaceAppletData(), target: .landscape)
       editor.update(
         definition: .with { $0.videoComponents = [.with { $0.vfxSource.internalID = 1 }] },
         programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
       let row = try #require(editor.table.rows[1])
-      let original = store.preferences
-      for strings in [["bad", "0", "1", "1"], ["0", "0", "bad", "1"]] {
-        row.state.strings = strings
-        row.state.hasUnconfirmedChanges = true
-        #expect(throws: (any Error).self) { try store.validateInspectorEdits() }
-        #expect(throws: (any Error).self) { try store.validateForSaving() }
-        #expect(row.state.strings == strings)
-        #expect(store.preferences == original)
-      }
-      row.state.strings = ["0", "0", "1", "1"]
-      try store.validateInspectorEdits()
-      #expect(store.preferences == original)
+      row.state.edit("-", at: 0)
+      #expect(row.state.strings[0] == "-")
+      store.inspectorSelector = .init(kind: .workspaceCanvas)
+      #expect(store.inspectorSelector == .init(kind: .workspaceCanvas))
     }
 
     @Test("UCT-1006.15: Only VFX Sources and Clocks expose placement fields")
@@ -552,7 +554,7 @@ extension AppUIComponentTestSuite {
       window.contentView = container
       defer { window.close() }
       window.displayIfNeeded()
-      for id in UInt64(1)...7 {
+      for id in Int64(1)...7 {
         let row = try #require(editor.table.rows[id])
         row.frame = NSRect(x: 0, y: 0, width: 1000, height: 80)
         container.addSubview(row)

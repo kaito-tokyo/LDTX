@@ -38,9 +38,11 @@ message VideoComponentWrapper {
 }
 
 // A Video Component that fills the entire Canvas with one uniform source color.
+// It has no intrinsic image size and uses the rendering Canvas dimensions.
+// It must not be referenced as a Vision input.
 message FillSolidColorComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The source color at every Canvas point, in extended sRGB. RGB components
@@ -55,9 +57,11 @@ message FillSolidColorComponent {
 // The gradient progresses from start_extended_srgb_color to
 // end_extended_srgb_color along the start-to-end axis. Coincident control
 // points and color interpolation are implementation-defined.
+// It has no intrinsic image size and uses the rendering Canvas dimensions.
+// It must not be referenced as a Vision input.
 message FillLinearGradientComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The start point X coordinate, normalized by the rendering Canvas width,
@@ -94,9 +98,11 @@ message FillLinearGradientComponent {
 // The gradient progresses from inner_extended_srgb_color to
 // outer_extended_srgb_color between the two control contours.
 // Color interpolation is implementation-defined.
+// It has no intrinsic image size and uses the rendering Canvas dimensions.
+// It must not be referenced as a Vision input.
 message FillRadialGradientComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -131,9 +137,11 @@ message FillRadialGradientComponent {
 // The gradient progresses from start_extended_srgb_color to
 // end_extended_srgb_color over one turn, with a seam at the start ray.
 // Color interpolation and the result at the exact center are implementation-defined.
+// It has no intrinsic image size and uses the rendering Canvas dimensions.
+// It must not be referenced as a Vision input.
 message FillConicGradientComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -162,28 +170,41 @@ message FillConicGradientComponent {
 }
 
 // A Video Component that applies Video Effects to video from an Input Device.
-// Physical camera assignment is app-local and keyed by this entity's LDTXWorkspaceID.
+// Physical camera assignment is app-local and keyed by this entity's LdtxInternalId.
+// Its device image size is explicitly defined by device_width and device_height
+// and can be resolved without a connected physical device. These dimensions
+// count pixels on the device image grid, so they are unsigned integers rather
+// than Rational32 values normalized to a Canvas.
 message VfxSourceComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
+  // The configured device image width in pixels.
+  uint32 device_width = 3 [default = 0];
+  // The configured device image height in pixels.
+  uint32 device_height = 4 [default = 0];
   // The VFX effects applied to the input video, in evaluation order.
-  repeated VideoEffectWrapper effects = 3;
+  repeated VideoEffectWrapper effects = 5;
 }
 
 // A Video Component that renders a test pattern.
+// It has no intrinsic image size and uses the rendering Canvas dimensions.
+// It must not be referenced as a Vision input.
 message TestPatternComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
 }
 
 // A Video Component that renders the current date and time.
+// It has no intrinsic image size. Its width and height define the rendering
+// extent relative to the Canvas, not an independent image size.
+// It must not be referenced as a Vision input.
 message ClockComponent {
-  // An LDTXWorkspaceID for this entity.
-  uint64 internal_id = 1 [default = 0];
+  // An LdtxInternalId for this entity.
+  sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The Clock width, normalized by the Landscape Canvas width, in [0, 1].

@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct WorkspacePhysicalDeviceField: View {
+  @Environment(\.workspaceReportError) private var reportError
   let title: String
-  let internalID: UInt64
+  let internalID: Int64
   let isAudio: Bool
-  let storeService: WorkspaceStoreService
+  let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let deviceRegistry: DeviceRegistryService
   var isEditable = true
+
+  var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
+  @State private var isShowingPicker = false
+  @State private var draft: WorkspacePhysicalDeviceID?
 
   private var options: [WorkspaceSelectionOption<WorkspacePhysicalDeviceID>] {
     if isAudio {
@@ -26,32 +31,73 @@ struct WorkspacePhysicalDeviceField: View {
   }
 
   var body: some View {
-    WorkspaceSelectionField(
-      title: title, current: appletData.physicalDeviceID(for: internalID), options: options,
-      loaded: deviceRegistry.hasRefreshed,
-      loadError: isAudio ? deviceRegistry.errorMessage : nil,
-      clearTitle: "Remove Assignment", isEditable: isEditable && !storeService.isOutputActive,
-      refresh: { deviceRegistry.refresh() },
-      reportError: { storeService.reportError($0) },
-      commit: { proposed in
-        try applySelection(proposed)
-        storeService.synchronizeCaptureInputs(
-          availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-        ) { _ in }
-        storeService.synchronizeAudioMonitor()
+    VStack(alignment: .leading) {
+      LabeledContent(title) {
+        HStack {
+          if let selected = appletData.physicalDeviceID(for: internalID) {
+            Text(
+              options.first { $0.id == selected }?.name
+                ?? String(localized: "Unavailable"))
+          } else {
+            Text("Unassigned")
+          }
+          Button("Choose…") {
+            deviceRegistry.refresh()
+            let current = appletData.physicalDeviceID(for: internalID)
+            draft = options.contains { $0.id == current } ? current : nil
+            isShowingPicker = true
+          }
+        }
       }
-    )
-    .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
+      .disabled(!isEditable || stateService.isOutputActive)
+      .onAppear { if !deviceRegistry.hasRefreshed { deviceRegistry.refresh() } }
+      if isAudio, let message = deviceRegistry.errorMessage {
+        Text(message).font(.caption).foregroundStyle(.red)
+      }
+    }
+    .sheet(isPresented: $isShowingPicker) {
+      VStack {
+        Form {
+          Picker(title, selection: $draft) {
+            Text("Unassigned").tag(WorkspacePhysicalDeviceID?.none)
+            ForEach(options) { Text($0.name).tag(Optional($0.id)) }
+          }
+          .disabled(!isEditable || stateService.isOutputActive)
+        }
+        HStack {
+          Spacer()
+          Button("Cancel", role: .cancel) { isShowingPicker = false }
+            .keyboardShortcut(.cancelAction)
+          Button("Choose") {
+            do {
+              try applySelection(draft)
+              runtimeActions()?.synchronizeCaptureInputs(
+                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
+              ) { _ in }
+              runtimeActions()?.synchronizeAudioMonitor()
+              isShowingPicker = false
+            } catch { reportError(error) }
+          }
+          .disabled(!isEditable || stateService.isOutputActive)
+          .keyboardShortcut(.defaultAction)
+        }
+      }
+      .padding()
+      .frame(width: 400)
+      .onChange(of: options.map(\.id)) { _, ids in
+        draft = WorkspaceSelectionRules.reconciled(draft, availableIDs: ids)
+      }
+    }
   }
 
   func applySelection(_ proposed: WorkspacePhysicalDeviceID?) throws {
-    guard isEditable, !storeService.isOutputActive else {
+    guard isEditable, !stateService.isOutputActive else {
       throw WorkspaceSelectionError(message: "Stop output before changing an assignment.")
     }
     let exists =
       isAudio
-      ? storeService.definition.audioDevices.contains { $0.internalID == internalID }
-      : storeService.definition.videoComponents.contains {
+      ? stateService.workspaceDefinition.audioDevices.contains { $0.internalID == internalID }
+      : stateService.workspaceDefinition.videoComponents.contains {
         guard case .vfxSource(let source) = $0.videoComponent else { return false }
         return source.internalID == internalID
       }

@@ -315,7 +315,7 @@ extension OutputTestSuite {
         ],
         programPreferences: ProgramPreferences(),
         inputPassthroughChannelKeys: [],
-        peakMeter: ProgramAudioPeakMeter(),
+        peakMeter: .init(),
         completionHandler: { result in
           resultSpy.receive(result)
           started.fulfill()

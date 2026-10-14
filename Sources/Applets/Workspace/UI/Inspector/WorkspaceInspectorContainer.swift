@@ -2,37 +2,42 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXWorkspaceBundleFormat
+import LDTXYouTubeRTMPS
 import SwiftUI
 
-#if DEBUG
-  import AppKit
-#endif
-
 public struct WorkspaceInspectorContainer: View {
-  @Environment(\.documentReference) private var documentReference
-  private var workspaceURL: URL? {
-    guard let document = documentReference?.document else { return nil }
-    return document.fileURL ?? storeService.localStateURL
-  }
+  @Environment(\.workspaceReportError) private var reportError
+  private var workspaceURL: URL? { stateService.localStateURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
-  @Bindable var storeService: WorkspaceStoreService
+  @Bindable var stateService: WorkspaceStateService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let runtimeWorkspace: () -> WorkspaceV4Bundle?
+  private weak var document: (any WorkspaceDocumentContext)?
 
   public init(
     deviceRegistry: DeviceRegistryService,
-    storeService: WorkspaceStoreService,
-    appletData: WorkspaceAppletData
+    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    document: (any WorkspaceDocumentContext)? = nil,
+    runtimeWorkspace: @escaping () -> WorkspaceV4Bundle? = { nil },
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.document = document
+    self.runtimeWorkspace = runtimeWorkspace
+    self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
-    self._storeService = Bindable(wrappedValue: storeService)
+    self._stateService = Bindable(wrappedValue: stateService)
   }
 
   public var body: some View {
-    if let selector = storeService.inspectorSelector {
+    if let selector = stateService.inspectorSelector {
       inspector(for: selector)
         .id(selector)
     } else {
@@ -59,88 +64,121 @@ public struct WorkspaceInspectorContainer: View {
     case .invalid:
       emptyInspector
     case .workspacePrograms:
-      WorkspaceProgramsInspector(storeService: storeService, appletData: appletData)
+      WorkspaceProgramsInspector(
+        stateService: stateService, appletData: appletData,
+        runtimeActions: runtimeActions)
     case .workspaceCanvas:
-      WorkspaceCanvasInspector(storeService: storeService)
+      WorkspaceCanvasInspector(stateService: stateService)
     case .workspaceOutput:
-      if let externalID = storeService.externalID.flatMap(UUID.init(uuidString:)) {
+      if let externalID = stateService.externalID.flatMap(UUID.init(uuidString:)) {
         WorkspaceOutputInspector(
-          outputSettings: $storeService.outputSettings, externalID: externalID,
-          isOutputActive: storeService.isOutputActive, appletData: appletData,
-          reportError: storeService.reportError)
+          outputSettings: $stateService.workspaceOutputSettings, externalID: externalID,
+          isOutputActive: stateService.isOutputActive, appletData: appletData,
+          reportError: reportError)
       } else {
         unavailablePreviewInspector
       }
     case .audioInputDevice:
       if let internalID = selector.internalID {
         AudioInputDeviceInspector(
-          storeService: storeService, internalID: internalID,
+          document: document, stateService: stateService, internalID: internalID,
           deviceRegistry: deviceRegistry,
-          appletData: appletData)
+          appletData: appletData, runtimeActions: runtimeActions)
       } else {
         emptyInspector
       }
     case .vfxVideoComponent:
       if let internalID = selector.internalID {
         VfxVideoComponentInspector(
-          storeService: storeService, internalID: internalID,
-          deviceRegistry: deviceRegistry, appletData: appletData)
+          stateService: stateService, internalID: internalID,
+          deviceRegistry: deviceRegistry, appletData: appletData, runtimeActions: runtimeActions)
       } else {
         emptyInspector
       }
     case .solidColorFillVideoComponent:
       if let internalID = selector.internalID {
         SolidColorFillVideoComponentInspector(
-          storeService: storeService,
-          videoComponentID: .solidColorFill(internalID))
+          stateService: stateService,
+          appletData: appletData,
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
     case .linearGradientFillVideoComponent:
       if let internalID = selector.internalID {
         LinearGradientFillVideoComponentInspector(
-          storeService: storeService,
-          videoComponentID: .linearGradientFill(internalID))
+          stateService: stateService,
+          appletData: appletData,
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
     case .radialGradientFillVideoComponent:
       if let internalID = selector.internalID {
         RadialGradientFillVideoComponentInspector(
-          storeService: storeService,
-          videoComponentID: .radialGradientFill(internalID))
+          stateService: stateService,
+          appletData: appletData,
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
     case .conicGradientFillVideoComponent:
       if let internalID = selector.internalID {
         ConicGradientFillVideoComponentInspector(
-          storeService: storeService,
-          videoComponentID: .conicGradientFill(internalID))
+          stateService: stateService,
+          appletData: appletData,
+          videoComponentID: internalID)
       } else {
         emptyInspector
       }
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(
-          storeService: storeService, internalID: internalID)
+          stateService: stateService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
     case .testPatternVideoComponent:
       if let internalID = selector.internalID {
         TestPatternInspector(
-          storeService: storeService, internalID: internalID)
+          stateService: stateService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }
     case .ocrVision:
-      if let internalID = selector.internalID {
+      if let internalID = selector.internalID,
+        let vision = $stateService.ocrVision(internalID: internalID)
+      {
         OcrVisionInspector(
-          storeService: storeService, internalID: internalID)
+          stateService: stateService, vision: vision)
       } else {
         emptyInspector
       }
+    case .ldtxSceneDetectorVision:
+      if let internalID = selector.internalID,
+        let vision = $stateService.ldtxSceneDetectorVision(internalID: internalID)
+      {
+        LdtxSceneDetectorVisionInspector(
+          videoComponents: stateService.workspaceDefinition.videoComponents,
+          inputSize: vision.wrappedValue.videoComponentInternalIDIfPresent.flatMap { inputID in
+            stateService.workspaceDefinition.videoComponents.first { $0.internalID == inputID }?
+              .renderingSize
+          },
+          vision: vision,
+          modelURL: Binding(
+            get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
+            set: { stateService.setVisionModelURL($0, for: internalID) }),
+          persistedModelURL: runtimeWorkspace()?.visionModels[
+            vision.wrappedValue.modelInternalID],
+          inferenceResult: stateService.visionResults[internalID],
+          inferenceFailure: stateService.visionFailureMessages[internalID],
+          modelPreparationGeneration: stateService.modelPreparationGeneration
+        )
+        .environment(\.outputActive, stateService.isOutputActive)
+      } else {
+        emptyInspector
+      }
+
     }
   }
 
@@ -158,12 +196,12 @@ public struct WorkspaceInspectorContainer: View {
 
 #if DEBUG
   #Preview("Workspace Inspector — Sidebar") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState(
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState(
       inspectorSelector: .init(kind: .solidColorFillVideoComponent, internalID: 4))
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        storeService: storeService, deviceRegistry: DeviceRegistryService(),
+        stateService: stateService, deviceRegistry: DeviceRegistryService(),
         appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
@@ -171,7 +209,7 @@ public struct WorkspaceInspectorContainer: View {
       Divider()
 
       WorkspaceInspectorContainer(
-        deviceRegistry: DeviceRegistryService(), storeService: storeService,
+        deviceRegistry: DeviceRegistryService(), stateService: stateService,
         appletData: WorkspaceAppletData()
       )
       .padding(16)

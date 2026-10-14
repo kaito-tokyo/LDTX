@@ -4,10 +4,12 @@
 
 import CoreMedia
 import Foundation
+import LDTXBackgroundSegmentation
 import LDTXDiagnostics
 import LDTXProgramRuntime
 import LDTXTaskQueue
-import LDTXWorkspaceAppletInterface
+import LDTXWorkspaceAppletModel
+import LDTXYouTubeRTMPS
 import Observation
 
 protocol SessionRecordServicing: AnyObject, Sendable {

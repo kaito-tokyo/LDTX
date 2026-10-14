@@ -7,48 +7,44 @@ import LDTXProtos
 import SwiftProtobuf
 
 public struct WorkspaceBundleWriterV4 {
-  public let bundleURL: URL
+  public let bundleURL: URL?
   private var randomNumberGenerator: any RandomNumberGenerator
+
+  /// Creates a writer whose destination is supplied when writing a bundle.
+  public init(randomNumberGenerator: any RandomNumberGenerator = SystemRandomNumberGenerator()) {
+    bundleURL = nil
+    self.randomNumberGenerator = randomNumberGenerator
+  }
 
   public init?(
     at bundleURL: URL,
     randomNumberGenerator: any RandomNumberGenerator = SystemRandomNumberGenerator(),
     fileManager: FileManager = .default
   ) {
-    let infoURL = bundleURL.appending(path: "Info.plist", directoryHint: .notDirectory)
-    do {
-      try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-      if !fileManager.fileExists(atPath: infoURL.path) {
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .xml
-        try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
-      }
-    } catch {
-      return nil
-    }
+    do { try Self.preparePackage(at: bundleURL, fileManager: fileManager) } catch { return nil }
     self.bundleURL = bundleURL
     self.randomNumberGenerator = randomNumberGenerator
   }
 
   public var definitionURL: URL {
-    bundleURL.appending(path: "definition.pb", directoryHint: .notDirectory)
+    get throws {
+      guard let bundleURL else { throw CocoaError(.fileWriteInvalidFileName) }
+      return bundleURL.appending(path: "definition.pb", directoryHint: .notDirectory)
+    }
   }
 
   public var preferencesURL: URL {
-    bundleURL.appending(path: "preferences.pb", directoryHint: .notDirectory)
+    get throws {
+      guard let bundleURL else { throw CocoaError(.fileWriteInvalidFileName) }
+      return bundleURL.appending(path: "preferences.pb", directoryHint: .notDirectory)
+    }
   }
 
   public func write(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     externalID: UUID
   ) throws -> UUID {
-    try validateExternalID(externalID)
-    var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
-    envelope.externalIDAsUUID = externalID
-    envelope.workspaceDefinitionV4 = definition
-    var options = BinaryEncodingOptions()
-    options.useDeterministicOrdering = true
-    let data = try envelope.serializedData(options: options)
+    let data = try Self.encode(definition: definition, externalID: externalID)
     try data.write(to: definitionURL, options: .atomic)
     return externalID
   }
@@ -57,36 +53,110 @@ public struct WorkspaceBundleWriterV4 {
     preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4,
     externalID: UUID
   ) throws -> UUID {
-    try validateExternalID(externalID)
-    var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
-    envelope.externalIDAsUUID = externalID
-    envelope.workspacePreferencesV4 = preferences
-    var options = BinaryEncodingOptions()
-    options.useDeterministicOrdering = true
-    let data = try envelope.serializedData(options: options)
+    let data = try Self.encode(preferences: preferences, externalID: externalID)
     try data.write(to: preferencesURL, options: .atomic)
     return externalID
   }
 
   public var outputSettingsURL: URL {
-    bundleURL.appending(path: "output_settings.pb", directoryHint: .notDirectory)
+    get throws {
+      guard let bundleURL else { throw CocoaError(.fileWriteInvalidFileName) }
+      return bundleURL.appending(path: "output_settings.pb", directoryHint: .notDirectory)
+    }
   }
 
   public func write(
     outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4,
     externalID: UUID
   ) throws -> UUID {
+    let data = try Self.encode(outputSettings: outputSettings, externalID: externalID)
+    try data.write(to: outputSettingsURL, options: .atomic)
+    return externalID
+  }
+
+  /// Validates and serializes all documents before changing the destination.
+  public func write(_ workspace: WorkspaceV4Bundle, to destination: URL) throws {
+    var workspace = workspace
+    let embedded = try WorkspaceModelFiles.read(at: destination)
+    for id in workspace.visionModels.keys {
+      if let url = embedded[id] { workspace.visionModels[id] = url }
+    }
+    try WorkspaceBundleValidatorV4.validate(workspace)
+    let definitionData = try Self.encode(
+      definition: workspace.definition,
+      externalID: Self.envelopeIdentifier(workspace.definitionExternalID))
+    let preferencesData = try Self.encode(
+      preferences: workspace.preferences,
+      externalID: Self.envelopeIdentifier(workspace.preferencesExternalID))
+    let outputSettingsData = try Self.encode(
+      outputSettings: workspace.outputSettings,
+      externalID: Self.envelopeIdentifier(workspace.outputSettingsExternalID))
+    try Self.preparePackage(at: destination)
+    try WorkspaceModelFiles.write(workspace.visionModels, to: destination)
+    try definitionData.write(
+      to: destination.appendingPathComponent("definition.pb"), options: .atomic)
+    try preferencesData.write(
+      to: destination.appendingPathComponent("preferences.pb"), options: .atomic)
+    try outputSettingsData.write(
+      to: destination.appendingPathComponent("output_settings.pb"), options: .atomic)
+  }
+
+  private static func preparePackage(at url: URL, fileManager: FileManager = .default) throws {
+    try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+    let infoURL = url.appendingPathComponent("Info.plist")
+    if !fileManager.fileExists(atPath: infoURL.path) {
+      let encoder = PropertyListEncoder()
+      encoder.outputFormat = .xml
+      try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+    }
+  }
+
+  private static func envelopeIdentifier(_ identifier: String?) throws -> UUID {
+    guard let identifier else { return makeExternalID() }
+    guard let uuid = UUID(uuidString: identifier) else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
+    try validateExternalID(uuid)
+    return uuid
+  }
+
+  private static func encode(definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, externalID: UUID)
+    throws -> Data
+  {
+    try validateExternalID(externalID)
+    var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
+    envelope.externalIDAsUUID = externalID
+    envelope.workspaceDefinitionV4 = definition
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try envelope.serializedData(options: options)
+  }
+
+  private static func encode(
+    preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4, externalID: UUID
+  ) throws -> Data {
+    try validateExternalID(externalID)
+    var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
+    envelope.externalIDAsUUID = externalID
+    envelope.workspacePreferencesV4 = preferences
+    var options = BinaryEncodingOptions()
+    options.useDeterministicOrdering = true
+    return try envelope.serializedData(options: options)
+  }
+
+  private static func encode(
+    outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4, externalID: UUID
+  ) throws -> Data {
     try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
     envelope.externalIDAsUUID = externalID
     envelope.workspaceOutputSettingsV4 = outputSettings
     var options = BinaryEncodingOptions()
     options.useDeterministicOrdering = true
-    try envelope.serializedData(options: options).write(to: outputSettingsURL, options: .atomic)
-    return externalID
+    return try envelope.serializedData(options: options)
   }
 
-  private func validateExternalID(_ identifier: UUID) throws {
+  private static func validateExternalID(_ identifier: UUID) throws {
     guard identifier.uuid.6 >> 4 == 7, identifier.uuid.8 & 0xc0 == 0x80 else {
       throw CocoaError(.fileWriteInvalidFileName)
     }

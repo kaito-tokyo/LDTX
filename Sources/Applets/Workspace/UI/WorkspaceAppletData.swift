@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXYouTubeRTMPS
 import Observation
@@ -64,15 +65,14 @@ public final class WorkspaceAppletData {
   public static let shared = WorkspaceAppletData()
 
   public private(set) var physicalDeviceIDsByResourceInternalID:
-    [UInt64: WorkspacePhysicalDeviceID] = [:]
+    [Int64: WorkspacePhysicalDeviceID] = [:]
   private static let assignmentsKey = "tokyo.kaito.ldtx.input-device-assignments.v1"
 
-  public func physicalDeviceID(for internalID: UInt64) -> WorkspacePhysicalDeviceID? {
+  public func physicalDeviceID(for internalID: Int64) -> WorkspacePhysicalDeviceID? {
     physicalDeviceIDsByResourceInternalID[internalID]
   }
 
-  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: UInt64)
-  {
+  public func setPhysicalDeviceID(_ identifier: WorkspacePhysicalDeviceID?, for internalID: Int64) {
     var updated = physicalDeviceIDsByResourceInternalID
     updated[internalID] = identifier
     let encoder = PropertyListEncoder()
@@ -85,7 +85,7 @@ public final class WorkspaceAppletData {
   private func loadAssignments() {
     guard let data = userDefaults.data(forKey: Self.assignmentsKey),
       let assignments = try? PropertyListDecoder().decode(
-        [UInt64: WorkspacePhysicalDeviceID].self, from: data)
+        [Int64: WorkspacePhysicalDeviceID].self, from: data)
     else { return }
     physicalDeviceIDsByResourceInternalID = assignments
   }
@@ -142,6 +142,23 @@ public final class WorkspaceAppletData {
     loadAssignments()
     userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
     userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
+  }
+
+  public func state(for workspaceURL: URL?, externalID: UUID?) -> WorkspaceLocalState {
+    var state = workspaceURL.map { self.state(for: $0) } ?? .init()
+    if let externalID {
+      state.recordingFolderPath = recordingFolderPaths[externalID]
+      state.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamIDs[externalID]
+      state.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamIDs[externalID]
+    }
+    return state
+  }
+
+  public func selectedProgram(
+    in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, for workspaceURL: URL?
+  ) -> Ldtx_Workspace_V4_ProgramDefinition? {
+    let id = workspaceURL.map { state(for: $0).selectedProgramInternalID } ?? nil
+    return definition.programs.first { $0.internalID == id } ?? definition.programs.first
   }
 
   public func state(for workspaceURL: URL) -> WorkspaceLocalState {

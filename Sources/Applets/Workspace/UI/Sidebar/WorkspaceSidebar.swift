@@ -4,34 +4,59 @@
 
 import LDTXAppletSupport
 import LDTXDeviceRegistry
-import LDTXWorkspaceAppletInterface
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  @Bindable var storeService: WorkspaceStoreService
+  @Bindable var stateService: WorkspaceStateService
+  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
-  @Environment(\.documentReference) private var documentReference
+  private weak var document: (any WorkspaceDocumentContext)?
   @State private var addSheet: WorkspaceAddSheet?
   @State private var draft = WorkspaceAddDraft()
+  @State private var additionFailure: String?
 
   public init(
-    storeService: WorkspaceStoreService,
-    deviceRegistry: DeviceRegistryService,
-    appletData: WorkspaceAppletData
+    stateService: WorkspaceStateService, deviceRegistry: DeviceRegistryService,
+    appletData: WorkspaceAppletData,
+    document: (any WorkspaceDocumentContext)? = nil,
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.document = document
+    self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self.appletData = appletData
-    self._storeService = Bindable(wrappedValue: storeService)
+    self._stateService = Bindable(wrappedValue: stateService)
+  }
+
+  static func rows<Value>(
+    _ values: [Value], internalID: (Value) -> Int64?
+  ) -> [(id: Int64, value: Value, isSelectable: Bool)] {
+    let ids = values.map(internalID)
+    let counts = ids.compactMap { $0 }.filter { $0 > 0 }
+      .reduce(into: [Int64: Int]()) { $0[$1, default: 0] += 1 }
+    return values.enumerated().map { index, value in
+      if let id = ids[index], id > 0, counts[id] == 1 {
+        return (id, value, true)
+      }
+      return (-Int64(index) - 1, value, false)
+    }
   }
 
   public var body: some View {
-    let inputDevices = storeService.definition.audioDevices
-    let videoComponents = storeService.definition.videoComponents
-    let visions = storeService.definition.visions
+    let inputDevices = Self.rows(stateService.workspaceDefinition.audioDevices) {
+      $0.hasInternalID ? $0.internalID : nil
+    }
+    let videoComponents = Self.rows(stateService.workspaceDefinition.videoComponents) {
+      $0.internalID
+    }
+    let visions = Self.rows(stateService.workspaceDefinition.visions) { $0.internalID }
 
     VStack {
-      List(selection: $storeService.inspectorSelector) {
+      List(selection: $stateService.inspectorSelector) {
         Section {
           Label("Programs", systemImage: "rectangle.stack")
             .tag(WorkspaceInspectorSelector(kind: .workspacePrograms))
@@ -44,10 +69,16 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(inputDevices) { device in
-            Label(device.displayName, systemImage: "waveform")
-              .tag(
-                WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID))
+          ForEach(inputDevices, id: \.id) { row in
+            let device = row.value
+            if row.isSelectable {
+              Label(device.displayName, systemImage: "waveform")
+                .tag(
+                  WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID)
+                )
+            } else {
+              Label(device.displayName, systemImage: "waveform").disabled(true)
+            }
           }
 
           Button {
@@ -62,45 +93,51 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(videoComponents) { component in
-            switch component.videoComponent {
-            case .vfxSource(let source):
-              Label(source.displayName, systemImage: "play.rectangle")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .vfxVideoComponent, internalID: source.internalID))
-            case .solidColorFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .solidColorFillVideoComponent, internalID: fill.internalID))
-            case .linearGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
-            case .radialGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
-            case .conicGradientFill(let fill):
-              Label(fill.displayName, systemImage: "paintpalette")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
-            case .clock(let clock):
-              Label(clock.displayName, systemImage: "clock")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .clockVideoComponent, internalID: clock.internalID))
-            case .testPattern(let testPattern):
-              Label(testPattern.displayName, systemImage: "testtube.2")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .testPatternVideoComponent, internalID: testPattern.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
+          ForEach(videoComponents, id: \.id) { row in
+            let component = row.value
+            if row.isSelectable {
+              switch component.videoComponent {
+              case .vfxSource(let source):
+                Label(source.displayName, systemImage: "play.rectangle")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .vfxVideoComponent, internalID: source.internalID))
+              case .solidColorFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .solidColorFillVideoComponent, internalID: fill.internalID))
+              case .linearGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
+              case .radialGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
+              case .conicGradientFill(let fill):
+                Label(fill.displayName, systemImage: "paintpalette")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
+              case .clock(let clock):
+                Label(clock.displayName, systemImage: "clock")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .clockVideoComponent, internalID: clock.internalID))
+              case .testPattern(let testPattern):
+                Label(testPattern.displayName, systemImage: "testtube.2")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .testPatternVideoComponent, internalID: testPattern.internalID))
+              case nil:
+                Label("(invalid)", systemImage: "questionmark.square.dashed")
+              }
+            } else {
+              Label(component.displayName ?? "(invalid)", systemImage: "questionmark.square.dashed")
+                .disabled(true)
             }
           }
 
@@ -116,15 +153,27 @@ public struct WorkspaceSidebar: View {
         }
 
         Section {
-          ForEach(visions) { vision in
-            switch vision.vision {
-            case .ocrVision(let ocrVision):
-              Label(ocrVision.displayName, systemImage: "eye")
-                .tag(
-                  WorkspaceInspectorSelector(
-                    kind: .ocrVision, internalID: ocrVision.internalID))
-            case nil:
-              Label("(invalid)", systemImage: "questionmark.square.dashed")
+          ForEach(visions, id: \.id) { row in
+            let vision = row.value
+            if row.isSelectable {
+              switch vision.vision {
+              case .ocrVision(let ocrVision):
+                Label(ocrVision.displayName, systemImage: "eye")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .ocrVision, internalID: ocrVision.internalID))
+              case .ldtxSceneDetectorVision(let classifierVision):
+                Label(classifierVision.displayName, systemImage: "eye")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .ldtxSceneDetectorVision,
+                      internalID: classifierVision.internalID))
+              case nil:
+                Label("(invalid)", systemImage: "questionmark.square.dashed")
+              }
+            } else {
+              Label(vision.displayName ?? "(invalid)", systemImage: "questionmark.square.dashed")
+                .disabled(true)
             }
           }
 
@@ -144,12 +193,13 @@ public struct WorkspaceSidebar: View {
     .sheet(item: $addSheet) { sheet in
       WorkspaceAddResourceSheet(
         sheet: sheet, draft: $draft, devices: deviceOptions,
-        videoComponents: storeService.definition.videoComponents,
-        validationMessage: documentReference?.document == nil
+        videoComponents: stateService.workspaceDefinition.videoComponents,
+        validationMessage: document == nil
           ? "The Workspace document is unavailable."
-          : WorkspaceResourceAddition.validationMessage(
-            sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
-            audioDiscoveryError: deviceRegistry.errorMessage),
+          : additionFailure
+            ?? WorkspaceResourceAddition.validationMessage(
+              sheet: sheet, draft: draft, devices: deviceOptions, stateService: stateService,
+              audioDiscoveryError: deviceRegistry.errorMessage),
         submit: { submitResource(sheet) }, cancel: { addSheet = nil },
         refresh: {
           deviceRegistry.refresh()
@@ -161,13 +211,19 @@ public struct WorkspaceSidebar: View {
     deviceRegistry.audioInputDevices.map {
       .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
     }
+      + deviceRegistry.cameras.map {
+        .init(
+          id: .avCaptureDevice(uniqueID: $0.id), name: $0.name,
+          width: UInt32(exactly: $0.width) ?? 0, height: UInt32(exactly: $0.height) ?? 0)
+      }
   }
 
-  var canAddResource: Bool { documentReference?.document != nil && !storeService.isOutputActive }
+  var canAddResource: Bool { document != nil && !stateService.isOutputActive }
 
   private func beginAdding(_ sheet: WorkspaceAddSheet) {
     guard canAddResource else { return }
-    if sheet == .device { deviceRegistry.refresh() }
+    if sheet == .device || sheet == .videoComponent { deviceRegistry.refresh() }
+    additionFailure = nil
     draft = WorkspaceAddDraft()
     if sheet == .videoComponent { draft.name = draft.componentKind.rawValue }
     if sheet == .vision { draft.name = "OCR Vision" }
@@ -179,38 +235,38 @@ public struct WorkspaceSidebar: View {
       try addResource(sheet, draft: draft)
       addSheet = nil
     } catch {
-      storeService.reportError(error)
+      additionFailure = error.localizedDescription
     }
   }
 
   func addResource(_ sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft) throws {
-    guard documentReference?.document != nil else {
+    guard document != nil else {
       throw WorkspaceSelectionError(message: "The Workspace document is unavailable.")
     }
-    if sheet == .device {
+    let selectsCamera = sheet == .videoComponent && draft.componentKind == .vfxSource
+    if sheet == .device || selectsCamera {
       deviceRegistry.refresh(reportErrors: false)
-      if let error = deviceRegistry.error { throw error }
+      if sheet == .device, let error = deviceRegistry.error { throw error }
     }
     let id = try WorkspaceResourceAddition.add(
-      sheet: sheet, draft: draft, devices: deviceOptions, storeService: storeService,
+      sheet: sheet, draft: draft, devices: deviceOptions, stateService: stateService,
       audioDiscoveryError: deviceRegistry.errorMessage)
-    if sheet == .device {
+    if sheet == .device || selectsCamera {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-      storeService.synchronizeCaptureInputs(
+      runtimeActions()?.synchronizeCaptureInputs(
         availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
       ) { _ in }
-      storeService.synchronizeAudioMonitor()
+      runtimeActions()?.synchronizeAudioMonitor()
     }
-    if sheet == .vision { storeService.synchronizeVision() }
   }
 
 }
 
 #if DEBUG
   #Preview("Workspace Sidebar") {
-    @Previewable @State var storeService = WorkspaceSidebarPreviewFixtures.makeUIState()
+    @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
     WorkspaceSidebar(
-      storeService: storeService, deviceRegistry: DeviceRegistryService(),
+      stateService: stateService, deviceRegistry: DeviceRegistryService(),
       appletData: WorkspaceAppletData()
     )
     .frame(width: 260, height: 640)

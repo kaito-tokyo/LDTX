@@ -30,16 +30,16 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       programInternalID: id, target: .landscape)
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = .with {
-      $0.numerator = 1
-      $0.denominator = 4
+      $0.num = 1
+      $0.den = 4
     }
     transform.scaleX = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.num = 1
+      $0.den = 1
     }
     transform.scaleY = .with {
-      $0.numerator = 1
-      $0.denominator = 1
+      $0.num = 1
+      $0.den = 1
     }
     try runtime.setBasicTransform(
       transform, forVideoLayerInternalID: first,
@@ -49,8 +49,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       programInternalID: id, target: .portrait)
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -6
-        $0.denominator = 1
+        $0.num = -6
+        $0.den = 1
       }, programInternalID: id, target: .landscape)
     #expect(old.preferences.videoLayerTransforms.isEmpty)
     #expect(
@@ -75,13 +75,13 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let id = try runtime.addProgram(displayName: "Canvas Preferences")
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -81
-        $0.denominator = 25
+        $0.num = -81
+        $0.den = 25
       }, programInternalID: id, target: .landscape)
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -9
-        $0.denominator = 1
+        $0.num = -9
+        $0.den = 1
       }, programInternalID: id, target: .portrait)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
@@ -95,8 +95,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         })
     try runtime.setMasterVolume(
       .with {
-        $0.numerator = -6
-        $0.denominator = 1
+        $0.num = -6
+        $0.den = 1
       }, programInternalID: id, target: .landscape)
     #expect(
       runtime.preferences.landscapeProgramPreferences[id]?.audioMasterVolumeDecibels
@@ -124,8 +124,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let inputID = try runtime.addAudioInputDevice(displayName: "Microphone")
     try runtime.setAudioChannelGain(
       .with {
-        $0.numerator = -617
-        $0.denominator = 50
+        $0.num = -617
+        $0.den = 50
       }, forAudioInputDeviceInternalID: inputID)
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
@@ -134,8 +134,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         })
     try runtime.setAudioChannelGain(
       .with {
-        $0.numerator = 63
-        $0.denominator = 50
+        $0.num = 63
+        $0.den = 50
       }, forAudioInputDeviceInternalID: inputID)
     #expect(
       runtime.preferences.audioChannelGainsDecibels[inputID]
@@ -152,13 +152,19 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
         == Ldtx_Workspace_V4_Rational32.with {
           $0.set(num: 13, den: 10)
         })
-    #expect(throws: WorkspaceV4IntegrityError.missingAudioInputDevice(999)) {
-      try runtime.setAudioChannelGain(
-        .with {
-          $0.numerator = -6
-          $0.denominator = 1
-        }, forAudioInputDeviceInternalID: 999)
-    }
+    #expect(
+      performing: {
+        try runtime.setAudioChannelGain(
+          .with {
+            $0.num = -6
+            $0.den = 1
+          }, forAudioInputDeviceInternalID: 999)
+      },
+      throws: {
+        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains {
+          $0.error == .missingAudioInputDevice(999)
+        } == true
+      })
     try runtime.removeProgram(internalID: id)
     #expect(runtime.preferences.landscapeProgramPreferences[id] == nil)
     #expect(runtime.preferences.portraitProgramPreferences[id] == nil)
@@ -242,7 +248,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: capture)
     let programID = try runtime.addProgram(displayName: "Main")
 
-    try WorkspaceDocumentPackage.write(runtime.workspace, to: packageURL, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(runtime.workspace, to: packageURL)
     runtime.persistenceCoordinator.setDocumentURL(packageURL)
     #expect(runtime.url == packageURL)
 
@@ -506,6 +512,26 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       try runtime.removeVideoComponent(internalID: source)
     }
     try runtime.removeVision(internalID: vision)
+    let classifierID = source + 1
+    try runtime.editDefinition {
+      let index = $0.videoComponents.firstIndex { $0.internalID == source }!
+      $0.videoComponents[index].vfxSource.deviceWidth = 1920
+      $0.videoComponents[index].vfxSource.deviceHeight = 1080
+      $0.visions.append(
+        .with {
+          $0.ldtxSceneDetectorVision = .with {
+            $0.internalID = classifierID
+            $0.displayName = "Classifier"
+            $0.videoComponentInternalID = source
+          }
+        })
+    }
+    let before = runtime.definition
+    #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
+      try runtime.removeVideoComponent(internalID: source)
+    }
+    #expect(runtime.definition == before)
+    try runtime.removeVision(internalID: classifierID)
     try runtime.editDefinition { $0.canvasConfiguration.ptsMasterVfxSourceInternalID = source }
     #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
       try runtime.removeVideoComponent(internalID: source)
@@ -521,7 +547,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       self.workspace = workspace
     }
     func replace(_ value: WorkspaceV4Bundle) throws {
-      try WorkspaceV4IntegrityValidator.validate(value)
+      try WorkspaceBundleValidatorV4.validate(value)
       workspace = value
     }
   }

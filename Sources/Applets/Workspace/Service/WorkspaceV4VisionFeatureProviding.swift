@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 
@@ -9,6 +10,6 @@ import LDTXWorkspaceAppletStore
 public protocol WorkspaceV4VisionFeatureProviding: AnyObject {
   func synchronize(
     visions: [Ldtx_Workspace_V4_VisionWrapper], context: WorkspaceV4VisionFeatureContext)
-  func stop()
-  func submit(visionInternalID: UInt64, context: WorkspaceV4VisionFeatureContext)
+  func stop() async
+  func submit(visionInternalID: Int64, context: WorkspaceV4VisionFeatureContext)
 }

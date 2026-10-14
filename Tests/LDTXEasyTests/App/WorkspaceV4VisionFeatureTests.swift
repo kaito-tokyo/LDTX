@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProtos
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -23,8 +24,8 @@ struct WorkspaceV4VisionFeatureUnitTestSuite {
     vision.usesLanguageCorrection = true
     vision.customWords = ["Unite"]
     vision.minimumTextHeight = .with {
-      $0.numerator = 1
-      $0.denominator = 5
+      $0.num = 1
+      $0.den = 5
     }
 
     let configuration = WorkspaceV4VisionFeature.ocrConfiguration(for: vision)

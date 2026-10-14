@@ -4,9 +4,12 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXProgramRuntime
+import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
-import LDTXWorkspaceAppletUI
+import LDTXWorkspaceAppletService
+@testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
+import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
@@ -15,13 +18,48 @@ extension AppUIComponentTestSuite {
   struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
+    @Test("Errors queued before window attachment are presented after attachment")
+    func startupErrorIsPresentedAfterAttach() async throws {
+      let document = WorkspaceDocument()
+      let controller = WorkspaceWindowController(document: document)
+      controller.reportError(
+        NSError(
+          domain: "Startup", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Queued startup failure"]))
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+        styleMask: [.titled], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      window.orderFront(nil)
+      controller.attachWindow(window)
+      let sheet = try await waitForSheet(on: window)
+      #expect(displayedText(in: sheet.contentView).contains("Queued startup failure"))
+      dismiss(sheet)
+      await controller.shutdown()
+      window.close()
+    }
+
+    @Test("A component in use is presented as an operation error")
+    func componentInUsePresentsError() async throws {
+      let (document, controller, window) = makeController()
+      defer {
+        if let sheet = window.attachedSheet { dismiss(sheet) }
+        window.close()
+        document.close()
+      }
+      controller.reportError(WorkspaceRuntimeError.resourceInUse(1))
+      let sheet = try await waitForSheet(on: window)
+      #expect(displayedText(in: sheet.contentView).contains("Visions"))
+    }
+
     private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
       _ = NSApplication.shared
       let document = WorkspaceDocument()
       let controller = WorkspaceWindowController(
-        storeService: document.storeService,
+        stateService: document.stateService,
         persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), documentReference: DocumentReference(document))
+        appletData: WorkspaceAppletData(), document: document)
+      document.addWindowController(controller)
       let window = controller.window!
       window.orderFront(nil)
       return (document, controller, window)
@@ -70,21 +108,21 @@ extension AppUIComponentTestSuite {
           NSLocalizedFailureReasonErrorKey: "A retained failure reason.",
           NSLocalizedRecoverySuggestionErrorKey: "Retry the edit.",
         ])
-      document.storeService.reportError(error)
+      controller.reportError(error)
       let first = try await waitForSheet(on: editor)
       #expect(first.sheetParent === editor)
       let text = displayedText(in: first.contentView)
       #expect(text.contains("Edit failed."))
       #expect(text.contains("A retained failure reason."))
       #expect(text.contains("Retry the edit."))
-      document.storeService.reportError(NSError(domain: "test", code: 2))
+      controller.reportError(NSError(domain: "test", code: 2))
       #expect(editor.attachedSheet === first)
       dismiss(first)
       let second = try await waitForSheet(on: editor, excluding: first)
       #expect(second !== first)
       await controller.shutdown()
       dismiss(second)
-      document.storeService.reportError(error)
+      controller.reportError(error)
       controller.reportError(error)
       try await Task.sleep(for: .milliseconds(100))
       #expect(editor.attachedSheet == nil)
@@ -149,6 +187,15 @@ extension AppUIComponentTestSuite {
       try await Task.sleep(for: .milliseconds(100))
       #expect(window.attachedSheet == nil)
       await controller.shutdown()
+    }
+  }
+}
+
+private struct WorkspaceErrorEnvironmentProbe: View {
+  @Environment(\.workspaceReportError) private var reportError
+  var body: some View {
+    Text("Error probe").onAppear {
+      reportError(WorkspaceSelectionError(message: "Invalid SwiftUI input"))
     }
   }
 }

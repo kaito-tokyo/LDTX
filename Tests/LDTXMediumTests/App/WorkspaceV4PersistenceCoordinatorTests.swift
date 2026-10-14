@@ -12,6 +12,7 @@ import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
+import LDTXYouTubeRTMPS
 import Observation
 import Security
 import Testing
@@ -19,6 +20,17 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
+  @Test func generatedIDsPreserveTimestampAndSetLowBit() {
+    let generator = WorkspaceInternalIDGenerator()
+    let milliseconds: Int64 = 1_800_000_000_000
+    for _ in 0..<100 {
+      let id = generator.next(now: Date(timeIntervalSince1970: Double(milliseconds) / 1_000))
+      #expect(id > 0)
+      #expect(id & 1 == 1)
+      #expect(id >> 15 == milliseconds)
+    }
+  }
+
   private final class ObservationFlag: @unchecked Sendable {
     var didChange = false
   }
@@ -31,7 +43,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let box = WorkspaceBox(cleanWorkspace(displayName: "Unite"))
     let coordinator = makeCoordinator(box)
 
-    try WorkspaceDocumentPackage.write(box.workspace, to: packageURL, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(box.workspace, to: packageURL)
     let reloaded = try coordinator.load(at: packageURL)
 
     #expect(reloaded.definition.displayName == "Unite")
@@ -214,7 +226,7 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
       self.workspace = workspace
     }
     func replace(_ value: WorkspaceV4Bundle) throws {
-      try WorkspaceV4IntegrityValidator.validate(value)
+      try WorkspaceBundleValidatorV4.validate(value)
       workspace = value
     }
   }

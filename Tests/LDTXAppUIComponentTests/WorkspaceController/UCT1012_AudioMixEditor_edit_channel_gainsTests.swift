@@ -4,10 +4,11 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
+import LDTXProgramRuntime
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletInterface
 @testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
 import Observation
 import SwiftUI
 import Testing
@@ -23,13 +24,16 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1012.1: Channel gains can be edited without selecting a Program or canvas")
     func audioMixEditsWorkspaceGainWithoutCanvasOrProgramSelection() throws {
+      let serviceAppletData = WorkspaceAppletData()
       _ = NSApplication.shared
-      let service = WorkspaceStoreService(definition: .init(), preferences: .init())
-      service.definition.audioDevices = [
+      let service = WorkspaceStateService(definition: .init(), preferences: .init())
+      service.workspaceDefinition.audioDevices = [
         WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
       ]
       service.selectedAudioMix = .portrait
-      let editor = AudioMixEditor(storeService: service)
+      let editor = AudioMixEditor(
+        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+        reportError: { _ in })
       func descendants(_ view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants($0) }
       }
@@ -43,14 +47,14 @@ extension AppUIComponentTestSuite {
       slider.doubleValue = -12
       slider.sendAction(try #require(slider.action), to: slider.target)
       #expect(
-        service.preferences.audioChannelGainsDecibels[10]
+        service.workspacePreferences.audioChannelGainsDecibels[10]
           == Ldtx_Workspace_V4_Rational32.with {
             $0.set(num: -120, den: 10)
           })
-      #expect(!service.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
-      #expect(!service.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
+      #expect(!editor.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
+      #expect(!editor.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
       #expect(
-        service.preferences.audioChannelGainsDecibels[10]
+        service.workspacePreferences.audioChannelGainsDecibels[10]
           == Ldtx_Workspace_V4_Rational32.with {
             $0.set(num: -120, den: 10)
           })
@@ -62,8 +66,8 @@ extension AppUIComponentTestSuite {
       let field = AudioDecibelField()
       field.configure(
         value: .with {
-          $0.numerator = 0
-          $0.denominator = 1
+          $0.num = 0
+          $0.den = 1
         }, enabled: true
       ) { _ in false }
       field.stringValue = "-12.5"
@@ -71,24 +75,24 @@ extension AppUIComponentTestSuite {
         Notification(name: NSControl.textDidChangeNotification, object: field))
       field.configure(
         value: .with {
-          $0.numerator = -4
-          $0.denominator = 1
+          $0.num = -4
+          $0.den = 1
         }, enabled: true
       ) { _ in false }
       #expect(field.stringValue == "-12.5")
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(field.dirty)
       var committed = 0.0
       field.configure(
         value: .with {
-          $0.numerator = -4
-          $0.denominator = 1
+          $0.num = -4
+          $0.den = 1
         }, enabled: true
       ) {
         committed = $0.double
         return true
       }
-      field.commit()
+      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
       #expect(committed == -12.5)
       #expect(!field.dirty)
     }

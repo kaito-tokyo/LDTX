@@ -16,15 +16,20 @@ import Observation
 @Observable
 public final class WorkspaceV4PersistenceCoordinator {
   private let workspaceSnapshot: () -> WorkspaceV4Bundle
+  private let runtimeSnapshot: () -> WorkspaceV4Bundle
+  private var adoptedRuntimeWorkspace: WorkspaceV4Bundle?
+  private var outputPreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4?
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
 
   public init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
     replaceWorkspace: @escaping (WorkspaceV4Bundle) throws -> Void,
-    url: URL? = nil
+    url: URL? = nil,
+    runtimeSnapshot: (() -> WorkspaceV4Bundle)? = nil
   ) {
     self.workspaceSnapshot = workspaceSnapshot
+    self.runtimeSnapshot = runtimeSnapshot ?? workspaceSnapshot
     self.replaceWorkspace = replaceWorkspace
     self.url = url
   }
@@ -40,6 +45,51 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
+  public var hasPersistedWorkspace: Bool { adoptedRuntimeWorkspace != nil }
+  var runtimeWorkspace: WorkspaceV4Bundle {
+    let live = runtimeSnapshot()
+    guard var adopted = adoptedRuntimeWorkspace else { return live }
+    adopted.preferences =
+      outputPreferences.map {
+        Self.preferencesDuringOutput(live.preferences, membership: $0)
+      } ?? live.preferences
+    adopted.outputSettings = live.outputSettings
+    return adopted
+  }
+
+  public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) {
+    adoptedRuntimeWorkspace = workspace
+  }
+
+  func setOutputActive(_ active: Bool) {
+    if active {
+      if outputPreferences == nil { outputPreferences = runtimeSnapshot().preferences }
+    } else {
+      outputPreferences = nil
+    }
+  }
+
+  nonisolated static func preferencesDuringOutput(
+    _ proposed: Ldtx_Workspace_V4_WorkspacePreferencesV4,
+    membership: Ldtx_Workspace_V4_WorkspacePreferencesV4
+  ) -> Ldtx_Workspace_V4_WorkspacePreferencesV4 {
+    var result = proposed
+    func preserveMembership(
+      _ values: inout [Int64: Ldtx_Workspace_V4_ProgramPreferences],
+      _ baseline: [Int64: Ldtx_Workspace_V4_ProgramPreferences]
+    ) {
+      for id in Set(values.keys).union(baseline.keys) {
+        let expected = baseline[id]?.videoLayerInternalIds ?? []
+        let proposed = values[id]?.videoLayerInternalIds ?? []
+        if proposed.sorted() != expected.sorted() {
+          values[id, default: .init()].videoLayerInternalIds = expected
+        }
+      }
+    }
+    preserveMembership(&result.landscapeProgramPreferences, membership.landscapeProgramPreferences)
+    preserveMembership(&result.portraitProgramPreferences, membership.portraitProgramPreferences)
+    return result
+  }
 
   func replaceWorkspaceState(_ workspace: WorkspaceV4Bundle) throws {
     try replaceWorkspace(workspace)
@@ -53,37 +103,38 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   public func open(_ workspace: WorkspaceV4Bundle, at packageURL: URL) throws {
-    try WorkspaceV4IntegrityValidator.validate(workspace)
+    try WorkspaceBundleValidatorV4.validate(workspace)
     url = packageURL.standardizedFileURL
   }
 
-  /// Synchronizes the formal NSDocument URL without changing content or save state.
+  /// Synchronizes the formal document URL without changing content or save state.
   public func setDocumentURL(_ url: URL?) { self.url = url }
 
   /// Resolves the concrete capture hardware selected for the V4 input devices.
   /// Device assignments are app-local and never become Workspace data.
   func runtimeProjection(
-    programInternalID: UInt64,
+    programInternalID: Int64,
     target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws -> WorkspaceV4RuntimeProjection {
+    let workspace = runtimeWorkspace
     let canvas = try WorkspaceProgramCanvasSnapshot(
-      definition: currentWorkspace.definition, preferences: currentWorkspace.preferences,
+      definition: workspace.definition, preferences: workspace.preferences,
       programInternalID: programInternalID, target: target)
     return try WorkspaceV4RenderGraph.runtimeProjection(
-      definition: currentWorkspace.definition, canvas: canvas,
+      definition: workspace.definition, canvas: canvas,
       physicalDeviceIDs: physicalDeviceIDs, timeSeconds: timeSeconds)
   }
 
   /// Installs one V4 Program directly into a shared preview or output runtime.
   func applyRuntime(
     _ runtime: ProgramRuntime,
-    programInternalID: UInt64,
+    programInternalID: Int64,
     target: WorkspaceCanvasTarget,
     localState: WorkspaceLocalState,
-    physicalDeviceIDs: [UInt64: WorkspacePhysicalDeviceID] = [:],
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float = Float(ProcessInfo.processInfo.systemUptime)
   ) throws {
     let projection = try runtimeProjection(

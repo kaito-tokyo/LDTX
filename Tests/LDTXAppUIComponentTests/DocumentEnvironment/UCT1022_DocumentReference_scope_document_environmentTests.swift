@@ -9,34 +9,31 @@ import Testing
 @MainActor
 private final class Probe {
   var appeared = false
-  var reference: DocumentReference?
   var readURL: () -> URL? = { nil }
 }
 
 private struct ProbeView: View {
-  @Environment(\.documentReference) private var reference
+  weak var document: NSDocument?
   let probe: Probe
 
   var body: some View {
-    Text("Document environment")
+    Text("Explicit Document")
       .onAppear {
-        let reference = reference
-        probe.reference = reference
-        probe.readURL = { reference?.document?.fileURL }
+        probe.readURL = { [weak document] in document?.fileURL }
         probe.appeared = true
       }
   }
 }
 
 extension AppUIComponentTestSuite {
-  @Suite("UCT-1022: scope-document-environment", .serialized)
+  @Suite("UCT-1022: inject-document-explicitly", .serialized)
   @MainActor
   struct UCT1022DocumentReferenceIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    private func host(_ reference: DocumentReference?, probe: Probe) async throws -> NSWindow {
+    private func host(_ document: NSDocument?, probe: Probe) async throws -> NSWindow {
       _ = NSApplication.shared
-      let root = VStack { ProbeView(probe: probe) }.environment(\.documentReference, reference)
+      let root = VStack { ProbeView(document: document, probe: probe) }
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
         styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -52,8 +49,8 @@ extension AppUIComponentTestSuite {
     func nestedViewsReadCurrentURLAndDocumentsRemainSeparate() async throws {
       let first = NSDocument()
       let second = NSDocument()
-      let firstReference = DocumentReference(first)
-      let secondReference = DocumentReference(second)
+      let firstReference = first
+      let secondReference = second
       let firstProbe = Probe()
       let secondProbe = Probe()
       let firstWindow = try await host(firstReference, probe: firstProbe)
@@ -64,10 +61,6 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      #expect(firstProbe.reference === firstReference)
-      #expect(secondProbe.reference === secondReference)
-      #expect(firstProbe.reference?.document === first)
-      #expect(secondProbe.reference?.document === second)
       #expect(firstProbe.readURL() == nil)
       first.fileURL = URL(fileURLWithPath: "/tmp/First.ldtxworkspace")
       second.fileURL = URL(fileURLWithPath: "/tmp/Second.ldtxrecord")
@@ -82,24 +75,20 @@ extension AppUIComponentTestSuite {
     func hostedViewsDoNotOwnDocument() async throws {
       var document: NSDocument? = NSDocument()
       weak var weakDocument = document
-      let reference = DocumentReference(try #require(document))
       let probe = Probe()
-      let window = try await host(reference, probe: probe)
+      let window = try await host(document, probe: probe)
       defer { window.close() }
       document = nil
       #expect(weakDocument == nil)
-      #expect(reference.document == nil)
-      #expect(probe.reference === reference)
       #expect(probe.readURL() == nil)
       #expect(window.contentViewController != nil)
     }
 
-    @Test("UCT-1022.3: A missing Document environment is safe")
+    @Test("UCT-1022.3: A missing Explicit Document is safe")
     func missingEnvironmentIsSafe() async throws {
       let probe = Probe()
       let window = try await host(nil, probe: probe)
       defer { window.close() }
-      #expect(probe.reference == nil)
       #expect(probe.readURL() == nil)
     }
   }

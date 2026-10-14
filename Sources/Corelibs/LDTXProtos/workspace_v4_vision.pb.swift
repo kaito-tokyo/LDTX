@@ -41,11 +41,22 @@ public nonisolated struct Ldtx_Workspace_V4_VisionWrapper: Sendable {
     set {vision = .ocrVision(newValue)}
   }
 
+  /// The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+  public var ldtxSceneDetectorVision: Ldtx_Workspace_V4_LdtxSceneDetectorVision {
+    get {
+      if case .ldtxSceneDetectorVision(let v)? = vision {return v}
+      return Ldtx_Workspace_V4_LdtxSceneDetectorVision()
+    }
+    set {vision = .ldtxSceneDetectorVision(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Vision: Equatable, Sendable {
     /// The OCR Vision definition. Mutually exclusive with the other fields.
     case ocrVision(Ldtx_Workspace_V4_OcrVision)
+    /// The LDTX Scene Detector Vision definition. Mutually exclusive with the other fields.
+    case ldtxSceneDetectorVision(Ldtx_Workspace_V4_LdtxSceneDetectorVision)
 
   }
 
@@ -171,8 +182,8 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// An LDTXWorkspaceID for this entity.
-  public var internalID: UInt64 {
+  /// An LdtxInternalId for this entity.
+  public var internalID: Int64 {
     get {_storage._internalID ?? 0}
     set {_uniqueStorage()._internalID = newValue}
   }
@@ -191,9 +202,9 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
   public mutating func clearDisplayName() {_uniqueStorage()._displayName = nil}
 
-  /// The LDTXWorkspaceID of the Video Component analyzed after effects and
+  /// The LdtxInternalId of the Video Component analyzed after effects and
   /// before Program placement.
-  public var videoComponentInternalID: UInt64 {
+  public var videoComponentInternalID: Int64 {
     get {_storage._videoComponentInternalID ?? 0}
     set {_uniqueStorage()._videoComponentInternalID = newValue}
   }
@@ -258,13 +269,90 @@ public nonisolated struct Ldtx_Workspace_V4_OcrVision: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// An image-analysis request that detects a scene using an LDTX Scene Detector model.
+public nonisolated struct Ldtx_Workspace_V4_LdtxSceneDetectorVision: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// An LdtxInternalId for this entity.
+  public var internalID: Int64 {
+    get {_internalID ?? 0}
+    set {_internalID = newValue}
+  }
+  /// Returns true if `internalID` has been explicitly set.
+  public var hasInternalID: Bool {self._internalID != nil}
+  /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
+  public mutating func clearInternalID() {self._internalID = nil}
+
+  /// The name of this Vision shown in the Workspace sidebar.
+  public var displayName: String {
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
+  }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {self._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {self._displayName = nil}
+
+  /// The LdtxInternalId of the Video Component analyzed after effects and
+  /// before Program placement.
+  public var videoComponentInternalID: Int64 {
+    get {_videoComponentInternalID ?? 0}
+    set {_videoComponentInternalID = newValue}
+  }
+  /// Returns true if `videoComponentInternalID` has been explicitly set.
+  public var hasVideoComponentInternalID: Bool {self._videoComponentInternalID != nil}
+  /// Clears the value of `videoComponentInternalID`. Subsequent reads from it will return its default value.
+  public mutating func clearVideoComponentInternalID() {self._videoComponentInternalID = nil}
+
+  /// The region of the input image in which Vision performs the request.
+  public var regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest {
+    get {_regionOfInterest ?? Ldtx_Workspace_V4_VisionRegionOfInterest()}
+    set {_regionOfInterest = newValue}
+  }
+  /// Returns true if `regionOfInterest` has been explicitly set.
+  public var hasRegionOfInterest: Bool {self._regionOfInterest != nil}
+  /// Clears the value of `regionOfInterest`. Subsequent reads from it will return its default value.
+  public mutating func clearRegionOfInterest() {self._regionOfInterest = nil}
+
+  /// The conditions that automatically trigger this Vision.
+  public var triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
+
+  /// The LdtxInternalId of the assigned model resource.
+  /// Zero means no model is assigned.
+  /// Models are stored at VisionModels/<model_internal_id>/ inside
+  /// the Workspace bundle. Use the first .mlmodel file or .mlpackage directory
+  /// in lexicographic basename order within that model directory. Model IDs
+  /// are assigned when selecting models, not when saving. Previous models
+  /// are retained and are not overwritten when a new model is saved.
+  public var modelInternalID: Int64 {
+    get {_modelInternalID ?? 0}
+    set {_modelInternalID = newValue}
+  }
+  /// Returns true if `modelInternalID` has been explicitly set.
+  public var hasModelInternalID: Bool {self._modelInternalID != nil}
+  /// Clears the value of `modelInternalID`. Subsequent reads from it will return its default value.
+  public mutating func clearModelInternalID() {self._modelInternalID = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _internalID: Int64? = nil
+  fileprivate var _displayName: String? = nil
+  fileprivate var _videoComponentInternalID: Int64? = nil
+  fileprivate var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
+  fileprivate var _modelInternalID: Int64? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VisionWrapper"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ocr_vision\0\u{3}ldtx_scene_detector_vision\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -285,6 +373,19 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
           self.vision = .ocrVision(v)
         }
       }()
+      case 2: try {
+        var v: Ldtx_Workspace_V4_LdtxSceneDetectorVision?
+        var hadOneofValue = false
+        if let current = self.vision {
+          hadOneofValue = true
+          if case .ldtxSceneDetectorVision(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.vision = .ldtxSceneDetectorVision(v)
+        }
+      }()
       default: break
       }
     }
@@ -295,9 +396,17 @@ nonisolated extension Ldtx_Workspace_V4_VisionWrapper: SwiftProtobuf.Message, Sw
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if case .ocrVision(let v)? = self.vision {
+    switch self.vision {
+    case .ocrVision?: try {
+      guard case .ocrVision(let v)? = self.vision else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
+    }()
+    case .ldtxSceneDetectorVision?: try {
+      guard case .ldtxSceneDetectorVision(let v)? = self.vision else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -442,9 +551,9 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}recognition_languages\0\u{3}uses_language_correction\0\u{3}custom_words\0\u{3}minimum_text_height\0")
 
   fileprivate class _StorageClass {
-    var _internalID: UInt64? = nil
+    var _internalID: Int64? = nil
     var _displayName: String? = nil
-    var _videoComponentInternalID: UInt64? = nil
+    var _videoComponentInternalID: Int64? = nil
     var _regionOfInterest: Ldtx_Workspace_V4_VisionRegionOfInterest? = nil
     var _triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper] = []
     var _recognitionLanguages: [String] = []
@@ -488,9 +597,9 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
         // allocates stack space for every case branch when no optimizations are
         // enabled. https://github.com/apple/swift-protobuf/issues/1034
         switch fieldNumber {
-        case 1: try { try decoder.decodeSingularUInt64Field(value: &_storage._internalID) }()
+        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
         case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 3: try { try decoder.decodeSingularUInt64Field(value: &_storage._videoComponentInternalID) }()
+        case 3: try { try decoder.decodeSingularSFixed64Field(value: &_storage._videoComponentInternalID) }()
         case 4: try { try decoder.decodeSingularMessageField(value: &_storage._regionOfInterest) }()
         case 5: try { try decoder.decodeRepeatedMessageField(value: &_storage._triggers) }()
         case 6: try { try decoder.decodeRepeatedStringField(value: &_storage._recognitionLanguages) }()
@@ -510,13 +619,13 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
       // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
       // https://github.com/apple/swift-protobuf/issues/1182
       try { if let v = _storage._internalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 1)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
       } }()
       try { if let v = _storage._displayName {
         try visitor.visitSingularStringField(value: v, fieldNumber: 2)
       } }()
       try { if let v = _storage._videoComponentInternalID {
-        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 3)
       } }()
       try { if let v = _storage._regionOfInterest {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
@@ -558,6 +667,65 @@ nonisolated extension Ldtx_Workspace_V4_OcrVision: SwiftProtobuf.Message, SwiftP
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V4_LdtxSceneDetectorVision: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".LdtxSceneDetectorVision"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{3}video_component_internal_id\0\u{3}region_of_interest\0\u{1}triggers\0\u{3}model_internal_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
+      case 3: try { try decoder.decodeSingularSFixed64Field(value: &self._videoComponentInternalID) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._regionOfInterest) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.triggers) }()
+      case 6: try { try decoder.decodeSingularSFixed64Field(value: &self._modelInternalID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._internalID {
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._videoComponentInternalID {
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._regionOfInterest {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if !self.triggers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.triggers, fieldNumber: 5)
+    }
+    try { if let v = self._modelInternalID {
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V4_LdtxSceneDetectorVision, rhs: Ldtx_Workspace_V4_LdtxSceneDetectorVision) -> Bool {
+    if lhs._internalID != rhs._internalID {return false}
+    if lhs._displayName != rhs._displayName {return false}
+    if lhs._videoComponentInternalID != rhs._videoComponentInternalID {return false}
+    if lhs._regionOfInterest != rhs._regionOfInterest {return false}
+    if lhs.triggers != rhs.triggers {return false}
+    if lhs._modelInternalID != rhs._modelInternalID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

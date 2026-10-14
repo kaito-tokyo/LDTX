@@ -11,6 +11,47 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  @Test func transientLocalStateIsOnlyPersistedAfterSave() throws {
+    let suite = UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let transient = URL(string: "ldtx-untitled://workspace/test")!
+    let saved = URL(fileURLWithPath: "/tmp/Saved.ldtxworkspace")
+    data.registerTransientState(at: transient)
+    data.setState(.init(selectedProgramInternalID: 42), for: transient)
+    #expect(data.state(for: transient).selectedProgramInternalID == 42)
+    #expect(
+      WorkspaceAppletData(userDefaults: defaults).state(for: transient).selectedProgramInternalID
+        == nil)
+    data.copyState(from: transient, to: saved)
+    #expect(
+      WorkspaceAppletData(userDefaults: defaults).state(for: saved).selectedProgramInternalID == 42)
+  }
+
+  @Test func runtimeStateUsesExternalAssignmentsWithoutChangingPathState() throws {
+    let suite = "RuntimeLocalState.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let data = WorkspaceAppletData(userDefaults: defaults)
+    let url = URL(fileURLWithPath: "/tmp/RuntimeLocalState.ldtxworkspace")
+    let externalID = UUID()
+    var original = WorkspaceLocalState()
+    original.monitorVolume = -12
+    original.selectedProgramInternalID = 123
+    original.recordingFolderPath = "/tmp/legacy-recordings"
+    data.setState(original, for: url)
+    data.recordingFolderPaths[externalID] = "/tmp/current-recordings"
+    data.landscapeYouTubeLiveStreamIDs[externalID] = "landscape"
+    let runtime = data.state(for: url, externalID: externalID)
+    #expect(runtime.monitorVolume == -12)
+    #expect(runtime.selectedProgramInternalID == 123)
+    #expect(runtime.recordingFolderPath == "/tmp/current-recordings")
+    #expect(runtime.landscapeYouTubeLiveStreamID == "landscape")
+    #expect(data.state(for: url) == original)
+    #expect(data.state(for: url, externalID: nil) == original)
+  }
+
   @Test func persistsRecordingFolderInAppletData() throws {
     let suiteName = "RecordingFolderTest.\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -63,14 +104,14 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
   }
 
   @Test func roundTripsTypedAssignmentsInBinaryPropertyList() throws {
-    let assignments: [UInt64: WorkspacePhysicalDeviceID] = [
+    let assignments: [Int64: WorkspacePhysicalDeviceID] = [
       8: .avCaptureDevice(uniqueID: "camera-uid"), 9: .coreAudioDevice(uid: "microphone-uid"),
     ]
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .binary
     let data = try encoder.encode(assignments)
     #expect(
-      try PropertyListDecoder().decode([UInt64: WorkspacePhysicalDeviceID].self, from: data)
+      try PropertyListDecoder().decode([Int64: WorkspacePhysicalDeviceID].self, from: data)
         == assignments)
     #expect(data.starts(with: Data("bplist".utf8)))
   }

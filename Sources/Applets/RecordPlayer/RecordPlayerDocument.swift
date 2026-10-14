@@ -4,149 +4,179 @@
 
 import AVFoundation
 import AppKit
-import LDTXAppletSupport
 import LDTXRecordBundleFormat
 import LDTXRecording
-import OSLog
 import Observation
+import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
-@objc(RecordPlayerDocument)
-public final class RecordPlayerDocument: NSDocument {
+public final class RecordPlayerDocument: Document {
   public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
+  public nonisolated static let readableContentTypes: [UTType] = {
+    let primary = UTType(exportedAs: RecordingPackageInfo.typeIdentifier, conformingTo: .package)
+    let legacy = UTType(
+      importedAs: RecordingPackageInfo.legacyTypeIdentifier, conformingTo: .package)
+    return primary == legacy ? [primary] : [primary, legacy]
+  }()
+
   public private(set) var markers: [RecordingMarker] = []
-  @ObservationIgnored
-  private var markerReadError: (any Error)?
-  @ObservationIgnored
-  private var hasReadContents = false
-  @ObservationIgnored
-  private(set) var model: LDTXRecordPlayerModel?
-  @ObservationIgnored
-  var scenarioFixture: RecordingPreviewScenarioFixture?
-  @ObservationIgnored
-  var assetLoader: LDTXRecordPlayerAssetLoader = RecordPlayerWindowController.loadAsset
-  @ObservationIgnored
-  private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "RecordPlayerDocument")
+  private var markerDeletions: [String: UUID] = [:]
+  @ObservationIgnored private let configuration: URLDocumentConfiguration?
+  private var initialURL: URL?
+  @ObservationIgnored private var markerReadError: (any Error)?
+  @ObservationIgnored private var hasReadContents = false
+  @ObservationIgnored private var playbackModel: LDTXRecordPlayerModel?
+  @ObservationIgnored var scenarioFixture: RecordingPreviewScenarioFixture?
+  @ObservationIgnored var assetLoader: LDTXRecordPlayerAssetLoader = LDTXRecordPlayerModel.loadAsset
 
-  private nonisolated static func accepts(_ typeName: String) -> Bool {
-    typeName == Self.typeName || typeName == RecordingPackageInfo.legacyTypeIdentifier
+  public var fileURL: URL? { configuration?.fileURL ?? initialURL }
+  public var canModifyMarkers: Bool { fileURL != nil }
+
+  init(configuration: URLDocumentConfiguration) {
+    self.configuration = configuration
+    initialURL = configuration.fileURL
   }
 
-  public override class var autosavesInPlace: Bool { false }
-  public override class var preservesVersions: Bool { false }
-  public override var autosavingFileType: String? { nil }
-  public override var backupFileURL: URL? { nil }
-
-  public override func read(from url: URL, ofType typeName: String) throws {
-    try MainActor.assumeIsolated {
-      guard Self.accepts(typeName) else { throw CocoaError(.fileReadUnknown) }
-      do {
-        _ = try RecordingPackage(contentsOf: url)
-        let loaded: [RecordingMarker]
-        var markerError: (any Error)?
-        do {
-          loaded = try RecordingMarkerStore(recordingDirectoryURL: url).markers()
-        } catch {
-          // Revert must preserve current edits if the replacement cannot be read.
-          guard !hasReadContents else { throw error }
-          logger.error(
-            "Reading optional markers failed: \(error.localizedDescription, privacy: .public)")
-          loaded = []
-          markerError = error
-        }
-        hasReadContents = true
-        markerReadError = markerError
-        markers = loaded
-      } catch {
-        logger.error("Reading recording failed: \(error.localizedDescription, privacy: .public)")
-        throw error
-      }
-    }
+  init(fileURL: URL) {
+    configuration = nil
+    initialURL = fileURL
   }
 
-  public override func makeWindowControllers() {
-    guard windowControllers.isEmpty, fileURL != nil else { return }
-    let reference = DocumentReference(self)
+  var model: LDTXRecordPlayerModel {
+    if let playbackModel { return playbackModel }
     let model = LDTXRecordPlayerModel(
-      documentReference: reference, scenarioFixture: scenarioFixture,
-      assetLoader: assetLoader)
-    self.model = model
-    addWindowController(
-      RecordPlayerWindowController(
-        model: model, documentReference: reference))
+      document: self, scenarioFixture: scenarioFixture, assetLoader: assetLoader)
+    playbackModel = model
+    return model
   }
 
-  public var canModifyMarkers: Bool {
-    return fileURL != nil
+  isolated deinit { playbackModel?.stop() }
+
+  public nonisolated func reader(configuration: sending ReadConfiguration) -> sending Reader {
+    Reader()
+  }
+  public nonisolated func writer(configuration: sending WriteConfiguration) -> sending Writer {
+    Writer()
   }
 
-  public func createMarker(note: String, at time: CMTime) throws {
-    guard fileURL != nil else { throw CocoaError(.fileWriteUnknown) }
+  public func apply(snapshot: sending Reader.Snapshot, previous: sending Reader.Snapshot?)
+    async throws
+  {
+    if hasReadContents, let error = snapshot.markerReadError { throw error }
+    markers = snapshot.markers
+    markerDeletions.removeAll()
+    initialURL = snapshot.url
+    markerReadError = snapshot.markerReadError
+    hasReadContents = true
+  }
+
+  public func snapshot(contentType: UTType) async throws -> sending Writer.Snapshot {
+    guard Self.readableContentTypes.contains(contentType) else {
+      throw RecordingMarkerError.unsupportedOperation
+    }
+    if let markerReadError { throw markerReadError }
+    guard let fileURL else { throw RecordingMarkerError.unsupportedOperation }
+    return Writer.Snapshot(
+      url: fileURL, markers: markers, markerDeletions: markerDeletions)
+  }
+
+  public func createMarker(note: String, at time: CMTime, undoManager: UndoManager? = nil) throws {
     guard !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw RecordingMarkerError.emptyNote
     }
     let name = try RecordingMarkerStore.fileName(for: time)
     let index = try markers.firstIndex { try RecordingMarkerStore.fileName(for: $0.time) == name }
-    let marker =
-      RecordingMarker(
-        time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time), note: note,
-        fileName: index.map { markers[$0].fileName } ?? name)
-    if let index { markers[index] = marker } else { markers.append(marker) }
-    markers.sort { CMTimeCompare($0.time, $1.time) < 0 }
-    updateChangeCount(.changeDone)
+    let marker = RecordingMarker(
+      time: time, timecode: try RecordingMarkerStore.displayTimecode(for: time), note: note,
+      fileName: index.map { markers[$0].fileName } ?? name)
+    var updated = markers
+    if let index { updated[index] = marker } else { updated.append(marker) }
+    updated.sort { CMTimeCompare($0.time, $1.time) < 0 }
+    replaceMarkers(updated, undoManager: undoManager)
   }
 
-  public func deleteMarker(_ marker: RecordingMarker) throws {
-    guard let recordingURL = fileURL else {
-      throw CocoaError(.fileWriteUnknown)
+  private func replaceMarkers(
+    _ updated: [RecordingMarker], undoManager: UndoManager?,
+    actionName: String = String(localized: "Edit Marker")
+  ) {
+    let previous = markers
+    undoManager?.registerUndo(withTarget: self) { target in
+      MainActor.assumeIsolated {
+        target.replaceMarkers(previous, undoManager: undoManager, actionName: actionName)
+      }
     }
+    undoManager?.setActionName(actionName)
+    let remaining = Set(updated.map(\.fileName))
+    for name in Set(previous.map(\.fileName)).subtracting(remaining) {
+      markerDeletions[name] = UUID()
+    }
+    for name in remaining { markerDeletions.removeValue(forKey: name) }
+    markers = updated
+  }
+
+  public func deleteMarker(_ marker: RecordingMarker, undoManager: UndoManager? = nil) throws {
+    guard canModifyMarkers else { throw RecordingMarkerError.unsupportedOperation }
     guard let index = markers.firstIndex(of: marker) else {
       throw RecordingMarkerError.invalidMarkerFile
     }
-    try RecordingMarkerStore(recordingDirectoryURL: recordingURL).deleteMarker(
-      marker, filePresenter: self)
-    markers.remove(at: index)
+    var updated = markers
+    updated.remove(at: index)
+    replaceMarkers(
+      updated, undoManager: undoManager, actionName: String(localized: "Delete Marker"))
   }
 
-  public override func canAsynchronouslyWrite(
-    to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
-  ) -> Bool { false }
+  public struct Reader: DocumentReader {
+    public struct Snapshot: Sendable {
+      let url: URL
+      let markers: [RecordingMarker]
+      let markerReadError: (any Error)?
+    }
 
-  public override func writeSafely(
-    to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType
-  ) throws {
-    try MainActor.assumeIsolated {
-      guard saveOperation == .saveOperation, Self.accepts(typeName),
-        url.standardizedFileURL == fileURL?.standardizedFileURL
-      else { throw RecordingMarkerError.unsupportedOperation }
-      if let markerReadError { throw markerReadError }
-      let snapshot = markers
+    @concurrent public func read(
+      from source: sending URL, progress: consuming Subprogress
+    ) async throws -> sending Snapshot {
+      let progress = progress.start(totalCount: 2)
+      _ = try RecordingPackage(contentsOf: source)
+      progress.complete(count: 1)
+      let markers: [RecordingMarker]
+      var markerError: (any Error)?
       do {
-        markers = try RecordingMarkerStore(recordingDirectoryURL: url).save(
-          snapshot, filePresenter: self)
+        markers = try RecordingMarkerStore(recordingDirectoryURL: source).markers()
       } catch {
-        logger.error("Saving markers failed: \(error.localizedDescription, privacy: .public)")
-        throw error
+        markers = []
+        markerError = error
       }
+      progress.complete(count: 1)
+      return Snapshot(url: source, markers: markers, markerReadError: markerError)
     }
   }
 
-  public override func close() {
-    model?.stop()
-    super.close()
-  }
+  public struct Writer: DocumentWriter {
+    public struct Snapshot: Sendable {
+      let url: URL
+      let markers: [RecordingMarker]
+      let markerDeletions: [String: UUID]
+    }
 
-  public override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
-    if let action = item.action, prohibitedActions.contains(action) { return false }
-    return super.validateUserInterfaceItem(item)
-  }
-
-  private var prohibitedActions: [Selector] {
-    [
-      #selector(revertToSaved(_:)), #selector(saveAs(_:)), #selector(saveTo(_:)),
-      #selector(duplicate(_:)),
-      #selector(rename(_:)), #selector(move(_:)), #selector(moveToUbiquityContainer(_:)),
-    ]
+    @concurrent public func write(
+      snapshot: sending Snapshot, to destination: sending URL,
+      previous: sending Snapshot?, progress: consuming Subprogress
+    ) async throws {
+      // DocumentGroup supplies a coordinated staging copy during safe saving.
+      try RecordingPackage(contentsOf: destination).requireFinalized()
+      let progress = progress.start(totalCount: 1)
+      _ = try RecordingMarkerStore(recordingDirectoryURL: destination)
+        .saveWithinCoordinatedAccess(
+          snapshot.markers,
+          deleting: Set(
+            snapshot.markerDeletions.compactMap { name, token in
+              // SwiftUI supplies the previous successfully written snapshot. A failed
+              // write does not acknowledge deletions; Undo/Redo generates a new token.
+              previous?.markerDeletions[name] == token ? nil : name
+            }))
+      progress.complete(count: 1)
+    }
   }
 }

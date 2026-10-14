@@ -23,9 +23,9 @@ struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
   var multiplier: UInt64 = 1
   var parseStrategy: RationalValueParseStrategy<Value> { .init(divisor: multiplier) }
   func format(_ value: Value) -> String {
-    guard value.denominator > 0 else { return String(value.double) }
-    var magnitude = Int128(value.numerator).magnitude * UInt128(multiplier)
-    var denominator = UInt128(value.denominator)
+    guard value.den > 0 else { return String(value.double) }
+    var magnitude = Int128(value.num).magnitude * UInt128(multiplier)
+    var denominator = UInt128(value.den)
     var a = magnitude
     var b = denominator
     while b != 0 { (a, b) = (b, a % b) }
@@ -34,9 +34,9 @@ struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
     var d = denominator
     while d % 2 == 0 { d /= 2 }
     while d % 5 == 0 { d /= 5 }
-    guard d == 1 else { return "\(value.numerator < 0 ? "-" : "")\(magnitude)/\(denominator)" }
+    guard d == 1 else { return "\(value.num < 0 ? "-" : "")\(magnitude)/\(denominator)" }
     let divisor = UInt128(denominator)
-    var output = (value.numerator < 0 ? "-" : "") + String(magnitude / divisor)
+    var output = (value.num < 0 ? "-" : "") + String(magnitude / divisor)
     var remainder = magnitude % divisor
     if remainder != 0 { output += "." }
     while remainder != 0 {
@@ -140,5 +140,32 @@ extension Binding where Value == Ldtx_Workspace_V4_Rational32 {
           wrappedValue = value
         }
       })
+  }
+}
+
+/// Keeps both fraction fields editable without discarding invalid drafts.
+enum RationalFractionInput {
+  static func fields<Value: Rational32Value>(
+    for value: Value, defaultDenominator: UInt32
+  ) -> (numerator: String, denominator: String) {
+    let scaled = Int64(value.num) * Int64(defaultDenominator)
+    if value.den > 0, scaled % Int64(value.den) == 0,
+      let numerator = Int32(exactly: scaled / Int64(value.den))
+    {
+      return (String(numerator), String(defaultDenominator))
+    }
+    return (String(value.num), String(value.den))
+  }
+
+  static func parse<Value: Rational32Value>(
+    numerator: String, denominator: String, as: Value.Type
+  ) throws -> Value {
+    guard let n = Int32(numerator.trimmingCharacters(in: .whitespacesAndNewlines)),
+      let d = UInt32(denominator.trimmingCharacters(in: .whitespacesAndNewlines))
+    else { throw RationalInputError.invalidNumber }
+    guard d > 0 else { throw RationalInputError.zeroDenominator }
+    var result = Value()
+    result.set(num: n, den: d)
+    return result
   }
 }

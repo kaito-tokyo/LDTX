@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXWorkspaceAppletInterface
+import LDTXBackgroundSegmentation
+import LDTXProtos
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
@@ -12,8 +13,8 @@ final class VideoLayersTestFixture {
   var reportedErrors: [String] = []
   func makeEditor() -> VideoLayersEditor {
     let editor = VideoLayersEditor(
-      storeService: WorkspaceStoreService(definition: .init(), preferences: .init()),
-      target: .landscape)
+      stateService: WorkspaceStateService(definition: .init(), preferences: .init()),
+      appletData: WorkspaceAppletData(), target: .landscape)
     _ = editor.view
     return editor
   }
@@ -34,11 +35,11 @@ final class VideoLayersTestFixture {
 
   func update(
     _ table: VideoLayersTableView,
-    ids: [UInt64] = [1, 2, 3],
+    ids: [Int64] = [1, 2, 3],
     preferences: Ldtx_Workspace_V4_ProgramPreferences = .init(),
-    commit: @escaping (UInt64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
-    order: @escaping ([UInt64]) throws -> Void = { _ in },
-    setHidden: @escaping (UInt64, Bool) throws -> Void = { _, _ in },
+    commit: @escaping (Int64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
+    order: @escaping ([Int64]) throws -> Void = { _ in },
+    setHidden: @escaping (Int64, Bool) throws -> Void = { _, _ in },
     onError: @escaping (Error) -> Void = { _ in }
   ) {
     let editor = editors[ObjectIdentifier(table)] ?? makeEditor()
@@ -86,7 +87,7 @@ final class LayerDraggingInfo: NSObject, NSDraggingInfo {
   var numberOfValidItemsForDrop = 1
   var springLoadingHighlight: NSSpringLoadingHighlight { .none }
 
-  init(source: VideoLayersTableView, id: UInt64) {
+  init(source: VideoLayersTableView, id: Int64) {
     draggingSource = source
     super.init()
     let item = NSPasteboardItem()

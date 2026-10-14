@@ -11,6 +11,7 @@ import LDTXProtos
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
+import LDTXWorkspaceBundleFormat
 import Metal
 import Testing
 
@@ -33,20 +34,20 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(full.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
     vision.regionOfInterest = .with {
       $0.x = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
       $0.y = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.width = .with {
-        $0.numerator = 1
-        $0.denominator = 2
+        $0.num = 1
+        $0.den = 2
       }
       $0.height = .with {
-        $0.numerator = 1
-        $0.denominator = 4
+        $0.num = 1
+        $0.den = 4
       }
     }
     let cropped = try await runtime.visionFeatureContext.frameForVision(vision)
@@ -89,11 +90,13 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
         lowFrequencyUpdateRegistry: registry))
     defer { runtime.shutdown() }
     try runtime.editDefinition { definition in
-      definition.videoComponents = [UInt64(1), 2].map { id in
+      definition.videoComponents = [Int64(1), 2].map { id in
         .with { wrapper in
           wrapper.vfxSource = .with { source in
             source.internalID = id
             source.displayName = "Camera \(id)"
+            source.deviceWidth = 1280
+            source.deviceHeight = 720
             if id == 2 {
               source.effects = [
                 .with { $0.backgroundRemoval = .with { $0.model = .mediapipeLandscape } }
@@ -111,6 +114,9 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(failures.isEmpty)
     #expect(service.startCount == 1)
     _ = try #require(try service.emitVideo(frameIndex: 1))
+    let captured = try #require(capture.latestVisionFrame(forCameraID: "camera"))
+    #expect(CVPixelBufferGetWidth(captured.pixelBuffer) == 1920)
+    #expect(try runtime.visionInputSize(componentID: 1) == CGSize(width: 1280, height: 720))
     let rawID = try runtime.addOcrVision(displayName: "Raw OCR", videoComponentInternalID: 1)
     let effectID = try runtime.addOcrVision(displayName: "Effect OCR", videoComponentInternalID: 2)
     let context = runtime.visionFeatureContext
@@ -118,7 +124,12 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let effect = try await readyFrame(
       runtime: runtime, vision: try #require(context.vision(effectID)))
     #expect(raw.image.extent == effect.image.extent)
-    #expect(raw.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
+    #expect(raw.image.extent == CGRect(x: 0, y: 0, width: 1280, height: 720))
+    var croppedVision = try #require(context.vision(rawID))
+    croppedVision.regionOfInterest.x.num = 640
+    croppedVision.regionOfInterest.width.num = 640
+    let cropped = try await readyFrame(runtime: runtime, vision: croppedVision)
+    #expect(cropped.image.extent == CGRect(x: 640, y: 0, width: 640, height: 720))
     // A zero-alpha effect produces black; the unprocessed synthetic pattern remains visible.
     #expect(try maximumLuma(raw.image) > 80)
     #expect(try maximumLuma(effect.image) < 5)
@@ -167,13 +178,13 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
 
   private func makeRuntime(
     capture: WorkspaceCaptureSessionCoordinator,
-    assignments: [UInt64: WorkspacePhysicalDeviceID] = [:]
+    assignments: [Int64: WorkspacePhysicalDeviceID] = [:]
   ) -> WorkspaceWindowRuntime {
     let box = WorkspaceBox()
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { box.workspace },
       replaceWorkspace: {
-        try WorkspaceV4IntegrityValidator.validate($0)
+        try WorkspaceBundleValidatorV4.validate($0)
         box.workspace = $0
       }, url: nil)
     return WorkspaceWindowRuntime(

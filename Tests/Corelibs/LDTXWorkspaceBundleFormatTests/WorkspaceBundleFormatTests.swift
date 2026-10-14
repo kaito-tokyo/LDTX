@@ -77,8 +77,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       ))
   }
 
-  @Test("Reader decodes documents without applying Workspace integrity validation")
-  func readerDoesNotValidateWorkspaceIntegrity() throws {
+  @Test("Reader gates decoded documents on Workspace integrity diagnostics")
+  func readerValidatesWorkspaceIntegrity() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
@@ -100,8 +100,9 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     )
 
     try writer.write(outputSettings: .init(), externalID: writer.makeExternalID())
-    let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
-    #expect(workspace.definition == invalidDefinition)
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleReaderV4(at: packageURL).read()
+    }
   }
 
   @Test("refuses to open a package in an unsupported format")
@@ -250,7 +251,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: root) }
     let destination = root.appendingPathComponent("Workspace.ldtxworkspace")
     let workspace = makeWorkspace()
-    try WorkspaceDocumentPackage.write(workspace, to: destination, createsPackage: true)
+    try WorkspaceBundleWriterV4().write(workspace, to: destination)
     #expect(try WorkspaceBundleReaderV4(at: destination).read() == workspace)
     #expect(
       FileManager.default.fileExists(
@@ -274,8 +275,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     case 1: workspace.preferencesExternalID = identifier
     default: workspace.outputSettingsExternalID = identifier
     }
-    #expect(throws: CocoaError(.fileWriteInvalidFileName)) {
-      try WorkspaceDocumentPackage.write(workspace, to: destination, createsPackage: true)
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleWriterV4().write(workspace, to: destination)
     }
     #expect(!FileManager.default.fileExists(atPath: destination.path))
   }
@@ -299,9 +300,189 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       default: _ = try writer.write(outputSettings: .init(), externalID: id)
       }
     }
-    for url in [writer.definitionURL, writer.preferencesURL, writer.outputSettingsURL] {
+    for url in [try writer.definitionURL, try writer.preferencesURL, try writer.outputSettingsURL] {
       #expect(!FileManager.default.fileExists(atPath: url.path))
     }
+  }
+
+  @Test(
+    "Saving uses assigned model IDs and clearing retains model resources",
+    arguments: ["Original.mlmodel", ".Original.mlmodel"])
+  func savesExternalModelReference(name: String) throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent(name)
+    let data = Data([0, 1, 255])
+    try data.write(to: source)
+    var workspace = makeWorkspace()
+    for id: Int64 in [5, 7] {
+      workspace.definition.visions.append(
+        .with {
+          $0.ldtxSceneDetectorVision = .with {
+            $0.internalID = id
+            $0.displayName = "Classifier \(id)"
+            $0.videoComponentInternalID = 2
+            $0.modelInternalID = 9
+          }
+        })
+    }
+    workspace.visionModels = [9: source]
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    #expect(workspace.visionModels[9] == source)
+    let embedded = bundle.appendingPathComponent("VisionModels/9/\(name)")
+    #expect(try Data(contentsOf: embedded) == data)
+    let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
+    #expect(loaded.definition == workspace.definition)
+    #expect(Set(loaded.visionModels.keys) == [9])
+    #expect(loaded.visionModels[9]?.resolvingSymlinksInPath() == embedded.resolvingSymlinksInPath())
+    try FileManager.default.removeItem(at: source)
+    var edited = workspace
+    edited.definition.displayName = "Edited after removing the source"
+    try WorkspaceBundleWriterV4().write(edited, to: bundle)
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read().definition == edited.definition)
+    var cleared = loaded
+    cleared.definition.visions[1].ldtxSceneDetectorVision.modelInternalID = 0
+    try WorkspaceBundleWriterV4().write(cleared, to: bundle)
+    #expect(try Data(contentsOf: embedded) == data)
+    #expect(try WorkspaceBundleReaderV4(at: bundle).read().visionModels == loaded.visionModels)
+  }
+
+  @Test(
+    "Model packages copy their native directory tree through save and reload",
+    arguments: ["Classifier.mlpackage", ".Classifier.mlpackage"])
+  func nativeModelPackageRoundTrip(name: String) throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent(name)
+    try FileManager.default.createDirectory(
+      at: source.appendingPathComponent("Data"), withIntermediateDirectories: true)
+    try Data("{}".utf8).write(to: source.appendingPathComponent("Manifest.json"))
+    try Data([1, 2, 3]).write(to: source.appendingPathComponent("Data/model.bin"))
+    var workspace = makeWorkspace()
+    workspace.visionModels = [9: source]
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
+    let embedded = try #require(loaded.visionModels[9])
+    #expect(embedded.lastPathComponent == name)
+    try FileManager.default.removeItem(at: source)
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    #expect(
+      try Data(contentsOf: embedded.appendingPathComponent("Data/model.bin")) == Data([1, 2, 3]))
+    let copied = root.appendingPathComponent("Copy.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(loaded, to: copied)
+    #expect(
+      try Data(
+        contentsOf: copied.appendingPathComponent(
+          "VisionModels/9/\(name)/Data/model.bin")) == Data([1, 2, 3]))
+  }
+
+  @Test("The first supported basename is selected and existing models stay immutable")
+  func selectsFirstModelWithinID() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Z.mlmodel")
+    try Data([1]).write(to: source)
+    var workspace = makeWorkspace()
+    workspace.definition.visions.append(
+      .with {
+        $0.ldtxSceneDetectorVision = .with {
+          $0.internalID = 5
+          $0.displayName = "Classifier"
+          $0.videoComponentInternalID = 2
+          $0.modelInternalID = 9
+        }
+      })
+    workspace.visionModels = [9: source]
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    let first = bundle.appendingPathComponent("VisionModels/9/A.mlmodel")
+    try Data([2]).write(to: first)
+    try Data([3]).write(to: bundle.appendingPathComponent("VisionModels/9/000.txt"))
+    let loaded = try WorkspaceBundleReaderV4(at: bundle).read()
+    #expect(loaded.visionModels[9]?.resolvingSymlinksInPath() == first.resolvingSymlinksInPath())
+    #expect(
+      WorkspaceModelFiles.modelURL(
+        for: workspace.definition.visions.last!.ldtxSceneDetectorVision,
+        in: loaded.visionModels)?.resolvingSymlinksInPath() == first.resolvingSymlinksInPath())
+    try Data([99]).write(to: source)
+    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    #expect(
+      try Data(contentsOf: bundle.appendingPathComponent("VisionModels/9/Z.mlmodel")) == Data([1]))
+    #expect(try Data(contentsOf: first) == Data([2]))
+  }
+
+  @Test("Invalid or missing model references fail before changing the destination")
+  func invalidModelReferencesDoNotWrite() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var workspace = makeWorkspace()
+    workspace.definition.visions.append(
+      .with {
+        $0.ldtxSceneDetectorVision = .with {
+          $0.internalID = 5
+          $0.displayName = "Classifier"
+          $0.videoComponentInternalID = 2
+          $0.modelInternalID = 9
+        }
+      })
+    let bundle = root.appendingPathComponent("Invalid.ldtxworkspace")
+    #expect(throws: (any Error).self) { try WorkspaceBundleWriterV4().write(workspace, to: bundle) }
+    workspace.visionModels[9] = root.appendingPathComponent("Missing.mlmodel")
+    #expect(throws: (any Error).self) { try WorkspaceBundleWriterV4().write(workspace, to: bundle) }
+    #expect(!FileManager.default.fileExists(atPath: bundle.path))
+    let source = root.appendingPathComponent("Valid.mlmodel")
+    try Data([1]).write(to: source)
+    workspace.visionModels = [-1: source]
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
+  }
+
+  @Test("Model resources reject unsupported types, incomplete packages and symlinks")
+  func rejectsUnsafeModelSources() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var workspace = makeWorkspace()
+    let unsupported = root.appendingPathComponent("Classifier.txt")
+    try Data([1]).write(to: unsupported)
+    workspace.visionModels = [9: unsupported]
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
+    let directory = root.appendingPathComponent("Directory.mlmodel")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    workspace.visionModels = [9: directory]
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
+    let package = root.appendingPathComponent("Classifier.mlpackage")
+    try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+    workspace.visionModels = [9: package]
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
+    try Data("{}".utf8).write(to: package.appendingPathComponent("Manifest.json"))
+    try FileManager.default.createSymbolicLink(
+      at: package.appendingPathComponent("outside"), withDestinationURL: unsupported)
+    #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
+  }
+
+  @Test("Model resources reject symlink destination directories")
+  func rejectsUnsafeModelDestinations() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Classifier.mlmodel")
+    try Data([1]).write(to: source)
+    var workspace = makeWorkspace()
+    workspace.visionModels = [9: source]
+    let outside = root.appendingPathComponent("Outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    let bundle = root.appendingPathComponent("Workspace.ldtxworkspace")
+    try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+    let models = bundle.appendingPathComponent("VisionModels")
+    try FileManager.default.createSymbolicLink(at: models, withDestinationURL: outside)
+    #expect(throws: (any Error).self) { try WorkspaceBundleWriterV4().write(workspace, to: bundle) }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
+    try FileManager.default.removeItem(at: models)
+    try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(
+      at: models.appendingPathComponent("9"), withDestinationURL: outside)
+    #expect(throws: (any Error).self) { try WorkspaceBundleWriterV4().write(workspace, to: bundle) }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
   }
 
   private func makeWorkspace() -> WorkspaceV4Bundle {
@@ -318,6 +499,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
         $0.vfxSource = .with {
           $0.internalID = 2
           $0.displayName = "Camera"
+          $0.deviceWidth = 1920
+          $0.deviceHeight = 1080
         }
       }
     ]
