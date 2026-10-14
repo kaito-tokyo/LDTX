@@ -16,7 +16,7 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceClockOCRIntegrationTestSuite {
-  @Test
+  @Test(.disabled("OCR execution is unavailable in the CI environment."))
   func clockOutputIsRecognized() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let registry = LowFrequencyUpdateRegistry()
