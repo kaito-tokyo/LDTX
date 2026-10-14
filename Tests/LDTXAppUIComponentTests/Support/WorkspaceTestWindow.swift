@@ -35,4 +35,6 @@ final class WorkspaceTestWindow: NSWindow {
   }
 }
 
+// Test-only adapter for the AppKit document fixtures.
+// swift-format-ignore: AvoidRetroactiveConformances
 extension NSDocument: @retroactive WorkspaceDocumentContext {}

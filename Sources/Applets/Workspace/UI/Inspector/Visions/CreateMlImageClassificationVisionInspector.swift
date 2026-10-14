@@ -36,7 +36,8 @@ struct LdtxSceneDetectorVisionInspector: View {
       if modelURL != nil {
         Section("Model Information") {
           if let modelInformation {
-            LabeledContent("Crop and Scale", value: String(localized: cropAndScaleLabel(modelInformation)))
+            LabeledContent(
+              "Crop and Scale", value: String(localized: cropAndScaleLabel(modelInformation)))
             if let width = modelInformation.inputWidth, let height = modelInformation.inputHeight {
               LabeledContent("Model Input Size", value: "\(width) × \(height)")
             }
@@ -70,8 +71,11 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
     }
     .formStyle(.grouped)
-    .task(id: ModelInformationRequest(url: modelURL, noCompile: outputActive,
-      preparationGeneration: modelPreparationGeneration)) {
+    .task(
+      id: ModelInformationRequest(
+        url: modelURL, noCompile: outputActive,
+        preparationGeneration: modelPreparationGeneration)
+    ) {
       modelInformation = nil
       modelInformationFailure = nil
       guard let url = modelURL else { return }
@@ -81,11 +85,13 @@ struct LdtxSceneDetectorVisionInspector: View {
         let information = try await VisionImageClassifierService.readModelInformation(
           at: url)
         guard modelURL == url, outputActive == noCompile,
-          modelPreparationGeneration == generation else { return }
+          modelPreparationGeneration == generation
+        else { return }
         modelInformation = information
       } catch {
         guard modelURL == url, outputActive == noCompile,
-          modelPreparationGeneration == generation else { return }
+          modelPreparationGeneration == generation
+        else { return }
         modelInformationFailure = error.localizedDescription
       }
     }

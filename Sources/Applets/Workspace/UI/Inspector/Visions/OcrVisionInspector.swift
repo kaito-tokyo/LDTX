@@ -30,11 +30,13 @@ struct OcrVisionInspector: View {
           isOn: $vision.usesLanguageCorrection
         )
         TextField(
-          "Languages (comma separated)", text: Binding(
+          "Languages (comma separated)",
+          text: Binding(
             get: { vision.recognitionLanguages.joined(separator: ", ") },
             set: { vision.recognitionLanguages = Self.commaSeparatedValues($0) }))
         TextField(
-          "Custom Words (comma separated)", text: Binding(
+          "Custom Words (comma separated)",
+          text: Binding(
             get: { vision.customWords.joined(separator: ", ") },
             set: { vision.customWords = Self.commaSeparatedValues($0) }))
         LabeledContent("Minimum Text Height") {

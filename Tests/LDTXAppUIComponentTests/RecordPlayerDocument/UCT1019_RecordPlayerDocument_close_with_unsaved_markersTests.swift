@@ -45,8 +45,9 @@ extension AppUIComponentTestSuite {
       window.isReleasedWhenClosed = false
       defer { window.close() }
       func host() -> NSViewController {
-        NSHostingController(rootView: LDTXRecordPlayerView(
-          model: model, document: document, requestClose: {}))
+        NSHostingController(
+          rootView: LDTXRecordPlayerView(
+            model: model, document: document, requestClose: {}))
       }
       window.contentViewController = host()
       window.orderFront(nil)
@@ -69,8 +70,9 @@ extension AppUIComponentTestSuite {
       var document: RecordPlayerDocument? = try await openRecordingTestDocument(url)
       let model = try #require(document).model
       model.player = AVPlayer()
-      let host = NSHostingController(rootView: LDTXRecordPlayerView(
-        model: model, document: try #require(document), requestClose: {}))
+      let host = NSHostingController(
+        rootView: LDTXRecordPlayerView(
+          model: model, document: try #require(document), requestClose: {}))
       weak var weakDocument = document
       document = nil
       #expect(weakDocument == nil)

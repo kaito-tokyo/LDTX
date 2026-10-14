@@ -2,15 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
-import LDTXWorkspaceBundleFormat
 import LDTXTaskQueue
+import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import SwiftUI
-
-import AppKit
 
 public struct WorkspaceInspectorContainer: View {
   @Environment(\.workspaceReportError) private var reportError

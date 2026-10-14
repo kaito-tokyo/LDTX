@@ -18,8 +18,10 @@ final class WorkspaceToolbarCoordinator: NSObject, NSToolbarDelegate {
     toolbar = NSToolbar(identifier: "workspace")
     sidebarItem = NSToolbarItem(itemIdentifier: Identifiers.sidebar.itemIdentifier)
     stopOutputItem = NSToolbarItem(itemIdentifier: Identifiers.stopOutput.itemIdentifier)
-    startPauseOutputItem = NSToolbarItem(itemIdentifier: Identifiers.startPauseOutput.itemIdentifier)
-    captureScreenshotsItem = NSToolbarItem(itemIdentifier: Identifiers.captureScreenshots.itemIdentifier)
+    startPauseOutputItem = NSToolbarItem(
+      itemIdentifier: Identifiers.startPauseOutput.itemIdentifier)
+    captureScreenshotsItem = NSToolbarItem(
+      itemIdentifier: Identifiers.captureScreenshots.itemIdentifier)
     runInferenceItem = NSToolbarItem(itemIdentifier: Identifiers.runInference.itemIdentifier)
     toggleInspectorItem = NSToolbarItem(itemIdentifier: Identifiers.toggleInspector.itemIdentifier)
     super.init()

@@ -62,8 +62,10 @@ func makeWorkspaceTestWindow(
     device: renderer.device, delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
-  let context = documentContext ?? WorkspaceTestDocumentContext(
-    fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
+  let context =
+    documentContext
+    ?? WorkspaceTestDocumentContext(
+      fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
   let content = WorkspaceViewController(
     document: context, appletData: data, stateService: state,
     peakMeter: .init(), reportError: { _ in },

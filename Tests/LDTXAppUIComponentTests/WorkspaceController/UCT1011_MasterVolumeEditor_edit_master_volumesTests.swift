@@ -66,12 +66,15 @@ extension AppUIComponentTestSuite {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
       let editor = MasterVolumeEditor(
-        stateService: store, appletData: WorkspaceAppletData(), peakMeter: .init(), reportError: { _ in })
+        stateService: store, appletData: WorkspaceAppletData(), peakMeter: .init(),
+        reportError: { _ in })
       _ = editor.view
       let field = editor.masterFields[0]
       field.stringValue = "-12.5"
       field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels.double == -12.5)
+      #expect(
+        store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
+          .double == -12.5)
       let previous = store.workspacePreferences
       field.stringValue = "-"
       field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))

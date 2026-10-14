@@ -270,7 +270,8 @@ extension AppUIComponentTestSuite {
           "Actual: \(pane.frame.width), expected: \(expectedWidth)")
       }
       for (identifier, index) in [
-        (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0), (.init("workspace.toggleInspector"), 2),
+        (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0),
+        (.init("workspace.toggleInspector"), 2),
       ] {
         let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
         #expect(item.target === split)
@@ -339,9 +340,10 @@ extension AppUIComponentTestSuite {
         stateService: document.stateService, dispatcher: dispatcher, documentContext: document)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
-      let toggle = try #require(window.toolbar?.items.first {
-        $0.itemIdentifier.rawValue == "workspace.startPauseOutput"
-      })
+      let toggle = try #require(
+        window.toolbar?.items.first {
+          $0.itemIdentifier.rawValue == "workspace.startPauseOutput"
+        })
       #expect(!window.validateToolbarItem(toggle))
       window.toggleOutput()
       await drainWorkspaceTestTasks()
@@ -382,9 +384,11 @@ extension AppUIComponentTestSuite {
         #expect(first.validateToolbarItem(stop) == stopEnabled)
         #expect(first.validateToolbarItem(toggle) == toggleEnabled)
         #expect(toggle.label == label)
-        #expect(toggle.image?.tiffRepresentation == NSImage(
-          systemSymbolName: value == .recording ? "pause.fill" : "play.fill",
-          accessibilityDescription: nil)?.tiffRepresentation)
+        #expect(
+          toggle.image?.tiffRepresentation
+            == NSImage(
+              systemSymbolName: value == .recording ? "pause.fill" : "play.fill",
+              accessibilityDescription: nil)?.tiffRepresentation)
       }
       state.recordingState = .idle
       try performWorkspaceToolbarAction(toggle)
@@ -530,10 +534,13 @@ extension AppUIComponentTestSuite {
         document: second)
       second.addWindowController(secondWindow)
       secondWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/Second-\(UUID()).ldtxworkspace"))
-      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: savedRoot) }
-      try await saveWorkspaceDocument(first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
-      try await saveWorkspaceDocument(second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
+      try await saveWorkspaceDocument(
+        first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
+      try await saveWorkspaceDocument(
+        second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
       try secondWindow.selectProgram(internalID: a)
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
@@ -632,10 +639,13 @@ extension AppUIComponentTestSuite {
       data.updateState(for: second.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
-      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+        UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: savedRoot) }
-      try await saveWorkspaceDocument(first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
-      try await saveWorkspaceDocument(second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
+      try await saveWorkspaceDocument(
+        first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
+      try await saveWorkspaceDocument(
+        second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
       let firstRuntime = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let secondRuntime = try #require(secondWindow.windowRuntime.landscapeRuntime)
       data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
@@ -729,7 +739,8 @@ extension AppUIComponentTestSuite {
         id: .avCaptureDevice(uniqueID: "test-camera"), name: "Camera", width: 1920, height: 1080)
       draft.physicalDeviceID = camera.id
       let inputID = try WorkspaceResourceAddition.add(
-        sheet: .videoComponent, draft: draft, devices: [camera], stateService: document.stateService)
+        sheet: .videoComponent, draft: draft, devices: [camera], stateService: document.stateService
+      )
       draft.name = "Color"
       draft.componentKind = .solidColor
       try WorkspaceResourceAddition.add(

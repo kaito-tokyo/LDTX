@@ -5,10 +5,10 @@
 import AppKit
 import Foundation
 import LDTXProtos
-import LDTXWorkspaceAppletModel
-import LDTXWorkspaceBundleFormat
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
 import SwiftUI
 import Testing
 
@@ -26,12 +26,14 @@ extension AppUIComponentTestSuite {
       draft.visionKind = .createMlImageClassifier
       draft.videoComponentID = 1
       #expect(throws: (any Error).self) {
-        try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], stateService: store)
+        try WorkspaceResourceAddition.add(
+          sheet: .vision, draft: draft, devices: [], stateService: store)
       }
       #expect(store.workspaceDefinition.visions.isEmpty)
       store.workspaceDefinition.videoComponents[0].vfxSource.deviceWidth = 1920
       store.workspaceDefinition.videoComponents[0].vfxSource.deviceHeight = 1080
-      _ = try WorkspaceResourceAddition.add(sheet: .vision, draft: draft, devices: [], stateService: store)
+      _ = try WorkspaceResourceAddition.add(
+        sheet: .vision, draft: draft, devices: [], stateService: store)
       #expect(store.workspaceDefinition.visions.count == 1)
     }
 
@@ -39,8 +41,10 @@ extension AppUIComponentTestSuite {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
       defer { window.close() }
-      for selector in [#selector(WorkspaceViewController.revertDocumentToSaved(_:)),
-        #selector(WorkspaceViewController.browseDocumentVersions(_:))] {
+      for selector in [
+        #selector(WorkspaceViewController.revertDocumentToSaved(_:)),
+        #selector(WorkspaceViewController.browseDocumentVersions(_:)),
+      ] {
         let item = NSMenuItem(title: "Revert", action: selector, keyEquivalent: "")
         for state: WorkspaceRecordingState in [.starting, .recording, .pausing, .stopping] {
           store.recordingState = state
@@ -98,7 +102,9 @@ extension AppUIComponentTestSuite {
       #expect(!window.validateToolbarItem(item))
     }
 
-    @Test("Inference discards obsolete results and failures", arguments: ["model", "input", "roi", "failure"])
+    @Test(
+      "Inference discards obsolete results and failures",
+      arguments: ["model", "input", "roi", "failure"])
     func discardObsoleteInference(change: String) async throws {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.videoComponents = [7, 9].map { id in
@@ -130,7 +136,8 @@ extension AppUIComponentTestSuite {
       case "input":
         store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.videoComponentInternalID = 9
       case "roi":
-        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(num: 1, den: 10)
+        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(
+          num: 1, den: 10)
       default:
         store.setVisionModelURL(URL(fileURLWithPath: "/tmp/replacement.mlmodel"), for: 2)
       }

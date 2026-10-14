@@ -50,17 +50,21 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     draft.name = "Camera"
     let camera = WorkspaceAddDeviceOption(
       id: .avCaptureDevice(uniqueID: "camera"), name: "Camera", width: 1920, height: 1080)
-    #expect(WorkspaceResourceAddition.validationMessage(
-      sheet: .videoComponent, draft: draft, devices: [camera], stateService: store) != nil)
+    #expect(
+      WorkspaceResourceAddition.validationMessage(
+        sheet: .videoComponent, draft: draft, devices: [camera], stateService: store) != nil)
     draft.physicalDeviceID = camera.id
-    #expect(WorkspaceResourceAddition.validationMessage(
-      sheet: .videoComponent, draft: draft, devices: [], stateService: store) != nil)
+    #expect(
+      WorkspaceResourceAddition.validationMessage(
+        sheet: .videoComponent, draft: draft, devices: [], stateService: store) != nil)
     var invalidCamera = camera
     invalidCamera.width = 0
-    #expect(WorkspaceResourceAddition.validationMessage(
-      sheet: .videoComponent, draft: draft, devices: [invalidCamera], stateService: store) != nil)
-    #expect(WorkspaceResourceAddition.validationMessage(
-      sheet: .videoComponent, draft: draft, devices: [camera], stateService: store) == nil)
+    #expect(
+      WorkspaceResourceAddition.validationMessage(
+        sheet: .videoComponent, draft: draft, devices: [invalidCamera], stateService: store) != nil)
+    #expect(
+      WorkspaceResourceAddition.validationMessage(
+        sheet: .videoComponent, draft: draft, devices: [camera], stateService: store) == nil)
   }
 
   @Test(arguments: WorkspaceAddVisionKind.allCases)

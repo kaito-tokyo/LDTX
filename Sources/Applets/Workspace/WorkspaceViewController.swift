@@ -63,7 +63,8 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
 
     self.splitViewController = NSSplitViewController()
     self.contentPane = WorkspaceContentPane(
-      stateService: stateService, appletData: appletData, peakMeter: peakMeter, reportError: reportError, pairedPreview: pairedPreview,
+      stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+      reportError: reportError, pairedPreview: pairedPreview,
       runtimeActions: runtimeActions)
 
     toolbarCoordinator = WorkspaceToolbarCoordinator()
@@ -268,13 +269,15 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       do {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
         guard !isClosed, let current = inferenceRequest,
-          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
+          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id })
+            == editingVision,
           current.vision == request.vision, current.url == request.url
         else { return }
         stateService.visionResults[id] = result
       } catch {
         guard !isClosed, let current = inferenceRequest,
-          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id }) == editingVision,
+          stateService.workspaceDefinition.visions.first(where: { $0.internalID == id })
+            == editingVision,
           current.vision == request.vision, current.url == request.url
         else { return }
         stateService.visionFailureMessages[id] = error.localizedDescription
@@ -293,8 +296,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     }
   }
 
-
-
   private var sidebarView: some View {
     WorkspaceSidebar(
       stateService: stateService, deviceRegistry: deviceRegistry,
@@ -307,7 +308,8 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
   private var inspectorView: some View {
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
-      stateService: stateService, appletData: appletData, document: document, runtimeActions: runtimeActions
+      stateService: stateService, appletData: appletData, document: document,
+      runtimeActions: runtimeActions
     )
     .environment(\.workspaceReportError, reportError)
   }
@@ -366,7 +368,8 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
 
   public func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
     if item.action == #selector(revertDocumentToSaved(_:))
-      || item.action == #selector(browseDocumentVersions(_:)) {
+      || item.action == #selector(browseDocumentVersions(_:))
+    {
       return !isClosed && !stateService.isOutputActive
     }
     return true

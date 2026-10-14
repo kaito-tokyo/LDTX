@@ -4,9 +4,9 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXProgramRuntime
-import LDTXWorkspaceAppletService
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
 import SwiftUI

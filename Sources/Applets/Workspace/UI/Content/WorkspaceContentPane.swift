@@ -117,8 +117,6 @@ public final class WorkspaceContentPane: NSViewController {
     splitView.autosaveName = stateService.externalID.map { "WorkspaceContentPane.\($0)" }
   }
 
-
-
   private final class FlipedStackView: NSStackView {
     override var isFlipped: Bool { true }
   }

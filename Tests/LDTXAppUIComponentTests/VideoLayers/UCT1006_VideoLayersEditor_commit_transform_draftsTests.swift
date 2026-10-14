@@ -416,9 +416,11 @@ extension AppUIComponentTestSuite {
       #expect(!row.state.isEditing)
       #expect(!row.state.hasLocalTextChanges)
       let latest = try #require(saved.last)
-      fixture.update(container.table, ids: [3, 2, 1], preferences: .with {
-        $0.videoLayerTransforms[1] = latest
-      })
+      fixture.update(
+        container.table, ids: [3, 2, 1],
+        preferences: .with {
+          $0.videoLayerTransforms[1] = latest
+        })
       #expect(container.table.rows[1] === row)
       #expect(row.state.strings[0] == "480")
       container.table.removeAllRows()
@@ -515,8 +517,10 @@ extension AppUIComponentTestSuite {
     @Test("Incomplete numeric input stays local without a navigation guard")
     func incompleteTransformInput() throws {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      let editor = VideoLayersEditor(stateService: store, appletData: WorkspaceAppletData(), target: .landscape)
-      editor.update(definition: .with { $0.videoComponents = [.with { $0.vfxSource.internalID = 1 }] },
+      let editor = VideoLayersEditor(
+        stateService: store, appletData: WorkspaceAppletData(), target: .landscape)
+      editor.update(
+        definition: .with { $0.videoComponents = [.with { $0.vfxSource.internalID = 1 }] },
         programPreferences: .init(), layerIDs: [1], canvasWidth: 1920, canvasHeight: 1080)
       let row = try #require(editor.table.rows[1])
       row.state.edit("-", at: 0)
@@ -524,7 +528,6 @@ extension AppUIComponentTestSuite {
       store.inspectorSelector = .init(kind: .workspaceCanvas)
       #expect(store.inspectorSelector == .init(kind: .workspaceCanvas))
     }
-
 
     @Test("UCT-1006.15: Only VFX Sources and Clocks expose placement fields")
     func placementFieldsFollowComponentType() throws {

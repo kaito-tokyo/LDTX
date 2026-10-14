@@ -11,23 +11,28 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
   @Test func channelGainsUseTheSupportedDecibelRange() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.displayName = "Test"
-      $0.audioDevices = [.with {
-        $0.internalID = 1
-        $0.displayName = "Microphone"
-      }]
+      $0.audioDevices = [
+        .with {
+          $0.internalID = 1
+          $0.displayName = "Microphone"
+        }
+      ]
     }
     var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
-    for (numerator, valid): (Int32, Bool) in [(-801, false), (-800, true),
-      (0, true), (200, true), (201, false), (1000, false)] {
+    for (numerator, valid): (Int32, Bool) in [
+      (-801, false), (-800, true),
+      (0, true), (200, true), (201, false), (1000, false),
+    ] {
       bundle.preferences.audioChannelGainsDecibels[1, default: .init()].set(num: numerator, den: 10)
       let bytes = try bundle.preferences.serializedData()
       let issues = WorkspaceBundleValidatorV4.validationIssues(in: bundle)
       #expect(issues.contains { $0.error == .invalidAudioChannelGain } == !valid)
       if !valid {
-        #expect(issues.contains {
-          $0.error == .invalidAudioChannelGain
-            && $0.path == "preferences.audio_channel_gains_decibels[1]"
-        })
+        #expect(
+          issues.contains {
+            $0.error == .invalidAudioChannelGain
+              && $0.path == "preferences.audio_channel_gains_decibels[1]"
+          })
       }
       #expect(try bundle.preferences.serializedData() == bytes)
     }
@@ -57,23 +62,27 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
 
   @Test func bundleValidationUsesReferencedInputSizeForAbsentRoiFields() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-      $0.videoComponents = [.with {
-        $0.vfxSource = .with {
-          $0.internalID = 1
-          $0.displayName = "Camera"
-          $0.deviceWidth = 1920
-          $0.deviceHeight = 1080
+      $0.videoComponents = [
+        .with {
+          $0.vfxSource = .with {
+            $0.internalID = 1
+            $0.displayName = "Camera"
+            $0.deviceWidth = 1920
+            $0.deviceHeight = 1080
+          }
         }
-      }]
-      $0.visions = [.with {
-        $0.ldtxSceneDetectorVision = .with {
-          $0.internalID = 3
-          $0.displayName = "Detector"
-          $0.videoComponentInternalID = 1
-          $0.regionOfInterest.width.num = 320
-          $0.regionOfInterest.height.num = 180
+      ]
+      $0.visions = [
+        .with {
+          $0.ldtxSceneDetectorVision = .with {
+            $0.internalID = 3
+            $0.displayName = "Detector"
+            $0.videoComponentInternalID = 1
+            $0.regionOfInterest.width.num = 320
+            $0.regionOfInterest.height.num = 180
+          }
         }
-      }]
+      ]
     }
     try WorkspaceBundleValidatorV4.validate(definition)
     let roi = definition.visions[0].ldtxSceneDetectorVision.regionOfInterest
@@ -93,19 +102,22 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
     var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
     bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[3] = true
-    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[5] = .init()
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[5] =
+      .init()
     bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[7] = true
-    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[7] = .init()
+    bundle.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[7] =
+      .init()
     let paths = WorkspaceBundleValidatorV4.validationIssues(in: bundle).filter {
       if case .missingVideoLayer = $0.error { return true }
       return false
     }.map(\.path).sorted()
-    #expect(paths == [
-      "preferences.Landscape[1].video_layer_hidden[3]",
-      "preferences.Landscape[1].video_layer_hidden[7]",
-      "preferences.Landscape[1].video_layer_transforms[5]",
-      "preferences.Landscape[1].video_layer_transforms[7]",
-    ])
+    #expect(
+      paths == [
+        "preferences.Landscape[1].video_layer_hidden[3]",
+        "preferences.Landscape[1].video_layer_hidden[7]",
+        "preferences.Landscape[1].video_layer_transforms[5]",
+        "preferences.Landscape[1].video_layer_transforms[7]",
+      ])
   }
 
   @Test func rejectsUnsupportedAndZeroSizedSceneDetectorInputs() {

@@ -20,7 +20,7 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     let infoURL = original.appendingPathComponent("Info.plist")
     var info = try #require(
       PropertyListSerialization.propertyList(
-        from: Data(contentsOf: infoURL), options: 0, format: nil)
+        from: Data(contentsOf: infoURL), options: [], format: nil)
         as? [String: Any])
     info["CustomMetadata"] = "Preserved"
     try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(
@@ -36,7 +36,7 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     let reloaded = try WorkspaceBundleReaderV4(at: original).read()
     let copiedInfo = try #require(
       PropertyListSerialization.propertyList(
-        from: Data(contentsOf: original.appendingPathComponent("Info.plist")), options: 0,
+        from: Data(contentsOf: original.appendingPathComponent("Info.plist")), options: [],
         format: nil)
         as? [String: Any])
     #expect(copiedInfo["CustomMetadata"] as? String == "Preserved")

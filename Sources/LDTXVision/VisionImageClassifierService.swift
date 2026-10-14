@@ -92,7 +92,9 @@ public actor VisionImageClassifierService {
         try fileManager.moveItem(at: compiledURL, to: targetURL)
       } catch {
         try? fileManager.removeItem(at: compiledURL)
-        guard fileManager.fileExists(atPath: targetURL.path(percentEncoded: false)) else { throw error }
+        guard fileManager.fileExists(atPath: targetURL.path(percentEncoded: false)) else {
+          throw error
+        }
       }
     }
 
@@ -122,7 +124,9 @@ public actor VisionImageClassifierService {
     else { throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url]) }
     var files: [(path: String, url: URL)] = []
     func visit(_ directory: URL, prefix: String) throws {
-      for child in try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+      for child in try fileManager.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: nil)
+      {
         let path = prefix + child.lastPathComponent
         let attributes = try fileManager.attributesOfItem(atPath: child.path)
         switch attributes[.type] as? FileAttributeType {

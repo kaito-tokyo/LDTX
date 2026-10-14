@@ -4,8 +4,8 @@
 
 import AppKit
 import LDTXProtos
-import LDTXWorkspaceBundleFormat
 import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
 import Observation
 import SwiftUI
 
@@ -142,9 +142,10 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
       disconnect()
       await windowController.shutdown()
       if let message = windowController.takeShutdownFailureForPresentation() {
-        NSApplication.shared.presentError(NSError(
-          domain: "tokyo.kaito.ldtx.WorkspaceShutdown", code: 1,
-          userInfo: [NSLocalizedDescriptionKey: message]))
+        NSApplication.shared.presentError(
+          NSError(
+            domain: "tokyo.kaito.ldtx.WorkspaceShutdown", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: message]))
       }
     }
   }

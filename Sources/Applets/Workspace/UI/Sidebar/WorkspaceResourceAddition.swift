@@ -110,9 +110,11 @@ enum WorkspaceResourceAddition {
       return "Select an available audio device."
     }
     if sheet == .videoComponent, draft.componentKind == .vfxSource {
-      guard let device = devices.first(where: {
-        $0.id == draft.physicalDeviceID && !$0.isAudio
-      }), device.width > 0, device.height > 0 else {
+      guard
+        let device = devices.first(where: {
+          $0.id == draft.physicalDeviceID && !$0.isAudio
+        }), device.width > 0, device.height > 0
+      else {
         return "Select an available camera with a valid image size."
       }
     }

@@ -10,11 +10,11 @@ import LDTXBackgroundSegmentation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceBundleFormat
 import LDTXProtosMacOSExtra
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel
+import LDTXWorkspaceBundleFormat
 import OSLog
 import Observation
 
@@ -130,7 +130,10 @@ public final class WorkspaceWindowRuntime {
   public func removeProgram(internalID: Int64) throws {
     var workspace = persistenceCoordinator.workspace
     workspace.definition.programs.removeAll { $0.internalID == internalID }
-    guard workspace.definition.programs.count != persistenceCoordinator.workspace.definition.programs.count else {
+    guard
+      workspace.definition.programs.count
+        != persistenceCoordinator.workspace.definition.programs.count
+    else {
       throw WorkspaceRuntimeError.missingProgram(internalID)
     }
     workspace.preferences.landscapeProgramPreferences.removeValue(forKey: internalID)
@@ -222,8 +225,9 @@ public final class WorkspaceWindowRuntime {
       }
     )
     context.sceneDetector = { [weak self] id in
-      guard case .ldtxSceneDetectorVision(let vision)? =
-        self?.definition.visions.first(where: { $0.internalID == id })?.vision
+      guard
+        case .ldtxSceneDetectorVision(let vision)? =
+          self?.definition.visions.first(where: { $0.internalID == id })?.vision
       else { return nil }
       return vision
     }

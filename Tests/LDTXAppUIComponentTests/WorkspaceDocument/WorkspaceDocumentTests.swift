@@ -43,14 +43,18 @@ extension AppUIComponentTestSuite {
       let coordinator = WorkspaceViewControllerRepresentation(document: first).makeCoordinator()
       let state = first.stateService
       state.workspaceDefinition.displayName = "Draft"
-      state.workspaceDefinition.programs = [.with {
-        $0.internalID = 7; $0.displayName = "Program"
-      }]
+      state.workspaceDefinition.programs = [
+        .with {
+          $0.internalID = 7
+          $0.displayName = "Program"
+        }
+      ]
       coordinator.recordEdits()
       try coordinator.windowController.selectProgram(internalID: 7)
       let localURL = try #require(state.localStateURL)
-      #expect(coordinator.windowController.appletData.state(for: localURL)
-        .selectedProgramInternalID == 7)
+      #expect(
+        coordinator.windowController.appletData.state(for: localURL)
+          .selectedProgramInternalID == 7)
       #expect(first.fileURL == nil)
       #expect(first.workspaceSnapshot == nil)
       #expect(state.workspaceDefinition.programs.count == 1)
@@ -117,11 +121,13 @@ extension AppUIComponentTestSuite {
       try Data([1]).write(to: root)
       let document = WorkspaceDocument()
       document.stateService.workspaceDefinition.displayName = "Confirmed"
-      let snapshot = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
       document.stateService.workspaceDefinition.displayName = "Later"
       let progress = ProgressManager(totalCount: 1)
       await #expect(throws: (any Error).self) {
-        try await WorkspaceDocument.Writer().write(snapshot: snapshot,
+        try await WorkspaceDocument.Writer().write(
+          snapshot: snapshot,
           to: root.appendingPathComponent("Impossible.ldtxworkspace"), previous: nil,
           progress: progress.subprogress(assigningCount: 1))
       }
@@ -166,26 +172,35 @@ extension AppUIComponentTestSuite {
       try await saveWorkspaceDocument(document, to: url)
       let persisted = document.persistenceCoordinator.runtimeWorkspace
       document.stateService.workspaceDefinition.videoComponents = [
-        .with { $0.vfxSource = .with {
-          $0.internalID = 7; $0.displayName = "Camera"
-          $0.deviceWidth = 1920; $0.deviceHeight = 1080
-        } }
+        .with {
+          $0.vfxSource = .with {
+            $0.internalID = 7
+            $0.displayName = "Camera"
+            $0.deviceWidth = 1920
+            $0.deviceHeight = 1080
+          }
+        }
       ]
       document.stateService.workspaceDefinition.visions = [
-        .with { $0.ocrVision = .with {
-          $0.internalID = 9; $0.displayName = "OCR"; $0.videoComponentInternalID = 7
-        } }
+        .with {
+          $0.ocrVision = .with {
+            $0.internalID = 9
+            $0.displayName = "OCR"
+            $0.videoComponentInternalID = 7
+          }
+        }
       ]
       document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x
         .set(num: 2, den: 1)
-      let snapshot = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot == document.stateService.editingWorkspace)
       #expect(document.workspaceSnapshot == snapshot)
       await #expect(throws: (any Error).self) { try await saveWorkspaceDocument(document, to: url) }
       #expect(document.persistenceCoordinator.runtimeWorkspace == persisted)
-      #expect(document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x.num == 2)
+      #expect(
+        document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x.num == 2)
     }
-
 
     @Test("A reload explicitly overwrites the editing documents")
     func reloadOverwritesEditingState() async throws {
@@ -276,7 +291,9 @@ extension AppUIComponentTestSuite {
       for _ in 0..<200 {
         if document.stateService.workspaceDefinition.displayName == "Observed",
           document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Observed"
-        { break }
+        {
+          break
+        }
         try await Task.sleep(for: .milliseconds(5))
       }
       #expect(document.stateService.workspaceDefinition.displayName == "Observed")
@@ -329,19 +346,23 @@ extension AppUIComponentTestSuite {
       let firstID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
       #expect(firstID > 0)
       state.setVisionModelURL(first, for: 5)
-      #expect(state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
-      let snapshot = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(
+        state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot.definition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
       state.setVisionModelURL(second, for: 5)
       let secondID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
       #expect(secondID != firstID)
       let progress = ProgressManager(totalCount: 1)
-      try await WorkspaceDocument.Writer().write(snapshot: snapshot, to: url, previous: nil,
+      try await WorkspaceDocument.Writer().write(
+        snapshot: snapshot, to: url, previous: nil,
         progress: progress.subprogress(assigningCount: 1))
       document.testSavedURL = url
       document.controller.adoptDocumentURL(url)
       await document.refreshTestPersistedWorkspace()
-      #expect(state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == secondID)
+      #expect(
+        state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == secondID)
       #expect(state.visionModels[secondID] == second)
       let firstURL = url.appendingPathComponent("VisionModels/\(firstID)/First.mlmodel")
       #expect(try Data(contentsOf: firstURL) == Data([1]))
@@ -352,8 +373,12 @@ extension AppUIComponentTestSuite {
       #expect(document.workspaceSnapshot?.visionModels[firstID] == first)
       #expect(document.workspaceSnapshot?.visionModels[secondID] == second)
       let reloaded = try WorkspaceBundleReaderV4(at: url).read()
-      #expect(reloaded.visionModels[firstID]?.resolvingSymlinksInPath() == firstURL.resolvingSymlinksInPath())
-      #expect(reloaded.visionModels[secondID]?.resolvingSymlinksInPath() == secondURL.resolvingSymlinksInPath())
+      #expect(
+        reloaded.visionModels[firstID]?.resolvingSymlinksInPath()
+          == firstURL.resolvingSymlinksInPath())
+      #expect(
+        reloaded.visionModels[secondID]?.resolvingSymlinksInPath()
+          == secondURL.resolvingSymlinksInPath())
       #expect(try Data(contentsOf: firstURL) == Data([1]))
       #expect(try Data(contentsOf: secondURL) == Data([2]))
       state.setVisionModelURL(nil, for: 5)
@@ -413,7 +438,8 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       let state = document.stateService
       state.workspaceDefinition.displayName = "Editing"
-      let snapshot = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot.definition.displayName == "Editing")
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: url) }
@@ -426,7 +452,8 @@ extension AppUIComponentTestSuite {
       #expect(coordinator.windowController.stateService === state)
       coordinator.disconnect()
       state.workspaceDefinition.displayName = "Disconnected"
-      let disconnected = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      let disconnected = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(disconnected.definition.displayName == "Disconnected")
       await coordinator.shutdown()
       #expect(document.stateService === state)
@@ -482,7 +509,9 @@ extension AppUIComponentTestSuite {
       coordinator.recordEdits()
       #expect(!undo.canUndo)
       #expect(coordinator.windowController.stateService.workspaceDefinition.displayName == "Loaded")
-      #expect(coordinator.windowController.persistenceCoordinator.runtimeWorkspace == document.workspaceSnapshot)
+      #expect(
+        coordinator.windowController.persistenceCoordinator.runtimeWorkspace
+          == document.workspaceSnapshot)
       await coordinator.shutdown()
       await original.shutdown()
     }

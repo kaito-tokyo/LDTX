@@ -5,8 +5,8 @@ import AppKit
 import Foundation
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletUI
 import LDTXWorkspaceAppletService
+import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import SwiftUI
 
@@ -83,7 +83,9 @@ extension WorkspaceDocument {
   }
   var controller: WorkspaceWindowController { testCoordinator.windowController }
   var appletData: WorkspaceAppletData { controller.appletData }
-  var persistenceCoordinator: WorkspaceV4PersistenceCoordinator { controller.persistenceCoordinator }
+  var persistenceCoordinator: WorkspaceV4PersistenceCoordinator {
+    controller.persistenceCoordinator
+  }
   var workspace: WorkspaceV4Bundle { stateService.editingWorkspace }
   func shutdown() async { await testCoordinator.shutdown() }
   var hasTestModelChanges: Bool {
@@ -107,7 +109,7 @@ extension WorkspaceDocument {
     testHost.controllers.removeAll { $0 === controller }
   }
   func close() {
-    testHost.windows.forEach { $0.close() }
+    for window in testHost.windows { window.close() }
     let controllers = testHost.controllers
     testHost.controllers = []
     testHost.windows = []

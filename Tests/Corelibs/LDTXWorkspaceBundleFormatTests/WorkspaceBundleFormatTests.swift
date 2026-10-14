@@ -305,7 +305,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Saving uses assigned model IDs and clearing retains model resources",
+  @Test(
+    "Saving uses assigned model IDs and clearing retains model resources",
     arguments: ["Original.mlmodel", ".Original.mlmodel"])
   func savesExternalModelReference(name: String) throws {
     let root = try makeTemporaryDirectory()
@@ -347,7 +348,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: bundle).read().visionModels == loaded.visionModels)
   }
 
-  @Test("Model packages copy their native directory tree through save and reload",
+  @Test(
+    "Model packages copy their native directory tree through save and reload",
     arguments: ["Classifier.mlpackage", ".Classifier.mlpackage"])
   func nativeModelPackageRoundTrip(name: String) throws {
     let root = try makeTemporaryDirectory()

@@ -107,9 +107,11 @@ struct OutputOrchestrationDetailPane: View {
           }
           if outputDestination.youtubeIngestMode == .dash {
             Section("YouTube Broadcast") {
-              Picker("Broadcast", selection: Binding(
-                get: { selectedBroadcastID },
-                set: { selectBroadcast($0) })
+              Picker(
+                "Broadcast",
+                selection: Binding(
+                  get: { selectedBroadcastID },
+                  set: { selectBroadcast($0) })
               ) {
                 Text("Not selected").tag(String?.none)
                 ForEach(existingBroadcasts) { broadcast in
@@ -380,7 +382,6 @@ struct OutputOrchestrationDetailPane: View {
       },
       load: loadStreamKeyConfigurations)
   }
-
 
 }
 

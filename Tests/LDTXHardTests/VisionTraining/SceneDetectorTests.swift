@@ -5,13 +5,13 @@ import CoreImage
 import CoreML
 import CreateMLComponents
 import Foundation
-import LDTXVisionTraining
+import LDTXProtos
 import LDTXVision
+import LDTXVisionTraining
+@testable import LDTXWorkspaceAppletService
 import Synchronization
 import Testing
 import Vision
-import LDTXProtos
-@testable import LDTXWorkspaceAppletService
 
 @Suite("Scene Detector", .serialized)
 struct SceneDetectorIntegrationTestSuite {
@@ -27,7 +27,9 @@ struct SceneDetectorIntegrationTestSuite {
         creatorDefined: ["tokyo.kaito.LDTX.cropAndScale": value])
       #expect(information.cropAndScaleAction == expected)
     }
-    #expect(VisionImageClassifierService.ModelInformation(creatorDefined: [:]).cropAndScaleAction == .centerCrop)
+    #expect(
+      VisionImageClassifierService.ModelInformation(creatorDefined: [:]).cropAndScaleAction
+        == .centerCrop)
   }
 
   @Test func readsClassFoldersAndExportsModel()
@@ -70,46 +72,56 @@ struct SceneDetectorIntegrationTestSuite {
         at: savedURL, cachesDirectory: caches)
     }
     #expect(!FileManager.default.fileExists(atPath: caches.path))
-    let loaded = try await VisionImageClassifierService.loadModel(at: savedURL, cachesDirectory: caches)
+    let loaded = try await VisionImageClassifierService.loadModel(
+      at: savedURL, cachesDirectory: caches)
     let information = try await VisionImageClassifierService.readModelInformation(
       at: savedURL, cachesDirectory: caches)
     #expect(loaded.modelDescription.predictedFeatureName != nil)
     let metadata = loaded.modelDescription.metadata[.creatorDefinedKey] as? [String: String] ?? [:]
     let service = try VisionImageClassifierService(model: loaded)
     #expect(information.cropAndScaleAction == service.modelInformation.cropAndScaleAction)
-    #expect(service.modelInformation.cropAndScaleAction
-      == VisionImageClassifierService.ModelInformation(creatorDefined: metadata).cropAndScaleAction)
+    #expect(
+      service.modelInformation.cropAndScaleAction
+        == VisionImageClassifierService.ModelInformation(creatorDefined: metadata)
+        .cropAndScaleAction)
     #expect(service.modelInformation.inputWidth == 360)
     #expect(service.modelInformation.inputHeight == 360)
     _ = try await VisionImageClassifierService.loadModel(
       at: savedURL, noCompile: true, cachesDirectory: caches)
     let copied = directory.appendingPathComponent("Copied.mlpackage", isDirectory: true)
     try FileManager.default.copyItem(at: savedURL, to: copied)
-    _ = try await VisionImageClassifierService.loadModel(at: copied, noCompile: true, cachesDirectory: caches)
+    _ = try await VisionImageClassifierService.loadModel(
+      at: copied, noCompile: true, cachesDirectory: caches)
     try Data([1]).write(to: copied.appendingPathComponent("content-change.bin"))
     await #expect(throws: (any Error).self) {
-      _ = try await VisionImageClassifierService.loadModel(at: copied, noCompile: true, cachesDirectory: caches)
+      _ = try await VisionImageClassifierService.loadModel(
+        at: copied, noCompile: true, cachesDirectory: caches)
     }
-    let cachedModel = try #require(try FileManager.default.contentsOfDirectory(
-      at: caches, includingPropertiesForKeys: nil).first { $0.pathExtension == "mlmodelc" })
+    let cachedModel = try #require(
+      try FileManager.default.contentsOfDirectory(
+        at: caches, includingPropertiesForKeys: nil
+      ).first { $0.pathExtension == "mlmodelc" })
     let corruptCaches = directory.appendingPathComponent("CorruptCaches", isDirectory: true)
     try FileManager.default.createDirectory(at: corruptCaches, withIntermediateDirectories: true)
     let corruptModel = corruptCaches.appendingPathComponent(cachedModel.lastPathComponent)
     try Data([1, 2, 3]).write(to: corruptModel)
     await #expect(throws: (any Error).self) {
-      _ = try await VisionImageClassifierService.loadModel(at: savedURL, cachesDirectory: corruptCaches)
+      _ = try await VisionImageClassifierService.loadModel(
+        at: savedURL, cachesDirectory: corruptCaches)
     }
     #expect(try Data(contentsOf: corruptModel) == Data([1, 2, 3]))
     let standalone = directory.appendingPathComponent("FeaturePrint.mlmodel")
     try ImageFeaturePrint(revision: 2, cropAndScale: .scaleFit).export(to: standalone)
     _ = try await VisionImageClassifierService.loadModel(at: standalone, cachesDirectory: caches)
-    try await verifyAutomaticRequests(modelURL: savedURL, caches: caches, imageURL: directory.appendingPathComponent("red/0.png"))
+    try await verifyAutomaticRequests(
+      modelURL: savedURL, caches: caches, imageURL: directory.appendingPathComponent("red/0.png"))
   }
 
   @MainActor
   private func verifyAutomaticRequests(modelURL: URL, caches: URL, imageURL: URL) async throws {
     var time = 0.0
-    let scheduler = WorkspaceVisionScheduler(now: { time }, random: { _ in 0 }, automaticTimer: false)
+    let scheduler = WorkspaceVisionScheduler(
+      now: { time }, random: { _ in 0 }, automaticTimer: false)
     var loads = 0
     var prepared = false
     let feature = WorkspaceV4VisionFeature(scheduler: scheduler) { url, noCompile in
@@ -195,7 +207,8 @@ struct SceneDetectorIntegrationTestSuite {
     var attempts: [Bool] = []
     var preparationErrors = 0
     let missingCache = caches.appendingPathComponent("Missing")
-    let cold = WorkspaceV4VisionFeature(scheduler: WorkspaceVisionScheduler(automaticTimer: false)) { url, noCompile in
+    let cold = WorkspaceV4VisionFeature(scheduler: WorkspaceVisionScheduler(automaticTimer: false))
+    { url, noCompile in
       attempts.append(noCompile)
       let model = try await VisionImageClassifierService.loadModel(
         at: url, noCompile: noCompile, cachesDirectory: missingCache)
@@ -223,7 +236,9 @@ struct SceneDetectorIntegrationTestSuite {
 
     active = false
     var failedLoads = 0
-    let failed = WorkspaceV4VisionFeature(scheduler: WorkspaceVisionScheduler(automaticTimer: false)) { _, noCompile in
+    let failed = WorkspaceV4VisionFeature(
+      scheduler: WorkspaceVisionScheduler(automaticTimer: false)
+    ) { _, noCompile in
       #expect(!noCompile)
       failedLoads += 1
       throw CocoaError(.fileReadCorruptFile)
@@ -241,7 +256,9 @@ struct SceneDetectorIntegrationTestSuite {
   @MainActor
   private func waitUntil(_ predicate: () -> Bool) async throws {
     let deadline = ContinuousClock.now + .seconds(10)
-    while !predicate(), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    while !predicate(), ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
     try #require(predicate())
   }
 }

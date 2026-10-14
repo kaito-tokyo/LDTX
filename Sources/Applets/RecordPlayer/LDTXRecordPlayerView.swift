@@ -44,41 +44,41 @@ public struct LDTXRecordPlayerView: View {
       playerContent
         .frame(minWidth: 400, minHeight: 360)
     }
-      .inspector(isPresented: $isInspectorPresented) {
-        featureDetail
-          .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
-      }
-      .toolbar {
-        ToolbarItem(placement: .primaryAction) {
-          Button {
-            isInspectorPresented.toggle()
-          } label: {
-            Label("Toggle Inspector", systemImage: "sidebar.right")
-          }
+    .inspector(isPresented: $isInspectorPresented) {
+      featureDetail
+        .inspectorColumnWidth(min: 220, ideal: 280, max: 360)
+    }
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          isInspectorPresented.toggle()
+        } label: {
+          Label("Toggle Inspector", systemImage: "sidebar.right")
         }
       }
-      .focusedSceneValue(\.recordPlayerInspector, $isInspectorPresented)
-      .task { model.start() }
-      .onChange(of: model.shouldClose, initial: true) { _, shouldClose in
-        if shouldClose { requestClose() }
+    }
+    .focusedSceneValue(\.recordPlayerInspector, $isInspectorPresented)
+    .task { model.start() }
+    .onChange(of: model.shouldClose, initial: true) { _, shouldClose in
+      if shouldClose { requestClose() }
+    }
+    .alert(
+      model.alert?.title ?? "Error",
+      isPresented: Binding(
+        get: { model.alert != nil },
+        set: { if !$0 { model.alert = nil } }),
+      presenting: model.alert
+    ) { pending in
+      Button("OK") {
+        model.alert = nil
+        if pending.closeAfterDismissal { requestClose() }
       }
-      .alert(
-        model.alert?.title ?? "Error",
-        isPresented: Binding(
-          get: { model.alert != nil },
-          set: { if !$0 { model.alert = nil } }),
-        presenting: model.alert
-      ) { pending in
-        Button("OK") {
-          model.alert = nil
-          if pending.closeAfterDismissal { requestClose() }
-        }
-      } message: { pending in
-        Text(pending.message)
-      }
-      .onChange(of: markers.map(\.fileName)) { _, names in
-        if let selectedMarkerID, !names.contains(selectedMarkerID) { self.selectedMarkerID = nil }
-      }
+    } message: { pending in
+      Text(pending.message)
+    }
+    .onChange(of: markers.map(\.fileName)) { _, names in
+      if let selectedMarkerID, !names.contains(selectedMarkerID) { self.selectedMarkerID = nil }
+    }
   }
 
   init(
@@ -381,7 +381,6 @@ public struct LDTXRecordPlayerView: View {
   }
 
 }
-
 
 @MainActor
 @Observable

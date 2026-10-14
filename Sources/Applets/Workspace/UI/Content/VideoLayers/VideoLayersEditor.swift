@@ -58,7 +58,8 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     if transform.translationX.double == previous.translationX.double,
       transform.translationY.double == previous.translationY.double,
       transform.scaleX.double == previous.scaleX.double,
-      transform.scaleY.double == previous.scaleY.double {
+      transform.scaleY.double == previous.scaleY.double
+    {
       row.state.hasLocalTextChanges = hasIncompleteText
       return
     }
@@ -76,9 +77,15 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
   {
     var hasIncompleteText = false
     let previous = row.state.transform
-    let fallback = [previous.translationX, previous.translationY,
-      Ldtx_Workspace_V4_Rational32.with { $0.set(num: previous.scaleX.num, den: previous.scaleX.den) },
-      Ldtx_Workspace_V4_Rational32.with { $0.set(num: previous.scaleY.num, den: previous.scaleY.den) }]
+    let fallback = [
+      previous.translationX, previous.translationY,
+      Ldtx_Workspace_V4_Rational32.with {
+        $0.set(num: previous.scaleX.num, den: previous.scaleX.den)
+      },
+      Ldtx_Workspace_V4_Rational32.with {
+        $0.set(num: previous.scaleY.num, den: previous.scaleY.den)
+      },
+    ]
     let values = row.state.strings.enumerated().map { index, text in
       do {
         if index < 2 {

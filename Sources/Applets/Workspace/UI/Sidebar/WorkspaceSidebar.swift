@@ -210,11 +210,12 @@ public struct WorkspaceSidebar: View {
   private var deviceOptions: [WorkspaceAddDeviceOption] {
     deviceRegistry.audioInputDevices.map {
       .init(id: .coreAudioDevice(uid: $0.id), name: $0.name)
-    } + deviceRegistry.cameras.map {
-      .init(
-        id: .avCaptureDevice(uniqueID: $0.id), name: $0.name,
-        width: UInt32(exactly: $0.width) ?? 0, height: UInt32(exactly: $0.height) ?? 0)
     }
+      + deviceRegistry.cameras.map {
+        .init(
+          id: .avCaptureDevice(uniqueID: $0.id), name: $0.name,
+          width: UInt32(exactly: $0.width) ?? 0, height: UInt32(exactly: $0.height) ?? 0)
+      }
   }
 
   var canAddResource: Bool { document != nil && !stateService.isOutputActive }

@@ -79,7 +79,8 @@ extension AppUIComponentTestSuite {
       first.queueShutdownFailure("Recording failed")
       second.queueShutdownFailure("Recording failed")
       #expect(first.takeShutdownFailureForPresentation() == "Recording failed")
-      #expect(await WorkspaceWindowController.shutdownForApplicationTermination() == ["Recording failed"])
+      #expect(
+        await WorkspaceWindowController.shutdownForApplicationTermination() == ["Recording failed"])
       #expect(second.takeShutdownFailureForPresentation() == nil)
       #expect(await WorkspaceWindowController.shutdownForApplicationTermination().isEmpty)
     }

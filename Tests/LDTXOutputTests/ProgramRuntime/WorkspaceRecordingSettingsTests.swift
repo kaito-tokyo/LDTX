@@ -5,8 +5,8 @@ import Foundation
 import LDTXCapture
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceBundleFormat
 @testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceBundleFormat
 import Testing
 
 extension OutputTestSuite {
@@ -28,12 +28,16 @@ extension OutputTestSuite {
       let capture = WorkspaceCaptureSessionCoordinator()
       let updates = LowFrequencyUpdateRegistry()
       defer { updates.shutdown() }
-      let runtime = WorkspaceWindowRuntime(persistence: persistence, captureSessionCoordinator: capture)
+      let runtime = WorkspaceWindowRuntime(
+        persistence: persistence, captureSessionCoordinator: capture)
       runtime.installRuntimes(
-        landscape: ProgramRuntime(captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates),
-        portrait: ProgramRuntime(captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates))
+        landscape: ProgramRuntime(
+          captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates),
+        portrait: ProgramRuntime(
+          captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates))
       defer { runtime.shutdown() }
-      let session = WorkspaceV4RecordingSession(windowRuntime: runtime,
+      let session = WorkspaceV4RecordingSession(
+        windowRuntime: runtime,
         streamKeyConfigurations: { throw CocoaError(.userCancelled) })
       var changed = false
       session.stateDidChange = { state in

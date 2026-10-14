@@ -27,11 +27,15 @@ extension AppUIComponentTestSuite {
         at: CMTime(value: 1, timescale: 1), note: "Unrelated")
       try await saveRecordingTestDocument(document, to: url)
       #expect(document.markers.first?.fileName == staleName)
-      #expect(try String(contentsOf: directory.appendingPathComponent(diskName), encoding: .utf8) == "Local\n")
+      #expect(
+        try String(contentsOf: directory.appendingPathComponent(diskName), encoding: .utf8)
+          == "Local\n")
       try document.deleteMarker(try #require(document.markers.first))
       try await saveRecordingTestDocument(document, to: url)
-      #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent(diskName).path))
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Unrelated"])
+      #expect(
+        !FileManager.default.fileExists(atPath: directory.appendingPathComponent(diskName).path))
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Unrelated"])
     }
 
     @Test("Successful deletion is acknowledged and does not delete an external recreation")
@@ -91,7 +95,8 @@ extension AppUIComponentTestSuite {
       #expect(reopened.markers.map(\.note) == ["Saved"])
       try document.deleteMarker(try #require(document.markers.first))
       #expect(document.markers.isEmpty)
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Saved"])
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Saved"])
       try await saveRecordingTestDocument(document, to: url)
       #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
     }
@@ -123,7 +128,9 @@ extension AppUIComponentTestSuite {
       let document = try await openRecordingTestDocument(url)
       try document.createMarker(note: "Pending", at: .zero)
       try Data().write(to: url.appendingPathComponent("Markers"))
-      await #expect(throws: (any Error).self) { try await saveRecordingTestDocument(document, to: url) }
+      await #expect(throws: (any Error).self) {
+        try await saveRecordingTestDocument(document, to: url)
+      }
       #expect(document.markers.map(\.note) == ["Pending"])
       await #expect(throws: (any Error).self) {
         try await saveRecordingTestDocument(document, to: url.appendingPathComponent("Other"))
@@ -143,9 +150,12 @@ extension AppUIComponentTestSuite {
       try document.createMarker(note: "Staged", at: .zero)
       try FileManager.default.copyItem(at: url, to: staging)
       try await saveRecordingTestDocument(document, to: staging)
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: staging).markers().map(\.note) == ["Staged"])
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: staging).markers().map(\.note) == ["Staged"]
+      )
       #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
-      #expect(FileManager.default.fileExists(atPath: staging.appendingPathComponent("main.mp4").path))
+      #expect(
+        FileManager.default.fileExists(atPath: staging.appendingPathComponent("main.mp4").path))
     }
 
     @Test("Canonical collisions preserve the original filename")
@@ -160,7 +170,8 @@ extension AppUIComponentTestSuite {
       try document.createMarker(note: "New", at: CMTime(value: 1, timescale: 10000))
       #expect(document.markers.first?.fileName == name)
       try await saveRecordingTestDocument(document, to: url)
-      #expect(try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8) == "New\n")
+      #expect(
+        try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8) == "New\n")
     }
 
     @Test("External reload preserves edits made since the previous snapshot")
@@ -220,7 +231,8 @@ extension AppUIComponentTestSuite {
       try document.deleteMarker(try #require(document.markers.first), undoManager: undo)
       undo.endUndoGrouping()
       #expect(document.markers.isEmpty)
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Original"])
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Original"])
       undo.undo()
       #expect(document.markers.map(\.note) == ["Updated"])
       undo.undo()
@@ -234,7 +246,8 @@ extension AppUIComponentTestSuite {
       undo.undo()
       #expect(document.markers.map(\.note) == ["Updated"])
       try await saveRecordingTestDocument(document, to: url)
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Updated"])
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Updated"])
     }
 
     @Test("Saving a deletion preserves unrelated external markers")
@@ -248,7 +261,8 @@ extension AppUIComponentTestSuite {
       _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
         at: CMTime(seconds: 1, preferredTimescale: 1000), note: "External")
       try await saveRecordingTestDocument(document, to: url)
-      #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["External"])
+      #expect(
+        try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["External"])
     }
   }
 }

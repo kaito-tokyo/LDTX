@@ -161,12 +161,15 @@ public final class WorkspaceWindowController: NSWindowController,
         return workspace
       })
     if let workspace = document.workspaceSnapshot { persistence.adoptRuntimeWorkspace(workspace) }
-    self.init(stateService: stateService, persistenceCoordinator: persistence,
+    self.init(
+      stateService: stateService, persistenceCoordinator: persistence,
       appletData: appletData, document: document)
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
-      (document?.workspaceSnapshot, document?.fileURL,
-        document?.lastContentModificationDate, stateService?.isOutputActive)
+      (
+        document?.workspaceSnapshot, document?.fileURL,
+        document?.lastContentModificationDate, stateService?.isOutputActive
+      )
     }
     documentObservationTask = Task { @MainActor [weak self] in
       for await _ in changes {
@@ -265,7 +268,8 @@ public final class WorkspaceWindowController: NSWindowController,
     let content = WorkspaceViewController(
       document: document,
       appletData: appletData,
-      stateService: stateService, peakMeter: audioCoordinator.peakMeter, reportError: reportOperationError,
+      stateService: stateService, peakMeter: audioCoordinator.peakMeter,
+      reportError: reportOperationError,
       deviceRegistry: deviceRegistry,
       pairedPreview: pairedPreview,
       runtimeActions: {
@@ -368,14 +372,17 @@ public final class WorkspaceWindowController: NSWindowController,
     do {
       let workspace = try await Self.readPersistedWorkspace(at: url)
       guard shutdownTask == nil, !stateService.isOutputActive,
-        isCurrent() else { return }
+        isCurrent()
+      else { return }
       guard workspace != windowRuntime.workspace else { return }
       persistenceCoordinator.adoptRuntimeWorkspace(workspace)
       confirmedContentsDidChange()
     } catch { reportError(error) }
   }
 
-  @concurrent private static func readPersistedWorkspace(at url: URL) async throws -> WorkspaceV4Bundle {
+  @concurrent private static func readPersistedWorkspace(at url: URL) async throws
+    -> WorkspaceV4Bundle
+  {
     let coordinator = NSFileCoordinator()
     var coordinationError: NSError?
     var result: Result<WorkspaceV4Bundle, Error>?
@@ -420,9 +427,10 @@ public final class WorkspaceWindowController: NSWindowController,
     return failures
   }
   private static func updateRecordingDockBadge() {
-    NSApplication.shared.dockTile.badgeLabel = activeControllers.allObjects.contains {
-      $0.stateService.isOutputActive
-    } ? "REC" : nil
+    NSApplication.shared.dockTile.badgeLabel =
+      activeControllers.allObjects.contains {
+        $0.stateService.isOutputActive
+      } ? "REC" : nil
   }
 
   func attachWindow(_ window: NSWindow?) {
@@ -479,7 +487,8 @@ public final class WorkspaceWindowController: NSWindowController,
           NSLocalizedDescriptionKey: "Program selection is unavailable during an output transition."
         ])
     }
-    guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == internalID }),
+    guard
+      stateService.workspaceDefinition.programs.contains(where: { $0.internalID == internalID }),
       let url = document.fileURL ?? stateService.localStateURL
     else {
       throw NSError(
@@ -577,13 +586,15 @@ extension WorkspaceWindowController {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
-    guard windowRuntime.definition.visions.contains(where: {
-      $0.vision == .ldtxSceneDetectorVision(vision)
-    }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
+    guard
+      windowRuntime.definition.visions.contains(where: {
+        $0.vision == .ldtxSceneDetectorVision(vision)
+      }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
       url.standardizedFileURL == modelURL.standardizedFileURL
     else { throw CocoaError(.fileReadNoSuchFile) }
-    guard let service = await visionFeature.classifierService(
-      modelID: vision.modelInternalID, url: modelURL)
+    guard
+      let service = await visionFeature.classifierService(
+        modelID: vision.modelInternalID, url: modelURL)
     else { throw CocoaError(.fileReadNoSuchFile) }
     return try await windowRuntime.classify(vision: vision, service: service)
   }
@@ -615,7 +626,8 @@ extension WorkspaceWindowController {
       stateService?.visionFailureMessages[id] = error.localizedDescription
     }
     visionFeature.synchronize(
-      visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace ? windowRuntime.definition.visions : [],
+      visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace
+        ? windowRuntime.definition.visions : [],
       context: context)
   }
 

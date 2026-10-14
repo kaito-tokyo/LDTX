@@ -16,7 +16,8 @@ public final class RecordPlayerDocument: Document {
   public nonisolated static let typeName = RecordingPackageInfo.typeIdentifier
   public nonisolated static let readableContentTypes: [UTType] = {
     let primary = UTType(exportedAs: RecordingPackageInfo.typeIdentifier, conformingTo: .package)
-    let legacy = UTType(importedAs: RecordingPackageInfo.legacyTypeIdentifier, conformingTo: .package)
+    let legacy = UTType(
+      importedAs: RecordingPackageInfo.legacyTypeIdentifier, conformingTo: .package)
     return primary == legacy ? [primary] : [primary, legacy]
   }()
 
@@ -53,10 +54,16 @@ public final class RecordPlayerDocument: Document {
 
   isolated deinit { playbackModel?.stop() }
 
-  public nonisolated func reader(configuration: sending ReadConfiguration) -> sending Reader { Reader() }
-  public nonisolated func writer(configuration: sending WriteConfiguration) -> sending Writer { Writer() }
+  public nonisolated func reader(configuration: sending ReadConfiguration) -> sending Reader {
+    Reader()
+  }
+  public nonisolated func writer(configuration: sending WriteConfiguration) -> sending Writer {
+    Writer()
+  }
 
-  public func apply(snapshot: sending Reader.Snapshot, previous: sending Reader.Snapshot?) async throws {
+  public func apply(snapshot: sending Reader.Snapshot, previous: sending Reader.Snapshot?)
+    async throws
+  {
     if hasReadContents, let error = snapshot.markerReadError { throw error }
     if let previous {
       let old = Dictionary(uniqueKeysWithValues: previous.markers.map { ($0.fileName, $0) })
@@ -127,7 +134,8 @@ public final class RecordPlayerDocument: Document {
     }
     var updated = markers
     updated.remove(at: index)
-    replaceMarkers(updated, undoManager: undoManager, actionName: String(localized: "Delete Marker"))
+    replaceMarkers(
+      updated, undoManager: undoManager, actionName: String(localized: "Delete Marker"))
   }
 
   public struct Reader: DocumentReader {

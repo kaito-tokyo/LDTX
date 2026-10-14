@@ -49,7 +49,10 @@ extension WorkspaceBundleValidatorV4 {
       guard let value else { continue }
       guard let uuid = UUID(uuidString: value), uuid.uuid.6 >> 4 == 7,
         uuid.uuid.8 & 0xc0 == 0x80
-      else { collector.add(path, .invalidEnvelopeID); continue }
+      else {
+        collector.add(path, .invalidEnvelopeID)
+        continue
+      }
     }
     for (id, url) in workspace.visionModels.sorted(by: { $0.key < $1.key }) {
       let path = "visionModels[\(id)]"
@@ -92,7 +95,8 @@ extension WorkspaceBundleValidatorV4 {
 
   public static func validateRegionOfInterest(
     _ region: Ldtx_Workspace_V4_VisionRegionOfInterest,
-    inputSize: (width: UInt32, height: UInt32) = (1, 1))
+    inputSize: (width: UInt32, height: UInt32) = (1, 1)
+  )
     throws
   {
     var collector = Collector()
@@ -248,15 +252,19 @@ extension WorkspaceBundleValidatorV4 {
           }
       }
       let resources = entities()
-      let idCounts = Dictionary(grouping: resources.compactMap { $0.1 }, by: { $0 }).mapValues(\.count)
-      let nameCounts = Dictionary(grouping: resources.compactMap { $0.2 }, by: { $0 }).mapValues(\.count)
+      let idCounts = Dictionary(grouping: resources.compactMap { $0.1 }, by: { $0 }).mapValues(
+        \.count)
+      let nameCounts = Dictionary(grouping: resources.compactMap { $0.2 }, by: { $0 }).mapValues(
+        \.count)
       for (path, id, name, concrete) in resources {
         if !concrete {
           add(path, .missingConcreteDefinition, id: id)
           continue
         }
         if let id, id > 0 {
-          if idCounts[id, default: 0] > 1 { add(path + ".internal_id", .duplicateInternalID, id: id) }
+          if idCounts[id, default: 0] > 1 {
+            add(path + ".internal_id", .duplicateInternalID, id: id)
+          }
         } else {
           add(path + ".internal_id", .invalidInternalID, id: id)
         }

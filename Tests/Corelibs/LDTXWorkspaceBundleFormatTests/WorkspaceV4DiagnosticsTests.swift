@@ -129,17 +129,22 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
   func duplicateLocationsAndEnvelopes() {
     var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
     workspace.definition.programs = (0..<2).map { _ in
-      .with { $0.internalID = 7; $0.displayName = "Program" }
+      .with {
+        $0.internalID = 7
+        $0.displayName = "Program"
+      }
     }
     workspace.definitionExternalID = "invalid"
     workspace.preferencesExternalID = "invalid"
     let issues = WorkspaceBundleValidatorV4.validationIssues(in: workspace)
-    #expect(issues.filter { $0.error == .duplicateInternalID }.map(\.path) == [
-      "definition.programs[0].internal_id", "definition.programs[1].internal_id",
-    ])
+    #expect(
+      issues.filter { $0.error == .duplicateInternalID }.map(\.path) == [
+        "definition.programs[0].internal_id", "definition.programs[1].internal_id",
+      ])
     #expect(issues.filter { $0.error == .duplicateDisplayName("Program") }.count == 2)
-    #expect(issues.filter { $0.error == .invalidEnvelopeID }.map(\.path) == [
-      "definitionExternalID", "preferencesExternalID",
-    ])
+    #expect(
+      issues.filter { $0.error == .invalidEnvelopeID }.map(\.path) == [
+        "definitionExternalID", "preferencesExternalID",
+      ])
   }
 }

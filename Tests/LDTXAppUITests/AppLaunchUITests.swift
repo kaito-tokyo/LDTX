@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
 import LDTXRecordBundleFormat
+import XCTest
 
 @MainActor
 final class AppLaunchUITests: XCTestCase {
@@ -12,7 +12,8 @@ final class AppLaunchUITests: XCTestCase {
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
     defer { try? FileManager.default.removeItem(at: url) }
     try RecordingPackageInfo.data(
-      identifier: "documentgroup-ui-test", mainMediaFile: "main.mp4", audioTracks: [], formatVersion: 2
+      identifier: "documentgroup-ui-test", mainMediaFile: "main.mp4", audioTracks: [],
+      formatVersion: 2
     ).write(to: url.appendingPathComponent(RecordingPackageInfo.fileName))
     try Data().write(to: url.appendingPathComponent("main.mp4"))
     try Data().write(to: url.appendingPathComponent("manifest.mpd"))
@@ -64,8 +65,9 @@ final class AppLaunchUITests: XCTestCase {
     let window = app.windows["Scene Detector"]
     XCTAssertTrue(window.waitForExistence(timeout: 5))
     app.typeKey(",", modifierFlags: .command)
-    XCTAssertTrue(app.windows["Audio"].waitForExistence(timeout: 5)
-      || app.windows["Account"].exists || app.windows["Output"].exists)
+    XCTAssertTrue(
+      app.windows["Audio"].waitForExistence(timeout: 5)
+        || app.windows["Account"].exists || app.windows["Output"].exists)
   }
 
 }

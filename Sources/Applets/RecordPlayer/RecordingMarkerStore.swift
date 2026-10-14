@@ -128,10 +128,12 @@ public struct RecordingMarkerStore: Sendable {
     let canonical = try Self.fileName(for: time)
     do {
       for url in try FileManager.default.contentsOfDirectory(
-        at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) {
+        at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+      {
         guard url.pathExtension.lowercased() == "txt",
           let storedTime = Self.time(fromMarkerFileName: url.lastPathComponent),
-          try Self.fileName(for: storedTime) == canonical else { continue }
+          try Self.fileName(for: storedTime) == canonical
+        else { continue }
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else {
           throw RecordingMarkerError.invalidMarkerFile
@@ -164,7 +166,8 @@ public struct RecordingMarkerStore: Sendable {
     for name in deletedFileNames.sorted() {
       try Self.validateFileName(name)
       guard let time = Self.time(fromMarkerFileName: name),
-        !remaining.contains(try Self.fileName(for: time)) else { continue }
+        !remaining.contains(try Self.fileName(for: time))
+      else { continue }
       try deleteMarkerWithinCoordinatedAccess(fileName: name)
     }
     let directory = try markerDirectory(create: true)
