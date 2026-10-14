@@ -345,6 +345,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .video).count == 1)
       let fragmentedAudioTracks = try await fragmentedMainAsset.loadTracks(withMediaType: .audio)
       #expect(fragmentedAudioTracks.count == 1)
+      try assertSyntheticRecordingTimingClocks(Data(contentsOf: fragmentedMainURL))
       let audioTrack = try #require(fragmentedAudioTracks.first)
       let audioFormat = try #require(try await audioTrack.load(.formatDescriptions).first)
       var audioSpecificConfigSize = 0
@@ -406,7 +407,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         let afterElapsed = CMTimeSubtract(try #require(after.last), try #require(after.first))
         if mainClockDrift {
           let expected = CMTime(value: Int64(before.count - 1) * 1_024_100, timescale: 48_000_000)
-          #expect(abs(CMTimeSubtract(beforeElapsed, expected).seconds) <= 1e-9)
+          #expect(abs(CMTimeSubtract(beforeElapsed, expected).seconds) <= 1.0 / 48_000)
         }
         #expect(abs(CMTimeSubtract(beforeElapsed, afterElapsed).seconds) <= 1e-9)
       }
@@ -1194,6 +1195,33 @@ private func hasFinalizedMarker(in directory: URL) -> Bool {
   FileManager.default.fileExists(
     atPath: directory.appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path
   )
+}
+
+private func assertSyntheticRecordingTimingClocks(_ data: Data) throws {
+  let boxes = try MP4TimingBox.parse(data)
+  let movie = try #require(boxes.first { $0.type == MP4TimingBox.fourCC("moov") })
+  let tracks = try MP4TimingBox.parse(movie.payload)
+  let movieHeader = try #require(tracks.first { $0.type == MP4TimingBox.fourCC("mvhd") })
+  #expect(try MP4TimingBox.read(movieHeader.payload, at: 12, bytes: 4) == 48_000)
+  for track in tracks where track.type == MP4TimingBox.fourCC("trak") {
+    let trackChildren = try MP4TimingBox.parse(track.payload)
+    let media = try #require(
+      trackChildren.first { $0.type == MP4TimingBox.fourCC("mdia") })
+    let mediaChildren = try MP4TimingBox.parse(media.payload)
+    let handler = try #require(
+      mediaChildren.first { $0.type == MP4TimingBox.fourCC("hdlr") })
+    let mediaHeader = try #require(
+      mediaChildren.first { $0.type == MP4TimingBox.fourCC("mdhd") })
+    let version = try MP4TimingBox.read(mediaHeader.payload, at: 0, bytes: 1)
+    let timescaleOffset = version == 0 ? 12 : 20
+    let timescale = try MP4TimingBox.read(mediaHeader.payload, at: timescaleOffset, bytes: 4)
+    let handlerType = try MP4TimingBox.read(handler.payload, at: 8, bytes: 4)
+    if handlerType == UInt64(MP4TimingBox.fourCC("soun")) {
+      #expect(timescale == 48_000)
+    } else if handlerType == UInt64(MP4TimingBox.fourCC("vide")) {
+      #expect(timescale == 600)
+    }
+  }
 }
 
 private func finishSyntheticEncoder(_ encoder: H264VideoEncoder) async throws {

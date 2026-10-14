@@ -390,10 +390,11 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(packetTimes.count, 100)
       let elapsed = CMTimeSubtract(try unwrap(packetTimes.last), try unwrap(packetTimes.first))
       // Each AAC packet spans two 512-frame input buffers, each shifted by
-      // another 0.1 sample. Comparing elapsed time excludes priming/edit offsets.
+      // another 0.1 sample. MP4 packet timestamps are rounded to the audio
+      // sample clock, so elapsed time may differ by at most one output sample.
       let expected = CMTime(
         value: Int64(packetTimes.count - 1) * (1_024_000 + drift * 2), timescale: 48_000_000)
-      assertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000_000)
+      assertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000)
     }
 
     @Test func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
@@ -574,7 +575,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(output.values.count, 1)
     }
 
-    @Test func testMonoRecordingWithSubsampleStartFinalizes() async throws {
+    @Test func testMonoRecordingRoundsSubsampleStartToSampleClockAndDecodes() async throws {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -598,6 +599,20 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
       try await finish(writer)
       assertGreaterThan(output.values.count, 1)
+      let initialization = try unwrap(output.values.first { $0.kind == .initialization })
+      for box in try MP4TimingBox.parse(initialization.data)
+      where box.type == MP4TimingBox.fourCC("moov") {
+        let movieChildren = try MP4TimingBox.parse(box.payload)
+        let movieHeader = try unwrap(
+          movieChildren.first { $0.type == MP4TimingBox.fourCC("mvhd") })
+        assertEqual(try MP4TimingBox.read(movieHeader.payload, at: 12, bytes: 4), 48_000)
+        let audioTrack = try unwrap(movieChildren.first { $0.type == MP4TimingBox.fourCC("trak") })
+        let media = try unwrap(
+          MP4TimingBox.parse(audioTrack.payload).first { $0.type == MP4TimingBox.fourCC("mdia") })
+        let mediaHeader = try unwrap(
+          MP4TimingBox.parse(media.payload).first { $0.type == MP4TimingBox.fourCC("mdhd") })
+        assertEqual(try MP4TimingBox.read(mediaHeader.payload, at: 12, bytes: 4), 48_000)
+      }
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(
         "MonoSubsampleStart-\(UUID().uuidString).mp4")
       defer { try? FileManager.default.removeItem(at: url) }
@@ -617,7 +632,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           where traf.type == MP4TimingBox.fourCC("traf") {
             for tfdt in try MP4TimingBox.parse(traf.payload)
             where tfdt.type == MP4TimingBox.fourCC("tfdt") {
-              assertEqual(try MP4TimingBox.read(tfdt.payload, at: 4, bytes: 8), 20_000)
+              assertEqual(try MP4TimingBox.read(tfdt.payload, at: 4, bytes: 8), 1)
             }
           }
         }
@@ -634,11 +649,39 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       // Compressed buffers can start before the source signal because they
       // include AAC priming. Verify the actual decoded PCM placement instead.
       assertLessThanOrEqual(firstPacket.presentationTimeStamp, decoded.presentationTimeStamp)
-      // AVAssetReader renders PCM on the sample-rate grid. The fragment check
-      // above verifies sub-sample storage; package/remux tests verify placement.
+      // AVAssetReader renders PCM on the sample-rate grid. The small source
+      // offset rounds to the nearest AAC sample in the persisted media clock.
       assertGreaterThan(decoded.numSamples, 0)
       while pcmOutput.copyNextSampleBuffer() != nil {}
       assertEqual(pcmReader.status, .completed)
+
+      let clipURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "MonoSubsampleStartClip-\(UUID().uuidString).mp4")
+      defer { try? FileManager.default.removeItem(at: clipURL) }
+      let export = try unwrap(
+        AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough))
+      export.outputURL = clipURL
+      export.outputFileType = .mp4
+      export.timeRange = CMTimeRange(
+        start: CMTime(value: 1, timescale: 4), duration: CMTime(value: 1, timescale: 2))
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        export.exportAsynchronously { continuation.resume() }
+      }
+      assertEqual(export.status, .completed, "\(String(describing: export.error))")
+      let clip = AVURLAsset(url: clipURL)
+      let clipAudioTracks = try await clip.loadTracks(withMediaType: .audio)
+      let clipReader = try AVAssetReader(asset: clip)
+      let clipPCM = AVAssetReaderTrackOutput(
+        track: try unwrap(clipAudioTracks.first),
+        outputSettings: [AVFormatIDKey: kAudioFormatLinearPCM])
+      clipReader.add(clipPCM)
+      assertTrue(clipReader.startReading())
+      var decodedFrames = 0
+      while let sample = clipPCM.copyNextSampleBuffer() {
+        decodedFrames += CMSampleBufferGetNumSamples(sample)
+      }
+      assertEqual(clipReader.status, .completed)
+      assertGreaterThan(decodedFrames, 20_000)
     }
 
     @Test func testPCMWriterPreservesSmallPresentationStartOffset() async throws {

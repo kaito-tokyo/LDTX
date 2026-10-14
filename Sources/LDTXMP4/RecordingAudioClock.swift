@@ -27,7 +27,7 @@ public final class RecordingAudioClock {
     }
     guard let trackID else { throw MP4TimingBoxError.malformed() }
     let clock = RecordingAudioFragmentClock(
-      sourceTimescale: pcm.sampleRate, destinationTimescale: 1_000_000_000,
+      sourceTimescale: pcm.sampleRate, destinationTimescale: pcm.sampleRate,
       map: { [pcm] in try pcm.sourceTime(for: $0) }, trackID: trackID)
     switch segment.kind {
     case .initialization: result.data = try clock.initialization(segment.data)

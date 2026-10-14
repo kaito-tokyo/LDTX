@@ -43,10 +43,32 @@ struct RecordingAudioFragmentClock {
     guard sourceTimescale > 0, destinationTimescale > 0 else {
       throw MP4TimingBoxError.integerOverflow
     }
+    guard let trackID,
+      let movie = try MP4TimingBox.parse(data).first(where: {
+        $0.type == MP4TimingBox.fourCC("moov")
+      })
+    else { throw MP4TimingBoxError.malformed() }
+
+    let movieBoxes = try MP4TimingBox.parse(movie.payload)
+    guard let movieHeader = movieBoxes.first(where: {
+      $0.type == MP4TimingBox.fourCC("mvhd")
+    }) else { throw MP4TimingBoxError.malformed() }
+    let movieVersion = try fullBoxVersion(movieHeader.payload)
+    let oldMovieTimescale = try movieTimescale(movieHeader.payload, version: movieVersion)
+    let newMovieTimescale = try commonMovieTimescale(in: movieBoxes, audioTrackID: trackID)
+
     func rewrite(_ data: Data) throws -> Data {
+      try rewrite(data, trackID: nil, oldMovieTimescale: oldMovieTimescale,
+        newMovieTimescale: newMovieTimescale)
+    }
+    func rewrite(
+      _ data: Data, trackID currentTrackID: UInt32?, oldMovieTimescale: Int32,
+      newMovieTimescale: Int32
+    ) throws -> Data {
       try MP4TimingBox.parse(data).reduce(into: Data()) { result, original in
         var box = original
-        if box.type == MP4TimingBox.fourCC("trak"), let trackID {
+        var nestedTrackID = currentTrackID
+        if box.type == MP4TimingBox.fourCC("trak") {
           guard
             let header = try MP4TimingBox.parse(box.payload).first(where: {
               $0.type == MP4TimingBox.fourCC("tkhd")
@@ -54,30 +76,184 @@ struct RecordingAudioFragmentClock {
           else {
             throw MP4TimingBoxError.malformed()
           }
-          let id = try MP4TimingBox.read(
+          nestedTrackID = UInt32(try MP4TimingBox.read(
             header.payload, at: header.payload.first == 1 ? 20 : 12, bytes: 4)
-          if id != UInt64(trackID) {
-            result.append(try box.encoded())
-            return
-          }
+          )
         }
-        if box.type == MP4TimingBox.fourCC("mdhd") {
-          let version = try MP4TimingBox.read(box.payload, at: 0, bytes: 1)
-          guard version <= 1 else { throw MP4TimingBoxError.malformed() }
-          let offset = version == 0 ? 12 : 20
-          guard try MP4TimingBox.read(box.payload, at: offset, bytes: 4) == UInt64(sourceTimescale)
-          else {
-            throw MP4TimingBoxError.malformed()
-          }
-          try MP4TimingBox.write(
-            UInt64(destinationTimescale), to: &box.payload, at: offset, bytes: 4)
-        } else if ["moov", "trak", "mdia"].map(MP4TimingBox.fourCC).contains(box.type) {
-          box.payload = try rewrite(box.payload)
+        switch box.type {
+        case MP4TimingBox.fourCC("mvhd"):
+          try rewriteMovieHeader(
+            &box.payload, oldTimescale: oldMovieTimescale, newTimescale: newMovieTimescale)
+        case MP4TimingBox.fourCC("tkhd"):
+          try rewriteTrackHeaderDuration(
+            &box.payload, oldTimescale: oldMovieTimescale, newTimescale: newMovieTimescale)
+        case MP4TimingBox.fourCC("mdhd") where nestedTrackID == trackID:
+          try rewriteMediaHeader(&box.payload)
+        case MP4TimingBox.fourCC("elst"):
+          try rewriteEditList(
+            &box.payload, isAudioTrack: nestedTrackID == trackID,
+            oldMovieTimescale: oldMovieTimescale, newMovieTimescale: newMovieTimescale)
+        default:
+          break
+        }
+        if ["moov", "trak", "mdia", "edts"].map(MP4TimingBox.fourCC).contains(box.type) {
+          box.payload = try rewrite(
+            box.payload, trackID: nestedTrackID, oldMovieTimescale: oldMovieTimescale,
+            newMovieTimescale: newMovieTimescale)
         }
         result.append(try box.encoded())
       }
     }
     return try rewrite(data)
+  }
+
+  private func commonMovieTimescale(in movieBoxes: [MP4TimingBox], audioTrackID: UInt32)
+    throws -> Int32
+  {
+    var result: Int64 = 1
+    for track in movieBoxes where track.type == MP4TimingBox.fourCC("trak") {
+      let children = try MP4TimingBox.parse(track.payload)
+      guard let header = children.first(where: { $0.type == MP4TimingBox.fourCC("tkhd") }),
+        let media = children.first(where: { $0.type == MP4TimingBox.fourCC("mdia") })
+      else { throw MP4TimingBoxError.malformed() }
+      let headerPayload = header.payload
+      let id = UInt32(try MP4TimingBox.read(
+        headerPayload, at: headerPayload.first == 1 ? 20 : 12, bytes: 4))
+      guard let mediaHeader = try MP4TimingBox.parse(media.payload).first(where: {
+        $0.type == MP4TimingBox.fourCC("mdhd")
+      }) else { throw MP4TimingBoxError.malformed() }
+      let version = try fullBoxVersion(mediaHeader.payload)
+      let timescale: Int32
+      if id == audioTrackID {
+        timescale = destinationTimescale
+      } else {
+        let offset = version == 0 ? 12 : 20
+        let raw = try MP4TimingBox.read(mediaHeader.payload, at: offset, bytes: 4)
+        guard raw > 0, raw <= UInt64(Int32.max) else {
+          throw MP4TimingBoxError.integerOverflow
+        }
+        timescale = Int32(raw)
+      }
+      result = try leastCommonMultiple(result, Int64(timescale))
+    }
+    guard result > 0, result <= Int64(Int32.max) else {
+      throw MP4TimingBoxError.integerOverflow
+    }
+    return Int32(result)
+  }
+
+  private func leastCommonMultiple(_ lhs: Int64, _ rhs: Int64) throws -> Int64 {
+    guard lhs > 0, rhs > 0 else { throw MP4TimingBoxError.integerOverflow }
+    var a = lhs
+    var b = rhs
+    while b != 0 { (a, b) = (b, a % b) }
+    let (value, overflow) = (lhs / a).multipliedReportingOverflow(by: rhs)
+    guard !overflow else { throw MP4TimingBoxError.integerOverflow }
+    return value
+  }
+
+  private func fullBoxVersion(_ payload: Data) throws -> UInt64 {
+    let version = try MP4TimingBox.read(payload, at: 0, bytes: 1)
+    guard version <= 1 else { throw MP4TimingBoxError.malformed() }
+    return version
+  }
+
+  private func movieTimescale(_ payload: Data, version: UInt64) throws -> Int32 {
+    let offset = version == 0 ? 12 : 20
+    let value = try MP4TimingBox.read(payload, at: offset, bytes: 4)
+    guard value > 0, value <= UInt64(Int32.max) else {
+      throw MP4TimingBoxError.integerOverflow
+    }
+    return Int32(value)
+  }
+
+  private func rewriteMovieHeader(
+    _ payload: inout Data, oldTimescale: Int32, newTimescale: Int32
+  ) throws {
+    let version = try fullBoxVersion(payload)
+    let timescaleOffset = version == 0 ? 12 : 20
+    let durationOffset = version == 0 ? 16 : 24
+    let durationBytes = version == 0 ? 4 : 8
+    try rescaleUnsigned(
+      in: &payload, offset: durationOffset, bytes: durationBytes,
+      from: oldTimescale, to: newTimescale)
+    try MP4TimingBox.write(UInt64(newTimescale), to: &payload, at: timescaleOffset, bytes: 4)
+  }
+
+  private func rewriteTrackHeaderDuration(
+    _ payload: inout Data, oldTimescale: Int32, newTimescale: Int32
+  ) throws {
+    let version = try fullBoxVersion(payload)
+    let offset = version == 0 ? 20 : 28
+    let bytes = version == 0 ? 4 : 8
+    try rescaleUnsigned(
+      in: &payload, offset: offset, bytes: bytes,
+      from: oldTimescale, to: newTimescale)
+  }
+
+  private func rewriteMediaHeader(_ payload: inout Data) throws {
+    let version = try fullBoxVersion(payload)
+    let timescaleOffset = version == 0 ? 12 : 20
+    let durationOffset = version == 0 ? 16 : 24
+    let durationBytes = version == 0 ? 4 : 8
+    let oldTimescale = try MP4TimingBox.read(payload, at: timescaleOffset, bytes: 4)
+    guard oldTimescale == UInt64(sourceTimescale) else {
+      throw MP4TimingBoxError.malformed()
+    }
+    try rescaleUnsigned(
+      in: &payload, offset: durationOffset, bytes: durationBytes,
+      from: sourceTimescale, to: destinationTimescale)
+    try MP4TimingBox.write(
+      UInt64(destinationTimescale), to: &payload, at: timescaleOffset, bytes: 4)
+  }
+
+  private func rewriteEditList(
+    _ payload: inout Data, isAudioTrack: Bool, oldMovieTimescale: Int32,
+    newMovieTimescale: Int32
+  ) throws {
+    let version = try fullBoxVersion(payload)
+    let count = try MP4TimingBox.read(payload, at: 4, bytes: 4)
+    let entrySize = version == 0 ? 12 : 20
+    guard count <= 1_000_000, payload.count == 8 + Int(count) * entrySize else {
+      throw MP4TimingBoxError.malformed()
+    }
+    let durationBytes = version == 0 ? 4 : 8
+    let mediaTimeBytes = durationBytes
+    for index in 0..<Int(count) {
+      let offset = 8 + index * entrySize
+      try rescaleUnsigned(
+        in: &payload, offset: offset, bytes: durationBytes,
+        from: oldMovieTimescale, to: newMovieTimescale)
+      guard isAudioTrack else { continue }
+      let mediaOffset = offset + durationBytes
+      let raw = try MP4TimingBox.read(payload, at: mediaOffset, bytes: mediaTimeBytes)
+      let mediaTime = version == 0
+        ? Int64(Int32(bitPattern: UInt32(raw))) : Int64(bitPattern: raw)
+      guard mediaTime >= 0 else { continue }  // -1 denotes an empty edit.
+      let converted = CMTimeConvertScale(
+        CMTime(value: mediaTime, timescale: sourceTimescale),
+        timescale: destinationTimescale, method: .roundHalfAwayFromZero)
+      guard converted.isNumeric, converted.value >= 0 else {
+        throw MP4TimingBoxError.integerOverflow
+      }
+      try MP4TimingBox.write(
+        UInt64(converted.value), to: &payload, at: mediaOffset, bytes: mediaTimeBytes)
+    }
+  }
+
+  private func rescaleUnsigned(
+    in payload: inout Data, offset: Int, bytes: Int, from source: Int32, to destination: Int32
+  ) throws {
+    let value = try MP4TimingBox.read(payload, at: offset, bytes: bytes)
+    guard value <= UInt64(Int64.max) else { throw MP4TimingBoxError.integerOverflow }
+    let converted = CMTimeConvertScale(
+      CMTime(value: Int64(value), timescale: source), timescale: destination,
+      method: .roundHalfAwayFromZero)
+    guard converted.isNumeric, converted.value >= 0 else {
+      throw MP4TimingBoxError.integerOverflow
+    }
+    try MP4TimingBox.write(
+      UInt64(converted.value), to: &payload, at: offset, bytes: bytes)
   }
 
   func fragment(_ data: Data) throws -> Data {
