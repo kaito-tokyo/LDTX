@@ -431,7 +431,9 @@ extension WorkspaceBundleValidatorV4 {
       for (id, gain) in preferences.audioChannelGainsDecibels.sorted(by: { $0.key < $1.key }) {
         let p = "preferences.audio_channel_gains_decibels[\(id)]"
         if !audio.contains(id) { add(p, .missingAudioInputDevice(id), id: id) }
-        _ = rational(gain, path: p, id: id)
+        if rational(gain, path: p, id: id), !(-80...20).contains(gain.double) {
+          add(p, .invalidAudioChannelGain, id: id)
+        }
       }
       for (canvas, values) in [
         ("Landscape", preferences.landscapeProgramPreferences),
@@ -518,6 +520,7 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case unsupportedVisionInput
   case invalidVisionInputSize
   case invalidMasterVolume
+  case invalidAudioChannelGain
   case invalidMinimumTextHeight
   case unsupportedOutputProfile(String)
   case unsupportedFrameRate(UInt32)
@@ -553,6 +556,7 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .missingVisionVideoComponent: "Vision must reference a Video Component."
     case .unsupportedVisionInput: "The Video Component cannot be used as a Vision input."
     case .invalidMasterVolume: "Master volume must be between -80 and 20 dB."
+    case .invalidAudioChannelGain: "Audio channel gain must be between -80 and 20 dB."
     case .invalidVisionInputSize: "The Vision input must define a positive image width and height."
     case .invalidVisionInterval: "Vision intervals must be finite and at least 0.1 seconds."
     case .invalidVisionRegionOfInterest:

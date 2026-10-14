@@ -339,34 +339,7 @@ public final class WorkspaceWindowController: NSWindowController,
     if case .failed(let message) = recordingSession.state {
       stateService.outputFailureMessage = message
     }
-    let ids = Set(
-      windowRuntime.definition.visions.compactMap {
-        $0.internalID
-      })
-    stateService.visionResults = stateService.visionResults.filter { ids.contains($0.key) }
-    stateService.visionFailureMessages = stateService.visionFailureMessages.filter {
-      ids.contains($0.key)
-    }
-    var context = windowRuntime.visionFeatureContext
-    context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
-    context.reportModelPrepared = { [weak stateService] _ in
-      stateService?.modelPreparationGeneration &+= 1
-    }
-    let reportResult = context.reportResult
-    let reportFailure = context.reportFailure
-    context.reportResult = { [weak stateService] id, output in
-      reportResult(id, output)
-      stateService?.visionResults[id] = output
-      stateService?.visionFailureMessages.removeValue(forKey: id)
-    }
-    context.reportFailure = { [weak stateService] id, error in
-      reportFailure(id, error)
-      stateService?.visionResults.removeValue(forKey: id)
-      stateService?.visionFailureMessages[id] = error.localizedDescription
-    }
-    visionFeature.synchronize(
-      visions: windowRuntime.persistenceCoordinator.hasPersistedWorkspace ? windowRuntime.definition.visions : [],
-      context: context)
+    synchronizeVision()
     Self.activeControllers.add(self)
   }
 
@@ -626,6 +599,9 @@ extension WorkspaceWindowController {
     }
     var context = windowRuntime.visionFeatureContext
     context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
+    context.reportModelPrepared = { [weak stateService] _ in
+      stateService?.modelPreparationGeneration &+= 1
+    }
     let reportResult = context.reportResult
     let reportFailure = context.reportFailure
     context.reportResult = { [weak stateService] id, output in

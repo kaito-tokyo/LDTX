@@ -8,6 +8,31 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func channelGainsUseTheSupportedDecibelRange() throws {
+    let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+      $0.displayName = "Test"
+      $0.audioDevices = [.with {
+        $0.internalID = 1
+        $0.displayName = "Microphone"
+      }]
+    }
+    var bundle = WorkspaceV4Bundle(definition: definition, preferences: .init())
+    for (numerator, valid): (Int32, Bool) in [(-801, false), (-800, true),
+      (0, true), (200, true), (201, false), (1000, false)] {
+      bundle.preferences.audioChannelGainsDecibels[1, default: .init()].set(num: numerator, den: 10)
+      let bytes = try bundle.preferences.serializedData()
+      let issues = WorkspaceBundleValidatorV4.validationIssues(in: bundle)
+      #expect(issues.contains { $0.error == .invalidAudioChannelGain } == !valid)
+      if !valid {
+        #expect(issues.contains {
+          $0.error == .invalidAudioChannelGain
+            && $0.path == "preferences.audio_channel_gains_decibels[1]"
+        })
+      }
+      #expect(try bundle.preferences.serializedData() == bytes)
+    }
+  }
+
   @Test func roiDefaultsUseInputPixelsWithoutMutatingStoredPresence() throws {
     var roi = Ldtx_Workspace_V4_VisionRegionOfInterest()
     let full = try roi.resolved(inputSize: (1920, 1080))
