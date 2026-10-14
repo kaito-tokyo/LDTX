@@ -20,6 +20,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
 import Observation
+import Synchronization
 import UniformTypeIdentifiers
 
 private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
@@ -28,6 +29,10 @@ private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
   var errorDescription: String? {
     "Microphone access was not granted."
   }
+}
+
+private final class VisionArchiveFailure: Sendable {
+  let error = Mutex<(any Error)?>(nil)
 }
 
 /// Owns recording and streaming for one Version 4 Workspace Output.
@@ -45,6 +50,7 @@ public final class WorkspaceV4RecordingSession {
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue: DispatchQueue
+  @ObservationIgnored private let visionArchiveFailure = VisionArchiveFailure()
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
@@ -169,12 +175,9 @@ public final class WorkspaceV4RecordingSession {
           guard let recordService else { return }
           let timelineMilliseconds = recordService.recordingTimelineMilliseconds()
           let packageDirectory = recordService.packageDirectory
-          self.visionArchiveQueue.async {
-            Self.archiveVisionResult(
-              internalID: internalID, image: image, output: output,
-              timelineMilliseconds: timelineMilliseconds,
-              packageDirectory: packageDirectory)
-          }
+          self.enqueueVisionArchive(
+            internalID: internalID, image: image, output: output,
+            timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
         }
         windowRuntime.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
         windowRuntime.visionArchivePackageURL = recordService.packageDirectory
@@ -274,6 +277,12 @@ public final class WorkspaceV4RecordingSession {
     await unsubscribeAndDrain()
     await withCheckedContinuation { continuation in
       visionArchiveQueue.async { continuation.resume() }
+    }
+    if let error = visionArchiveFailure.error.withLock({ error in
+      defer { error = nil }
+      return error
+    }) {
+      terminalFailureMessage = error.localizedDescription
     }
     if let recordService {
       await finalize(recordService)
@@ -512,30 +521,47 @@ public final class WorkspaceV4RecordingSession {
     portraitHub = nil
   }
 
-  private nonisolated static func archiveVisionResult(
+  func enqueueVisionArchive(
     internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
     packageDirectory: URL
   ) {
+    visionArchiveQueue.async { [visionArchiveFailure] in
+      do {
+        try Self.archiveVisionResult(
+          internalID: internalID, image: image, output: output,
+          timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
+      } catch {
+        visionArchiveFailure.error.withLock { if $0 == nil { $0 = error } }
+      }
+    }
+  }
+
+  private nonisolated static func archiveVisionResult(
+    internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
+    packageDirectory: URL
+  ) throws {
     let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let stem = "vision-\(internalID)-\(UInt64(Date().timeIntervalSince1970 * 1_000))"
     let imageURL = directory.appendingPathComponent("\(stem).jpg")
     let metadataURL = directory.appendingPathComponent("\(stem).json")
     let context = CIContext(options: [.cacheIntermediates: false])
-    if let cgImage = context.createCGImage(image, from: image.extent),
+    guard let cgImage = context.createCGImage(image, from: image.extent),
       let destination = CGImageDestinationCreateWithURL(
         imageURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
-    {
-      CGImageDestinationAddImage(destination, cgImage, nil)
-      _ = CGImageDestinationFinalize(destination)
+    else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    guard CGImageDestinationFinalize(destination) else {
+      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
     }
     var metadata: [String: String] = ["visionID": String(internalID), "output": output]
     if let timelineMilliseconds {
       metadata["recordingTimelineMilliseconds"] = String(timelineMilliseconds)
     }
-    if let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]) {
-      try? data.write(to: metadataURL, options: .atomic)
-    }
+    let data = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
+    try data.write(to: metadataURL, options: .atomic)
   }
 
   private var isFailed: Bool {

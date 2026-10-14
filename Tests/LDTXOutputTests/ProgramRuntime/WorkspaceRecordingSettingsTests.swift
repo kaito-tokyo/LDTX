@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreImage
 import Foundation
 import LDTXCapture
 import LDTXProgramRuntime
@@ -12,6 +13,29 @@ import Testing
 extension OutputTestSuite {
   @MainActor
   @Suite struct WorkspaceRecordingSettingsIntegrationTestSuite {
+    @Test func archiveWriteFailureIsReportedWhenStopping() async throws {
+      var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
+      let runtime = WorkspaceWindowRuntime(
+        persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+      defer { runtime.shutdown() }
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      try Data().write(to: url)
+      defer { try? FileManager.default.removeItem(at: url) }
+      let session = WorkspaceV4RecordingSession(windowRuntime: runtime)
+      session.state = .recording
+      session.enqueueVisionArchive(
+        internalID: 1, image: CIImage.empty(), output: "Result", timelineMilliseconds: 0,
+        packageDirectory: url)
+      await session.stop()
+      guard case .failed(let message) = session.state else {
+        Issue.record("Archive write failure was not reported")
+        return
+      }
+      #expect(!message.isEmpty)
+    }
+
     @Test func stopWaitsForQueuedVisionArchives() async {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(

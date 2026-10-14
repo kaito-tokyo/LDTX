@@ -65,19 +65,8 @@ public final class RecordPlayerDocument: Document {
     async throws
   {
     if hasReadContents, let error = snapshot.markerReadError { throw error }
-    if let previous {
-      let old = Dictionary(uniqueKeysWithValues: previous.markers.map { ($0.fileName, $0) })
-      let current = Dictionary(uniqueKeysWithValues: markers.map { ($0.fileName, $0) })
-      var incoming = Dictionary(uniqueKeysWithValues: snapshot.markers.map { ($0.fileName, $0) })
-      for name in Set(old.keys).union(current.keys) where old[name] != current[name] {
-        incoming[name] = current[name]
-      }
-      markers = incoming.values.sorted { CMTimeCompare($0.time, $1.time) < 0 }
-    } else {
-      markers = snapshot.markers
-      markerDeletions.removeAll()
-    }
-    for marker in markers { markerDeletions.removeValue(forKey: marker.fileName) }
+    markers = snapshot.markers
+    markerDeletions.removeAll()
     initialURL = snapshot.url
     markerReadError = snapshot.markerReadError
     hasReadContents = true

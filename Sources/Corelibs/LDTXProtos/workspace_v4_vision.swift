@@ -10,13 +10,10 @@ extension Ldtx_Workspace_V4_VisionRegionOfInterest {
       _ value: Value, numerator: UInt32, denominator: UInt32
     ) throws -> Value {
       var result = value
-      if !result.hasNum {
-        guard let num = Int32(exactly: numerator) else {
-          throw Rational32EncodingError.unrepresentableDecimal
-        }
-        result.num = num
+      guard let num = value.hasNum ? value.num : Int32(exactly: numerator) else {
+        throw Rational32EncodingError.unrepresentableDecimal
       }
-      if !result.hasDen { result.den = denominator }
+      result.set(num: num, den: value.hasDen ? value.den : denominator)
       return result
     }
     var result = self

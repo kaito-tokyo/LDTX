@@ -15,6 +15,19 @@ import Vision
 
 @Suite("Scene Detector", .serialized)
 struct SceneDetectorIntegrationTestSuite {
+  @Test func preparationRejectsFeatureExtractorModel() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appendingPathComponent("Features.mlpackage")
+    try ImageFeaturePrint(revision: 2).export(to: url)
+    let compiled = try await MLModel.compileModel(at: url)
+    defer { try? FileManager.default.removeItem(at: compiled) }
+    #expect(throws: (any Error).self) {
+      try VisionImageClassifierService(model: MLModel(contentsOf: compiled))
+    }
+  }
+
   @Test(
     "Archives only frames acquired during the same recording",
     arguments: [

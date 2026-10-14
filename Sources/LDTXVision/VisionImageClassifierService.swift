@@ -53,6 +53,18 @@ public actor VisionImageClassifierService {
   }
 
   public init(model: sending MLModel) throws {
+    let description = model.modelDescription
+    guard description.inputDescriptionsByName.values.contains(where: { $0.type == .image }),
+      let label = description.predictedFeatureName,
+      let labelType = description.outputDescriptionsByName[label]?.type,
+      labelType == .string || labelType == .int64,
+      let probabilities = description.predictedProbabilitiesName,
+      description.outputDescriptionsByName[probabilities]?.type == .dictionary
+    else {
+      throw CocoaError(
+        .coderInvalidValue,
+        userInfo: [NSLocalizedDescriptionKey: "The model must be an image classifier."])
+    }
     self.modelInformation = ModelInformation(model: model)
     self.modelContainer = try CoreMLModelContainer(model: model)
   }

@@ -8,8 +8,10 @@ SPDX-License-Identifier: Apache-2.0
 LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
 `RecordPlayerScene`, `WorkspaceScene`, `SettingsScene`, and
 `VisionProgrammerScene`. App initialization configures authentication storage.
-DocumentGroup initializes and manages both Workspace and Record Player documents. No diagnostic sampling session is started by the App. No custom application delegate is
-installed. SwiftUI owns the application lifecycle, main menu, and Scene presentation.
+DocumentGroup initializes and manages both Workspace and Record Player documents.
+The App starts ApplicationDiagnostics from its scene-phase handler and installs
+WorkspaceTerminationDelegate through NSApplicationDelegateAdaptor to wait for output shutdown.
+SwiftUI owns the main menu and Scene presentation.
 RecordPlayerScene is the first Scene and declares a DocumentGroup using the
 macOS 27 Document API. WorkspaceScene also declares a DocumentGroup. SettingsScene supplies the standard Settings scene and VisionProgrammerScene supplies its training windows. Vision Programmer
 is suppressed as a default launch window in LDTXApp, but opens normally in the
@@ -228,8 +230,9 @@ subsequent canvas loads use the current document URL. DocumentGroup manages docu
 access, without a separate security-scope lifetime or application move observer.
 Marker identity is a package-relative filename, never an absolute URL. Save
 writes the in-memory snapshot at the URL supplied to the DocumentWriter without
-deleting unknown files. Reader snapshots synchronize external changes while preserving
-current edits. Access failures preserve
+deleting unknown files. Successful Reader snapshots always replace marker contents and discard
+unsaved additions, deletions, and note edits, including during the standard Revert operation.
+Access failures preserve
 pending marker edits and are reported through the existing error paths.
 
 RecordPlayerDocument is observable and is the sole owner of marker contents.

@@ -190,18 +190,26 @@ extension AppUIComponentTestSuite {
         try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8) == "New\n")
     }
 
-    @Test("External reload preserves edits made since the previous snapshot")
-    func mergeReloadWithPendingEdits() async throws {
+    @Test("Reload discards all pending marker edits and deletion tokens")
+    func reloadDiscardsPendingEdits() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
+      let store = RecordingMarkerStore(recordingDirectoryURL: url)
+      _ = try store.createMarker(at: .zero, note: "Saved note")
+      _ = try store.createMarker(
+        at: CMTime(seconds: 1, preferredTimescale: 1000), note: "Saved marker")
       let previous = try await readRecordingTestSnapshot(url)
       let document = RecordPlayerDocument(fileURL: url)
       try await document.apply(snapshot: previous, previous: nil)
-      try document.createMarker(note: "Pending", at: .zero)
+      try document.createMarker(note: "Edited note", at: .zero)
+      try document.deleteMarker(try #require(document.markers.last))
+      try document.createMarker(note: "Pending", at: CMTime(seconds: 2, preferredTimescale: 1000))
       _ = try RecordingMarkerStore(recordingDirectoryURL: url).createMarker(
-        at: CMTime(seconds: 1, preferredTimescale: 1000), note: "External")
+        at: CMTime(seconds: 3, preferredTimescale: 1000), note: "External")
       try await document.apply(snapshot: readRecordingTestSnapshot(url), previous: previous)
-      #expect(document.markers.map(\.note) == ["Pending", "External"])
+      #expect(document.markers.map(\.note) == ["Saved note", "Saved marker", "External"])
+      try await saveRecordingTestDocument(document, to: url)
+      #expect(try store.markers().map(\.note) == ["Saved note", "Saved marker", "External"])
     }
 
     @Test("Failed deletion save preserves pending removal and can be undone")
