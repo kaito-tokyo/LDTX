@@ -35,9 +35,9 @@ final class AppLaunchUITests: XCTestCase {
       return
     }
     app.typeKey("g", modifierFlags: [.command, .shift])
-    // Navigate to the parent, then select the package explicitly. Go to Folder's
-    // asynchronous path completion must not determine which item Open receives.
-    app.typeText(url.deletingLastPathComponent().path + "/")
+    // Let Go to Folder select the exact package. Clicking its row can make XCUI
+    // try to scroll an off-screen Open panel on CI, where no hit point exists.
+    app.typeText(url.path)
     app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
     let package = app.windows.textFields.matching(
       NSPredicate(format: "value == %@", url.lastPathComponent)
@@ -46,7 +46,6 @@ final class AppLaunchUITests: XCTestCase {
       recordOpenFailure(app, message: "The recording package did not appear in the Open panel.")
       return
     }
-    package.click()
     guard
       XCTWaiter.wait(
         for: [
@@ -58,7 +57,7 @@ final class AppLaunchUITests: XCTestCase {
       recordOpenFailure(app, message: "The Open button did not become enabled for the recording.")
       return
     }
-    open.click()
+    app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
     guard open.waitForNonExistence(timeout: 10) else {
       recordOpenFailure(app, message: "The Open panel did not close after opening the recording.")
       return
