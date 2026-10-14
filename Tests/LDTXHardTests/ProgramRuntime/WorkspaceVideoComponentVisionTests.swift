@@ -95,6 +95,8 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
           wrapper.vfxSource = .with { source in
             source.internalID = id
             source.displayName = "Camera \(id)"
+            source.deviceWidth = 1280
+            source.deviceHeight = 720
             if id == 2 {
               source.effects = [
                 .with { $0.backgroundRemoval = .with { $0.model = .mediapipeLandscape } }
@@ -112,6 +114,9 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(failures.isEmpty)
     #expect(service.startCount == 1)
     _ = try #require(try service.emitVideo(frameIndex: 1))
+    let captured = try #require(capture.latestVisionFrame(forCameraID: "camera"))
+    #expect(CVPixelBufferGetWidth(captured.pixelBuffer) == 1920)
+    #expect(try runtime.visionInputSize(componentID: 1) == CGSize(width: 1280, height: 720))
     let rawID = try runtime.addOcrVision(displayName: "Raw OCR", videoComponentInternalID: 1)
     let effectID = try runtime.addOcrVision(displayName: "Effect OCR", videoComponentInternalID: 2)
     let context = runtime.visionFeatureContext
@@ -119,7 +124,12 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     let effect = try await readyFrame(
       runtime: runtime, vision: try #require(context.vision(effectID)))
     #expect(raw.image.extent == effect.image.extent)
-    #expect(raw.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
+    #expect(raw.image.extent == CGRect(x: 0, y: 0, width: 1280, height: 720))
+    var croppedVision = try #require(context.vision(rawID))
+    croppedVision.regionOfInterest.x.num = 640
+    croppedVision.regionOfInterest.width.num = 640
+    let cropped = try await readyFrame(runtime: runtime, vision: croppedVision)
+    #expect(cropped.image.extent == CGRect(x: 640, y: 0, width: 640, height: 720))
     // A zero-alpha effect produces black; the unprocessed synthetic pattern remains visible.
     #expect(try maximumLuma(raw.image) > 80)
     #expect(try maximumLuma(effect.image) < 5)

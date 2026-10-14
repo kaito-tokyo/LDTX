@@ -251,10 +251,13 @@ public final class WorkspaceWindowRuntime {
     case .vfxSource:
       guard case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[componentID]
       else { throw WorkspaceVisionFeatureError.vfxSourceHasNoPhysicalCamera }
-      guard let frame = captureSessionCoordinator.latestVisionFrame(forCameraID: cameraID)
+      guard captureSessionCoordinator.latestVisionFrame(forCameraID: cameraID) != nil
       else { throw WorkspaceVisionFeatureError.frameUnavailable }
-      width = CVPixelBufferGetWidth(frame.pixelBuffer)
-      height = CVPixelBufferGetHeight(frame.pixelBuffer)
+      guard let size = wrapper.renderingSize, size.width > 0, size.height > 0 else {
+        throw WorkspaceVisionFeatureError.frameUnavailable
+      }
+      width = Int(size.width)
+      height = Int(size.height)
     case .clock(let clock):
       guard clock.width.double.isFinite, clock.height.double.isFinite else {
         throw WorkspaceVisionFeatureError.frameUnavailable
