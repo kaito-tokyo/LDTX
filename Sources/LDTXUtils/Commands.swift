@@ -91,7 +91,6 @@ public struct WorkspaceCommand: ParsableCommand {
     @Option(help: "WorkspaceDefinitionV4 protobuf JSON to import.") var json: String?
     @Option(help: "WorkspacePreferencesV4 protobuf JSON to import with --json.")
     var preferencesJSON: String?
-    @Flag(help: "Replace an existing Workspace package at the destination.") var replace = false
 
     mutating func run() async throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
@@ -101,7 +100,7 @@ public struct WorkspaceCommand: ParsableCommand {
       let command = self
       try coordinateWorkspace(at: url, writing: true) { url in
         let createdPackageDirectory = !FileManager.default.fileExists(atPath: url.path)
-        guard command.replace || createdPackageDirectory else {
+        guard createdPackageDirectory else {
           throw ValidationError("Workspace already exists: \(url.path)")
         }
         do {

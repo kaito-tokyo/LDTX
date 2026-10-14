@@ -511,15 +511,37 @@ public final class WorkspaceWindowController: NSWindowController,
 
   public func startOutput() async throws {
     guard recordingSession.state.canStart else { return }
-    guard workspaceDocument?.fileURL != nil, persistenceCoordinator.hasPersistedWorkspace else {
+    try validateOutputWorkspace()
+    windowRuntime.updateRuntimes()
+    await visionFeature.prepareForOutput()
+    guard shutdownTask == nil, recordingSession.state.canStart else { return }
+    try validateOutputWorkspace()
+    await recordingSession.start()
+  }
+
+  func validateOutputWorkspace() throws {
+    guard let document = workspaceDocument, let url = document.fileURL,
+      let snapshot = document.runtimeWorkspace, persistenceCoordinator.hasPersistedWorkspace
+    else {
       throw NSError(
         domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 1,
         userInfo: [NSLocalizedDescriptionKey: "Save the Workspace before starting output."])
     }
-    windowRuntime.updateRuntimes()
-    await visionFeature.prepareForOutput()
-    guard shutdownTask == nil else { return }
-    await recordingSession.start()
+    let disk = try WorkspaceBundleReaderV4(at: url).read()
+    let runtime = windowRuntime.workspace
+    func matches(_ workspace: WorkspaceV4Bundle) -> Bool {
+      workspace.definition == disk.definition && workspace.preferences == disk.preferences
+        && workspace.outputSettings == disk.outputSettings
+        && Set(workspace.visionModels.keys) == Set(disk.visionModels.keys)
+    }
+    guard matches(snapshot), matches(runtime) else {
+      throw NSError(
+        domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 2,
+        userInfo: [
+          NSLocalizedDescriptionKey:
+            "The document, runtime, and saved Workspace must match before starting output. Wait for saving to finish or save the Workspace again."
+        ])
+    }
   }
 
   public func shutdown() async {

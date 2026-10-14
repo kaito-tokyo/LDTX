@@ -224,15 +224,18 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     }
     do {
       let frame: WorkspaceVisionAnalysisFrame
+      let recordingPackageURL: URL?
       let output: String
       if let ocr {
         frame = try await context.frameForVision(ocr)
+        recordingPackageURL = context.recordingPackageURL()
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
       } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
         guard let service = models[ModelKey(id: classifier.modelInternalID, url: url)] else {
           return
         }
         frame = try await frameProvider(classifier)
+        recordingPackageURL = context.recordingPackageURL()
         output = try await service.classify(image: frame.image)
       } else {
         return
@@ -240,7 +243,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       guard isCurrent() else { return }
       resultsByVisionInternalID[id] = output
       context.reportResult(id, output)
-      context.archiveResult?(id, frame.image, output)
+      if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
+        context.archiveResult?(id, frame.image, output)
+      }
     } catch {
       guard isCurrent() else { return }
       resultsByVisionInternalID.removeValue(forKey: id)

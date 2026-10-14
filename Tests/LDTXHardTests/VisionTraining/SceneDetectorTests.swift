@@ -15,6 +15,42 @@ import Vision
 
 @Suite("Scene Detector", .serialized)
 struct SceneDetectorIntegrationTestSuite {
+  @Test(
+    "Archives only frames acquired during the same recording",
+    arguments: [
+      (nil, "new", false), ("old", nil, false), ("old", "new", false),
+      ("same", "same", true),
+    ] as [(String?, String?, Bool)])
+  @MainActor
+  func archiveUsesFrameRecordingURL(initial: String?, final: String?, shouldArchive: Bool)
+    async throws
+  {
+    var recordingURL = initial.map { URL(fileURLWithPath: "/\($0).ldtxrecord") }
+    var continuation: CheckedContinuation<String, Never>?
+    let feature = WorkspaceV4VisionFeature(
+      scheduler: WorkspaceVisionScheduler(automaticTimer: false),
+      recognizeText: { _, _ in
+        await withCheckedContinuation { continuation = $0 }
+      })
+    let vision = Ldtx_Workspace_V4_OcrVision.with { $0.internalID = 1 }
+    var result: String?
+    var archives = 0
+    var context = WorkspaceV4VisionFeatureContext(
+      vision: { _ in vision },
+      frameForVision: { _ in WorkspaceVisionAnalysisFrame(image: CIImage.empty()) },
+      reportResult: { _, output in result = output },
+      reportFailure: { _, error in Issue.record(error) },
+      archiveResult: { _, _, _ in archives += 1 })
+    context.recordingPackageURL = { recordingURL }
+    feature.submit(visionInternalID: 1, context: context)
+    try await waitUntil { continuation != nil }
+    recordingURL = final.map { URL(fileURLWithPath: "/\($0).ldtxrecord") }
+    continuation?.resume(returning: "Result")
+    try await waitUntil { result != nil }
+    await feature.stop()
+    #expect(archives == (shouldArchive ? 1 : 0))
+  }
+
   @Test func cropAndScaleUsesCreatorDefinedMetadata() {
     let cases: [(String, ImageCropAndScaleAction)] = [
       ("centerCrop", .centerCrop), ("scaleFit", .scaleToFit), ("scaleFill", .scaleToFill),
@@ -170,6 +206,7 @@ struct SceneDetectorIntegrationTestSuite {
       reportFailure: { _, error in failures.append(error) },
       archiveResult: { id, _, _ in archived.append(id) })
     context.sceneDetector = { $0 == 5 ? classifier : nil }
+    context.recordingPackageURL = { URL(fileURLWithPath: "/test.ldtxrecord") }
     context.reportModelPrepared = { preparedModelIDs.append($0) }
     context.modelURL = { $0 == 7 ? modelURL : nil }
     context.frameForSceneDetector = { _ in

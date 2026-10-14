@@ -177,6 +177,7 @@ public final class WorkspaceV4RecordingSession {
           }
         }
         windowRuntime.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
+        windowRuntime.visionArchivePackageURL = recordService.packageDirectory
         service = recordService
       } else {
         service = nil
@@ -266,6 +267,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func finishStopping(pausing: Bool) async {
+    windowRuntime.visionArchivePackageURL = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
     if let activeSession { await stop(activeSession) }
@@ -494,6 +496,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func clearSessionReferences() {
+    windowRuntime.visionArchivePackageURL = nil
     sessionOutputSettings = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil

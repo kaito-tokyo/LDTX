@@ -43,6 +43,7 @@ public final class WorkspaceWindowRuntime {
   public private(set) var visionResults: [Int64: String] = [:]
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
+  var visionArchivePackageURL: URL?
 
   public init(
     persistence: WorkspaceV4PersistenceCoordinator,
@@ -231,6 +232,7 @@ public final class WorkspaceWindowRuntime {
       else { return nil }
       return vision
     }
+    context.recordingPackageURL = { [weak self] in self?.visionArchivePackageURL }
     context.videoComponents = definition.videoComponents
     context.reportPreparationRecovered = { [weak self] id in
       self?.visionFailureMessages.removeValue(forKey: id)

@@ -14,6 +14,52 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {
+    @Test("Output requires the document, runtime, and disk to agree")
+    func outputRejectsUnwrittenSnapshotAndUnreadableDisk() async throws {
+      let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString).appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = WorkspaceDocument()
+      try await saveWorkspaceDocument(document, to: url)
+      final class SavedDocumentContext: WorkspaceDocumentContext {
+        let fileURL: URL?
+        let document: WorkspaceDocument
+        var runtimeWorkspace: WorkspaceV4Bundle? { document.workspaceSnapshot }
+        init(url: URL, document: WorkspaceDocument) {
+          fileURL = url
+          self.document = document
+        }
+      }
+      let context = SavedDocumentContext(url: url, document: document)
+      let state = document.stateService
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { state.editingWorkspace },
+        replaceWorkspace: { state.replaceEditingWorkspace($0) }, url: url)
+      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      let controller = WorkspaceWindowController(
+        stateService: state, persistenceCoordinator: persistence,
+        appletData: WorkspaceAppletData(), document: context)
+      defer { document.close() }
+      try controller.validateOutputWorkspace()
+      var staleRuntime = try WorkspaceBundleReaderV4(at: url).read()
+      staleRuntime.definition.displayName = "Stale runtime"
+      persistence.adoptRuntimeWorkspace(staleRuntime)
+      await #expect(throws: (any Error).self) { try await controller.startOutput() }
+      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      document.stateService.workspaceDefinition.displayName = "Pending save"
+      _ = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
+      await #expect(throws: (any Error).self) { try await controller.startOutput() }
+      #expect(document.stateService.recordingState == .idle)
+      try await saveWorkspaceDocument(document, to: url)
+      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      try controller.validateOutputWorkspace()
+      try FileManager.default.removeItem(at: url)
+      await #expect(throws: (any Error).self) { try await controller.startOutput() }
+      #expect(document.stateService.recordingState == .idle)
+      await controller.shutdown()
+      await document.shutdown()
+    }
+
     @Test("Headless capture adopts Reader content once and retains later edits")
     func headlessReadThenSave() async throws {
       let document = WorkspaceDocument()
