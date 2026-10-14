@@ -114,19 +114,23 @@ compatibility is useful test coverage but does not define the package format.
 
 LDTX passes compressed video samples through without changing their payload.
 At recording start, one common session origin is subtracted from every track's
-PTS and valid DTS. This keeps all media timestamps close to zero while preserving
-the exact relative offsets between tracks. Audio capture is PCM and must be
-encoded for the MP4 recording.
-Captured PCM is normalized to the recording format and encoded separately from
-the MP4 muxer. A continuous sample-count clock is used internally by the AAC
-converter; frame-to-source-PTS anchors restore recording timing in the persisted
-audio fragments. Source-clock drift does not cause insertion or removal of PCM
-samples merely to satisfy the encoder's continuity checks. Missing input still
-produces silence. Persisted audio timing and manifest ticks have 1 ns resolution.
-MPD metadata describes the resulting normalized timelines. All Representations
-use a common presentation origin so that their relative starting offsets remain
-explicit in the DASH timeline. Optional protobuf metadata may retain the original
-host-clock origin when absolute capture diagnostics require it.
+PTS and valid DTS. Video keeps its native media clock. The AAC media clock uses
+the encoded audio sample rate, so AAC packet timestamps, packet durations, and
+AAC edit-list media times are expressed in audio sample units. The movie clock
+is the least common multiple of the media clocks in that Representation; this
+keeps video frame and audio sample boundaries exact in movie-time fields.
+
+Audio capture is PCM and must be encoded for the MP4 recording. Captured PCM is
+normalized to the recording format and encoded separately from the MP4 muxer. A
+continuous sample-count clock is used internally by the AAC converter;
+frame-to-source-PTS anchors retain the source timing for the DASH timeline.
+Source-clock drift does not cause insertion or removal of PCM samples merely to
+satisfy the encoder's continuity checks. MP4 AAC timestamps are rounded to the
+nearest audio sample; the DASH timeline retains the source timing at 1 ns
+resolution. Missing input still produces silence. All Representations use a
+common presentation origin so that their relative starting offsets remain
+explicit in the DASH timeline. Optional protobuf metadata may retain the
+original host-clock origin when absolute capture diagnostics require it.
 
 A multiplexed video/audio Representation may contain a `SupplementalProperty`
 with `schemeIdUri="urn:tokyo.kaito.ldtx:audio-presentation-start-ns"`. Its `value`
