@@ -16,6 +16,17 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1027: Create ML Image Classifier UI", .serialized)
   @MainActor
   struct UCT1027LdtxSceneDetectorVisionIntegrationTestSuite {
+    @Test func modelInformationUsesPersistedCopy() {
+      let source = URL(fileURLWithPath: "/missing/source.mlpackage")
+      let embedded = URL(fileURLWithPath: "/workspace/VisionModels/3/source.mlpackage")
+      var inspector = LdtxSceneDetectorVisionInspector(
+        videoComponents: [], inputSize: nil, vision: .constant(.init()),
+        modelURL: .constant(source), persistedModelURL: embedded)
+      #expect(inspector.modelInformationURL == embedded)
+      inspector.persistedModelURL = nil
+      #expect(inspector.modelInformationURL == source)
+    }
+
     @Test func classifierAdditionRejectsZeroSizedInput() throws {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       store.workspaceDefinition.videoComponents = [

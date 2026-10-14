@@ -165,6 +165,8 @@ public struct WorkspaceInspectorContainer: View {
           modelURL: Binding(
             get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
             set: { stateService.setVisionModelURL($0, for: internalID) }),
+          persistedModelURL: document?.runtimeWorkspace?.visionModels[
+            vision.wrappedValue.modelInternalID],
           inferenceResult: stateService.visionResults[internalID],
           inferenceFailure: stateService.visionFailureMessages[internalID],
           modelPreparationGeneration: stateService.modelPreparationGeneration

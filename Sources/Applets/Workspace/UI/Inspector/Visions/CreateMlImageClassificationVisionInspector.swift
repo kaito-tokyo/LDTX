@@ -11,6 +11,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   let inputSize: (width: UInt32, height: UInt32)?
   @Binding var vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision
   @Binding var modelURL: URL?
+  var persistedModelURL: URL? = nil
   var inferenceResult: String? = nil
   var inferenceFailure: String? = nil
   var modelPreparationGeneration: UInt64 = 0
@@ -18,6 +19,8 @@ struct LdtxSceneDetectorVisionInspector: View {
   @Environment(\.outputActive) var outputActive
   @State private var modelInformation: VisionImageClassifierService.ModelInformation?
   @State private var modelInformationFailure: String?
+
+  var modelInformationURL: URL? { persistedModelURL ?? modelURL }
 
   var body: some View {
     Form {
@@ -33,7 +36,7 @@ struct LdtxSceneDetectorVisionInspector: View {
         TriggerEditor(triggers: $vision.triggers)
       }
       .disabled(outputActive)
-      if modelURL != nil {
+      if modelInformationURL != nil {
         Section("Model Information") {
           if let modelInformation {
             LabeledContent(
@@ -73,23 +76,23 @@ struct LdtxSceneDetectorVisionInspector: View {
     .formStyle(.grouped)
     .task(
       id: ModelInformationRequest(
-        url: modelURL, noCompile: outputActive,
+        url: modelInformationURL, noCompile: outputActive,
         preparationGeneration: modelPreparationGeneration)
     ) {
       modelInformation = nil
       modelInformationFailure = nil
-      guard let url = modelURL else { return }
+      guard let url = modelInformationURL else { return }
       let noCompile = outputActive
       let generation = modelPreparationGeneration
       do {
         let information = try await VisionImageClassifierService.readModelInformation(
           at: url)
-        guard modelURL == url, outputActive == noCompile,
+        guard modelInformationURL == url, outputActive == noCompile,
           modelPreparationGeneration == generation
         else { return }
         modelInformation = information
       } catch {
-        guard modelURL == url, outputActive == noCompile,
+        guard modelInformationURL == url, outputActive == noCompile,
           modelPreparationGeneration == generation
         else { return }
         modelInformationFailure = error.localizedDescription
