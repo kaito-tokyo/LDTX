@@ -20,7 +20,7 @@ public struct WorkspaceBundleValidatorV4 {
   public func validate() throws -> String {
     let infoData = try Data(contentsOf: infoURL)
     guard
-      let info = try? PropertyListDecoder().decode(WorkspaceBundleInfoV4.self, from: infoData),
+      let info = try? WorkspaceBundleInfoV4(data: infoData),
       info.packageType == "BNDL",
       info.workspaceVersion == 4
     else {

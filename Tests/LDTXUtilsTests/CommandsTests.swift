@@ -16,6 +16,18 @@ import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)
 struct CommandsSystemTestSuite {
+  private struct Metadata: Encodable {
+    let packageType = "BNDL"
+    let workspaceVersion = 4
+    let workspaceBundleVersion = "4.0"
+
+    enum CodingKeys: String, CodingKey {
+      case packageType = "CFBundlePackageType"
+      case workspaceVersion = "LDTXWorkspaceVersion"
+      case workspaceBundleVersion = "LDTXWorkspaceBundleVersion"
+    }
+  }
+
   @Test("parses the Workspace command tree")
   func parsesWorkspaceCommands() throws {
     #expect(
@@ -220,15 +232,9 @@ struct CommandsSystemTestSuite {
       program.displayName = "Invalid"
       definition.programs = [program]
       try FileManager.default.createDirectory(at: invalid, withIntermediateDirectories: true)
-      let infoData = try PropertyListSerialization.data(
-        fromPropertyList: [
-          "CFBundlePackageType": "BNDL",
-          "LDTXWorkspaceVersion": 4,
-          "LDTXWorkspaceBundleVersion": "4.0",
-        ],
-        format: .xml,
-        options: 0
-      )
+      let encoder = PropertyListEncoder()
+      encoder.outputFormat = .xml
+      let infoData = try encoder.encode(Metadata())
       try infoData.write(to: invalid.appendingPathComponent("Info.plist"))
       var definitionEnvelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
       definitionEnvelope.externalIDAsUUID = try #require(

@@ -4,24 +4,31 @@
 
 import Foundation
 
-struct WorkspaceBundleInfoV4: Codable {
-  var packageType = "BNDL"
-  var workspaceVersion = 4
-  var workspaceBundleVersion = "4.0"
+// Production Info.plist IO is an exception to Codable property-list IO:
+// user-defined keys and values must remain intact. Tests may use Encoder/Decoder
+// models for their known fixtures and assertions.
+struct WorkspaceBundleInfoV4 {
+  var values: [String: Any] = [
+    "CFBundlePackageType": "BNDL",
+    "LDTXWorkspaceVersion": 4,
+    "LDTXWorkspaceBundleVersion": "4.0",
+  ]
+
+  var packageType: String? { values["CFBundlePackageType"] as? String }
+  var workspaceVersion: Int? { values["LDTXWorkspaceVersion"] as? Int }
+  var workspaceBundleVersion: String { values["LDTXWorkspaceBundleVersion"] as? String ?? "4.0" }
 
   init() {}
 
-  init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    packageType = try container.decode(String.self, forKey: .packageType)
-    workspaceVersion = try container.decode(Int.self, forKey: .workspaceVersion)
-    workspaceBundleVersion =
-      (try? container.decode(String.self, forKey: .workspaceBundleVersion)) ?? "4.0"
+  init(data: Data) throws {
+    guard
+      let values = try PropertyListSerialization.propertyList(
+        from: data, options: .init(), format: nil) as? [String: Any]
+    else { throw CocoaError(.fileReadCorruptFile) }
+    self.values = values
   }
 
-  enum CodingKeys: String, CodingKey {
-    case packageType = "CFBundlePackageType"
-    case workspaceVersion = "LDTXWorkspaceVersion"
-    case workspaceBundleVersion = "LDTXWorkspaceBundleVersion"
+  func encodedData() throws -> Data {
+    try PropertyListSerialization.data(fromPropertyList: values, format: .xml, options: 0)
   }
 }

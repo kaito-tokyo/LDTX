@@ -11,6 +11,35 @@ import Testing
 @MainActor
 @Suite
 struct WorkspaceAppletDataPropertyListUnitTestSuite {
+  private struct LegacyLocalState: Codable {
+    var state: WorkspaceLocalState
+    var physicalDeviceIDsByInputDeviceInternalID: [String: [String: [String: String]]]?
+
+    enum CodingKeys: String, CodingKey {
+      case physicalDeviceIDsByInputDeviceInternalID
+    }
+
+    init(state: WorkspaceLocalState) {
+      self.state = state
+    }
+
+    init(from decoder: any Decoder) throws {
+      state = try WorkspaceLocalState(from: decoder)
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      physicalDeviceIDsByInputDeviceInternalID = try container.decodeIfPresent(
+        [String: [String: [String: String]]].self,
+        forKey: .physicalDeviceIDsByInputDeviceInternalID)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+      try state.encode(to: encoder)
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encodeIfPresent(
+        physicalDeviceIDsByInputDeviceInternalID,
+        forKey: .physicalDeviceIDsByInputDeviceInternalID)
+    }
+  }
+
   @Test func transientLocalStateIsOnlyPersistedAfterSave() throws {
     let suite = UUID().uuidString
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -122,21 +151,16 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
       monitorAudioInputDeviceInternalIDs: [5],
       landscapeYouTubeLiveStreamID: "landscape", portraitYouTubeLiveStreamID: "portrait")
     let encoder = PropertyListEncoder()
-    let data = try encoder.encode(state)
-    var legacy = try #require(
-      PropertyListSerialization.propertyList(from: data, options: 0, format: nil) as? [String: Any]
-    )
-    legacy["physicalDeviceIDsByInputDeviceInternalID"] = [
+    encoder.outputFormat = .binary
+    var legacy = LegacyLocalState(state: state)
+    legacy.physicalDeviceIDsByInputDeviceInternalID = [
       "3": ["avCaptureDevice": ["uniqueID": "legacy-camera"]]
     ]
-    let oldData = try PropertyListSerialization.data(
-      fromPropertyList: legacy, format: .binary, options: 0)
+    let oldData = try encoder.encode(legacy)
     #expect(try PropertyListDecoder().decode(WorkspaceLocalState.self, from: oldData) == state)
     let newData = try encoder.encode(
       try PropertyListDecoder().decode(WorkspaceLocalState.self, from: oldData))
-    let new = try #require(
-      PropertyListSerialization.propertyList(from: newData, options: 0, format: nil)
-        as? [String: Any])
-    #expect(new["physicalDeviceIDsByInputDeviceInternalID"] == nil)
+    let new = try PropertyListDecoder().decode(LegacyLocalState.self, from: newData)
+    #expect(new.physicalDeviceIDsByInputDeviceInternalID == nil)
   }
 }

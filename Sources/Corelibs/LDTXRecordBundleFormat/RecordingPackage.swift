@@ -84,7 +84,7 @@ public struct RecordingPackage: Equatable, Sendable {
     let data = try Data(contentsOf: infoURL)
     let info: RecordingPackageInfoValue
     do {
-      info = try PropertyListDecoder().decode(RecordingPackageInfoValue.self, from: data)
+      info = try RecordingPackageInfoValue(data: data)
     } catch {
       throw RecordingPackageError.invalidInfoPropertyList
     }
@@ -372,18 +372,21 @@ private final class RecordingPackageEnumerationFailure: @unchecked Sendable {
   var path: String?
 }
 
-private struct RecordingPackageInfoValue: Decodable {
-  struct AudioTrack: Decodable {
+// Info.plist may contain user extensions, so production IO uses
+// PropertyListSerialization rather than a closed Codable schema. This value
+// projects only the fields needed for playback; it must not rewrite Info.plist.
+private struct RecordingPackageInfoValue {
+  struct AudioTrack {
     var identifier: String
     var name: String
     var mediaFile: String
     var playlist: String?
 
-    enum CodingKeys: String, CodingKey {
-      case identifier = "Identifier"
-      case name = "Name"
-      case mediaFile = "MediaFile"
-      case playlist = "Playlist"
+    init(values: [String: Any]) throws {
+      identifier = try RecordingPackageInfoValue.required("Identifier", in: values)
+      name = try RecordingPackageInfoValue.required("Name", in: values)
+      mediaFile = try RecordingPackageInfoValue.required("MediaFile", in: values)
+      playlist = try RecordingPackageInfoValue.optional("Playlist", in: values)
     }
   }
 
@@ -396,15 +399,32 @@ private struct RecordingPackageInfoValue: Decodable {
   var masterPlaylist: String?
   var audioTracks: [AudioTrack]
 
-  enum CodingKeys: String, CodingKey {
-    case formatVersion = "LDTXRecordingFormatVersion"
-    case identifier = "LDTXRecordingIdentifier"
-    case mainMediaFile = "LDTXRecordingMainMediaFile"
-    case landscapeMediaFile = "LDTXRecordingLandscapeMediaFile"
-    case portraitMediaFile = "LDTXRecordingPortraitMediaFile"
-    case mainPlaylist = "LDTXRecordingMainPlaylist"
-    case masterPlaylist = "LDTXRecordingMasterPlaylist"
-    case audioTracks = "LDTXRecordingAudioTracks"
+  init(data: Data) throws {
+    guard
+      let values = try PropertyListSerialization.propertyList(
+        from: data, options: .init(), format: nil) as? [String: Any]
+    else { throw RecordingPackageError.invalidInfoPropertyList }
+    formatVersion = try Self.required(RecordingPackageInfo.formatVersionKey, in: values)
+    identifier = try Self.required(RecordingPackageInfo.identifierKey, in: values)
+    mainMediaFile = try Self.optional(RecordingPackageInfo.mainMediaFileKey, in: values)
+    landscapeMediaFile = try Self.optional(RecordingPackageInfo.landscapeMediaFileKey, in: values)
+    portraitMediaFile = try Self.optional(RecordingPackageInfo.portraitMediaFileKey, in: values)
+    mainPlaylist = try Self.optional("LDTXRecordingMainPlaylist", in: values)
+    masterPlaylist = try Self.optional("LDTXRecordingMasterPlaylist", in: values)
+    let tracks: [[String: Any]] = try Self.required(RecordingPackageInfo.audioTracksKey, in: values)
+    audioTracks = try tracks.map { try AudioTrack(values: $0) }
+  }
+
+  private static func required<T>(_ key: String, in values: [String: Any]) throws -> T {
+    guard let value = values[key] as? T else {
+      throw RecordingPackageError.invalidInfoPropertyList
+    }
+    return value
+  }
+
+  private static func optional<T>(_ key: String, in values: [String: Any]) throws -> T? {
+    guard values[key] != nil else { return nil }
+    return try required(key, in: values)
   }
 }
 

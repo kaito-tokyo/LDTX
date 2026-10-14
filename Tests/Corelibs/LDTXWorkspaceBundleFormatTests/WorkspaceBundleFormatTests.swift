@@ -9,6 +9,24 @@ import Testing
 
 @Suite("Workspace bundle format")
 struct WorkspaceBundleFormatIntegrationTestSuite {
+  private struct Metadata<BundleVersion: Codable>: Codable {
+    var packageType = "BNDL"
+    var workspaceVersion = 4
+    var workspaceBundleVersion: BundleVersion?
+
+    enum CodingKeys: String, CodingKey {
+      case packageType = "CFBundlePackageType"
+      case workspaceVersion = "LDTXWorkspaceVersion"
+      case workspaceBundleVersion = "LDTXWorkspaceBundleVersion"
+    }
+  }
+
+  private func encodeMetadata<T: Codable>(_ metadata: Metadata<T>) throws -> Data {
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .xml
+    return try encoder.encode(metadata)
+  }
+
   @Test("Writer initialization creates XML Info.plist metadata")
   func writerInitializationCreatesXMLInfoPlist() throws {
     let rootURL = try makeTemporaryDirectory()
@@ -51,13 +69,10 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
 
     #expect(try reader.read() == workspace)
     let infoData = try Data(contentsOf: packageURL.appendingPathComponent("Info.plist"))
-    let info = try #require(
-      PropertyListSerialization.propertyList(
-        from: infoData, options: .init(), format: nil)
-        as? [String: Any])
-    #expect(info["CFBundlePackageType"] as? String == "BNDL")
-    #expect(info["LDTXWorkspaceVersion"] as? Int == 4)
-    #expect(info["LDTXWorkspaceBundleVersion"] as? String == "4.0")
+    let info = try PropertyListDecoder().decode(Metadata<String>.self, from: infoData)
+    #expect(info.packageType == "BNDL")
+    #expect(info.workspaceVersion == 4)
+    #expect(info.workspaceBundleVersion == "4.0")
     #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
     let selectedReader = makeWorkspaceBundleReader(at: packageURL)
     guard case .v4(let v4Reader) = selectedReader else {
@@ -137,15 +152,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: rootURL) }
     let packageURL = rootURL.appendingPathComponent("Workspace.ldtxworkspace", isDirectory: true)
     try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    let infoData = try PropertyListSerialization.data(
-      fromPropertyList: [
-        "CFBundlePackageType": "APPL",
-        "LDTXWorkspaceVersion": 4,
-        "LDTXWorkspaceBundleVersion": "4.0",
-      ],
-      format: .xml,
-      options: 0
-    )
+    let infoData = try encodeMetadata(
+      Metadata(packageType: "APPL", workspaceBundleVersion: "4.0"))
     try infoData.write(to: packageURL.appendingPathComponent("Info.plist"))
 
     guard case .v4(let reader) = makeWorkspaceBundleReader(at: packageURL) else {
@@ -177,9 +185,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let workspace = makeWorkspace()
     var writer = try #require(WorkspaceBundleWriterV4(at: packageURL))
     try writeWorkspace(workspace, using: &writer)
-    var info: [String: Any] = ["CFBundlePackageType": "BNDL", "LDTXWorkspaceVersion": 4]
-    if includeValue { info["LDTXWorkspaceBundleVersion"] = 4.0 }
-    let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+    let info = Metadata<Double>(workspaceBundleVersion: includeValue ? 4.0 : nil)
+    let data = try encodeMetadata(info)
     try data.write(to: packageURL.appendingPathComponent("Info.plist"))
     #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
@@ -567,15 +574,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     version: Int = 4,
     bundleVersion: String = "4.0"
   ) throws {
-    let data = try PropertyListSerialization.data(
-      fromPropertyList: [
-        "CFBundlePackageType": "BNDL",
-        "LDTXWorkspaceVersion": version,
-        "LDTXWorkspaceBundleVersion": bundleVersion,
-      ],
-      format: .xml,
-      options: 0
-    )
+    let data = try encodeMetadata(
+      Metadata(workspaceVersion: version, workspaceBundleVersion: bundleVersion))
     try data.write(to: bundleURL.appendingPathComponent("Info.plist"))
   }
 

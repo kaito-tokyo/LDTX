@@ -16,6 +16,9 @@ public struct RecordingPackageInfoAudioTrack: Equatable, Sendable {
   }
 }
 
+// Production Info.plist IO is an exception to Codable property-list IO because
+// users may add arbitrary keys and values. Preserve extensions when updating an
+// existing dictionary. Tests may use Encoder/Decoder for known metadata fixtures.
 public enum RecordingPackageInfo {
   public static let fileName = "Info.plist"
   public static let currentFormatVersion = 3

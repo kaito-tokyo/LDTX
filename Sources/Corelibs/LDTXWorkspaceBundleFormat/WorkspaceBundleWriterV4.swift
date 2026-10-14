@@ -105,9 +105,7 @@ public struct WorkspaceBundleWriterV4 {
     try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
     let infoURL = url.appendingPathComponent("Info.plist")
     if !fileManager.fileExists(atPath: infoURL.path) {
-      let encoder = PropertyListEncoder()
-      encoder.outputFormat = .xml
-      try encoder.encode(WorkspaceBundleInfoV4()).write(to: infoURL, options: .atomic)
+      try WorkspaceBundleInfoV4().encodedData().write(to: infoURL, options: .atomic)
     }
   }
 
