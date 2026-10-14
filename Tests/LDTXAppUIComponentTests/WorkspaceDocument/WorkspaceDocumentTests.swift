@@ -40,7 +40,7 @@ extension AppUIComponentTestSuite {
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
       defer { document.close() }
-      try controller.validateOutputWorkspace()
+      try await controller.validateOutputWorkspace()
       let baseline = try WorkspaceBundleReaderV4(at: url).read()
       for field in [
         \WorkspaceV4Bundle.definitionExternalID, \WorkspaceV4Bundle.preferencesExternalID,
@@ -72,7 +72,7 @@ extension AppUIComponentTestSuite {
       #expect(document.stateService.recordingState == .idle)
       try await saveWorkspaceDocument(document, to: url)
       persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
-      try controller.validateOutputWorkspace()
+      try await controller.validateOutputWorkspace()
       try FileManager.default.removeItem(at: url)
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
       #expect(document.stateService.recordingState == .idle)

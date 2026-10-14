@@ -513,23 +513,25 @@ public final class WorkspaceWindowController: NSWindowController,
 
   public func startOutput() async throws {
     guard recordingSession.state.canStart else { return }
-    try validateOutputWorkspace()
+    try await validateOutputWorkspace()
+    guard shutdownTask == nil, recordingSession.state.canStart else { return }
     windowRuntime.updateRuntimes()
     await visionFeature.prepareForOutput()
     guard shutdownTask == nil, recordingSession.state.canStart else { return }
-    try validateOutputWorkspace()
+    try await validateOutputWorkspace()
+    guard shutdownTask == nil, recordingSession.state.canStart else { return }
     await recordingSession.start()
   }
 
-  func validateOutputWorkspace() throws {
+  func validateOutputWorkspace() async throws {
     guard let document = workspaceDocument, let url = document.fileURL,
-      let snapshot = document.runtimeWorkspace, persistenceCoordinator.hasPersistedWorkspace
+      document.runtimeWorkspace != nil, persistenceCoordinator.hasPersistedWorkspace
     else {
       throw NSError(
         domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 1,
         userInfo: [NSLocalizedDescriptionKey: "Save the Workspace before starting output."])
     }
-    let disk = try WorkspaceBundleReaderV4(at: url).read()
+    let disk = try await Self.readPersistedWorkspace(at: url)
     let runtime = windowRuntime.workspace
     func matches(_ workspace: WorkspaceV4Bundle) -> Bool {
       workspace.definition == disk.definition && workspace.preferences == disk.preferences
@@ -539,7 +541,9 @@ public final class WorkspaceWindowController: NSWindowController,
         && workspace.outputSettingsExternalID == disk.outputSettingsExternalID
         && Set(workspace.visionModels.keys) == Set(disk.visionModels.keys)
     }
-    guard matches(snapshot), matches(runtime) else {
+    guard document.fileURL == url, let snapshot = document.runtimeWorkspace,
+      matches(snapshot), matches(runtime)
+    else {
       throw NSError(
         domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 2,
         userInfo: [

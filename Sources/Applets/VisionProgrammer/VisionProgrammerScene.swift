@@ -178,7 +178,7 @@ public struct VisionProgrammerScene: Scene {
       let url = try await trainer.fit(
         to: directory.appendingPathComponent("SceneDetector.mlpackage", isDirectory: true),
         eventHandler: eventHandler)
-      modelFile = try ModelFile(url: url)
+      modelFile = try await ModelFile.load(at: url)
       extraction.completedUnitCount = extraction.totalUnitCount
       if fitting.totalUnitCount <= 0 { fitting.totalUnitCount = 1 }
       fitting.completedUnitCount = fitting.totalUnitCount
@@ -224,6 +224,10 @@ public struct VisionProgrammerScene: Scene {
     static let contentType = UTType(filenameExtension: "mlpackage", conformingTo: .package)!
     static var readableContentTypes: [UTType] { [contentType] }
     let wrapper: FileWrapper
+
+    @concurrent static func load(at url: URL) async throws -> sending ModelFile {
+      try ModelFile(url: url)
+    }
 
     init(url: URL) throws {
       wrapper = try FileWrapper(url: url, options: .immediate)
