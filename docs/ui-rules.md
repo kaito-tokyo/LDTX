@@ -24,8 +24,12 @@ Implementation, tests, and reviews should follow these rules alongside the
   sheet may preselect the saved assignment when its candidate is available;
   opening the sheet or discovering candidates must not itself change the saved
   assignment.
-- The Program list is a static set of candidates defined by the authoritative
-  Workspace definition. Its selection control may display the currently
-  resolved Program, including a restored selection. The initial-selection
-  restriction for dynamic resources does not apply to this static list.
+- Candidates defined by the Workspace Definition are outside this dynamic-device
+  selection rule. This includes Programs, Video Components used as Vision inputs,
+  and VFX Sources used as the PTS master. Their controls may bind directly to the
+  defined assignment and display a restored selection; no initially unselected
+  editing draft or separate restored-assignment display is required. A VFX Source
+  defined in the Workspace remains a Definition-derived candidate regardless of
+  whether its physical device is currently connected. Selection of the physical
+  device itself remains subject to the dynamic-resource rule above.
 
