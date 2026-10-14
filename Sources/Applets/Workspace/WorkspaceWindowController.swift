@@ -495,7 +495,9 @@ public final class WorkspaceWindowController: NSWindowController,
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
     }
-    if !persistenceCoordinator.hasPersistedWorkspace {
+    if !persistenceCoordinator.hasPersistedWorkspace
+      || !windowRuntime.definition.programs.contains(where: { $0.internalID == internalID })
+    {
       appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       return
     }
@@ -532,6 +534,9 @@ public final class WorkspaceWindowController: NSWindowController,
     func matches(_ workspace: WorkspaceV4Bundle) -> Bool {
       workspace.definition == disk.definition && workspace.preferences == disk.preferences
         && workspace.outputSettings == disk.outputSettings
+        && workspace.definitionExternalID == disk.definitionExternalID
+        && workspace.preferencesExternalID == disk.preferencesExternalID
+        && workspace.outputSettingsExternalID == disk.outputSettingsExternalID
         && Set(workspace.visionModels.keys) == Set(disk.visionModels.keys)
     }
     guard matches(snapshot), matches(runtime) else {

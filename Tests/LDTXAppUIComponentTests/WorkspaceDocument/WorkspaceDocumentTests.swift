@@ -41,6 +41,26 @@ extension AppUIComponentTestSuite {
         appletData: WorkspaceAppletData(), document: context)
       defer { document.close() }
       try controller.validateOutputWorkspace()
+      let baseline = try WorkspaceBundleReaderV4(at: url).read()
+      for field in [
+        \WorkspaceV4Bundle.definitionExternalID, \WorkspaceV4Bundle.preferencesExternalID,
+        \WorkspaceV4Bundle.outputSettingsExternalID,
+      ] {
+        var replacement = baseline
+        replacement[keyPath: field] = WorkspaceBundleWriterV4.makeExternalID().uuidString
+          .lowercased()
+        try WorkspaceBundleWriterV4().write(replacement, to: url)
+        await #expect(throws: (any Error).self) { try await controller.startOutput() }
+        #expect(document.stateService.recordingState == .idle)
+      }
+      try WorkspaceBundleWriterV4().write(baseline, to: url)
+      let newProgramID: Int64 = 123
+      state.workspaceDefinition.programs.append(.with { $0.internalID = newProgramID })
+      try controller.selectProgram(internalID: newProgramID)
+      #expect(controller.appletData.state(for: url).selectedProgramInternalID == newProgramID)
+      #expect(
+        !controller.windowRuntime.definition.programs.contains { $0.internalID == newProgramID })
+      state.workspaceDefinition.programs.removeAll { $0.internalID == newProgramID }
       var staleRuntime = try WorkspaceBundleReaderV4(at: url).read()
       staleRuntime.definition.displayName = "Stale runtime"
       persistence.adoptRuntimeWorkspace(staleRuntime)
