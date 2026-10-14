@@ -50,15 +50,18 @@ struct RecordingAudioFragmentClock {
     else { throw MP4TimingBoxError.malformed() }
 
     let movieBoxes = try MP4TimingBox.parse(movie.payload)
-    guard let movieHeader = movieBoxes.first(where: {
-      $0.type == MP4TimingBox.fourCC("mvhd")
-    }) else { throw MP4TimingBoxError.malformed() }
+    guard
+      let movieHeader = movieBoxes.first(where: {
+        $0.type == MP4TimingBox.fourCC("mvhd")
+      })
+    else { throw MP4TimingBoxError.malformed() }
     let movieVersion = try fullBoxVersion(movieHeader.payload)
     let oldMovieTimescale = try movieTimescale(movieHeader.payload, version: movieVersion)
     let newMovieTimescale = try commonMovieTimescale(in: movieBoxes, audioTrackID: trackID)
 
     func rewrite(_ data: Data) throws -> Data {
-      try rewrite(data, trackID: nil, oldMovieTimescale: oldMovieTimescale,
+      try rewrite(
+        data, trackID: nil, oldMovieTimescale: oldMovieTimescale,
         newMovieTimescale: newMovieTimescale)
     }
     func rewrite(
@@ -76,8 +79,9 @@ struct RecordingAudioFragmentClock {
           else {
             throw MP4TimingBoxError.malformed()
           }
-          nestedTrackID = UInt32(try MP4TimingBox.read(
-            header.payload, at: header.payload.first == 1 ? 20 : 12, bytes: 4)
+          nestedTrackID = UInt32(
+            try MP4TimingBox.read(
+              header.payload, at: header.payload.first == 1 ? 20 : 12, bytes: 4)
           )
         }
         switch box.type {
@@ -117,11 +121,14 @@ struct RecordingAudioFragmentClock {
         let media = children.first(where: { $0.type == MP4TimingBox.fourCC("mdia") })
       else { throw MP4TimingBoxError.malformed() }
       let headerPayload = header.payload
-      let id = UInt32(try MP4TimingBox.read(
-        headerPayload, at: headerPayload.first == 1 ? 20 : 12, bytes: 4))
-      guard let mediaHeader = try MP4TimingBox.parse(media.payload).first(where: {
-        $0.type == MP4TimingBox.fourCC("mdhd")
-      }) else { throw MP4TimingBoxError.malformed() }
+      let id = UInt32(
+        try MP4TimingBox.read(
+          headerPayload, at: headerPayload.first == 1 ? 20 : 12, bytes: 4))
+      guard
+        let mediaHeader = try MP4TimingBox.parse(media.payload).first(where: {
+          $0.type == MP4TimingBox.fourCC("mdhd")
+        })
+      else { throw MP4TimingBoxError.malformed() }
       let version = try fullBoxVersion(mediaHeader.payload)
       let timescale: Int32
       if id == audioTrackID {
@@ -227,7 +234,8 @@ struct RecordingAudioFragmentClock {
       guard isAudioTrack else { continue }
       let mediaOffset = offset + durationBytes
       let raw = try MP4TimingBox.read(payload, at: mediaOffset, bytes: mediaTimeBytes)
-      let mediaTime = version == 0
+      let mediaTime =
+        version == 0
         ? Int64(Int32(bitPattern: UInt32(raw))) : Int64(bitPattern: raw)
       guard mediaTime >= 0 else { continue }  // -1 denotes an empty edit.
       let converted = CMTimeConvertScale(
