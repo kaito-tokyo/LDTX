@@ -44,7 +44,7 @@ public final class WorkspaceV4RecordingSession {
   private var recordService: SessionRecordService?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
-  private let visionArchiveQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive")
+  private let visionArchiveQueue: DispatchQueue
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
   private var landscapeHub: ProgramOutputMediaHub?
@@ -68,11 +68,13 @@ public final class WorkspaceV4RecordingSession {
     windowRuntime: WorkspaceWindowRuntime,
     physicalDeviceIDs: @escaping () -> [Int64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
+    visionArchiveQueue: DispatchQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive"),
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.windowRuntime = windowRuntime
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
+    self.visionArchiveQueue = visionArchiveQueue
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
@@ -264,8 +266,13 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func finishStopping(pausing: Bool) async {
+    windowRuntime.visionArchiveHandler = nil
+    windowRuntime.visionArchiveTimelineProvider = nil
     if let activeSession { await stop(activeSession) }
     await unsubscribeAndDrain()
+    await withCheckedContinuation { continuation in
+      visionArchiveQueue.async { continuation.resume() }
+    }
     if let recordService {
       await finalize(recordService)
     }

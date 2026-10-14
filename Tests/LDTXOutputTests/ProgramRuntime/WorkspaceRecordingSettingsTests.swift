@@ -12,6 +12,30 @@ import Testing
 extension OutputTestSuite {
   @MainActor
   @Suite struct WorkspaceRecordingSettingsIntegrationTestSuite {
+    @Test func stopWaitsForQueuedVisionArchives() async {
+      var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
+      let runtime = WorkspaceWindowRuntime(
+        persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+      defer { runtime.shutdown() }
+      let queue = DispatchQueue(label: "test.vision-archive")
+      let release = DispatchSemaphore(value: 0)
+      queue.async { release.wait() }
+      let session = WorkspaceV4RecordingSession(windowRuntime: runtime, visionArchiveQueue: queue)
+      session.state = .recording
+      runtime.visionArchiveHandler = { _, _, _ in }
+      let stopping = Task { await session.stop() }
+      for _ in 0..<100 where session.state != .stopping { await Task.yield() }
+      #expect(session.state == .stopping)
+      for _ in 0..<100 where runtime.visionArchiveHandler != nil { await Task.yield() }
+      #expect(runtime.visionArchiveHandler == nil)
+      #expect(session.state == .stopping)
+      release.signal()
+      await stopping.value
+      #expect(session.state == .idle)
+    }
+
     @Test func startupKeepsCapturedSettingsUntilCleanupAndNextStart() async {
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.displayName = "Test"

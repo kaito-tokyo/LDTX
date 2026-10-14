@@ -18,15 +18,18 @@ public struct WorkspaceInspectorContainer: View {
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let runtimeWorkspace: () -> WorkspaceV4Bundle?
   private weak var document: (any WorkspaceDocumentContext)?
 
   public init(
     deviceRegistry: DeviceRegistryService,
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
+    runtimeWorkspace: @escaping () -> WorkspaceV4Bundle? = { nil },
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.document = document
+    self.runtimeWorkspace = runtimeWorkspace
     self.runtimeActions = runtimeActions
     self.deviceRegistry = deviceRegistry
     self._appletData = Bindable(wrappedValue: appletData)
@@ -165,7 +168,7 @@ public struct WorkspaceInspectorContainer: View {
           modelURL: Binding(
             get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
             set: { stateService.setVisionModelURL($0, for: internalID) }),
-          persistedModelURL: document?.runtimeWorkspace?.visionModels[
+          persistedModelURL: runtimeWorkspace()?.visionModels[
             vision.wrappedValue.modelInternalID],
           inferenceResult: stateService.visionResults[internalID],
           inferenceFailure: stateService.visionFailureMessages[internalID],

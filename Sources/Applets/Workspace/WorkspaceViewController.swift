@@ -309,6 +309,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
       stateService: stateService, appletData: appletData, document: document,
+      runtimeWorkspace: runtimeWorkspace,
       runtimeActions: runtimeActions
     )
     .environment(\.workspaceReportError, reportError)
