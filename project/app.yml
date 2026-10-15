@@ -196,8 +196,6 @@ targets:
         embed: true
       - target: LDTXDash
         embed: true
-      - target: LDTXDiagnostics
-        embed: true
       - target: LDTXInternalProtocols
         embed: true
       - target: LDTXMediaTiming

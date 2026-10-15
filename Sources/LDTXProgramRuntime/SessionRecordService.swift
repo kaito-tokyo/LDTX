@@ -162,13 +162,6 @@ public final class SessionRecordService: @unchecked Sendable {
     let value: CMSampleBuffer
   }
 
-  private struct DiagnosticsState {
-    var isPrepared = false
-    var isClosed = false
-    var eventLog: RecordingDiagnosticsEventLog?
-    var pendingEvents: [RecordingDiagnosticsEventKind] = []
-  }
-
   private enum State {
     case idle
     case writing
@@ -192,19 +185,15 @@ public final class SessionRecordService: @unchecked Sendable {
   private let audioTracks: [SessionRecordAudioTrack]
   private let targetSegmentDurationSeconds: Int
   private let failureHandler: @MainActor (Error) -> Void
-  private let diagnosticsContext: RecordingDiagnosticsContext?
   private let customFields: [String: String]
   private let recordsLandscape: Bool
   private let recordsPortrait: Bool
   private let mediaQueue = DispatchQueue(label: "tokyo.kaito.ldtx.record-service-media")
   private let stateLock = NSLock()
-  private let diagnosticsLock = NSLock()
-  private var diagnosticsState = DiagnosticsState()
   private var sideRecordersByTrackID: [String: AudioSideStreamRecorder] = [:]
   private var state: State = .idle
   private var discardsPackageWhenStopped = false
   private var preservesIncompletePackageWhenStopped = false
-  private var recordsOutputStoppedWhenStopCompletes = false
   private var stopHandlers: [@MainActor @Sendable (SessionRecordFinalizationResult) -> Void] = []
   private var videoCodecString: String?
   private var recordingClockOrigin: ContinuousClock.Instant?
@@ -240,7 +229,6 @@ public final class SessionRecordService: @unchecked Sendable {
     recordsLandscape: Bool = true,
     recordsPortrait: Bool = false,
     customFields: [String: String] = [:],
-    diagnosticsContext: RecordingDiagnosticsContext? = nil,
     failureHandler: @escaping @MainActor (Error) -> Void
   ) throws {
     packageDirectory =
@@ -259,7 +247,6 @@ public final class SessionRecordService: @unchecked Sendable {
     self.portraitWriterConfiguration = portraitWriterConfiguration ?? writerConfiguration
     targetSegmentDurationSeconds = writerConfiguration.targetSegmentDurationSeconds
     self.failureHandler = failureHandler
-    self.diagnosticsContext = diagnosticsContext
   }
 
   public static func makeRecordID(date: Date = Date()) -> String {
@@ -283,7 +270,6 @@ public final class SessionRecordService: @unchecked Sendable {
       return true
     }
     guard started else { throw SessionRecordServiceError.alreadyStarted }
-    appendDiagnosticsEvent(.recordingStarted)
   }
 
   public func appendMainVideo(_ sampleBuffer: CMSampleBuffer) {
@@ -516,7 +502,7 @@ public final class SessionRecordService: @unchecked Sendable {
       _ in
     }
   ) {
-    stop(recordsOutputStoppedWhenComplete: true, completionHandler: completionHandler)
+    stop(completionHandler: completionHandler)
   }
 
   /// Finalizes a completed record at a Cut boundary.  A Cut ends only this
@@ -526,11 +512,10 @@ public final class SessionRecordService: @unchecked Sendable {
       _ in
     }
   ) {
-    stop(recordsOutputStoppedWhenComplete: false, completionHandler: completionHandler)
+    stop(completionHandler: completionHandler)
   }
 
   @MainActor private func stop(
-    recordsOutputStoppedWhenComplete: Bool,
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
   ) {
     if let finalizationResult {
@@ -542,8 +527,6 @@ public final class SessionRecordService: @unchecked Sendable {
       guard state != .stopping && state != .stopped else { return false }
       let previousState = state
       state = .stopping
-      recordsOutputStoppedWhenStopCompletes =
-        recordsOutputStoppedWhenComplete && previousState == .writing
       discardsPackageWhenStopped =
         discardsPackageWhenStopped || previousState == .idle
       return true
@@ -574,7 +557,6 @@ public final class SessionRecordService: @unchecked Sendable {
     }
   ) {
     stateLock.withLock { preservesIncompletePackageWhenStopped = true }
-    appendDiagnosticsEvent(.abnormalStop)
     stop(completionHandler: completionHandler)
   }
 
@@ -604,14 +586,6 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     stateLock.withLock { discardsPackageWhenStopped = true }
     stop(completionHandler: completionHandler)
-  }
-
-  public func recordOutputReconstructionRequested() {
-    appendDiagnosticsEvent(.outputReconstructionRequested)
-  }
-
-  public func recordOutputStarted() {
-    appendDiagnosticsEvent(.outputStarted)
   }
 
   /// Approximate time on the recording bundle timeline for auxiliary artifacts.
@@ -700,23 +674,11 @@ public final class SessionRecordService: @unchecked Sendable {
           timelineNormalizer: timelineNormalizer,
           timelineTrackID: track.trackID)
       }
-      let diagnosticsEventLog: RecordingDiagnosticsEventLog?
-      do {
-        diagnosticsEventLog = try diagnosticsContext.map {
-          try RecordingDiagnosticsEventLog(packageDirectory: packageDirectory, context: $0)
-        }
-      } catch {
-        diagnosticsEventLog = nil
-        sessionRecordServiceLogger.error(
-          "Recording diagnostics event log could not be created: \(error.localizedDescription, privacy: .public)"
-        )
-      }
       self.package = package
       self.timelineNormalizer = timelineNormalizer
       self.recordingPipeline = recordingPipeline
       self.portraitRecordingPipeline = portraitRecordingPipeline
       sideRecordersByTrackID = sideRecorders
-      prepareDiagnostics(eventLog: diagnosticsEventLog)
       logPackagePaths()
     } catch {
       resourcePreparationFailed = true
@@ -816,37 +778,29 @@ public final class SessionRecordService: @unchecked Sendable {
   private func finishPackage() {
     let stopOptions = stateLock.withLock {
       () -> (
-        recordsOutputStopped: Bool, discardsPackage: Bool, preservesIncompletePackage: Bool,
+        discardsPackage: Bool, preservesIncompletePackage: Bool,
         acceptedFirstVideo: Bool, resourcePreparationFailed: Bool
       ) in
       let options = (
-        recordsOutputStoppedWhenStopCompletes,
         discardsPackageWhenStopped,
         preservesIncompletePackageWhenStopped,
         acceptedFirstVideo || acceptedFirstPortraitVideo,
         resourcePreparationFailed
       )
-      recordsOutputStoppedWhenStopCompletes = false
       return options
     }
-    if stopOptions.recordsOutputStopped {
-      appendDiagnosticsEvent(.outputStopped)
-    }
     if stopOptions.discardsPackage {
-      closeDiagnostics(normally: false)
       discardCancelledPackage()
       completeStop(.preservedIncomplete)
       return
     }
     if stopOptions.preservesIncompletePackage {
-      closeDiagnostics(normally: false)
       completeStop(.preservedIncomplete)
       return
     }
     do {
       guard let package else {
         if !stopOptions.acceptedFirstVideo && !stopOptions.resourcePreparationFailed {
-          closeDiagnostics(normally: false)
           completeStop(.preservedIncomplete)
           return
         }
@@ -856,12 +810,9 @@ public final class SessionRecordService: @unchecked Sendable {
               "No video sample was accepted before recording stopped.")))
         return
       }
-      try package.finish { [weak self] in
-        self?.closeDiagnostics(normally: true)
-      }
+      try package.finish()
       completeStop(.finalized)
     } catch {
-      closeDiagnostics(normally: false)
       sessionRecordServiceLogger.error(
         "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
       )
@@ -898,58 +849,6 @@ public final class SessionRecordService: @unchecked Sendable {
   }
 
   private var isWriting: Bool { stateLock.withLock { state == .writing } }
-
-  private func appendDiagnosticsEvent(_ kind: RecordingDiagnosticsEventKind) {
-    diagnosticsLock.withLock {
-      guard !diagnosticsState.isClosed else { return }
-      guard diagnosticsState.isPrepared else {
-        diagnosticsState.pendingEvents.append(kind)
-        return
-      }
-      appendDiagnosticsEvent(kind, to: diagnosticsState.eventLog)
-    }
-  }
-
-  private func prepareDiagnostics(eventLog: RecordingDiagnosticsEventLog?) {
-    diagnosticsLock.withLock {
-      guard !diagnosticsState.isPrepared, !diagnosticsState.isClosed else { return }
-      diagnosticsState.isPrepared = true
-      diagnosticsState.eventLog = eventLog
-      let pendingEvents = diagnosticsState.pendingEvents
-      diagnosticsState.pendingEvents = []
-      for event in pendingEvents { appendDiagnosticsEvent(event, to: eventLog) }
-    }
-  }
-
-  private func closeDiagnostics(normally: Bool) {
-    diagnosticsLock.withLock {
-      guard !diagnosticsState.isClosed else { return }
-      diagnosticsState.isClosed = true
-      let eventLog = diagnosticsState.eventLog
-      diagnosticsState.eventLog = nil
-      do {
-        if normally { try eventLog?.append(.normalCompletion) }
-        try eventLog?.close()
-      } catch {
-        sessionRecordServiceLogger.error(
-          "Recording diagnostics completion event was discarded: \(error.localizedDescription, privacy: .public)"
-        )
-      }
-    }
-  }
-
-  private func appendDiagnosticsEvent(
-    _ kind: RecordingDiagnosticsEventKind,
-    to eventLog: RecordingDiagnosticsEventLog?
-  ) {
-    do {
-      try eventLog?.append(kind)
-    } catch {
-      sessionRecordServiceLogger.error(
-        "Recording diagnostics event was discarded kind=\(kind.rawValue, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
-      )
-    }
-  }
 
   private func logPackagePaths() {
     sessionRecordServiceLogger.notice(

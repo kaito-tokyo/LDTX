@@ -47,8 +47,8 @@ struct ResourceTaskQueueIntegrationTestSuite {
     let release = ResourceTaskQueueTestSignal()
     let values = ResourceTaskQueueTestValues()
     let observedStop = ResourceTaskQueueTestFlag()
-    let queue = ResourceTaskQueue<Command>(label: "test.resource.stop", logger: .disabled) {
-      command, stopToken, _ in
+    let queue = ResourceTaskQueue<Command>(label: "test.resource.stop") {
+      command, stopToken in
       switch command {
       case .append(let value):
         values.append(value)
@@ -77,7 +77,7 @@ struct ResourceTaskQueueIntegrationTestSuite {
     values: ResourceTaskQueueTestValues,
     started: ResourceTaskQueueTestSignal? = nil
   ) -> ResourceTaskQueue<Command> {
-    ResourceTaskQueue(label: "test.resource", logger: .disabled) { command, _, _ in
+    ResourceTaskQueue(label: "test.resource") { command, _ in
       switch command {
       case .append(let value):
         values.append(value)

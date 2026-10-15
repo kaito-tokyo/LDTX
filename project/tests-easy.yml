@@ -16,7 +16,6 @@ targets:
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
       - target: LDTXDash
-      - target: LDTXDiagnostics
       - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXProgram

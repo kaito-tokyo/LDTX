@@ -58,7 +58,6 @@ targets:
     dependencies:
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
-      - target: LDTXDiagnostics
       - target: LDTXProgram
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
@@ -192,18 +191,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXDash
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXDiagnostics:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXDiagnostics
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXDiagnostics
-        PRODUCT_MODULE_NAME: LDTXDiagnostics
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        OTHER_LDFLAGS: "$(inherited) -lsqlite3"
   LDTXMediaTiming:
     type: framework
     platform: macOS
@@ -330,8 +317,6 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXTaskQueue
-    dependencies:
-      - target: LDTXDiagnostics
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXTaskQueue
@@ -517,7 +502,6 @@ targets:
           - Service
     dependencies:
       - target: LDTXBackgroundSegmentation
-      - target: LDTXDiagnostics
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceBundleFormat
@@ -572,7 +556,6 @@ targets:
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
-      - target: LDTXDiagnostics
       - target: LDTXInternalProtocols
       - target: LDTXProgram
       - target: LDTXProgramRuntime

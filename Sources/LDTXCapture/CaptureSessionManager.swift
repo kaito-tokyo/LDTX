@@ -225,7 +225,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     guard let managedOutput = outputsByID[ObjectIdentifier(output)] else {
       return
     }
-    managedOutput.videoTimingDiagnostics?.record(sampleBuffer: sampleBuffer)
     sampleHandler?(
       CapturedSample(
         sourceKey: managedOutput.sourceKey,
@@ -240,7 +239,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     didDrop sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    outputsByID[ObjectIdentifier(output)]?.videoTimingDiagnostics?.recordDroppedSample()
   }
 
   private func configureAndStart(
@@ -387,10 +385,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       outputsByID[ObjectIdentifier(output)] = ManagedOutput(
         sourceKey: sourceKey,
         deviceID: deviceID,
-        kind: kind,
-        videoTimingDiagnostics: kind == .video
-          ? VideoTimingDiagnostics(deviceID: deviceID)
-          : nil
+        kind: kind
       )
     }
   }
@@ -790,68 +785,11 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     var sourceKey: String
     var deviceID: String
     var kind: CameraCaptureSampleKind
-    var videoTimingDiagnostics: VideoTimingDiagnostics?
   }
 
   private struct ConfiguredVideoInput {
     var request: CaptureSessionVideoRequest
     var device: AVCaptureDevice
-  }
-}
-
-private final class VideoTimingDiagnostics: @unchecked Sendable {
-  private static let logger = Logger(
-    subsystem: "tokyo.kaito.ldtx",
-    category: "CaptureSessionManager"
-  )
-  private let deviceID: String
-  private var sampleCount = 0
-  private var firstPresentationTime: CMTime?
-  private var lastPresentationTime: CMTime?
-  private var maximumGapSeconds = 0.0
-  private var droppedSampleCount = 0
-
-  init(deviceID: String) {
-    self.deviceID = deviceID
-  }
-
-  func record(sampleBuffer: CMSampleBuffer) {
-    let presentationTime = sampleBuffer.presentationTimeStamp
-    guard presentationTime.isValid else { return }
-    if firstPresentationTime == nil {
-      firstPresentationTime = presentationTime
-    }
-    if let lastPresentationTime {
-      let gap = CMTimeSubtract(presentationTime, lastPresentationTime).seconds
-      if gap.isFinite, gap > maximumGapSeconds {
-        maximumGapSeconds = gap
-      }
-    }
-    lastPresentationTime = presentationTime
-    sampleCount += 1
-
-    guard sampleCount >= 120,
-      let firstPresentationTime,
-      let lastPresentationTime
-    else {
-      return
-    }
-    let span = CMTimeSubtract(lastPresentationTime, firstPresentationTime).seconds
-    let measuredFrameRate =
-      span.isFinite && span > 0
-      ? Double(sampleCount - 1) / span
-      : 0
-    Self.logger.notice(
-      "Capture video timing: device=\(self.deviceID, privacy: .public), samples=\(self.sampleCount, privacy: .public), measuredFPS=\(measuredFrameRate, format: .fixed(precision: 3), privacy: .public), maxGapMilliseconds=\(self.maximumGapSeconds * 1_000, format: .fixed(precision: 3), privacy: .public), droppedSamples=\(self.droppedSampleCount, privacy: .public)"
-    )
-    sampleCount = 1
-    self.firstPresentationTime = lastPresentationTime
-    maximumGapSeconds = 0
-    droppedSampleCount = 0
-  }
-
-  func recordDroppedSample() {
-    droppedSampleCount += 1
   }
 }
 

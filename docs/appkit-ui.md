@@ -9,8 +9,8 @@ LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
 `RecordPlayerScene`, `WorkspaceScene`, `SettingsScene`, and
 `VisionProgrammerScene`. App initialization configures authentication storage.
 DocumentGroup initializes and manages both Workspace and Record Player documents.
-The App starts ApplicationDiagnostics from its scene-phase handler and installs
-WorkspaceTerminationDelegate through NSApplicationDelegateAdaptor to wait for output shutdown.
+The App installs WorkspaceTerminationDelegate through NSApplicationDelegateAdaptor
+to wait for output shutdown.
 SwiftUI owns the main menu and Scene presentation.
 RecordPlayerScene is the first Scene and declares a DocumentGroup using the
 macOS 27 Document API. WorkspaceScene also declares a DocumentGroup. SettingsScene supplies the standard Settings scene and VisionProgrammerScene supplies its training windows. Vision Programmer
@@ -472,7 +472,7 @@ exact Rational32 ranges before writing the Workspace. Workspace Version remains
 Save validation errors are surfaced by the document framework. Runtime operation
 errors use WorkspaceWindowController's queued error presentation. Editors and
 Inspectors receive the error-reporting boundary explicitly or through the SwiftUI
-error environment. Output-session failures and continuous OCR diagnostics retain
+error environment. Output-session failures and continuous OCR results retain
 their existing state and display paths.
 
 The Window Controller presents errors using AppKit `presentError`, targeting

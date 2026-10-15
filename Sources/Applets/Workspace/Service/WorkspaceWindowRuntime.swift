@@ -15,15 +15,7 @@ import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
-import OSLog
 import Observation
-
-/// Persistent diagnostics for Version 4 Workspace lifecycle operations. These
-/// records remain available in release builds after a Workspace closes.
-private let workspaceV4OperationLogger = Logger(
-  subsystem: "tokyo.kaito.ldtx",
-  category: "WorkspaceOperation"
-)
 
 /// Projects the authoritative Workspace UI state into preview and output runtimes.
 @MainActor
@@ -72,9 +64,6 @@ public final class WorkspaceWindowRuntime {
 
   public func shutdown() {
     componentFrameRenderer?.retainComponents([])
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 closed package=\(self.url?.path ?? "unsaved", privacy: .public)"
-    )
   }
 
   public func setRecordingState(_ state: WorkspaceRecordingState) {
@@ -192,9 +181,6 @@ public final class WorkspaceWindowRuntime {
       canvasHeight: 1_080,
       frameRate: canvas.frameRate == 0 ? 60 : Int(canvas.frameRate),
       completionHandler: completionHandler
-    )
-    workspaceV4OperationLogger.notice(
-      "workspace-v4 synchronized-inputs videoCount=\(videoCameraIDs.count, privacy: .public) audioCount=\(audioDeviceIDs.count, privacy: .public)"
     )
   }
 

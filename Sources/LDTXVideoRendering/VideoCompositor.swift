@@ -1146,17 +1146,6 @@ public final class VideoCompositor: @unchecked Sendable {
     category: "VideoCompositor"
   )
 
-  private static func diagnosticFourCC(_ value: OSType) -> String {
-    let scalars = [
-      UnicodeScalar((value >> 24) & 0xff),
-      UnicodeScalar((value >> 16) & 0xff),
-      UnicodeScalar((value >> 8) & 0xff),
-      UnicodeScalar(value & 0xff),
-    ]
-    let string = scalars.compactMap { $0 }.map(String.init).joined()
-    return string.isEmpty ? "\(value)" : "\(string)(\(value))"
-  }
-
   public static func makePreviewNV12ToBGRAPipeline(device: MTLDevice) throws
     -> MTLComputePipelineState
   {

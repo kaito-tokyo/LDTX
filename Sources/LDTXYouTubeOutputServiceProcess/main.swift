@@ -19,13 +19,12 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   private weak var connection: NSXPCConnection?
   private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.timers")
   private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
-    label: "tokyo.kaito.ldtx.youtube-output-service.resources", logger: .disabled
-  ) { task, _, _ in
+    label: "tokyo.kaito.ldtx.youtube-output-service.resources"
+  ) { task, _ in
     task.execute()
   }
   private lazy var commandQueue = SessionTaskQueue(
-    label: "tokyo.kaito.ldtx.youtube-output-service.commands",
-    logger: .disabled)
+    label: "tokyo.kaito.ldtx.youtube-output-service.commands")
   private var context: YouTubeOutputContext?
   private var pipeline: DASHLiveUploadPipeline?
   private var mediaProcessor: YouTubeOutputMediaProcessor?
@@ -38,7 +37,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   private var availabilityStartTime: Date?
   private var nextMediaTimeSeconds: Double?
   private var generatedUploads = DASHUploadFinalizationState()
-  private var generatedSegmentTimes: [Int: ContinuousClock.Instant] = [:]
 
   func bootstrap(
     _ request: Data,
@@ -83,9 +81,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
               audioSamplingRate: representation.audioSamplingRate
             )
           ),
-          diagnosticContext: DASHLiveUploadDiagnosticContext(
-            sessionID: request.context.sessionID,
-            revision: request.context.revision),
           manifestStateHandler: { [weak self] state in
             self?.post { [weak self] in self?.commitManifestState(state) }
           }
@@ -118,7 +113,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         nextMediaTimeSeconds = request.nextMediaTimeSeconds ?? 1
         videoCodecString = nil
         generatedUploads = DASHUploadFinalizationState()
-        generatedSegmentTimes = [:]
         let availabilityStartMilliseconds = Int64(
           (request.availabilityStartTime.timeIntervalSince1970 * 1_000).rounded())
         logger.notice(
@@ -237,7 +231,7 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
     let accepted = commandQueue.submit(
       key: SessionTaskKey(UUID().uuidString), source: .normal
     ) { completion in
-      { [weak self] stopToken, _ in
+      { [weak self] stopToken in
         guard let self else {
           completion()
           return
@@ -264,7 +258,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
     // must wait even when the HTTP PUT has not started yet.
     generatedUploads.beginUpload()
     if case .media(let number) = segment.kind {
-      generatedSegmentTimes[number] = .now
       reserveMediaSegment(segment, number: number, context: context, pipeline: pipeline)
       return
     }
@@ -331,10 +324,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
         case .success(let event):
           self.generatedUploads.completeUpload()
           if case .media(let number) = segment.kind {
-            let deliveryMilliseconds =
-              self.generatedSegmentTimes.removeValue(forKey: number).map {
-                Self.milliseconds($0.duration(to: .now))
-              } ?? -1
             self.nextMediaSegmentNumber = max(self.nextMediaSegmentNumber ?? 1, number + 1)
             if let start = segment.earliestPresentationTimeSeconds,
               let duration = segment.durationSeconds,
@@ -342,9 +331,8 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
             {
               self.nextMediaTimeSeconds = max(self.nextMediaTimeSeconds ?? 1, start + duration)
             }
-            let diagnostics = segment.diagnostics
             logger.notice(
-              "[event:dash.segment.delivered] session=\(context.sessionID.uuidString, privacy: .public) revision=\(context.revision, privacy: .public) segment=\(number, privacy: .public) startMs=\(Self.milliseconds(segment.earliestPresentationTimeSeconds), privacy: .public) durationMs=\(Self.milliseconds(segment.durationSeconds), privacy: .public) bytes=\(segment.data.count, privacy: .public) videoSamples=\(diagnostics?.videoSampleCount ?? -1, privacy: .public) audioSamples=\(diagnostics?.audioSampleCount ?? -1, privacy: .public) audioFrames=\(diagnostics?.audioFrameCount ?? -1, privacy: .public) syncSamples=\(diagnostics?.syncVideoSampleCount ?? -1, privacy: .public) maxSyncGapMs=\(Self.milliseconds(diagnostics?.maximumSyncVideoIntervalSeconds), privacy: .public) deliveryMs=\(deliveryMilliseconds, privacy: .public) nextSegment=\(self.nextMediaSegmentNumber ?? -1, privacy: .public) nextMediaMs=\(Self.milliseconds(self.nextMediaTimeSeconds), privacy: .public)"
+              "[event:dash.segment.delivered] session=\(context.sessionID.uuidString, privacy: .public) revision=\(context.revision, privacy: .public) segment=\(number, privacy: .public) bytes=\(segment.data.count, privacy: .public)"
             )
           } else if case .initializationPrepared(let byteCount) = event {
             logger.notice(
@@ -358,16 +346,8 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
               return false
             }())
         case .failure(let error):
-          var deliveryMilliseconds: Int64 = -1
-          if case .media(let number) = segment.kind {
-            deliveryMilliseconds =
-              self.generatedSegmentTimes.removeValue(forKey: number).map {
-                Self.milliseconds($0.duration(to: .now))
-              } ?? -1
-          }
-          let diagnostics = segment.diagnostics
           logger.error(
-            "[event:dash.delivery.failed] session=\(context.sessionID.uuidString, privacy: .public) revision=\(context.revision, privacy: .public) kind=\(Self.kindDescription(segment.kind), privacy: .public) startMs=\(Self.milliseconds(segment.earliestPresentationTimeSeconds), privacy: .public) durationMs=\(Self.milliseconds(segment.durationSeconds), privacy: .public) bytes=\(segment.data.count, privacy: .public) syncSamples=\(diagnostics?.syncVideoSampleCount ?? -1, privacy: .public) maxSyncGapMs=\(Self.milliseconds(diagnostics?.maximumSyncVideoIntervalSeconds), privacy: .public) deliveryMs=\(deliveryMilliseconds, privacy: .public) error=\(error.localizedDescription, privacy: .private(mask: .hash))"
+            "[event:dash.delivery.failed] session=\(context.sessionID.uuidString, privacy: .public) revision=\(context.revision, privacy: .public) kind=\(Self.kindDescription(segment.kind), privacy: .public) error=\(error.localizedDescription, privacy: .private(mask: .hash))"
           )
           self.generatedUploads.completeUpload(error: error)
           self.requestReset(error, context: context)
@@ -501,13 +481,6 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   private static func milliseconds(_ seconds: Double?) -> Int64 {
     guard let seconds, seconds.isFinite else { return -1 }
     return Int64(clamping: Int((seconds * 1_000).rounded()))
-  }
-
-  private static func milliseconds(_ duration: Duration) -> Int64 {
-    let components = duration.components
-    let seconds = components.seconds.multipliedReportingOverflow(by: 1_000)
-    guard !seconds.overflow else { return .max }
-    return seconds.partialValue + Int64(components.attoseconds / 1_000_000_000_000_000)
   }
 
   private static func kindDescription(_ kind: SegmentedMP4SegmentKind) -> String {

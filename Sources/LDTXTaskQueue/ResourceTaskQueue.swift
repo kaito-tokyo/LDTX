@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXDiagnostics
 
 /// A FIFO executor for the commands that exclusively own one resource.
 ///
@@ -12,7 +11,7 @@ import LDTXDiagnostics
 /// queue are implementation details of the resource owner.
 public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
   public typealias Executor =
-    @Sendable (_ task: Task, _ stopToken: StopToken, _ logger: EventTaskLogger) async -> Void
+    @Sendable (_ task: Task, _ stopToken: StopToken) async -> Void
 
   private enum State {
     case accepting
@@ -23,7 +22,6 @@ public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
   }
 
   private let controlQueue: DispatchQueue
-  private let logger: EventTaskLogger
   private let executor: Executor
   private var state = State.accepting
   private var pending: [Task] = []
@@ -34,11 +32,9 @@ public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
 
   public init(
     label: String,
-    logger: EventTaskLogger,
     executor: @escaping Executor
   ) {
     controlQueue = DispatchQueue(label: label)
-    self.logger = logger
     self.executor = executor
   }
 
@@ -112,8 +108,8 @@ public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
 
     let task = pending.removeFirst()
     isRunning = true
-    _Concurrency.Task { [executor, stopToken, logger, weak self] in
-      await executor(task, stopToken, logger)
+    _Concurrency.Task { [executor, stopToken, weak self] in
+      await executor(task, stopToken)
       self?.controlQueue.async { [weak self] in
         guard let self else { return }
         isRunning = false
@@ -137,8 +133,7 @@ public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
     guard !isRunning, pending.isEmpty else { return }
     guard state == .finishing || state == .stopping else { return }
     state = .closing
-    _Concurrency.Task { [logger, weak self] in
-      await logger.close()
+    _Concurrency.Task { [weak self] in
       self?.controlQueue.async { [weak self] in
         guard let self, state == .closing else { return }
         state = .finished

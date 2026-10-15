@@ -824,12 +824,10 @@ extension OutputTestSuite {
 
       let service = try SessionRecordService(
         baseDirectory: baseDirectory,
-        recordID: "diagnostics-stop-order-test",
+        recordID: "stop-order-test",
         writerConfiguration: SegmentedMP4WriterConfiguration(
           width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
         audioTracks: [],
-        diagnosticsContext: RecordingDiagnosticsContext(
-          launchID: UUID(), launchUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds),
         failureHandler: { error in fail("Unexpected record failure: \(error)") })
 
       try service.start()

@@ -39,7 +39,6 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXCapture                | AVCapture camera sources, services, and capture-session management. |
 | LDTXDeviceRegistry         | Workspace device discovery using AVCapture cameras and Core Audio input UIDs. |
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
-| LDTXDiagnostics            | Privacy-limited process-load sampling and SQLite queries.          |
 | LDTXFontRasterizer         | C-backed TrueType glyph rasterization used by runtime overlays.    |
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |

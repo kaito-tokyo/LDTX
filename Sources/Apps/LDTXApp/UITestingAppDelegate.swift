@@ -175,13 +175,6 @@ import UniformTypeIdentifiers
 //      (NSApp.keyWindow?.windowController as? RecordPlayerApplet)?.toggleInspector(sender)
 //    }
 //  }
-//
-//  @objc func crashReports(_ sender: Any?) {
-//    NSWorkspace.shared.open(
-//      FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-//        "Library/Logs/DiagnosticReports", isDirectory: true))
-//  }
-//
 //  func validateMenuItem(_ item: NSMenuItem) -> Bool {
 //    switch item.action {
 //    case #selector(save): return activeWorkspace != nil

@@ -762,17 +762,6 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
       let keyFrameCount = videoSamples.filter(isKeyFrame).count
       assertEqual(mediaSegments.count, keyFrameCount)
-      assertEqual(
-        mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.videoSampleCount },
-        videoSamples.count)
-      assertEqual(
-        mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.syncVideoSampleCount },
-        videoSamples.filter(isKeyFrame).count)
-      assertGreaterThan(
-        mediaSegments.compactMap(\.diagnostics).reduce(0) { $0 + $1.audioFrameCount },
-        0)
-      assertTrue(
-        mediaSegments.compactMap(\.diagnostics).allSatisfy { $0.syncVideoSampleCount == 1 })
       var output = try unwrap(
         segments.values.first { $0.kind == .initialization }?.data)
       for segment in mediaSegments { output.append(segment.data) }

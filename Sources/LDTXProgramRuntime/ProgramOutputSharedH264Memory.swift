@@ -65,8 +65,8 @@ public final class ProgramOutputSharedH264Service: @unchecked Sendable {
   private var occupied: [Bool]
   private var generations: [UInt64]
   private lazy var taskQueue = ResourceTaskQueue<ResourceTask>(
-    label: "tokyo.kaito.ldtx.shared-h264-resource", logger: .disabled
-  ) { [weak self] task, _, _ in
+    label: "tokyo.kaito.ldtx.shared-h264-resource"
+  ) { [weak self] task, _ in
     self?.execute(task)
   }
 

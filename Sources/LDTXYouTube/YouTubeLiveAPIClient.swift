@@ -30,67 +30,6 @@ public enum YouTubeLiveAPIError: Error, Equatable, LocalizedError {
       nil
     }
   }
-
-  public var sanitizedDiagnosticSummary: String? {
-    switch self {
-    case .rejected(let statusCode, let body):
-      var components = ["httpStatus=\(statusCode)"]
-      guard let errorResponse = decodedErrorResponse(from: body)?.error else {
-        return components.joined(separator: " ")
-      }
-
-      if let status = sanitizedDiagnosticValue(errorResponse.status) {
-        components.append("googleStatus=\(status)")
-      }
-
-      let domains = Array(
-        Set(
-          errorResponse.errors?.compactMap(\.domain).compactMap(sanitizedDiagnosticValue(_:)) ?? [])
-      ).sorted()
-      if !domains.isEmpty {
-        components.append("domains=\(domains.joined(separator: ","))")
-      }
-
-      let reasons = Array(
-        Set(
-          errorResponse.errors?.compactMap(\.reason).compactMap(sanitizedDiagnosticValue(_:)) ?? [])
-      ).sorted()
-      if !reasons.isEmpty {
-        components.append("reasons=\(reasons.joined(separator: ","))")
-      }
-
-      if let message = sanitizedDiagnosticValue(errorResponse.message) {
-        components.append("message=\(message)")
-      }
-
-      return components.joined(separator: " ")
-    case .invalidURL, .nonHTTPResponse:
-      return nil
-    }
-  }
-
-  private func decodedErrorResponse(from body: Data) -> YouTubeLiveAPIErrorResponse? {
-    try? JSONDecoder().decode(YouTubeLiveAPIErrorResponse.self, from: body)
-  }
-
-  private func sanitizedDiagnosticValue(_ value: String?) -> String? {
-    guard let value else {
-      return nil
-    }
-    let trimmed =
-      value
-      .split(whereSeparator: \.isNewline)
-      .joined(separator: " ")
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      return nil
-    }
-    if trimmed.count <= 160 {
-      return trimmed
-    }
-    let index = trimmed.index(trimmed.startIndex, offsetBy: 157)
-    return "\(trimmed[..<index])..."
-  }
 }
 
 public enum YouTubeDualRTMPSConfigurationError: Error, Equatable, LocalizedError {
@@ -106,23 +45,6 @@ public enum YouTubeDualRTMPSConfigurationError: Error, Equatable, LocalizedError
     case .unsupportedIngestionType: "A selected YouTube LiveStream does not support RTMPS."
     case .missingDestination: "A selected YouTube LiveStream has no RTMPS destination."
     }
-  }
-}
-
-private struct YouTubeLiveAPIErrorResponse: Decodable {
-  var error: ErrorPayload
-
-  struct ErrorPayload: Decodable {
-    var code: Int?
-    var message: String?
-    var status: String?
-    var errors: [ErrorDetail]?
-  }
-
-  struct ErrorDetail: Decodable {
-    var domain: String?
-    var reason: String?
-    var message: String?
   }
 }
 

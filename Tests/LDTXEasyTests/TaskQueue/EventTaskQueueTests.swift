@@ -3,30 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXDiagnostics
 import LDTXTaskQueue
 import Testing
 
 @Suite
 struct EventTaskQueueIntegrationTestSuite {
-  @Test func passesTheInjectedLoggerToTheTask() throws {
-    let logger = EventTaskLogger.disabled
-    let received = DispatchSemaphore(value: 0)
-    let queue = EventTaskQueue(label: "test.logger", logger: logger)
-    #expect(
-      queue.enqueue { completion in
-        { _, taskLogger in
-          if taskLogger !== logger { Issue.record("Task received a different logger") }
-          received.signal()
-          completion()
-        }
-      })
-    #expect(received.wait(timeout: .now() + 1) == .success)
-  }
-
   @Test func executesFIFOAndWaitsForBoundCompletion() throws {
     let log = TaskQueueTestLog()
-    let queue = EventTaskQueue(label: "test.fifo", logger: .disabled)
+    let queue = EventTaskQueue(label: "test.fifo")
 
     #expect(queue.enqueue(task(named: "first", log: log)))
     #expect(queue.enqueue(task(named: "second", log: log)))
@@ -44,7 +28,7 @@ struct EventTaskQueueIntegrationTestSuite {
     let log = TaskQueueTestLog()
     let stopped = TaskQueueAsyncSignal()
     let discarded = TaskQueueAsyncSignal()
-    let queue = EventTaskQueue(label: "test.stop", logger: .disabled)
+    let queue = EventTaskQueue(label: "test.stop")
 
     #expect(queue.enqueue(task(named: "running", log: log)))
     let acceptedPending = queue.enqueue(
@@ -70,7 +54,7 @@ struct EventTaskQueueIntegrationTestSuite {
 
   @Test func completionIsOneShot() throws {
     let log = TaskQueueTestLog()
-    let queue = EventTaskQueue(label: "test.oneshot", logger: .disabled)
+    let queue = EventTaskQueue(label: "test.oneshot")
     #expect(queue.enqueue(task(named: "first", log: log)))
     #expect(queue.enqueue(task(named: "second", log: log)))
     #expect(log.waitForStarts(1))
@@ -88,7 +72,7 @@ struct EventTaskQueueIntegrationTestSuite {
     let log = TaskQueueTestLog()
     let discarded = TaskQueueAsyncSignal()
     let stopped = TaskQueueAsyncSignal()
-    let queue = EventTaskQueue(label: "test.discard-reenqueue", logger: .disabled)
+    let queue = EventTaskQueue(label: "test.discard-reenqueue")
 
     #expect(queue.enqueue(task(named: "running", log: log)))
     let acceptedPending = queue.enqueue(
@@ -109,7 +93,7 @@ struct EventTaskQueueIntegrationTestSuite {
 
   private func task(named name: String, log: TaskQueueTestLog) -> EventTaskQueue.TaskFactory {
     { completion in
-      { stopToken, _ in
+      { stopToken in
         log.start(name, stopToken: stopToken, completion: completion)
       }
     }
