@@ -19,12 +19,13 @@ import SwiftUI
 @main
 @MainActor
 struct LDTXApp: App {
-  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
   @State private var workspaceResources:
     [UUID: (
       landscape: ProgramRuntime, portrait: ProgramRuntime, metalView: MTKView,
       capture: WorkspaceCaptureSessionCoordinator, updates: LowFrequencyUpdateRegistry
     )] = [:]
+
+  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
   init() {
     if let bundleIdentifier = Bundle.main.bundleIdentifier,
@@ -38,6 +39,10 @@ struct LDTXApp: App {
   }
 
   var body: some Scene {
+    // Read State here so resource registration updates the Scene's editor
+    // closure; reading only inside DocumentGroup leaves its initial snapshot.
+    let currentResources = workspaceResources
+    let resourceStorage = $workspaceResources
     DocumentGroup(allowCreating: false) { (document: RecordPlayerDocument) in
       RecordPlayerDocumentContent(document: document)
     } makeDocument: { configuration, _ in
@@ -50,7 +55,7 @@ struct LDTXApp: App {
     }
 
     DocumentGroup { (document: WorkspaceDocument) in
-      let resources = workspaceResources[document.runtimeID]
+      let resources = currentResources[document.runtimeID]
       WorkspaceDocumentContent(
         document: document,
         landscapeRuntime: resources?.landscape,
@@ -59,7 +64,7 @@ struct LDTXApp: App {
         captureSessionCoordinator: resources?.capture,
         lowFrequencyUpdateRegistry: resources?.updates)
     } makeDocument: { configuration, _ in
-      let resources = $workspaceResources
+      let resources = resourceStorage
       let document = WorkspaceDocument(configuration: configuration) { id in
         resources.wrappedValue.removeValue(forKey: id)
       }
