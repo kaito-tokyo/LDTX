@@ -42,6 +42,8 @@ public final class WorkspaceWindowController: NSWindowController,
 
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
+  private let metalViews: WorkspaceMetalViews?
+  private let metalViewID: UUID?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
@@ -146,7 +148,8 @@ public final class WorkspaceWindowController: NSWindowController,
   }
 
   public convenience init(
-    document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared
+    document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared,
+    metalViews: WorkspaceMetalViews? = nil
   ) {
     let stateService = document.stateService
     stateService.localStateURL = document.fileURL
@@ -163,7 +166,8 @@ public final class WorkspaceWindowController: NSWindowController,
     if let workspace = document.workspaceSnapshot { persistence.adoptRuntimeWorkspace(workspace) }
     self.init(
       stateService: stateService, persistenceCoordinator: persistence,
-      appletData: appletData, document: document)
+      appletData: appletData, document: document,
+      metalViews: metalViews, metalViewID: document.runtimeID)
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
       (
@@ -183,8 +187,12 @@ public final class WorkspaceWindowController: NSWindowController,
     stateService: WorkspaceStateService,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
-    document: any WorkspaceDocumentContext
+    document: any WorkspaceDocumentContext,
+    metalViews: WorkspaceMetalViews? = nil, metalViewID: UUID? = nil
   ) {
+    precondition(metalViews == nil || metalViewID != nil)
+    self.metalViews = metalViews
+    self.metalViewID = metalViewID
     self.workspaceDocument = document
     self.stateService = stateService
     self.persistenceCoordinator = persistenceCoordinator
@@ -253,7 +261,10 @@ public final class WorkspaceWindowController: NSWindowController,
     let pairedPreview = ProgramCanvasPairedPreview(
       device: previewRenderer.device, delegate: previewRenderer,
       onSelectLandscape: { stateService.selectedAudioMix = .landscape },
-      onSelectPortrait: { stateService.selectedAudioMix = .portrait })
+      onSelectPortrait: { stateService.selectedAudioMix = .portrait },
+      metalView: metalViewID.flatMap {
+        metalViews?.acquire(for: $0, device: previewRenderer.device)
+      })
     self.pairedPreview = pairedPreview
     self.windowRuntime = windowRuntime
     self.recordingSession = recordingSession
@@ -582,6 +593,7 @@ public final class WorkspaceWindowController: NSWindowController,
       await audioCoordinator.stopAndReset()
       lowFrequencyUpdateRegistry.shutdown()
       windowRuntime.shutdown()
+      if let metalViewID { metalViews?.release(for: metalViewID) }
       if let shutdownFailureMessage { queueShutdownFailure(shutdownFailureMessage) }
       Self.activeControllers.remove(self)
       Self.updateRecordingDockBadge()

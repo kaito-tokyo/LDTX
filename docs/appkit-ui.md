@@ -47,7 +47,9 @@ output and tears down capture, audio, Vision, and preview resources asynchronous
 Representable dismantling stops UI observation and initiates idempotent shutdown;
 its Coordinator also initiates cleanup if released without explicit dismantling.
 
-The SwiftUI App connects a termination-only `NSApplicationDelegateAdaptor`.
+The SwiftUI App installs its application-owned AppDelegate through
+`NSApplicationDelegateAdaptor`. AppDelegate owns the Workspace Metal view registry
+and delegates asynchronous Workspace termination to `WorkspaceApplicationTermination`.
 Quit returns `terminateLater` while any Workspace controller is alive or its
 shutdown is running, and replies only after all controllers finish. This includes
 controllers whose windows have already closed. Shutdown failures are retained
@@ -187,8 +189,14 @@ formal document URL.
 
 Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
 
-WorkspaceWindowController constructs and retains the Program preview's single
-`MTKView`, then passes the configured preview to the Content view controller. A
+AppDelegate retains `WorkspaceMetalViews` and injects it through the Workspace
+Scene's Environment. The Representable Coordinator passes it to
+WorkspaceWindowController, which registers one Program preview `MTKView` per
+Document's non-persisted runtime ID. Duplicate registration is rejected. The
+controller passes the view to `ProgramCanvasPairedPreview` for layout and input.
+Shutdown pauses and disconnects drawing before stopping runtime resources, then
+detaches the view and releases its registration. Standalone components and Xcode
+previews may construct a local view without an application registry. A
 `ProgramPairPreviewRenderer` supplied as its delegate reads the latest
 `ProgramFrame` from the Landscape and Portrait runtimes and draws the 16:9 and
 9:16 images at equal height into the drawable. The four-pixel gap is transparent

@@ -12,10 +12,13 @@ import SwiftUI
 public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentable {
   let document: WorkspaceDocument
   @Environment(\.undoManager) private var undoManager
+  @Environment(\.workspaceMetalViews) private var metalViews
 
   public init(document: WorkspaceDocument) { self.document = document }
 
-  public func makeCoordinator() -> Coordinator { Coordinator(document: document) }
+  public func makeCoordinator() -> Coordinator {
+    Coordinator(document: document, metalViews: metalViews)
+  }
 
   public func makeNSViewController(context: Context) -> WorkspaceViewController {
     context.coordinator.setUndoManager(undoManager)
@@ -45,9 +48,14 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
     private var documentTask: Task<Void, Never>?
     private var readGeneration = 0
 
-    init(document: WorkspaceDocument, windowController: WorkspaceWindowController? = nil) {
+    init(
+      document: WorkspaceDocument, windowController: WorkspaceWindowController? = nil,
+      metalViews: WorkspaceMetalViews? = nil
+    ) {
       self.document = document
-      let owner = windowController ?? WorkspaceWindowController(document: document)
+      let owner =
+        windowController
+        ?? WorkspaceWindowController(document: document, metalViews: metalViews)
       self.windowController = owner
       lastObservedSnapshot = owner.stateService.editingWorkspace
       synchronizeDocument()

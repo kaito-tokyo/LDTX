@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 @MainActor
 @Observable
 public final class WorkspaceDocument: WorkspaceDocumentContext {
+  public let runtimeID = UUID()
   public let stateService: WorkspaceStateService
   public private(set) var workspaceSnapshot: WorkspaceV4Bundle?
   private let configuration: URLDocumentConfiguration?

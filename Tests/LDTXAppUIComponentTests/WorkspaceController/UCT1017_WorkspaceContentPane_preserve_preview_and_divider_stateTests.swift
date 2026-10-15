@@ -11,6 +11,7 @@ import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
+import MetalKit
 import Observation
 import SwiftUI
 import Testing
@@ -19,6 +20,47 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1017: preserve-preview-and-divider-state", .serialized)
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
+    @Test func applicationRegistryRetainsViewsUntilExplicitRelease() {
+      let registry = WorkspaceMetalViews()
+      let firstID = UUID()
+      let secondID = UUID()
+      weak var retained: MTKView?
+      autoreleasepool {
+        let first = registry.acquire(for: firstID, device: nil)
+        retained = first
+      }
+      let second = registry.acquire(for: secondID, device: nil)
+      #expect(retained !== second)
+      #expect(retained != nil)
+      registry.release(for: firstID)
+      #expect(retained == nil)
+      registry.release(for: firstID)
+      registry.release(for: secondID)
+    }
+
+    @Test func shutdownDetachesRegisteredViewAndAllowsNewRuntime() async {
+      let registry = WorkspaceMetalViews()
+      let document = WorkspaceDocument()
+      let controller = WorkspaceWindowController(
+        document: document, appletData: WorkspaceAppletData(), metalViews: registry)
+      let view = controller.pairedPreview.metalView
+      #expect(view.superview === controller.pairedPreview)
+      #expect(view.delegate === controller.previewRenderer)
+      await controller.shutdown()
+      #expect(view.isPaused)
+      #expect(view.delegate == nil)
+      #expect(view.superview == nil)
+      weak var retained: MTKView?
+      autoreleasepool {
+        retained = registry.acquire(for: document.runtimeID, device: nil)
+      }
+      await controller.shutdown()
+      // Repeating an old shutdown must not release the replacement registration.
+      #expect(retained != nil)
+      registry.release(for: document.runtimeID)
+      #expect(retained == nil)
+    }
+
     private static var controller: NSDocumentController {
       UIComponentTestEnvironment.documentController
     }
