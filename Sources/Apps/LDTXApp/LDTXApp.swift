@@ -13,7 +13,7 @@ import SwiftUI
 @main
 @MainActor
 struct LDTXApp: App {
-  @NSApplicationDelegateAdaptor(WorkspaceTerminationDelegate.self) private var terminationDelegate
+  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
   init() {
     if let bundleIdentifier = Bundle.main.bundleIdentifier,

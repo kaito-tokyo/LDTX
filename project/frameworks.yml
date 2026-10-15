@@ -539,7 +539,7 @@ targets:
         includes:
           - WorkspaceDocument.swift
           - WorkspaceDocumentContent.swift
-          - WorkspaceTerminationDelegate.swift
+          - AppDelegate.swift
           - WorkspaceToolbarCoordinator.swift
           - WorkspaceViewController.swift
           - WorkspaceViewControllerRepresentation.swift

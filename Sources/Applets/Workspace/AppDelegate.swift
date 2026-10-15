@@ -6,7 +6,7 @@ import OSLog
 
 /// The SwiftUI application's AppKit bridge for asynchronous Workspace shutdown only.
 @MainActor
-public final class WorkspaceTerminationDelegate: NSObject, NSApplicationDelegate {
+public final class AppDelegate: NSObject, NSApplicationDelegate {
   private let hasPendingShutdown: () -> Bool
   private let shutdown: () async -> [String]
   private let reply: (NSApplication, Bool) -> Void
