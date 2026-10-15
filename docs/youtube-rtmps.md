@@ -41,11 +41,12 @@ at startup, without re-fetching or replacing the configuration from YouTube.
 Manually configured output does not require OAuth. Importing from YouTube does.
 
 Configuration credentials must not be written to Workspace files, preferences,
-logs, diagnostics, error descriptions, or state restoration data. The Keychain
-is the only persistent credential store. YouTube owns the association between
-stream keys and events; LDTX does not change that association. API health checks
-are available for imported configurations until their connection fields are
-edited; local configuration IDs are never sent as YouTube LiveStream IDs.
+Unified Logger messages, error descriptions, or state restoration data. The
+Keychain is the only persistent credential store. YouTube owns the association
+between stream keys and events; LDTX does not change that association. API
+health checks are available for imported configurations until their connection
+fields are edited; local configuration IDs are never sent as YouTube LiveStream
+IDs.
 
 The Backup Server URL is stored and validated together with the primary URL and
 key. Publishing currently uses the primary URL only; automatic failover or

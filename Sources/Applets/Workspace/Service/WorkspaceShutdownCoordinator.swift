@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXDiagnostics
 import LDTXTaskQueue
 import os
 
@@ -37,15 +36,9 @@ final class WorkspaceShutdownCoordinator: Sendable {
   private let resourceQueue: EventTaskQueue
   private let verificationTimeout: Duration
 
-  init(
-    logger: EventTaskLogger,
-    verificationTimeout: Duration = .seconds(30)
-  ) {
+  init(verificationTimeout: Duration = .seconds(30)) {
     self.verificationTimeout = verificationTimeout
-    resourceQueue = EventTaskQueue(
-      label: "tokyo.kaito.ldtx.workspace.resources",
-      logger: logger
-    )
+    resourceQueue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.resources")
   }
 
   /// Atomically admits a resource-control event before shutdown begins.
@@ -56,7 +49,7 @@ final class WorkspaceShutdownCoordinator: Sendable {
         return false
       }
       return resourceQueue.enqueue { finish in
-        { stopToken, _ in
+        { stopToken in
           Task { @MainActor in
             defer { finish() }
             guard !stopToken.isStopRequested else { return }
@@ -83,7 +76,7 @@ final class WorkspaceShutdownCoordinator: Sendable {
           Task { @MainActor in result.finish(false) }
         },
         { finish in
-          { stopToken, _ in
+          { stopToken in
             Task { @MainActor in
               defer { finish() }
               guard !stopToken.isStopRequested else {

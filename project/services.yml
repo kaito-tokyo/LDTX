@@ -19,9 +19,6 @@ targets:
       - target: LDTXDash
         embed: true
         codeSign: true
-      - target: LDTXDiagnostics
-        embed: true
-        codeSign: true
       - target: LDTXMP4
         embed: true
         codeSign: true

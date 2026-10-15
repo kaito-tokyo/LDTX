@@ -57,9 +57,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
   private let queue = DispatchQueue(
     label: "tokyo.kaito.ldtx.MuxedPassthroughSegmentedMP4Writer")
   private var pending: [PendingSample] = []
-  private var currentSegmentDiagnostics = SegmentedMP4SegmentDiagnostics()
-  private var pendingSegmentDiagnostics: [SegmentedMP4SegmentDiagnostics] = []
-  private var lastSyncVideoTime: CMTime?
   private var nextSegmentNumber: Int
   private var segmentStartTime: CMTime?
   private var latestVideoTime: CMTime?
@@ -170,9 +167,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
         onSegment(SegmentedMP4Segment(kind: .initialization, data: segmentData))
       case .separable:
         let number = nextSegmentNumber
-        let diagnostics =
-          pendingSegmentDiagnostics.isEmpty
-          ? nil : pendingSegmentDiagnostics.removeFirst()
         let trackTimings = Self.trackTimings(from: segmentReport)
         guard !Self.containsOnlyEmptyTracks(trackTimings) else {
           muxedPassthroughSegmentLogger.notice(
@@ -184,24 +178,11 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
         let timing = Self.segmentTiming(trackTimings: trackTimings)
         let durationSeconds = timing?.durationSeconds
         let earliestPresentationTimeSeconds = timing?.earliestPresentationTimeSeconds
-        let startMilliseconds = Self.milliseconds(earliestPresentationTimeSeconds)
-        let durationMilliseconds = Self.milliseconds(durationSeconds)
-        let maximumSyncIntervalMilliseconds = Self.milliseconds(
-          diagnostics?.maximumSyncVideoIntervalSeconds)
-        muxedPassthroughSegmentLogger.info(
-          "[event:dash.segment.generated] segment=\(number, privacy: .public) startMs=\(startMilliseconds, privacy: .public) durationMs=\(durationMilliseconds, privacy: .public) bytes=\(segmentData.count, privacy: .public) videoSamples=\(diagnostics?.videoSampleCount ?? -1, privacy: .public) audioSamples=\(diagnostics?.audioSampleCount ?? -1, privacy: .public) audioFrames=\(diagnostics?.audioFrameCount ?? -1, privacy: .public) syncSamples=\(diagnostics?.syncVideoSampleCount ?? -1, privacy: .public) maxSyncGapMs=\(maximumSyncIntervalMilliseconds, privacy: .public)"
-        )
-        logBoundaryDiagnostics(
-          segmentNumber: number,
-          durationMilliseconds: durationMilliseconds,
-          diagnostics: diagnostics,
-          maximumSyncIntervalMilliseconds: maximumSyncIntervalMilliseconds)
         var segment = SegmentedMP4Segment(
           kind: .media(number: number),
           data: segmentData,
           durationSeconds: durationSeconds,
-          earliestPresentationTimeSeconds: earliestPresentationTimeSeconds,
-          diagnostics: diagnostics)
+          earliestPresentationTimeSeconds: earliestPresentationTimeSeconds)
         segment.trackTimings =
           segmentReport?.trackReports.map {
             SegmentedMP4TrackTiming(
@@ -222,10 +203,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       guard input.isReadyForMoreMediaData else { return }
 
       if sample.isSyncVideo, hasAppendedSample, segmentStartTime != nil {
-        recordSyncVideoInterval(endingAt: sample.sortTime)
-        pendingSegmentDiagnostics.append(currentSegmentDiagnostics)
-        currentSegmentDiagnostics = SegmentedMP4SegmentDiagnostics()
-        lastSyncVideoTime = nil
         assetWriter.flushSegment()
         segmentStartTime = sample.sortTime
       }
@@ -234,7 +211,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
         return
       }
       hasAppendedSample = true
-      recordDiagnostics(for: sample)
       if segmentStartTime == nil, sample.isSyncVideo {
         segmentStartTime = sample.sortTime
       }
@@ -284,13 +260,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       return
     }
     self.finishHandler = nil
-    if currentSegmentDiagnostics.videoSampleCount > 0
-      || currentSegmentDiagnostics.audioSampleCount > 0
-    {
-      pendingSegmentDiagnostics.append(currentSegmentDiagnostics)
-      currentSegmentDiagnostics = SegmentedMP4SegmentDiagnostics()
-      lastSyncVideoTime = nil
-    }
     videoInput.markAsFinished()
     audioInput.markAsFinished()
     AVAssetWriterLifecycleGate.finish(
@@ -321,55 +290,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
     if let finishHandler {
       self.finishHandler = nil
       finishHandler(.failure(error))
-    }
-  }
-
-  private func recordDiagnostics(for sample: PendingSample) {
-    switch sample.track {
-    case .video:
-      currentSegmentDiagnostics.videoSampleCount += CMSampleBufferGetNumSamples(sample.buffer)
-      guard sample.isSyncVideo else { return }
-      currentSegmentDiagnostics.syncVideoSampleCount += 1
-      recordSyncVideoInterval(endingAt: sample.sortTime)
-      lastSyncVideoTime = sample.sortTime
-    case .audio:
-      currentSegmentDiagnostics.audioSampleCount += 1
-      currentSegmentDiagnostics.audioFrameCount += CMSampleBufferGetNumSamples(sample.buffer)
-    }
-  }
-
-  private func recordSyncVideoInterval(endingAt time: CMTime) {
-    guard let lastSyncVideoTime else { return }
-    let interval = CMTimeSubtract(time, lastSyncVideoTime).seconds
-    guard interval.isFinite, interval >= 0 else { return }
-    currentSegmentDiagnostics.maximumSyncVideoIntervalSeconds = max(
-      currentSegmentDiagnostics.maximumSyncVideoIntervalSeconds ?? 0,
-      interval)
-  }
-
-  private func logBoundaryDiagnostics(
-    segmentNumber: Int,
-    durationMilliseconds: Int64,
-    diagnostics: SegmentedMP4SegmentDiagnostics?,
-    maximumSyncIntervalMilliseconds: Int64
-  ) {
-    if diagnostics?.syncVideoSampleCount != 1 {
-      muxedPassthroughSegmentLogger.error(
-        "[event:dash.segment.invalid-boundary] segment=\(segmentNumber, privacy: .public) durationMs=\(durationMilliseconds, privacy: .public) syncSamples=\(diagnostics?.syncVideoSampleCount ?? -1, privacy: .public)"
-      )
-    }
-    if durationMilliseconds >= 8_000 || maximumSyncIntervalMilliseconds >= 8_000 {
-      muxedPassthroughSegmentLogger.error(
-        "[event:dash.segment.gop-contract-violation] segment=\(segmentNumber, privacy: .public) durationMs=\(durationMilliseconds, privacy: .public) maxSyncGapMs=\(maximumSyncIntervalMilliseconds, privacy: .public)"
-      )
-    } else if durationMilliseconds > 4_000 || maximumSyncIntervalMilliseconds > 4_000 {
-      muxedPassthroughSegmentLogger.warning(
-        "[event:dash.segment.long] segment=\(segmentNumber, privacy: .public) durationMs=\(durationMilliseconds, privacy: .public) maxSyncGapMs=\(maximumSyncIntervalMilliseconds, privacy: .public)"
-      )
-    } else if durationMilliseconds >= 0 && durationMilliseconds < 1_000 {
-      muxedPassthroughSegmentLogger.notice(
-        "[event:dash.segment.short] segment=\(segmentNumber, privacy: .public) durationMs=\(durationMilliseconds, privacy: .public)"
-      )
     }
   }
 
@@ -473,10 +393,6 @@ public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDe
       durationSeconds: durationSeconds)
   }
 
-  private static func milliseconds(_ seconds: Double?) -> Int64 {
-    guard let seconds, seconds.isFinite else { return -1 }
-    return Int64(clamping: Int((seconds * 1_000).rounded()))
-  }
 }
 
 struct MuxedPassthroughTrackTiming: Equatable, Sendable {

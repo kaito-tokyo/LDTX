@@ -5,7 +5,6 @@
 import CoreMedia
 import Foundation
 import LDTXBackgroundSegmentation
-import LDTXDiagnostics
 import LDTXProgramRuntime
 import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
@@ -42,7 +41,6 @@ protocol SessionRecordServicing: AnyObject, Sendable {
   @MainActor func cancelBeforeFirstVideo(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void)
   func recordingTimelineMilliseconds() -> UInt64?
-  func recordOutputStarted()
 }
 
 extension SessionRecordServicing {
@@ -967,13 +965,13 @@ final class WorkspaceEventCoordinator {
   @ObservationIgnored private var generation: UInt64 = 0
   var isLocked = false
 
-  init(logger: EventTaskLogger) {
-    queue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.events", logger: logger)
+  init() {
+    queue = EventTaskQueue(label: "tokyo.kaito.ldtx.workspace.events")
   }
 
   @discardableResult
   func enqueue(
-    _ operation: @escaping @MainActor @Sendable (EventTaskLogger) async -> Void
+    _ operation: @escaping @MainActor @Sendable () async -> Void
   ) -> Bool {
     let completionState = WorkspaceEventCompletion()
     generation &+= 1
@@ -984,13 +982,13 @@ final class WorkspaceEventCoordinator {
         Task { @MainActor in completionState.finish() }
       },
       { completion in
-        { _, logger in
+        { _ in
           Task { @MainActor in
             defer {
               completionState.finish()
               completion()
             }
-            await operation(logger)
+            await operation()
           }
         }
       })

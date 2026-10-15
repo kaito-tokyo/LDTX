@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXDiagnostics
 
 public struct TaskQueueStopped: Error, Equatable, Sendable {
   public init() {}
@@ -33,7 +32,7 @@ public final class StopToken: @unchecked Sendable {
 /// its shutdown and must eventually invoke its bound completion closure.
 public final class EventTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
-  public typealias Task = @Sendable (_ stopToken: StopToken, _ logger: EventTaskLogger) -> Void
+  public typealias Task = @Sendable (_ stopToken: StopToken) -> Void
   public typealias TaskFactory = @Sendable (_ completion: @escaping Completion) -> Task
 
   private enum State {
@@ -53,17 +52,15 @@ public final class EventTaskQueue: @unchecked Sendable {
 
   private let controlQueue: DispatchQueue
   private let executionQueue: DispatchQueue
-  private let logger: EventTaskLogger
   private var state = State.accepting
   private var pending: [Entry] = []
   private var runningID: UUID?
   private var discardCallbacksInFlight = 0
   private var stopHandlers: [@MainActor @Sendable () -> Void] = []
 
-  public init(label: String, logger: EventTaskLogger) {
+  public init(label: String) {
     controlQueue = DispatchQueue(label: label)
     executionQueue = DispatchQueue(label: "\(label).execution")
-    self.logger = logger
   }
 
   /// Constructs a task after binding its one-shot completion closure. The
@@ -122,8 +119,8 @@ public final class EventTaskQueue: @unchecked Sendable {
     guard !pending.isEmpty else { return }
     let entry = pending.removeFirst()
     runningID = entry.id
-    executionQueue.async { [stopToken, logger] in
-      entry.task(stopToken, logger)
+    executionQueue.async { [stopToken] in
+      entry.task(stopToken)
     }
   }
 
@@ -157,10 +154,7 @@ public final class EventTaskQueue: @unchecked Sendable {
     state = .stopped
     let handlers = stopHandlers
     stopHandlers.removeAll()
-    _Concurrency.Task { [logger] in
-      await logger.close()
-      handlers.forEach(notifyOnMainActor)
-    }
+    handlers.forEach(notifyOnMainActor)
   }
 
   private func notifyOnMainActor(_ handler: @escaping @MainActor @Sendable () -> Void) {

@@ -54,22 +54,9 @@ does not flatten, replace, or rename the durable recording file.
 - Optional `Markers/HH-MM-SS.mmm.txt`: UTF-8 user-authored marker notes. The
   filename is the recording timecode; the UI presents the equivalent
   `HH:MM:SS.mmm` form.
-- Optional `Diagnostics/events.jsonl`: privacy-limited recording lifecycle
-  events used to correlate the recording with the separate application load
-  database. Each complete line contains only `timestamp_unix_ms`, the
-  per-launch random `launch_id`, `uptime_ms`, and a fixed event `kind`. Readers
-  ignore an incomplete final line after an interrupted recording.
 - `.finalized`: zero-byte completion marker, created last after every media
   writer, `manifest.mpd`, and `Info.plist` have been finalized successfully.
 - Optional protobuf metadata and derived artifacts not required for remuxing.
-
-The diagnostics event kinds are `recording_started`, `output_started`,
-`output_stopped`, `output_reconstruction_requested`, `normal_completion`, and
-`abnormal_stop`. The event log does not contain paths, Program or device names,
-YouTube identifiers, free-form messages, or error descriptions. It is advisory:
-missing events never change recording verification or recovery behavior.
-`timestamp_unix_ms` is UTC Unix time for comparison with the application load
-database. `uptime_ms` is elapsed monotonic time since that LDTX app launch.
 
 If `.finalized` is absent, the package may still be recording, may have been
 interrupted, or may predate the marker. Its contents can be inspected, but
@@ -129,8 +116,7 @@ satisfy the encoder's continuity checks. MP4 AAC timestamps are rounded to the
 nearest audio sample; the DASH timeline retains the source timing at 1 ns
 resolution. Missing input still produces silence. All Representations use a
 common presentation origin so that their relative starting offsets remain
-explicit in the DASH timeline. Optional protobuf metadata may retain the
-original host-clock origin when absolute capture diagnostics require it.
+explicit in the DASH timeline.
 
 A multiplexed video/audio Representation may contain a `SupplementalProperty`
 with `schemeIdUri="urn:tokyo.kaito.ldtx:audio-presentation-start-ns"`. Its `value`

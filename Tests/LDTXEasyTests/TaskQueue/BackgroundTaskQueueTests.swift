@@ -3,39 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXDiagnostics
 import LDTXTaskQueue
 import Testing
 
 @Suite
 struct SessionTaskQueueIntegrationTestSuite {
-  @Test func passesTheInjectedLoggerToTaskAndFinalizer() {
-    let logger = EventTaskLogger.disabled
-    let taskReceived = DispatchSemaphore(value: 0)
-    let finalizerReceived = DispatchSemaphore(value: 0)
-    let queue = SessionTaskQueue(label: "test.session.logger", logger: logger) { completion in
-      { _, taskLogger in
-        if taskLogger !== logger { Issue.record("Finalizer received a different logger") }
-        finalizerReceived.signal()
-        completion()
-      }
-    }
-    #expect(
-      queue.submit(key: SessionTaskKey("task"), source: .normal) { completion in
-        { _, taskLogger in
-          if taskLogger !== logger { Issue.record("Task received a different logger") }
-          taskReceived.signal()
-          completion()
-        }
-      })
-    #expect(taskReceived.wait(timeout: .now() + 1) == .success)
-    queue.finish()
-    #expect(finalizerReceived.wait(timeout: .now() + 1) == .success)
-  }
-
   @Test func executesFireAndForgetTasksSerially() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.serial", logger: .disabled)
+    let queue = SessionTaskQueue(label: "test.session.serial")
 
     #expect(
       queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
@@ -52,7 +27,7 @@ struct SessionTaskQueueIntegrationTestSuite {
 
   @Test func deduplicatesRunningAndPendingKeys() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.deduplicate", logger: .disabled)
+    let queue = SessionTaskQueue(label: "test.session.deduplicate")
 
     #expect(
       queue.submit(key: SessionTaskKey("vision"), source: .normal, task(named: "first", log: log)))
@@ -76,7 +51,7 @@ struct SessionTaskQueueIntegrationTestSuite {
 
   @Test func whenIdleSkipsWhileQueueHasWork() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.when-idle", logger: .disabled)
+    let queue = SessionTaskQueue(label: "test.session.when-idle")
 
     #expect(
       queue.submit(
@@ -93,7 +68,7 @@ struct SessionTaskQueueIntegrationTestSuite {
 
   @Test func stopSignalsRunningTaskDropsPendingAndNotifiesOnMainActor() async {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.cancel", logger: .disabled)
+    let queue = SessionTaskQueue(label: "test.session.cancel")
 
     #expect(
       queue.submit(
@@ -121,7 +96,7 @@ struct SessionTaskQueueIntegrationTestSuite {
 
   @Test func completionIsOneShot() {
     let log = BackgroundQueueTestLog()
-    let queue = SessionTaskQueue(label: "test.session.oneshot", logger: .disabled)
+    let queue = SessionTaskQueue(label: "test.session.oneshot")
     #expect(
       queue.submit(key: SessionTaskKey("first"), source: .normal, task(named: "first", log: log)))
     #expect(
@@ -139,8 +114,8 @@ struct SessionTaskQueueIntegrationTestSuite {
   @Test(.timeLimit(.minutes(1)))
   func finishClosesSubmissionsThenRunsFinalizer() async throws {
     let finalizerStarted = TaskQueueAsyncSignal()
-    let queue = SessionTaskQueue(label: "test.session.finish", logger: .disabled) { completion in
-      { _, _ in
+    let queue = SessionTaskQueue(label: "test.session.finish") { completion in
+      { _ in
         finalizerStarted.signal()
         completion()
       }
@@ -151,7 +126,7 @@ struct SessionTaskQueueIntegrationTestSuite {
 
     #expect(
       queue.submit(key: SessionTaskKey("first"), source: .normal) { completion in
-        { _, _ in
+        { _ in
           firstStarted.signal()
           releaseFirst.wait()
           completion()
@@ -160,7 +135,7 @@ struct SessionTaskQueueIntegrationTestSuite {
     await firstStarted.wait()
     queue.finish { finishCompleted.signal() }
     let laterTask: SessionTaskQueue.TaskFactory = { completion in
-      { _, _ in completion() }
+      { _ in completion() }
     }
     let acceptedLater = queue.submit(
       key: SessionTaskKey("later"), source: .normal, laterTask)
@@ -178,7 +153,7 @@ struct SessionTaskQueueIntegrationTestSuite {
     log: BackgroundQueueTestLog
   ) -> SessionTaskQueue.TaskFactory {
     { completion in
-      { stopToken, _ in
+      { stopToken in
         log.start(name, stopToken: stopToken, completion: completion)
       }
     }

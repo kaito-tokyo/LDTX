@@ -37,7 +37,7 @@ Workspace reconfiguration and shutdown determine capture lifetime.
 `ActiveProgramOutputSession` is a single-use output graph, but its lifetime is
 distinct from a Session Record. `SessionRecordService` writes exactly one
 standalone `.ldtxrecord` package and owns only that package's writers, AAC
-encoders, timeline, MPD, and diagnostics. It owns no capture session, physical
+encoders, timeline, and MPD. It owns no capture session, physical
 device, Workspace subscription, or shared H.264 encoder.
 
 A Cut replaces the current `SessionRecordService` at the next naturally

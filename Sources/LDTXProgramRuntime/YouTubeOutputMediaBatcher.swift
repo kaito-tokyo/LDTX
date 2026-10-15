@@ -156,8 +156,8 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
 
   private static func makeResourceQueue() -> ResourceTaskQueue<ResourceTask> {
     ResourceTaskQueue(
-      label: "tokyo.kaito.ldtx.youtube-output-media-batcher", logger: .disabled
-    ) { task, _, _ in
+      label: "tokyo.kaito.ldtx.youtube-output-media-batcher"
+    ) { task, _ in
       task.execute()
     }
   }

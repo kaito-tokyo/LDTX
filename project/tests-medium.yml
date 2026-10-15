@@ -20,7 +20,6 @@ targets:
       - target: LDTXRecordPlayerApplet
       - target: LDTXSettingsApplet
       - target: LDTXCapture
-      - target: LDTXDiagnostics
       - target: LDTXMP4
       - target: LDTXProgram
       - target: LDTXProtos

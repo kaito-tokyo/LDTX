@@ -4,10 +4,6 @@
 
 import Foundation
 import LDTXMP4
-import OSLog
-
-private let dashManifestLogger = Logger(
-  subsystem: "tokyo.kaito.ldtx", category: "DASHManifest")
 
 public enum DASHLiveUploadPipelineEvent: Equatable, Sendable {
   case initializationPrepared(byteCount: Int)
@@ -22,16 +18,6 @@ public struct DASHLiveUploadManifestState: Equatable, Sendable {
   public init(startNumber: Int, availabilityStartTime: Date) {
     self.startNumber = startNumber
     self.availabilityStartTime = availabilityStartTime
-  }
-}
-
-public struct DASHLiveUploadDiagnosticContext: Equatable, Sendable {
-  public var sessionID: UUID?
-  public var revision: UInt64?
-
-  public init(sessionID: UUID? = nil, revision: UInt64? = nil) {
-    self.sessionID = sessionID
-    self.revision = revision
   }
 }
 
@@ -63,7 +49,6 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
 
   private let uploadClient: DASHUploadClient
   private var baseManifestConfiguration: DASHManifestConfiguration
-  private let diagnosticContext: DASHLiveUploadDiagnosticContext
   private let manifestStateHandler: @Sendable (DASHLiveUploadManifestState) -> Void
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.DASHLiveUploadPipeline")
   private var uploadedManifest = false
@@ -77,7 +62,6 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     manifestConfiguration: DASHManifestConfiguration,
     session: any HTTPSession = URLSession.shared,
     retryPolicy: DASHRetryPolicy = DASHRetryPolicy(),
-    diagnosticContext: DASHLiveUploadDiagnosticContext = DASHLiveUploadDiagnosticContext(),
     manifestStateHandler: @escaping @Sendable (DASHLiveUploadManifestState) -> Void = { _ in }
   ) {
     uploadClient = DASHUploadClient(
@@ -86,19 +70,16 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
       retryPolicy: retryPolicy
     )
     baseManifestConfiguration = manifestConfiguration
-    self.diagnosticContext = diagnosticContext
     self.manifestStateHandler = manifestStateHandler
   }
 
   public init(
     uploadClient: DASHUploadClient,
     manifestConfiguration: DASHManifestConfiguration,
-    diagnosticContext: DASHLiveUploadDiagnosticContext = DASHLiveUploadDiagnosticContext(),
     manifestStateHandler: @escaping @Sendable (DASHLiveUploadManifestState) -> Void = { _ in }
   ) {
     self.uploadClient = uploadClient
     baseManifestConfiguration = manifestConfiguration
-    self.diagnosticContext = diagnosticContext
     self.manifestStateHandler = manifestStateHandler
   }
 
@@ -191,10 +172,7 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
                 completionHandler(.failure(error))
                 return
               }
-              self.publishManifest(
-                using: latestInitializationSegment,
-                reason: self.uploadedManifest ? "media" : "initial"
-              ) { manifestResult in
+              self.publishManifest(using: latestInitializationSegment) { manifestResult in
                 switch manifestResult {
                 case .success:
                   completionHandler(
@@ -213,11 +191,10 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
 
   private func publishManifest(
     using initializationSegment: Data,
-    reason: String,
     completionHandler: @escaping @Sendable (Result<DASHLiveUploadPipelineEvent, any Error>) -> Void
   ) {
     dispatchPrecondition(condition: .onQueue(queue))
-    guard let number = segmentTimeline.first?.number else {
+    guard segmentTimeline.first != nil else {
       completionHandler(.failure(DASHLiveUploadPipelineError.mediaSegmentMissingTiming(0)))
       return
     }
@@ -237,16 +214,9 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         switch result {
         case .failure(let error):
           completionHandler(.failure(error))
-        case .success(let response):
+        case .success:
           self.uploadedManifest = true
           self.manifestStateHandler(self.manifestState())
-          let diagnosticSession = self.diagnosticContext.sessionID?.uuidString ?? "unavailable"
-          let diagnosticRevision =
-            self.diagnosticContext.revision.map(String.init)
-            ?? "unavailable"
-          dashManifestLogger.notice(
-            "[event:dash.manifest.published] session=\(diagnosticSession, privacy: .public) revision=\(diagnosticRevision, privacy: .public) reason=\(reason, privacy: .public) startSegment=\(number, privacy: .public) availabilityStartMs=\(Self.epochMilliseconds(self.baseManifestConfiguration.availabilityStartTime), privacy: .public) bytes=\(manifest.utf8.count, privacy: .public) status=\(response.statusCode, privacy: .public)"
-          )
           completionHandler(.success(.manifestUploaded(byteCount: manifest.utf8.count)))
         }
       }
@@ -341,15 +311,8 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
         case .failure(let error):
           self.segmentTimeline = timelineBeforeRecovery
           completionHandler(.failure(error))
-        case .success(let response):
+        case .success:
           self.manifestStateHandler(self.manifestState())
-          let diagnosticSession = self.diagnosticContext.sessionID?.uuidString ?? "unavailable"
-          let diagnosticRevision =
-            self.diagnosticContext.revision.map(String.init)
-            ?? "unavailable"
-          dashManifestLogger.notice(
-            "[event:dash.manifest.published] session=\(diagnosticSession, privacy: .public) revision=\(diagnosticRevision, privacy: .public) reason=http409Recovery startSegment=\(number, privacy: .public) availabilityStartMs=\(Self.epochMilliseconds(self.baseManifestConfiguration.availabilityStartTime), privacy: .public) bytes=\(manifest.utf8.count, privacy: .public) status=\(response.statusCode, privacy: .public)"
-          )
           self.uploadClient.put(object) { result in
             self.queue.async {
               switch result {
@@ -462,7 +425,4 @@ public final class DASHLiveUploadPipeline: @unchecked Sendable {
     segmentTimeline.removeLast()
   }
 
-  private static func epochMilliseconds(_ date: Date) -> Int64 {
-    Int64(clamping: Int((date.timeIntervalSince1970 * 1_000).rounded()))
-  }
 }

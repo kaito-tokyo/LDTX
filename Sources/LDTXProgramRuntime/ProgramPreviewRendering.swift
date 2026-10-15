@@ -133,9 +133,6 @@ public struct ProgramRuntimeConfiguration: Sendable {
     self.videoLayerProgramName = videoLayerProgramName
   }
 
-  public var diagnosticDescription: String {
-    "canvas=\(canvasWidth)x\(canvasHeight), output=\(outputWidth)x\(outputHeight), fps=\(frameRate), videoPTSMasterCameraID=\(videoPTSMasterCameraID ?? "hostClock"), cameraIDs=\(cameraIDsByInputKey), inputDeviceNames=\(inputDeviceNamesByInputKey), cameraInputColorOverrides=\(cameraInputColorOverrides), backgroundRemovalInputKeys=\(backgroundRemovalInputKeys.sorted()), audioChannels=\(audioChannels.map { $0.component.definition.rawValue }.joined(separator: ",")), steps=\(composite.steps.map { $0.component.definition.rawValue }.joined(separator: ","))"
-  }
 }
 
 extension ProgramRuntimeConfiguration {

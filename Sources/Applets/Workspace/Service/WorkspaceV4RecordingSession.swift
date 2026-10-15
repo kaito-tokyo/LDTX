@@ -166,7 +166,6 @@ public final class WorkspaceV4RecordingSession {
           recordsLandscape: recordsLandscape,
           recordsPortrait: recordsPortrait,
           customFields: output.recordingSettings.customFields,
-          diagnosticsContext: RecordingDiagnosticsContext(),
           failureHandler: { [weak self] error in
             Task { @MainActor in await self?.fail(error) }
           })

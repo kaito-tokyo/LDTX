@@ -94,8 +94,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Medium | `WorkspaceV4PersistenceCoordinatorIntegrationTestSuite` | `Tests/LDTXMediumTests/App/WorkspaceV4PersistenceCoordinatorTests.swift` |
 | Medium | `YouTubeAuthStateIntegrationTestSuite` | `Tests/LDTXMediumTests/App/YouTubeAuthStateTests.swift` |
 | Output | `DASHLocalFilePipelineIntegrationTestSuite` | `Tests/LDTXOutputTests/Dash/DASHLocalFilePipelineTests.swift` |
-| Medium | `DiagnosticsDatabaseIntegrationTestSuite` | `Tests/LDTXMediumTests/Diagnostics/DiagnosticsDatabaseTests.swift` |
-| Medium | `EventTaskLoggerIntegrationTestSuite` | `Tests/LDTXMediumTests/Diagnostics/EventTaskLoggerTests.swift` |
 | Medium | `WorkspaceCaptureSessionCoordinatorIntegrationTestSuite` | `Tests/LDTXMediumTests/Integration/WorkspaceCaptureSessionCoordinatorTests.swift` |
 | Output | `YouTubeOutputMediaBatcherIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputMediaBatcherTests.swift` |
 | Output | `MP4TimingBoxUnitTestSuite` | `Tests/LDTXOutputTests/MP4/MP4TimingBoxTests.swift` |
@@ -110,7 +108,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `ProgramVideoPTSSelectorHostClockIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorHostClockTests.swift` |
 | Output | `ProgramVideoPTSSelectorUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorTests.swift` |
 | Output | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
-| Corelibs | `RecordingDiagnosticsEventLogIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingDiagnosticsEventLogTests.swift` |
 | Corelibs | `RecordingPackageIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXMediumTests/Vision/VisionFramePoolTests.swift` |
 | Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | `Tests/LDTXMediumTests/YouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |

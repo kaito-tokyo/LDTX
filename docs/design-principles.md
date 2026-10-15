@@ -170,7 +170,7 @@ the relevant design or feature documentation instead.
 ## Preserve observable failures
 
 - Failures during startup, output, and finalization must remain observable to
-  the user and diagnostics.
+  the user.
 - Cleanup must not replace an actionable failure with a generic idle or
   successful state.
 

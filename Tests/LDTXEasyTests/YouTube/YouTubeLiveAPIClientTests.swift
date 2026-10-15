@@ -452,43 +452,6 @@ struct YouTubeLiveAPIClientUnitTestSuite {
 
     try await client.awaitDeleteLiveStream(id: "stream-id")
   }
-
-  @Test func rejectedErrorProducesSanitizedDiagnosticSummary() {
-    let body = Data(
-      """
-      {
-        "error": {
-          "code": 403,
-          "message": "The broadcast cannot be bound to the stream.",
-          "status": "PERMISSION_DENIED",
-          "errors": [
-            {
-              "domain": "youtube.liveBroadcast",
-              "reason": "liveBroadcastBindingNotAllowed",
-              "message": "The broadcast cannot be bound to the stream."
-            }
-          ]
-        }
-      }
-      """.utf8
-    )
-
-    let error = YouTubeLiveAPIError.rejected(statusCode: 403, body: body)
-
-    assertEqual(
-      error.sanitizedDiagnosticSummary,
-      "httpStatus=403 googleStatus=PERMISSION_DENIED domains=youtube.liveBroadcast reasons=liveBroadcastBindingNotAllowed message=The broadcast cannot be bound to the stream."
-    )
-  }
-
-  @Test func rejectedErrorFallsBackToHTTPStatusWhenBodyIsNotJSON() {
-    let error = YouTubeLiveAPIError.rejected(
-      statusCode: 500,
-      body: Data("upstream failure".utf8)
-    )
-
-    assertEqual(error.sanitizedDiagnosticSummary, "httpStatus=500")
-  }
 }
 
 private func assertEqual<Value: Equatable>(_ actual: Value, _ expected: Value) {
