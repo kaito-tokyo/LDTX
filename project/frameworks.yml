@@ -538,7 +538,7 @@ targets:
       - path: Sources/Applets/Workspace
         includes:
           - WorkspaceDocument.swift
-          - WorkspaceScene.swift
+          - WorkspaceDocumentContent.swift
           - WorkspaceTerminationDelegate.swift
           - WorkspaceToolbarCoordinator.swift
           - WorkspaceViewController.swift

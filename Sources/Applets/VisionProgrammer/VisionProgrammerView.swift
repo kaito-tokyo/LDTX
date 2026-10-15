@@ -8,7 +8,7 @@ import LDTXVisionTraining
 import SwiftUI
 import UniformTypeIdentifiers
 
-public struct VisionProgrammerScene: Scene {
+public struct VisionProgrammerView: View {
   public static let id = "vision-programmer"
 
   @State private var datasetURL: URL?
@@ -35,15 +35,7 @@ public struct VisionProgrammerScene: Scene {
     _status = State(initialValue: status)
   }
 
-  public var body: some Scene {
-    Window("Vision Programmer", id: Self.id) {
-      content
-    }
-    .defaultSize(width: 700, height: 500)
-    .windowToolbarStyle(.unified)
-  }
-
-  var content: some View {
+  public var body: some View {
     NavigationSplitView {
       List(selection: $selectedVision) {
         Text("Scene Detector")
@@ -286,6 +278,6 @@ private struct FolderPathPicker: NSViewRepresentable {
 
 #if DEBUG
   #Preview {
-    VisionProgrammerScene().content
+    VisionProgrammerView()
   }
 #endif

@@ -28,12 +28,32 @@ struct LDTXApp: App {
 
   var body: some Scene {
     Group {
-      RecordPlayerScene()
-      WorkspaceScene()
-      SettingsScene()
-        .defaultLaunchBehavior(.suppressed)
-      VisionProgrammerScene()
-        .defaultLaunchBehavior(.suppressed)
+      DocumentGroup(allowCreating: false) { (document: RecordPlayerDocument) in
+        RecordPlayerDocumentContent(document: document)
+      } makeDocument: { configuration, _ in
+        RecordPlayerDocument(configuration: configuration)
+      }
+      .defaultSize(width: 960, height: 600)
+      .windowToolbarStyle(.unified)
+
+      DocumentGroup { (document: WorkspaceDocument) in
+        WorkspaceDocumentContent(document: document)
+      } makeDocument: { configuration, _ in
+        WorkspaceDocument(configuration: configuration)
+      }
+      .windowToolbarStyle(.unified)
+
+      Settings {
+        SettingsRootView()
+      }
+      .defaultLaunchBehavior(.suppressed)
+
+      Window("Vision Programmer", id: VisionProgrammerView.id) {
+        VisionProgrammerView()
+      }
+      .defaultSize(width: 700, height: 500)
+      .windowToolbarStyle(.unified)
+      .defaultLaunchBehavior(.suppressed)
     }
     .commands {
       VisionProgrammerCommands()

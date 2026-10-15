@@ -34,7 +34,7 @@ public final class RecordPlayerDocument: Document {
   public var fileURL: URL? { configuration?.fileURL ?? initialURL }
   public var canModifyMarkers: Bool { fileURL != nil }
 
-  init(configuration: URLDocumentConfiguration) {
+  public init(configuration: URLDocumentConfiguration) {
     self.configuration = configuration
     initialURL = configuration.fileURL
   }
