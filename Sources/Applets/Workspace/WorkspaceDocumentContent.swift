@@ -9,16 +9,17 @@ import SwiftUI
 
 public struct WorkspaceDocumentContent: View {
   let document: WorkspaceDocument
-  let landscapeRuntime: ProgramRuntime
-  let portraitRuntime: ProgramRuntime
-  let metalView: MTKView
-  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+  let landscapeRuntime: ProgramRuntime?
+  let portraitRuntime: ProgramRuntime?
+  let metalView: MTKView?
+  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?
+  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry?
 
   public init(
-    document: WorkspaceDocument, landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
-    metalView: MTKView, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+    document: WorkspaceDocument,
+    landscapeRuntime: ProgramRuntime?, portraitRuntime: ProgramRuntime?,
+    metalView: MTKView?, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry?
   ) {
     self.document = document
     self.landscapeRuntime = landscapeRuntime
@@ -29,12 +30,16 @@ public struct WorkspaceDocumentContent: View {
   }
 
   public var body: some View {
-    WorkspaceViewControllerRepresentation(
-      document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
-      metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
-      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
-    )
-    .focusedSceneValue(\.workspaceUndoDisabled, true)
+    if let landscapeRuntime, let portraitRuntime, let metalView,
+      let captureSessionCoordinator, let lowFrequencyUpdateRegistry
+    {
+      WorkspaceViewControllerRepresentation(
+        document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
+        metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+      )
+      .focusedSceneValue(\.workspaceUndoDisabled, true)
+    }
   }
 }
 

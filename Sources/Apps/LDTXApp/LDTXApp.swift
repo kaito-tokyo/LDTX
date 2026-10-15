@@ -50,13 +50,14 @@ struct LDTXApp: App {
     }
 
     DocumentGroup { (document: WorkspaceDocument) in
-      if let resources = workspaceResources[document.runtimeID] {
-        WorkspaceDocumentContent(
-          document: document, landscapeRuntime: resources.landscape,
-          portraitRuntime: resources.portrait, metalView: resources.metalView,
-          captureSessionCoordinator: resources.capture,
-          lowFrequencyUpdateRegistry: resources.updates)
-      }
+      let resources = workspaceResources[document.runtimeID]
+      WorkspaceDocumentContent(
+        document: document,
+        landscapeRuntime: resources?.landscape,
+        portraitRuntime: resources?.portrait,
+        metalView: resources?.metalView,
+        captureSessionCoordinator: resources?.capture,
+        lowFrequencyUpdateRegistry: resources?.updates)
     } makeDocument: { configuration, _ in
       let resources = $workspaceResources
       let document = WorkspaceDocument(configuration: configuration) { id in
