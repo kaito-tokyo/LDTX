@@ -10,7 +10,7 @@ the Record Player and Workspace `DocumentGroup`s, `Settings`, and the Vision
 Programmer `Window`. Applets provide documents, content Views, and their processing.
 App initialization configures authentication storage.
 DocumentGroup initializes and manages both Workspace and Record Player documents.
-The App installs WorkspaceTerminationDelegate through NSApplicationDelegateAdaptor
+The App installs AppDelegate through NSApplicationDelegateAdaptor
 to wait for output shutdown.
 SwiftUI owns the main menu and Scene presentation.
 The Record Player DocumentGroup is the first Scene and uses the
