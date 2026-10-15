@@ -502,7 +502,7 @@ public final class SessionRecordService: @unchecked Sendable {
       _ in
     }
   ) {
-    stop(completionHandler: completionHandler)
+    finalizeStop(completionHandler: completionHandler)
   }
 
   /// Finalizes a completed record at a Cut boundary.  A Cut ends only this
@@ -515,7 +515,7 @@ public final class SessionRecordService: @unchecked Sendable {
     stop(completionHandler: completionHandler)
   }
 
-  @MainActor private func stop(
+  @MainActor private func finalizeStop(
     completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
   ) {
     if let finalizationResult {
