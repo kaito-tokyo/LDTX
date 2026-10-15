@@ -4,25 +4,13 @@
 
 import SwiftUI
 
-public struct RecordPlayerScene: Scene {
-  public init() {}
-
-  public var body: some Scene {
-    DocumentGroup(allowCreating: false) { (document: RecordPlayerDocument) in
-      RecordPlayerDocumentContent(document: document)
-    } makeDocument: { configuration, _ in
-      RecordPlayerDocument(configuration: configuration)
-    }
-    .defaultSize(width: 960, height: 600)
-    .windowToolbarStyle(.unified)
-  }
-}
-
-private struct RecordPlayerDocumentContent: View {
+public struct RecordPlayerDocumentContent: View {
   let document: RecordPlayerDocument
   @Environment(\.dismiss) private var dismiss
 
-  var body: some View {
+  public init(document: RecordPlayerDocument) { self.document = document }
+
+  public var body: some View {
     LDTXRecordPlayerView(model: document.model, document: document, requestClose: { dismiss() })
   }
 }

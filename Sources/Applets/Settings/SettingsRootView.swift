@@ -5,24 +5,16 @@
 import AppKit
 import SwiftUI
 
-public struct SettingsScene: Scene {
-  public init() {}
-
-  public var body: some Scene {
-    Settings {
-      SettingsSceneContent()
-    }
-  }
-}
-
-private struct SettingsSceneContent: View {
+public struct SettingsRootView: View {
   @StateObject private var account = SettingsAccountModel(
     authorizationService: SettingsAuthorizationServiceFactory.make())
   @State private var monitorSettings = MonitorDeviceSettingsModel()
   @State private var error: Error?
   @State private var isShowingError = false
 
-  var body: some View {
+  public init() {}
+
+  public var body: some View {
     SettingsContent(account: account, monitorSettings: monitorSettings)
       .onAppear {
         monitorSettings.reportError = {

@@ -11,7 +11,7 @@ public struct VisionProgrammerCommands: Commands {
 
   public var body: some Commands {
     CommandGroup(after: .appSettings) {
-      Button("Vision Programmer…") { openWindow(id: VisionProgrammerScene.id) }
+      Button("Vision Programmer…") { openWindow(id: VisionProgrammerView.id) }
     }
   }
 }

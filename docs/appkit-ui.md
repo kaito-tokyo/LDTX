@@ -5,19 +5,21 @@ SPDX-License-Identifier: Apache-2.0
 
 # Application and pane ownership
 
-LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body declares
-`RecordPlayerScene`, `WorkspaceScene`, `SettingsScene`, and
-`VisionProgrammerScene`. App initialization configures authentication storage.
+LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body directly declares
+the Record Player and Workspace `DocumentGroup`s, `Settings`, and the Vision
+Programmer `Window`. Applets provide documents, content Views, and their processing.
+App initialization configures authentication storage.
 DocumentGroup initializes and manages both Workspace and Record Player documents.
 The App installs WorkspaceTerminationDelegate through NSApplicationDelegateAdaptor
 to wait for output shutdown.
 SwiftUI owns the main menu and Scene presentation.
-RecordPlayerScene is the first Scene and declares a DocumentGroup using the
-macOS 27 Document API. WorkspaceScene also declares a DocumentGroup. SettingsScene supplies the standard Settings scene and VisionProgrammerScene supplies its training windows. Vision Programmer
+The Record Player DocumentGroup is the first Scene and uses the
+macOS 27 Document API, as does the Workspace DocumentGroup. SettingsRootView
+provides settings content and VisionProgrammerView owns training state and processing. Vision Programmer
 is suppressed as a default launch window in LDTXApp, but opens normally in the
 standalone test app.
 
-LDTXApp groups these Scenes and installs VisionProgrammerCommands and RecordPlayerCommands on
+LDTXApp groups these Scenes and installs VisionProgrammerCommands, RecordPlayerCommands, and WorkspaceCommands on
 the Group so the shared menu remains available across windows and without an
 open document. Standard Open and editing commands come from SwiftUI.
 
@@ -314,7 +316,7 @@ Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Expli
 
 Physical assignments, VFX/OCR inputs, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
 
-Monitor output selection is application-wide and belongs to SettingsScene's
+Monitor output selection is application-wide and belongs to SettingsRootView's
 Audio tab. The current device is displayed separately from an initially
 unselected candidate list. Selecting a candidate rechecks availability and
 immediately persists it, without Apply or Cancel. System Default is an explicit candidate.
@@ -340,7 +342,7 @@ The NSHostingController uses `.preferredContentSize` sizing, allowing SwiftUI's
 ideal content size to size the popover without manually laying out or resizing
 the hosting view. See Apple's [Use SwiftUI with AppKit](https://developer.apple.com/videos/play/wwdc2022/10075/).
 
-SettingsScene's Output tab configures the application-wide screenshots folder,
+SettingsRootView's Output tab configures the application-wide screenshots folder,
 defaulting to ~/Pictures. Captures save there regardless of recording state and
 also save identical images in the active local recording's Screenshots folder.
 The toolbar folder action opens the global folder; the result counts images,

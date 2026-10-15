@@ -4,17 +4,14 @@
 
 import SwiftUI
 
-public struct WorkspaceScene: Scene {
-  public init() {}
+public struct WorkspaceDocumentContent: View {
+  let document: WorkspaceDocument
 
-  public var body: some Scene {
-    DocumentGroup { (document: WorkspaceDocument) in
-      WorkspaceViewControllerRepresentation(document: document)
-        .focusedSceneValue(\.workspaceUndoDisabled, true)
-    } makeDocument: { configuration, _ in
-      WorkspaceDocument(configuration: configuration)
-    }
-    .windowToolbarStyle(.unified)
+  public init(document: WorkspaceDocument) { self.document = document }
+
+  public var body: some View {
+    WorkspaceViewControllerRepresentation(document: document)
+      .focusedSceneValue(\.workspaceUndoDisabled, true)
   }
 }
 
