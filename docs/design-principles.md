@@ -45,7 +45,10 @@ the relevant design or feature documentation instead.
   validates them before writing. Saving does not require a represented UI or an editing connection.
 - The Representable receives Document and owns the WindowController through its
   Coordinator. UI receives Document's StateService through Bindable. Runtime
-  resources remain WindowController-owned; Document does not own the controller.
+  ProgramRuntime pairs and preview MTKViews are constructed and retained by App
+  State, keyed by the Document's transient UUID, and injected through initializers.
+  WindowController operates those resources and releases their App registration
+  only after asynchronous shutdown. Document does not own the controller.
 - Snapshot preparation confirms only captured values; newer edits stay in
   StateService. Model IDs are assigned on selection and remain unchanged during
   saving. Snapshots contain model source URLs; Writer copies those resources

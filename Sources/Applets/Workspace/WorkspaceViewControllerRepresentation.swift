@@ -3,21 +3,44 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXProgramRuntime
 import LDTXProtos
+import LDTXTaskQueue
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
+import MetalKit
 import Observation
 import SwiftUI
 
 public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentable {
   let document: WorkspaceDocument
   @Environment(\.undoManager) private var undoManager
-  @Environment(\.workspaceMetalViews) private var metalViews
+  let landscapeRuntime: ProgramRuntime
+  let portraitRuntime: ProgramRuntime
+  let metalView: MTKView
+  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
 
-  public init(document: WorkspaceDocument) { self.document = document }
+  public init(
+    document: WorkspaceDocument, landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
+    metalView: MTKView, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+  ) {
+    self.document = document
+    self.landscapeRuntime = landscapeRuntime
+    self.portraitRuntime = portraitRuntime
+    self.metalView = metalView
+    self.captureSessionCoordinator = captureSessionCoordinator
+    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
+  }
 
   public func makeCoordinator() -> Coordinator {
-    Coordinator(document: document, metalViews: metalViews)
+    Coordinator(
+      document: document,
+      windowController: WorkspaceWindowController(
+        document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
+        metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
+        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
   }
 
   public func makeNSViewController(context: Context) -> WorkspaceViewController {
@@ -48,14 +71,9 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
     private var documentTask: Task<Void, Never>?
     private var readGeneration = 0
 
-    init(
-      document: WorkspaceDocument, windowController: WorkspaceWindowController? = nil,
-      metalViews: WorkspaceMetalViews? = nil
-    ) {
+    init(document: WorkspaceDocument, windowController: WorkspaceWindowController) {
       self.document = document
-      let owner =
-        windowController
-        ?? WorkspaceWindowController(document: document, metalViews: metalViews)
+      let owner = windowController
       self.windowController = owner
       lastObservedSnapshot = owner.stateService.editingWorkspace
       synchronizeDocument()

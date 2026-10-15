@@ -2,16 +2,39 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import LDTXProgramRuntime
+import LDTXTaskQueue
+import MetalKit
 import SwiftUI
 
 public struct WorkspaceDocumentContent: View {
   let document: WorkspaceDocument
+  let landscapeRuntime: ProgramRuntime
+  let portraitRuntime: ProgramRuntime
+  let metalView: MTKView
+  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
 
-  public init(document: WorkspaceDocument) { self.document = document }
+  public init(
+    document: WorkspaceDocument, landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
+    metalView: MTKView, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+  ) {
+    self.document = document
+    self.landscapeRuntime = landscapeRuntime
+    self.portraitRuntime = portraitRuntime
+    self.metalView = metalView
+    self.captureSessionCoordinator = captureSessionCoordinator
+    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
+  }
 
   public var body: some View {
-    WorkspaceViewControllerRepresentation(document: document)
-      .focusedSceneValue(\.workspaceUndoDisabled, true)
+    WorkspaceViewControllerRepresentation(
+      document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
+      metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+    )
+    .focusedSceneValue(\.workspaceUndoDisabled, true)
   }
 }
 

@@ -10,6 +10,7 @@ import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
+import MetalKit
 import Observation
 import SwiftUI
 import Testing
@@ -59,7 +60,7 @@ func makeWorkspaceTestWindow(
     landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
     prefersColor: true)
   let preview = ProgramCanvasPairedPreview(
-    device: renderer.device, delegate: renderer,
+    metalView: MTKView(frame: .zero, device: renderer.device), delegate: renderer,
     onSelectLandscape: { state.selectedAudioMix = .landscape },
     onSelectPortrait: { state.selectedAudioMix = .portrait })
   let context =

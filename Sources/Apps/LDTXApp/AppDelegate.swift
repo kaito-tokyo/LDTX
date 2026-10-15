@@ -3,11 +3,9 @@
 
 import AppKit
 import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-  let metalViews = WorkspaceMetalViews()
   private let termination = WorkspaceApplicationTermination()
 
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

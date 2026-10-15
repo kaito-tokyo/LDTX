@@ -20,45 +20,60 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1017: preserve-preview-and-divider-state", .serialized)
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
-    @Test func applicationRegistryRetainsViewsUntilExplicitRelease() {
-      let registry = WorkspaceMetalViews()
-      let firstID = UUID()
-      let secondID = UUID()
-      weak var retained: MTKView?
-      autoreleasepool {
-        let first = registry.acquire(for: firstID, device: nil)
-        retained = first
+    @Test func unrepresentedDocumentReleasesItsResourceRegistration() {
+      var released: [UUID] = []
+      var document: WorkspaceDocument? = WorkspaceDocument {
+        released.append($0)
       }
-      let second = registry.acquire(for: secondID, device: nil)
-      #expect(retained !== second)
-      #expect(retained != nil)
-      registry.release(for: firstID)
-      #expect(retained == nil)
-      registry.release(for: firstID)
-      registry.release(for: secondID)
+      let id = document!.runtimeID
+      #expect(id != WorkspaceDocument().runtimeID)
+      #expect(released.isEmpty)
+      document = nil
+      #expect(released == [id])
     }
 
-    @Test func shutdownDetachesRegisteredViewAndAllowsNewRuntime() async {
-      let registry = WorkspaceMetalViews()
-      let document = WorkspaceDocument()
+    @Test func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
+      let resources = WorkspaceRuntimeFixture()
+      var released: [UUID] = []
+      let document = WorkspaceDocument { id in
+        #expect(resources.metalView.isPaused)
+        #expect(resources.metalView.delegate == nil)
+        #expect(resources.metalView.superview == nil)
+        released.append(id)
+      }
       let controller = WorkspaceWindowController(
-        document: document, appletData: WorkspaceAppletData(), metalViews: registry)
+        document: document, appletData: WorkspaceAppletData(),
+        landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
+        metalView: resources.metalView, captureSessionCoordinator: resources.capture,
+        lowFrequencyUpdateRegistry: resources.updates)
       let view = controller.pairedPreview.metalView
+      #expect(view === resources.metalView)
+      #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)
+      #expect(controller.windowRuntime.portraitRuntime === resources.portrait)
+      #expect(controller.windowRuntime.captureSessionCoordinator === resources.capture)
       #expect(view.superview === controller.pairedPreview)
       #expect(view.delegate === controller.previewRenderer)
+      #expect(released.isEmpty)
       await controller.shutdown()
       #expect(view.isPaused)
       #expect(view.delegate == nil)
       #expect(view.superview == nil)
-      weak var retained: MTKView?
-      autoreleasepool {
-        retained = registry.acquire(for: document.runtimeID, device: nil)
-      }
+      #expect(released == [document.runtimeID])
       await controller.shutdown()
-      // Repeating an old shutdown must not release the replacement registration.
-      #expect(retained != nil)
-      registry.release(for: document.runtimeID)
+      #expect(released == [document.runtimeID])
+    }
+
+    @Test func runtimeOwnsCleanupAfterDocumentIsReleased() {
+      var released: [UUID] = []
+      var document: WorkspaceDocument? = WorkspaceDocument { released.append($0) }
+      let id = document!.runtimeID
+      weak var retained = document
+      let finishShutdown = document!.claimRuntimeResources()
+      document = nil
       #expect(retained == nil)
+      #expect(released.isEmpty)
+      finishShutdown()
+      #expect(released == [id])
     }
 
     private static var controller: NSDocumentController {
