@@ -2,14 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@UCT-1015 @WorkspaceWindowController
+@UCT-1015 @WorkspaceRuntimeCoordinator
 Feature: Present operation errors
 
   @UCT-1015.1
-  Scenario: Errors are queued on the editing sheet and stop after shutdown
-    Given a Workspace has an open editing sheet
+  Scenario: Errors are queued in SwiftUI and stop after shutdown
+    Given a Workspace is open
     When multiple operation errors are reported and the Workspace shuts down
-    Then error sheets preserve the explanation and recovery advice and are presented in order before shutdown
+    Then SwiftUI alerts preserve the explanation and recovery advice and are presented in order before shutdown
 
   @UCT-1015.2
   Scenario: Runtime failures are scoped and can recur after recovery
@@ -21,4 +21,4 @@ Feature: Present operation errors
   Scenario: Closing a window discards queued and late errors
     Given a Workspace window has a presented error and a queued error
     When the window closes and more operation failures arrive
-    Then no further error sheet is presented
+    Then no further error alert is presented

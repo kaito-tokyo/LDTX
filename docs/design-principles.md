@@ -44,11 +44,11 @@ the relevant design or feature documentation instead.
   and UI state. Document captures those values directly when saving; Writer
   validates them before writing. Saving does not require a represented UI or an editing connection.
 - WorkspaceScene receives Document and retains its connection through SwiftUI State.
-  The connection owns the runtime WindowController.
+  The connection owns the runtime WorkspaceRuntimeCoordinator.
   UI receives Document's StateService through Bindable. Runtime
   ProgramRuntime pairs and preview MTKViews are constructed and retained by App
   State, keyed by the Document's transient UUID, and injected through initializers.
-  WindowController operates those resources and releases their App registration
+  WorkspaceRuntimeCoordinator operates those resources and releases their App registration
   only after asynchronous shutdown. Document does not own the controller.
 - Snapshot preparation confirms only captured values; newer edits stay in
   StateService. Model IDs are assigned on selection and remain unchanged during

@@ -23,14 +23,8 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class WorkspaceWindowController: NSWindowController,
-  WorkspaceRuntimeActions
-{
-  private weak var hostedWindow: NSWindow?
-  public override var window: NSWindow? {
-    get { hostedWindow }
-    set { hostedWindow = newValue }
-  }
+public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
+  public weak var window: NSWindow?
   private weak var workspaceDocument: (any WorkspaceDocumentContext)?
   public private(set) var viewState: WorkspaceViewState!
   public let stateService: WorkspaceStateService
@@ -70,36 +64,24 @@ public final class WorkspaceWindowController: NSWindowController,
 
   private func presentNextError() {
     guard !errorPresentationClosed, presentedError == nil, !pendingErrors.isEmpty,
-      var host = window
+      let viewState, !viewState.isClosed
     else { return }
-    while let sheet = host.attachedSheet { host = sheet }
-    let error = pendingErrors.removeFirst()
-    presentedError = error as NSError
-    presentError(
-      error, modalFor: host, delegate: self,
-      didPresent: #selector(errorDidPresent(_:contextInfo:)), contextInfo: nil)
-  }
-
-  public override func willPresentError(_ error: Error) -> Error {
-    let error = super.willPresentError(error) as NSError
-    guard let presentedError,
-      error.domain == presentedError.domain, error.code == presentedError.code,
-      let reason = error.localizedFailureReason
-    else { return error }
-    var info = error.userInfo
-    info[NSLocalizedRecoverySuggestionErrorKey] =
-      [reason, error.localizedRecoverySuggestion].compactMap { $0 }.joined(separator: "\n\n")
-    return NSError(domain: error.domain, code: error.code, userInfo: info)
-  }
-
-  @objc private func errorDidPresent(_ didRecover: Bool, contextInfo: UnsafeMutableRawPointer?) {
-    presentedError = nil
-    Task { @MainActor [weak self] in self?.presentNextError() }
+    let error = pendingErrors.removeFirst() as NSError
+    presentedError = error
+    viewState.presentOperationError(error) { [weak self] in
+      self?.presentedError = nil
+      Task { @MainActor [weak self] in
+        await Task.yield()
+        self?.presentNextError()
+      }
+    }
   }
 
   private func closeErrorPresentation() {
     errorPresentationClosed = true
     pendingErrors.removeAll()
+    presentedError = nil
+    viewState?.dismissOperationError()
     if let audioStatusObserver {
       NotificationCenter.default.removeObserver(audioStatusObserver)
       self.audioStatusObserver = nil
@@ -259,8 +241,7 @@ public final class WorkspaceWindowController: NSWindowController,
     self.audioCoordinator = audioCoordinator
     self.visionFeature = visionFeature
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
-    super.init(window: nil)
-    weak var errorOwner: WorkspaceWindowController? = self
+    weak var errorOwner: WorkspaceRuntimeCoordinator? = self
     let reportOperationError: (Error) -> Void = { errorOwner?.reportError($0) }
     let deviceRegistry = DeviceRegistryService()
     deviceRegistry.errorHandler = reportOperationError
@@ -393,7 +374,7 @@ public final class WorkspaceWindowController: NSWindowController,
     return try result.get()
   }
 
-  private static let activeControllers = NSHashTable<WorkspaceWindowController>.weakObjects()
+  private static let activeControllers = NSHashTable<WorkspaceRuntimeCoordinator>.weakObjects()
   private let shutdownID = UUID()
   private static var pendingShutdownFailures: [UUID: String] = [:]
   private static var isTerminating = false
@@ -456,8 +437,6 @@ public final class WorkspaceWindowController: NSWindowController,
     persistenceCoordinator.setDocumentURL(url)
   }
 
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   public func removeProgram(internalID: Int64) throws {
     guard shutdownTask == nil, !stateService.isOutputActive else {
@@ -616,7 +595,7 @@ public final class WorkspaceWindowController: NSWindowController,
   }
 }
 
-extension WorkspaceWindowController {
+extension WorkspaceRuntimeCoordinator {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {

@@ -38,19 +38,25 @@ persisted runtime snapshot before starting.
 Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
 state, and file persistence. App State owns the ProgramRuntime pair, preview view,
 capture coordinator, and update registry for each Document UUID.
-WorkspaceWindowController receives those resources and the Document-owned
+WorkspaceRuntimeCoordinator receives those resources and the Document-owned
 StateService, owns their runtime projection coordinator, and coordinates shutdown.
 WorkspaceScene is a SwiftUI View. It creates its connection lazily on first
-presentation and retains it in State. The connection owns WindowController;
+presentation and retains it in State. The connection owns WorkspaceRuntimeCoordinator;
 WorkspaceRootView renders WorkspaceViewState directly without a ViewController
 or hosting-controller wrapper. SwiftUI editing views receive StateService through Bindable.
 Reconstructing the SwiftUI View reuses the same connection and runtime.
+Scene-level implementation lives in `Sources/Applets/Workspace/Scene`:
+WorkspaceScene handles lifecycle, WorkspaceSceneConnection handles document edits,
+and WorkspaceRootView composes WorkspacePanes and WorkspaceToolbar. WorkspacePanes
+places Sidebar, WorkspaceContentPane, and Inspector. WorkspaceViewState retains
+resources and layout state, while the view hierarchy constructs the views.
+Horizontal and vertical pane resizing share WorkspaceDivider.
 The runtime controller holds the framework's window weakly and does not replace
 its delegate or install its own restoration policy. Window closure finalizes
 output and tears down capture, audio, Vision, and preview resources asynchronously.
 Scene disappearance stops document observation and initiates idempotent shutdown;
 connection release also initiates cleanup. A small NSViewRepresentable obtains
-the framework-owned window for runtime error presentation and installs a document
+the framework-owned window from PairedProgramPreview and installs a document
 action responder that prevents Revert and Browse Versions during output.
 
 The SwiftUI App installs its application-owned AppDelegate through
@@ -86,7 +92,7 @@ values and model URLs, while preserving UI and runtime status. The alternative
 URL-only operation changes only URLs for IDs already in StateService; it preserves
 other edits and does not add or remove models. There is no implicit merge. The
 connection observes content and URL changes for Undo baselines and UI routing.
-WindowController independently observes content, URL, persistence notifications,
+WorkspaceRuntimeCoordinator independently observes content, URL, persistence notifications,
 and output state. It adopts persisted runtime content while idle and defers that
 adoption during output. Document does not keep a second runtime bundle.
 
@@ -112,7 +118,8 @@ The Content pane implementation is organized by feature under
 `Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
 WorkspaceContentPane is a SwiftUI View with a draggable preview divider and a
 ScrollView containing SwiftUI audio and video-layer editors. NSViewRepresentable
-embeds only the retained Metal preview surface and audio meters.
+embeds only the retained Metal preview surface inside PairedProgramPreview.
+Audio meters use SwiftUI TimelineView and Canvas.
 MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
 Layers and Portrait Video Layers choices. Both canvas editors retain their local
 drafts when switching tabs. SwiftUI observes the shared WorkspaceStateService.
@@ -181,7 +188,7 @@ files and past models. Save failure leaves the current edits intact.
 Snapshots exclude edits made after their capture.
 
 Writing the staging package alone does not update runtime definitions. After
-URLDocumentConfiguration reports a committed URL/modification date, WindowController
+URLDocumentConfiguration reports a committed URL/modification date, WorkspaceRuntimeCoordinator
 reads the formal package independently and adopts that
 persisted Definition for ProgramRuntime and Vision. Newer edits and model
 selections remain pending. Preferences can reach the runtime immediately.
@@ -208,7 +215,7 @@ retaining local editing drafts, scroll state, and task results without accepting
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
 coordinator and low-frequency update registry, and a Program preview `MTKView` when
 creating each Document. App retains them in an `@State` dictionary keyed by the
-Document's non-persisted runtime UUID. Content, WorkspaceScene, and WindowController
+Document's non-persisted runtime UUID. Content, WorkspaceScene, and WorkspaceRuntimeCoordinator
 receive those instances through initializers. Document admits one active runtime
 owner. The controller passes the view to `ProgramCanvasPairedPreview` for layout and input.
 Shutdown pauses and disconnects drawing before stopping runtime resources, then
@@ -307,7 +314,7 @@ keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
 The Workspace Content pane uses SwiftUI for preview placement, gestures, audio
-controls, canvas selection, and layer rows. `WorkspaceWindowController` owns the
+controls, canvas selection, and layer rows. `WorkspaceRuntimeCoordinator` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
 centers a fixed 16:9 plus 9:16 pair with 12-point padding, and shows black when
@@ -394,7 +401,7 @@ must preserve the current membership. Tab and Program changes need no Submit;
 Program changes discard incomplete local text. SwiftUI Observation updates editors
 without an externally invoked `stop()`. Model and recording-folder selection use
 SwiftUI file importers; numeric fields use SwiftUI TextField bindings.
-Audio meters pause themselves when detached or when their window closes.
+Audio meters use a SwiftUI TimelineView; removing the view ends its updates.
 
 ### Program selection in the Inspector
 
@@ -442,8 +449,8 @@ default folder, then the built-in default.
 
 ## Workspace state and cross-layer operations
 
-WorkspaceWindowController owns one Observable `WorkspaceStateService` for editable
-values and UI/runtime status. Document owns confirmed content separately.
+WorkspaceDocument owns one Observable `WorkspaceStateService` for editable
+values and UI/runtime status. WorkspaceRuntimeCoordinator receives that same instance.
 Simple state changes may assign variables directly; operations that require
 validation or coordinated updates use methods. There is no separate UI Dispatcher.
 The service does not reference runtime actions or assemble capture, rendering,
@@ -456,7 +463,7 @@ their parent pane. Each VideoLayersEditor retains its row editing state and
 connects edits directly to the Store. The window does not refresh or operate
 individual editors. Initial rendering uses current state.
 Content does not require a shutdown cascade. SwiftUI owns observation tracking;
-each meter manages its window notifications and drawing lifetime internally.
+each meter uses SwiftUI TimelineView and Canvas for its drawing lifetime.
 Program Preview and runtime shutdown remain explicit, and runtime shutdown
 disconnects the service's runtime actions before releasing resources.
 
@@ -495,19 +502,15 @@ exact Rational32 ranges before writing the Workspace. Workspace Version remains
 ## Workspace operation errors
 
 Save validation errors are surfaced by the document framework. Runtime operation
-errors use WorkspaceWindowController's queued error presentation. Editors and
+errors use WorkspaceRuntimeCoordinator's queued error presentation. Editors and
 Inspectors receive the error-reporting boundary explicitly or through the SwiftUI
 error environment. Output-session failures and continuous OCR results retain
 their existing state and display paths.
 
-The Window Controller presents errors using AppKit `presentError`, targeting
-the Workspace Window or its active editing sheet. It queues further errors
-until the current presentation completes, and discards pending notifications
-when the Window closes or shutdown begins. The callback captures the controller
-weakly; UI components do not own the presentation lifecycle. Its `willPresentError`
-customization applies only to the queued error's domain and code, combines the
-failure reason with the recovery suggestion for AppKit's informative text, and
-preserves the NSError domain, code, and other userInfo (including recovery metadata).
+WorkspaceRootView presents queued operation errors using a SwiftUI alert.
+The alert includes the failure reason and recovery suggestion. Dismissing an
+alert advances the queue. Closing the UI or starting shutdown discards queued
+and late errors. The runtime coordinator holds the dismissal callback weakly.
 
 Native audio status notifications include an engine identifier and a failure
 snapshot. The controller reads its own engine's initial monitor state, then

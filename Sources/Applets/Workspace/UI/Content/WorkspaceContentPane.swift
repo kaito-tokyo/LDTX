@@ -13,14 +13,14 @@ public struct WorkspaceContentPane: View {
   let reportError: (Error) -> Void
   let pairedPreview: ProgramCanvasPairedPreview
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  let layout = WorkspaceContentLayout()
-  @State private var dragStart: CGFloat?
+  let layout: WorkspaceContentLayout
 
   public init(
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
     pairedPreview: ProgramCanvasPairedPreview,
-    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil },
+    layout: WorkspaceContentLayout = WorkspaceContentLayout()
   ) {
     self.stateService = stateService
     self.appletData = appletData
@@ -28,89 +28,66 @@ public struct WorkspaceContentPane: View {
     self.reportError = reportError
     self.pairedPreview = pairedPreview
     self.runtimeActions = runtimeActions
+    self.layout = layout
   }
 
   public var body: some View {
-    @Bindable var layout = layout
     GeometryReader { geometry in
-      let height = min(layout.previewHeight, max(0, geometry.size.height - 1))
+      let maximum = max(0, geometry.size.height - 1)
+      let height = min(layout.previewHeight, maximum)
       VStack(spacing: 0) {
-        pairedPreview.content
-          .frame(height: height)
-        Divider()
-          .overlay {
-            Color.clear
-              .frame(height: 9)
-              .contentShape(Rectangle())
-              .pointerStyle(.rowResize)
-              .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named("WorkspaceContent"))
-                  .onChanged { value in
-                    if dragStart == nil { dragStart = height }
-                    layout.resizePreview(
-                      to: min(
-                        max(0, (dragStart ?? height) + value.translation.height),
-                        max(0, geometry.size.height - 1)))
-                  }
-                  .onEnded { _ in dragStart = nil }
-              )
-              .accessibilityLabel("Preview height")
-              .accessibilityValue(Text("\(Int(height)) points"))
-              .accessibilityAdjustableAction { direction in
-                layout.resizePreview(
-                  to: min(
-                    max(0, height + (direction == .increment ? 20 : -20)),
-                    max(0, geometry.size.height - 1)))
-              }
-          }
-        ScrollView {
-          VStack(alignment: .leading, spacing: 12) {
-            MasterVolumeEditor(
-              stateService: stateService, appletData: appletData, peakMeter: peakMeter,
-              reportError: reportError, runtimeActions: runtimeActions)
-            AudioMixEditor(
-              stateService: stateService, appletData: appletData, peakMeter: peakMeter,
-              reportError: reportError, runtimeActions: runtimeActions)
-            Picker("Video Layers", selection: $layout.isPortrait) {
-              Text("Landscape Video Layers").tag(false)
-              Text("Portrait Video Layers").tag(true)
-            }
-            .pickerStyle(.segmented)
-            ZStack(alignment: .topLeading) {
-              VideoLayersEditor(
-                stateService: stateService, appletData: appletData, target: .landscape
-              )
-              .frame(height: layout.isPortrait ? 0 : nil, alignment: .top)
-              .clipped()
-              .opacity(layout.isPortrait ? 0 : 1)
-              .disabled(layout.isPortrait)
-              .accessibilityHidden(layout.isPortrait)
-              VideoLayersEditor(
-                stateService: stateService, appletData: appletData, target: .portrait
-              )
-              .frame(height: layout.isPortrait ? nil : 0, alignment: .top)
-              .clipped()
-              .opacity(layout.isPortrait ? 1 : 0)
-              .disabled(!layout.isPortrait)
-              .accessibilityHidden(!layout.isPortrait)
-            }
-          }
-          .padding(12)
-          .frame(maxWidth: .infinity, alignment: .leading)
+        pairedPreview.content.frame(height: height)
+        WorkspaceDivider("Preview height", axis: .vertical, value: height) {
+          layout.resizePreview(to: min(maximum, max(0, $0)))
         }
-        .frame(maxHeight: .infinity)
+        editors.frame(maxHeight: .infinity)
       }
     }
-    .coordinateSpace(name: "WorkspaceContent")
     .frame(minWidth: 480, minHeight: 120)
-    .onChange(of: stateService.externalID, initial: true) { _, externalID in
-      layout.restore(externalID: externalID)
+    .onChange(of: stateService.externalID, initial: true) { _, id in
+      layout.restore(externalID: id)
     }
+  }
+
+  private var editors: some View {
+    @Bindable var layout = layout
+    return ScrollView {
+      VStack(alignment: .leading, spacing: 12) {
+        MasterVolumeEditor(
+          stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+          reportError: reportError, runtimeActions: runtimeActions)
+        AudioMixEditor(
+          stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+          reportError: reportError, runtimeActions: runtimeActions)
+        Picker("Video Layers", selection: $layout.isPortrait) {
+          Text("Landscape Video Layers").tag(false)
+          Text("Portrait Video Layers").tag(true)
+        }
+        .pickerStyle(.segmented)
+        ZStack(alignment: .topLeading) {
+          videoLayers(.landscape, isVisible: !layout.isPortrait)
+          videoLayers(.portrait, isVisible: layout.isPortrait)
+        }
+      }
+      .padding(12)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func videoLayers(_ target: WorkspaceCanvasTarget, isVisible: Bool) -> some View {
+    VideoLayersEditor(stateService: stateService, appletData: appletData, target: target)
+      .frame(height: isVisible ? nil : 0, alignment: .top)
+      .clipped()
+      .opacity(isVisible ? 1 : 0)
+      .disabled(!isVisible)
+      .accessibilityHidden(!isVisible)
   }
 }
 
 @MainActor @Observable
-final class WorkspaceContentLayout {
+public final class WorkspaceContentLayout {
+  public init() {}
+
   var isPortrait = false
   var previewHeight: CGFloat = 280
   private var persistenceKey: String?

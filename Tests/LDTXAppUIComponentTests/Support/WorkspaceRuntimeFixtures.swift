@@ -34,7 +34,7 @@ struct WorkspaceRuntimeFixture {
   }
 }
 
-extension WorkspaceWindowController {
+extension WorkspaceRuntimeCoordinator {
   convenience init(document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared) {
     let resources = WorkspaceRuntimeFixture()
     self.init(
@@ -72,6 +72,6 @@ extension WorkspaceScene {
 
 extension WorkspaceSceneConnection {
   convenience init(document: WorkspaceDocument) {
-    self.init(document: document, windowController: WorkspaceWindowController(document: document))
+    self.init(document: document, runtimeCoordinator: WorkspaceRuntimeCoordinator(document: document))
   }
 }

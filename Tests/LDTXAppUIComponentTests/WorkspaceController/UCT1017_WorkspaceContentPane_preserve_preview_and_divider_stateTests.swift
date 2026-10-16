@@ -55,7 +55,7 @@ extension AppUIComponentTestSuite {
         #expect(resources.metalView.superview == nil)
         released.append(id)
       }
-      let controller = WorkspaceWindowController(
+      let controller = WorkspaceRuntimeCoordinator(
         document: document, appletData: WorkspaceAppletData(),
         landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
         metalView: resources.metalView, captureSessionCoordinator: resources.capture,
@@ -152,7 +152,7 @@ extension AppUIComponentTestSuite {
         })
       let scroll = try #require(
         scrolls.first {
-          workspaceDescendants($0).contains { $0 is AudioPeakMeterMTKView }
+          ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
         })
       let document = try #require(scroll.documentView)
       let initialHeight = document.frame.height

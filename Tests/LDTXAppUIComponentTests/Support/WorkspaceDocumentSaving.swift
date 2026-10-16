@@ -46,7 +46,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
 private final class WorkspaceTestHost {
   var savedURL: URL?
   var coordinator: WorkspaceSceneConnection?
-  var controllers: [WorkspaceWindowController] = []
+  var controllers: [WorkspaceRuntimeCoordinator] = []
   var windows: [NSWindow] = []
   var saved: WorkspaceV4Bundle?
 }
@@ -81,7 +81,7 @@ extension WorkspaceDocument {
     testHost.coordinator = coordinator
     return coordinator
   }
-  var controller: WorkspaceWindowController { testCoordinator.windowController }
+  var controller: WorkspaceRuntimeCoordinator { testCoordinator.runtimeCoordinator }
   var appletData: WorkspaceAppletData { controller.appletData }
   var persistenceCoordinator: WorkspaceV4PersistenceCoordinator {
     controller.persistenceCoordinator
@@ -92,20 +92,20 @@ extension WorkspaceDocument {
     testHost.saved.map { workspace != $0 }
       ?? (workspace.definition.displayName != "Untitled" || !workspace.definition.programs.isEmpty)
   }
-  var windowControllers: [WorkspaceWindowController] { testHost.controllers }
+  var windowControllers: [WorkspaceRuntimeCoordinator] { testHost.controllers }
   func makeWindowControllers() { if windowControllers.isEmpty { addWindowController(controller) } }
-  func addWindowController(_ controller: WorkspaceWindowController) {
-    if testHost.coordinator?.windowController !== controller {
+  func addWindowController(_ controller: WorkspaceRuntimeCoordinator) {
+    if testHost.coordinator?.runtimeCoordinator !== controller {
       testHost.coordinator?.disconnect()
       testHost.coordinator = WorkspaceSceneConnection(
-        document: self, windowController: controller)
+        document: self, runtimeCoordinator: controller)
     }
     testHost.controllers.append(controller)
     let window = WorkspaceTestWindow(content: controller.viewState, document: self)
     controller.window = window
     testHost.windows.append(window)
   }
-  func removeWindowController(_ controller: WorkspaceWindowController) {
+  func removeWindowController(_ controller: WorkspaceRuntimeCoordinator) {
     testHost.controllers.removeAll { $0 === controller }
   }
   func close() {

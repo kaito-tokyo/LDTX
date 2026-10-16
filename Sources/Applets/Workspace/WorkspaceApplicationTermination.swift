@@ -17,8 +17,8 @@ public final class WorkspaceApplicationTermination: NSObject {
 
   public override convenience init() {
     self.init(
-      hasPendingShutdown: { WorkspaceWindowController.hasPendingApplicationShutdown },
-      shutdown: { await WorkspaceWindowController.shutdownForApplicationTermination() },
+      hasPendingShutdown: { WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown },
+      shutdown: { await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination() },
       reply: { application, shouldTerminate in
         application.reply(toApplicationShouldTerminate: shouldTerminate)
       },

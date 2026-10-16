@@ -22,7 +22,7 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
-  struct UCT1016WorkspaceWindowControllerIntegrationTestSuite {
+  struct UCT1016WorkspaceRuntimeCoordinatorIntegrationTestSuite {
     @Test("Stream-key candidate loss clears only the editing choice")
     func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
       let suite = "StreamKeyDraft.\(UUID())"
@@ -237,7 +237,7 @@ extension AppUIComponentTestSuite {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let probe = InspectorDraftProbe()
       let host = NSHostingController(
-        rootView: WorkspaceView(
+        rootView: WorkspacePanes(
           layout: WorkspacePaneLayout(), stateService: state,
           sidebar: isSidebar ? AnyView(InspectorDraftView(probe: probe)) : AnyView(Text("Sidebar")),
           content: Text("Content"),
@@ -272,7 +272,7 @@ extension AppUIComponentTestSuite {
     func collapsingSidebarRetainsScrollPosition() async throws {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let host = NSHostingController(
-        rootView: WorkspaceView(
+        rootView: WorkspacePanes(
           layout: WorkspacePaneLayout(), stateService: state,
           sidebar: List(0..<100, id: \.self) { Text("Resource \($0)") },
           content: Text("Content"), inspector: Text("Inspector")))
@@ -318,7 +318,7 @@ extension AppUIComponentTestSuite {
     func minimumWidthFollowsVisiblePanes() async {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let host = NSHostingView(
-        rootView: WorkspaceView(
+        rootView: WorkspacePanes(
           layout: WorkspacePaneLayout(), stateService: state,
           sidebar: Text("Sidebar"), content: Text("Content"), inspector: Text("Inspector")))
       for (sidebar, inspector, expected): (Bool, Bool, CGFloat) in [
@@ -489,7 +489,7 @@ extension AppUIComponentTestSuite {
         "sdr-landscape-1080p60"
       first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
-      let firstWindow = WorkspaceWindowController(
+      let firstWindow = WorkspaceRuntimeCoordinator(
         stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
@@ -499,7 +499,7 @@ extension AppUIComponentTestSuite {
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
       second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
       second.stateService.workspacePreferences = first.stateService.workspacePreferences
-      let secondWindow = WorkspaceWindowController(
+      let secondWindow = WorkspaceRuntimeCoordinator(
         stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
@@ -547,7 +547,7 @@ extension AppUIComponentTestSuite {
       first.close()
       let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
-      let reopenedWindow = WorkspaceWindowController(
+      let reopenedWindow = WorkspaceRuntimeCoordinator(
         stateService: reopened.stateService,
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
         document: reopened)
@@ -586,7 +586,7 @@ extension AppUIComponentTestSuite {
         "sdr-landscape-1080p60"
       first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
-      let firstWindow = WorkspaceWindowController(
+      let firstWindow = WorkspaceRuntimeCoordinator(
         stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
@@ -601,7 +601,7 @@ extension AppUIComponentTestSuite {
       }
       second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
       second.stateService.workspacePreferences = first.stateService.workspacePreferences
-      let secondWindow = WorkspaceWindowController(
+      let secondWindow = WorkspaceRuntimeCoordinator(
         stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)

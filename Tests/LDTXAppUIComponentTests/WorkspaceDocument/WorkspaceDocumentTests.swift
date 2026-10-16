@@ -36,7 +36,7 @@ extension AppUIComponentTestSuite {
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) }, url: url)
       persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
-      let controller = WorkspaceWindowController(
+      let controller = WorkspaceRuntimeCoordinator(
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
       defer { document.close() }
@@ -116,18 +116,18 @@ extension AppUIComponentTestSuite {
         }
       ]
       coordinator.recordEdits()
-      try coordinator.windowController.selectProgram(internalID: 7)
+      try coordinator.runtimeCoordinator.selectProgram(internalID: 7)
       let localURL = try #require(state.localStateURL)
       #expect(
-        coordinator.windowController.appletData.state(for: localURL)
+        coordinator.runtimeCoordinator.appletData.state(for: localURL)
           .selectedProgramInternalID == 7)
       #expect(first.fileURL == nil)
       #expect(first.workspaceSnapshot == nil)
       #expect(state.workspaceDefinition.programs.count == 1)
       #expect(state.externalID == firstID.uuidString.lowercased())
-      #expect(!coordinator.windowController.persistenceCoordinator.hasPersistedWorkspace)
+      #expect(!coordinator.runtimeCoordinator.persistenceCoordinator.hasPersistedWorkspace)
       await #expect(throws: (any Error).self) {
-        try await coordinator.windowController.startOutput()
+        try await coordinator.runtimeCoordinator.startOutput()
       }
       #expect(state.recordingState == .idle)
       #expect(state.workspaceDefinition.displayName == "Draft")
@@ -556,7 +556,7 @@ extension AppUIComponentTestSuite {
         progress: progress.subprogress(assigningCount: 1))
       #expect(try WorkspaceBundleReaderV4(at: url).read() == snapshot)
       let coordinator = WorkspaceScene(document: document).makeConnection()
-      #expect(coordinator.windowController.stateService === state)
+      #expect(coordinator.runtimeCoordinator.stateService === state)
       coordinator.disconnect()
       state.workspaceDefinition.displayName = "Disconnected"
       let disconnected = try await document.snapshot(
@@ -570,7 +570,7 @@ extension AppUIComponentTestSuite {
     func editingUndoRedo() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceScene(document: document).makeConnection()
-      let state = coordinator.windowController.stateService
+      let state = coordinator.runtimeCoordinator.stateService
       let undo = UndoManager()
       undo.groupsByEvent = false
       coordinator.setUndoManager(undo)
@@ -610,14 +610,14 @@ extension AppUIComponentTestSuite {
       try await document.apply(snapshot: read, previous: nil)
       #expect(document.workspaceSnapshot?.definition.displayName == "Loaded")
       let coordinator = WorkspaceScene(document: document).makeConnection()
-      await coordinator.windowController.refreshPersistedWorkspace(at: root) { true }
+      await coordinator.runtimeCoordinator.refreshPersistedWorkspace(at: root) { true }
       let undo = UndoManager()
       coordinator.setUndoManager(undo)
       coordinator.recordEdits()
       #expect(!undo.canUndo)
-      #expect(coordinator.windowController.stateService.workspaceDefinition.displayName == "Loaded")
+      #expect(coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName == "Loaded")
       #expect(
-        coordinator.windowController.persistenceCoordinator.runtimeWorkspace
+        coordinator.runtimeCoordinator.persistenceCoordinator.runtimeWorkspace
           == document.workspaceSnapshot)
       await coordinator.shutdown()
       await original.shutdown()
@@ -628,7 +628,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       var coordinator: WorkspaceSceneConnection? =
         WorkspaceScene(document: document).makeConnection()
-      weak var owner = coordinator?.windowController
+      weak var owner = coordinator?.runtimeCoordinator
       if let coordinator {
         coordinator.disconnect()
         await coordinator.shutdown()

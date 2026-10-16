@@ -24,7 +24,7 @@ final class WorkspaceTestWindow: NSWindow {
     setContentSize(NSSize(width: 1062, height: 700))
     content.didAttachWindow?(self)
   }
-  var contentPane: WorkspaceContentPane { content.contentPane }
+  var contentPane: WorkspaceContentPane { WorkspaceRootView(state: content).contentPane }
   var stateService: WorkspaceStateService { content.stateService }
   func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
     item.menuFormRepresentation?.isEnabled ?? false

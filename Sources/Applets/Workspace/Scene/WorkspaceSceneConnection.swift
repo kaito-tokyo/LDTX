@@ -1,72 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
-//
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProgramRuntime
-import LDTXProtos
-import LDTXTaskQueue
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
-import MetalKit
 import Observation
-import SwiftUI
-
-public struct WorkspaceScene: View {
-  let document: WorkspaceDocument
-  @Environment(\.undoManager) private var undoManager
-  @State private var connection: WorkspaceSceneConnection?
-  let landscapeRuntime: ProgramRuntime
-  let portraitRuntime: ProgramRuntime
-  let metalView: MTKView
-  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
-
-  public init(
-    document: WorkspaceDocument, landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime,
-    metalView: MTKView, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
-  ) {
-    self.document = document
-    self.landscapeRuntime = landscapeRuntime
-    self.portraitRuntime = portraitRuntime
-    self.metalView = metalView
-    self.captureSessionCoordinator = captureSessionCoordinator
-    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
-  }
-
-  public var body: some View {
-    ZStack {
-      if let connection {
-        WorkspaceRootView(state: connection.windowController.viewState)
-      }
-    }
-    .task {
-      if connection == nil { connection = makeConnection() }
-      connection?.setUndoManager(undoManager)
-    }
-    .onChange(of: undoManager) { _, manager in connection?.setUndoManager(manager) }
-    .onDisappear {
-      guard let connection else { return }
-      connection.disconnect()
-      Task { await connection.shutdown() }
-    }
-  }
-
-  func makeConnection() -> WorkspaceSceneConnection {
-    WorkspaceSceneConnection(
-      document: document,
-      windowController: WorkspaceWindowController(
-        document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
-        metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
-  }
-}
 
 @MainActor
 final class WorkspaceSceneConnection {
   private weak var document: WorkspaceDocument?
-  let windowController: WorkspaceWindowController
+  let runtimeCoordinator: WorkspaceRuntimeCoordinator
   private weak var undoManager: UndoManager?
   private var lastObservedSnapshot: WorkspaceV4Bundle
   private var editsTask: Task<Void, Never>?
@@ -74,16 +17,15 @@ final class WorkspaceSceneConnection {
   private var documentTask: Task<Void, Never>?
   private var readGeneration = 0
 
-  init(document: WorkspaceDocument, windowController: WorkspaceWindowController) {
+  init(document: WorkspaceDocument, runtimeCoordinator: WorkspaceRuntimeCoordinator) {
     self.document = document
-    let owner = windowController
-    self.windowController = owner
-    lastObservedSnapshot = owner.stateService.editingWorkspace
+    self.runtimeCoordinator = runtimeCoordinator
+    lastObservedSnapshot = runtimeCoordinator.stateService.editingWorkspace
     synchronizeDocument()
-    owner.viewState.didAttachWindow = { [weak self] window in
+    runtimeCoordinator.viewState.didAttachWindow = { [weak self] window in
       self?.attachWindow(window)
     }
-    let state = owner.stateService
+    let state = runtimeCoordinator.stateService
     let changes = Observations {
       state.editingWorkspace
     }
@@ -107,12 +49,12 @@ final class WorkspaceSceneConnection {
   isolated deinit {
     editsTask?.cancel()
     documentTask?.cancel()
-    let owner = windowController
+    let owner = runtimeCoordinator
     Task { await owner.shutdown() }
   }
 
   func attachWindow(_ window: NSWindow?) {
-    windowController.attachWindow(window)
+    runtimeCoordinator.attachWindow(window)
     if undoManager == nil { setUndoManager(window?.undoManager) }
   }
 
@@ -122,8 +64,7 @@ final class WorkspaceSceneConnection {
   }
 
   private var currentSnapshot: WorkspaceV4Bundle {
-    let state = windowController.stateService
-    return state.editingWorkspace
+    runtimeCoordinator.stateService.editingWorkspace
   }
 
   func recordEdits() {
@@ -143,12 +84,7 @@ final class WorkspaceSceneConnection {
 
   private func restoreWorkspaceV4Bundle(_ snapshot: WorkspaceV4Bundle) {
     registerUndo(to: currentSnapshot)
-    replaceWorkspaceV4Bundle(snapshot)
-  }
-
-  private func replaceWorkspaceV4Bundle(_ snapshot: WorkspaceV4Bundle) {
-    let state = windowController.stateService
-    state.replaceEditingWorkspace(snapshot)
+    runtimeCoordinator.stateService.replaceEditingWorkspace(snapshot)
     lastObservedSnapshot = currentSnapshot
   }
 
@@ -159,7 +95,7 @@ final class WorkspaceSceneConnection {
       readGeneration = document.readGeneration
       lastObservedSnapshot = currentSnapshot
     }
-    if let url = document.fileURL { windowController.adoptDocumentURL(url) }
+    if let url = document.fileURL { runtimeCoordinator.adoptDocumentURL(url) }
   }
 
   func disconnect() {
@@ -172,12 +108,43 @@ final class WorkspaceSceneConnection {
 
   func shutdown() async {
     disconnect()
-    await windowController.shutdown()
-    if let message = windowController.takeShutdownFailureForPresentation() {
+    await runtimeCoordinator.shutdown()
+    if let message = runtimeCoordinator.takeShutdownFailureForPresentation() {
       NSApplication.shared.presentError(
         NSError(
           domain: "tokyo.kaito.ldtx.WorkspaceShutdown", code: 1,
           userInfo: [NSLocalizedDescriptionKey: message]))
     }
+  }
+}
+
+final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
+  private weak var state: WorkspaceViewState?
+
+  init(state: WorkspaceViewState) {
+    self.state = state
+    super.init()
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+  private var canRevert: Bool {
+    state.map { !$0.isClosed && !$0.stateService.isOutputActive } ?? false
+  }
+
+  @objc func revertDocumentToSaved(_ sender: Any?) {
+    guard canRevert else { return }
+    nextResponder?.tryToPerform(#selector(revertDocumentToSaved(_:)), with: sender)
+  }
+  @objc func browseDocumentVersions(_ sender: Any?) {
+    guard canRevert else { return }
+    nextResponder?.tryToPerform(#selector(browseDocumentVersions(_:)), with: sender)
+  }
+  func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(revertDocumentToSaved(_:))
+      || item.action == #selector(browseDocumentVersions(_:))
+    {
+      return canRevert
+    }
+    return true
   }
 }
