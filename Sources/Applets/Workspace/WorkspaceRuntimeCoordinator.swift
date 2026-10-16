@@ -26,7 +26,9 @@ import SwiftUI
 public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   public weak var window: NSWindow?
   private weak var workspaceDocument: (any WorkspaceDocumentContext)?
-  public private(set) var viewState: WorkspaceViewState!
+  let deviceRegistry = DeviceRegistryService()
+  var peakMeter: ProgramAudioPeakMeter { audioCoordinator.peakMeter }
+  private var inferenceTask: Task<Void, Never>?
   public let stateService: WorkspaceStateService
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let appletData: WorkspaceAppletData
@@ -48,48 +50,35 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   private var deviceAssignmentsObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
 
-  private var pendingErrors: [Error] = []
-  private var presentedError: NSError?
-  private var errorPresentationClosed = false
   private var audioStatusObserver: NSObjectProtocol?
   private var monitorFailureStatus: Int32?
   private var captureFailureIDs: Set<String> = []
 
   func reportError(_ error: Error) {
-
-    guard !errorPresentationClosed, shutdownTask == nil else { return }
-    pendingErrors.append(error)
-    presentNextError()
-  }
-
-  private func presentNextError() {
-    guard !errorPresentationClosed, presentedError == nil, !pendingErrors.isEmpty,
-      let viewState, !viewState.isClosed
-    else { return }
-    let error = pendingErrors.removeFirst() as NSError
-    presentedError = error
-    viewState.presentOperationError(error) { [weak self] in
-      self?.presentedError = nil
-      Task { @MainActor [weak self] in
-        await Task.yield()
-        self?.presentNextError()
-      }
-    }
+    guard !stateService.isClosed, shutdownTask == nil else { return }
+    stateService.operationErrors.append(error as NSError)
   }
 
   private func closeErrorPresentation() {
-    errorPresentationClosed = true
-    pendingErrors.removeAll()
-    presentedError = nil
-    viewState?.dismissOperationError()
+    stateService.operationErrors.removeAll()
     if let audioStatusObserver {
       NotificationCenter.default.removeObserver(audioStatusObserver)
       self.audioStatusObserver = nil
     }
   }
 
+  public func runInference() {
+    guard !stateService.isClosed, inferenceTask == nil else { return }
+    inferenceTask = Task { [self] in
+      defer { inferenceTask = nil }
+      await inferSelectedVision(
+        stateService: stateService, document: workspaceDocument,
+        runtimeWorkspace: { [weak self] in self?.windowRuntime.workspace })
+    }
+  }
+
   func updateMonitorFailure(_ status: Int32?) {
-    guard !errorPresentationClosed, shutdownTask == nil else { return }
+    guard !stateService.isClosed, shutdownTask == nil else { return }
     defer { monitorFailureStatus = status }
     guard let status, status != monitorFailureStatus else { return }
     reportError(
@@ -104,7 +93,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   }
 
   func updateCaptureFailures(_ failures: Set<String>) {
-    guard !errorPresentationClosed, shutdownTask == nil else { return }
+    guard !stateService.isClosed, shutdownTask == nil else { return }
     let newlyFailed = failures.subtracting(captureFailureIDs)
     captureFailureIDs = failures
     guard !newlyFailed.isEmpty else { return }
@@ -241,23 +230,12 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     self.audioCoordinator = audioCoordinator
     self.visionFeature = visionFeature
     self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
-    weak var errorOwner: WorkspaceRuntimeCoordinator? = self
-    let reportOperationError: (Error) -> Void = { errorOwner?.reportError($0) }
-    let deviceRegistry = DeviceRegistryService()
-    deviceRegistry.errorHandler = reportOperationError
-    let content = WorkspaceViewState(
-      document: document,
-      appletData: appletData,
-      stateService: stateService, peakMeter: audioCoordinator.peakMeter,
-      reportError: reportOperationError,
-      deviceRegistry: deviceRegistry,
-      pairedPreview: pairedPreview,
-      runtimeActions: {
-        guard let owner = errorOwner, owner.shutdownTask == nil else { return nil }
-        return owner
-      }, runtimeWorkspace: { [weak runtime = windowRuntime] in runtime?.workspace })
-    self.viewState = content
-    content.didAttachWindow = { [weak self] window in self?.attachWindow(window) }
+    deviceRegistry.errorHandler = { [weak self] in self?.reportError($0) }
+    pairedPreview.attachWindow = { [weak self] window in
+      self?.attachWindow(window)
+      guard let self else { return nil }
+      return WorkspaceDocumentActions(stateService: self.stateService)
+    }
     appletData.registerTransientState(at: transientURL)
     if stateService.localStateURL == nil { stateService.localStateURL = transientURL }
     let outputChanges = Observations { stateService.isOutputActive }
@@ -423,7 +401,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     ) { [weak self] _ in
       MainActor.assumeIsolated { Task { await self?.shutdown() } }
     }
-    presentNextError()
   }
 
   func adoptDocumentURL(_ url: URL) {
@@ -436,7 +413,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     }
     persistenceCoordinator.setDocumentURL(url)
   }
-
 
   public func removeProgram(internalID: Int64) throws {
     guard shutdownTask == nil, !stateService.isOutputActive else {
@@ -536,14 +512,14 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       await shutdownTask.value
       return
     }
+    stateService.isClosed = true
     closeErrorPresentation()
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     closeObserver = nil
     documentObservationTask?.cancel()
     outputObservationTask?.cancel()
     let task = Task { @MainActor in
-      viewState.tearDown()
-      await viewState.waitForInference()
+      await inferenceTask?.value
       pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()

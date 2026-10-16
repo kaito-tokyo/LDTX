@@ -22,8 +22,8 @@ Bindable access does not hide validation, persistence, or runtime synchronizatio
 | Snapshot capture | WorkspaceDocument |
 | Save validation | WorkspaceBundleWriterV4, invoked by DocumentWriter |
 | Persisted runtime adoption and output-time deferral | WorkspaceRuntimeCoordinator |
-| Applying read snapshots to editing state | SwiftUI scene connection |
-| Undo/Redo and standard unsaved-change tracking | SwiftUI scene connection and the window's UndoManager |
+| Applying read snapshots to editing state | WorkspaceDocumentConnection |
+| Undo/Redo and standard unsaved-change tracking | WorkspaceDocumentConnection and the window's UndoManager |
 | Runtime projection and recording/capture/audio/Vision lifetimes | WorkspaceRuntimeCoordinator and its runtime services |
 | ProgramRuntime and Vision definition/model inputs | Last successfully persisted content, separate from in-memory confirmation |
 | Live preferences | StateService, projected by the runtime coordinator |
@@ -32,8 +32,10 @@ Bindable access does not hide validation, persistence, or runtime synchronizatio
 | Program selection | Program Inspector and controller, using injected AppletData |
 | Program deletion, layer membership and resource operations | Explicit controller/runtime editing operations |
 | Layer transforms, audio gains, master volumes and mute edits | Direct bindings and editors with explicit numeric encoding |
-| Output, screenshot and inference commands | ViewController and runtime actions |
-| Runtime error presentation | WorkspaceRuntimeCoordinator |
+| Output, screenshot and inference commands | UI actions and RuntimeCoordinator; manual inference tasks are runtime-owned |
+| Runtime errors awaiting acknowledgement | WorkspaceStateService |
+| Alert and screenshot popover display | Local State in the presenting UI View |
+| Pane widths, preview height and canvas tab | Local State in the owning UI View |
 | Dock recording badge | WorkspaceRuntimeCoordinator observes output state through weakly registered controllers |
 
 There is no Apply/Submit registry or navigation guard for unconfirmed input.

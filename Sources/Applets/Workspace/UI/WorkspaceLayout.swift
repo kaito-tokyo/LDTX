@@ -1,24 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletUI
-import Observation
 import SwiftUI
 
-@MainActor @Observable
-final class WorkspacePaneLayout {
-  var sidebarWidth: CGFloat = 240
-  var inspectorWidth: CGFloat = 320
-}
-
-struct WorkspacePanes<Sidebar: View, Content: View, Inspector: View>: View {
-  let layout: WorkspacePaneLayout
+public struct WorkspaceLayout<Sidebar: View, Content: View, Inspector: View>: View {
+  @State private var sidebarWidth: CGFloat = 240
+  @State private var inspectorWidth: CGFloat = 320
   let stateService: WorkspaceStateService
   let sidebar: Sidebar
   let content: Content
   let inspector: Inspector
 
-  var body: some View {
+  public init(
+    stateService: WorkspaceStateService, sidebar: Sidebar, content: Content, inspector: Inspector
+  ) {
+    self.stateService = stateService
+    self.sidebar = sidebar
+    self.content = content
+    self.inspector = inspector
+  }
+
+  public var body: some View {
     GeometryReader { geometry in
       let dividers =
         (stateService.isSidebarVisible ? 1.0 : 0) + (stateService.isInspectorVisible ? 1 : 0)
@@ -26,18 +28,18 @@ struct WorkspacePanes<Sidebar: View, Content: View, Inspector: View>: View {
       let inspectorWidth =
         stateService.isInspectorVisible
         ? min(
-          layout.inspectorWidth, max(240, available - (stateService.isSidebarVisible ? 200 : 0)))
+          self.inspectorWidth, max(240, available - (stateService.isSidebarVisible ? 200 : 0)))
         : 0
       let sidebarWidth =
         stateService.isSidebarVisible
-        ? min(layout.sidebarWidth, max(200, available - inspectorWidth)) : 0
+        ? min(self.sidebarWidth, max(200, available - inspectorWidth)) : 0
       HStack(spacing: 0) {
         sidebar.workspaceSidePane(
-          width: sidebarWidth, expandedWidth: layout.sidebarWidth,
+          width: sidebarWidth, expandedWidth: self.sidebarWidth,
           isVisible: stateService.isSidebarVisible, alignment: .leading)
         if stateService.isSidebarVisible {
           WorkspaceDivider("Sidebar width", axis: .horizontal, value: sidebarWidth) {
-            layout.sidebarWidth = min(max(200, available - inspectorWidth), max(200, $0))
+            self.sidebarWidth = min(max(200, available - inspectorWidth), max(200, $0))
           }
         }
         content.frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
@@ -45,11 +47,11 @@ struct WorkspacePanes<Sidebar: View, Content: View, Inspector: View>: View {
           WorkspaceDivider(
             "Inspector width", axis: .horizontal, value: inspectorWidth, direction: -1
           ) {
-            layout.inspectorWidth = min(480, max(240, available - sidebarWidth), max(240, $0))
+            self.inspectorWidth = min(480, max(240, available - sidebarWidth), max(240, $0))
           }
         }
         inspector.workspaceSidePane(
-          width: inspectorWidth, expandedWidth: layout.inspectorWidth,
+          width: inspectorWidth, expandedWidth: self.inspectorWidth,
           isVisible: stateService.isInspectorVisible, alignment: .trailing)
       }
     }
@@ -57,8 +59,8 @@ struct WorkspacePanes<Sidebar: View, Content: View, Inspector: View>: View {
   }
 }
 
-private extension View {
-  func workspaceSidePane(
+extension View {
+  fileprivate func workspaceSidePane(
     width: CGFloat, expandedWidth: CGFloat, isVisible: Bool, alignment: Alignment
   ) -> some View {
     frame(width: isVisible ? width : expandedWidth)

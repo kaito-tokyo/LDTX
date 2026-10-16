@@ -69,12 +69,9 @@ func makeWorkspaceTestWindow(
     documentContext
     ?? WorkspaceTestDocumentContext(
       fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
-  let content = WorkspaceViewState(
-    document: context, appletData: data, stateService: state,
-    peakMeter: .init(), reportError: { _ in },
-    deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
-
-  return WorkspaceTestWindow(content: content, document: context)
+  return WorkspaceTestWindow(
+    stateService: state, appletData: data, deviceRegistry: DeviceRegistryService(),
+    peakMeter: .init(), pairedPreview: preview, runtimeActions: { dispatcher }, document: context)
 }
 
 @MainActor

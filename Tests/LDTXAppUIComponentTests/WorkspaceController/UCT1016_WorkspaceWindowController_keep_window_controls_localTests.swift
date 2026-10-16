@@ -213,7 +213,6 @@ extension AppUIComponentTestSuite {
       first.orderFront(nil)
       await settleWorkspaceToolbar(first)
       let preview = first.contentPane.pairedPreview
-      first.content.layout.sidebarWidth = 280
       for id in ["workspace.toggleSidebar", "workspace.toggleInspector"] {
         let item = try #require(first.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
         try performWorkspaceToolbarAction(item)
@@ -228,7 +227,6 @@ extension AppUIComponentTestSuite {
         try performWorkspaceToolbarAction(item)
         await settleWorkspaceToolbar(first)
       }
-      #expect(first.content.layout.sidebarWidth == 280)
       #expect(first.contentPane.pairedPreview === preview)
     }
 
@@ -237,8 +235,8 @@ extension AppUIComponentTestSuite {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let probe = InspectorDraftProbe()
       let host = NSHostingController(
-        rootView: WorkspacePanes(
-          layout: WorkspacePaneLayout(), stateService: state,
+        rootView: WorkspaceLayout(
+          stateService: state,
           sidebar: isSidebar ? AnyView(InspectorDraftView(probe: probe)) : AnyView(Text("Sidebar")),
           content: Text("Content"),
           inspector: isSidebar
@@ -272,8 +270,8 @@ extension AppUIComponentTestSuite {
     func collapsingSidebarRetainsScrollPosition() async throws {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let host = NSHostingController(
-        rootView: WorkspacePanes(
-          layout: WorkspacePaneLayout(), stateService: state,
+        rootView: WorkspaceLayout(
+          stateService: state,
           sidebar: List(0..<100, id: \.self) { Text("Resource \($0)") },
           content: Text("Content"), inspector: Text("Inspector")))
       let window = NSWindow(contentViewController: host)
@@ -318,8 +316,8 @@ extension AppUIComponentTestSuite {
     func minimumWidthFollowsVisiblePanes() async {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let host = NSHostingView(
-        rootView: WorkspacePanes(
-          layout: WorkspacePaneLayout(), stateService: state,
+        rootView: WorkspaceLayout(
+          stateService: state,
           sidebar: Text("Sidebar"), content: Text("Content"), inspector: Text("Inspector")))
       for (sidebar, inspector, expected): (Bool, Bool, CGFloat) in [
         (true, true, 922), (false, true, 721), (true, false, 681), (false, false, 480),
@@ -420,8 +418,8 @@ extension AppUIComponentTestSuite {
       state.isOutputActive = true
       state.outputFailureMessage = "Existing output failure"
       dispatcher.failScreenshot = true
-      window.captureScreenshots()
-      #expect(window.content.presentation.screenshot?.title == "Screenshot could not be captured")
+      let failure = window.captureScreenshots()
+      #expect(failure.title == "Screenshot could not be captured")
       #expect(state.outputFailureMessage == "Existing output failure")
       dispatcher.failScreenshot = false
       for count in [1, 2] {
@@ -430,15 +428,14 @@ extension AppUIComponentTestSuite {
             url: URL(fileURLWithPath: "/tmp/screenshot-\($0).png"),
             programCanvas: $0 == 0 ? .landscape : .portrait)
         }
-        window.captureScreenshots()
-        let result = try #require(window.content.presentation.screenshot)
+        let result = window.captureScreenshots()
         #expect(result.title == "Screenshots saved")
         #expect(result.screenshots.count == 1)
         #expect(result.screenshots.allSatisfy { $0.programCanvas == .landscape })
       }
       #expect(state.outputFailureMessage == "Existing output failure")
       window.close()
-      #expect(window.content.presentation.screenshot == nil)
+      #expect(state.isClosed)
     }
 
     @Test("UCT-1016.9: Screenshot actions remain available outside local recording")

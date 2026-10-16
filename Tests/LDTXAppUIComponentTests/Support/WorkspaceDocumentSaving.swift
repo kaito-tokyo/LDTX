@@ -45,7 +45,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
 @MainActor
 private final class WorkspaceTestHost {
   var savedURL: URL?
-  var coordinator: WorkspaceSceneConnection?
+  var coordinator: WorkspaceDocumentConnection?
   var controllers: [WorkspaceRuntimeCoordinator] = []
   var windows: [NSWindow] = []
   var saved: WorkspaceV4Bundle?
@@ -75,9 +75,9 @@ extension WorkspaceDocument {
     set { testHost.saved = newValue }
   }
   // Test-only conveniences retain the production scene connection and runtime controller.
-  var testCoordinator: WorkspaceSceneConnection {
+  var testCoordinator: WorkspaceDocumentConnection {
     if let coordinator = testHost.coordinator { return coordinator }
-    let coordinator = WorkspaceSceneConnection(document: self)
+    let coordinator = WorkspaceDocumentConnection(document: self)
     testHost.coordinator = coordinator
     return coordinator
   }
@@ -97,11 +97,16 @@ extension WorkspaceDocument {
   func addWindowController(_ controller: WorkspaceRuntimeCoordinator) {
     if testHost.coordinator?.runtimeCoordinator !== controller {
       testHost.coordinator?.disconnect()
-      testHost.coordinator = WorkspaceSceneConnection(
+      testHost.coordinator = WorkspaceDocumentConnection(
         document: self, runtimeCoordinator: controller)
     }
     testHost.controllers.append(controller)
-    let window = WorkspaceTestWindow(content: controller.viewState, document: self)
+    let window = WorkspaceTestWindow(
+      stateService: stateService, appletData: controller.appletData,
+      deviceRegistry: controller.deviceRegistry, peakMeter: controller.peakMeter,
+      pairedPreview: controller.pairedPreview, runtimeActions: { [weak controller] in controller },
+      document: self)
+    testCoordinator.attachWindow(window)
     controller.window = window
     testHost.windows.append(window)
   }

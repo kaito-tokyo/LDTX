@@ -93,7 +93,7 @@ extension AppUIComponentTestSuite {
       let second = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(second.definition.displayName == "Later edit")
-      let coordinator = WorkspaceScene(document: document).makeConnection()
+      let coordinator = WorkspaceDocumentConnection(document: document)
       coordinator.synchronizeDocument()
       #expect(document.stateService.workspaceDefinition.displayName == "Later edit")
       await coordinator.shutdown()
@@ -106,7 +106,7 @@ extension AppUIComponentTestSuite {
       let secondID = try #require(second.stateService.externalID.flatMap(UUID.init(uuidString:)))
       #expect(firstID != secondID)
       #expect(firstID.uuid.6 >> 4 == 7)
-      let coordinator = WorkspaceScene(document: first).makeConnection()
+      let coordinator = WorkspaceDocumentConnection(document: first)
       let state = first.stateService
       state.workspaceDefinition.displayName = "Draft"
       state.workspaceDefinition.programs = [
@@ -492,8 +492,8 @@ extension AppUIComponentTestSuite {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
       let document = WorkspaceDocument { released.append($0) }
-      func scene() -> WorkspaceScene {
-        WorkspaceScene(
+      func scene() -> WorkspaceDocumentContent {
+        WorkspaceDocumentContent(
           document: document, landscapeRuntime: resources.landscape,
           portraitRuntime: resources.portrait, metalView: resources.metalView,
           captureSessionCoordinator: resources.capture,
@@ -555,7 +555,7 @@ extension AppUIComponentTestSuite {
         snapshot: snapshot, to: url, previous: nil,
         progress: progress.subprogress(assigningCount: 1))
       #expect(try WorkspaceBundleReaderV4(at: url).read() == snapshot)
-      let coordinator = WorkspaceScene(document: document).makeConnection()
+      let coordinator = WorkspaceDocumentConnection(document: document)
       #expect(coordinator.runtimeCoordinator.stateService === state)
       coordinator.disconnect()
       state.workspaceDefinition.displayName = "Disconnected"
@@ -569,7 +569,7 @@ extension AppUIComponentTestSuite {
     @Test("Undo and Redo change only editing content; UI state is not undoable")
     func editingUndoRedo() async throws {
       let document = WorkspaceDocument()
-      let coordinator = WorkspaceScene(document: document).makeConnection()
+      let coordinator = WorkspaceDocumentConnection(document: document)
       let state = coordinator.runtimeCoordinator.stateService
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -609,13 +609,14 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       try await document.apply(snapshot: read, previous: nil)
       #expect(document.workspaceSnapshot?.definition.displayName == "Loaded")
-      let coordinator = WorkspaceScene(document: document).makeConnection()
+      let coordinator = WorkspaceDocumentConnection(document: document)
       await coordinator.runtimeCoordinator.refreshPersistedWorkspace(at: root) { true }
       let undo = UndoManager()
       coordinator.setUndoManager(undo)
       coordinator.recordEdits()
       #expect(!undo.canUndo)
-      #expect(coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName == "Loaded")
+      #expect(
+        coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName == "Loaded")
       #expect(
         coordinator.runtimeCoordinator.persistenceCoordinator.runtimeWorkspace
           == document.workspaceSnapshot)
@@ -626,8 +627,8 @@ extension AppUIComponentTestSuite {
     @Test("Dismantling releases the controller while the Document stays alive")
     func representationOwnsControllerLifetime() async {
       let document = WorkspaceDocument()
-      var coordinator: WorkspaceSceneConnection? =
-        WorkspaceScene(document: document).makeConnection()
+      var coordinator: WorkspaceDocumentConnection? =
+        WorkspaceDocumentConnection(document: document)
       weak var owner = coordinator?.runtimeCoordinator
       if let coordinator {
         coordinator.disconnect()

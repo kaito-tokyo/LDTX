@@ -7,7 +7,7 @@ import LDTXWorkspaceBundleFormat
 import Observation
 
 @MainActor
-final class WorkspaceSceneConnection {
+final class WorkspaceDocumentConnection {
   private weak var document: WorkspaceDocument?
   let runtimeCoordinator: WorkspaceRuntimeCoordinator
   private weak var undoManager: UndoManager?
@@ -22,8 +22,10 @@ final class WorkspaceSceneConnection {
     self.runtimeCoordinator = runtimeCoordinator
     lastObservedSnapshot = runtimeCoordinator.stateService.editingWorkspace
     synchronizeDocument()
-    runtimeCoordinator.viewState.didAttachWindow = { [weak self] window in
+    runtimeCoordinator.pairedPreview.attachWindow = { [weak self] window in
       self?.attachWindow(window)
+      guard let self else { return nil }
+      return WorkspaceDocumentActions(stateService: self.runtimeCoordinator.stateService)
     }
     let state = runtimeCoordinator.stateService
     let changes = Observations {
@@ -119,16 +121,16 @@ final class WorkspaceSceneConnection {
 }
 
 final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
-  private weak var state: WorkspaceViewState?
+  private weak var stateService: WorkspaceStateService?
 
-  init(state: WorkspaceViewState) {
-    self.state = state
+  init(stateService: WorkspaceStateService) {
+    self.stateService = stateService
     super.init()
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   private var canRevert: Bool {
-    state.map { !$0.isClosed && !$0.stateService.isOutputActive } ?? false
+    stateService.map { !$0.isClosed && !$0.isOutputActive } ?? false
   }
 
   @objc func revertDocumentToSaved(_ sender: Any?) {

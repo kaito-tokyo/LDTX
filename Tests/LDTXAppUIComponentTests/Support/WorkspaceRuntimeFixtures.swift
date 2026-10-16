@@ -59,7 +59,7 @@ extension WorkspaceRuntimeCoordinator {
   }
 }
 
-extension WorkspaceScene {
+extension WorkspaceDocumentContent {
   init(document: WorkspaceDocument) {
     let resources = WorkspaceRuntimeFixture()
     self.init(
@@ -70,8 +70,9 @@ extension WorkspaceScene {
   }
 }
 
-extension WorkspaceSceneConnection {
+extension WorkspaceDocumentConnection {
   convenience init(document: WorkspaceDocument) {
-    self.init(document: document, runtimeCoordinator: WorkspaceRuntimeCoordinator(document: document))
+    self.init(
+      document: document, runtimeCoordinator: WorkspaceRuntimeCoordinator(document: document))
   }
 }

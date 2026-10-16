@@ -13,14 +13,13 @@ public struct WorkspaceContentPane: View {
   let reportError: (Error) -> Void
   let pairedPreview: ProgramCanvasPairedPreview
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  let layout: WorkspaceContentLayout
+  @State var layout = WorkspaceContentLayout()
 
   public init(
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
     pairedPreview: ProgramCanvasPairedPreview,
-    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil },
-    layout: WorkspaceContentLayout = WorkspaceContentLayout()
+    runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.stateService = stateService
     self.appletData = appletData
@@ -28,7 +27,6 @@ public struct WorkspaceContentPane: View {
     self.reportError = reportError
     self.pairedPreview = pairedPreview
     self.runtimeActions = runtimeActions
-    self.layout = layout
   }
 
   public var body: some View {
@@ -85,8 +83,8 @@ public struct WorkspaceContentPane: View {
 }
 
 @MainActor @Observable
-public final class WorkspaceContentLayout {
-  public init() {}
+final class WorkspaceContentLayout {
+  init() {}
 
   var isPortrait = false
   var previewHeight: CGFloat = 280
