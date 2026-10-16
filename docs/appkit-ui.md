@@ -200,8 +200,8 @@ Hiding a side pane preserves its last expanded width. Divider gestures and
 accessibility adjustments update these window-local widths without touching the document.
 The minimum window width includes only visible panes: 480 points for Content,
 201 for Sidebar and its divider, and 241 for Inspector and its divider.
-The Inspector stays mounted at zero visible width while collapsed, retaining
-local editing drafts and task results without accepting interaction.
+The Sidebar and Inspector stay mounted at zero visible width while collapsed,
+retaining local editing drafts, scroll state, and task results without accepting interaction.
 
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
 coordinator and low-frequency update registry, and a Program preview `MTKView` when

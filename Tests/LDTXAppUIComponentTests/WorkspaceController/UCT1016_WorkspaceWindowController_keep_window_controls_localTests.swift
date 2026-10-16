@@ -347,15 +347,17 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Collapsing the inspector preserves its draft and task results")
-    func collapsingInspectorRetainsSubtree() async throws {
+    @Test("Collapsing a side pane preserves its draft and task results", arguments: [true, false])
+    func collapsingSidePaneRetainsSubtree(isSidebar: Bool) async throws {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let probe = InspectorDraftProbe()
       let host = NSHostingController(
         rootView: WorkspaceView(
           layout: WorkspacePaneLayout(), stateService: state,
-          sidebar: Text("Sidebar"), content: Text("Content"),
-          inspector: InspectorDraftView(probe: probe)))
+          sidebar: isSidebar ? AnyView(InspectorDraftView(probe: probe)) : AnyView(Text("Sidebar")),
+          content: Text("Content"),
+          inspector: isSidebar
+            ? AnyView(Text("Inspector")) : AnyView(InspectorDraftView(probe: probe))))
       let window = NSWindow(contentViewController: host)
       window.isReleasedWhenClosed = false
       window.setContentSize(.init(width: 1062, height: 700))
@@ -365,9 +367,9 @@ extension AppUIComponentTestSuite {
       let draft = try #require(probe.draft)
       draft.wrappedValue = "-"
       await settleWorkspaceToolbar(window)
-      state.isInspectorVisible = false
+      if isSidebar { state.isSidebarVisible = false } else { state.isInspectorVisible = false }
       await settleWorkspaceToolbar(window)
-      state.isInspectorVisible = true
+      if isSidebar { state.isSidebarVisible = true } else { state.isInspectorVisible = true }
       await settleWorkspaceToolbar(window)
       #expect(probe.draft?.wrappedValue == "-")
       #expect(probe.instances.count == 1)
@@ -379,6 +381,37 @@ extension AppUIComponentTestSuite {
       var draft: Binding<String>?
       var instances: [UUID] = []
       var taskRuns = 0
+    }
+
+    @Test("Collapsing the sidebar preserves its List scroll position")
+    func collapsingSidebarRetainsScrollPosition() async throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let host = NSHostingController(
+        rootView: WorkspaceView(
+          layout: WorkspacePaneLayout(), stateService: state,
+          sidebar: List(0..<100, id: \.self) { Text("Resource \($0)") },
+          content: Text("Content"), inspector: Text("Inspector")))
+      let window = NSWindow(contentViewController: host)
+      window.isReleasedWhenClosed = false
+      window.setContentSize(.init(width: 1062, height: 700))
+      window.orderFront(nil)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      func scrollView(in view: NSView) -> NSScrollView? {
+        (view as? NSScrollView) ?? view.subviews.lazy.compactMap { scrollView(in: $0) }.first
+      }
+      let scroll = try #require(scrollView(in: host.view))
+      scroll.contentView.scroll(to: .init(x: 0, y: 400))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      await settleWorkspaceToolbar(window)
+      let offset = scroll.contentView.bounds.origin.y
+      #expect(offset > 0)
+      state.isSidebarVisible = false
+      await settleWorkspaceToolbar(window)
+      state.isSidebarVisible = true
+      await settleWorkspaceToolbar(window)
+      #expect(scrollView(in: host.view) === scroll)
+      #expect(abs(scroll.contentView.bounds.origin.y - offset) <= 1)
     }
 
     private struct InspectorDraftView: View {

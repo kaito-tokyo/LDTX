@@ -405,8 +405,15 @@ struct WorkspaceView<Sidebar: View, Content: View, Inspector: View>: View {
         stateService.isSidebarVisible
         ? min(layout.sidebarWidth, max(200, available - inspectorWidth)) : 0
       HStack(spacing: 0) {
+        sidebar
+          .frame(width: stateService.isSidebarVisible ? sidebarWidth : layout.sidebarWidth)
+          .frame(width: sidebarWidth, alignment: .leading)
+          .clipped()
+          .opacity(stateService.isSidebarVisible ? 1 : 0)
+          .allowsHitTesting(stateService.isSidebarVisible)
+          .disabled(!stateService.isSidebarVisible)
+          .accessibilityHidden(!stateService.isSidebarVisible)
         if stateService.isSidebarVisible {
-          sidebar.frame(width: sidebarWidth)
           WorkspacePaneDivider(
             title: "Sidebar width", width: sidebarWidth,
             maximum: max(200, available - inspectorWidth),
