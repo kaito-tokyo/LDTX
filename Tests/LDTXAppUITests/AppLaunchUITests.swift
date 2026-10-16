@@ -27,7 +27,7 @@ final class AppLaunchUITests: XCTestCase {
     XCTAssertEqual(previews.count, 2)
   }
 
-  func testVisionProgrammerOpensFromEveryScene() throws {
+  func testVisionProgrammerOpensFromEveryScene() async throws {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
@@ -64,9 +64,7 @@ final class AppLaunchUITests: XCTestCase {
       identifier: "scene-command-ui-test", mainMediaFile: "main.mp4", audioTracks: [],
       formatVersion: 2
     ).write(to: url.appendingPathComponent(RecordingPackageInfo.fileName))
-    let media = try XCTUnwrap(
-      Bundle(for: Self.self).url(forResource: "menu-smoke", withExtension: "mp4"))
-    try FileManager.default.copyItem(at: media, to: url.appendingPathComponent("main.mp4"))
+    try await makeMenuSmokeMedia(at: url.appendingPathComponent("main.mp4"))
     try "<MPD><Period/></MPD>".write(
       to: url.appendingPathComponent("manifest.mpd"), atomically: true, encoding: .utf8)
     app.menuBars.menuBarItems["File"].click()
