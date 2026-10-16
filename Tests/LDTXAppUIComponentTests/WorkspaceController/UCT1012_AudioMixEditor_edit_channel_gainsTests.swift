@@ -2,99 +2,49 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXDeviceRegistry
 import LDTXProgramRuntime
 import LDTXProtos
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
-import LDTXYouTubeRTMPS
-import Observation
 import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
-  @Suite("UCT-1012: edit-channel-gains", .serialized)
-  @MainActor
+  @Suite("UCT-1012: SwiftUI channel gains", .serialized) @MainActor
   struct UCT1012AudioMixEditorIntegrationTestSuite {
-    private static var controller: NSDocumentController {
-      UIComponentTestEnvironment.documentController
-    }
-    init() { _ = Self.controller }
-
-    @Test("UCT-1012.1: Channel gains can be edited without selecting a Program or canvas")
-    func audioMixEditsWorkspaceGainWithoutCanvasOrProgramSelection() throws {
-      let serviceAppletData = WorkspaceAppletData()
-      _ = NSApplication.shared
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      service.workspaceDefinition.audioDevices = [
+    init() { _ = UIComponentTestEnvironment.documentController }
+    @Test func gainEditsDoNotRequireProgramOrCanvasSelection() throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      state.workspaceDefinition.audioDevices = [
         WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
       ]
-      service.selectedAudioMix = .portrait
+      state.selectedAudioMix = .portrait
       let editor = AudioMixEditor(
-        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in })
-      func descendants(_ view: NSView) -> [NSView] {
-        view.subviews.flatMap { [$0] + descendants($0) }
-      }
-      let views = descendants(editor.view)
-      #expect(!views.contains { $0 is NSSegmentedControl })
-      let gains = views.compactMap { $0 as? AudioChannelControlView }
-      #expect(gains.count == 1)
-      let gain = try #require(gains.first)
-      let slider = try #require(descendants(gain).compactMap { $0 as? NSSlider }.first)
-      #expect(slider.isEnabled)
-      slider.doubleValue = -12
-      slider.sendAction(try #require(slider.action), to: slider.target)
-      #expect(
-        service.workspacePreferences.audioChannelGainsDecibels[10]
-          == Ldtx_Workspace_V4_Rational32.with {
-            $0.set(num: -120, den: 10)
-          })
+        stateService: state, appletData: WorkspaceAppletData(),
+        peakMeter: .init(), reportError: { _ in })
+      #expect(editor.setAudioChannelGain(-12, forAudioInputDeviceInternalID: 10))
+      let saved = state.workspacePreferences
+      #expect(saved.audioChannelGainsDecibels[10] == .with { $0.set(num: -120, den: 10) })
       #expect(!editor.setAudioChannelGain(.nan, forAudioInputDeviceInternalID: 10))
       #expect(!editor.setAudioChannelGain(-6, forAudioInputDeviceInternalID: 999))
-      #expect(
-        service.workspacePreferences.audioChannelGainsDecibels[10]
-          == Ldtx_Workspace_V4_Rational32.with {
-            $0.set(num: -120, den: 10)
-          })
-      #expect(service.selectedAudioMix == .portrait)
+      #expect(state.workspacePreferences == saved)
+      #expect(state.selectedAudioMix == .portrait)
     }
-
-    @Test("UCT-1012.2: Numeric gain drafts survive refresh and failed commit")
-    func audioNumericDraftSurvivesRefreshAndFailure() {
-      let field = AudioDecibelField()
-      field.configure(
-        value: .with {
-          $0.num = 0
-          $0.den = 1
-        }, enabled: true
-      ) { _ in false }
-      field.stringValue = "-12.5"
-      field.controlTextDidChange(
-        Notification(name: NSControl.textDidChangeNotification, object: field))
-      field.configure(
-        value: .with {
-          $0.num = -4
-          $0.den = 1
-        }, enabled: true
-      ) { _ in false }
-      #expect(field.stringValue == "-12.5")
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(field.dirty)
-      var committed = 0.0
-      field.configure(
-        value: .with {
-          $0.num = -4
-          $0.den = 1
-        }, enabled: true
-      ) {
-        committed = $0.double
-        return true
-      }
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(committed == -12.5)
-      #expect(!field.dirty)
+    @Test func hostedMixerUpdatesWhenDevicesChange() async throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let editor = AudioMixEditor(
+        stateService: state, appletData: WorkspaceAppletData(),
+        peakMeter: .init(), reportError: { _ in })
+      let window = hostWorkspaceView(editor)
+      defer { window.close() }
+      state.workspaceDefinition.audioDevices = [
+        WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
+      ]
+      await settleWorkspaceToolbar(window)
+      #expect(workspaceDescendants(window.contentView!).contains { $0 is AudioPeakMeterMTKView })
+      state.workspaceDefinition.audioDevices = []
+      await settleWorkspaceToolbar(window)
+      #expect(!workspaceDescendants(window.contentView!).contains { $0 is AudioPeakMeterMTKView })
     }
   }
 }

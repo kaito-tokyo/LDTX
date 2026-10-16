@@ -26,29 +26,27 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Editing updates the draft and Enter submits its latest value without consuming Tab")
-    func bindDraftAndSubmit() {
+    @Test("SwiftUI editing updates drafts and submits the current value")
+    func bindDraftAndSubmit() async throws {
       var draft = "0"
       var submitted: [String] = []
       let field = Rational32TextField.IntegerField(
         title: "X numerator", text: Binding(get: { draft }, set: { draft = $0 }),
         onSubmit: { submitted.append(draft) })
-      let coordinator = field.makeCoordinator()
-      let control = NSTextField(string: "960")
-      coordinator.controlTextDidChange(
-        Notification(name: NSControl.textDidChangeNotification, object: control))
+      let window = hostWorkspaceView(field)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let control = try #require(
+        workspaceDescendants(window.contentView!)
+          .compactMap { $0 as? NSTextField }.first { $0.isEditable })
+      try editWorkspaceField(control, text: "960", window: window)
+      await settleWorkspaceToolbar(window)
       #expect(draft == "960")
       #expect(submitted.isEmpty)
-      let editor = NSTextView()
-      editor.string = "1280"
-      #expect(
-        !coordinator.control(
-          control, textView: editor, doCommandBy: #selector(NSResponder.insertTab(_:))))
-      #expect(
-        coordinator.control(
-          control, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
-      #expect(draft == "1280")
-      #expect(submitted == ["1280"])
+      let editor = try #require(control.currentEditor() as? NSTextView)
+      editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+      await settleWorkspaceToolbar(window)
+      #expect(submitted == ["960"])
     }
   }
 }

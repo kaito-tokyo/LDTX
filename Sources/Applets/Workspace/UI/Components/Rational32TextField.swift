@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
 import SwiftUI
 
 /// Edits a Rational numerator and denominator while the owner retains the draft.
@@ -24,47 +23,22 @@ struct Rational32TextField: View {
     }
   }
 
-  struct IntegerField: NSViewRepresentable {
+  struct IntegerField: View {
     let title: String
     @Binding var text: String
     var onSubmit: () -> Void
-    @Environment(\.isEnabled) var isEnabled
 
-    func makeCoordinator() -> Coordinator { Coordinator(field: self) }
-
-    func makeNSView(context: Context) -> NSTextField {
-      let field = NSTextField(string: text)
-      field.alignment = .right
-      field.formatter = DigitsFormatter()
-      field.delegate = context.coordinator
-      field.setAccessibilityLabel(title)
-      return field
-    }
-
-    func updateNSView(_ field: NSTextField, context: Context) {
-      context.coordinator.field = self
-      field.isEnabled = isEnabled
-      field.setAccessibilityLabel(title)
-      if field.stringValue != text { field.stringValue = text }
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-      var field: IntegerField
-      init(field: IntegerField) { self.field = field }
-
-      func controlTextDidChange(_ notification: Notification) {
-        guard let control = notification.object as? NSTextField else { return }
-        field.text = control.stringValue
-      }
-
-      func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector)
-        -> Bool
-      {
-        guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
-        field.text = textView.string
-        field.onSubmit()
-        return true
-      }
+    var body: some View {
+      TextField(
+        title,
+        text: Binding(
+          get: { text },
+          set: { if DigitsFormatter.accepts($0) { text = $0 } })
+      )
+      .multilineTextAlignment(.trailing)
+      .textFieldStyle(.roundedBorder)
+      .accessibilityLabel(title)
+      .onSubmit(onSubmit)
     }
   }
 

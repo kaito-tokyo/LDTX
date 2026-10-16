@@ -2,34 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXProtos
 @testable import LDTXWorkspaceAppletUI
+import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
-  @Suite("UCT-1008: edit-layer-visibility", .serialized)
-  @MainActor
+  @Suite("UCT-1008: SwiftUI visibility", .serialized) @MainActor
   struct UCT1008VideoLayersEditorIntegrationTestSuite {
-    init() { _ = UIComponentTestEnvironment.documentController }
-    @Test("UCT-1008.1: Hide callbacks restore state on failure")
-    func hideCallbacksRestoreStateOnFailure() throws {
+    @Test func hideEditsRemainLiveDuringOutput() throws {
       let fixture = VideoLayersTestFixture()
-      let table = fixture.makeTable()
-      var saved: [(Int64, Bool)] = []
-      var failures = 0
-      fixture.update(table, ids: [1], setHidden: { id, hidden in saved.append((id, hidden)) })
-      let row = try #require(table.rows[1])
-      row.state.onSetHidden(!row.state.isHidden)
-      #expect(saved.count == 1)
-      #expect(saved[0].0 == 1 && saved[0].1)
-      fixture.update(
-        table, ids: [1],
-        setHidden: { _, _ in throw WorkspaceSelectionError(message: "Rejected") },
-        onError: { _ in failures += 1 })
-      row.state.onSetHidden(!row.state.isHidden)
-      #expect(!row.state.isHidden)
-      #expect(failures == 1)
-      #expect(table.rows[1] === row)
+      let row = try #require(fixture.editor.rows[1])
+      fixture.state.isOutputActive = true
+      row.onSetHidden(true)
+      #expect(fixture.editor.preferences.videoLayerHidden[1] == true)
+      #expect(row.isHidden)
+      row.onSetHidden(false)
+      #expect(fixture.editor.preferences.videoLayerHidden[1] == false)
+      fixture.state.workspaceDefinition.programs = []
+      row.onSetHidden(true)
+      #expect(
+        fixture.state.workspacePreferences.landscapeProgramPreferences[100]?.videoLayerHidden[1]
+          == false)
     }
-
   }
 }

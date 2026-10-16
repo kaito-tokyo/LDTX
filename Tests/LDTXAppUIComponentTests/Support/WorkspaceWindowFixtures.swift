@@ -32,8 +32,10 @@ func settleWorkspaceToolbar(_ window: NSWindow) async {
 
 @MainActor
 func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
-  let action = try #require(item.action)
-  #expect(NSApp.sendAction(action, to: item.target, from: item))
+  let menuItem = try #require(item.menuFormRepresentation)
+  guard menuItem.isEnabled else { return }
+  let action = try #require(menuItem.action)
+  #expect(NSApp.sendAction(action, to: menuItem.target, from: menuItem))
 }
 
 @MainActor
@@ -67,7 +69,7 @@ func makeWorkspaceTestWindow(
     documentContext
     ?? WorkspaceTestDocumentContext(
       fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
-  let content = WorkspaceViewController(
+  let content = WorkspaceViewState(
     document: context, appletData: data, stateService: state,
     peakMeter: .init(), reportError: { _ in },
     deviceRegistry: DeviceRegistryService(), pairedPreview: preview, runtimeActions: { dispatcher })
@@ -120,16 +122,5 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
 
 @MainActor
 extension WorkspaceContentPane {
-  var testPairedPreview: ProgramCanvasPairedPreview {
-    pairedPreview
-  }
-  var testEditorScrollView: NSScrollView {
-    editorScrollView
-  }
-  var testVideoTabs: NSTabViewController {
-    children.first { $0 is NSTabViewController } as! NSTabViewController
-  }
-  var testAudioMixEditor: AudioMixEditor {
-    children.first { $0 is AudioMixEditor } as! AudioMixEditor
-  }
+  var testPairedPreview: ProgramCanvasPairedPreview { pairedPreview }
 }

@@ -33,7 +33,7 @@ public struct WorkspaceDocumentContent: View {
     if let landscapeRuntime, let portraitRuntime, let metalView,
       let captureSessionCoordinator, let lowFrequencyUpdateRegistry
     {
-      WorkspaceViewControllerRepresentation(
+      WorkspaceScene(
         document: document, landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime,
         metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry

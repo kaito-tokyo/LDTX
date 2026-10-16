@@ -25,7 +25,7 @@ extension AppUIComponentTestSuite {
       service.workspacePreferences.landscapeProgramPreferences[100] = preferences
       service.isOutputActive = true
       preferences.videoLayerInternalIds = [20, 10]
-      try VideoLayersEditor(
+      try VideoLayersEditorState(
         stateService: service, appletData: serviceAppletData,
         target: .landscape
       ).commitLayerOrder(
@@ -33,7 +33,7 @@ extension AppUIComponentTestSuite {
       for ids: [Int64] in [[10], [10, 20, 30], [10, 20, 20]] {
         preferences.videoLayerInternalIds = ids
         #expect(throws: WorkspaceSelectionError.self) {
-          try VideoLayersEditor(
+          try VideoLayersEditorState(
             stateService: service, appletData: serviceAppletData,
             target: .landscape
           ).commitLayerOrder(
@@ -152,7 +152,7 @@ extension AppUIComponentTestSuite {
           )
           .setIncluded(true, programID: 100, target: target)
         }
-        try VideoLayersEditor(
+        try VideoLayersEditorState(
           stateService: content.stateService, appletData: content.appletData, target: target
         ).commitLayerOrder(
           [30, 10, 20], programID: 100)
@@ -161,7 +161,7 @@ extension AppUIComponentTestSuite {
             keyPath: target.layerIDs]
             == [30, 10, 20])
         #expect(throws: WorkspaceSelectionError.self) {
-          try VideoLayersEditor(
+          try VideoLayersEditorState(
             stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([10], programID: 100)
@@ -193,11 +193,11 @@ extension AppUIComponentTestSuite {
             )
             .setIncluded(false, programID: 100, target: target)
           }
-          try VideoLayersEditor(
+          try VideoLayersEditorState(
             stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([20, 10], programID: 100)
-          try VideoLayersEditor(
+          try VideoLayersEditorState(
             stateService: content.stateService, appletData: content.appletData, target: target
           )
           .commitLayerOrder([10, 20], programID: 100)
