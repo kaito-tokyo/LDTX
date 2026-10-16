@@ -4,6 +4,10 @@
 
 # Source requirements for requirements-dev.lock. Regenerate the hash-locked
 # transitive closure with the command documented in docs/build.md.
+# Model conversion and inference require a strictly matched dependency set.
+# Keep these exact versions and the transitive versions in requirements-dev.lock
+# pinned; exclude them from routine dependency updates. Change them only as a
+# coordinated update with explicit validation of model compatibility.
 
 coremltools==9.0
 huggingface_hub==0.34.4
