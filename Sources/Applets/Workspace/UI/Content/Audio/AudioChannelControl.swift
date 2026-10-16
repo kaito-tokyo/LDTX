@@ -40,7 +40,8 @@ struct AudioPeakMeter: View {
     TimelineView(.animation(minimumInterval: 1.0 / 15)) { timeline in
       Canvas { context, size in
         let level = CGFloat(envelope.level)
-        context.fill(Path(CGRect(origin: .zero, size: size)),
+        context.fill(
+          Path(CGRect(origin: .zero, size: size)),
           with: .color(Color(red: 0.10, green: 0.11, blue: 0.12)))
         let segments: [(CGFloat, CGFloat, Color)] = [
           (0, 0.7, Color(red: 0.20, green: 0.78, blue: 0.42)),
@@ -49,13 +50,16 @@ struct AudioPeakMeter: View {
         ]
         for (start, end, color) in segments where level > start {
           context.fill(
-            Path(CGRect(x: size.width * start, y: 0,
-              width: size.width * (min(level, end) - start), height: size.height)),
+            Path(
+              CGRect(
+                x: size.width * start, y: 0,
+                width: size.width * (min(level, end) - start), height: size.height)),
             with: .color(color))
         }
       }
       .onChange(of: timeline.date, initial: true) { _, date in
-        envelope.update(peak: peakProvider(), elapsed: max(0, date.timeIntervalSince(lastUpdate ?? date)))
+        envelope.update(
+          peak: peakProvider(), elapsed: max(0, date.timeIntervalSince(lastUpdate ?? date)))
         lastUpdate = date
       }
     }
@@ -71,7 +75,10 @@ struct AudioPeakEnvelope {
 
   mutating func update(peak: Float, elapsed: TimeInterval) {
     let measured: Float = peak.isFinite && peak > 0 ? 20 * log10(peak) : -60
-    decibels = max(-60, min(0,
-      max(measured, decibels - Float(max(0, elapsed)) * (20 / 1.7))))
+    decibels = max(
+      -60,
+      min(
+        0,
+        max(measured, decibels - Float(max(0, elapsed)) * (20 / 1.7))))
   }
 }

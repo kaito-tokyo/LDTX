@@ -81,7 +81,8 @@ private struct PairedProgramPreview: NSViewRepresentable {
   }
   func updateNSView(_ view: PreviewHost, context: Context) { view.attach() }
   static func dismantleNSView(_ view: PreviewHost, coordinator: ()) { view.detach() }
-  func sizeThatFits(_ proposal: ProposedViewSize, nsView: PreviewHost, context: Context) -> CGSize? {
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: PreviewHost, context: Context) -> CGSize?
+  {
     CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
   }
 

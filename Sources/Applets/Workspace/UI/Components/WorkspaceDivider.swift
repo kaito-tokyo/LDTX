@@ -34,7 +34,8 @@ public struct WorkspaceDivider: View {
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
               .onChanged { gesture in
                 if dragStart == nil { dragStart = value }
-                let offset = axis == .horizontal ? gesture.translation.width : gesture.translation.height
+                let offset =
+                  axis == .horizontal ? gesture.translation.width : gesture.translation.height
                 resize((dragStart ?? value) + offset * direction)
               }
               .onEnded { _ in dragStart = nil }
