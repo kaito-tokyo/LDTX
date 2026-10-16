@@ -54,7 +54,7 @@ the Feature. Case ID tags belong only on Features and Scenarios.
 @UCT-1000 @WorkspaceDocument
 Feature: Workspace close confirmation with unsaved changes
 
-  @UCT-1000.1 @WorkspaceWindowController
+  @UCT-1000.1 @WorkspaceRuntimeCoordinator
   Scenario: Cancel closing preserves unsaved changes
     Given a Workspace is open with unsaved changes
     When the user closes the Workspace and selects Cancel in the confirmation sheet

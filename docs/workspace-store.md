@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 WorkspaceStateService holds editable protobuf values and observable UI/runtime
 facts for one Workspace document. WorkspaceDocument owns it alongside its
 workspaceSnapshot and persistence. UI receives that same instance through
-Bindable; WindowController retains a reference while managing runtime resources.
+Bindable; WorkspaceRuntimeCoordinator retains a reference while managing runtime resources.
 Assignments to StateService's stored properties remain transparent; direct
 Bindable access does not hide validation, persistence, or runtime synchronization.
 
@@ -21,20 +21,22 @@ Bindable access does not hide validation, persistence, or runtime synchronizatio
 | Reading and writing content snapshots | WorkspaceDocument and its Reader/Writer |
 | Snapshot capture | WorkspaceDocument |
 | Save validation | WorkspaceBundleWriterV4, invoked by DocumentWriter |
-| Persisted runtime adoption and output-time deferral | WorkspaceWindowController |
-| Applying read snapshots to editing state | SwiftUI scene connection |
-| Undo/Redo and standard unsaved-change tracking | SwiftUI scene connection and the window's UndoManager |
-| Runtime projection and recording/capture/audio/Vision lifetimes | WorkspaceWindowController and its runtime services |
+| Persisted runtime adoption and output-time deferral | WorkspaceRuntimeCoordinator |
+| Applying read snapshots to editing state | WorkspaceDocumentConnection |
+| Undo/Redo and standard unsaved-change tracking | WorkspaceDocumentConnection and the window's UndoManager |
+| Runtime projection and recording/capture/audio/Vision lifetimes | WorkspaceRuntimeCoordinator and its runtime services |
 | ProgramRuntime and Vision definition/model inputs | Last successfully persisted content, separate from in-memory confirmation |
 | Live preferences | StateService, projected by the runtime coordinator |
-| Local state URL and transient state migration | WorkspaceWindowController |
+| Local state URL and transient state migration | WorkspaceRuntimeCoordinator |
 | Device assignments, output folders, stream keys and monitor assignments | Shared AppletData |
 | Program selection | Program Inspector and controller, using injected AppletData |
 | Program deletion, layer membership and resource operations | Explicit controller/runtime editing operations |
 | Layer transforms, audio gains, master volumes and mute edits | Direct bindings and editors with explicit numeric encoding |
-| Output, screenshot and inference commands | ViewController and runtime actions |
-| Runtime error presentation | WorkspaceWindowController |
-| Dock recording badge | WindowController observes output state through weakly registered controllers |
+| Output, screenshot and inference commands | UI actions and RuntimeCoordinator; manual inference tasks are runtime-owned |
+| Runtime errors awaiting acknowledgement | WorkspaceStateService |
+| Alert and screenshot popover display | Local State in the presenting UI View |
+| Pane widths, preview height and canvas tab | Local State in the owning UI View |
+| Dock recording badge | WorkspaceRuntimeCoordinator observes output state through weakly registered controllers |
 
 There is no Apply/Submit registry or navigation guard for unconfirmed input.
 Representable edits update StateService; incomplete numeric text may remain local

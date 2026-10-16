@@ -8,6 +8,7 @@ import SwiftUI
 /// Retains the document's Metal surface and delegate independently of SwiftUI view updates.
 @MainActor
 public final class ProgramCanvasPairedPreview {
+  public var attachWindow: ((NSWindow?) -> NSResponder?)?
   public let metalView: MTKView
   private let previewDelegate: any MTKViewDelegate
   private let onSelectLandscape: () -> Void
@@ -38,7 +39,7 @@ public final class ProgramCanvasPairedPreview {
     GeometryReader { geometry in
       let ratio: CGFloat = 16.0 / 9.0 + 9.0 / 16.0
       let height = min(max(0, geometry.size.height - 24), max(0, geometry.size.width - 24) / ratio)
-      MetalPreview(view: self.metalView)
+      PairedProgramPreview(preview: self)
         .frame(width: height * ratio, height: height)
         .contentShape(Rectangle())
         .onTapGesture { point in self.selectCanvas(at: point) }
@@ -72,11 +73,61 @@ public final class ProgramCanvasPairedPreview {
   }
 }
 
-private struct MetalPreview: NSViewRepresentable {
-  let view: MTKView
-  func makeNSView(context: Context) -> MTKView { view }
-  func updateNSView(_ view: MTKView, context: Context) {}
-  func sizeThatFits(_ proposal: ProposedViewSize, nsView: MTKView, context: Context) -> CGSize? {
+private struct PairedProgramPreview: NSViewRepresentable {
+  let preview: ProgramCanvasPairedPreview
+
+  func makeNSView(context: Context) -> PreviewHost {
+    PreviewHost(preview: preview)
+  }
+  func updateNSView(_ view: PreviewHost, context: Context) { view.attach() }
+  static func dismantleNSView(_ view: PreviewHost, coordinator: ()) { view.detach() }
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView: PreviewHost, context: Context) -> CGSize?
+  {
     CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+  }
+
+  final class PreviewHost: NSView {
+    let preview: ProgramCanvasPairedPreview
+    private weak var responderHost: NSWindow?
+    private var documentActions: NSResponder?
+
+    init(preview: ProgramCanvasPairedPreview) {
+      self.preview = preview
+      super.init(frame: .zero)
+      let metalView = preview.metalView
+      metalView.translatesAutoresizingMaskIntoConstraints = false
+      addSubview(metalView)
+      NSLayoutConstraint.activate([
+        metalView.leadingAnchor.constraint(equalTo: leadingAnchor),
+        metalView.trailingAnchor.constraint(equalTo: trailingAnchor),
+        metalView.topAnchor.constraint(equalTo: topAnchor),
+        metalView.bottomAnchor.constraint(equalTo: bottomAnchor),
+      ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      attach()
+    }
+
+    func attach() {
+      guard responderHost !== window || documentActions == nil else { return }
+      detach()
+      guard let window, let actions = preview.attachWindow?(window) else { return }
+      actions.nextResponder = window.nextResponder
+      window.nextResponder = actions
+      documentActions = actions
+      responderHost = window
+    }
+
+    func detach() {
+      if let responderHost, responderHost.nextResponder === documentActions {
+        responderHost.nextResponder = documentActions?.nextResponder
+      }
+      documentActions?.nextResponder = nil
+      documentActions = nil
+      responderHost = nil
+    }
   }
 }

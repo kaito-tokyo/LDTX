@@ -539,10 +539,10 @@ targets:
         includes:
           - WorkspaceDocument.swift
           - WorkspaceDocumentContent.swift
+          - WorkspaceCommands.swift
           - WorkspaceApplicationTermination.swift
-          - WorkspaceRootView.swift
-          - WorkspaceScene.swift
-          - WorkspaceWindowController.swift
+          - WorkspaceDocumentConnection.swift
+          - WorkspaceRuntimeCoordinator.swift
     dependencies:
       - target: LDTXProtos
       - target: LDTXWorkspaceBundleFormat

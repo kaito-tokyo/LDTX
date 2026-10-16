@@ -2,105 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXProgramRuntime
-import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
-import LDTXWorkspaceAppletService
-@testable import LDTXWorkspaceAppletUI
-import LDTXYouTubeRTMPS
-import SwiftUI
+import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {
   @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
-  struct UCT1015WorkspaceWindowControllerIntegrationTestSuite {
-    init() { _ = UIComponentTestEnvironment.documentController }
-
-    @Test("Errors queued before window attachment are presented after attachment")
-    func startupErrorIsPresentedAfterAttach() async throws {
-      let document = WorkspaceDocument()
-      let controller = WorkspaceWindowController(document: document)
-      controller.reportError(
+  struct UCT1015WorkspaceRuntimeCoordinatorIntegrationTestSuite {
+    @Test func alertAcknowledgesQueuedErrorsInOrder() async throws {
+      let state = WorkspaceStateService()
+      let window = makeWorkspaceTestWindow(stateService: state)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      state.operationErrors = [1, 2].map {
         NSError(
-          domain: "Startup", code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "Queued startup failure"]))
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
-        styleMask: [.titled], backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.orderFront(nil)
-      controller.attachWindow(window)
-      let sheet = try await waitForSheet(on: window)
-      #expect(displayedText(in: sheet.contentView).contains("Queued startup failure"))
-      dismiss(sheet)
-      await controller.shutdown()
-      window.close()
-    }
-
-    @Test("A component in use is presented as an operation error")
-    func componentInUsePresentsError() async throws {
-      let (document, controller, window) = makeController()
-      defer {
-        if let sheet = window.attachedSheet { dismiss(sheet) }
-        window.close()
-        document.close()
+          domain: "queue", code: $0,
+          userInfo: [NSLocalizedDescriptionKey: "Failure \($0)"])
       }
-      controller.reportError(WorkspaceRuntimeError.resourceInUse(1))
-      let sheet = try await waitForSheet(on: window)
-      #expect(displayedText(in: sheet.contentView).contains("Visions"))
+      for code in [1, 2] {
+        var sheet: NSWindow?
+        for _ in 0..<200 {
+          if let current = window.attachedSheet,
+            workspaceDescendants(current.contentView!).contains(where: {
+              ($0 as? NSTextField)?.stringValue == "Failure \(code)"
+            })
+          {
+            sheet = current
+            break
+          }
+          try await Task.sleep(for: .milliseconds(10))
+        }
+        let current = try #require(sheet)
+        let button = try #require(
+          workspaceDescendants(current.contentView!)
+            .compactMap { $0 as? NSButton }.first { $0.title == "OK" })
+        button.performClick(nil)
+        await settleWorkspaceToolbar(window)
+      }
+      #expect(state.operationErrors.isEmpty)
     }
 
-    private func makeController() -> (WorkspaceDocument, WorkspaceWindowController, NSWindow) {
-      _ = NSApplication.shared
+    @Test func queuesErrorsAndPreservesDetails() async throws {
       let document = WorkspaceDocument()
-      let controller = WorkspaceWindowController(
-        stateService: document.stateService,
-        persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), document: document)
-      document.addWindowController(controller)
-      let window = controller.window!
-      window.orderFront(nil)
-      return (document, controller, window)
-    }
-
-    private func waitForSheet(on window: NSWindow, excluding previous: NSWindow? = nil) async throws
-      -> NSWindow
-    {
-      for _ in 0..<200 {
-        if let sheet = window.attachedSheet, sheet !== previous { return sheet }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      throw NSError(
-        domain: "WorkspaceErrorTest", code: 1,
-        userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for error sheet."])
-    }
-
-    private func dismiss(_ sheet: NSWindow) {
-      sheet.sheetParent?.endSheet(sheet)
-    }
-
-    private func displayedText(in view: NSView?) -> String {
-      guard let view else { return "" }
-      return ((view as? NSTextField)?.stringValue ?? "") + "\n"
-        + view.subviews.map { displayedText(in: $0) }.joined(separator: "\n")
-    }
-
-    @Test("UCT-1015.1: Errors are queued on the editing sheet and stop after shutdown")
-    func errorsQueueOnEditingSheetAndStopAfterShutdown() async throws {
-      let (document, controller, window) = makeController()
-      let editor = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
-        styleMask: [.titled], backing: .buffered, defer: false)
-      editor.isReleasedWhenClosed = false
-      window.beginSheet(editor, completionHandler: { _ in })
-      defer {
-        if let sheet = editor.attachedSheet { dismiss(sheet) }
-        dismiss(editor)
-        window.close()
-        document.close()
-      }
+      let coordinator = WorkspaceRuntimeCoordinator(document: document)
       let error = NSError(
         domain: "test", code: 1,
         userInfo: [
@@ -108,94 +53,39 @@ extension AppUIComponentTestSuite {
           NSLocalizedFailureReasonErrorKey: "A retained failure reason.",
           NSLocalizedRecoverySuggestionErrorKey: "Retry the edit.",
         ])
-      controller.reportError(error)
-      let first = try await waitForSheet(on: editor)
-      #expect(first.sheetParent === editor)
-      let text = displayedText(in: first.contentView)
-      #expect(text.contains("Edit failed."))
-      #expect(text.contains("A retained failure reason."))
-      #expect(text.contains("Retry the edit."))
-      controller.reportError(NSError(domain: "test", code: 2))
-      #expect(editor.attachedSheet === first)
-      dismiss(first)
-      let second = try await waitForSheet(on: editor, excluding: first)
-      #expect(second !== first)
-      await controller.shutdown()
-      dismiss(second)
-      controller.reportError(error)
-      controller.reportError(error)
-      try await Task.sleep(for: .milliseconds(100))
-      #expect(editor.attachedSheet == nil)
+      coordinator.reportError(error)
+      coordinator.reportError(NSError(domain: "test", code: 2))
+      let state = coordinator.stateService
+      #expect(state.operationErrors.first?.code == 1)
+      #expect(state.operationErrors.first?.localizedFailureReason == "A retained failure reason.")
+      #expect(state.operationErrors.first?.localizedRecoverySuggestion == "Retry the edit.")
+      state.operationErrors.removeFirst()
+      for _ in 0..<20 {
+        if state.operationErrors.first != nil { break }
+        await Task.yield()
+      }
+      #expect(state.operationErrors.first?.code == 2)
+      await coordinator.shutdown()
+      coordinator.reportError(error)
+      #expect(state.operationErrors.first == nil)
     }
 
-    @Test("UCT-1015.2: Runtime failures are scoped and can recur after recovery")
-    func runtimeFailuresAreScopedDeduplicatedAndCanRecur() async throws {
-      let (firstDocument, first, firstWindow) = makeController()
-      let (secondDocument, second, secondWindow) = makeController()
-      defer {
-        if let sheet = firstWindow.attachedSheet { dismiss(sheet) }
-        if let sheet = secondWindow.attachedSheet { dismiss(sheet) }
-        firstWindow.close()
-        secondWindow.close()
-        firstDocument.close()
-        secondDocument.close()
-      }
-      let engineID = first.windowRuntime.captureSessionCoordinator.audioEngine.statusIdentifier
-      NotificationCenter.default.post(
-        name: WorkspaceAudioEngine.statusDidChange, object: engineID,
-        userInfo: ["failures": ["Monitor": Int32(-50)]])
-      let initial = try await waitForSheet(on: firstWindow)
-      #expect(secondWindow.attachedSheet == nil)
+    @Test func runtimeFailuresAreScopedAndCanRecurAfterRecovery() async {
+      let firstDocument = WorkspaceDocument()
+      let secondDocument = WorkspaceDocument()
+      let first = WorkspaceRuntimeCoordinator(document: firstDocument)
+      let second = WorkspaceRuntimeCoordinator(document: secondDocument)
       first.updateMonitorFailure(-50)
-      dismiss(initial)
-      try await Task.sleep(for: .milliseconds(100))
-      #expect(firstWindow.attachedSheet == nil)
+      #expect(first.stateService.operationErrors.first != nil)
+      #expect(second.stateService.operationErrors.first == nil)
+      first.stateService.operationErrors.removeFirst()
+      first.updateMonitorFailure(-50)
+      #expect(first.stateService.operationErrors.first == nil)
       first.updateMonitorFailure(nil)
       first.updateMonitorFailure(-50)
-      let recurrence = try await waitForSheet(on: firstWindow)
-      dismiss(recurrence)
-      try await Task.sleep(for: .milliseconds(100))
-      first.updateCaptureFailures(["camera-a", "camera-b"])
-      let capture = try await waitForSheet(on: firstWindow)
-      first.updateCaptureFailures(["camera-a", "camera-b"])
-      dismiss(capture)
-      try await Task.sleep(for: .milliseconds(100))
-      #expect(firstWindow.attachedSheet == nil)
-      first.updateCaptureFailures([])
-      first.updateCaptureFailures(["camera-a"])
-      let retry = try await waitForSheet(on: firstWindow)
-      dismiss(retry)
+      #expect(first.stateService.operationErrors.first != nil)
       await first.shutdown()
       await second.shutdown()
-    }
-
-    @Test("UCT-1015.3: Closing a window discards queued and late errors")
-    func closingWindowDiscardsQueuedAndLateErrors() async throws {
-      let (document, controller, window) = makeController()
-      defer {
-        window.close()
-        document.close()
-      }
-      controller.reportError(NSError(domain: "test", code: 1))
-      let sheet = try await waitForSheet(on: window)
-      controller.reportError(NSError(domain: "test", code: 2))
-      window.close()
-      if sheet.sheetParent != nil { dismiss(sheet) }
-      controller.updateMonitorFailure(-50)
-      controller.updateCaptureFailures(["camera"])
-      controller.reportError(NSError(domain: "test", code: 3))
-      try await Task.sleep(for: .milliseconds(100))
-      #expect(window.attachedSheet == nil)
-      await controller.shutdown()
-    }
-  }
-}
-
-private struct WorkspaceErrorEnvironmentProbe: View {
-  @Environment(\.workspaceReportError) private var reportError
-  var body: some View {
-    Text("Error probe").onAppear {
-      reportError(WorkspaceSelectionError(message: "Invalid SwiftUI input"))
     }
   }
 }

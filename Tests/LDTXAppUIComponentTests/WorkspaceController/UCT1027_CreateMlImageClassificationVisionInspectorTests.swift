@@ -52,7 +52,7 @@ extension AppUIComponentTestSuite {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
       defer { window.close() }
-      let responder = WorkspaceDocumentActions(state: window.content)
+      let responder = WorkspaceDocumentActions(stateService: store)
       for selector in [
         #selector(WorkspaceDocumentActions.revertDocumentToSaved(_:)),
         #selector(WorkspaceDocumentActions.browseDocumentVersions(_:)),

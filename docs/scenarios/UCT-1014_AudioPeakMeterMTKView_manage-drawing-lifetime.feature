@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@UCT-1014 @AudioPeakMeterMTKView
-Feature: Manage drawing lifetime
+@UCT-1014 @AudioPeakMeter
+Feature: Display audio peaks with SwiftUI
 
   @UCT-1014.1
-  Scenario: Drawing follows Window attachment and UI releases without external stop calls
-    Given a meter and editors whose owning references can be released
-    When the meter attaches, its Window closes, it reconnects, and UI owners are released
-    Then drawing pauses on closure or detachment, resumes on reconnection, and the UI is released without external stop calls
+  Scenario: Peak attack is immediate and release follows elapsed time
+    Given a silent meter
+    When a full-scale peak arrives followed by silence for 1.7 seconds
+    Then the peak immediately reaches zero decibels and releases by twenty decibels

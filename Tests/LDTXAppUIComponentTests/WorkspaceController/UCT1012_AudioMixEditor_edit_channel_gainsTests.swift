@@ -37,14 +37,17 @@ extension AppUIComponentTestSuite {
         peakMeter: .init(), reportError: { _ in })
       let window = hostWorkspaceView(editor)
       defer { window.close() }
+      let host = try #require(window.contentViewController as? NSHostingController<AudioMixEditor>)
+      let proposal = NSSize(width: 720, height: CGFloat.greatestFiniteMagnitude)
+      let emptyHeight = host.sizeThatFits(in: proposal).height
       state.workspaceDefinition.audioDevices = [
         WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
       ]
       await settleWorkspaceToolbar(window)
-      #expect(workspaceDescendants(window.contentView!).contains { $0 is AudioPeakMeterMTKView })
+      #expect(host.sizeThatFits(in: proposal).height > emptyHeight)
       state.workspaceDefinition.audioDevices = []
       await settleWorkspaceToolbar(window)
-      #expect(!workspaceDescendants(window.contentView!).contains { $0 is AudioPeakMeterMTKView })
+      #expect(abs(host.sizeThatFits(in: proposal).height - emptyHeight) < 1)
     }
   }
 }

@@ -31,6 +31,10 @@ public final class WorkspaceStateService {
     480 + (isSidebarVisible ? 201 : 0) + (isInspectorVisible ? 241 : 0)
   }
 
+  public var isClosed = false
+  public var isInferring = false
+  public var operationErrors: [NSError] = []
+
   public var isOutputActive = false
   public var recordingState: WorkspaceRecordingState = .idle
   public var isLocalRecording = false
