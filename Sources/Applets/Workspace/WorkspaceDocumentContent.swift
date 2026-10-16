@@ -38,6 +38,7 @@ public struct WorkspaceDocumentContent: View {
         metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
       )
+      .frame(minWidth: document.stateService.minimumWindowWidth, minHeight: 400)
       .focusedSceneValue(\.workspaceUndoDisabled, true)
     }
   }

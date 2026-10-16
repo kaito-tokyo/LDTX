@@ -202,8 +202,8 @@ extension AppUIComponentTestSuite {
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
-    @Test("Workspace native sidebar toggle restores width and stays Window local")
-    func nativeSidebarToggleRestoresWidth() async throws {
+    @Test("Workspace SwiftUI sidebar toggle stays Window local")
+    func swiftUISidebarToggleStaysWindowLocal() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
       defer {
@@ -211,33 +211,35 @@ extension AppUIComponentTestSuite {
         second.close()
       }
       await settleWorkspaceToolbar(first)
+      first.content.layout.sidebarWidth = 280
+      await settleWorkspaceToolbar(first)
+      let width = first.content.layout.sidebarWidth
+      let contentWidth = first.contentPane.view.bounds.width
+      let preview = first.contentPane.testPairedPreview
       let item = try #require(
         first.toolbar?.items.first {
           $0.itemIdentifier.rawValue == "workspace.toggleSidebar"
         })
-      let split = first.splitViewController
       #expect(first.contentViewController === first.content)
-      #expect(split.parent === first.content)
-      split.view.layoutSubtreeIfNeeded()
-      split.splitView.setPosition(280, ofDividerAt: 0)
-      let width = split.splitView.arrangedSubviews[0].frame.width
       try performWorkspaceToolbarAction(item)
       try await Task.sleep(for: .milliseconds(500))
-      #expect(split.splitViewItems[0].isCollapsed)
-      #expect(!second.splitViewController.splitViewItems[0].isCollapsed)
+      #expect(!first.stateService.isSidebarVisible)
+      #expect(second.stateService.isSidebarVisible)
+      #expect(first.contentPane.view.bounds.width > contentWidth)
       try performWorkspaceToolbarAction(item)
       try await Task.sleep(for: .milliseconds(500))
-      split.view.layoutSubtreeIfNeeded()
-      #expect(!split.splitViewItems[0].isCollapsed)
-      #expect(abs(split.splitView.arrangedSubviews[0].frame.width - width) <= 1)
-      split.toggleInspector(nil)
+      #expect(first.stateService.isSidebarVisible)
+      #expect(abs(first.content.layout.sidebarWidth - width) <= 1)
+      #expect(abs(first.contentPane.view.bounds.width - contentWidth) <= 1)
+      #expect(first.contentPane.testPairedPreview === preview)
+      first.content.toggleInspector(nil)
       #expect(!first.stateService.isInspectorVisible)
-      split.toggleInspector(nil)
+      first.content.toggleInspector(nil)
       #expect(first.stateService.isInspectorVisible)
     }
 
-    @Test("UCT-1016.7: Toolbar pane toggles restore widths in their own Window")
-    func toolbarActionsRestoreWidthsAndStayWithinTheirWindow() async throws {
+    @Test("UCT-1016.7: Toolbar pane toggles stay within their own Window")
+    func toolbarActionsStayWithinTheirWindow() async throws {
       _ = NSApplication.shared
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
@@ -254,40 +256,26 @@ extension AppUIComponentTestSuite {
           $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
         })
       #expect(screenshot.isEnabled)
-      let split = first.splitViewController
-      let other = second.splitViewController
-      split.view.layoutSubtreeIfNeeded()
-      let sidebarWidth = split.splitView.arrangedSubviews[0].frame.width
-      #expect((240...260).contains(sidebarWidth))
-      let contentWidth =
-        split.splitView.bounds.width - sidebarWidth - 340
-        - 2 * split.splitView.dividerThickness
-      for (pane, expectedWidth) in zip(
-        split.splitView.arrangedSubviews, [sidebarWidth, contentWidth, 340.0])
-      {
-        #expect(
-          abs(pane.frame.width - expectedWidth) <= 1,
-          "Actual: \(pane.frame.width), expected: \(expectedWidth)")
-      }
       for (identifier, index) in [
         (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0),
         (.init("workspace.toggleInspector"), 2),
       ] {
         let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
-        #expect(item.target === split)
+        #expect(item.target === first.content)
         #expect(!item.autovalidates)
-        let width = split.splitView.arrangedSubviews[index].frame.width
         try performWorkspaceToolbarAction(item)
         try await Task.sleep(for: .milliseconds(350))
-        #expect(split.splitViewItems[index].isCollapsed)
-        #expect(!other.splitViewItems[index].isCollapsed)
+        if index == 0 {
+          #expect(!first.stateService.isSidebarVisible)
+          #expect(second.stateService.isSidebarVisible)
+        } else {
+          #expect(!first.stateService.isInspectorVisible)
+          #expect(second.stateService.isInspectorVisible)
+        }
         try performWorkspaceToolbarAction(item)
         try await Task.sleep(for: .milliseconds(350))
-        split.view.layoutSubtreeIfNeeded()
-        #expect(!split.splitViewItems[index].isCollapsed)
-        #expect(
-          abs(split.splitView.arrangedSubviews[index].frame.width - width) <= 1,
-          "Pane \(index): \(split.splitView.arrangedSubviews[index].frame.width), before \(width)")
+        #expect(first.stateService.isSidebarVisible)
+        #expect(first.stateService.isInspectorVisible)
       }
     }
 
@@ -309,27 +297,154 @@ extension AppUIComponentTestSuite {
         let items = toolbar.items
         let separator = try #require(
           items.firstIndex {
-            $0.itemIdentifier == .inspectorTrackingSeparator
+            $0.itemIdentifier.rawValue == "workspace.inspectorSeparator"
           })
-        #expect(items[separator] is NSTrackingSeparatorToolbarItem)
-        #expect(items.filter { $0.itemIdentifier == .inspectorTrackingSeparator }.count == 1)
+        #expect(items[separator].view is NSBox)
+        #expect(
+          items.filter { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" }.count == 1)
+        #expect(!items.contains { $0.itemIdentifier == .inspectorTrackingSeparator })
         #expect(items[..<separator].contains { $0.itemIdentifier == .flexibleSpace })
-        #expect(items[(separator + 1)...].contains { $0.itemIdentifier == .flexibleSpace })
+        #expect(
+          items[(separator + 1)...].contains {
+            $0.itemIdentifier.rawValue == "workspace.inspectorSpace"
+          })
       }
       let separatorItem = try #require(
-        toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator })
+        toolbar.items.first { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" })
       let applyID = NSToolbarItem.Identifier("workspace.inspector.apply")
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.splitViewController.toggleInspector(nil)
+      window.content.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(!state.isInspectorVisible)
+      #expect(separatorItem.view?.isHidden == true)
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.splitViewController.toggleInspector(nil)
+      window.content.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(state.isInspectorVisible)
+      #expect(separatorItem.view?.isHidden == false)
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
       #expect(
-        toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator } === separatorItem)
+        toolbar.items.first { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" }
+          === separatorItem)
+    }
+
+    @Test("The toolbar separator follows the custom inspector boundary")
+    func toolbarSeparatorTracksInspectorGeometry() async throws {
+      let window = makeWorkspaceTestWindow()
+      defer { window.close() }
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      let separator = try #require(
+        window.toolbar?.items.first {
+          $0.itemIdentifier.rawValue == "workspace.inspectorSeparator"
+        }?.view)
+      for (windowWidth, inspectorWidth): (CGFloat, CGFloat) in [(1200, 400), (1100, 280)] {
+        window.setContentSize(.init(width: windowWidth, height: 700))
+        window.content.layout.inspectorWidth = inspectorWidth
+        await settleWorkspaceToolbar(window)
+        let actual = separator.convert(separator.bounds, to: nil).midX
+        #expect(abs(actual - (windowWidth - inspectorWidth)) <= 1)
+      }
+    }
+
+    @Test("Collapsing a side pane preserves its draft and task results", arguments: [true, false])
+    func collapsingSidePaneRetainsSubtree(isSidebar: Bool) async throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let probe = InspectorDraftProbe()
+      let host = NSHostingController(
+        rootView: WorkspaceView(
+          layout: WorkspacePaneLayout(), stateService: state,
+          sidebar: isSidebar ? AnyView(InspectorDraftView(probe: probe)) : AnyView(Text("Sidebar")),
+          content: Text("Content"),
+          inspector: isSidebar
+            ? AnyView(Text("Inspector")) : AnyView(InspectorDraftView(probe: probe))))
+      let window = NSWindow(contentViewController: host)
+      window.isReleasedWhenClosed = false
+      window.setContentSize(.init(width: 1062, height: 700))
+      window.orderFront(nil)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let draft = try #require(probe.draft)
+      draft.wrappedValue = "-"
+      await settleWorkspaceToolbar(window)
+      if isSidebar { state.isSidebarVisible = false } else { state.isInspectorVisible = false }
+      await settleWorkspaceToolbar(window)
+      if isSidebar { state.isSidebarVisible = true } else { state.isInspectorVisible = true }
+      await settleWorkspaceToolbar(window)
+      #expect(probe.draft?.wrappedValue == "-")
+      #expect(probe.instances.count == 1)
+      #expect(probe.taskRuns == 1)
+    }
+
+    @MainActor
+    private final class InspectorDraftProbe {
+      var draft: Binding<String>?
+      var instances: [UUID] = []
+      var taskRuns = 0
+    }
+
+    @Test("Collapsing the sidebar preserves its List scroll position")
+    func collapsingSidebarRetainsScrollPosition() async throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let host = NSHostingController(
+        rootView: WorkspaceView(
+          layout: WorkspacePaneLayout(), stateService: state,
+          sidebar: List(0..<100, id: \.self) { Text("Resource \($0)") },
+          content: Text("Content"), inspector: Text("Inspector")))
+      let window = NSWindow(contentViewController: host)
+      window.isReleasedWhenClosed = false
+      window.setContentSize(.init(width: 1062, height: 700))
+      window.orderFront(nil)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      func scrollView(in view: NSView) -> NSScrollView? {
+        (view as? NSScrollView) ?? view.subviews.lazy.compactMap { scrollView(in: $0) }.first
+      }
+      let scroll = try #require(scrollView(in: host.view))
+      scroll.contentView.scroll(to: .init(x: 0, y: 400))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      await settleWorkspaceToolbar(window)
+      let offset = scroll.contentView.bounds.origin.y
+      #expect(offset > 0)
+      state.isSidebarVisible = false
+      await settleWorkspaceToolbar(window)
+      state.isSidebarVisible = true
+      await settleWorkspaceToolbar(window)
+      #expect(scrollView(in: host.view) === scroll)
+      #expect(abs(scroll.contentView.bounds.origin.y - offset) <= 1)
+    }
+
+    private struct InspectorDraftView: View {
+      let probe: InspectorDraftProbe
+      @State private var draft = "0"
+      @State private var instance = UUID()
+
+      var body: some View {
+        TextField("Numeric draft", text: $draft)
+          .onAppear {
+            probe.draft = $draft
+            probe.instances.append(instance)
+          }
+          .task { probe.taskRuns += 1 }
+      }
+    }
+
+    @Test("Hidden side panes lower the SwiftUI minimum width")
+    func minimumWidthFollowsVisiblePanes() async {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let host = NSHostingView(
+        rootView: WorkspaceView(
+          layout: WorkspacePaneLayout(), stateService: state,
+          sidebar: Text("Sidebar"), content: Text("Content"), inspector: Text("Inspector")))
+      for (sidebar, inspector, expected): (Bool, Bool, CGFloat) in [
+        (true, true, 922), (false, true, 721), (true, false, 681), (false, false, 480),
+      ] {
+        state.isSidebarVisible = sidebar
+        state.isInspectorVisible = inspector
+        await drainWorkspaceTestTasks()
+        #expect(state.minimumWindowWidth == expected)
+        #expect(abs(host.fittingSize.width - expected) <= 1)
+      }
     }
 
     @Test("An unsaved Workspace disables output without disabling editing")

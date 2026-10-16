@@ -20,7 +20,6 @@ final class WorkspaceTestWindow: NSWindow {
     setContentSize(NSSize(width: 1062, height: 700))
     content.viewDidAppear()
   }
-  var splitViewController: NSSplitViewController { content.splitViewController }
   var contentPane: WorkspaceContentPane { content.contentPane }
   var stateService: WorkspaceStateService { content.stateService }
   func validateToolbarItem(_ item: NSToolbarItem) -> Bool { content.validateToolbarItem(item) }

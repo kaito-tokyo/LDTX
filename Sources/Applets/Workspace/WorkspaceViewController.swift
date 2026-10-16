@@ -26,21 +26,13 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
   private let reportError: (Error) -> Void
   let deviceRegistry: DeviceRegistryService
 
-  let splitViewController: NSSplitViewController
+  let layout = WorkspacePaneLayout()
   let contentPane: WorkspaceContentPane
 
   let screenshotResultPopover = NSPopover()
-  private var inspectorCollapseObservation: NSKeyValueObservation?
-  private var sidebarCollapseObservation: NSKeyValueObservation?
   private let toolbarCoordinator: WorkspaceToolbarCoordinator
   private var inferenceTask: Task<Void, Never>?
   private var isClosed = false
-  private var expandedSidebarWidth: CGFloat = 240
-  private var didSetInitialLayout = false
-
-  var inspectorSplitViewItem: NSSplitViewItem? {
-    splitViewController.splitViewItems[2]
-  }
 
   init(
     document: any WorkspaceDocumentContext,
@@ -61,7 +53,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     self.reportError = reportError
     self.deviceRegistry = deviceRegistry
 
-    self.splitViewController = NSSplitViewController()
     self.contentPane = WorkspaceContentPane(
       stateService: stateService, appletData: appletData, peakMeter: peakMeter,
       reportError: reportError, pairedPreview: pairedPreview,
@@ -70,63 +61,21 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     toolbarCoordinator = WorkspaceToolbarCoordinator()
     super.init(nibName: nil, bundle: nil)
 
-    let sidebarController = NSHostingController(rootView: sidebarView)
-    sidebarController.sizingOptions = [.minSize]
-    sidebarController.sceneBridgingOptions = []
-
-    let inspectorController = NSHostingController(rootView: inspectorView)
-    inspectorController.sizingOptions = [.minSize]
-    inspectorController.sceneBridgingOptions = []
-
-    let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-    sidebarItem.canCollapse = true
-    sidebarItem.canCollapseFromWindowResize = false
-    sidebarItem.holdingPriority = .init(260)
-    let contentItem = NSSplitViewItem(viewController: contentPane)
-    contentItem.holdingPriority = .init(250)
-    let inspectorItem = NSSplitViewItem(inspectorWithViewController: inspectorController)
-    inspectorItem.canCollapse = true
-    inspectorItem.canCollapseFromWindowResize = false
-    inspectorItem.maximumThickness = 480
-    inspectorItem.holdingPriority = .init(260)
-    for item in [sidebarItem, contentItem, inspectorItem] {
-      item.automaticallyAdjustsSafeAreaInsets = false
-      splitViewController.addSplitViewItem(item)
-    }
-
-    addChild(splitViewController)
-    view = splitViewController.view
+    let host = NSHostingController(rootView: workspaceView)
+    host.sizingOptions = []
+    host.sceneBridgingOptions = []
+    addChild(host)
+    view = NSView()
+    host.view.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(host.view)
+    NSLayoutConstraint.activate([
+      host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      host.view.topAnchor.constraint(equalTo: view.topAnchor),
+      host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+    ])
     configureToolbar()
     refreshToolbarState()
-    let splitView = splitViewController.splitView
-    NotificationCenter.default.addObserver(
-      self, selector: #selector(paneLayoutChanged(_:)),
-      name: NSSplitView.didResizeSubviewsNotification, object: splitView)
-    sidebarCollapseObservation = sidebarItem.observe(\.isCollapsed, options: [.new]) {
-      [weak self] item, _ in
-      let isCollapsed = item.isCollapsed
-      MainActor.assumeIsolated {
-        guard let self else { return }
-        if !isCollapsed {
-          let width = self.expandedSidebarWidth
-          self.splitViewController.view.layoutSubtreeIfNeeded()
-          self.splitViewController.splitView.setPosition(width, ofDividerAt: 0)
-        }
-        self.view.window?.invalidateRestorableState()
-      }
-    }
-
-    inspectorCollapseObservation = splitViewController.splitViewItems[2].observe(
-      \.isCollapsed, options: [.initial, .new]
-    ) { [weak self] item, _ in
-      let isCollapsed = item.isCollapsed
-      MainActor.assumeIsolated {
-        guard let self else { return }
-        self.stateService.isInspectorVisible = !isCollapsed
-        self.view.window?.invalidateRestorableState()
-      }
-    }
-
     observeToolbarState()
 
   }
@@ -139,33 +88,24 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     view.window?.toolbar = toolbarCoordinator.toolbar
     view.window?.toolbarStyle = .unified
     didAttachWindow?(view.window)
-    guard !didSetInitialLayout else { return }
-    didSetInitialLayout = true
-    view.layoutSubtreeIfNeeded()
-    let splitView = splitViewController.splitView
-    splitView.setPosition(240, ofDividerAt: 0)
-    splitView.setPosition(240 + 480 + splitView.dividerThickness, ofDividerAt: 1)
-    contentPane.configureAfterEstablished()
   }
 
   var didAttachWindow: ((NSWindow?) -> Void)?
 
-  @objc private func paneLayoutChanged(_ notification: Notification) {
-    let split = splitViewController.splitView
-    guard split.arrangedSubviews.count == 3 else { return }
-    if !splitViewController.splitViewItems[0].isCollapsed {
-      let width = split.arrangedSubviews[0].frame.width
-      if width > 0 { expandedSidebarWidth = width }
-    }
-    view.window?.invalidateRestorableState()
+  @objc func toggleSidebar(_ sender: Any?) {
+    stateService.isSidebarVisible.toggle()
+  }
+
+  @objc func toggleInspector(_ sender: Any?) {
+    stateService.isInspectorVisible.toggle()
   }
 
   private func configureToolbar() {
     toolbarCoordinator.sidebarItem.label = String(localized: "Toggle Sidebar")
     toolbarCoordinator.sidebarItem.image = NSImage(
       systemSymbolName: "sidebar.left", accessibilityDescription: nil)
-    toolbarCoordinator.sidebarItem.target = splitViewController
-    toolbarCoordinator.sidebarItem.action = #selector(NSSplitViewController.toggleSidebar(_:))
+    toolbarCoordinator.sidebarItem.target = self
+    toolbarCoordinator.sidebarItem.action = #selector(toggleSidebar(_:))
     toolbarCoordinator.sidebarItem.isNavigational = true
     toolbarCoordinator.sidebarItem.autovalidates = false
 
@@ -204,9 +144,8 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     toolbarCoordinator.toggleInspectorItem.label = String(localized: "Toggle Inspector")
     toolbarCoordinator.toggleInspectorItem.image = NSImage(
       systemSymbolName: "sidebar.right", accessibilityDescription: nil)
-    toolbarCoordinator.toggleInspectorItem.target = splitViewController
-    toolbarCoordinator.toggleInspectorItem.action = #selector(
-      NSSplitViewController.toggleInspector(_:))
+    toolbarCoordinator.toggleInspectorItem.target = self
+    toolbarCoordinator.toggleInspectorItem.action = #selector(toggleInspector(_:))
     toolbarCoordinator.toggleInspectorItem.autovalidates = false
 
     toolbarCoordinator.toolbar.autosavesConfiguration = false
@@ -305,6 +244,17 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     .environment(\.workspaceReportError, reportError)
   }
 
+  private var workspaceView: some View {
+    WorkspaceView(
+      layout: layout, stateService: stateService,
+      sidebar: sidebarView,
+      content: WorkspaceContentRepresentation(controller: contentPane),
+      inspector: inspectorView,
+      inspectorWidthChanged: { [weak self] width in
+        self?.toolbarCoordinator.updateInspectorWidth(width)
+      })
+  }
+
   private var inspectorView: some View {
     WorkspaceInspectorContainer(
       deviceRegistry: deviceRegistry,
@@ -378,11 +328,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
 
   func tearDown() {
     isClosed = true
-    inspectorCollapseObservation?.invalidate()
-    sidebarCollapseObservation?.invalidate()
-    NotificationCenter.default.removeObserver(
-      self, name: NSSplitView.didResizeSubviewsNotification,
-      object: splitViewController.splitView)
     screenshotResultPopover.close()
 
   }
@@ -429,6 +374,125 @@ extension WorkspaceViewController: NSToolbarItemValidation {
       inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil
     default: false
     }
+  }
+}
+
+@MainActor @Observable
+final class WorkspacePaneLayout {
+  var sidebarWidth: CGFloat = 240
+  var inspectorWidth: CGFloat = 320
+}
+
+struct WorkspaceView<Sidebar: View, Content: View, Inspector: View>: View {
+  let layout: WorkspacePaneLayout
+  let stateService: WorkspaceStateService
+  let sidebar: Sidebar
+  let content: Content
+  let inspector: Inspector
+  var inspectorWidthChanged: (CGFloat) -> Void = { _ in }
+
+  var body: some View {
+    GeometryReader { geometry in
+      let dividers =
+        (stateService.isSidebarVisible ? 1.0 : 0) + (stateService.isInspectorVisible ? 1 : 0)
+      let available = max(0, geometry.size.width - 480 - dividers)
+      let inspectorWidth =
+        stateService.isInspectorVisible
+        ? min(
+          layout.inspectorWidth, max(240, available - (stateService.isSidebarVisible ? 200 : 0)))
+        : 0
+      let sidebarWidth =
+        stateService.isSidebarVisible
+        ? min(layout.sidebarWidth, max(200, available - inspectorWidth)) : 0
+      HStack(spacing: 0) {
+        sidebar
+          .frame(width: stateService.isSidebarVisible ? sidebarWidth : layout.sidebarWidth)
+          .frame(width: sidebarWidth, alignment: .leading)
+          .clipped()
+          .opacity(stateService.isSidebarVisible ? 1 : 0)
+          .allowsHitTesting(stateService.isSidebarVisible)
+          .disabled(!stateService.isSidebarVisible)
+          .accessibilityHidden(!stateService.isSidebarVisible)
+        if stateService.isSidebarVisible {
+          WorkspacePaneDivider(
+            title: "Sidebar width", width: sidebarWidth,
+            maximum: max(200, available - inspectorWidth),
+            minimum: 200, isTrailing: false
+          ) { layout.sidebarWidth = $0 }
+        }
+        content.frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+        if stateService.isInspectorVisible {
+          WorkspacePaneDivider(
+            title: "Inspector width", width: inspectorWidth,
+            maximum: min(480, max(240, available - sidebarWidth)),
+            minimum: 240, isTrailing: true
+          ) { layout.inspectorWidth = $0 }
+        }
+        inspector
+          .frame(width: stateService.isInspectorVisible ? inspectorWidth : layout.inspectorWidth)
+          .frame(width: inspectorWidth, alignment: .trailing)
+          .clipped()
+          .opacity(stateService.isInspectorVisible ? 1 : 0)
+          .allowsHitTesting(stateService.isInspectorVisible)
+          .disabled(!stateService.isInspectorVisible)
+          .accessibilityHidden(!stateService.isInspectorVisible)
+      }
+      .onChange(of: inspectorWidth, initial: true) { _, width in
+        inspectorWidthChanged(width)
+      }
+    }
+    .coordinateSpace(name: "WorkspacePanes")
+    .frame(minWidth: stateService.minimumWindowWidth, minHeight: 400)
+  }
+}
+
+private struct WorkspacePaneDivider: View {
+  let title: LocalizedStringKey
+  let width: CGFloat
+  let maximum: CGFloat
+  let minimum: CGFloat
+  let isTrailing: Bool
+  let resize: (CGFloat) -> Void
+  @State private var dragStart: CGFloat?
+
+  private func adjust(to value: CGFloat) {
+    resize(min(maximum, max(minimum, value)))
+  }
+
+  var body: some View {
+    Divider()
+      .overlay {
+        Color.clear
+          .frame(width: 9)
+          .contentShape(Rectangle())
+          .pointerStyle(.columnResize)
+          .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .named("WorkspacePanes"))
+              .onChanged { value in
+                if dragStart == nil { dragStart = width }
+                adjust(to: (dragStart ?? width) + value.translation.width * (isTrailing ? -1 : 1))
+              }
+              .onEnded { _ in dragStart = nil }
+          )
+          .accessibilityLabel(title)
+          .accessibilityValue(Text("\(Int(width)) points"))
+          .accessibilityAdjustableAction { direction in
+            adjust(to: width + (direction == .increment ? 20 : -20))
+          }
+      }
+  }
+}
+
+private struct WorkspaceContentRepresentation: NSViewControllerRepresentable {
+  let controller: WorkspaceContentPane
+
+  func makeNSViewController(context: Context) -> WorkspaceContentPane { controller }
+  func updateNSViewController(_ controller: WorkspaceContentPane, context: Context) {}
+
+  func sizeThatFits(
+    _ proposal: ProposedViewSize, nsViewController: WorkspaceContentPane, context: Context
+  ) -> CGSize? {
+    CGSize(width: proposal.width ?? 480, height: proposal.height ?? 560)
   }
 }
 
