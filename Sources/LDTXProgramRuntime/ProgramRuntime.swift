@@ -235,7 +235,6 @@ public final class ProgramRuntime: @unchecked Sendable {
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
     scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
   ) {
@@ -246,7 +245,6 @@ public final class ProgramRuntime: @unchecked Sendable {
       captureSessionCoordinator: captureSessionCoordinator,
       backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
       programPreferencesState: programPreferencesState,
-      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       clockCurrentTimeProvider: clockCurrentTimeProvider
     )
     self.scheduler = scheduler
@@ -504,7 +502,6 @@ func compositeApplyingVideoLayerVisibility(
 final class ActiveProgramRenderer: @unchecked Sendable {
   typealias ClockOverlayRegistryFactory = (
     MTLDevice,
-    LowFrequencyUpdateRegistry,
     any ClockCurrentTimeProviding
   ) throws -> ClockOverlayRuntimeRegistry
 
@@ -555,7 +552,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
   private var activeSessionID: Int?
   private var compositor: VideoCompositor?
   private let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
-  private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   private let clockCurrentTimeProvider: any ClockCurrentTimeProviding
   private let clockOverlayRegistryFactory: ClockOverlayRegistryFactory
   private var clockOverlayRegistry: ClockOverlayRuntimeRegistry?
@@ -579,19 +575,16 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
     programPreferencesState: ProgramPreferencesState = ProgramPreferencesState(),
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
     clockOverlayRegistryFactory: @escaping ClockOverlayRegistryFactory = {
       try ClockOverlayRuntimeRegistry(
         device: $0,
-        updateRegistry: $1,
-        currentTimeProvider: $2
+        currentTimeProvider: $1
       )
     }
   ) {
     self.captureSessionCoordinator = captureSessionCoordinator
     self.programPreferencesState = programPreferencesState
-    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     self.clockCurrentTimeProvider = clockCurrentTimeProvider
     self.clockOverlayRegistryFactory = clockOverlayRegistryFactory
     #if canImport(Metal)
@@ -777,7 +770,6 @@ final class ActiveProgramRenderer: @unchecked Sendable {
       do {
         clockOverlayRegistry = try clockOverlayRegistryFactory(
           metalDevice,
-          lowFrequencyUpdateRegistry,
           clockCurrentTimeProvider
         )
         failedClockOverlayInitializationConfiguration = nil

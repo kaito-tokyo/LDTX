@@ -23,17 +23,14 @@ final class ClockOverlayRuntimeRegistry {
     var pixelHeight: Int
   }
 
-  private let updateRegistry: LowFrequencyUpdateRegistry
   private let currentTimeProvider: any ClockCurrentTimeProviding
   private let renderer: MetalClockOverlayRenderer
   private var entriesByStepName: [String: Entry] = [:]
 
   init(
     device: MTLDevice,
-    updateRegistry: LowFrequencyUpdateRegistry,
     currentTimeProvider: any ClockCurrentTimeProviding
   ) throws {
-    self.updateRegistry = updateRegistry
     self.currentTimeProvider = currentTimeProvider
     renderer = try MetalClockOverlayRenderer(device: device)
   }
@@ -71,7 +68,6 @@ final class ClockOverlayRuntimeRegistry {
         component: component,
         pixelWidth: placement.pixelWidth,
         pixelHeight: placement.pixelHeight,
-        updateRegistry: updateRegistry,
         currentTimeProvider: currentTimeProvider,
         renderer: renderer
       )

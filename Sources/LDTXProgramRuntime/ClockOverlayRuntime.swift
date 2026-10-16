@@ -127,7 +127,7 @@ protocol ClockOverlayRendering: Sendable {
 
 /// Owns the low-frequency lifecycle and retained output for one Clock component.
 ///
-/// It renders immediately when activated, registers only while active, and
+/// It renders immediately when activated, runs a timer only while active, and
 /// coalesces requests while one render is in flight. A failed refresh leaves the
 /// previous texture and successful request intact, so the next notification or
 /// configuration update retries it.
@@ -142,7 +142,8 @@ final class ClockOverlayRuntime: @unchecked Sendable {
     var renderInFlight = false
     var renderRequested = false
     var renderGeneration: UInt64 = 0
-    var registration: LowFrequencyUpdateRegistration?
+    var timer: DispatchSourceTimer?
+    var timerGeneration: UInt64 = 0
     var retainedTexture: ClockOverlayTexture?
     var lastSuccessfulRequest: ClockOverlayRenderRequest?
     var needsRetry = false
@@ -150,7 +151,6 @@ final class ClockOverlayRuntime: @unchecked Sendable {
 
   private let lock: NSLock
   private var state: State
-  private let updateRegistry: LowFrequencyUpdateRegistry
   private let currentTimeProvider: any ClockCurrentTimeProviding
   private let formatter: ClockTextFormatter
   private let renderer: any ClockOverlayRendering
@@ -161,7 +161,6 @@ final class ClockOverlayRuntime: @unchecked Sendable {
     component: ClockComponent,
     pixelWidth: Int = 256,
     pixelHeight: Int = 96,
-    updateRegistry: LowFrequencyUpdateRegistry,
     currentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
     formatter: ClockTextFormatter = ClockTextFormatter(),
     renderer: any ClockOverlayRendering,
@@ -177,7 +176,6 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       pixelWidth: pixelWidth,
       pixelHeight: pixelHeight
     )
-    self.updateRegistry = updateRegistry
     self.currentTimeProvider = currentTimeProvider
     self.formatter = formatter
     self.renderer = renderer
@@ -186,24 +184,21 @@ final class ClockOverlayRuntime: @unchecked Sendable {
   }
 
   func activate() {
-    let needsRegistration = lock.withLock { () -> Bool in
-      guard !state.isActive else { return false }
+    lock.withLock {
+      guard !state.isActive else { return }
       state.isActive = true
       state.renderGeneration &+= 1
-      return state.registration == nil
-    }
-    if needsRegistration {
-      let registration = updateRegistry.register { [weak self] in
-        self?.requestRender()
+      let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+      state.timerGeneration &+= 1
+      let generation = state.timerGeneration
+      timer.setEventHandler { [weak self] in
+        self?.requestRender(timerGeneration: generation)
       }
-      let registrationToCancel = lock.withLock { () -> LowFrequencyUpdateRegistration? in
-        guard state.isActive, state.registration == nil else {
-          return registration
-        }
-        state.registration = registration
-        return nil
-      }
-      registrationToCancel?.cancel()
+      timer.schedule(
+        deadline: .now() + .seconds(1), repeating: .seconds(1),
+        leeway: .milliseconds(100))
+      state.timer = timer
+      timer.resume()
     }
     requestRender()
   }
@@ -244,17 +239,16 @@ final class ClockOverlayRuntime: @unchecked Sendable {
   }
 
   func deactivate() {
-    let registration = lock.withLock { () -> LowFrequencyUpdateRegistration? in
+    lock.withLock {
       if state.isActive {
         state.renderGeneration &+= 1
       }
       state.isActive = false
       state.renderRequested = false
-      let registration = state.registration
-      state.registration = nil
-      return registration
+      state.timer?.setEventHandler {}
+      state.timer?.cancel()
+      state.timer = nil
     }
-    registration?.cancel()
   }
 
   func retainedOverlay() -> ClockOverlayTexture? {
@@ -265,9 +259,15 @@ final class ClockOverlayRuntime: @unchecked Sendable {
     deactivate()
   }
 
-  private func requestRender() {
+  func requestRender() {
+    requestRender(timerGeneration: nil)
+  }
+
+  private func requestRender(timerGeneration: UInt64?) {
     let shouldStart = lock.withLock { () -> Bool in
       guard state.isActive else { return false }
+      // Cancellation does not remove callbacks already queued by an older timer.
+      if let timerGeneration, timerGeneration != state.timerGeneration { return false }
       state.renderRequested = true
       guard !state.renderInFlight else { return false }
       state.renderInFlight = true

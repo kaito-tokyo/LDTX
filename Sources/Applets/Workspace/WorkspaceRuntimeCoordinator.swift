@@ -44,7 +44,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
   private let visionFeature: WorkspaceV4VisionFeature
-  private let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   private var shutdownTask: Task<Void, Never>?
   public private(set) var shutdownFailureMessage: String?
   private var deviceAssignmentsObservationTask: Task<Void, Never>?
@@ -121,8 +120,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   public convenience init(
     document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared,
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
   ) {
     let stateService = document.stateService
     stateService.localStateURL = document.fileURL
@@ -142,7 +140,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       appletData: appletData, document: document,
       landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime, metalView: metalView,
       captureSessionCoordinator: captureSessionCoordinator,
-      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
       releaseRuntimeResources: document.claimRuntimeResources())
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
@@ -166,7 +163,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     document: any WorkspaceDocumentContext,
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     releaseRuntimeResources: @escaping @MainActor () -> Void
   ) {
     self.releaseRuntimeResources = releaseRuntimeResources
@@ -209,8 +205,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     windowRuntime.installComponentFrameRenderer(
       VideoComponentFrameRenderer(
         captureSessionCoordinator: captureSessionCoordinator,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory))
     windowRuntime.installRuntimes(landscape: landscapeRuntime, portrait: portraitRuntime)
     windowRuntime.updateRuntimes()
 
@@ -229,7 +224,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     self.recordingSession = recordingSession
     self.audioCoordinator = audioCoordinator
     self.visionFeature = visionFeature
-    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
     deviceRegistry.errorHandler = { [weak self] in self?.reportError($0) }
     pairedPreview.attachWindow = { [weak self] window in
       self?.attachWindow(window)
@@ -534,7 +528,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
         windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
       }
       await audioCoordinator.stopAndReset()
-      lowFrequencyUpdateRegistry.shutdown()
       windowRuntime.shutdown()
       pairedPreview.metalView.removeFromSuperview()
       let release = releaseRuntimeResources

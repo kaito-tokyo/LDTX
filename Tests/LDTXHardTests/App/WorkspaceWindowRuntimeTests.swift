@@ -265,11 +265,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let programID = try runtime.addProgram(displayName: "Main")
     let landscape = ProgramRuntime(
       captureSessionCoordinator: capture,
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
     let portrait = ProgramRuntime(
       captureSessionCoordinator: capture,
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
     runtime.installRuntimes(landscape: landscape, portrait: portrait)
     runtime.selectedProgramInternalID = programID
@@ -316,13 +314,11 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       [videoComponentID], forProgramInternalID: programID, target: .landscape)
     let programRuntime = ProgramRuntime(
       captureSessionCoordinator: capture,
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
       scheduler: ManualProgramRuntimeScheduler())
     windowRuntime.installRuntimes(
       landscape: programRuntime,
       portrait: ProgramRuntime(
         captureSessionCoordinator: capture,
-        lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(),
         scheduler: ManualProgramRuntimeScheduler()))
     windowRuntime.selectedProgramInternalID = programID
 

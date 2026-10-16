@@ -214,7 +214,7 @@ The Sidebar and Inspector stay mounted at zero visible width while collapsed,
 retaining local editing drafts, scroll state, and task results without accepting interaction.
 
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
-coordinator and low-frequency update registry, and a Program preview `MTKView` when
+coordinator, and a Program preview `MTKView` when
 creating each Document. App retains them in an `@State` dictionary keyed by the
 Document's non-persisted runtime UUID. WorkspaceDocumentContent and WorkspaceRuntimeCoordinator
 receive those instances through initializers. Document admits one active runtime

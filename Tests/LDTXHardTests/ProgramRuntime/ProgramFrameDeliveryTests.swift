@@ -45,8 +45,7 @@ struct ProgramFrameDeliveryIntegrationTestSuite {
 
   @Test func discardedSubscriptionCancelsAndReleasesHandlerCapture() {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     weak var weakCapture: ProgramFrameHandlerCapture?
 
@@ -63,8 +62,7 @@ struct ProgramFrameDeliveryIntegrationTestSuite {
 
   @Test func concurrentSubscriptionCancellationIsIdempotent() async {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let subscription = runtime.subscribeFrames(replayLatestFrame: false) { _ in }
 
@@ -94,8 +92,7 @@ struct ProgramFrameDeliveryIntegrationTestSuite {
       Issue.record("Cancelled mailbox unexpectedly delivered a queued frame")
     }
     var runtime: ProgramRuntime? = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let subscription = ProgramFrameSubscription(
       id: UUID(), mailbox: mailbox, runtime: runtime!)

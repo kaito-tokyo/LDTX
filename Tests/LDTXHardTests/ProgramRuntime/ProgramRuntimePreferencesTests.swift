@@ -53,8 +53,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func outputProfileOnlyUpdatesReplaceTheRuntimeConfiguration() throws {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     var configuration = runtimeConfiguration(componentName: "Camera")
     runtime.updateProgram(configuration)
@@ -72,8 +71,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func outputConsumptionDoesNotFreezeOrReplaceTheSharedProgram() throws {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     runtime.updateProgram(runtimeConfiguration(componentName: "Before Output"))
     runtime.beginOutput()
@@ -85,16 +83,13 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func workspacePreferencesStateIsSharedByEveryProgramRuntime() {
     let preferencesState = ProgramPreferencesState()
-    let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let first = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      programPreferencesState: preferencesState,
-      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+      programPreferencesState: preferencesState
     )
     let second = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      programPreferencesState: preferencesState,
-      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+      programPreferencesState: preferencesState
     )
 
     first.updateProgramPreferences(
@@ -107,8 +102,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func visibilityUpdatesDoNotRebuildTheVideoInputPipeline() throws {
     let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let initialPipelineID = try #require(renderer.videoPipelineIDForTesting)
 
@@ -161,8 +155,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func destinationUpdatesDoNotReplaceTheInputPipelineState() {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let initial = runtimeConfiguration(componentName: "Camera", destinationX: 0)
     runtime.updateProgram(initial)
@@ -178,8 +171,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func duplicateDestinationStepNamesUseTheFirstDestination() {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     var configuration = runtimeConfiguration(componentName: "Camera", destinationX: 120)
     configuration.composite.steps.append(
@@ -197,8 +189,7 @@ struct ProgramRuntimePreferencesUnitTestSuite {
 
   @Test func destinationUpdatesApplyClockPlacementWithoutReplacingInputPipelineState() throws {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     var initial = runtimeConfiguration(componentName: "Camera")
     initial.composite.steps = [

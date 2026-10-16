@@ -398,7 +398,6 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
   public init(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
     clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
     scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
   ) {
@@ -407,7 +406,6 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
       ActiveProgramRenderer(
         captureSessionCoordinator: captureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
         clockCurrentTimeProvider: clockCurrentTimeProvider
       )
     )

@@ -54,11 +54,9 @@ func makeWorkspaceTestWindow(
   let data = appletData ?? WorkspaceAppletData()
   let renderer = ProgramPairPreviewRenderer(
     landscapeRuntime: ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()),
     portraitRuntime: ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry()),
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()),
     landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
     prefersColor: true)
   let preview = ProgramCanvasPairedPreview(

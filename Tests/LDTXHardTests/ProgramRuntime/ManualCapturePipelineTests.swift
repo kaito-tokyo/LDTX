@@ -122,8 +122,7 @@ struct ManualCapturePipelineIntegrationTestSuite {
 
   @Test func rendererDoesNotReuseOutputBuffersRetainedByConsumers() throws {
     let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
     let configuration = ProgramRuntimeConfiguration(
       composite: CompositeProgramDefinition(steps: [
@@ -198,8 +197,7 @@ struct ManualCapturePipelineIntegrationTestSuite {
       backgroundRemovalInputKeys: []
     )
     let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: coordinator,
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60))
+      captureSessionCoordinator: coordinator
     )
     renderer.beginSession(1)
 

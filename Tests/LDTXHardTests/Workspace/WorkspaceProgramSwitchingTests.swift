@@ -43,11 +43,10 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
       persistence: persistence,
       captureSessionCoordinator: capture, localState: { local },
       selectProgram: { local.selectedProgramInternalID = $0 })
-    let updates = LowFrequencyUpdateRegistry()
     let landscape = ProgramRuntime(
-      captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates)
+      captureSessionCoordinator: capture)
     let portrait = ProgramRuntime(
-      captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates)
+      captureSessionCoordinator: capture)
     runtime.installRuntimes(landscape: landscape, portrait: portrait)
     let first = try runtime.addProgram(displayName: "First")
     let second = try runtime.addProgram(displayName: "Second")
@@ -79,7 +78,6 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
       await session.stop()
       landscape.stopPreview()
       portrait.stopPreview()
-      updates.shutdown()
       runtime.shutdown()
       Issue.record("Recording did not start: \(state)")
       return
@@ -140,7 +138,6 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
         atPath: package.appendingPathComponent("portrait.fragmented.mp4").path))
     landscape.stopPreview()
     portrait.stopPreview()
-    updates.shutdown()
     runtime.shutdown()
   }
 }
