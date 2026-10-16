@@ -98,7 +98,8 @@ public final class WorkspaceContentPane: NSViewController {
     ])
     let host = NSHostingController(
       rootView: WorkspaceContentView(
-        layout: layout, preview: pairedPreview, editors: editorScrollView))
+        stateService: stateService, layout: layout,
+        preview: pairedPreview, editors: editorScrollView))
     host.sizingOptions = []
     host.sceneBridgingOptions = []
     addChild(host)
@@ -147,6 +148,7 @@ final class WorkspaceContentLayout {
 }
 
 private struct WorkspaceContentView: View {
+  let stateService: WorkspaceStateService
   let layout: WorkspaceContentLayout
   let preview: ProgramCanvasPairedPreview
   let editors: NSScrollView
@@ -190,6 +192,9 @@ private struct WorkspaceContentView: View {
     }
     .coordinateSpace(name: "WorkspaceContent")
     .frame(minWidth: 480, minHeight: 120)
+    .onChange(of: stateService.externalID, initial: true) { _, externalID in
+      layout.restore(externalID: externalID)
+    }
   }
 }
 

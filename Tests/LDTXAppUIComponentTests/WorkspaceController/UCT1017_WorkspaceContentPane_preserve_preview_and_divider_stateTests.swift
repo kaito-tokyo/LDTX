@@ -347,6 +347,40 @@ extension AppUIComponentTestSuite {
         abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
     }
 
+    @Test("Preview height follows the saved ID adopted after constructing the pane")
+    func previewHeightFollowsLateSnapshotAdoption() async throws {
+      let transientID = UUID().uuidString.lowercased()
+      let savedID = UUID().uuidString.lowercased()
+      let transientKey = "WorkspaceContentPane.\(transientID).previewHeight"
+      let savedKey = "WorkspaceContentPane.\(savedID).previewHeight"
+      defer {
+        UserDefaults.standard.removeObject(forKey: transientKey)
+        UserDefaults.standard.removeObject(forKey: savedKey)
+      }
+      UserDefaults.standard.set(360.0, forKey: savedKey)
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let window = makeWorkspaceTestWindow(stateService: state, externalID: transientID)
+      defer { window.close() }
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      let pane = window.contentPane
+      let preview = pane.testPairedPreview
+      pane.layout.resizePreview(to: 300)
+      var snapshot = state.editingWorkspace
+      snapshot.definitionExternalID = savedID
+      state.replaceEditingWorkspace(snapshot)
+      await settleWorkspaceToolbar(window)
+      #expect(pane.layout.previewHeight == 360)
+      #expect(abs(preview.frame.height - 360) < 1)
+      #expect(pane.testPairedPreview === preview)
+      pane.layout.resizePreview(to: 340)
+      #expect(UserDefaults.standard.double(forKey: savedKey) == 340)
+      #expect(UserDefaults.standard.double(forKey: transientKey) == 300)
+      state.replaceEditingWorkspace(snapshot)
+      await settleWorkspaceToolbar(window)
+      #expect(pane.layout.previewHeight == 340)
+    }
+
     @Test("UCT-1017.7: A new Workspace preserves its initial content size")
     func newWorkspacePreservesInitialContentSize() async throws {
       _ = NSApplication.shared

@@ -322,6 +322,8 @@ during window resizing. The editors absorb the remaining space and scroll.
 WorkspaceContentLayout saves the requested height to application preferences
 under `WorkspaceContentPane.<externalID>.previewHeight`; the document's external
 ID keeps it stable across renaming. Repeated configuration does not reset a drag.
+The content View observes external ID changes and restores the corresponding
+height when a Reader snapshot replaces the initially generated ID.
 Divider configuration is not stored in the Workspace package.
 Shutdown pauses the MTKView, detaches its delegate,
 and stops the renderer before shutting down the runtimes.
