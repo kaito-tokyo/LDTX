@@ -540,9 +540,8 @@ targets:
           - WorkspaceDocument.swift
           - WorkspaceDocumentContent.swift
           - WorkspaceApplicationTermination.swift
-          - WorkspaceToolbarCoordinator.swift
-          - WorkspaceViewController.swift
-          - WorkspaceViewControllerRepresentation.swift
+          - WorkspaceRootView.swift
+          - WorkspaceScene.swift
           - WorkspaceWindowController.swift
     dependencies:
       - target: LDTXProtos

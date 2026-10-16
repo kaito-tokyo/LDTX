@@ -59,7 +59,7 @@ extension WorkspaceWindowController {
   }
 }
 
-extension WorkspaceViewControllerRepresentation {
+extension WorkspaceScene {
   init(document: WorkspaceDocument) {
     let resources = WorkspaceRuntimeFixture()
     self.init(
@@ -70,7 +70,7 @@ extension WorkspaceViewControllerRepresentation {
   }
 }
 
-extension WorkspaceViewControllerRepresentation.Coordinator {
+extension WorkspaceSceneConnection {
   convenience init(document: WorkspaceDocument) {
     self.init(document: document, windowController: WorkspaceWindowController(document: document))
   }

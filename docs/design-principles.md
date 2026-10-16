@@ -27,7 +27,7 @@ the relevant design or feature documentation instead.
   properties. Assignments must remain transparent: setters must not silently
   reject, reinterpret, or replace an assigned value. Editing restrictions and
   validation belong to explicit editing operations and their UI owners.
-- The Representable Coordinator registers undo actions for content changes to participate
+- The SwiftUI scene connection registers undo actions for content changes to participate
   in SwiftUI's unsaved-change tracking. StateService must not hide document-change
   callbacks or persistence notifications in its setters.
   Workspace Undo/Redo menu commands and shortcuts are temporarily disabled;
@@ -43,8 +43,9 @@ the relevant design or feature documentation instead.
 - WorkspaceDocument owns WorkspaceStateService and its temporary editing values
   and UI state. Document captures those values directly when saving; Writer
   validates them before writing. Saving does not require a represented UI or an editing connection.
-- The Representable receives Document and owns the WindowController through its
-  Coordinator. UI receives Document's StateService through Bindable. Runtime
+- WorkspaceScene receives Document and retains its connection through SwiftUI State.
+  The connection owns the runtime WindowController.
+  UI receives Document's StateService through Bindable. Runtime
   ProgramRuntime pairs and preview MTKViews are constructed and retained by App
   State, keyed by the Document's transient UUID, and injected through initializers.
   WindowController operates those resources and releases their App registration
@@ -66,7 +67,7 @@ the relevant design or feature documentation instead.
   URL-only synchronization updates URLs for model IDs already present in
   StateService; it does not add or remove models or change Vision references or
   other editing values. There is no implicit three-way or field-level merge.
-- Reader content is adopted with full overwrite by the Representable Coordinator.
+- Reader content is adopted with full overwrite by the SwiftUI scene connection.
   Snapshot capture also adopts an unread Reader generation into StateService,
   so headless saving cannot replace read content with initial editing values.
   Adoption is shared and runs once per Reader generation.
@@ -221,7 +222,7 @@ the relevant design or feature documentation instead.
 
 ## Editing writes directly to WorkspaceStateService
 
-- Representable edits update the Store's authoritative documents directly. There
+- SwiftUI edits update the Store's authoritative documents directly. There
   is no separate Submit or Apply operation and no window-wide draft registry.
 - Input controls may retain incomplete or unrepresentable numeric text locally;
   they must write representable values without requiring Return. Navigation does

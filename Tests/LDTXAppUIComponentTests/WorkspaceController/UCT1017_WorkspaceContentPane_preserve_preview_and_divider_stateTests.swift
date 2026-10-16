@@ -21,7 +21,7 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
     @Test func hostingAndToolbarReleaseTheirController() async {
-      weak var released: WorkspaceViewController?
+      weak var released: WorkspaceViewState?
       autoreleasepool {
         let window = makeWorkspaceTestWindow()
         released = window.content

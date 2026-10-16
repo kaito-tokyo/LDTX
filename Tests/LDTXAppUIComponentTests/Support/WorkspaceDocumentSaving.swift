@@ -45,7 +45,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
 @MainActor
 private final class WorkspaceTestHost {
   var savedURL: URL?
-  var coordinator: WorkspaceViewControllerRepresentation.Coordinator?
+  var coordinator: WorkspaceSceneConnection?
   var controllers: [WorkspaceWindowController] = []
   var windows: [NSWindow] = []
   var saved: WorkspaceV4Bundle?
@@ -74,10 +74,10 @@ extension WorkspaceDocument {
     get { testHost.saved }
     set { testHost.saved = newValue }
   }
-  // Test-only conveniences host the production Representable and its runtime controller.
-  var testCoordinator: WorkspaceViewControllerRepresentation.Coordinator {
+  // Test-only conveniences retain the production scene connection and runtime controller.
+  var testCoordinator: WorkspaceSceneConnection {
     if let coordinator = testHost.coordinator { return coordinator }
-    let coordinator = WorkspaceViewControllerRepresentation.Coordinator(document: self)
+    let coordinator = WorkspaceSceneConnection(document: self)
     testHost.coordinator = coordinator
     return coordinator
   }
@@ -97,11 +97,11 @@ extension WorkspaceDocument {
   func addWindowController(_ controller: WorkspaceWindowController) {
     if testHost.coordinator?.windowController !== controller {
       testHost.coordinator?.disconnect()
-      testHost.coordinator = WorkspaceViewControllerRepresentation.Coordinator(
+      testHost.coordinator = WorkspaceSceneConnection(
         document: self, windowController: controller)
     }
     testHost.controllers.append(controller)
-    let window = WorkspaceTestWindow(content: controller.contentController, document: self)
+    let window = WorkspaceTestWindow(content: controller.viewState, document: self)
     controller.window = window
     testHost.windows.append(window)
   }

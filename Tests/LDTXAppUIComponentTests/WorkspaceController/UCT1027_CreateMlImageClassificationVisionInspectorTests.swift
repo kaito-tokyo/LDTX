@@ -52,19 +52,20 @@ extension AppUIComponentTestSuite {
       let store = WorkspaceStateService(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
       defer { window.close() }
+      let responder = WorkspaceDocumentActions(state: window.content)
       for selector in [
-        #selector(WorkspaceViewController.revertDocumentToSaved(_:)),
-        #selector(WorkspaceViewController.browseDocumentVersions(_:)),
+        #selector(WorkspaceDocumentActions.revertDocumentToSaved(_:)),
+        #selector(WorkspaceDocumentActions.browseDocumentVersions(_:)),
       ] {
         let item = NSMenuItem(title: "Revert", action: selector, keyEquivalent: "")
         for state: WorkspaceRecordingState in [.starting, .recording, .pausing, .stopping] {
           store.recordingState = state
           store.isOutputActive = state.isOutputActive
-          #expect(!window.content.validateUserInterfaceItem(item))
+          #expect(!responder.validateUserInterfaceItem(item))
         }
         store.recordingState = .idle
         store.isOutputActive = false
-        #expect(window.content.validateUserInterfaceItem(item))
+        #expect(responder.validateUserInterfaceItem(item))
       }
     }
 

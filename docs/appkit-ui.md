@@ -40,14 +40,18 @@ state, and file persistence. App State owns the ProgramRuntime pair, preview vie
 capture coordinator, and update registry for each Document UUID.
 WorkspaceWindowController receives those resources and the Document-owned
 StateService, owns their runtime projection coordinator, and coordinates shutdown.
-The NSViewControllerRepresentable receives Document and its Coordinator retains
-WindowController. SwiftUI editing views receive StateService through Bindable.
-Reconstructing the SwiftUI wrapper reuses the same controller and runtime.
+WorkspaceScene is a SwiftUI View. It creates its connection lazily on first
+presentation and retains it in State. The connection owns WindowController;
+WorkspaceRootView renders WorkspaceViewState directly without a ViewController
+or hosting-controller wrapper. SwiftUI editing views receive StateService through Bindable.
+Reconstructing the SwiftUI View reuses the same connection and runtime.
 The runtime controller holds the framework's window weakly and does not replace
 its delegate or install its own restoration policy. Window closure finalizes
 output and tears down capture, audio, Vision, and preview resources asynchronously.
-Representable dismantling stops UI observation and initiates idempotent shutdown;
-its Coordinator also initiates cleanup if released without explicit dismantling.
+Scene disappearance stops document observation and initiates idempotent shutdown;
+connection release also initiates cleanup. A small NSViewRepresentable obtains
+the framework-owned window for runtime error presentation and installs a document
+action responder that prevents Revert and Browse Versions during output.
 
 The SwiftUI App installs its application-owned AppDelegate through
 `NSApplicationDelegateAdaptor`. AppDelegate delegates asynchronous Workspace
@@ -60,7 +64,7 @@ proceed. Standard document save confirmation remains owned by SwiftUI.
 The ordinary-close presentation acknowledges its queued shutdown failure. If Quit
 is already waiting for shutdown, termination owns that presentation instead.
 
-The Representable Coordinator registers Undo/Redo for content changes, including pending
+The scene connection registers Undo/Redo for content changes, including pending
 model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
 Workspace Undo and Redo menu commands and their keyboard shortcuts are temporarily
 disabled while a Workspace scene is active. Other scenes retain their standard
@@ -76,12 +80,12 @@ remain in StateService.
 Reader and Writer use WorkspaceV4Bundle directly as their Snapshot. Reader does
 not attach its source URL to that content. Applying a read replaces only the
 Document's workspaceSnapshot; it never restores an earlier URL or calls UI or
-runtime update hooks. The Representable Coordinator observes read generations
+runtime update hooks. The scene connection observes read generations
 and directly assigns StateService fields using full overwrite. Full overwrite replaces all document
 values and model URLs, while preserving UI and runtime status. The alternative
 URL-only operation changes only URLs for IDs already in StateService; it preserves
 other edits and does not add or remove models. There is no implicit merge. The
-Coordinator observes content and URL changes for Undo baselines and UI routing.
+connection observes content and URL changes for Undo baselines and UI routing.
 WindowController independently observes content, URL, persistence notifications,
 and output state. It adopts persisted runtime content while idle and defers that
 adoption during output. Document does not keep a second runtime bundle.
@@ -118,10 +122,11 @@ under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
 WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 
-WorkspaceViewController hosts a SwiftUI horizontal layout containing Sidebar,
+WorkspaceRootView presents a SwiftUI horizontal layout containing Sidebar,
 Content, and Inspector, with draggable dividers. Its View observes window-local
 pane visibility and widths directly.
-The controller remains the boundary for runtime actions and window attachment.
+WorkspaceViewState owns operation state. Window attachment is a small AppKit bridge;
+DocumentGroup owns the window and SwiftUI installs the toolbar directly.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument conforms to SwiftUI's macOS 27 Document API and is
@@ -203,7 +208,7 @@ retaining local editing drafts, scroll state, and task results without accepting
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
 coordinator and low-frequency update registry, and a Program preview `MTKView` when
 creating each Document. App retains them in an `@State` dictionary keyed by the
-Document's non-persisted runtime UUID. Content, Representable, and WindowController
+Document's non-persisted runtime UUID. Content, WorkspaceScene, and WindowController
 receive those instances through initializers. Document admits one active runtime
 owner. The controller passes the view to `ProgramCanvasPairedPreview` for layout and input.
 Shutdown pauses and disconnects drawing before stopping runtime resources, then
@@ -282,17 +287,10 @@ relocation cleanup for those fields is a separate change. Landscape and Portrait
 master volumes and audio mute settings are independent. There is no mix
 synchronization setting between the canvases.
 
-The Workspace window uses the unified toolbar style. WorkspaceToolbarCoordinator
-owns the NSToolbar and its items; WorkspaceViewController configures labels and
-target/action and attaches the toolbar to the framework window. Pane roots do not
-use the SwiftUI toolbar modifier. Output state updates existing labels and images.
+WorkspaceRootView declares the toolbar with SwiftUI ToolbarContent and the
+toolbar modifier. Output state updates labels, images, and enabled state.
 The toolbar has no Apply item or Inspector title. Sidebar and Inspector actions
-update the SwiftUI visibility bindings. Toolbar customization and layout
-persistence are disabled.
-The Inspector toolbar separator uses a custom item and a constrained spacer.
-The effective Inspector width and the separator's window coordinates determine
-the spacer width, keeping the separator aligned during pane and window resizing.
-Collapsing Inspector hides the separator and removes the spacer width.
+update the SwiftUI visibility bindings. SwiftUI owns native toolbar presentation.
 
 Editors write representable values directly to WorkspaceStateService. OCR ROI
 uses the same bound RegionOfInterestEditor as Scene Detector ROI. Master-volume
@@ -366,7 +364,7 @@ failures show the error without modifying the output session's failure state.
 Subsequent captures replace the message. Window closure closes the popover;
 ordinary interaction dismissal and sizing are managed by SwiftUI.
 Toolbar items are declared with SwiftUI ToolbarContent and project the current
-Workspace state. The hosting boundary bridges the toolbar to the document window.
+Workspace state. SwiftUI installs the toolbar on the document window.
 
 SettingsRootView's Output tab configures the application-wide screenshots folder,
 defaulting to ~/Pictures. Captures save there regardless of recording state and

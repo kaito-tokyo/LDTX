@@ -17,20 +17,21 @@ import Observation
 import QuickLookThumbnailing
 import SwiftUI
 
-public final class WorkspaceViewController: NSViewController, NSUserInterfaceValidations {
+@MainActor @Observable
+public final class WorkspaceViewState {
   weak var document: (any WorkspaceDocumentContext)?
   let appletData: WorkspaceAppletData
   let stateService: WorkspaceStateService
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  private let runtimeWorkspace: () -> WorkspaceV4Bundle?
-  private let reportError: (Error) -> Void
+  fileprivate let runtimeWorkspace: () -> WorkspaceV4Bundle?
+  fileprivate let reportError: (Error) -> Void
   let deviceRegistry: DeviceRegistryService
 
   let layout = WorkspacePaneLayout()
   let contentPane: WorkspaceContentPane
 
   let presentation = WorkspacePresentation()
-  private var inferenceTask: Task<Void, Never>?
+  @ObservationIgnored private var inferenceTask: Task<Void, Never>?
   private(set) var isClosed = false
 
   init(
@@ -57,39 +58,15 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       reportError: reportError, pairedPreview: pairedPreview,
       runtimeActions: runtimeActions)
 
-    super.init(nibName: nil, bundle: nil)
-
-    let host = NSHostingController(rootView: workspaceView)
-    host.sizingOptions = []
-    host.sceneBridgingOptions = [.toolbars]
-    addChild(host)
-    view = NSView()
-    host.view.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(host.view)
-    NSLayoutConstraint.activate([
-      host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      host.view.topAnchor.constraint(equalTo: view.topAnchor),
-      host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-    ])
-
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
-
-  public override func viewDidAppear() {
-    super.viewDidAppear()
-    didAttachWindow?(view.window)
   }
 
   var didAttachWindow: ((NSWindow?) -> Void)?
 
-  @objc func toggleSidebar(_ sender: Any?) {
+  func toggleSidebar() {
     stateService.isSidebarVisible.toggle()
   }
 
-  @objc func toggleInspector(_ sender: Any?) {
+  func toggleInspector() {
     stateService.isInspectorVisible.toggle()
   }
 
@@ -120,7 +97,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     return (vision, url)
   }
 
-  @objc func runInference() {
+  func runInference() {
     guard !isClosed, inferenceTask == nil, let request = inferenceRequest,
       let actions = runtimeActions()
     else { return }
@@ -155,38 +132,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     presentation.isInferring = true
   }
 
-  private var sidebarView: some View {
-    WorkspaceSidebar(
-      stateService: stateService, deviceRegistry: deviceRegistry,
-      appletData: appletData, document: document,
-      runtimeActions: runtimeActions
-    )
-    .environment(\.workspaceReportError, reportError)
-  }
-
-  private var workspaceView: some View {
-    WorkspaceView(
-      layout: layout, stateService: stateService,
-      sidebar: sidebarView,
-      content: contentPane,
-      inspector: inspectorView
-    )
-    .toolbar { [weak self] in
-      if let self { WorkspaceToolbar(controller: self) }
-    }
-  }
-
-  private var inspectorView: some View {
-    WorkspaceInspectorContainer(
-      deviceRegistry: deviceRegistry,
-      stateService: stateService, appletData: appletData, document: document,
-      runtimeWorkspace: runtimeWorkspace,
-      runtimeActions: runtimeActions
-    )
-    .environment(\.workspaceReportError, reportError)
-  }
-
-  @objc func captureScreenshots() {
+  func captureScreenshots() {
     guard !isClosed else { return }
     do {
       guard let runtimeActions = runtimeActions() else {
@@ -218,37 +164,18 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     await inferenceTask?.value
   }
 
-  @objc func revertDocumentToSaved(_ sender: Any?) {
-    guard !isClosed, !stateService.isOutputActive else { return }
-    nextResponder?.tryToPerform(#selector(revertDocumentToSaved(_:)), with: sender)
-  }
-
-  @objc func browseDocumentVersions(_ sender: Any?) {
-    guard !isClosed, !stateService.isOutputActive else { return }
-    nextResponder?.tryToPerform(#selector(browseDocumentVersions(_:)), with: sender)
-  }
-
-  public func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
-    if item.action == #selector(revertDocumentToSaved(_:))
-      || item.action == #selector(browseDocumentVersions(_:))
-    {
-      return !isClosed && !stateService.isOutputActive
-    }
-    return true
-  }
-
   func tearDown() {
     isClosed = true
     presentation.screenshot = nil
 
   }
 
-  @objc func stopOutput() {
+  func stopOutput() {
     guard !isClosed, stateService.recordingState.canStop else { return }
     Task { await runtimeActions()?.stopOutput() }
   }
 
-  @objc func toggleOutput() {
+  func toggleOutput() {
     guard !isClosed else { return }
     let state = stateService.recordingState
     guard (state.canStart && document?.fileURL != nil) || state == .recording else { return }
@@ -448,83 +375,164 @@ struct WorkspaceScreenshotPresentation: Identifiable {
 }
 
 private struct WorkspaceToolbar: ToolbarContent {
-  weak var controller: WorkspaceViewController?
+  let state: WorkspaceViewState
 
   var body: some ToolbarContent {
-    ToolbarItem(id: "workspace.toggleSidebar", placement: .navigation) { [weak controller] in
-      if let controller {
-        Button("Toggle Sidebar", systemImage: "sidebar.left") { [weak controller] in
-          controller?.toggleSidebar(nil)
-        }
+    ToolbarItem(id: "workspace.toggleSidebar", placement: .navigation) {
+      Button("Toggle Sidebar", systemImage: "sidebar.left") { state.toggleSidebar() }
         .accessibilityIdentifier("workspace.toggleSidebar")
-      }
     }
-    ToolbarItem(id: "workspace.stopOutput", placement: .navigation) { [weak controller] in
-      if let controller {
-        Button("Stop Output", systemImage: "stop.fill") { [weak controller] in
-          controller?.stopOutput()
-        }
-        .disabled(!controller.stateService.recordingState.canStop || controller.isClosed)
+    ToolbarItem(id: "workspace.stopOutput", placement: .navigation) {
+      Button("Stop Output", systemImage: "stop.fill") { state.stopOutput() }
+        .disabled(!state.stateService.recordingState.canStop || state.isClosed)
         .accessibilityIdentifier("workspace.stopOutput")
-      }
     }
-    ToolbarItem(id: "workspace.startPauseOutput", placement: .navigation) { [weak controller] in
-      if let controller {
-        Button(
-          controller.stateService.recordingState == .recording ? "Pause Output" : "Start Output",
-          systemImage: controller.stateService.recordingState == .recording
-            ? "pause.fill" : "play.fill"
-        ) { [weak controller] in controller?.toggleOutput() }
+    ToolbarItem(id: "workspace.startPauseOutput", placement: .navigation) {
+      Button(
+        state.stateService.recordingState == .recording ? "Pause Output" : "Start Output",
+        systemImage: state.stateService.recordingState == .recording ? "pause.fill" : "play.fill"
+      ) { state.toggleOutput() }
+      .disabled(
+        state.isClosed
+          || !((state.stateService.recordingState.canStart && state.document?.fileURL != nil)
+            || state.stateService.recordingState == .recording)
+      )
+      .accessibilityIdentifier("workspace.startPauseOutput")
+    }
+    ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) {
+      WorkspaceScreenshotButton(state: state)
+    }
+    ToolbarItem(id: "workspace.runInference", placement: .primaryAction) {
+      Button("Run Inference", systemImage: "sparkles") { state.runInference() }
         .disabled(
-          controller.isClosed
-            || !((controller.stateService.recordingState.canStart
-              && controller.document?.fileURL != nil)
-              || controller.stateService.recordingState == .recording)
-        )
-        .accessibilityIdentifier("workspace.startPauseOutput")
-      }
-    }
-    ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) { [weak controller] in
-      WorkspaceScreenshotButton(controller: controller)
-    }
-    ToolbarItem(id: "workspace.runInference", placement: .primaryAction) { [weak controller] in
-      if let controller {
-        Button("Run Inference", systemImage: "sparkles") { [weak controller] in
-          controller?.runInference()
-        }
-        .disabled(
-          controller.presentation.isInferring || controller.inferenceRequest == nil
-            || controller.runtimeActions() == nil || controller.isClosed
+          state.presentation.isInferring || state.inferenceRequest == nil
+            || state.runtimeActions() == nil || state.isClosed
         )
         .accessibilityIdentifier("workspace.runInference")
-      }
     }
-    ToolbarItem(id: "workspace.toggleInspector", placement: .primaryAction) { [weak controller] in
-      if let controller {
-        Button("Toggle Inspector", systemImage: "sidebar.right") { [weak controller] in
-          controller?.toggleInspector(nil)
-        }
+    ToolbarItem(id: "workspace.toggleInspector", placement: .primaryAction) {
+      Button("Toggle Inspector", systemImage: "sidebar.right") { state.toggleInspector() }
         .accessibilityIdentifier("workspace.toggleInspector")
-      }
     }
   }
 }
 
 private struct WorkspaceScreenshotButton: View {
-  weak var controller: WorkspaceViewController?
+  let state: WorkspaceViewState
 
   var body: some View {
-    if let controller {
-      @Bindable var presentation = controller.presentation
-      Button("Capture Screenshot(s)", systemImage: "camera") { [weak controller] in
-        controller?.captureScreenshots()
-      }
-      .disabled(controller.isClosed)
+    @Bindable var presentation = state.presentation
+    Button("Capture Screenshot(s)", systemImage: "camera") { state.captureScreenshots() }
+      .disabled(state.isClosed)
       .accessibilityIdentifier("workspace.captureScreenshots")
       .popover(item: $presentation.screenshot) { result in
         ScreenshotResultView(
           title: result.title, message: result.message, screenshots: result.screenshots)
       }
+  }
+}
+
+struct WorkspaceRootView: View {
+  let state: WorkspaceViewState
+
+  var body: some View {
+    WorkspaceView(
+      layout: state.layout, stateService: state.stateService,
+      sidebar: WorkspaceSidebar(
+        stateService: state.stateService, deviceRegistry: state.deviceRegistry,
+        appletData: state.appletData, document: state.document, runtimeActions: state.runtimeActions
+      ).environment(\.workspaceReportError, state.reportError),
+      content: state.contentPane,
+      inspector: WorkspaceInspectorContainer(
+        deviceRegistry: state.deviceRegistry, stateService: state.stateService,
+        appletData: state.appletData, document: state.document,
+        runtimeWorkspace: state.runtimeWorkspace, runtimeActions: state.runtimeActions
+      ).environment(\.workspaceReportError, state.reportError)
+    )
+    .toolbar { WorkspaceToolbar(state: state) }
+    .background(
+      WorkspaceWindowAttachment(state: state)
+        .allowsHitTesting(false).accessibilityHidden(true))
+  }
+}
+
+/// The document window is owned by DocumentGroup. This bridge only attaches runtime
+/// error presentation and guards the standard document responder actions.
+private struct WorkspaceWindowAttachment: NSViewRepresentable {
+  let state: WorkspaceViewState
+
+  func makeNSView(context: Context) -> AttachmentView { AttachmentView(state: state) }
+  func updateNSView(_ view: AttachmentView, context: Context) { view.attach() }
+  static func dismantleNSView(_ view: AttachmentView, coordinator: ()) { view.detach() }
+
+  final class AttachmentView: NSView {
+    private weak var state: WorkspaceViewState?
+    private let documentActions: WorkspaceDocumentActions
+    private weak var responderHost: NSResponder?
+
+    init(state: WorkspaceViewState) {
+      self.state = state
+      documentActions = WorkspaceDocumentActions(state: state)
+      super.init(frame: .zero)
     }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      attach()
+    }
+
+    func attach() {
+      guard let window else {
+        detach()
+        return
+      }
+      state?.didAttachWindow?(window)
+      let host: NSResponder = window
+      guard responderHost !== host else { return }
+      detach()
+      documentActions.nextResponder = host.nextResponder
+      host.nextResponder = documentActions
+      responderHost = host
+    }
+
+    func detach() {
+      if let responderHost, responderHost.nextResponder === documentActions {
+        responderHost.nextResponder = documentActions.nextResponder
+      }
+      responderHost = nil
+      documentActions.nextResponder = nil
+    }
+  }
+}
+
+final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
+  private weak var state: WorkspaceViewState?
+
+  init(state: WorkspaceViewState) {
+    self.state = state
+    super.init()
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+  private var canRevert: Bool {
+    state.map { !$0.isClosed && !$0.stateService.isOutputActive } ?? false
+  }
+
+  @objc func revertDocumentToSaved(_ sender: Any?) {
+    guard canRevert else { return }
+    nextResponder?.tryToPerform(#selector(revertDocumentToSaved(_:)), with: sender)
+  }
+  @objc func browseDocumentVersions(_ sender: Any?) {
+    guard canRevert else { return }
+    nextResponder?.tryToPerform(#selector(browseDocumentVersions(_:)), with: sender)
+  }
+  func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(revertDocumentToSaved(_:))
+      || item.action == #selector(browseDocumentVersions(_:))
+    {
+      return canRevert
+    }
+    return true
   }
 }

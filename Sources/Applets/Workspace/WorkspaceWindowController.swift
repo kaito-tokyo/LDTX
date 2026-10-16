@@ -32,7 +32,7 @@ public final class WorkspaceWindowController: NSWindowController,
     set { hostedWindow = newValue }
   }
   private weak var workspaceDocument: (any WorkspaceDocumentContext)?
-  public private(set) var contentController: WorkspaceViewController!
+  public private(set) var viewState: WorkspaceViewState!
   public let stateService: WorkspaceStateService
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let appletData: WorkspaceAppletData
@@ -264,7 +264,7 @@ public final class WorkspaceWindowController: NSWindowController,
     let reportOperationError: (Error) -> Void = { errorOwner?.reportError($0) }
     let deviceRegistry = DeviceRegistryService()
     deviceRegistry.errorHandler = reportOperationError
-    let content = WorkspaceViewController(
+    let content = WorkspaceViewState(
       document: document,
       appletData: appletData,
       stateService: stateService, peakMeter: audioCoordinator.peakMeter,
@@ -275,7 +275,7 @@ public final class WorkspaceWindowController: NSWindowController,
         guard let owner = errorOwner, owner.shutdownTask == nil else { return nil }
         return owner
       }, runtimeWorkspace: { [weak runtime = windowRuntime] in runtime?.workspace })
-    self.contentController = content
+    self.viewState = content
     content.didAttachWindow = { [weak self] window in self?.attachWindow(window) }
     appletData.registerTransientState(at: transientURL)
     if stateService.localStateURL == nil { stateService.localStateURL = transientURL }
@@ -563,8 +563,8 @@ public final class WorkspaceWindowController: NSWindowController,
     documentObservationTask?.cancel()
     outputObservationTask?.cancel()
     let task = Task { @MainActor in
-      contentController.tearDown()
-      await contentController.waitForInference()
+      viewState.tearDown()
+      await viewState.waitForInference()
       pairedPreview.stop()
       previewRenderer.stop()
       deviceAssignmentsObservationTask?.cancel()

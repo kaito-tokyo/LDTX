@@ -93,7 +93,7 @@ extension AppUIComponentTestSuite {
       let second = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(second.definition.displayName == "Later edit")
-      let coordinator = WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      let coordinator = WorkspaceScene(document: document).makeConnection()
       coordinator.synchronizeDocument()
       #expect(document.stateService.workspaceDefinition.displayName == "Later edit")
       await coordinator.shutdown()
@@ -106,7 +106,7 @@ extension AppUIComponentTestSuite {
       let secondID = try #require(second.stateService.externalID.flatMap(UUID.init(uuidString:)))
       #expect(firstID != secondID)
       #expect(firstID.uuid.6 >> 4 == 7)
-      let coordinator = WorkspaceViewControllerRepresentation(document: first).makeCoordinator()
+      let coordinator = WorkspaceScene(document: first).makeConnection()
       let state = first.stateService
       state.workspaceDefinition.displayName = "Draft"
       state.workspaceDefinition.programs = [
@@ -487,16 +487,57 @@ extension AppUIComponentTestSuite {
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "External")
     }
 
-    @Test("Repeated hosting uses the same runtime controller")
-    func stableRuntimeLifetime() async {
-      let document = WorkspaceDocument()
-      let representation = WorkspaceViewControllerRepresentation(document: document)
-      let coordinator = representation.makeCoordinator()
-      let first = coordinator.windowController
-      let second = coordinator.windowController
-      #expect(first === second)
-      #expect(first.contentController === second.contentController)
-      await coordinator.shutdown()
+    @Test("SwiftUI reconstruction preserves runtime lifetime and close releases it once")
+    func stableRuntimeLifetime() async throws {
+      let resources = WorkspaceRuntimeFixture()
+      var released: [UUID] = []
+      let document = WorkspaceDocument { released.append($0) }
+      func scene() -> WorkspaceScene {
+        WorkspaceScene(
+          document: document, landscapeRuntime: resources.landscape,
+          portraitRuntime: resources.portrait, metalView: resources.metalView,
+          captureSessionCoordinator: resources.capture,
+          lowFrequencyUpdateRegistry: resources.updates)
+      }
+      let host = NSHostingController(rootView: scene())
+      let window = NSWindow(contentViewController: host)
+      window.isReleasedWhenClosed = false
+      window.setContentSize(.init(width: 1062, height: 700))
+      window.makeKeyAndOrderFront(nil)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let renderer = try #require(resources.metalView.delegate)
+      #expect(resources.metalView.superview != nil)
+      var responder: NSResponder? = window.contentView
+      var seen: Set<ObjectIdentifier> = []
+      var documentActions: WorkspaceDocumentActions?
+      while let current = responder, seen.insert(ObjectIdentifier(current)).inserted {
+        if let actions = current as? WorkspaceDocumentActions {
+          documentActions = actions
+          break
+        }
+        responder = current.nextResponder
+      }
+      #expect(documentActions != nil)
+      #expect(window.toolbar != nil)
+      host.rootView = scene()
+      document.stateService.isSidebarVisible = false
+      await settleWorkspaceToolbar(window)
+      #expect(resources.metalView.delegate === renderer)
+      #expect(released.isEmpty)
+      window.miniaturize(nil)
+      await settleWorkspaceToolbar(window)
+      #expect(released.isEmpty)
+      #expect(resources.metalView.delegate === renderer)
+      window.deminiaturize(nil)
+      window.close()
+      for _ in 0..<100 {
+        if !released.isEmpty { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(released == [document.runtimeID])
+      #expect(resources.metalView.delegate == nil)
+      #expect(resources.metalView.isPaused)
     }
 
     @Test("Document owns editing state and can save without a represented UI")
@@ -514,7 +555,7 @@ extension AppUIComponentTestSuite {
         snapshot: snapshot, to: url, previous: nil,
         progress: progress.subprogress(assigningCount: 1))
       #expect(try WorkspaceBundleReaderV4(at: url).read() == snapshot)
-      let coordinator = WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      let coordinator = WorkspaceScene(document: document).makeConnection()
       #expect(coordinator.windowController.stateService === state)
       coordinator.disconnect()
       state.workspaceDefinition.displayName = "Disconnected"
@@ -528,7 +569,7 @@ extension AppUIComponentTestSuite {
     @Test("Undo and Redo change only editing content; UI state is not undoable")
     func editingUndoRedo() async throws {
       let document = WorkspaceDocument()
-      let coordinator = WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      let coordinator = WorkspaceScene(document: document).makeConnection()
       let state = coordinator.windowController.stateService
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -568,7 +609,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       try await document.apply(snapshot: read, previous: nil)
       #expect(document.workspaceSnapshot?.definition.displayName == "Loaded")
-      let coordinator = WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      let coordinator = WorkspaceScene(document: document).makeConnection()
       await coordinator.windowController.refreshPersistedWorkspace(at: root) { true }
       let undo = UndoManager()
       coordinator.setUndoManager(undo)
@@ -585,12 +626,11 @@ extension AppUIComponentTestSuite {
     @Test("Dismantling releases the controller while the Document stays alive")
     func representationOwnsControllerLifetime() async {
       let document = WorkspaceDocument()
-      var coordinator: WorkspaceViewControllerRepresentation.Coordinator? =
-        WorkspaceViewControllerRepresentation(document: document).makeCoordinator()
+      var coordinator: WorkspaceSceneConnection? =
+        WorkspaceScene(document: document).makeConnection()
       weak var owner = coordinator?.windowController
       if let coordinator {
-        WorkspaceViewControllerRepresentation.dismantleNSViewController(
-          coordinator.windowController.contentController, coordinator: coordinator)
+        coordinator.disconnect()
         await coordinator.shutdown()
         await coordinator.shutdown()
       }
