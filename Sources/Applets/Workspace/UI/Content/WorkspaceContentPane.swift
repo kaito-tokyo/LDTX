@@ -4,15 +4,14 @@
 
 import AppKit
 import LDTXProgramRuntime
-
-private let kBelowDividerDragPriority0 = NSLayoutConstraint.Priority(250)
-private let kBelowDividerDragPriority10 = NSLayoutConstraint.Priority(260)
+import Observation
+import SwiftUI
 
 public final class WorkspaceContentPane: NSViewController {
   let appletData: WorkspaceAppletData
   let stateService: WorkspaceStateService
 
-  let splitView = NSSplitView()
+  let layout = WorkspaceContentLayout()
   let pairedPreview: ProgramCanvasPairedPreview
   let editorScrollView = NSScrollView()
   let editorStack: NSStackView = FlipedStackView()
@@ -59,7 +58,6 @@ public final class WorkspaceContentPane: NSViewController {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   public override func loadView() {
-    view = splitView
 
     // MARK: Configures Paired Preview
     pairedPreview.autoresizingMask = [.width, .height]
@@ -85,14 +83,6 @@ public final class WorkspaceContentPane: NSViewController {
     editorScrollView.autohidesScrollers = true
     editorScrollView.autoresizingMask = [.width, .height]
 
-    // MARK: Configures Split View
-    splitView.isVertical = false
-    splitView.dividerStyle = .thin
-    splitView.addArrangedSubview(pairedPreview)
-    splitView.addArrangedSubview(editorScrollView)
-    splitView.setHoldingPriority(kBelowDividerDragPriority10, forSubviewAt: 0)
-    splitView.setHoldingPriority(kBelowDividerDragPriority0, forSubviewAt: 1)
-
     // MARK: Configures constraints for Editor Stack size
     NSLayoutConstraint.activate([
       masterVolumeEditor.view.widthAnchor.constraint(equalTo: editorStack.widthAnchor),
@@ -100,25 +90,118 @@ public final class WorkspaceContentPane: NSViewController {
       videoLayersEditorTabs.view.widthAnchor.constraint(equalTo: editorStack.widthAnchor),
       videoLayersEditorTabs.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 120),
     ])
-    let editorSize = editorStack.fittingSize
-
     // MARK: Configures remaining constraints
     NSLayoutConstraint.activate([
-      splitView.widthAnchor.constraint(greaterThanOrEqualToConstant: editorSize.width),
       editorStack.leadingAnchor.constraint(equalTo: editorScrollView.contentView.leadingAnchor),
       editorStack.topAnchor.constraint(equalTo: editorScrollView.contentView.topAnchor),
       editorStack.widthAnchor.constraint(equalTo: editorScrollView.contentView.widthAnchor),
     ])
+    let host = NSHostingController(
+      rootView: WorkspaceContentView(
+        layout: layout, preview: pairedPreview, editors: editorScrollView))
+    host.sizingOptions = []
+    host.sceneBridgingOptions = []
+    addChild(host)
+    view = NSView()
+    host.view.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(host.view)
+    NSLayoutConstraint.activate([
+      host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      host.view.topAnchor.constraint(equalTo: view.topAnchor),
+      host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+    ])
+    configureAfterEstablished()
   }
 
   public func configureAfterEstablished() {
-    splitView.layoutSubtreeIfNeeded()
-    splitView.setPosition(280, ofDividerAt: 0)
-    splitView.autosaveName = stateService.externalID.map { "WorkspaceContentPane.\($0)" }
+    layout.restore(externalID: stateService.externalID)
   }
 
   private final class FlipedStackView: NSStackView {
     override var isFlipped: Bool { true }
+  }
+}
+
+@MainActor @Observable
+final class WorkspaceContentLayout {
+  var previewHeight: CGFloat = 280
+  private var persistenceKey: String?
+
+  func restore(externalID: String?) {
+    let key = externalID.map { "WorkspaceContentPane.\($0).previewHeight" }
+    guard key != persistenceKey else { return }
+    persistenceKey = key
+    previewHeight =
+      key.flatMap { UserDefaults.standard.object(forKey: $0) as? Double }
+      .flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } ?? 280
+  }
+
+  func resizePreview(to height: CGFloat) {
+    guard height.isFinite else { return }
+    previewHeight = max(0, height)
+    if let persistenceKey {
+      UserDefaults.standard.set(Double(previewHeight), forKey: persistenceKey)
+    }
+  }
+}
+
+private struct WorkspaceContentView: View {
+  let layout: WorkspaceContentLayout
+  let preview: ProgramCanvasPairedPreview
+  let editors: NSScrollView
+  @State private var dragStart: CGFloat?
+
+  var body: some View {
+    GeometryReader { geometry in
+      let height = min(layout.previewHeight, max(0, geometry.size.height - 1))
+      VStack(spacing: 0) {
+        WorkspaceNativeView(view: preview)
+          .frame(height: height)
+        Divider()
+          .overlay {
+            Color.clear
+              .frame(height: 9)
+              .contentShape(Rectangle())
+              .pointerStyle(.rowResize)
+              .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("WorkspaceContent"))
+                  .onChanged { value in
+                    if dragStart == nil { dragStart = height }
+                    layout.resizePreview(
+                      to: min(
+                        max(0, (dragStart ?? height) + value.translation.height),
+                        max(0, geometry.size.height - 1)))
+                  }
+                  .onEnded { _ in dragStart = nil }
+              )
+              .accessibilityLabel("Preview height")
+              .accessibilityValue(Text("\(Int(height)) points"))
+              .accessibilityAdjustableAction { direction in
+                layout.resizePreview(
+                  to: min(
+                    max(0, height + (direction == .increment ? 20 : -20)),
+                    max(0, geometry.size.height - 1)))
+              }
+          }
+        WorkspaceNativeView(view: editors)
+          .frame(maxHeight: .infinity)
+      }
+    }
+    .coordinateSpace(name: "WorkspaceContent")
+    .frame(minWidth: 480, minHeight: 120)
+  }
+}
+
+private struct WorkspaceNativeView<NativeView: NSView>: NSViewRepresentable {
+  let view: NativeView
+  func makeNSView(context: Context) -> NativeView { view }
+  func updateNSView(_ view: NativeView, context: Context) {}
+
+  func sizeThatFits(
+    _ proposal: ProposedViewSize, nsView: NativeView, context: Context
+  ) -> CGSize? {
+    CGSize(width: proposal.width ?? 480, height: proposal.height ?? 0)
   }
 }
 

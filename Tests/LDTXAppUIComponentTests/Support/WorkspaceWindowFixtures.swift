@@ -120,12 +120,11 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
 
 @MainActor
 extension WorkspaceContentPane {
-  var testSplitView: NSSplitView { view as! NSSplitView }
   var testPairedPreview: ProgramCanvasPairedPreview {
-    testSplitView.arrangedSubviews[0] as! ProgramCanvasPairedPreview
+    pairedPreview
   }
   var testEditorScrollView: NSScrollView {
-    testSplitView.arrangedSubviews[1] as! NSScrollView
+    editorScrollView
   }
   var testVideoTabs: NSTabViewController {
     children.first { $0 is NSTabViewController } as! NSTabViewController

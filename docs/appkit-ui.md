@@ -106,8 +106,9 @@ Layer menus place existing resources into the selected Program.
 
 The Content pane implementation is organized by feature under
 `Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
-WorkspaceContentPane is an NSViewController containing the configured AppKit preview
-and the editors in a vertical NSSplitView. It does not subclass NSSplitViewController.
+WorkspaceContentPane retains the configured AppKit preview and editors and hosts
+a SwiftUI vertical layout with a draggable divider. NSViewRepresentable embeds
+the retained preview and editor scroll view without rebuilding their media resources.
 MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
 Layers and Portrait Video Layers tabs, which use VideoLayersEditor controllers.
 Each editor owns its Observation task and reads the shared WorkspaceStateService.
@@ -120,8 +121,10 @@ under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
 WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 
-WorkspaceViewController configures its NSSplitViewController directly with hosted SwiftUI sidebar and
-Inspector panes and an AppKit WorkspaceContentPane in the center.
+WorkspaceViewController hosts a SwiftUI horizontal layout containing Sidebar,
+Content, and Inspector, with draggable dividers. Its View observes window-local
+pane visibility and widths directly.
+The controller remains the boundary for runtime actions and window attachment.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
 RecordPlayerDocument conforms to SwiftUI's macOS 27 Document API and is
@@ -189,7 +192,12 @@ handles its normal unsaved-change review; pane visibility does not own runtime
 lifetime. Output uses the last successfully persisted Definition and requires a
 formal document URL.
 
-Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
+Workspace requests a 240-point sidebar, a content width of at least 480 points,
+and a 320-point inspector. SwiftUI manages pane layout and resizing;
+the inspector width ranges from 240 to 480 points. Toolbar buttons update
+window-local sidebar visibility and the Store's inspector visibility.
+Hiding a side pane preserves its last expanded width. Divider gestures and
+accessibility adjustments update these window-local widths without touching the document.
 
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
 coordinator and low-frequency update registry, and a Program preview `MTKView` when
@@ -210,7 +218,8 @@ so the pane's background shows through; the drawable uses linear
 Menus and toolbars route commands to their owning window. Workspace restoration
 uses DocumentGroup's document reopening and window restoration. Workspace
 Inspector selection starts at nil and is neither encoded nor restored; the former
-versioned selection key is ignored. AppKit owns frame and pane state.
+versioned selection key is ignored. SwiftUI owns column layout; preview height is
+stored separately in application preferences.
 
 Run `LDTXAppUIComponentTests` for directly constructed component, document lifecycle, saving, window, sheet, observation, and meter tests. These share a serialized MainActor parent suite and one Document Controller in a hostless AppKit test process. `LDTXAppUITests` launches the normal application for launch and main-menu smoke tests. The embedded XPC process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen and run builds and tests outside the sandbox.
 
@@ -276,8 +285,8 @@ The Workspace window uses the unified toolbar style. WorkspaceToolbarCoordinator
 owns the NSToolbar and its items; WorkspaceViewController configures labels and
 target/action and attaches the toolbar to the framework window. Pane roots do not
 use the SwiftUI toolbar modifier. Output state updates existing labels and images.
-The toolbar has no Apply item or Inspector title. Sidebar and Inspector use the
-split view controller's standard toggle actions. Toolbar customization and layout
+The toolbar has no Apply item or Inspector title. Sidebar and Inspector actions
+update the SwiftUI visibility bindings. Toolbar customization and layout
 persistence are disabled.
 
 Editors write representable values directly to WorkspaceStateService. OCR ROI
@@ -294,7 +303,7 @@ creates a new output session. Stop from paused returns to idle. Transition state
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
-The Workspace Content pane uses an AppKit horizontal split above its AppKit
+The Workspace Content pane uses a SwiftUI vertical layout above its AppKit
 tabbed editor. `WorkspaceWindowController` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
@@ -306,20 +315,15 @@ and redraw on display invalidation without starting Program runtimes.
 Preview clicks and accessibility actions update the window's transient
 `isPortraitAudio` selection without changing document contents.
 
-`configureAfterEstablished()` is a custom lifecycle hook called once after the
-pane is attached to the window and the parent sizes are established. It calls
-`layoutSubtreeIfNeeded()` before configuring size-dependent behavior.
-The pane uses `setPosition` to
-set the initial preview height to 280 points, then assigns `autosaveName` so
-AppKit can restore saved divider configuration over that default. The pane does
-not seed the layout by assigning view frames. Its higher holding priority
-keeps its height when resizing the window, with the editor taking the size change
-first. The content split uses AppKit default divider limits and collapse behavior.
-`NSSplitView.autosaveName`, keyed by the definition envelope external
-ID, lets AppKit save and restore divider configuration in application preferences.
-`WorkspaceStateService.externalID` holds that ID, and `WorkspaceContentPane`
-constructs the autosave name internally. Divider
-configuration is not stored in Workspace-local state. Shutdown pauses the MTKView, detaches its delegate,
+The preview starts at 280 points. A SwiftUI drag gesture changes its height,
+and an accessibility adjustment changes it in 20-point increments. The height
+is clamped to the available space without overwriting the requested height
+during window resizing. The editors absorb the remaining space and scroll.
+WorkspaceContentLayout saves the requested height to application preferences
+under `WorkspaceContentPane.<externalID>.previewHeight`; the document's external
+ID keeps it stable across renaming. Repeated configuration does not reset a drag.
+Divider configuration is not stored in the Workspace package.
+Shutdown pauses the MTKView, detaches its delegate,
 and stops the renderer before shutting down the runtimes.
 
 ### Dynamic reference selection
@@ -372,8 +376,9 @@ and monitor volume controls. AudioMixEditor owns one Workspace-wide gain per inp
 mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
 Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
-The Content pane uses no SwiftUI hosting or Representable wrappers. Its standard
-AppKit controls retain their default selection, background, and focus behavior.
+The Content pane embeds its retained AppKit preview and editor scroll view with
+Representable wrappers. The editors' standard AppKit controls retain their
+default selection, background, and focus behavior.
 Each layer operation copies the latest ProgramPreferences and updates the complete
 value, preserving unrelated fields. Reordering submits the complete ID array and
 must preserve the current membership. Tab and Program changes need no Submit;

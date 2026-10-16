@@ -53,6 +53,12 @@ public struct WorkspaceViewControllerRepresentation: NSViewControllerRepresentab
     context.coordinator.windowController.attachWindow(controller.view.window)
   }
 
+  public func sizeThatFits(
+    _ proposal: ProposedViewSize, nsViewController: WorkspaceViewController, context: Context
+  ) -> CGSize? {
+    CGSize(width: proposal.width ?? 1062, height: proposal.height ?? 700)
+  }
+
   public static func dismantleNSViewController(
     _ controller: WorkspaceViewController, coordinator: Coordinator
   ) {

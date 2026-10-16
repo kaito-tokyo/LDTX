@@ -202,8 +202,8 @@ extension AppUIComponentTestSuite {
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
-    @Test("Workspace native sidebar toggle restores width and stays Window local")
-    func nativeSidebarToggleRestoresWidth() async throws {
+    @Test("Workspace SwiftUI sidebar toggle stays Window local")
+    func swiftUISidebarToggleStaysWindowLocal() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
       defer {
@@ -211,33 +211,35 @@ extension AppUIComponentTestSuite {
         second.close()
       }
       await settleWorkspaceToolbar(first)
+      first.content.layout.sidebarWidth = 280
+      await settleWorkspaceToolbar(first)
+      let width = first.content.layout.sidebarWidth
+      let contentWidth = first.contentPane.view.bounds.width
+      let preview = first.contentPane.testPairedPreview
       let item = try #require(
         first.toolbar?.items.first {
           $0.itemIdentifier.rawValue == "workspace.toggleSidebar"
         })
-      let split = first.splitViewController
       #expect(first.contentViewController === first.content)
-      #expect(split.parent === first.content)
-      split.view.layoutSubtreeIfNeeded()
-      split.splitView.setPosition(280, ofDividerAt: 0)
-      let width = split.splitView.arrangedSubviews[0].frame.width
       try performWorkspaceToolbarAction(item)
       try await Task.sleep(for: .milliseconds(500))
-      #expect(split.splitViewItems[0].isCollapsed)
-      #expect(!second.splitViewController.splitViewItems[0].isCollapsed)
+      #expect(!first.content.layout.isSidebarVisible)
+      #expect(second.content.layout.isSidebarVisible)
+      #expect(first.contentPane.view.bounds.width > contentWidth)
       try performWorkspaceToolbarAction(item)
       try await Task.sleep(for: .milliseconds(500))
-      split.view.layoutSubtreeIfNeeded()
-      #expect(!split.splitViewItems[0].isCollapsed)
-      #expect(abs(split.splitView.arrangedSubviews[0].frame.width - width) <= 1)
-      split.toggleInspector(nil)
+      #expect(first.content.layout.isSidebarVisible)
+      #expect(abs(first.content.layout.sidebarWidth - width) <= 1)
+      #expect(abs(first.contentPane.view.bounds.width - contentWidth) <= 1)
+      #expect(first.contentPane.testPairedPreview === preview)
+      first.content.toggleInspector(nil)
       #expect(!first.stateService.isInspectorVisible)
-      split.toggleInspector(nil)
+      first.content.toggleInspector(nil)
       #expect(first.stateService.isInspectorVisible)
     }
 
-    @Test("UCT-1016.7: Toolbar pane toggles restore widths in their own Window")
-    func toolbarActionsRestoreWidthsAndStayWithinTheirWindow() async throws {
+    @Test("UCT-1016.7: Toolbar pane toggles stay within their own Window")
+    func toolbarActionsStayWithinTheirWindow() async throws {
       _ = NSApplication.shared
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
@@ -254,40 +256,26 @@ extension AppUIComponentTestSuite {
           $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
         })
       #expect(screenshot.isEnabled)
-      let split = first.splitViewController
-      let other = second.splitViewController
-      split.view.layoutSubtreeIfNeeded()
-      let sidebarWidth = split.splitView.arrangedSubviews[0].frame.width
-      #expect((240...260).contains(sidebarWidth))
-      let contentWidth =
-        split.splitView.bounds.width - sidebarWidth - 340
-        - 2 * split.splitView.dividerThickness
-      for (pane, expectedWidth) in zip(
-        split.splitView.arrangedSubviews, [sidebarWidth, contentWidth, 340.0])
-      {
-        #expect(
-          abs(pane.frame.width - expectedWidth) <= 1,
-          "Actual: \(pane.frame.width), expected: \(expectedWidth)")
-      }
       for (identifier, index) in [
         (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0),
         (.init("workspace.toggleInspector"), 2),
       ] {
         let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
-        #expect(item.target === split)
+        #expect(item.target === first.content)
         #expect(!item.autovalidates)
-        let width = split.splitView.arrangedSubviews[index].frame.width
         try performWorkspaceToolbarAction(item)
         try await Task.sleep(for: .milliseconds(350))
-        #expect(split.splitViewItems[index].isCollapsed)
-        #expect(!other.splitViewItems[index].isCollapsed)
+        if index == 0 {
+          #expect(!first.content.layout.isSidebarVisible)
+          #expect(second.content.layout.isSidebarVisible)
+        } else {
+          #expect(!first.stateService.isInspectorVisible)
+          #expect(second.stateService.isInspectorVisible)
+        }
         try performWorkspaceToolbarAction(item)
         try await Task.sleep(for: .milliseconds(350))
-        split.view.layoutSubtreeIfNeeded()
-        #expect(!split.splitViewItems[index].isCollapsed)
-        #expect(
-          abs(split.splitView.arrangedSubviews[index].frame.width - width) <= 1,
-          "Pane \(index): \(split.splitView.arrangedSubviews[index].frame.width), before \(width)")
+        #expect(first.content.layout.isSidebarVisible)
+        #expect(first.stateService.isInspectorVisible)
       }
     }
 
@@ -320,11 +308,11 @@ extension AppUIComponentTestSuite {
         toolbar.items.first { $0.itemIdentifier == .inspectorTrackingSeparator })
       let applyID = NSToolbarItem.Identifier("workspace.inspector.apply")
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.splitViewController.toggleInspector(nil)
+      window.content.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(!state.isInspectorVisible)
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.splitViewController.toggleInspector(nil)
+      window.content.toggleInspector(nil)
       await settleWorkspaceToolbar(window)
       #expect(state.isInspectorVisible)
       #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })

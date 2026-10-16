@@ -88,6 +88,7 @@ struct LDTXApp: App {
       )
       return document
     }
+    .defaultSize(width: 1062, height: 700)
     .windowToolbarStyle(.unified)
     .commands {
       WorkspaceCommands()

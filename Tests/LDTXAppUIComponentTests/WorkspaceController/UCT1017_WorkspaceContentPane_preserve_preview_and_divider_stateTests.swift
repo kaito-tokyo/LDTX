@@ -212,7 +212,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test("UCT-1017.5: Preview selection and Divider position remain Window local")
-    func appKitPreviewSelectionAndSplitPositionAreWindowLocal() throws {
+    func swiftUIPreviewSelectionAndSplitPositionAreWindowLocal() async throws {
       _ = NSApplication.shared
       let url = URL(fileURLWithPath: "/tmp/PreviewLayout-\(UUID()).ldtxworkspace")
       let suite = "PreviewLayout-\(UUID())"
@@ -224,7 +224,7 @@ extension AppUIComponentTestSuite {
       let preferences = state.workspacePreferences
       let outputSettings = state.workspaceOutputSettings
       let externalID = UUID().uuidString.lowercased()
-      let dividerKey = "NSSplitView Subview Frames WorkspaceContentPane.\(externalID)"
+      let dividerKey = "WorkspaceContentPane.\(externalID).previewHeight"
       let savedDivider = UserDefaults.standard.object(forKey: dividerKey)
       defer {
         if let savedDivider {
@@ -237,12 +237,13 @@ extension AppUIComponentTestSuite {
         stateService: state, appletData: data, url: url, externalID: externalID)
       defer { first.close() }
       let pane = first.contentPane
-      #expect(!pane.testSplitView.isVertical)
       #expect(pane.testPairedPreview.metalView.delegate != nil)
       first.orderFront(nil)
-      #expect(pane.testSplitView.arrangedSubviews[1] === pane.testEditorScrollView)
+      await settleWorkspaceToolbar(first)
+      #expect(pane.testEditorScrollView.isDescendant(of: pane.view))
       #expect(pane.testEditorScrollView.hasVerticalScroller)
-      pane.testSplitView.setPosition(pane.testSplitView.bounds.height - 80, ofDividerAt: 0)
+      pane.layout.resizePreview(to: pane.view.bounds.height - 80)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
       let editorDocument = try #require(pane.testEditorScrollView.documentView)
       #expect(editorDocument is NSStackView)
@@ -254,7 +255,8 @@ extension AppUIComponentTestSuite {
       #expect(pane.testEditorScrollView.contentView.bounds.origin.y > 0)
       editorDocument.scroll(.zero)
       #expect(pane.testEditorScrollView.contentView.bounds.origin.y == 0)
-      pane.testSplitView.setPosition(150, ofDividerAt: 0)
+      pane.layout.resizePreview(to: 150)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
       pane.testPairedPreview.layout()
       let metalFrameInWindow = pane.testPairedPreview.metalView.convert(
@@ -267,15 +269,17 @@ extension AppUIComponentTestSuite {
       #expect(state.selectedAudioMix == .portrait)
       pane.testPairedPreview.selectCanvas(at: CGPoint(x: 20, y: size.height / 2))
       #expect(state.selectedAudioMix == .landscape)
-      pane.testSplitView.setPosition(220, ofDividerAt: 0)
+      pane.layout.resizePreview(to: 220)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
       let previewHeight = pane.testPairedPreview.frame.height
-      #expect(
-        pane.testSplitView.autosaveName == "WorkspaceContentPane.\(externalID)")
+      #expect(UserDefaults.standard.double(forKey: dividerKey) == 220)
       first.setContentSize(NSSize(width: 1100, height: 800))
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
       #expect(abs(pane.testPairedPreview.frame.height - previewHeight) < 0.5)
-      pane.testSplitView.setPosition(100, ofDividerAt: 0)
+      pane.layout.resizePreview(to: 100)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
       #expect(editorDocument.frame.height < pane.testEditorScrollView.contentView.bounds.height)
       #expect(editorDocument.frame.minY == 0)
@@ -284,8 +288,7 @@ extension AppUIComponentTestSuite {
         stateService: state, appletData: data,
         url: URL(fileURLWithPath: "/tmp/Renamed-\(UUID()).ldtxworkspace"), externalID: externalID)
       defer { reopened.close() }
-      let split = reopened.contentPane.testSplitView
-      #expect(split.autosaveName == pane.testSplitView.autosaveName)
+      #expect(reopened.contentPane.layout.previewHeight == 100)
       #expect(state.workspaceDefinition == definition)
       #expect(state.workspacePreferences == preferences)
       #expect(state.workspaceOutputSettings == outputSettings)
@@ -295,9 +298,9 @@ extension AppUIComponentTestSuite {
     }
 
     @Test("UCT-1017.6: Divider state restores and preserves user-adjusted height")
-    func initialDividerRestoresAndPreservesDraggedHeight() throws {
+    func initialDividerRestoresAndPreservesDraggedHeight() async throws {
       let externalID = UUID().uuidString.lowercased()
-      let dividerKey = "NSSplitView Subview Frames WorkspaceContentPane.\(externalID)"
+      let dividerKey = "WorkspaceContentPane.\(externalID).previewHeight"
       let savedDivider = UserDefaults.standard.object(forKey: dividerKey)
       defer {
         if let savedDivider {
@@ -309,45 +312,36 @@ extension AppUIComponentTestSuite {
       let first = makeWorkspaceTestWindow(externalID: externalID)
       defer { first.close() }
       first.orderFront(nil)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
-      let split = first.contentPane.testSplitView
-      #expect(abs(split.arrangedSubviews[0].frame.height - 280) < 0.5)
-
-      let initialHeight = split.arrangedSubviews[0].frame.height
-      let start = NSPoint(x: split.bounds.midX, y: initialHeight + split.dividerThickness / 2)
-      let end = NSPoint(x: start.x, y: 360 + split.dividerThickness / 2)
-      let timestamp = ProcessInfo.processInfo.systemUptime
-      let down = try #require(
-        NSEvent.mouseEvent(
-          with: .leftMouseDown, location: split.convert(start, to: nil), modifierFlags: [],
-          timestamp: timestamp, windowNumber: first.windowNumber, context: nil,
-          eventNumber: 1, clickCount: 1, pressure: 1))
-      for type in [NSEvent.EventType.leftMouseDragged, .leftMouseUp] {
-        let event = try #require(
-          NSEvent.mouseEvent(
-            with: type, location: split.convert(end, to: nil), modifierFlags: [],
-            timestamp: timestamp + 0.01, windowNumber: first.windowNumber, context: nil,
-            eventNumber: 2, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
-        NSApplication.shared.postEvent(event, atStart: false)
-      }
-      split.mouseDown(with: down)
+      let pane = first.contentPane
+      #expect(abs(pane.testPairedPreview.frame.height - 280) < 0.5)
+      let preview = pane.testPairedPreview
+      let delegate = preview.metalView.delegate
+      pane.layout.resizePreview(to: 360)
+      await settleWorkspaceToolbar(first)
       first.contentView?.layoutSubtreeIfNeeded()
-      let draggedHeight = split.arrangedSubviews[0].frame.height
+      let draggedHeight = preview.frame.height
       #expect(abs(draggedHeight - 360) < 1)
+      #expect(preview === pane.testPairedPreview)
+      #expect(preview.metalView.delegate === delegate)
 
       for height: CGFloat in [800, 700] {
         first.setContentSize(NSSize(width: 1062, height: height))
+        await settleWorkspaceToolbar(first)
         first.contentView?.layoutSubtreeIfNeeded()
-        #expect(abs(split.arrangedSubviews[0].frame.height - draggedHeight) < 0.5)
+        #expect(abs(preview.frame.height - draggedHeight) < 0.5)
       }
       first.close()
       let reopened = makeWorkspaceTestWindow(externalID: externalID)
       defer { reopened.close() }
       reopened.orderFront(nil)
+      await settleWorkspaceToolbar(reopened)
       reopened.contentView?.layoutSubtreeIfNeeded()
       #expect(
         abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
       reopened.setContentSize(NSSize(width: 1100, height: 850))
+      await settleWorkspaceToolbar(reopened)
       reopened.contentView?.layoutSubtreeIfNeeded()
       #expect(
         abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
