@@ -44,8 +44,10 @@ struct MasterVolumeEditor: View {
     let value = Binding<Ldtx_Workspace_V4_Rational32>(
       get: {
         id.flatMap {
-          stateService.workspacePreferences[keyPath: target.preferences][$0]?
-            .audioMasterVolumeDecibels
+          guard let preference = stateService.workspacePreferences[keyPath: target.preferences][$0],
+            preference.hasAudioMasterVolumeDecibels
+          else { return nil }
+          return preference.audioMasterVolumeDecibels
         } ?? .with { $0.set(num: 0, den: 10) }
       },
       set: { value in
