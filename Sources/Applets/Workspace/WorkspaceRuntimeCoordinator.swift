@@ -310,6 +310,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   }
 
   private var documentObservationTask: Task<Void, Never>?
+  private var adoptedContentModificationDate: Date?
 
   // Runtime adoption is independent of Document's in-memory confirmation.
   func refreshPersistedWorkspace() async {
@@ -326,7 +327,12 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       guard shutdownTask == nil, !stateService.isOutputActive,
         isCurrent()
       else { return }
-      guard workspace != windowRuntime.workspace else { return }
+      let modificationDate = workspaceDocument?.lastContentModificationDate
+      guard
+        workspace != windowRuntime.workspace
+          || modificationDate != adoptedContentModificationDate
+      else { return }
+      adoptedContentModificationDate = modificationDate
       persistenceCoordinator.adoptRuntimeWorkspace(workspace)
       confirmedContentsDidChange()
     } catch { reportError(error) }
@@ -568,16 +574,26 @@ extension WorkspaceRuntimeCoordinator {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
-    guard
-      windowRuntime.definition.visions.contains(where: {
-        $0.vision == .ldtxSceneDetectorVision(vision)
-      }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
-      url.standardizedFileURL == modelURL.standardizedFileURL
-    else { throw CocoaError(.fileReadNoSuchFile) }
-    guard
-      let service = await visionFeature.classifierService(
-        modelID: vision.modelInternalID, url: modelURL)
-    else { throw CocoaError(.fileReadNoSuchFile) }
+    let context = windowRuntime.visionFeatureContext
+    let service: VisionImageClassifierService
+    do {
+      guard
+        windowRuntime.definition.visions.contains(where: {
+          $0.vision == .ldtxSceneDetectorVision(vision)
+        }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
+        url.standardizedFileURL == modelURL.standardizedFileURL
+      else { throw CocoaError(.fileReadNoSuchFile) }
+      guard
+        let preparedService = await visionFeature.classifierService(
+          modelID: vision.modelInternalID, url: modelURL)
+      else { throw CocoaError(.fileReadNoSuchFile) }
+      guard context.isCurrent() else { throw CancellationError() }
+      service = preparedService
+    } catch {
+      guard context.isCurrent() else { throw CancellationError() }
+      if !(error is CancellationError) { context.reportFailure(vision.internalID, error) }
+      throw error
+    }
     return try await windowRuntime.classify(vision: vision, service: service)
   }
 

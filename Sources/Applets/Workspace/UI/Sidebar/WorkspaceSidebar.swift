@@ -64,6 +64,8 @@ public struct WorkspaceSidebar: View {
             .tag(WorkspaceInspectorSelector(kind: .workspaceCanvas))
           Label("Output", systemImage: "dot.radiowaves.left.and.right")
             .tag(WorkspaceInspectorSelector(kind: .workspaceOutput))
+          Label("Variables", systemImage: "list.bullet.rectangle")
+            .tag(WorkspaceInspectorSelector(kind: .variableStore))
         } header: {
           Text("WORKSPACE")
         }

@@ -54,6 +54,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXRecording              | Media-track validation, playback composition, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
+| LDTXVariableMacro          | Target reserved for variable macro UI.                            |
+| LDTXVariableStore          | Variable data models, Definition projection, string storage, and readers. |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVisionProgrammerApplet | Vision Programmer windows and training UI. |

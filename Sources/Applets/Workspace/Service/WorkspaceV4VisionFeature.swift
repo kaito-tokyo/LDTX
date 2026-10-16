@@ -4,6 +4,7 @@
 import CoreImage
 import Foundation
 import LDTXProtos
+import LDTXVariableStore
 import LDTXVision
 import OSLog
 import Observation
@@ -217,7 +218,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     let classifier = context.sceneDetector(id)
     let url = classifier.flatMap { context.modelURL($0.modelInternalID) }
     func isCurrent() -> Bool {
-      !stopped && (generation.map { scheduler.isCurrent($0) } ?? true)
+      !stopped && context.isCurrent() && (generation.map { scheduler.isCurrent($0) } ?? true)
         && (self.context?.videoComponents ?? context.videoComponents) == context.videoComponents
         && context.vision(id) == ocr && context.sceneDetector(id) == classifier
         && (classifier.map { context.modelURL($0.modelInternalID) == url } ?? true)
@@ -226,23 +227,31 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       let frame: WorkspaceVisionAnalysisFrame
       let recordingPackageURL: URL?
       let output: String
+      let variables: [VariableItem: String]
       if let ocr {
         frame = try await context.frameForVision(ocr)
         recordingPackageURL = context.recordingPackageURL()
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
+        variables = [.text: output]
       } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
         guard let service = models[ModelKey(id: classifier.modelInternalID, url: url)] else {
           return
         }
         frame = try await frameProvider(classifier)
         recordingPackageURL = context.recordingPackageURL()
-        output = try await service.classify(image: frame.image)
+        let result = try await service.classifyResult(image: frame.image)
+        output = result.displayText
+        variables = [
+          .label: result.topCandidate?.label ?? "",
+          .confidence: result.topCandidate.map { String($0.confidence) } ?? "0",
+        ]
       } else {
         return
       }
       guard isCurrent() else { return }
       resultsByVisionInternalID[id] = output
       context.reportResult(id, output)
+      context.reportVariables(id, variables)
       if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
         context.archiveResult?(id, frame.image, output)
       }

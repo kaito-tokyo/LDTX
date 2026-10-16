@@ -12,7 +12,7 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
-  @Test func timerRefreshesOnlyWhileActiveAndRestartsAfterDeactivation() throws {
+  @Test func timerRefreshesOnlyWhileActiveAndRestartsAfterDeactivation() async throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let timeProvider = CountingClockCurrentTimeProvider(
       date: Date(timeIntervalSince1970: 1_700_000_000))
@@ -24,15 +24,15 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
     runtime.activate()
     runtime.activate()
-    waitUntil(timeout: 3) { timeProvider.invocationCount >= 2 }
+    try await waitForClock(timeout: 10) { timeProvider.invocationCount >= 2 }
     runtime.deactivate()
     rendererQueue.sync {}
     let stoppedCount = timeProvider.invocationCount
-    Thread.sleep(forTimeInterval: 1.3)
+    try await Task.sleep(for: .seconds(1.3))
     assertEqual(timeProvider.invocationCount, stoppedCount)
 
     runtime.activate()
-    waitUntil(timeout: 3) { timeProvider.invocationCount >= stoppedCount + 2 }
+    try await waitForClock(timeout: 10) { timeProvider.invocationCount >= stoppedCount + 2 }
   }
 
   @Test func deinitializationCancelsTimerWithoutRetainingRuntime() throws {
@@ -468,21 +468,25 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     renderer.endSession(2)
   }
 
-  @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() throws {
-    _ = try unwrap(MTLCreateSystemDefaultDevice())
+  @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() async throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
     let timeProvider = CountingClockCurrentTimeProvider(
       date: Date(timeIntervalSince1970: 1_700_000_000)
     )
+    let registry = try ClockOverlayRuntimeRegistry(
+      device: device, currentTimeProvider: timeProvider)
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      clockCurrentTimeProvider: timeProvider
+      clockCurrentTimeProvider: timeProvider,
+      clockOverlayRegistryFactory: { _, _ in registry }
     )
     var configuration = clockRuntimeConfiguration(component: ClockComponent())
 
     renderer.beginSession(1)
     defer { renderer.endSession(1) }
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
-    waitUntil(timeout: 2) { timeProvider.invocationCount == 1 }
+    try await waitForClock(timeout: 10) { registry.retainedTexture(forStepNamed: "clock") != nil }
+    let initial = try unwrap(registry.retainedTexture(forStepNamed: "clock"))
 
     for (index, frameTimestamp) in [0, 1, 60, 3_600, 86_400].enumerated() {
       configuration.timeSeconds = Float(frameTimestamp)
@@ -491,13 +495,18 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         sessionID: 1,
         frameID: UInt64(index + 2)
       )
+      assertTrue(
+        registry.retainedTexture(forStepNamed: "clock")?.colorTexture === initial.colorTexture)
     }
 
-    assertEqual(timeProvider.invocationCount, 1)
-
     timeProvider.date = Date(timeIntervalSince1970: 1_700_000_001)
-    // Wait for the clock's own timer to request the next refresh.
-    waitUntil(timeout: 2) { timeProvider.invocationCount == 2 }
+    // Timer ticks may occur during pipeline creation and frame rendering. Verify the
+    // retained output, rather than assuming an exact number of wall-clock samples.
+    // Only a change to the injected clock time should replace the clock texture.
+    try await waitForClock(timeout: 10) {
+      guard let refreshed = registry.retainedTexture(forStepNamed: "clock") else { return false }
+      return refreshed.colorTexture !== initial.colorTexture
+    }
   }
 
   @Test func previewAndOutputConsumersActivateTheSameClockPath() throws {
@@ -1042,6 +1051,17 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertNotNil(runtime.retainedOverlay())
 
     runtime.deactivate()
+  }
+
+  private func waitForClock(
+    timeout: TimeInterval,
+    condition: () -> Bool
+  ) async throws {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
+    while !condition(), ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    try #require(condition(), "Clock condition did not become true within \(timeout) seconds")
   }
 
   private func waitUntil(

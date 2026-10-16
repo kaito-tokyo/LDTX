@@ -4,6 +4,7 @@
 import CoreImage
 import Foundation
 import LDTXProtos
+import LDTXVariableStore
 import LDTXWorkspaceAppletModel
 
 @MainActor
@@ -13,6 +14,8 @@ public struct WorkspaceV4VisionFeatureContext {
     (Ldtx_Workspace_V4_OcrVision) async throws -> WorkspaceVisionAnalysisFrame
   public var reportResult: (Int64, String) -> Void
   public var reportFailure: (Int64, Error) -> Void
+  public var reportVariables: (Int64, [VariableItem: String]) -> Void = { _, _ in }
+  public var isCurrent: () -> Bool = { true }
   public var archiveResult: ((Int64, CIImage, String) -> Void)?
   public var recordingTimelineMilliseconds: (() -> UInt64?)?
   public var recordingPackageURL: () -> URL? = { nil }

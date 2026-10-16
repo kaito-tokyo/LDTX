@@ -2,9 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreImage
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXVariableStore
+import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -17,6 +20,96 @@ import Testing
 @MainActor
 @Suite("Workspace window runtime")
 struct WorkspaceWindowRuntimeIntegrationTestSuite {
+  @Test func variableStoreFollowsPersistedAdoptionAndRejectsOldResults() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    var saved = runtime.workspace
+    saved.definition.visions = [
+      .with { $0.ocrVision = .with { $0.internalID = 11 } },
+      .with { $0.ldtxSceneDetectorVision = .with { $0.internalID = 22 } },
+    ]
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    let text = VariableKey(visionID: 11, item: .text)
+    let label = VariableKey(visionID: 22, item: .label)
+    let confidence = VariableKey(visionID: 22, item: .confidence)
+    let oldContext = runtime.visionFeatureContext
+    oldContext.reportVariables(11, [.text: "recognized"])
+    oldContext.reportVariables(22, [.label: "battle", .confidence: "0.8"])
+    #expect(try runtime.readVariable(text) == "recognized")
+    #expect(try runtime.readVariable(label) == "battle")
+    #expect(try runtime.readVariable(confidence) == "0.8")
+    oldContext.reportFailure(22, CocoaError(.fileReadUnknown))
+    #expect(try runtime.readVariable(label) == "")
+    #expect(try runtime.readVariable(confidence) == "0")
+    #expect(try runtime.readVariable(text) == "recognized")
+
+    // Updating editable content, including snapshot preparation for a failed save,
+    // does not constitute persisted adoption.
+    try runtime.editWorkspace { $0.definition.displayName = "Pending edit" }
+    runtime.updateRuntimes()
+    #expect(try runtime.readVariable(text) == "recognized")
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(try runtime.readVariable(text) == "")
+    #expect(!oldContext.isCurrent())
+    oldContext.reportVariables(11, [.text: "stale"])
+    #expect(try runtime.readVariable(text) == "")
+    let current = runtime.visionFeatureContext
+    current.reportVariables(11, [.text: "new"])
+    oldContext.reportFailure(11, CocoaError(.fileReadUnknown))
+    #expect(try runtime.readVariable(text) == "new")
+
+    let other = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    other.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(try other.readVariable(text) == "")
+    saved.definition.visions.removeAll()
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(runtime.variableStore.keys.isEmpty)
+    #expect(throws: VariableStoreError.unregisteredKey(text)) { try runtime.readVariable(text) }
+  }
+
+  @Test(
+    "Current manual classifications publish results and preserve cancellation state",
+    arguments: ["success", "failure", "cancelled"])
+  func currentManualClassification(outcome: String) async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with { $0.internalID = 22 }
+    var workspace = runtime.workspace
+    workspace.definition.visions = [.with { $0.ldtxSceneDetectorVision = vision }]
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+    runtime.visionFeatureContext.reportResult(22, "Previous result")
+    runtime.visionFeatureContext.reportVariables(22, [.label: "Previous", .confidence: "0.5"])
+    do {
+      let result = try await runtime.classify(
+        vision: vision, frameForSceneDetector: { WorkspaceVisionAnalysisFrame(image: CIImage()) },
+        classifyResult: { _ in
+          switch outcome {
+          case "failure": throw CocoaError(.fileReadUnknown)
+          case "cancelled": throw CancellationError()
+          default: return .init(candidates: [.init(label: "Current", confidence: 0.8)])
+          }
+        })
+      #expect(outcome == "success")
+      #expect(result == "Current: 80.0%")
+      #expect(runtime.visionResults[22] == result)
+      #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "Current")
+      #expect(try runtime.readVariable(.init(visionID: 22, item: .confidence)) == "0.8")
+      #expect(runtime.visionFailureMessages[22] == nil)
+    } catch {
+      #expect(outcome != "success")
+      if outcome == "cancelled" {
+        #expect(error is CancellationError)
+        #expect(runtime.visionResults[22] == "Previous result")
+        #expect(runtime.visionFailureMessages[22] == nil)
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "Previous")
+      } else {
+        #expect(!(error is CancellationError))
+        #expect(runtime.visionResults[22] == nil)
+        #expect(runtime.visionFailureMessages[22] != nil)
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "")
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .confidence)) == "0")
+      }
+    }
+  }
+
   @Test("canvas updates preserve current values after reading an old snapshot")
   func preservesCurrentCanvasValues() throws {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())

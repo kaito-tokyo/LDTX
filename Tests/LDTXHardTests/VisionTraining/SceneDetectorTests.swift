@@ -6,6 +6,7 @@ import CoreML
 import CreateMLComponents
 import Foundation
 import LDTXProtos
+import LDTXVariableStore
 import LDTXVision
 import LDTXVisionTraining
 @testable import LDTXWorkspaceAppletService
@@ -207,6 +208,7 @@ struct SceneDetectorIntegrationTestSuite {
       [.with { $0.ldtxSceneDetectorVision = classifier }, .with { $0.ocrVision = ocr }]
     }
     var results: [(Int64, String)] = []
+    var variables: [Int64: [VariableItem: String]] = [:]
     var preparedModelIDs: [Int64] = []
     var failures: [Error] = []
     var archived: [Int64] = []
@@ -219,6 +221,7 @@ struct SceneDetectorIntegrationTestSuite {
       reportFailure: { _, error in failures.append(error) },
       archiveResult: { id, _, _ in archived.append(id) })
     context.sceneDetector = { $0 == 5 ? classifier : nil }
+    context.reportVariables = { variables[$0] = $1 }
     context.recordingPackageURL = { URL(fileURLWithPath: "/test.ldtxrecord") }
     context.reportModelPrepared = { preparedModelIDs.append($0) }
     context.modelURL = { $0 == 7 ? modelURL : nil }
@@ -240,12 +243,16 @@ struct SceneDetectorIntegrationTestSuite {
     try await waitUntil { results.count == 1 || !failures.isEmpty }
     #expect(results.first?.0 == 5)
     #expect(results.first?.1.contains("red") == true)
+    #expect(variables[5]?[.label] == "red")
+    let confidence = try #require(variables[5]?[.confidence].flatMap(Float.init))
+    #expect((0...1).contains(confidence))
     time = 3
     for _ in 0..<10 { await Task.yield() }
     scheduler.tick()
     try await waitUntil { results.count == 2 || !failures.isEmpty }
     #expect(results.last?.0 == 3)
     #expect(results.last?.1 == "Scheduled OCR")
+    #expect(variables[3] == [.text: "Scheduled OCR"])
     #expect(archived == [5, 3])
     #expect(loads == 1)
     #expect(failures.isEmpty)

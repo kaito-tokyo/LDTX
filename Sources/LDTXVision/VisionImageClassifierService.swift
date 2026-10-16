@@ -70,6 +70,10 @@ public actor VisionImageClassifierService {
   }
 
   public func classify(image: CIImage) async throws -> String {
+    try await classifyResult(image: image).displayText
+  }
+
+  public func classifyResult(image: CIImage) async throws -> VisionClassificationResult {
     var request = CoreMLRequest(model: modelContainer)
     request.cropAndScaleAction = modelInformation.cropAndScaleAction
     let observations = try await request.perform(on: image)
@@ -78,9 +82,10 @@ public actor VisionImageClassifierService {
         .coderInvalidValue,
         userInfo: [NSLocalizedDescriptionKey: "The model did not return image classifications."])
     }
-    return results.map {
-      "\($0.identifier): \(String(format: "%.1f%%", $0.confidence * 100))"
-    }.joined(separator: "\n")
+    return VisionClassificationResult(
+      candidates: results.map {
+        .init(label: $0.identifier, confidence: $0.confidence)
+      })
   }
 
   @concurrent public static func loadModel(
@@ -157,5 +162,32 @@ public actor VisionImageClassifierService {
       hash.update(data: Data(digest))
     }
     return hash.finalize()
+  }
+}
+
+public struct VisionClassificationResult: Equatable, Sendable {
+  public struct Candidate: Equatable, Sendable {
+    public let label: String
+    public let confidence: Float
+    public init(label: String, confidence: Float) {
+      self.label = label
+      self.confidence = confidence
+    }
+  }
+
+  public let candidates: [Candidate]
+  public init(candidates: [Candidate]) { self.candidates = candidates }
+
+  public var topCandidate: Candidate? {
+    candidates.reduce(nil as Candidate?) { best, candidate in
+      guard let best else { return candidate }
+      return candidate.confidence > best.confidence ? candidate : best
+    }
+  }
+
+  public var displayText: String {
+    candidates.map {
+      "\($0.label): \(String(format: "%.1f%%", $0.confidence * 100))"
+    }.joined(separator: "\n")
   }
 }

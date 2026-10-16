@@ -42,6 +42,7 @@ targets:
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXVariableStore
       - target: LDTXVision
       - target: LDTXBackgroundSegmentation
       - target: LDTXInternalProtocols
@@ -237,6 +238,10 @@ targets:
       - target: LDTXWorkspaceAppletStore
         embed: true
       - target: LDTXWorkspaceAppletService
+        embed: true
+      - target: LDTXVariableMacro
+        embed: true
+      - target: LDTXVariableStore
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
