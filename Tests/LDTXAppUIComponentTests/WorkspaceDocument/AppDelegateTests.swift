@@ -8,9 +8,9 @@ import Testing
 extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace application termination", .serialized)
-  struct AppDelegateUnitTestSuite {
+  struct WorkspaceApplicationTerminationUnitTestSuite {
     @Test func idleApplicationTerminatesImmediately() {
-      let delegate = AppDelegate(
+      let delegate = WorkspaceApplicationTermination(
         hasPendingShutdown: { false },
         shutdown: {
           Issue.record("Unexpected shutdown")
@@ -25,7 +25,7 @@ extension AppUIComponentTestSuite {
       var continuation: CheckedContinuation<Void, Never>?
       var calls = 0
       var replies: [Bool] = []
-      let delegate = AppDelegate(
+      let delegate = WorkspaceApplicationTermination(
         hasPendingShutdown: { true },
         shutdown: {
           calls += 1
@@ -46,7 +46,7 @@ extension AppUIComponentTestSuite {
     @Test func failureIsPresentedBeforeCancellingQuitAndCanRetry() async {
       var attempts = 0
       var events: [String] = []
-      let delegate = AppDelegate(
+      let delegate = WorkspaceApplicationTermination(
         hasPendingShutdown: { true },
         shutdown: {
           attempts += 1

@@ -13,6 +13,9 @@ import UniformTypeIdentifiers
 @MainActor
 @Observable
 public final class WorkspaceDocument: WorkspaceDocumentContext {
+  public let runtimeID = UUID()
+  @ObservationIgnored private var releaseRuntimeResources: (@MainActor (UUID) -> Void)?
+  @ObservationIgnored private var runtimeClaimed = false
   public let stateService: WorkspaceStateService
   public private(set) var workspaceSnapshot: WorkspaceV4Bundle?
   private let configuration: URLDocumentConfiguration?
@@ -22,7 +25,11 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
   public var lastContentModificationDate: Date? { configuration?.lastContentModificationDate }
   public var runtimeWorkspace: WorkspaceV4Bundle? { workspaceSnapshot }
 
-  public init(configuration: URLDocumentConfiguration? = nil) {
+  public init(
+    configuration: URLDocumentConfiguration? = nil,
+    releaseRuntimeResources: (@MainActor (UUID) -> Void)? = nil
+  ) {
+    self.releaseRuntimeResources = releaseRuntimeResources
     self.configuration = configuration
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Untitled"
@@ -33,6 +40,23 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
     stateService.outputSettingsExternalID = WorkspaceBundleWriterV4.makeExternalID().uuidString
       .lowercased()
     stateService.localStateURL = configuration?.fileURL
+  }
+
+  isolated deinit {
+    releaseRuntimeResources?(runtimeID)
+  }
+
+  /// Transfers cleanup to the runtime owner, which must finish shutdown first.
+  func claimRuntimeResources() -> @MainActor () -> Void {
+    precondition(!runtimeClaimed, "A Document may only have one active Workspace runtime")
+    runtimeClaimed = true
+    let release = releaseRuntimeResources
+    releaseRuntimeResources = nil
+    let id = runtimeID
+    return { [weak self] in
+      self?.runtimeClaimed = false
+      release?(id)
+    }
   }
 
   @MainActor

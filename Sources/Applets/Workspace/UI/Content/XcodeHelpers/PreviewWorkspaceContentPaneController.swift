@@ -58,7 +58,7 @@
       }
       let delegate = PreviewDelegate()
       let pairedPreview = ProgramCanvasPairedPreview(
-        device: delegate.device, delegate: delegate,
+        metalView: MTKView(frame: .zero, device: delegate.device), delegate: delegate,
         onSelectLandscape: { service.selectedAudioMix = .landscape },
         onSelectPortrait: { service.selectedAudioMix = .portrait })
       pairedPreview.metalView.isPaused = true

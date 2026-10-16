@@ -18,6 +18,7 @@ import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
+import MetalKit
 import Observation
 import SwiftUI
 
@@ -42,6 +43,7 @@ public final class WorkspaceWindowController: NSWindowController,
 
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
+  private var releaseRuntimeResources: (@MainActor () -> Void)?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
@@ -146,7 +148,10 @@ public final class WorkspaceWindowController: NSWindowController,
   }
 
   public convenience init(
-    document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared
+    document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared,
+    landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
   ) {
     let stateService = document.stateService
     stateService.localStateURL = document.fileURL
@@ -163,7 +168,11 @@ public final class WorkspaceWindowController: NSWindowController,
     if let workspace = document.workspaceSnapshot { persistence.adoptRuntimeWorkspace(workspace) }
     self.init(
       stateService: stateService, persistenceCoordinator: persistence,
-      appletData: appletData, document: document)
+      appletData: appletData, document: document,
+      landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime, metalView: metalView,
+      captureSessionCoordinator: captureSessionCoordinator,
+      lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry,
+      releaseRuntimeResources: document.claimRuntimeResources())
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
       (
@@ -183,14 +192,18 @@ public final class WorkspaceWindowController: NSWindowController,
     stateService: WorkspaceStateService,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
-    document: any WorkspaceDocumentContext
+    document: any WorkspaceDocumentContext,
+    landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry,
+    releaseRuntimeResources: @escaping @MainActor () -> Void
   ) {
+    self.releaseRuntimeResources = releaseRuntimeResources
     self.workspaceDocument = document
     self.stateService = stateService
     self.persistenceCoordinator = persistenceCoordinator
     self.appletData = appletData
 
-    let captureSessionCoordinator = WorkspaceCaptureSessionCoordinator()
     let windowRuntime = WorkspaceWindowRuntime(
       persistence: persistenceCoordinator,
       captureSessionCoordinator: captureSessionCoordinator,
@@ -217,7 +230,6 @@ public final class WorkspaceWindowController: NSWindowController,
     let audioCoordinator = WorkspaceAudioCoordinator(
       captureSessionCoordinator: captureSessionCoordinator)
     let visionFeature = WorkspaceV4VisionFeature()
-    let lowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry()
 
     let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory = {
       device, textureCache in
@@ -228,20 +240,6 @@ public final class WorkspaceWindowController: NSWindowController,
         captureSessionCoordinator: captureSessionCoordinator,
         backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
         lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
-    let programRuntimeFactory:
-      @MainActor (
-        WorkspaceCaptureSessionCoordinator, ProgramPreferencesState, LowFrequencyUpdateRegistry
-      ) -> ProgramRuntime = { coordinator, preferences, registry in
-        ProgramRuntime(
-          captureSessionCoordinator: coordinator,
-          backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-          programPreferencesState: preferences,
-          lowFrequencyUpdateRegistry: registry)
-      }
-    let landscapeRuntime = programRuntimeFactory(
-      captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
-    let portraitRuntime = programRuntimeFactory(
-      captureSessionCoordinator, ProgramPreferencesState(), lowFrequencyUpdateRegistry)
     windowRuntime.installRuntimes(landscape: landscapeRuntime, portrait: portraitRuntime)
     windowRuntime.updateRuntimes()
 
@@ -250,8 +248,9 @@ public final class WorkspaceWindowController: NSWindowController,
       landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16),
       prefersColor: true)
     self.previewRenderer = previewRenderer
+    metalView.device = previewRenderer.device
     let pairedPreview = ProgramCanvasPairedPreview(
-      device: previewRenderer.device, delegate: previewRenderer,
+      metalView: metalView, delegate: previewRenderer,
       onSelectLandscape: { stateService.selectedAudioMix = .landscape },
       onSelectPortrait: { stateService.selectedAudioMix = .portrait })
     self.pairedPreview = pairedPreview
@@ -582,6 +581,10 @@ public final class WorkspaceWindowController: NSWindowController,
       await audioCoordinator.stopAndReset()
       lowFrequencyUpdateRegistry.shutdown()
       windowRuntime.shutdown()
+      pairedPreview.metalView.removeFromSuperview()
+      let release = releaseRuntimeResources
+      releaseRuntimeResources = nil
+      release?()
       if let shutdownFailureMessage { queueShutdownFailure(shutdownFailureMessage) }
       Self.activeControllers.remove(self)
       Self.updateRecordingDockBadge()

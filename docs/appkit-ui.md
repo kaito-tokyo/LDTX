@@ -36,8 +36,10 @@ until a document location exists, and the output controller also requires a
 persisted runtime snapshot before starting.
 
 Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
-state, and file persistence. WorkspaceWindowController owns the runtime projection
-coordinator and runtime resources, and receives the Document-owned StateService.
+state, and file persistence. App State owns the ProgramRuntime pair, preview view,
+capture coordinator, and update registry for each Document UUID.
+WorkspaceWindowController receives those resources and the Document-owned
+StateService, owns their runtime projection coordinator, and coordinates shutdown.
 The NSViewControllerRepresentable receives Document and its Coordinator retains
 WindowController. SwiftUI editing views receive StateService through Bindable.
 Reconstructing the SwiftUI wrapper reuses the same controller and runtime.
@@ -47,7 +49,9 @@ output and tears down capture, audio, Vision, and preview resources asynchronous
 Representable dismantling stops UI observation and initiates idempotent shutdown;
 its Coordinator also initiates cleanup if released without explicit dismantling.
 
-The SwiftUI App connects a termination-only `NSApplicationDelegateAdaptor`.
+The SwiftUI App installs its application-owned AppDelegate through
+`NSApplicationDelegateAdaptor`. AppDelegate delegates asynchronous Workspace
+termination to `WorkspaceApplicationTermination`.
 Quit returns `terminateLater` while any Workspace controller is alive or its
 shutdown is running, and replies only after all controllers finish. This includes
 controllers whose windows have already closed. Shutdown failures are retained
@@ -187,8 +191,16 @@ formal document URL.
 
 Workspace starts with a 240-point sidebar, 480-point content pane, and 340-point inspector. The sidebar and inspector can be toggled from their toolbar buttons; each retains its expanded width and does not collapse automatically when the window is resized. Content absorbs window resizing first. Content does not extend beneath the side panes. The inspector has a maximum width of 480 points, while the sidebar has no application-defined maximum.
 
-WorkspaceWindowController constructs and retains the Program preview's single
-`MTKView`, then passes the configured preview to the Content view controller. A
+LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
+coordinator and low-frequency update registry, and a Program preview `MTKView` when
+creating each Document. App retains them in an `@State` dictionary keyed by the
+Document's non-persisted runtime UUID. Content, Representable, and WindowController
+receive those instances through initializers. Document admits one active runtime
+owner. The controller passes the view to `ProgramCanvasPairedPreview` for layout and input.
+Shutdown pauses and disconnects drawing before stopping runtime resources, then
+detaches the view and removes the App State entry. A Document discarded before a
+runtime is attached also removes its entry. Component tests and Xcode previews
+construct their own dependencies. A
 `ProgramPairPreviewRenderer` supplied as its delegate reads the latest
 `ProgramFrame` from the Landscape and Portrait runtimes and draws the 16:9 and
 9:16 images at equal height into the drawable. The four-pixel gap is transparent

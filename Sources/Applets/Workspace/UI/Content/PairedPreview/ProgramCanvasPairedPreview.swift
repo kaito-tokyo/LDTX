@@ -15,10 +15,10 @@ public final class ProgramCanvasPairedPreview: NSView {
   private let onSelectPortrait: () -> Void
 
   public init(
-    device: MTLDevice?, delegate: any MTKViewDelegate, onSelectLandscape: @escaping () -> Void,
+    metalView: MTKView, delegate: any MTKViewDelegate, onSelectLandscape: @escaping () -> Void,
     onSelectPortrait: @escaping () -> Void
   ) {
-    metalView = MTKView(frame: .zero, device: device)
+    self.metalView = metalView
     previewDelegate = delegate
     self.onSelectLandscape = onSelectLandscape
     self.onSelectPortrait = onSelectPortrait

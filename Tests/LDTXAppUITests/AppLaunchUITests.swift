@@ -6,6 +6,101 @@ import XCTest
 
 @MainActor
 final class AppLaunchUITests: XCTestCase {
+  func testNewWorkspaceShowsPreview() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
+    ]
+    app.launch()
+    defer { app.terminate() }
+    XCTAssertTrue(app.menuBars.menuBarItems["File"].waitForExistence(timeout: 15))
+    app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+    app.menuBars.menuBarItems["File"].click()
+    app.menuItems["New"].hover()
+    app.menuItems["New Document"].click()
+    XCTAssertTrue(app.images["canvasPairPreview"].waitForExistence(timeout: 15))
+    app.menuBars.menuBarItems["File"].click()
+    app.menuItems["New"].hover()
+    app.menuItems["New Document"].click()
+    let previews = app.images.matching(identifier: "canvasPairPreview")
+    XCTAssertTrue(previews.element(boundBy: 1).waitForExistence(timeout: 15))
+    XCTAssertEqual(previews.count, 2)
+  }
+
+  func testVisionProgrammerOpensFromEveryScene() async throws {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
+    ]
+    app.launch()
+    defer { app.terminate() }
+    XCTAssertTrue(app.menuBars.menuBarItems["File"].waitForExistence(timeout: 15))
+    app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+    // Explicitly create and focus the Workspace document scene.
+    app.menuBars.menuBarItems["File"].click()
+    app.menuItems["New"].hover()
+    app.menuItems["New Document"].click()
+    XCTAssertTrue(app.images["canvasPairPreview"].waitForExistence(timeout: 15))
+    try openVisionProgrammer(app, from: "Workspace")
+
+    // The command must also remain usable while its own window is active.
+    try openVisionProgrammer(app, from: "Vision Programmer")
+    app.typeKey("w", modifierFlags: .command)
+    XCTAssertTrue(app.windows["Scene Detector"].waitForNonExistence(timeout: 5))
+
+    app.typeKey(",", modifierFlags: .command)
+    let settings = app.windows["com_apple_SwiftUI_Settings_window"]
+    XCTAssertTrue(settings.waitForExistence(timeout: 10))
+    try openVisionProgrammer(app, from: "Settings")
+    app.typeKey("w", modifierFlags: .command)
+    XCTAssertTrue(app.windows["Scene Detector"].waitForNonExistence(timeout: 5))
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension("ldtxrecord")
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: url) }
+    try RecordingPackageInfo.data(
+      identifier: "scene-command-ui-test", mainMediaFile: "main.mp4", audioTracks: [],
+      formatVersion: 2
+    ).write(to: url.appendingPathComponent(RecordingPackageInfo.fileName))
+    try await makeMenuSmokeMedia(at: url.appendingPathComponent("main.mp4"))
+    try "<MPD><Period/></MPD>".write(
+      to: url.appendingPathComponent("manifest.mpd"), atomically: true, encoding: .utf8)
+    app.menuBars.menuBarItems["File"].click()
+    app.menuItems["Open…"].click()
+    let open = app.windows.buttons["Open"].firstMatch
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    app.typeKey("g", modifierFlags: [.command, .shift])
+    app.typeText(url.path)
+    app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+    let package = app.windows.textFields.matching(
+      NSPredicate(format: "value == %@", url.lastPathComponent)
+    ).firstMatch
+    XCTAssertTrue(package.waitForExistence(timeout: 10))
+    XCTAssertTrue(open.isEnabled)
+    app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+    XCTAssertTrue(open.waitForNonExistence(timeout: 10))
+    let recording = app.windows[url.lastPathComponent]
+    XCTAssertTrue(recording.waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["Loading Recording…"].waitForNonExistence(timeout: 10))
+    XCTAssertFalse(app.staticTexts["Recording Could Not Be Opened"].exists)
+    recording.click()
+    try openVisionProgrammer(app, from: "Record Player")
+  }
+
+  private func openVisionProgrammer(_ app: XCUIApplication, from scene: String) throws {
+    app.menuBars.menuBarItems["LDTX"].click()
+    let commands = app.menuItems.matching(identifier: "Vision Programmer…")
+    XCTAssertEqual(commands.count, 1, "Exactly one command should be visible from \(scene)")
+    let command = commands.firstMatch
+    XCTAssertTrue(command.isEnabled, "The command must be enabled from \(scene)")
+    command.click()
+    XCTAssertTrue(
+      app.windows["Scene Detector"].waitForExistence(timeout: 5),
+      "Vision Programmer should open from \(scene)")
+  }
+
   func testRecordingOpensThroughDocumentGroup() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       .appendingPathExtension("ldtxrecord")
