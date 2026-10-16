@@ -290,12 +290,22 @@ public final class WorkspaceWindowRuntime {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, service: VisionImageClassifierService
   ) async throws -> String {
+    try await classify(
+      vision: vision, frameForSceneDetector: { try await self.frameForSceneDetector(vision) },
+      classifyResult: { try await service.classifyResult(image: $0) })
+  }
+
+  func classify(
+    vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision,
+    frameForSceneDetector: () async throws -> WorkspaceVisionAnalysisFrame,
+    classifyResult: (CIImage) async throws -> VisionClassificationResult
+  ) async throws -> String {
     let context = visionFeatureContext
     do {
-      let frame = try await frameForSceneDetector(vision)
+      let frame = try await frameForSceneDetector()
       let recordingPackageURL = context.recordingPackageURL()
-      let result = try await service.classifyResult(image: frame.image)
-      guard context.isCurrent() else { return result.displayText }
+      let result = try await classifyResult(frame.image)
+      guard context.isCurrent() else { throw CancellationError() }
       context.reportResult(vision.internalID, result.displayText)
       context.reportVariables(
         vision.internalID,
@@ -308,7 +318,8 @@ public final class WorkspaceWindowRuntime {
       }
       return result.displayText
     } catch {
-      if context.isCurrent() { context.reportFailure(vision.internalID, error) }
+      guard context.isCurrent() else { throw CancellationError() }
+      if !(error is CancellationError) { context.reportFailure(vision.internalID, error) }
       throw error
     }
   }

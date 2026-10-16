@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreImage
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
 import LDTXVariableStore
+import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -62,6 +64,50 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
     #expect(runtime.variableStore.keys.isEmpty)
     #expect(throws: VariableStoreError.unregisteredKey(text)) { try runtime.readVariable(text) }
+  }
+
+  @Test(
+    "Current manual classifications publish results and preserve cancellation state",
+    arguments: ["success", "failure", "cancelled"])
+  func currentManualClassification(outcome: String) async throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    let vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with { $0.internalID = 22 }
+    var workspace = runtime.workspace
+    workspace.definition.visions = [.with { $0.ldtxSceneDetectorVision = vision }]
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+    runtime.visionFeatureContext.reportResult(22, "Previous result")
+    runtime.visionFeatureContext.reportVariables(22, [.label: "Previous", .confidence: "0.5"])
+    do {
+      let result = try await runtime.classify(
+        vision: vision, frameForSceneDetector: { WorkspaceVisionAnalysisFrame(image: CIImage()) },
+        classifyResult: { _ in
+          switch outcome {
+          case "failure": throw CocoaError(.fileReadUnknown)
+          case "cancelled": throw CancellationError()
+          default: return .init(candidates: [.init(label: "Current", confidence: 0.8)])
+          }
+        })
+      #expect(outcome == "success")
+      #expect(result == "Current: 80.0%")
+      #expect(runtime.visionResults[22] == result)
+      #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "Current")
+      #expect(try runtime.readVariable(.init(visionID: 22, item: .confidence)) == "0.8")
+      #expect(runtime.visionFailureMessages[22] == nil)
+    } catch {
+      #expect(outcome != "success")
+      if outcome == "cancelled" {
+        #expect(error is CancellationError)
+        #expect(runtime.visionResults[22] == "Previous result")
+        #expect(runtime.visionFailureMessages[22] == nil)
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "Previous")
+      } else {
+        #expect(!(error is CancellationError))
+        #expect(runtime.visionResults[22] == nil)
+        #expect(runtime.visionFailureMessages[22] != nil)
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .label)) == "")
+        #expect(try runtime.readVariable(.init(visionID: 22, item: .confidence)) == "0")
+      }
+    }
   }
 
   @Test("canvas updates preserve current values after reading an old snapshot")

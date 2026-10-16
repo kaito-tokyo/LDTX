@@ -30,6 +30,8 @@ extension WorkspaceRuntimeActions {
       let result = try await classify(vision: request.vision, modelURL: request.url)
       guard isCurrent() else { return }
       stateService.visionResults[id] = result
+    } catch is CancellationError {
+      return
     } catch {
       guard isCurrent() else { return }
       stateService.visionFailureMessages[id] = error.localizedDescription

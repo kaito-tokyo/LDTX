@@ -590,7 +590,8 @@ extension WorkspaceRuntimeCoordinator {
       guard context.isCurrent() else { throw CancellationError() }
       service = preparedService
     } catch {
-      if context.isCurrent() { context.reportFailure(vision.internalID, error) }
+      guard context.isCurrent() else { throw CancellationError() }
+      if !(error is CancellationError) { context.reportFailure(vision.internalID, error) }
       throw error
     }
     return try await windowRuntime.classify(vision: vision, service: service)

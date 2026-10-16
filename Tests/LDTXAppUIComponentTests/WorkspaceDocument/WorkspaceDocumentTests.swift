@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import CoreImage
+import LDTXProgramRuntime
 import LDTXProtos
 import LDTXVariableStore
+import LDTXVision
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -66,6 +69,116 @@ extension AppUIComponentTestSuite {
       }
       #expect(try runtime.readVariable(key) == "second")
       await controller.shutdown()
+      await document.shutdown()
+    }
+
+    @Test(
+      "Unchanged saves cancel pending manual classification without publishing stale state",
+      arguments: ["success", "failure", "cancelled"], [false, true])
+    func unchangedSaveCancelsManualClassification(outcome: String, publishNew: Bool) async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let url = root.appendingPathComponent("Workspace.ldtxworkspace")
+      let model = root.appendingPathComponent("Classifier.mlmodel")
+      try Data([1]).write(to: model)
+      let document = WorkspaceDocument()
+      let editingState = document.stateService
+      editingState.workspaceDefinition.videoComponents = [
+        .with {
+          $0.vfxSource = .with {
+            $0.internalID = 7
+            $0.displayName = "Camera"
+            $0.deviceWidth = 1920
+            $0.deviceHeight = 1080
+          }
+        }
+      ]
+      editingState.workspaceDefinition.visions = [
+        .with {
+          $0.ldtxSceneDetectorVision = .with {
+            $0.internalID = 5
+            $0.displayName = "Classifier"
+            $0.videoComponentInternalID = 7
+          }
+        }
+      ]
+      editingState.setVisionModelURL(model, for: 5)
+      editingState.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 5)
+      try await saveWorkspaceDocument(document, to: url)
+      let saved = try WorkspaceBundleReaderV4(at: url).read()
+      let state = WorkspaceStateService(
+        definition: saved.definition, preferences: saved.preferences)
+      state.visionModels = saved.visionModels
+      state.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 5)
+      final class SavedContext: WorkspaceDocumentContext {
+        let fileURL: URL?
+        init(url: URL) { fileURL = url }
+      }
+      let context = SavedContext(url: url)
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { state.editingWorkspace },
+        replaceWorkspace: { state.replaceEditingWorkspace($0) })
+      persistence.adoptRuntimeWorkspace(saved)
+      let runtime = WorkspaceWindowRuntime(
+        persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+      let vision = saved.definition.visions[0].ldtxSceneDetectorVision
+      let key = VariableKey(visionID: 5, item: .label)
+      let oldContext = runtime.visionFeatureContext
+      let dispatcher = ToolbarDispatcher()
+      let started = AsyncStream<Void>.makeStream()
+      var pending: CheckedContinuation<VisionClassificationResult, any Error>?
+      dispatcher.classificationHandler = {
+        try await runtime.classify(
+          vision: vision,
+          frameForSceneDetector: { WorkspaceVisionAnalysisFrame(image: CIImage()) },
+          classifyResult: { _ in
+            try await withCheckedThrowingContinuation {
+              pending = $0
+              started.continuation.yield(())
+              started.continuation.finish()
+            }
+          })
+      }
+      let task = Task {
+        await dispatcher.inferSelectedVision(
+          stateService: state, document: context, runtimeWorkspace: { runtime.workspace })
+      }
+      var iterator = started.stream.makeAsyncIterator()
+      _ = await iterator.next()
+      defer { pending?.resume(throwing: CancellationError()) }
+      #expect(state.isInferring)
+      try await saveWorkspaceDocument(document, to: url)
+      #expect(try WorkspaceBundleReaderV4(at: url).read() == saved)
+      // Drive the same persisted-adoption boundary after the successful unchanged save.
+      // Keep model preparation outside this deterministic manual-inference test.
+      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      #expect(!oldContext.isCurrent())
+      #expect(try runtime.readVariable(key) == "")
+      if publishNew {
+        runtime.visionFeatureContext.reportResult(5, "New result")
+        runtime.visionFeatureContext.reportVariables(5, [.label: "New label", .confidence: "0.9"])
+        state.visionResults[5] = "New result"
+        state.visionFailureMessages[5] = "New diagnostic"
+      }
+      let completion = try #require(pending)
+      pending = nil
+      switch outcome {
+      case "failure": completion.resume(throwing: CocoaError(.fileReadUnknown))
+      case "cancelled": completion.resume(throwing: CancellationError())
+      default:
+        completion.resume(returning: .init(candidates: [.init(label: "Stale", confidence: 0.8)]))
+      }
+      await task.value
+      #expect(!state.isInferring)
+      #expect(state.visionResults[5] == (publishNew ? "New result" : nil))
+      #expect(state.visionFailureMessages[5] == (publishNew ? "New diagnostic" : nil))
+      #expect(runtime.visionResults[5] == (publishNew ? "New result" : nil))
+      #expect(runtime.visionFailureMessages[5] == nil)
+      #expect(try runtime.readVariable(key) == (publishNew ? "New label" : ""))
+      #expect(
+        try runtime.readVariable(.init(visionID: 5, item: .confidence))
+          == (publishNew ? "0.9" : "0"))
       await document.shutdown()
     }
 
