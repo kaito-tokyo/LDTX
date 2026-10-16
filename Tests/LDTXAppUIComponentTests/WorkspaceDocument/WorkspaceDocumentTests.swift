@@ -3,6 +3,7 @@
 
 import AppKit
 import LDTXProtos
+import LDTXVariableStore
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
@@ -14,6 +15,60 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {
+    @Test("Saving unchanged content recreates runtime variables; failed reads preserve them")
+    func persistedAdoptionRecreatesVariables() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let document = WorkspaceDocument()
+      let component = try document.controller.windowRuntime.addClock(displayName: "Clock")
+      let id = try document.controller.windowRuntime.addOcrVision(
+        displayName: "OCR", videoComponentInternalID: component)
+      document.stateService.workspaceDefinition.visions[0].ocrVision.triggers = []
+      try await saveWorkspaceDocument(document, to: root)
+      let saved = try WorkspaceBundleReaderV4(at: root).read()
+      final class SavedContext: WorkspaceDocumentContext {
+        let fileURL: URL?
+        let runtimeWorkspace: WorkspaceV4Bundle?
+        var lastContentModificationDate: Date?
+        init(url: URL, workspace: WorkspaceV4Bundle) {
+          fileURL = url
+          runtimeWorkspace = workspace
+          lastContentModificationDate = Date(timeIntervalSince1970: 1)
+        }
+      }
+      let context = SavedContext(url: root, workspace: saved)
+      let state = document.stateService
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { state.editingWorkspace },
+        replaceWorkspace: { state.replaceEditingWorkspace($0) })
+      persistence.adoptRuntimeWorkspace(saved)
+      let controller = WorkspaceRuntimeCoordinator(
+        stateService: state, persistenceCoordinator: persistence,
+        appletData: WorkspaceAppletData(), document: context)
+      await controller.refreshPersistedWorkspace(at: root) { true }
+      let runtime = controller.windowRuntime
+      let key = VariableKey(visionID: id, item: .text)
+      runtime.visionFeatureContext.reportVariables(id, [.text: "first"])
+      await controller.refreshPersistedWorkspace(at: root) { true }
+      #expect(try runtime.readVariable(key) == "first")
+      context.lastContentModificationDate = Date(timeIntervalSince1970: 2)
+      await controller.refreshPersistedWorkspace(at: root) { true }
+      #expect(try runtime.readVariable(key) == "")
+      runtime.visionFeatureContext.reportVariables(id, [.text: "second"])
+      state.workspaceDefinition.visions[0].ocrVision.regionOfInterest.width.set(num: 1, den: 0)
+      await #expect(throws: (any Error).self) {
+        try await saveWorkspaceDocument(document, to: root)
+      }
+      await controller.refreshPersistedWorkspace(at: root) { true }
+      #expect(try runtime.readVariable(key) == "second")
+      await controller.refreshPersistedWorkspace(at: root.appendingPathComponent("missing")) {
+        true
+      }
+      #expect(try runtime.readVariable(key) == "second")
+      await controller.shutdown()
+      await document.shutdown()
+    }
+
     @Test("Output requires the document, runtime, and disk to agree")
     func outputRejectsUnwrittenSnapshotAndUnreadableDisk() async throws {
       let url = FileManager.default.temporaryDirectory

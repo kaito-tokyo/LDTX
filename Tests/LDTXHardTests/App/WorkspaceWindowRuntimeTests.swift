@@ -5,6 +5,7 @@
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXVariableStore
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -17,6 +18,52 @@ import Testing
 @MainActor
 @Suite("Workspace window runtime")
 struct WorkspaceWindowRuntimeIntegrationTestSuite {
+  @Test func variableStoreFollowsPersistedAdoptionAndRejectsOldResults() throws {
+    let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    var saved = runtime.workspace
+    saved.definition.visions = [
+      .with { $0.ocrVision = .with { $0.internalID = 11 } },
+      .with { $0.ldtxSceneDetectorVision = .with { $0.internalID = 22 } },
+    ]
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    let text = VariableKey(visionID: 11, item: .text)
+    let label = VariableKey(visionID: 22, item: .label)
+    let confidence = VariableKey(visionID: 22, item: .confidence)
+    let oldContext = runtime.visionFeatureContext
+    oldContext.reportVariables(11, [.text: "recognized"])
+    oldContext.reportVariables(22, [.label: "battle", .confidence: "0.8"])
+    #expect(try runtime.readVariable(text) == "recognized")
+    #expect(try runtime.readVariable(label) == "battle")
+    #expect(try runtime.readVariable(confidence) == "0.8")
+    oldContext.reportFailure(22, CocoaError(.fileReadUnknown))
+    #expect(try runtime.readVariable(label) == "")
+    #expect(try runtime.readVariable(confidence) == "0")
+    #expect(try runtime.readVariable(text) == "recognized")
+
+    // Updating editable content, including snapshot preparation for a failed save,
+    // does not constitute persisted adoption.
+    try runtime.editWorkspace { $0.definition.displayName = "Pending edit" }
+    runtime.updateRuntimes()
+    #expect(try runtime.readVariable(text) == "recognized")
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(try runtime.readVariable(text) == "")
+    #expect(!oldContext.isCurrent())
+    oldContext.reportVariables(11, [.text: "stale"])
+    #expect(try runtime.readVariable(text) == "")
+    let current = runtime.visionFeatureContext
+    current.reportVariables(11, [.text: "new"])
+    oldContext.reportFailure(11, CocoaError(.fileReadUnknown))
+    #expect(try runtime.readVariable(text) == "new")
+
+    let other = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
+    other.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(try other.readVariable(text) == "")
+    saved.definition.visions.removeAll()
+    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    #expect(runtime.variableStore.keys.isEmpty)
+    #expect(throws: VariableStoreError.unregisteredKey(text)) { try runtime.readVariable(text) }
+  }
+
   @Test("canvas updates preserve current values after reading an old snapshot")
   func preservesCurrentCanvasValues() throws {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())

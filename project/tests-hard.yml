@@ -9,6 +9,7 @@ targets:
     sources:
       - Tests/LDTXHardTests
     dependencies:
+      - target: LDTXVariableStore
       - target: LDTXVisionTraining
       - target: LDTXCapture
       - target: LDTXInternalProtocols

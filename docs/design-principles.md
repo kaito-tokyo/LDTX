@@ -104,6 +104,20 @@ the relevant design or feature documentation instead.
 
 ## Vision interval execution is best effort
 
+- Each Workspace runtime owns an ephemeral `VariableStore` value. Its fixed key
+  inventory is projected from the persisted Definition, using structured Vision
+  IDs and variable items. Paths such as `visions/123/text` are serialized key
+  representations, not internal identifiers. Stored values are always strings;
+  missing results use each item's natural empty value rather than Optional.
+- All variable data models, readers, and Definition projection belong to
+  `Sources/Corelibs/LDTXVariableStore`, with shared tests under `Tests/Corelibs`.
+  `Sources/UI/LDTXVariableMacro` is exclusively for UI; model execution and tests
+  must not depend on that target or on UI frameworks.
+- Successful persisted Workspace adoption recreates the entire Store, including
+  when a save leaves the Definition unchanged. Editing or a failed save does not
+  reset it. In-flight results from an earlier Store generation cannot update the
+  new Store. Store access and result publication are serialized on MainActor.
+
 - Absent ROI fields use input-pixel defaults: X/Y numerators are zero,
   Width/Height numerators are the input width/height, and denominators are
   the corresponding input dimension. UI placeholders, persistence validation,

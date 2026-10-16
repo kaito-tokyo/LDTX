@@ -450,6 +450,32 @@ targets:
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
+  LDTXVariableStore:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Corelibs/LDTXVariableStore
+    dependencies:
+      - target: LDTXProtos
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableStore
+        PRODUCT_MODULE_NAME: LDTXVariableStore
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
+  LDTXVariableMacro:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/UI/LDTXVariableMacro
+    dependencies:
+      - target: LDTXVariableStore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableMacro
+        PRODUCT_MODULE_NAME: LDTXVariableMacro
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXWorkspaceAppletModel:
     type: framework
     platform: macOS
@@ -501,6 +527,7 @@ targets:
         includes:
           - Service
     dependencies:
+      - target: LDTXVariableStore
       - target: LDTXBackgroundSegmentation
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

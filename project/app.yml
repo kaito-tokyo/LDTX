@@ -238,6 +238,10 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletService
         embed: true
+      - target: LDTXVariableMacro
+        embed: true
+      - target: LDTXVariableStore
+        embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
       - target: LDTXWorkspaceBundleFormat

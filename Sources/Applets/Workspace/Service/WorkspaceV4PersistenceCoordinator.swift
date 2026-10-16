@@ -21,6 +21,7 @@ public final class WorkspaceV4PersistenceCoordinator {
   private var outputPreferences: Ldtx_Workspace_V4_WorkspacePreferencesV4?
   private let replaceWorkspace: (WorkspaceV4Bundle) throws -> Void
   public private(set) var url: URL?
+  var runtimeWorkspaceAdopted: ((WorkspaceV4Bundle) -> Void)?
 
   public init(
     workspaceSnapshot: @escaping () -> WorkspaceV4Bundle,
@@ -59,6 +60,7 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) {
     adoptedRuntimeWorkspace = workspace
+    runtimeWorkspaceAdopted?(workspace)
   }
 
   func setOutputActive(_ active: Bool) {

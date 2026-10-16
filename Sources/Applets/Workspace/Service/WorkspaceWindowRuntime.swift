@@ -12,6 +12,7 @@ import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
 import LDTXTaskQueue
+import LDTXVariableStore
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
@@ -33,6 +34,8 @@ public final class WorkspaceWindowRuntime {
   public private(set) var recordingState: WorkspaceRecordingState = .idle
   public private(set) var visionFailureMessages: [Int64: String] = [:]
   public private(set) var visionResults: [Int64: String] = [:]
+  public private(set) var variableStore: VariableStore
+  private var variableStoreGeneration = UUID()
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
   var visionArchivePackageURL: URL?
@@ -49,6 +52,12 @@ public final class WorkspaceWindowRuntime {
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.selectProgramHandler = selectProgram
+    variableStore = VariableStore(definition: persistence.runtimeWorkspace.definition)
+    persistence.runtimeWorkspaceAdopted = { [weak self] workspace in
+      guard let self else { return }
+      variableStore = VariableStore(definition: workspace.definition)
+      variableStoreGeneration = UUID()
+    }
   }
 
   var physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
@@ -185,6 +194,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   public var visionFeatureContext: WorkspaceV4VisionFeatureContext {
+    let generation = variableStoreGeneration
     var context = WorkspaceV4VisionFeatureContext(
       vision: { internalID in
         self.workspace.definition.visions.compactMap {
@@ -197,10 +207,13 @@ public final class WorkspaceWindowRuntime {
       },
       frameForVision: { vision in try await self.frameForVision(vision) },
       reportResult: { internalID, result in
+        guard self.variableStoreGeneration == generation else { return }
         self.visionResults[internalID] = result
         self.visionFailureMessages.removeValue(forKey: internalID)
       },
       reportFailure: { internalID, error in
+        guard self.variableStoreGeneration == generation else { return }
+        self.variableStore.reset(visionID: internalID)
         self.visionResults.removeValue(forKey: internalID)
         self.visionFailureMessages[internalID] = error.localizedDescription
       },
@@ -211,6 +224,11 @@ public final class WorkspaceWindowRuntime {
         self?.visionArchiveTimelineProvider?()
       }
     )
+    context.isCurrent = { [weak self] in self?.variableStoreGeneration == generation }
+    context.reportVariables = { [weak self] id, values in
+      guard let self, variableStoreGeneration == generation else { return }
+      applyVisionVariables(values, visionID: id)
+    }
     context.sceneDetector = { [weak self] id in
       guard
         case .ldtxSceneDetectorVision(let vision)? =
@@ -272,8 +290,47 @@ public final class WorkspaceWindowRuntime {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, service: VisionImageClassifierService
   ) async throws -> String {
-    let frame = try await frameForSceneDetector(vision)
-    return try await service.classify(image: frame.image)
+    let context = visionFeatureContext
+    do {
+      let frame = try await frameForSceneDetector(vision)
+      let recordingPackageURL = context.recordingPackageURL()
+      let result = try await service.classifyResult(image: frame.image)
+      guard context.isCurrent() else { return result.displayText }
+      context.reportResult(vision.internalID, result.displayText)
+      context.reportVariables(
+        vision.internalID,
+        [
+          .label: result.topCandidate?.label ?? "",
+          .confidence: result.topCandidate.map { String($0.confidence) } ?? "0",
+        ])
+      if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
+        context.archiveResult?(vision.internalID, frame.image, result.displayText)
+      }
+      return result.displayText
+    } catch {
+      if context.isCurrent() { context.reportFailure(vision.internalID, error) }
+      throw error
+    }
+  }
+
+  /// MainActor-owned access for future macro execution and item-specific readers.
+  public func readVariable(_ key: VariableKey) throws -> String {
+    try variableStore.read(key)
+  }
+
+  public func setVariableReader(_ reader: any VariableReader, for key: VariableKey) throws {
+    try variableStore.setReader(reader, for: key)
+  }
+
+  private func applyVisionVariables(_ values: [VariableItem: String], visionID: Int64) {
+    let updates = Dictionary(
+      uniqueKeysWithValues: values.map {
+        (VariableKey(visionID: visionID, item: $0.key), $0.value)
+      })
+    // Result producers must publish exactly the items registered by the Definition.
+    do { try variableStore.update(updates) } catch {
+      assertionFailure("Invalid Vision variable update: \(error)")
+    }
   }
 
   private func frameForSceneDetector(

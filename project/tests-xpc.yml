@@ -8,6 +8,7 @@ targets:
     sources:
       - Tests/LDTXAppXpcTests
     dependencies:
+      - target: LDTXVariableStore
       - target: LDTXApp
       - target: LDTXWorkspaceAppletService
     settings:

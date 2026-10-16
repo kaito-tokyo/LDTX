@@ -10,8 +10,10 @@ import LDTXWorkspaceBundleFormat
 public protocol WorkspaceDocumentContext: AnyObject {
   var fileURL: URL? { get }
   var runtimeWorkspace: WorkspaceV4Bundle? { get }
+  var lastContentModificationDate: Date? { get }
 }
 
 extension WorkspaceDocumentContext {
   public var runtimeWorkspace: WorkspaceV4Bundle? { nil }
+  public var lastContentModificationDate: Date? { nil }
 }

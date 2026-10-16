@@ -9,6 +9,7 @@ targets:
     sources:
       - Tests/LDTXOutputTests
     dependencies:
+      - target: LDTXVariableStore
       - target: LDTXCapture
       - target: LDTXDash
       - target: LDTXMediaTiming
