@@ -136,6 +136,18 @@ final class WorkspaceContentLayout {
     previewHeight =
       key.flatMap { UserDefaults.standard.object(forKey: $0) as? Double }
       .flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } ?? 280
+    if let key, UserDefaults.standard.object(forKey: key) == nil,
+      let externalID,
+      let frames = UserDefaults.standard.stringArray(
+        forKey: "NSSplitView Subview Frames WorkspaceContentPane.\(externalID)"),
+      let first = frames.first
+    {
+      let fields = first.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+      if fields.count >= 4, let height = Double(fields[3]), height.isFinite, height >= 0 {
+        previewHeight = height
+        UserDefaults.standard.set(height, forKey: key)
+      }
+    }
   }
 
   func resizePreview(to height: CGFloat) {

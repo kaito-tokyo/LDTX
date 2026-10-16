@@ -381,6 +381,35 @@ extension AppUIComponentTestSuite {
       #expect(pane.layout.previewHeight == 340)
     }
 
+    @Test("Legacy AppKit divider height migrates once and never overrides a new value")
+    func migratesLegacyPreviewHeight() {
+      let id = UUID().uuidString.lowercased()
+      let legacyKey = "NSSplitView Subview Frames WorkspaceContentPane.\(id)"
+      let key = "WorkspaceContentPane.\(id).previewHeight"
+      defer {
+        UserDefaults.standard.removeObject(forKey: legacyKey)
+        UserDefaults.standard.removeObject(forKey: key)
+      }
+      UserDefaults.standard.set(
+        [
+          "0.000000, 0.000000, 480.000000, 360.000000, NO, NO",
+          "0.000000, 361.000000, 480.000000, 339.000000, NO, NO",
+        ], forKey: legacyKey)
+      let layout = WorkspaceContentLayout()
+      layout.restore(externalID: id)
+      #expect(layout.previewHeight == 360)
+      #expect(UserDefaults.standard.double(forKey: key) == 360)
+      layout.resizePreview(to: 320)
+      let reopened = WorkspaceContentLayout()
+      reopened.restore(externalID: id)
+      #expect(reopened.previewHeight == 320)
+      UserDefaults.standard.removeObject(forKey: key)
+      UserDefaults.standard.set(["invalid"], forKey: legacyKey)
+      let invalid = WorkspaceContentLayout()
+      invalid.restore(externalID: id)
+      #expect(invalid.previewHeight == 280)
+    }
+
     @Test("UCT-1017.7: A new Workspace preserves its initial content size")
     func newWorkspacePreservesInitialContentSize() async throws {
       _ = NSApplication.shared

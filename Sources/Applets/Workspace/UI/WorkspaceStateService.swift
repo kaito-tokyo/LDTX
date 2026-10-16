@@ -25,6 +25,11 @@ public final class WorkspaceStateService {
 
   public var inspectorSelector: WorkspaceInspectorSelector?
   public var isInspectorVisible = true
+  public var isSidebarVisible = true
+
+  public var minimumWindowWidth: CGFloat {
+    480 + (isSidebarVisible ? 201 : 0) + (isInspectorVisible ? 241 : 0)
+  }
 
   public var isOutputActive = false
   public var recordingState: WorkspaceRecordingState = .idle

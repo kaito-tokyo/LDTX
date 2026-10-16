@@ -93,7 +93,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
   var didAttachWindow: ((NSWindow?) -> Void)?
 
   @objc func toggleSidebar(_ sender: Any?) {
-    layout.isSidebarVisible.toggle()
+    stateService.isSidebarVisible.toggle()
   }
 
   @objc func toggleInspector(_ sender: Any?) {
@@ -249,7 +249,10 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       layout: layout, stateService: stateService,
       sidebar: sidebarView,
       content: WorkspaceContentRepresentation(controller: contentPane),
-      inspector: inspectorView)
+      inspector: inspectorView,
+      inspectorWidthChanged: { [weak self] width in
+        self?.toolbarCoordinator.updateInspectorWidth(width)
+      })
   }
 
   private var inspectorView: some View {
@@ -376,32 +379,37 @@ extension WorkspaceViewController: NSToolbarItemValidation {
 
 @MainActor @Observable
 final class WorkspacePaneLayout {
-  var isSidebarVisible = true
   var sidebarWidth: CGFloat = 240
   var inspectorWidth: CGFloat = 320
 }
 
-private struct WorkspaceView<Sidebar: View, Content: View, Inspector: View>: View {
+struct WorkspaceView<Sidebar: View, Content: View, Inspector: View>: View {
   let layout: WorkspacePaneLayout
   let stateService: WorkspaceStateService
   let sidebar: Sidebar
   let content: Content
   let inspector: Inspector
+  var inspectorWidthChanged: (CGFloat) -> Void = { _ in }
 
   var body: some View {
     GeometryReader { geometry in
-      let available = max(0, geometry.size.width - 482)
+      let dividers =
+        (stateService.isSidebarVisible ? 1.0 : 0) + (stateService.isInspectorVisible ? 1 : 0)
+      let available = max(0, geometry.size.width - 480 - dividers)
       let inspectorWidth =
         stateService.isInspectorVisible
-        ? min(layout.inspectorWidth, max(240, available - (layout.isSidebarVisible ? 200 : 0))) : 0
+        ? min(
+          layout.inspectorWidth, max(240, available - (stateService.isSidebarVisible ? 200 : 0)))
+        : 0
       let sidebarWidth =
-        layout.isSidebarVisible ? min(layout.sidebarWidth, max(200, available - inspectorWidth)) : 0
+        stateService.isSidebarVisible
+        ? min(layout.sidebarWidth, max(200, available - inspectorWidth)) : 0
       HStack(spacing: 0) {
-        if layout.isSidebarVisible {
+        if stateService.isSidebarVisible {
           sidebar.frame(width: sidebarWidth)
           WorkspacePaneDivider(
             title: "Sidebar width", width: sidebarWidth,
-            maximum: max(200, geometry.size.width - inspectorWidth - 482),
+            maximum: max(200, available - inspectorWidth),
             minimum: 200, isTrailing: false
           ) { layout.sidebarWidth = $0 }
         }
@@ -409,15 +417,25 @@ private struct WorkspaceView<Sidebar: View, Content: View, Inspector: View>: Vie
         if stateService.isInspectorVisible {
           WorkspacePaneDivider(
             title: "Inspector width", width: inspectorWidth,
-            maximum: min(480, max(240, geometry.size.width - sidebarWidth - 482)),
+            maximum: min(480, max(240, available - sidebarWidth)),
             minimum: 240, isTrailing: true
           ) { layout.inspectorWidth = $0 }
-          inspector.frame(width: inspectorWidth)
         }
+        inspector
+          .frame(width: stateService.isInspectorVisible ? inspectorWidth : layout.inspectorWidth)
+          .frame(width: inspectorWidth, alignment: .trailing)
+          .clipped()
+          .opacity(stateService.isInspectorVisible ? 1 : 0)
+          .allowsHitTesting(stateService.isInspectorVisible)
+          .disabled(!stateService.isInspectorVisible)
+          .accessibilityHidden(!stateService.isInspectorVisible)
+      }
+      .onChange(of: inspectorWidth, initial: true) { _, width in
+        inspectorWidthChanged(width)
       }
     }
     .coordinateSpace(name: "WorkspacePanes")
-    .frame(minWidth: 922, minHeight: 400)
+    .frame(minWidth: stateService.minimumWindowWidth, minHeight: 400)
   }
 }
 

@@ -198,6 +198,10 @@ the inspector width ranges from 240 to 480 points. Toolbar buttons update
 window-local sidebar visibility and the Store's inspector visibility.
 Hiding a side pane preserves its last expanded width. Divider gestures and
 accessibility adjustments update these window-local widths without touching the document.
+The minimum window width includes only visible panes: 480 points for Content,
+201 for Sidebar and its divider, and 241 for Inspector and its divider.
+The Inspector stays mounted at zero visible width while collapsed, retaining
+local editing drafts and task results without accepting interaction.
 
 LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
 coordinator and low-frequency update registry, and a Program preview `MTKView` when
@@ -288,6 +292,10 @@ use the SwiftUI toolbar modifier. Output state updates existing labels and image
 The toolbar has no Apply item or Inspector title. Sidebar and Inspector actions
 update the SwiftUI visibility bindings. Toolbar customization and layout
 persistence are disabled.
+The Inspector toolbar separator uses a custom item and a constrained spacer.
+The effective Inspector width and the separator's window coordinates determine
+the spacer width, keeping the separator aligned during pane and window resizing.
+Collapsing Inspector hides the separator and removes the spacer width.
 
 Editors write representable values directly to WorkspaceStateService. OCR ROI
 uses the same bound RegionOfInterestEditor as Scene Detector ROI. Master-volume
@@ -324,6 +332,10 @@ under `WorkspaceContentPane.<externalID>.previewHeight`; the document's external
 ID keeps it stable across renaming. Repeated configuration does not reset a drag.
 The content View observes external ID changes and restores the corresponding
 height when a Reader snapshot replaces the initially generated ID.
+When the new height key is absent, the first frame in the legacy AppKit
+`NSSplitView Subview Frames WorkspaceContentPane.<externalID>` array supplies
+the height. A finite nonnegative height is copied once into the new key;
+existing new values take precedence and the old preference remains untouched.
 Divider configuration is not stored in the Workspace package.
 Shutdown pauses the MTKView, detaches its delegate,
 and stops the renderer before shutting down the runtimes.
