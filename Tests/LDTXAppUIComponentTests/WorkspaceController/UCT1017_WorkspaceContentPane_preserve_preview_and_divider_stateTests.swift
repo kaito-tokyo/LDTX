@@ -58,8 +58,7 @@ extension AppUIComponentTestSuite {
       let controller = WorkspaceRuntimeCoordinator(
         document: document, appletData: WorkspaceAppletData(),
         landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
-        metalView: resources.metalView, captureSessionCoordinator: resources.capture,
-        lowFrequencyUpdateRegistry: resources.updates)
+        metalView: resources.metalView, captureSessionCoordinator: resources.capture)
       let view = controller.pairedPreview.metalView
       #expect(view === resources.metalView)
       #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)

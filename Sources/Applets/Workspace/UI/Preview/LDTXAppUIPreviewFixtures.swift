@@ -136,12 +136,10 @@
     }
 
     static func makeProgramRuntime(
-      coordinator: WorkspaceCaptureSessionCoordinator,
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+      coordinator: WorkspaceCaptureSessionCoordinator
     ) -> ProgramRuntime {
       ProgramRuntime(
-        captureSessionCoordinator: coordinator,
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
+        captureSessionCoordinator: coordinator
       )
     }
 

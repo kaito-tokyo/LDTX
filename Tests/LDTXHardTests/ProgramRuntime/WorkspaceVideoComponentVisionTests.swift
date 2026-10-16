@@ -20,12 +20,10 @@ import Testing
 struct WorkspaceVideoComponentVisionIntegrationTestSuite {
   @Test func generatedComponentAndROIWorkWithoutAProgram() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let registry = LowFrequencyUpdateRegistry()
-    defer { registry.shutdown() }
     let runtime = makeRuntime(capture: capture)
     runtime.installComponentFrameRenderer(
       VideoComponentFrameRenderer(
-        captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: registry))
+        captureSessionCoordinator: capture))
     defer { runtime.shutdown() }
     let pattern = try runtime.addTestPattern(displayName: "Pattern")
     let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: pattern)
@@ -57,12 +55,10 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
 
   @Test func clockUsesItsOwnLandscapePixelSize() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let registry = LowFrequencyUpdateRegistry()
-    defer { registry.shutdown() }
     let runtime = makeRuntime(capture: capture)
     runtime.installComponentFrameRenderer(
       VideoComponentFrameRenderer(
-        captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: registry))
+        captureSessionCoordinator: capture))
     defer { runtime.shutdown() }
     let clock = try runtime.addClock(displayName: "Clock")
     let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: clock)
@@ -75,8 +71,6 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
   @Test func sharedCameraUsesIndependentEffectsForOCR() async throws {
     let service = ManualCameraCaptureService()
     let capture = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
-    let registry = LowFrequencyUpdateRegistry()
-    defer { registry.shutdown() }
     let runtime = makeRuntime(
       capture: capture,
       assignments: [
@@ -86,8 +80,7 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
       VideoComponentFrameRenderer(
         captureSessionCoordinator: capture,
         backgroundRemovalPreprocessorFactory: { device, _ in ZeroAlphaPreprocessor(device: device)
-        },
-        lowFrequencyUpdateRegistry: registry))
+        }))
     defer { runtime.shutdown() }
     try runtime.editDefinition { definition in
       definition.videoComponents = [Int64(1), 2].map { id in

@@ -496,8 +496,7 @@ extension AppUIComponentTestSuite {
         WorkspaceDocumentContent(
           document: document, landscapeRuntime: resources.landscape,
           portraitRuntime: resources.portrait, metalView: resources.metalView,
-          captureSessionCoordinator: resources.capture,
-          lowFrequencyUpdateRegistry: resources.updates)
+          captureSessionCoordinator: resources.capture)
       }
       let host = NSHostingController(rootView: scene())
       let window = NSWindow(contentViewController: host)

@@ -187,57 +187,6 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func switchProgramRuntimeTransfersClockUpdateRegistration() async {
-      let firstUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      let secondUpdates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-      let firstRuntime = makeProgramRuntime(lowFrequencyUpdateRegistry: firstUpdates)
-      let secondRuntime = makeProgramRuntime(lowFrequencyUpdateRegistry: secondUpdates)
-      firstRuntime.updateProgram(Self.clockOutputConfiguration())
-      secondRuntime.updateProgram(Self.clockOutputConfiguration())
-      let mixer = ProgramMainAudioMixerSpy()
-      let session = ActiveProgramOutputSession(
-        currentProgramRuntime: firstRuntime,
-        mediaHub: ProgramOutputMediaHub(),
-        audioMixer: mixer
-      )
-      let started = expectation(description: "output started")
-      session.start(
-        programPreferences: ProgramPreferences(),
-        audioDeviceIDsByInputKey: [:],
-        eventHandler: { _ in },
-        failureHandler: { error in fail("Unexpected output failure: \(error)") },
-        completionHandler: { result in
-          if case .failure(let error) = result { fail("Unexpected start failure: \(error)") }
-          started.fulfill()
-        }
-      )
-      let didStartMixer = await waitUntil { mixer.isStartPending }
-      assertTrue(didStartMixer)
-      mixer.completeStart()
-      await fulfillment(of: [started], timeout: 2)
-
-      let firstClockActivated = await waitUntil {
-        firstUpdates.registrationCountForTesting == 1
-      }
-      assertTrue(firstClockActivated)
-      assertEqual(secondUpdates.registrationCountForTesting, 0)
-
-      assertTrue(session.switchProgramRuntime(to: secondRuntime))
-      let handoffCompleted = await waitUntil {
-        firstUpdates.registrationCountForTesting == 0
-          && secondUpdates.registrationCountForTesting == 1
-      }
-      assertTrue(handoffCompleted)
-
-      await withCheckedContinuation { continuation in
-        session.stop { continuation.resume() }
-      }
-      let secondClockDeactivated = await waitUntil {
-        secondUpdates.registrationCountForTesting == 0
-      }
-      assertTrue(secondClockDeactivated)
-    }
-
     @Test func unavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
       let error = ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable("Desk Mic")
 
@@ -966,15 +915,8 @@ extension OutputTestSuite {
       await fulfillment(of: [rejected], timeout: 1)
     }
 
-    private func makeProgramRuntime(
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry = LowFrequencyUpdateRegistry(
-        interval: .seconds(60)
-      )
-    ) -> ProgramRuntime {
-      ProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-        lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry
-      )
+    private func makeProgramRuntime() -> ProgramRuntime {
+      ProgramRuntime(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
     }
 
     private func waitUntil(
@@ -999,33 +941,6 @@ extension OutputTestSuite {
         canvasHeight: 16,
         outputWidth: 16,
         outputHeight: 16,
-        frameRate: 30,
-        timeSeconds: 0,
-        videoPTSMasterCameraID: nil,
-        cameraIDsByInputKey: [:],
-        cameraInputColorOverrides: [:],
-        backgroundRemovalInputKeys: []
-      )
-    }
-
-    private static func clockOutputConfiguration() -> ProgramRuntimeConfiguration {
-      ProgramRuntimeConfiguration(
-        composite: CompositeProgramDefinition(steps: [
-          CompositeProgramStep(
-            id: "clock",
-            component: .clock(
-              ClockComponent(
-                destinationX: 0.1,
-                destinationY: 0.1,
-                destinationWidth: 0.8,
-                destinationHeight: 0.4
-              )))
-        ]),
-        audioChannels: [ProgramAudioChannel(component: .silentAudio)],
-        canvasWidth: 320,
-        canvasHeight: 180,
-        outputWidth: 320,
-        outputHeight: 180,
         frameRate: 30,
         timeSeconds: 0,
         videoPTSMasterCameraID: nil,

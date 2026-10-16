@@ -11,17 +11,14 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
     label: "tokyo.kaito.ldtx.component-analysis", qos: .userInitiated)
   private let coordinator: WorkspaceCaptureSessionCoordinator
   private let factory: BackgroundRemovalPreprocessorFactory?
-  private let registry: LowFrequencyUpdateRegistry
   private var renderers: [Int64: ActiveProgramRenderer] = [:]
 
   public init(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry
+    backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
   ) {
     coordinator = captureSessionCoordinator
     factory = backgroundRemovalPreprocessorFactory
-    registry = lowFrequencyUpdateRegistry
   }
 
   public func render(componentID: Int64, configuration: ProgramRuntimeConfiguration) async throws
@@ -37,8 +34,7 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
           } else {
             renderer = ActiveProgramRenderer(
               captureSessionCoordinator: coordinator,
-              backgroundRemovalPreprocessorFactory: factory,
-              lowFrequencyUpdateRegistry: registry)
+              backgroundRemovalPreprocessorFactory: factory)
             renderer.beginSession(1)
             renderers[componentID] = renderer
           }

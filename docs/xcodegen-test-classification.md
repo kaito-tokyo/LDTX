@@ -61,7 +61,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `DASHUploadClientUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHUploadClientTests.swift` |
 | Output | `DASHUploadFinalizationStateUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHUploadFinalizationStateTests.swift` |
 | Easy | `AudioInputDeviceUnitTestSuite` | `Tests/LDTXEasyTests/DeviceRegistry/AudioInputDeviceTests.swift` |
-| Easy | `LowFrequencyUpdateRegistryIntegrationTestSuite` | `Tests/LDTXEasyTests/Integration/LowFrequencyUpdateRegistryTests.swift` |
 | Output | `YouTubeOutputServiceProcessClientIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputServiceProcessClientTests.swift` |
 | Output | `YouTubeOutputWorkspaceServiceIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputWorkspaceServiceTests.swift` |
 | Output | `DASHStreamContinuityUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/DASHStreamContinuityTests.swift` |

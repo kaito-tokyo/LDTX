@@ -12,6 +12,50 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func timerRefreshesOnlyWhileActiveAndRestartsAfterDeactivation() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let timeProvider = CountingClockCurrentTimeProvider(
+      date: Date(timeIntervalSince1970: 1_700_000_000))
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.timer")
+    let runtime = ClockOverlayRuntime(
+      component: ClockComponent(), currentTimeProvider: timeProvider,
+      renderer: ClockOverlayRendererSpy(device: device), rendererQueue: rendererQueue)
+    defer { runtime.deactivate() }
+
+    runtime.activate()
+    runtime.activate()
+    waitUntil(timeout: 3) { timeProvider.invocationCount >= 2 }
+    runtime.deactivate()
+    rendererQueue.sync {}
+    let stoppedCount = timeProvider.invocationCount
+    Thread.sleep(forTimeInterval: 1.3)
+    assertEqual(timeProvider.invocationCount, stoppedCount)
+
+    runtime.activate()
+    waitUntil(timeout: 3) { timeProvider.invocationCount >= stoppedCount + 2 }
+  }
+
+  @Test func deinitializationCancelsTimerWithoutRetainingRuntime() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let timeProvider = CountingClockCurrentTimeProvider(
+      date: Date(timeIntervalSince1970: 1_700_000_000))
+    let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.timer-deinit")
+    weak var releasedRuntime: ClockOverlayRuntime?
+    do {
+      let runtime = ClockOverlayRuntime(
+        component: ClockComponent(), currentTimeProvider: timeProvider,
+        renderer: ClockOverlayRendererSpy(device: device), rendererQueue: rendererQueue)
+      releasedRuntime = runtime
+      runtime.activate()
+      waitUntil(timeout: 2) { timeProvider.invocationCount >= 1 }
+      rendererQueue.sync {}
+    }
+    waitUntil(timeout: 2) { releasedRuntime == nil }
+    let stoppedCount = timeProvider.invocationCount
+    Thread.sleep(forTimeInterval: 1.3)
+    assertEqual(timeProvider.invocationCount, stoppedCount)
+  }
+
   @Test func retainedClockTextureRejectsInvalidCompositorContracts() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let validColor = try makeTexture(
@@ -185,12 +229,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     }
   }
 
-  @Test func programClockRegistryOwnsRegistrationOnlyWhileClockIsActive() throws {
+  @Test func programClockRegistryRetainsTextureOnlyWhileClockIsPresent() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
-      updateRegistry: updates,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -205,7 +247,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputHeight: 360
     )
 
-    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: step.name) != nil
     }
@@ -215,15 +256,13 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputWidth: 640,
       outputHeight: 360
     )
-    assertEqual(updates.registrationCountForTesting, 0)
+    assertNil(registry.retainedTexture(forStepNamed: step.name))
   }
 
   @Test func programClockRegistryDeactivatesZeroSizedClockAndReactivatesWhenVisible() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
-      updateRegistry: updates,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -238,7 +277,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputWidth: 640,
       outputHeight: 360
     )
-    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: visibleStep.name) != nil
     }
@@ -252,7 +290,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputWidth: 640,
       outputHeight: 360
     )
-    assertEqual(updates.registrationCountForTesting, 0)
     assertNil(registry.retainedTexture(forStepNamed: visibleStep.name))
 
     registry.synchronize(
@@ -260,13 +297,11 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputWidth: 640,
       outputHeight: 360
     )
-    assertEqual(updates.registrationCountForTesting, 1)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: visibleStep.name) != nil
     }
 
     registry.deactivateAll()
-    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func clockDestinationRectClampsExtremeOutputDimensionsWithoutTrapping() {
@@ -289,10 +324,8 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
   @Test func programClockRegistryTracksMultipleClocksIndependently() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
-      updateRegistry: updates,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -313,7 +346,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputHeight: 360
     )
 
-    assertEqual(updates.registrationCountForTesting, 2)
     waitUntil(timeout: 2) {
       registry.retainedTexture(forStepNamed: first.name) != nil
         && registry.retainedTexture(forStepNamed: second.name) != nil
@@ -332,19 +364,15 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       outputWidth: 640,
       outputHeight: 360
     )
-    assertEqual(updates.registrationCountForTesting, 1)
     assertNil(registry.retainedTexture(forStepNamed: first.name))
 
     registry.deactivateAll()
-    assertEqual(updates.registrationCountForTesting, 0)
   }
 
   @Test func clockPlacementClipsWithoutChangingRenderedSize() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
       device: device,
-      updateRegistry: updates,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -386,9 +414,8 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
   @Test func negativeClockDimensionsMirrorTheRetainedTexture() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let registry = try ClockOverlayRuntimeRegistry(
-      device: device, updateRegistry: updates,
+      device: device,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)))
     defer { registry.deactivateAll() }
@@ -413,8 +440,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let attempts = ClockOverlayInitializationAttemptCounter()
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry(interval: .seconds(60)),
-      clockOverlayRegistryFactory: { _, _, _ in
+      clockOverlayRegistryFactory: { _, _ in
         attempts.increment()
         throw ClockOverlayRendererSpyError.requestedFailure
       }
@@ -444,13 +470,11 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
   @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() throws {
     _ = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let timeProvider = CountingClockCurrentTimeProvider(
       date: Date(timeIntervalSince1970: 1_700_000_000)
     )
     let renderer = ActiveProgramRenderer(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
       clockCurrentTimeProvider: timeProvider
     )
     var configuration = clockRuntimeConfiguration(component: ClockComponent())
@@ -472,51 +496,13 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertEqual(timeProvider.invocationCount, 1)
 
     timeProvider.date = Date(timeIntervalSince1970: 1_700_000_001)
-    updates.notifySubscribersForTesting()
+    // Wait for the clock's own timer to request the next refresh.
     waitUntil(timeout: 2) { timeProvider.invocationCount == 2 }
   }
 
-  @Test func clockRemovalUnregistersBeforeFrameResourcePreparationCanFail() throws {
-    _ = try unwrap(MTLCreateSystemDefaultDevice())
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
-    )
-
-    renderer.beginSession(1)
-    defer { renderer.endSession(1) }
-    _ = try renderer.render(
-      configuration: clockRuntimeConfiguration(component: ClockComponent()),
-      sessionID: 1,
-      frameID: 1
-    )
-    assertEqual(updates.registrationCountForTesting, 1)
-
-    var invalidConfiguration = clockRuntimeConfiguration(
-      composite: CompositeProgramDefinition()
-    )
-    invalidConfiguration.outputWidth = .max
-    invalidConfiguration.outputHeight = .max
-
-    assertThrowsError(
-      try renderer.render(
-        configuration: invalidConfiguration,
-        sessionID: 1,
-        frameID: 2
-      )
-    )
-    assertEqual(updates.registrationCountForTesting, 0)
-  }
-
   @Test func previewAndOutputConsumersActivateTheSameClockPath() throws {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
       clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -554,87 +540,16 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
     runtime.startPreview()
     let previewFrame = try waitForVisibleClockFrame(from: runtime, afterFrameID: 0)
-    assertEqual(updates.registrationCountForTesting, 1)
     runtime.stopPreview()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
 
     runtime.beginOutput()
     _ = try waitForVisibleClockFrame(from: runtime, afterFrameID: previewFrame.frameID)
-    assertEqual(updates.registrationCountForTesting, 1)
     runtime.endOutput()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
-  }
-
-  @Test func clockStaysRegisteredUntilPreviewAndOutputAreBothInactive() throws {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
-    )
-    runtime.updateProgram(
-      clockRuntimeConfiguration(
-        component: ClockComponent(
-          destinationX: 0.1,
-          destinationY: 0.1,
-          destinationWidth: 0.7,
-          destinationHeight: 0.5,
-          backgroundRed: 1,
-          backgroundGreen: 1,
-          backgroundBlue: 1,
-          backgroundAlpha: 0.5,
-          background: "rgba(255, 255, 255, 0.5)"
-        )
-      ))
-
-    runtime.startPreview()
-    runtime.beginOutput()
-    _ = try waitForVisibleClockFrame(from: runtime, afterFrameID: 0)
-    assertEqual(updates.registrationCountForTesting, 1)
-
-    runtime.stopPreview()
-    assertEqual(updates.registrationCountForTesting, 1)
-
-    runtime.endOutput()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
-  }
-
-  @Test func appOwnedRegistryTracksMultipleProgramRuntimesIndependently() {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let timeProvider = FixedClockCurrentTimeProvider(
-      date: Date(timeIntervalSince1970: 1_700_000_000)
-    )
-    let firstRuntime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: timeProvider
-    )
-    let secondRuntime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: timeProvider
-    )
-    firstRuntime.updateProgram(clockRuntimeConfiguration(component: ClockComponent()))
-    secondRuntime.updateProgram(clockRuntimeConfiguration(component: ClockComponent()))
-
-    firstRuntime.startPreview()
-    secondRuntime.startPreview()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 2 }
-
-    firstRuntime.stopPreview()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 1 }
-
-    secondRuntime.stopPreview()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
   @Test func activeProgramAppliesClockAdditionAppearanceUpdateAndRemoval() throws {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
       clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       )
@@ -659,7 +574,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       let value = self.luma(in: frame.pixelBuffer, x: 1, y: 1)
       return value > 30 && value < 100
     }
-    assertEqual(updates.registrationCountForTesting, 1)
 
     var greenClock = redClock
     greenClock.backgroundRed = 0
@@ -669,44 +583,19 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let greenFrame = try waitForFrame(from: runtime, afterFrameID: redFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) > 150
     }
-    assertEqual(updates.registrationCountForTesting, 1)
 
     runtime.updateProgram(clockRuntimeConfiguration(composite: CompositeProgramDefinition()))
     _ = try waitForFrame(from: runtime, afterFrameID: greenFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) == 0
     }
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  @Test func standalonePreviewUsesInjectedUpdateRegistryAndUnregistersOnStop() {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let controller = ProgramPreviewController(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
-    )
-    controller.configure(
-      configuration: clockRuntimeConfiguration(
-        component: ClockComponent(backgroundAlpha: 0.5)
-      ))
-
-    controller.start()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 1 }
-
-    controller.stop()
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
-  }
-
-  @Test func activeProgramRuntimeDeinitUnregistersClockWithoutExplicitStop() {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+  @Test func activeProgramRuntimeDeinitReleasesClockWithoutExplicitStop() {
     weak var releasedRuntime: ProgramRuntime?
 
     autoreleasepool {
       let runtime = ProgramRuntime(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-        lowFrequencyUpdateRegistry: updates,
         clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
           date: Date(timeIntervalSince1970: 1_700_000_000)
         )
@@ -714,21 +603,17 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       releasedRuntime = runtime
       runtime.updateProgram(clockRuntimeConfiguration(component: ClockComponent()))
       runtime.startPreview()
-      waitUntil(timeout: 2) { updates.registrationCountForTesting == 1 }
     }
 
     waitUntil(timeout: 2) { releasedRuntime == nil }
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
-  @Test func activeStandalonePreviewDeinitUnregistersClockWithoutExplicitStop() {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
+  @Test func activeStandalonePreviewDeinitReleasesClockWithoutExplicitStop() {
     weak var releasedController: ProgramPreviewController?
 
     autoreleasepool {
       let controller = ProgramPreviewController(
         captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-        lowFrequencyUpdateRegistry: updates,
         clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
           date: Date(timeIntervalSince1970: 1_700_000_000)
         )
@@ -738,34 +623,9 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         configuration: clockRuntimeConfiguration(component: ClockComponent())
       )
       controller.start()
-      waitUntil(timeout: 2) { updates.registrationCountForTesting == 1 }
     }
 
     waitUntil(timeout: 2) { releasedController == nil }
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
-  }
-
-  @Test func activeSharedPreviewControllerDeinitBalancesPreviewConsumer() {
-    let updates = LowFrequencyUpdateRegistry(interval: .seconds(60))
-    let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      lowFrequencyUpdateRegistry: updates,
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
-    )
-    runtime.updateProgram(clockRuntimeConfiguration(component: ClockComponent()))
-    weak var releasedController: ProgramPreviewController?
-
-    autoreleasepool {
-      let controller = ProgramPreviewController(programRuntime: runtime)
-      releasedController = controller
-      controller.start()
-      waitUntil(timeout: 2) { updates.registrationCountForTesting == 1 }
-    }
-
-    waitUntil(timeout: 2) { releasedController == nil }
-    waitUntil(timeout: 2) { updates.registrationCountForTesting == 0 }
   }
 
   @Test func bundledNotoSansFamilyAndLicenseAreAvailable() throws {
@@ -828,14 +688,12 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     )
   }
 
-  @Test func activationRendersImmediatelyAndDeactivationUnregisters() throws {
+  @Test func activationRendersImmediately() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let published = expectation(description: "initial retained overlay published")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -849,10 +707,8 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
     assertEqual(renderer.requests.map(\.text), ["22:13:20"])
     assertNotNil(runtime.retainedOverlay())
-    assertEqual(registry.registrationCountForTesting, 1)
 
     runtime.deactivate()
-    assertEqual(registry.registrationCountForTesting, 0)
   }
 
   @Test func failedRefreshKeepsTextureAndLaterNotificationRetries() throws {
@@ -864,10 +720,8 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2]) {
       calls.fulfill()
     }
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -887,7 +741,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     waitUntil(timeout: 2) { renderer.requests.count == 2 }
     assertTrue(runtime.retainedOverlay() === firstTexture)
 
-    registry.notifySubscribersForTesting()
+    runtime.requestRender()
     wait(for: [calls, publications], timeout: 2)
 
     assertEqual(renderer.requests.count, 3)
@@ -898,12 +752,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func failedRefreshIsNotRetriedByEquivalentFrameSynchronization() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.failed-frame-sync")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -928,7 +780,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     rendererQueue.sync {}
     assertEqual(renderer.requests.count, 2)
 
-    registry.notifySubscribersForTesting()
+    runtime.requestRender()
     rendererQueue.sync {}
     assertEqual(renderer.requests.count, 3)
     runtime.deactivate()
@@ -937,12 +789,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func destinationUpdateRetriesFailedRefreshWithoutWaitingForNotification() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, failingCalls: [2])
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.destination-retry")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -978,12 +828,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       failingCalls: [1],
       blocksFirstCall: true
     )
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.in-flight-destination-retry")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1007,12 +855,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func destinationOnlyUpdatesReuseRetainedTexture() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.destination-only")
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1033,7 +879,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         destinationWidth: 0.32,
         destinationHeight: 0.12
       ))
-    registry.notifySubscribersForTesting()
+    runtime.requestRender()
     rendererQueue.sync {}
 
     assertEqual(renderer.requests.count, 1)
@@ -1049,7 +895,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func malformedColorsAreNormalizedWithoutFrameRateRefreshes() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.malformed-colors")
     let runtime = ClockOverlayRuntime(
@@ -1059,7 +904,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         foregroundBlue: 2,
         backgroundAlpha: .infinity
       ),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1070,7 +914,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
     runtime.activate()
     rendererQueue.sync {}
-    registry.notifySubscribersForTesting()
+    runtime.requestRender()
     rendererQueue.sync {}
 
     assertEqual(renderer.requests.count, 1)
@@ -1085,12 +929,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func requestsCoalesceToLatestConfigurationWhileRenderIsInFlight() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.coalescing")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(backgroundAlpha: 0.8),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1105,7 +947,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
     runtime.update(component: ClockComponent(backgroundAlpha: 0.6))
     runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
-    registry.notifySubscribersForTesting()
+    runtime.requestRender()
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
@@ -1118,13 +960,11 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func repeatedNotificationsDoNotDiscardEquivalentInFlightRender() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(
       label: "ClockOverlayRuntimeIntegrationTestSuite.notification-coalescing")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1138,7 +978,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertTrue(renderer.waitForFirstCall(timeout: 2))
 
     for _ in 0..<3 {
-      registry.notifySubscribersForTesting()
+      runtime.requestRender()
     }
     renderer.unblockFirstCall()
     rendererQueue.sync {}
@@ -1149,15 +989,13 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.deactivate()
   }
 
-  @Test func deactivationDuringRenderSuppressesPublicationAndUnregisters() throws {
+  @Test func deactivationDuringRenderSuppressesPublication() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.deactivation")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(),
-      updateRegistry: registry,
       renderer: renderer,
       rendererQueue: rendererQueue,
       overlayDidChange: { _ in publicationCount.increment() }
@@ -1166,7 +1004,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.activate()
     assertTrue(renderer.waitForFirstCall(timeout: 2))
     runtime.deactivate()
-    assertEqual(registry.registrationCountForTesting, 0)
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
@@ -1177,12 +1014,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func reactivationDuringRenderPublishesOnlyTheReactivatedGeneration() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = ClockOverlayRendererSpy(device: device, blocksFirstCall: true)
-    let registry = LowFrequencyUpdateRegistry(interval: .seconds(60))
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.reactivation")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
       component: ClockComponent(backgroundAlpha: 0.8),
-      updateRegistry: registry,
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1197,7 +1032,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.deactivate()
     runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
     runtime.activate()
-    assertEqual(registry.registrationCountForTesting, 1)
 
     renderer.unblockFirstCall()
     rendererQueue.sync {}
@@ -1208,7 +1042,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertNotNil(runtime.retainedOverlay())
 
     runtime.deactivate()
-    assertEqual(registry.registrationCountForTesting, 0)
   }
 
   private func waitUntil(

@@ -16,25 +16,22 @@ public struct WorkspaceDocumentContent: View {
   let portraitRuntime: ProgramRuntime?
   let metalView: MTKView?
   let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?
-  let lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry?
 
   public init(
     document: WorkspaceDocument,
     landscapeRuntime: ProgramRuntime?, portraitRuntime: ProgramRuntime?,
-    metalView: MTKView?, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?,
-    lowFrequencyUpdateRegistry: LowFrequencyUpdateRegistry?
+    metalView: MTKView?, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?
   ) {
     self.document = document
     self.landscapeRuntime = landscapeRuntime
     self.portraitRuntime = portraitRuntime
     self.metalView = metalView
     self.captureSessionCoordinator = captureSessionCoordinator
-    self.lowFrequencyUpdateRegistry = lowFrequencyUpdateRegistry
   }
 
   public var body: some View {
     if let landscapeRuntime, let portraitRuntime, let metalView,
-      let captureSessionCoordinator, let lowFrequencyUpdateRegistry
+      let captureSessionCoordinator
     {
       ZStack {
         if let connection { workspace(connection.runtimeCoordinator) }
@@ -48,8 +45,7 @@ public struct WorkspaceDocumentContent: View {
             runtimeCoordinator: WorkspaceRuntimeCoordinator(
               document: document, landscapeRuntime: landscapeRuntime,
               portraitRuntime: portraitRuntime,
-              metalView: metalView, captureSessionCoordinator: captureSessionCoordinator,
-              lowFrequencyUpdateRegistry: lowFrequencyUpdateRegistry))
+              metalView: metalView, captureSessionCoordinator: captureSessionCoordinator))
         }
         connection?.setUndoManager(undoManager)
       }

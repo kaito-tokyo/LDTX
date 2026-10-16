@@ -74,15 +74,13 @@ extension OutputTestSuite {
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
       let capture = WorkspaceCaptureSessionCoordinator()
-      let updates = LowFrequencyUpdateRegistry()
-      defer { updates.shutdown() }
       let runtime = WorkspaceWindowRuntime(
         persistence: persistence, captureSessionCoordinator: capture)
       runtime.installRuntimes(
         landscape: ProgramRuntime(
-          captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates),
+          captureSessionCoordinator: capture),
         portrait: ProgramRuntime(
-          captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: updates))
+          captureSessionCoordinator: capture))
       defer { runtime.shutdown() }
       let session = WorkspaceV4RecordingSession(
         windowRuntime: runtime,

@@ -19,12 +19,10 @@ struct WorkspaceClockOCRIntegrationTestSuite {
   @Test(.disabled("OCR execution is unavailable in the CI environment."))
   func clockOutputIsRecognized() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
-    let registry = LowFrequencyUpdateRegistry()
-    defer { registry.shutdown() }
     let runtime = makeRuntime(capture: capture)
     runtime.installComponentFrameRenderer(
       VideoComponentFrameRenderer(
-        captureSessionCoordinator: capture, lowFrequencyUpdateRegistry: registry))
+        captureSessionCoordinator: capture))
     defer { runtime.shutdown() }
     let clock = try runtime.addClock(displayName: "Clock")
     let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: clock)
