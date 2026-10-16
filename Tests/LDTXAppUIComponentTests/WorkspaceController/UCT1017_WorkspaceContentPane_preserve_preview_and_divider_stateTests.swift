@@ -114,9 +114,16 @@ extension AppUIComponentTestSuite {
       pane.layout.isPortrait = true
       #expect(!second.contentPane.layout.isPortrait)
       #expect(first.stateService.selectedAudioMix == .landscape)
-      preview.selectCanvas(at: .init(x: metal.bounds.width - 1, y: metal.bounds.height / 2))
+      let regions = ProgramPairPreviewRegions(
+        drawable: metal.convertToBacking(metal.bounds).size,
+        landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16))
+      preview.selectCanvas(
+        at: metal.convertFromBacking(
+          CGPoint(x: regions.portrait.midX, y: regions.portrait.midY)))
       #expect(first.stateService.selectedAudioMix == .portrait)
-      preview.selectCanvas(at: .init(x: 1, y: metal.bounds.height / 2))
+      preview.selectCanvas(
+        at: metal.convertFromBacking(
+          CGPoint(x: regions.landscape.midX, y: regions.landscape.midY)))
       #expect(first.stateService.selectedAudioMix == .landscape)
       for height: CGFloat in [100, 360, 200] {
         pane.layout.resizePreview(to: height)
