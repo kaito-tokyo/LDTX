@@ -18,10 +18,10 @@ import QuickLookThumbnailing
 import SwiftUI
 
 public final class WorkspaceViewController: NSViewController, NSUserInterfaceValidations {
-  private weak var document: (any WorkspaceDocumentContext)?
+  weak var document: (any WorkspaceDocumentContext)?
   let appletData: WorkspaceAppletData
   let stateService: WorkspaceStateService
-  private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private let runtimeWorkspace: () -> WorkspaceV4Bundle?
   private let reportError: (Error) -> Void
   let deviceRegistry: DeviceRegistryService
@@ -29,10 +29,9 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
   let layout = WorkspacePaneLayout()
   let contentPane: WorkspaceContentPane
 
-  let screenshotResultPopover = NSPopover()
-  private let toolbarCoordinator: WorkspaceToolbarCoordinator
+  let presentation = WorkspacePresentation()
   private var inferenceTask: Task<Void, Never>?
-  private var isClosed = false
+  private(set) var isClosed = false
 
   init(
     document: any WorkspaceDocumentContext,
@@ -58,12 +57,11 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       reportError: reportError, pairedPreview: pairedPreview,
       runtimeActions: runtimeActions)
 
-    toolbarCoordinator = WorkspaceToolbarCoordinator()
     super.init(nibName: nil, bundle: nil)
 
     let host = NSHostingController(rootView: workspaceView)
     host.sizingOptions = []
-    host.sceneBridgingOptions = []
+    host.sceneBridgingOptions = [.toolbars]
     addChild(host)
     view = NSView()
     host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -74,9 +72,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       host.view.topAnchor.constraint(equalTo: view.topAnchor),
       host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
-    configureToolbar()
-    refreshToolbarState()
-    observeToolbarState()
 
   }
 
@@ -85,8 +80,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
 
   public override func viewDidAppear() {
     super.viewDidAppear()
-    view.window?.toolbar = toolbarCoordinator.toolbar
-    view.window?.toolbarStyle = .unified
     didAttachWindow?(view.window)
   }
 
@@ -100,71 +93,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     stateService.isInspectorVisible.toggle()
   }
 
-  private func configureToolbar() {
-    toolbarCoordinator.sidebarItem.label = String(localized: "Toggle Sidebar")
-    toolbarCoordinator.sidebarItem.image = NSImage(
-      systemSymbolName: "sidebar.left", accessibilityDescription: nil)
-    toolbarCoordinator.sidebarItem.target = self
-    toolbarCoordinator.sidebarItem.action = #selector(toggleSidebar(_:))
-    toolbarCoordinator.sidebarItem.isNavigational = true
-    toolbarCoordinator.sidebarItem.autovalidates = false
-
-    toolbarCoordinator.stopOutputItem.label = String(localized: "Stop Output")
-    toolbarCoordinator.stopOutputItem.image = NSImage(
-      systemSymbolName: "stop.fill", accessibilityDescription: nil)
-    toolbarCoordinator.stopOutputItem.target = self
-    toolbarCoordinator.stopOutputItem.action = #selector(stopOutput)
-    toolbarCoordinator.stopOutputItem.isNavigational = true
-
-    let startOutputLabel = String(localized: "Start Output")
-    toolbarCoordinator.startPauseOutputItem.possibleLabels = [
-      startOutputLabel,
-      String(localized: "Pause Output"),
-    ]
-    toolbarCoordinator.startPauseOutputItem.label = startOutputLabel
-    toolbarCoordinator.startPauseOutputItem.image = NSImage(
-      systemSymbolName: "play.fill", accessibilityDescription: nil)
-    toolbarCoordinator.startPauseOutputItem.target = self
-    toolbarCoordinator.startPauseOutputItem.action = #selector(toggleOutput)
-    toolbarCoordinator.startPauseOutputItem.isNavigational = true
-
-    toolbarCoordinator.captureScreenshotsItem.label = String(localized: "Capture Screenshot(s)")
-    toolbarCoordinator.captureScreenshotsItem.image = NSImage(
-      systemSymbolName: "camera", accessibilityDescription: nil)
-    toolbarCoordinator.captureScreenshotsItem.target = self
-    toolbarCoordinator.captureScreenshotsItem.action = #selector(captureScreenshots)
-    toolbarCoordinator.captureScreenshotsItem.isNavigational = true
-
-    toolbarCoordinator.runInferenceItem.label = String(localized: "Run Inference")
-    toolbarCoordinator.runInferenceItem.image = NSImage(
-      systemSymbolName: "sparkles", accessibilityDescription: nil)
-    toolbarCoordinator.runInferenceItem.target = self
-    toolbarCoordinator.runInferenceItem.action = #selector(runInference)
-
-    toolbarCoordinator.toggleInspectorItem.label = String(localized: "Toggle Inspector")
-    toolbarCoordinator.toggleInspectorItem.image = NSImage(
-      systemSymbolName: "sidebar.right", accessibilityDescription: nil)
-    toolbarCoordinator.toggleInspectorItem.target = self
-    toolbarCoordinator.toggleInspectorItem.action = #selector(toggleInspector(_:))
-    toolbarCoordinator.toggleInspectorItem.autovalidates = false
-
-    toolbarCoordinator.toolbar.autosavesConfiguration = false
-    toolbarCoordinator.toolbar.allowsUserCustomization = false
-    toolbarCoordinator.toolbar.displayMode = .iconOnly
-    toolbarCoordinator.toolbar.delegate = toolbarCoordinator
-  }
-
-  private func refreshToolbarState() {
-    toolbarCoordinator.startPauseOutputItem.label =
-      stateService.recordingState == .recording
-      ? String(localized: "Pause Output") : String(localized: "Start Output")
-    toolbarCoordinator.startPauseOutputItem.image = NSImage(
-      systemSymbolName: stateService.recordingState == .recording ? "pause.fill" : "play.fill",
-      accessibilityDescription: nil)
-
-  }
-
-  private var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)? {
+  var inferenceRequest: (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)? {
     guard stateService.inspectorSelector?.kind == .ldtxSceneDetectorVision,
       let workspace = runtimeWorkspace(),
       document?.fileURL != nil,
@@ -203,7 +132,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       guard let self else { return }
       defer {
         inferenceTask = nil
-        refreshToolbarState()
+        presentation.isInferring = false
       }
       do {
         let result = try await actions.classify(vision: request.vision, modelURL: request.url)
@@ -223,16 +152,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
       }
     }
 
-    refreshToolbarState()
-  }
-
-  private func observeToolbarState() {
-    guard !isClosed else { return }
-    withObservationTracking {
-      refreshToolbarState()
-    } onChange: { [weak self] in
-      Task { @MainActor [weak self] in self?.observeToolbarState() }
-    }
+    presentation.isInferring = true
   }
 
   private var sidebarView: some View {
@@ -248,11 +168,12 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     WorkspaceView(
       layout: layout, stateService: stateService,
       sidebar: sidebarView,
-      content: WorkspaceContentRepresentation(controller: contentPane),
-      inspector: inspectorView,
-      inspectorWidthChanged: { [weak self] width in
-        self?.toolbarCoordinator.updateInspectorWidth(width)
-      })
+      content: contentPane,
+      inspector: inspectorView
+    )
+    .toolbar { [weak self] in
+      if let self { WorkspaceToolbar(controller: self) }
+    }
   }
 
   private var inspectorView: some View {
@@ -266,6 +187,7 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
   }
 
   @objc func captureScreenshots() {
+    guard !isClosed else { return }
     do {
       guard let runtimeActions = runtimeActions() else {
         throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
@@ -280,27 +202,16 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
             ? "Saved 1 Program screenshot." : "Saved \(programFiles.count) Program screenshots.",
         screenshots: programFiles.filter { $0.programCanvas == .landscape })
     } catch {
-      if !showScreenshotResult(
+      showScreenshotResult(
         title: "Screenshot could not be captured", message: error.localizedDescription)
-      {
-        reportError(error)
-      }
     }
   }
 
-  @discardableResult
   private func showScreenshotResult(
     title: String, message: String, screenshots: [WorkspaceScreenshot] = []
-  ) -> Bool {
-    screenshotResultPopover.behavior = .transient
-    let controller = NSHostingController(
-      rootView: ScreenshotResultView(title: title, message: message, screenshots: screenshots))
-    controller.sizingOptions = .preferredContentSize
-    screenshotResultPopover.contentViewController = controller
-    screenshotResultPopover.contentViewController?.view.setAccessibilityLabel(
-      "\(title). \(message)")
-    toolbarCoordinator.showScreenshotResultPopover(screenshotResultPopover)
-    return true
+  ) {
+    presentation.screenshot = WorkspaceScreenshotPresentation(
+      title: title, message: message, screenshots: screenshots)
   }
 
   func waitForInference() async {
@@ -328,16 +239,17 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
 
   func tearDown() {
     isClosed = true
-    screenshotResultPopover.close()
+    presentation.screenshot = nil
 
   }
 
   @objc func stopOutput() {
-    guard stateService.recordingState.canStop else { return }
+    guard !isClosed, stateService.recordingState.canStop else { return }
     Task { await runtimeActions()?.stopOutput() }
   }
 
   @objc func toggleOutput() {
+    guard !isClosed else { return }
     let state = stateService.recordingState
     guard (state.canStart && document?.fileURL != nil) || state == .recording else { return }
     Task {
@@ -356,25 +268,6 @@ public final class WorkspaceViewController: NSViewController, NSUserInterfaceVal
     }
   }
 
-}
-
-extension WorkspaceViewController: NSToolbarItemValidation {
-  public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
-    guard !isClosed,
-      let identifier = WorkspaceToolbarCoordinator.Identifiers(
-        rawValue: item.itemIdentifier.rawValue)
-    else { return false }
-    return switch identifier {
-    case .captureScreenshots: true
-    case .stopOutput: stateService.recordingState.canStop
-    case .startPauseOutput:
-      (stateService.recordingState.canStart && document?.fileURL != nil)
-        || stateService.recordingState == .recording
-    case .runInference:
-      inferenceTask == nil && inferenceRequest != nil && runtimeActions() != nil
-    default: false
-    }
-  }
 }
 
 @MainActor @Observable
@@ -483,19 +376,6 @@ private struct WorkspacePaneDivider: View {
   }
 }
 
-private struct WorkspaceContentRepresentation: NSViewControllerRepresentable {
-  let controller: WorkspaceContentPane
-
-  func makeNSViewController(context: Context) -> WorkspaceContentPane { controller }
-  func updateNSViewController(_ controller: WorkspaceContentPane, context: Context) {}
-
-  func sizeThatFits(
-    _ proposal: ProposedViewSize, nsViewController: WorkspaceContentPane, context: Context
-  ) -> CGSize? {
-    CGSize(width: proposal.width ?? 480, height: proposal.height ?? 560)
-  }
-}
-
 struct ScreenshotResultView: View {
   let title: String
   let message: String
@@ -550,6 +430,101 @@ struct ScreenshotResultView: View {
           else { return }
           image = representation.nsImage
         }
+    }
+  }
+}
+
+@MainActor @Observable
+final class WorkspacePresentation {
+  var isInferring = false
+  var screenshot: WorkspaceScreenshotPresentation?
+}
+
+struct WorkspaceScreenshotPresentation: Identifiable {
+  let id = UUID()
+  let title: String
+  let message: String
+  let screenshots: [WorkspaceScreenshot]
+}
+
+private struct WorkspaceToolbar: ToolbarContent {
+  weak var controller: WorkspaceViewController?
+
+  var body: some ToolbarContent {
+    ToolbarItem(id: "workspace.toggleSidebar", placement: .navigation) { [weak controller] in
+      if let controller {
+        Button("Toggle Sidebar", systemImage: "sidebar.left") { [weak controller] in
+          controller?.toggleSidebar(nil)
+        }
+        .accessibilityIdentifier("workspace.toggleSidebar")
+      }
+    }
+    ToolbarItem(id: "workspace.stopOutput", placement: .navigation) { [weak controller] in
+      if let controller {
+        Button("Stop Output", systemImage: "stop.fill") { [weak controller] in
+          controller?.stopOutput()
+        }
+        .disabled(!controller.stateService.recordingState.canStop || controller.isClosed)
+        .accessibilityIdentifier("workspace.stopOutput")
+      }
+    }
+    ToolbarItem(id: "workspace.startPauseOutput", placement: .navigation) { [weak controller] in
+      if let controller {
+        Button(
+          controller.stateService.recordingState == .recording ? "Pause Output" : "Start Output",
+          systemImage: controller.stateService.recordingState == .recording
+            ? "pause.fill" : "play.fill"
+        ) { [weak controller] in controller?.toggleOutput() }
+        .disabled(
+          controller.isClosed
+            || !((controller.stateService.recordingState.canStart
+              && controller.document?.fileURL != nil)
+              || controller.stateService.recordingState == .recording)
+        )
+        .accessibilityIdentifier("workspace.startPauseOutput")
+      }
+    }
+    ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) { [weak controller] in
+      WorkspaceScreenshotButton(controller: controller)
+    }
+    ToolbarItem(id: "workspace.runInference", placement: .primaryAction) { [weak controller] in
+      if let controller {
+        Button("Run Inference", systemImage: "sparkles") { [weak controller] in
+          controller?.runInference()
+        }
+        .disabled(
+          controller.presentation.isInferring || controller.inferenceRequest == nil
+            || controller.runtimeActions() == nil || controller.isClosed
+        )
+        .accessibilityIdentifier("workspace.runInference")
+      }
+    }
+    ToolbarItem(id: "workspace.toggleInspector", placement: .primaryAction) { [weak controller] in
+      if let controller {
+        Button("Toggle Inspector", systemImage: "sidebar.right") { [weak controller] in
+          controller?.toggleInspector(nil)
+        }
+        .accessibilityIdentifier("workspace.toggleInspector")
+      }
+    }
+  }
+}
+
+private struct WorkspaceScreenshotButton: View {
+  weak var controller: WorkspaceViewController?
+
+  var body: some View {
+    if let controller {
+      @Bindable var presentation = controller.presentation
+      Button("Capture Screenshot(s)", systemImage: "camera") { [weak controller] in
+        controller?.captureScreenshots()
+      }
+      .disabled(controller.isClosed)
+      .accessibilityIdentifier("workspace.captureScreenshots")
+      .popover(item: $presentation.screenshot) { result in
+        ScreenshotResultView(
+          title: result.title, message: result.message, screenshots: result.screenshots)
+      }
     }
   }
 }

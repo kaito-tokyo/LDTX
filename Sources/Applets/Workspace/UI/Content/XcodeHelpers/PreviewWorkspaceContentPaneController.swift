@@ -4,7 +4,7 @@
 
 #if DEBUG
   import LDTXProtos
-  import AppKit
+  import SwiftUI
 
   import LDTXProgramRuntime
   import LDTXVideoRendering
@@ -14,7 +14,6 @@
   @MainActor
   final class PreviewWorkspaceContentPaneController: NSViewController {
     private let pane: WorkspaceContentPane
-    private var didConfigure = false
 
     init(hasProgram: Bool) {
       let service = WorkspaceSidebarPreviewFixtures.makeUIState()
@@ -68,31 +67,15 @@
         peakMeter: ProgramAudioPeakMeter(),
         reportError: { _ in }, pairedPreview: pairedPreview)
       super.init(nibName: nil, bundle: nil)
-      addChild(pane)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func loadView() {
       view = NSView()
-      pane.view.translatesAutoresizingMaskIntoConstraints = false
-      view.addSubview(pane.view)
-      NSLayoutConstraint.activate([
-        view.widthAnchor.constraint(equalToConstant: 480),
-        view.heightAnchor.constraint(equalToConstant: 560),
-        pane.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-        pane.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        pane.view.topAnchor.constraint(equalTo: view.topAnchor),
-        pane.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      ])
-    }
-
-    override func viewDidAppear() {
-      super.viewDidAppear()
-      guard !didConfigure else { return }
-      didConfigure = true
-      pane.configureAfterEstablished()
-      pane.pairedPreview.metalView.needsDisplay = true
+      let host = NSHostingController(rootView: pane)
+      addChild(host)
+      view = host.view
     }
 
     private final class PreviewDelegate: NSObject, MTKViewDelegate {

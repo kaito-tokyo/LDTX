@@ -22,8 +22,9 @@ final class WorkspaceTestWindow: NSWindow {
   }
   var contentPane: WorkspaceContentPane { content.contentPane }
   var stateService: WorkspaceStateService { content.stateService }
-  func validateToolbarItem(_ item: NSToolbarItem) -> Bool { content.validateToolbarItem(item) }
-  var screenshotResultPopover: NSPopover { content.screenshotResultPopover }
+  func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+    item.menuFormRepresentation?.isEnabled ?? false
+  }
   func runInference() { content.runInference() }
   func captureScreenshots() { content.captureScreenshots() }
   func toggleOutput() { content.toggleOutput() }

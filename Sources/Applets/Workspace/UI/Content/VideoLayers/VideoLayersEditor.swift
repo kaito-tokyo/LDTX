@@ -1,82 +1,146 @@
-import AppKit
-import LDTXBackgroundSegmentation
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
+
 import LDTXProtos
 import LDTXWorkspaceAppletModel
+import Observation
 import SwiftUI
 
-final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
-  let table = VideoLayersTableView()
+@MainActor @Observable
+final class VideoLayersEditorState {
+  let stateService: WorkspaceStateService
+  let appletData: WorkspaceAppletData
+  let target: WorkspaceCanvasTarget
+  private var dragScope = UUID()
+  private(set) var rows: [Int64: VideoLayersTableRowState] = [:]
+  var failure: String?
 
-  private let status = NSTextField(wrappingLabelWithString: "")
-  private let appletData: WorkspaceAppletData
-  private let stateService: WorkspaceStateService
-  private let target: WorkspaceCanvasTarget
-  private var displayedProgramID: Int64?
-  private var selectedProgram: Ldtx_Workspace_V4_ProgramDefinition? {
+  var programID: Int64? {
     appletData.selectedProgram(
-      in: stateService.workspaceDefinition, for: stateService.localStateURL)
+      in: stateService.workspaceDefinition, for: stateService.localStateURL)?.internalID
   }
+  var preferences: Ldtx_Workspace_V4_ProgramPreferences {
+    programID.flatMap { stateService.workspacePreferences[keyPath: target.preferences][$0] }
+      ?? .init()
+  }
+  var layerIDs: [Int64] { preferences.videoLayerInternalIds }
 
+  private var displayedProgramID: Int64?
   init(
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     target: WorkspaceCanvasTarget
   ) {
-    self.appletData = appletData
     self.stateService = stateService
+    self.appletData = appletData
     self.target = target
-    super.init(nibName: nil, bundle: nil)
-
+    synchronizeRows()
   }
 
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-  private var onCommitTransform:
-    (Int64, Ldtx_Workspace_V4_BasicTransform) throws -> Ldtx_Workspace_V4_BasicTransform = {
-      _, value in value
-    }
-  private var onSetHidden: (Int64, Bool) throws -> Void = { _, _ in }
-  private var onError: (Error) -> Void = { _ in }
-
-  private func internalID(for row: VideoLayersTableRow) throws -> Int64 {
-    guard let id = table.rows.first(where: { $0.value === row })?.key else {
-      throw WorkspaceSelectionError(message: "Video layer is no longer available.")
-    }
-    return id
+  func token(for id: Int64) -> String {
+    "\(dragScope):\(programID ?? 0):\(id)"
   }
 
-  func videoLayersTableRowDidRequestCommit(_ row: VideoLayersTableRow) {
-    do { try commit(row) } catch { onError(error) }
-  }
-
-  private func commit(_ row: VideoLayersTableRow) throws {
-    guard row.state.hasLocalTextChanges else { return }
-    let id = try internalID(for: row)
-    let (transform, hasIncompleteText) = parsedTransform(for: row)
-    let previous = row.state.transform
-    if transform.translationX.double == previous.translationX.double,
-      transform.translationY.double == previous.translationY.double,
-      transform.scaleX.double == previous.scaleX.double,
-      transform.scaleY.double == previous.scaleY.double
-    {
-      row.state.hasLocalTextChanges = hasIncompleteText
-      return
+  func move(_ tokens: [String], before destination: Int64?) -> Bool {
+    guard tokens.count == 1, let source = layerIDs.first(where: { token(for: $0) == tokens[0] }),
+      let programID
+    else { return false }
+    var order = layerIDs
+    order.removeAll { $0 == source }
+    if let destination {
+      if destination == source { return true }
+      guard let index = order.firstIndex(of: destination) else { return false }
+      order.insert(source, at: index)
+    } else {
+      order.append(source)
     }
-    let saved = try onCommitTransform(id, transform)
-    row.state.transform = saved
-    row.state.hasLocalTextChanges = hasIncompleteText
-    if !row.state.isEditing && !hasIncompleteText {
-      row.state.display(
-        saved, canvasWidth: row.rootView.canvasWidth, canvasHeight: row.rootView.canvasHeight)
+    do {
+      try commitLayerOrder(order, programID: programID)
+      return true
+    } catch {
+      failure = error.localizedDescription
+      return false
     }
   }
 
-  private func parsedTransform(for row: VideoLayersTableRow)
+  func commitLayerOrder(_ ids: [Int64], programID: Int64) throws {
+    guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID })
+    else { throw WorkspaceSelectionError(message: "The Program is unavailable.") }
+    let current =
+      stateService.workspacePreferences[keyPath: target.preferences][programID]?
+      .videoLayerInternalIds ?? []
+    guard current.sorted() == ids.sorted() else {
+      throw WorkspaceSelectionError(message: "The video layer order changed.")
+    }
+    stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
+      .videoLayerInternalIds = ids
+  }
+
+  func synchronizeRows() {
+    if displayedProgramID != programID {
+      rows = [:]
+      failure = nil
+      displayedProgramID = programID
+    }
+    rows = rows.filter { layerIDs.contains($0.key) }
+    let program = programID
+    for id in layerIDs {
+      let row = rows[id] ?? VideoLayersTableRowState()
+      let component = stateService.workspaceDefinition.videoComponents.first { $0.internalID == id }
+      row.name = component?.displayName ?? "Missing Video Layer"
+      switch component?.videoComponent {
+      case .vfxSource, .clock: row.supportsPlacement = true
+      default: row.supportsPlacement = false
+      }
+      row.isHidden = preferences.videoLayerHidden[id] ?? false
+      if !row.hasLocalTextChanges && !row.isEditing {
+        row.display(
+          preferences.videoLayerTransforms[id] ?? .init(), canvasWidth: 1920, canvasHeight: 1080)
+      }
+      row.onCommit = { [weak self, weak row] in
+        guard let self, let row, row.hasLocalTextChanges, let program,
+          self.programID == program,
+          self.rows[id] === row,
+          self.stateService.workspacePreferences[keyPath: self.target.preferences][program]?
+            .videoLayerInternalIds.contains(id) == true
+        else { return }
+        let (transform, incomplete) = self.parsedTransform(for: row)
+        let previous = row.transform
+        if transform.translationX.double == previous.translationX.double,
+          transform.translationY.double == previous.translationY.double,
+          transform.scaleX.double == previous.scaleX.double,
+          transform.scaleY.double == previous.scaleY.double
+        {
+          row.hasLocalTextChanges = incomplete
+          return
+        }
+        self.stateService.workspacePreferences[keyPath: self.target.preferences][
+          program, default: .init()
+        ]
+        .videoLayerTransforms[id] = transform
+        row.transform = transform
+        row.hasLocalTextChanges = incomplete
+      }
+      row.onSetHidden = { [weak self, weak row] hidden in
+        guard let self, let row, let program, self.programID == program,
+          self.rows[id] === row,
+          self.stateService.workspacePreferences[keyPath: self.target.preferences][program]?
+            .videoLayerInternalIds.contains(id) == true
+        else { return }
+        self.stateService.workspacePreferences[keyPath: self.target.preferences][
+          program, default: .init()
+        ]
+        .videoLayerHidden[id] = hidden
+        row.isHidden = hidden
+      }
+      rows[id] = row
+    }
+  }
+
+  private func parsedTransform(for state: VideoLayersTableRowState)
     -> (Ldtx_Workspace_V4_BasicTransform, Bool)
   {
     var hasIncompleteText = false
-    let previous = row.state.transform
+    let previous = state.transform
     let fallback = [
       previous.translationX, previous.translationY,
       Ldtx_Workspace_V4_Rational32.with {
@@ -86,10 +150,10 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         $0.set(num: previous.scaleY.num, den: previous.scaleY.den)
       },
     ]
-    let values = row.state.strings.enumerated().map { index, text in
+    let values = state.strings.enumerated().map { index, text in
       do {
         if index < 2 {
-          let size = UInt32(index == 0 ? row.rootView.canvasWidth : row.rootView.canvasHeight)
+          let size = UInt32(index == 0 ? 1920 : 1080)
           guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
           else {
             throw WorkspaceSelectionError(
@@ -116,7 +180,7 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
         return fallback[index]
       }
     }
-    var transform = Ldtx_Workspace_V4_BasicTransform()
+    var transform = state.transform
     transform.translationX = values[0]
     transform.translationY = values[1]
     transform.scaleX = .init(value: values[2])
@@ -124,222 +188,53 @@ final class VideoLayersEditor: NSViewController, VideoLayersTableRowDelegate {
     return (transform, hasIncompleteText)
   }
 
-  func videoLayersTableRow(_ row: VideoLayersTableRow, setHidden hidden: Bool) {
-    guard let id = try? internalID(for: row) else { return }
-    do {
-      try onSetHidden(id, hidden)
-      row.state.isHidden = hidden
-    } catch {
-      onError(error)
-    }
-  }
-
-  func update(
-    definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    programPreferences: Ldtx_Workspace_V4_ProgramPreferences,
-    layerIDs: [Int64], canvasWidth: Double, canvasHeight: Double,
-    onCommitTransform:
-      @escaping (Int64, Ldtx_Workspace_V4_BasicTransform) throws ->
-      Ldtx_Workspace_V4_BasicTransform = { _, value in value },
-    onSetHidden: @escaping (Int64, Bool) throws -> Void = { _, _ in },
-    onCommitLayerOrder: @escaping ([Int64]) throws -> Void = { _ in },
-    onError: @escaping (Error) -> Void = { _ in }
-  ) {
-    _ = view
-    self.onCommitTransform = onCommitTransform
-    self.onSetHidden = onSetHidden
-    self.onError = onError
-    var names: [Int64: String] = [:]
-    var placementSupport: [Int64: Bool] = [:]
-    for component in definition.videoComponents {
-      if let id = component.internalID, names[id] == nil {
-        names[id] = component.displayName
-        switch component.videoComponent {
-        case .vfxSource, .clock: placementSupport[id] = true
-        default: placementSupport[id] = false
-        }
-      }
-    }
-    var rows: [Int64: VideoLayersTableRow] = [:]
-    for id in layerIDs {
-      let row: VideoLayersTableRow
-      if let existing = table.rows[id],
-        existing.rootView.canvasWidth == canvasWidth, existing.rootView.canvasHeight == canvasHeight
-      {
-        row = existing
-      } else {
-        row = VideoLayersTableRow(
-          rootView: VideoLayersTableRowContent(
-            state: VideoLayersTableRowState(),
-            canvasWidth: canvasWidth, canvasHeight: canvasHeight))
-        row.state.onCommit = { [weak row] in
-          guard let row else { return }
-          row.delegate?.videoLayersTableRowDidRequestCommit(row)
-        }
-        row.state.onSetHidden = { [weak row] value in
-          guard let row else { return }
-          row.delegate?.videoLayersTableRow(row, setHidden: value)
-        }
-      }
-      row.delegate = self
-      row.state.name = names[id] ?? "Missing Video Layer"
-      row.state.supportsPlacement = placementSupport[id] ?? false
-      row.state.isHidden = programPreferences.videoLayerHidden[id] ?? false
-      if !row.state.hasLocalTextChanges && !row.state.isEditing {
-        row.state.display(
-          programPreferences.videoLayerTransforms[id] ?? .init(),
-          canvasWidth: canvasWidth, canvasHeight: canvasHeight)
-      }
-      rows[id] = row
-    }
-    table.update(
-      layerIDs: layerIDs, rows: rows,
-      onCommitLayerOrder: onCommitLayerOrder, onError: onError)
-  }
-
-  override func loadView() {
-    view = NSView()
-    table.setContentHuggingPriority(.required, for: .vertical)
-    table.setContentCompressionResistancePriority(.required, for: .vertical)
-    let stack = contentStack([table, status])
-    pinContent(stack, in: view)
-    table.translatesAutoresizingMaskIntoConstraints = false
-    table.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-    refresh()
-  }
-
-  override func viewWillLayout() {
-    super.viewWillLayout()
-    refresh()
-  }
-
-  func commitLayerOrder(_ ids: [Int64], programID: Int64) throws {
-    guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID })
-    else {
-      throw WorkspaceSelectionError(message: "The Program is unavailable.")
-    }
-    let current =
-      stateService.workspacePreferences[keyPath: target.preferences][programID]?
-      .videoLayerInternalIds ?? []
-    guard current.sorted() == ids.sorted() else {
-      throw WorkspaceSelectionError(message: "The video layer order changed.")
-    }
-    stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
-      .videoLayerInternalIds = ids
-  }
-
-  func refresh() {
-    _ = view
-    let id = selectedProgram?.internalID
-    if displayedProgramID != id {
-      table.removeAllRows()
-      displayedProgramID = id
-    }
-    let preference =
-      id.flatMap { stateService.workspacePreferences[keyPath: target.preferences][$0] } ?? .init()
-    let layerIDs = preference.videoLayerInternalIds
-    update(
-      definition: stateService.workspaceDefinition, programPreferences: preference,
-      layerIDs: layerIDs,
-      canvasWidth: 1920,
-      canvasHeight: 1080,
-      onCommitTransform: { [weak self] layerID, value in
-        guard let self, let id else {
-          throw WorkspaceSelectionError(message: "No program selected.")
-        }
-        guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
-        else {
-          throw WorkspaceSelectionError(message: "The Program is unavailable.")
-        }
-        var transform =
-          stateService.workspacePreferences[keyPath: target.preferences][id]?
-          .videoLayerTransforms[layerID] ?? .init()
-        transform.translationX = value.translationX
-        transform.translationY = value.translationY
-        transform.scaleX = value.scaleX
-        transform.scaleY = value.scaleY
-        stateService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
-          .videoLayerTransforms[layerID] = transform
-        return transform
-      },
-      onSetHidden: { [weak self] layerID, value in
-        guard let self, let id else {
-          throw WorkspaceSelectionError(message: "No program selected.")
-        }
-        guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
-        else {
-          throw WorkspaceSelectionError(message: "The Program is unavailable.")
-        }
-        stateService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
-          .videoLayerHidden[layerID] = value
-      },
-      onCommitLayerOrder: { [weak self] ids in
-        guard let self, let id else {
-          throw WorkspaceSelectionError(message: "No program selected.")
-        }
-        try commitLayerOrder(ids, programID: id)
-      },
-      onError: { [weak self] error in
-        self?.status.stringValue = error.localizedDescription
-        self?.status.isHidden = false
-      })
-    status.textColor = .secondaryLabelColor
-    status.stringValue =
-      stateService.outputFailureMessage
-      ?? (id == nil ? "No program selected" : layerIDs.isEmpty ? "No video layers" : "")
-    status.isHidden = status.stringValue.isEmpty
-  }
 }
 
-#if DEBUG
+struct VideoLayersEditor: View {
+  @State var editor: VideoLayersEditorState
 
-  #Preview("Video Layers Editor", traits: .fixedLayout(width: 720, height: 360)) {
-    let stateService = WorkspaceStateService(definition: .init(), preferences: .init())
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.videoComponents = ["Camera", "Background", "Portrait Source"].enumerated().map {
-      index, name in
-      var device = Ldtx_Workspace_V4_VfxSourceComponent()
-      device.internalID = Int64(index + 1)
-      device.displayName = name
-      var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      wrapper.vfxSource = device
-      return wrapper
-    }
-    var programPreferences = Ldtx_Workspace_V4_ProgramPreferences()
-    for id: Int64 in [1, 2] {
-      var transform = Ldtx_Workspace_V4_BasicTransform()
-      transform.scaleX = .with {
-        $0.set(num: 1, den: 1)
-      }
-      transform.scaleY = .with {
-        $0.set(num: 1, den: 1)
-      }
-      programPreferences.videoLayerTransforms[id] = transform
-    }
-    programPreferences.videoLayerHidden[2] = true
-    var program = Ldtx_Workspace_V4_ProgramDefinition()
-    program.internalID = 100
-    programPreferences.videoLayerInternalIds = [1, 2]
-    definition.programs = [program]
-    stateService.workspaceDefinition = definition
-    stateService.workspacePreferences.landscapeProgramPreferences[100] = programPreferences
-    let editor = VideoLayersEditor(
-      stateService: stateService, appletData: WorkspaceAppletData(), target: .landscape)
-    NSLayoutConstraint.activate([
-      editor.view.widthAnchor.constraint(equalToConstant: 720),
-      editor.view.heightAnchor.constraint(equalToConstant: 360),
-    ])
-    return editor
+  init(
+    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    target: WorkspaceCanvasTarget
+  ) {
+    _editor = State(
+      initialValue: VideoLayersEditorState(
+        stateService: stateService, appletData: appletData, target: target))
   }
 
-  #Preview("Video Layers Editor — No Program", traits: .fixedLayout(width: 720, height: 360)) {
-    let editor = VideoLayersEditor(
-      stateService: WorkspaceStateService(definition: .init(), preferences: .init()),
-      appletData: WorkspaceAppletData(), target: .landscape)
-    NSLayoutConstraint.activate([
-      editor.view.widthAnchor.constraint(equalToConstant: 720),
-      editor.view.heightAnchor.constraint(equalToConstant: 360),
-    ])
-    return editor
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(editor.layerIDs, id: \.self) { id in
+        if let row = editor.rows[id] {
+          VideoLayersTableRowContent(
+            state: row, canvasWidth: 1920, canvasHeight: 1080,
+            dragToken: editor.token(for: id)
+          )
+          .padding(4)
+          .dropDestination(for: String.self) { (values: [String], point: CGPoint) -> Bool in
+            editor.move(values, before: id)
+          }
+          Divider()
+        }
+      }
+      Color.clear.frame(height: 12)
+        .contentShape(Rectangle())
+        .dropDestination(for: String.self) { (values: [String], point: CGPoint) -> Bool in
+          editor.move(values, before: nil)
+        }
+      if let message = editor.failure ?? editor.stateService.outputFailureMessage {
+        Text(message).foregroundStyle(.secondary)
+      } else if editor.programID == nil {
+        Text("No program selected").foregroundStyle(.secondary)
+      } else if editor.layerIDs.isEmpty {
+        Text("No video layers").foregroundStyle(.secondary)
+      }
+    }
+    .onChange(of: editor.programID, initial: true) { _, _ in
+      editor.synchronizeRows()
+    }
+    .onChange(of: editor.preferences) { _, _ in editor.synchronizeRows() }
+    .onChange(of: editor.stateService.workspaceDefinition) { _, _ in editor.synchronizeRows() }
   }
-#endif
+
+}

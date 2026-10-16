@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXProgramRuntime
@@ -202,51 +201,30 @@ struct WorkspaceOutputInspector: View {
 
 }
 
-private struct RecordingFolderPicker: NSViewRepresentable {
+private struct RecordingFolderPicker: View {
   @Binding var path: String?
   @Environment(\.isEnabled) private var isEnabled
+  @Environment(\.workspaceReportError) private var reportError
+  @State private var isImporting = false
 
-  func makeNSView(context: Context) -> NSPathControl {
-    let control = NSPathControl()
-    control.pathStyle = .popUp
-    control.isEditable = true
-    control.allowedTypes = [UTType.folder.identifier]
-    control.placeholderString = String(localized: "(Default)")
-    control.setAccessibilityLabel(String(localized: "Recording Folder"))
-    control.delegate = context.coordinator
-    control.target = context.coordinator
-    control.action = #selector(Coordinator.pathChanged(_:))
-    return control
-  }
-
-  func updateNSView(_ control: NSPathControl, context: Context) {
-    context.coordinator.path = $path
-    context.coordinator.isEnabled = isEnabled
-    control.isEnabled = isEnabled
-    let url = path.map { URL(fileURLWithPath: $0, isDirectory: true) }
-    if control.url != url { control.url = url }
-  }
-
-  func makeCoordinator() -> Coordinator { Coordinator(path: $path) }
-
-  @MainActor
-  final class Coordinator: NSObject, NSPathControlDelegate {
-    var path: Binding<String?>
-    var isEnabled = true
-
-    init(path: Binding<String?>) { self.path = path }
-
-    @objc func pathChanged(_ control: NSPathControl) {
-      guard isEnabled, control.clickedPathItem == nil else { return }
-      path.wrappedValue = control.url?.standardizedFileURL.path
+  var body: some View {
+    HStack {
+      Button {
+        isImporting = true
+      } label: {
+        Text(path ?? String(localized: "(Default)"))
+          .lineLimit(1).truncationMode(.middle)
+      }
+      .accessibilityLabel("Recording Folder")
+      if path != nil {
+        Button("Use Default", systemImage: "xmark.circle") { path = nil }
+          .labelStyle(.iconOnly)
+      }
     }
-
-    func pathControl(_ pathControl: NSPathControl, willDisplay openPanel: NSOpenPanel) {
-      openPanel.canChooseDirectories = true
-      openPanel.canChooseFiles = false
-      openPanel.allowsMultipleSelection = false
+    .fileImporter(isPresented: $isImporting, allowedContentTypes: [.folder]) { result in
+      guard isEnabled else { return }
+      do { path = try result.get().standardizedFileURL.path } catch { reportError(error) }
     }
-
   }
 }
 

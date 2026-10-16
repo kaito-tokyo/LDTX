@@ -106,16 +106,13 @@ Layer menus place existing resources into the selected Program.
 
 The Content pane implementation is organized by feature under
 `Sources/Applets/Workspace/UI/Content`: Audio, VideoLayers, and Preview.
-WorkspaceContentPane retains the configured AppKit preview and editors and hosts
-a SwiftUI vertical layout with a draggable divider. NSViewRepresentable embeds
-the retained preview and editor scroll view without rebuilding their media resources.
+WorkspaceContentPane is a SwiftUI View with a draggable preview divider and a
+ScrollView containing SwiftUI audio and video-layer editors. NSViewRepresentable
+embeds only the retained Metal preview surface and audio meters.
 MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
-Layers and Portrait Video Layers tabs, which use VideoLayersEditor controllers.
-Each editor owns its Observation task and reads the shared WorkspaceStateService.
-The editor stack is the vertical NSScrollView's document view directly. Its
-flipped coordinates keep the controls at the top, and its width tracks the
-viewport without an intermediate container. Reducing the lower pane height scrolls the controls rather
-than requiring the pane to fit all editors at once.
+Layers and Portrait Video Layers choices. Both canvas editors retain their local
+drafts when switching tabs. SwiftUI observes the shared WorkspaceStateService.
+Reducing the lower pane height scrolls all editors together.
 Output and canvas settings, including their supporting types and helpers, live
 under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
 owned by the video and audio input Inspectors, which share
@@ -311,8 +308,8 @@ creates a new output session. Stop from paused returns to idle. Transition state
 keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
-The Workspace Content pane uses a SwiftUI vertical layout above its AppKit
-tabbed editor. `WorkspaceWindowController` owns the
+The Workspace Content pane uses SwiftUI for preview placement, gestures, audio
+controls, canvas selection, and layer rows. `WorkspaceWindowController` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
 centers a fixed 16:9 plus 9:16 pair with 12-point padding, and shows black when
@@ -358,7 +355,7 @@ Monitoring uses Workspace audio devices and their shared gains independently of
 Program selection. It remains available with no Programs; Program master volume
 and mute settings affect output meters, not monitor routing.
 
-Screenshot capture results appear in a transient NSPopover anchored to the
+Screenshot capture results appear in a SwiftUI popover anchored to the
 screenshot toolbar item. Successful captures show the saved Program image count
 and the Landscape file icon and name; Portrait and VFX Source images remain saved but
 are excluded from the popover. Clicking a file opens it in its default application;
@@ -367,10 +364,9 @@ generates the file icon asynchronously with `iconMode` enabled; the standard fil
 icon remains visible until a representation is available. Capture
 failures show the error without modifying the output session's failure state.
 Subsequent captures replace the message. Window closure closes the popover;
-ordinary interaction dismissal is managed by AppKit.
-The NSHostingController uses `.preferredContentSize` sizing, allowing SwiftUI's
-ideal content size to size the popover without manually laying out or resizing
-the hosting view. See Apple's [Use SwiftUI with AppKit](https://developer.apple.com/videos/play/wwdc2022/10075/).
+ordinary interaction dismissal and sizing are managed by SwiftUI.
+Toolbar items are declared with SwiftUI ToolbarContent and project the current
+Workspace state. The hosting boundary bridges the toolbar to the document window.
 
 SettingsRootView's Output tab configures the application-wide screenshots folder,
 defaulting to ~/Pictures. Captures save there regardless of recording state and
@@ -381,8 +377,8 @@ not duplicate copies. Recording and screenshots folder settings are independent.
 ### Video layer editing belongs to Content
 
 The Editor vertically arranges MasterVolumeEditor, AudioMixEditor, and the
-Landscape/Portrait Video Layers tabs. Each canvas has an NSTableView sized to
-show all its rows and empty-state labels.
+Landscape/Portrait Video Layers choices. Each canvas uses SwiftUI rows and
+empty-state labels.
 VideoLayersEditor has no internal scroll view; the Content pane scrolls all
 editors together.
 Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
@@ -390,15 +386,16 @@ and monitor volume controls. AudioMixEditor owns one Workspace-wide gain per inp
 mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
 Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
-The Content pane embeds its retained AppKit preview and editor scroll view with
-Representable wrappers. The editors' standard AppKit controls retain their
-default selection, background, and focus behavior.
+The Content pane embeds its retained MTKView with a Representable wrapper.
+All editor controls and scrolling are SwiftUI. Only the name band is draggable;
+drop tokens identify the editor instance, Program, and layer, rejecting foreign,
+multiple, and stale drags.
 Each layer operation copies the latest ProgramPreferences and updates the complete
 value, preserving unrelated fields. Reordering submits the complete ID array and
 must preserve the current membership. Tab and Program changes need no Submit;
-Program changes discard incomplete local text. Editors update from
-`viewWillLayout()` using AppKit automatic Observation, without observation Tasks
-or an externally invoked `stop()`.
+Program changes discard incomplete local text. SwiftUI Observation updates editors
+without an externally invoked `stop()`. Model and recording-folder selection use
+SwiftUI file importers; numeric fields use SwiftUI TextField bindings.
 Audio meters pause themselves when detached or when their window closes.
 
 ### Program selection in the Inspector
@@ -455,15 +452,12 @@ The service does not reference runtime actions or assemble capture, rendering,
 or output resources. UI owners receive runtime actions through weak providers.
 Disconnected runtime operations that need a result report an explicit error.
 
-Content view controllers receive the service and construct their editors where
+Content Views receive the service and construct their editors where
 they are used. MasterVolumeEditor and AudioMixEditor have no reference back to
-their parent pane. Each VideoLayersEditor directly owns its table, status,
-Store connection and observation lifetime. There is one view
-controller per canvas editor, with no additional editor controller wrapper. The window
-does not refresh or operate individual editors. Dependencies and child controllers
-are retained in init; view layout and configuration run in loadView. Initial
-rendering uses current state, and observation does not force unloaded views to load.
-Content does not require a shutdown cascade. AppKit owns observation tracking;
+their parent pane. Each VideoLayersEditor retains its row editing state and
+connects edits directly to the Store. The window does not refresh or operate
+individual editors. Initial rendering uses current state.
+Content does not require a shutdown cascade. SwiftUI owns observation tracking;
 each meter manages its window notifications and drawing lifetime internally.
 Program Preview and runtime shutdown remain explicit, and runtime shutdown
 disconnects the service's runtime actions before releasing resources.

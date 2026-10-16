@@ -123,7 +123,7 @@ extension AppUIComponentTestSuite {
       state.workspaceDefinition.programs = [first, second]
       #expect(inspector.programSelection.wrappedValue == 11)
       data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
-      // AppKit Content and the Inspector resolve the same local selection.
+      // Content and the Inspector resolve the same local selection.
       #expect(
         content.appletData.selectedProgram(
           in: content.stateService.workspaceDefinition, for: content.stateService.localStateURL)?
@@ -202,70 +202,23 @@ extension AppUIComponentTestSuite {
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
-    @Test("Workspace SwiftUI sidebar toggle stays Window local")
-    func swiftUISidebarToggleStaysWindowLocal() async throws {
-      let first = makeWorkspaceTestWindow()
-      let second = makeWorkspaceTestWindow()
-      defer {
-        first.close()
-        second.close()
-      }
-      await settleWorkspaceToolbar(first)
-      first.content.layout.sidebarWidth = 280
-      await settleWorkspaceToolbar(first)
-      let width = first.content.layout.sidebarWidth
-      let contentWidth = first.contentPane.view.bounds.width
-      let preview = first.contentPane.testPairedPreview
-      let item = try #require(
-        first.toolbar?.items.first {
-          $0.itemIdentifier.rawValue == "workspace.toggleSidebar"
-        })
-      #expect(first.contentViewController === first.content)
-      try performWorkspaceToolbarAction(item)
-      try await Task.sleep(for: .milliseconds(500))
-      #expect(!first.stateService.isSidebarVisible)
-      #expect(second.stateService.isSidebarVisible)
-      #expect(first.contentPane.view.bounds.width > contentWidth)
-      try performWorkspaceToolbarAction(item)
-      try await Task.sleep(for: .milliseconds(500))
-      #expect(first.stateService.isSidebarVisible)
-      #expect(abs(first.content.layout.sidebarWidth - width) <= 1)
-      #expect(abs(first.contentPane.view.bounds.width - contentWidth) <= 1)
-      #expect(first.contentPane.testPairedPreview === preview)
-      first.content.toggleInspector(nil)
-      #expect(!first.stateService.isInspectorVisible)
-      first.content.toggleInspector(nil)
-      #expect(first.stateService.isInspectorVisible)
-    }
-
-    @Test("UCT-1016.7: Toolbar pane toggles stay within their own Window")
+    @Test("SwiftUI toolbar pane toggles stay Window local")
     func toolbarActionsStayWithinTheirWindow() async throws {
-      _ = NSApplication.shared
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
       defer {
         first.close()
         second.close()
       }
+      first.orderFront(nil)
       await settleWorkspaceToolbar(first)
-      let toolbar = try #require(first.toolbar)
-      #expect(first.toolbarStyle == .unified)
-      #expect(first.titleVisibility == .visible)
-      let screenshot = try #require(
-        toolbar.items.first {
-          $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
-        })
-      #expect(screenshot.isEnabled)
-      for (identifier, index) in [
-        (NSToolbarItem.Identifier("workspace.toggleSidebar"), 0),
-        (.init("workspace.toggleInspector"), 2),
-      ] {
-        let item = try #require(toolbar.items.first { $0.itemIdentifier == identifier })
-        #expect(item.target === first.content)
-        #expect(!item.autovalidates)
+      let preview = first.contentPane.pairedPreview
+      first.content.layout.sidebarWidth = 280
+      for id in ["workspace.toggleSidebar", "workspace.toggleInspector"] {
+        let item = try #require(first.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
         try performWorkspaceToolbarAction(item)
-        try await Task.sleep(for: .milliseconds(350))
-        if index == 0 {
+        await settleWorkspaceToolbar(first)
+        if id == "workspace.toggleSidebar" {
           #expect(!first.stateService.isSidebarVisible)
           #expect(second.stateService.isSidebarVisible)
         } else {
@@ -273,78 +226,10 @@ extension AppUIComponentTestSuite {
           #expect(second.stateService.isInspectorVisible)
         }
         try performWorkspaceToolbarAction(item)
-        try await Task.sleep(for: .milliseconds(350))
-        #expect(first.stateService.isSidebarVisible)
-        #expect(first.stateService.isInspectorVisible)
+        await settleWorkspaceToolbar(first)
       }
-    }
-
-    @Test("Declared Inspector separator survives toolbar configuration changes")
-    func declaredInspectorSeparatorSurvivesUpdates() async throws {
-      let state = WorkspaceSidebarPreviewFixtures.makeUIState(
-        inspectorSelector: .init(kind: .ocrVision, internalID: 10))
-      let window = makeWorkspaceTestWindow(stateService: state)
-      defer { window.close() }
-      await settleWorkspaceToolbar(window)
-      let toolbar = try #require(window.toolbar)
-      for selector in [
-        .init(kind: .workspaceCanvas),
-        .init(kind: .ocrVision, internalID: 10),
-      ] as [WorkspaceInspectorSelector] {
-        state.inspectorSelector = selector
-        await settleWorkspaceToolbar(window)
-        #expect(window.toolbar === toolbar)
-        let items = toolbar.items
-        let separator = try #require(
-          items.firstIndex {
-            $0.itemIdentifier.rawValue == "workspace.inspectorSeparator"
-          })
-        #expect(items[separator].view is NSBox)
-        #expect(
-          items.filter { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" }.count == 1)
-        #expect(!items.contains { $0.itemIdentifier == .inspectorTrackingSeparator })
-        #expect(items[..<separator].contains { $0.itemIdentifier == .flexibleSpace })
-        #expect(
-          items[(separator + 1)...].contains {
-            $0.itemIdentifier.rawValue == "workspace.inspectorSpace"
-          })
-      }
-      let separatorItem = try #require(
-        toolbar.items.first { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" })
-      let applyID = NSToolbarItem.Identifier("workspace.inspector.apply")
-      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.content.toggleInspector(nil)
-      await settleWorkspaceToolbar(window)
-      #expect(!state.isInspectorVisible)
-      #expect(separatorItem.view?.isHidden == true)
-      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      window.content.toggleInspector(nil)
-      await settleWorkspaceToolbar(window)
-      #expect(state.isInspectorVisible)
-      #expect(separatorItem.view?.isHidden == false)
-      #expect(!toolbar.items.contains { $0.itemIdentifier == applyID })
-      #expect(
-        toolbar.items.first { $0.itemIdentifier.rawValue == "workspace.inspectorSeparator" }
-          === separatorItem)
-    }
-
-    @Test("The toolbar separator follows the custom inspector boundary")
-    func toolbarSeparatorTracksInspectorGeometry() async throws {
-      let window = makeWorkspaceTestWindow()
-      defer { window.close() }
-      window.orderFront(nil)
-      await settleWorkspaceToolbar(window)
-      let separator = try #require(
-        window.toolbar?.items.first {
-          $0.itemIdentifier.rawValue == "workspace.inspectorSeparator"
-        }?.view)
-      for (windowWidth, inspectorWidth): (CGFloat, CGFloat) in [(1200, 400), (1100, 280)] {
-        window.setContentSize(.init(width: windowWidth, height: 700))
-        window.content.layout.inspectorWidth = inspectorWidth
-        await settleWorkspaceToolbar(window)
-        let actual = separator.convert(separator.bounds, to: nil).midX
-        #expect(abs(actual - (windowWidth - inspectorWidth)) <= 1)
-      }
+      #expect(first.content.layout.sidebarWidth == 280)
+      #expect(first.contentPane.pairedPreview === preview)
     }
 
     @Test("Collapsing a side pane preserves its draft and task results", arguments: [true, false])
@@ -498,12 +383,8 @@ extension AppUIComponentTestSuite {
         await settleWorkspaceToolbar(first)
         #expect(first.validateToolbarItem(stop) == stopEnabled)
         #expect(first.validateToolbarItem(toggle) == toggleEnabled)
-        #expect(toggle.label == label)
-        #expect(
-          toggle.image?.tiffRepresentation
-            == NSImage(
-              systemSymbolName: value == .recording ? "pause.fill" : "play.fill",
-              accessibilityDescription: nil)?.tiffRepresentation)
+        #expect(toggle.menuFormRepresentation?.title == label)
+
       }
       state.recordingState = .idle
       try performWorkspaceToolbarAction(toggle)
@@ -530,30 +411,17 @@ extension AppUIComponentTestSuite {
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("UCT-1016.16: Screenshot results use a transient popover without changing output state")
+    @Test("Screenshot results preserve output status and remain Window local")
     func screenshotFailureDoesNotPoisonOutput() async throws {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       let dispatcher = ToolbarDispatcher()
       let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
-      window.orderFront(nil)
-      window.screenshotResultPopover.animates = false
       defer { window.close() }
       state.isOutputActive = true
-      state.isLocalRecording = true
       state.outputFailureMessage = "Existing output failure"
-      await settleWorkspaceToolbar(window)
-      let item = try #require(
-        window.toolbar?.items.first {
-          $0.itemIdentifier.rawValue == "workspace.captureScreenshots"
-        })
       dispatcher.failScreenshot = true
-      try performWorkspaceToolbarAction(item)
-      #expect(window.screenshotResultPopover.isShown)
-      #expect(window.screenshotResultPopover.behavior == .transient)
-      let popoverWindow = try #require(
-        window.screenshotResultPopover.contentViewController?.view.window)
-      #expect(popoverWindow.frame.maxY <= window.frame.maxY)
-      #expect(popoverWindow.frame.maxY >= window.frame.maxY - 70)
+      window.captureScreenshots()
+      #expect(window.content.presentation.screenshot?.title == "Screenshot could not be captured")
       #expect(state.outputFailureMessage == "Existing output failure")
       dispatcher.failScreenshot = false
       for count in [1, 2] {
@@ -562,27 +430,15 @@ extension AppUIComponentTestSuite {
             url: URL(fileURLWithPath: "/tmp/screenshot-\($0).png"),
             programCanvas: $0 == 0 ? .landscape : .portrait)
         }
-        dispatcher.screenshotFiles.append(.init(url: URL(fileURLWithPath: "/tmp/source.png")))
-        try performWorkspaceToolbarAction(item)
-        #expect(window.screenshotResultPopover.isShown)
-        let label = window.screenshotResultPopover.contentViewController?.view.accessibilityLabel()
-        #expect(
-          label == "Screenshots saved. Saved \(count) Program screenshot\(count == 1 ? "" : "s").")
-        let controller = try #require(
-          window.screenshotResultPopover.contentViewController
-            as? NSHostingController<ScreenshotResultView>)
-        #expect(controller.rootView.screenshots.count == 1)
-        #expect(controller.rootView.screenshots.allSatisfy { $0.programCanvas == .landscape })
+        window.captureScreenshots()
+        let result = try #require(window.content.presentation.screenshot)
+        #expect(result.title == "Screenshots saved")
+        #expect(result.screenshots.count == 1)
+        #expect(result.screenshots.allSatisfy { $0.programCanvas == .landscape })
       }
       #expect(state.outputFailureMessage == "Existing output failure")
-      dispatcher.failScreenshot = true
-      try performWorkspaceToolbarAction(item)
       window.close()
-      for _ in 0..<100 {
-        if !window.screenshotResultPopover.isShown { break }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      #expect(!window.screenshotResultPopover.isShown)
+      #expect(window.content.presentation.screenshot == nil)
     }
 
     @Test("UCT-1016.9: Screenshot actions remain available outside local recording")

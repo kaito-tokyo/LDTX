@@ -3,238 +3,71 @@
 
 import AppKit
 import LDTXProtos
-import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletUI
+import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
-  @Suite("UCT-1007: follow-selected-program", .serialized)
-  @MainActor
+  @Suite("UCT-1007: SwiftUI selected Program", .serialized) @MainActor
   struct UCT1007VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
-    @Test("UCT-1007.1: Preview constraints preserve editor size")
-    func previewConstraintsPreserveEditorSize() {
+
+    @Test func namesVisibilityAndDraftsFollowCurrentDefinitions() throws {
       let fixture = VideoLayersTestFixture()
-      let editor = fixture.makeEditor()
-      editor.update(
-        definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
-        canvasWidth: 1920, canvasHeight: 1080)
-      NSLayoutConstraint.activate([
-        editor.view.widthAnchor.constraint(equalToConstant: 720),
-        editor.view.heightAnchor.constraint(equalToConstant: 360),
-      ])
-      #expect(editor.view.fittingSize == NSSize(width: 720, height: 360))
+      let row = try #require(fixture.editor.rows[1])
+      row.edit("-", at: 0)
+      fixture.state.workspaceDefinition.videoComponents[0].vfxSource.displayName = "Renamed"
+      fixture.state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+        .videoLayerHidden[1] = true
+      fixture.editor.synchronizeRows()
+      #expect(row.name == "Renamed")
+      #expect(row.isHidden)
+      #expect(row.strings[0] == "-")
+      fixture.state.workspaceDefinition.videoComponents.removeAll()
+      fixture.editor.synchronizeRows()
+      #expect(row.name == "Missing Video Layer")
+      #expect(!row.supportsPlacement)
     }
 
-    @Test("UCT-1007.2: Editor rows use available width")
-    func editorRowsUseAvailableWidth() throws {
-      let serviceAppletData = WorkspaceAppletData()
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 100
-      service.workspaceDefinition.programs = [program]
-      service.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds =
-        [1, 2]
-      let editor = VideoLayersEditor(
-        stateService: service, appletData: serviceAppletData,
-        target: .landscape)
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
-        styleMask: [.titled], backing: .buffered, defer: false)
-      window.contentViewController = editor
-      window.setContentSize(NSSize(width: 720, height: 360))
-      window.contentView?.layoutSubtreeIfNeeded()
-      let row = try #require(
-        editor.table.view(atColumn: 0, row: 0, makeIfNecessary: true)
-          as? VideoLayersTableRow)
-      row.layoutSubtreeIfNeeded()
-      #expect(editor.table.enclosingScrollView == nil)
-      #expect(editor.table.frame.width >= 690)
-      #expect(editor.table.frame.height >= editor.table.intrinsicContentSize.height - 0.5)
-      #expect(editor.table.rect(ofRow: 1).maxY <= editor.table.bounds.height + 0.5)
-      #expect(row.frame.width >= 670)
-      #expect(row.rootView.state === row.state)
-      #expect(row.rootView.canvasWidth == 1920)
-      #expect(row.rootView.canvasHeight == 1080)
-    }
-
-    @Test("UCT-1007.3: Editor owns observation without loading view until used")
-    func editorOwnsObservationWithoutLoadingViewUntilUsed() async throws {
-      let stateServiceAppletData = WorkspaceAppletData()
-      let stateService = WorkspaceStateService(definition: .init(), preferences: .init())
-      let editor = VideoLayersEditor(
-        stateService: stateService, appletData: stateServiceAppletData, target: .landscape)
-      #expect(!editor.isViewLoaded)
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 100
-      stateService.workspaceDefinition.programs = [program]
-      stateService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds = [1]
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
-        backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.contentViewController = editor
-      window.orderFront(nil)
-      defer { window.close() }
-      window.contentView?.layoutSubtreeIfNeeded()
-      #expect(editor.table.layerIDs == [1])
-      stateService.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds = [1, 2]
-      for _ in 0..<50 {
-        if editor.table.layerIDs == [1, 2] { break }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      #expect(editor.table.layerIDs == [1, 2])
-    }
-
-    @Test("UCT-1007.4: Hidden video tab uses latest state when shown")
-    func hiddenVideoTabUsesLatestStateWhenShown() async throws {
-      let serviceAppletData = WorkspaceAppletData()
-      _ = NSApplication.shared
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 100
-      service.workspaceDefinition.programs = [program]
-      service.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds =
-        [1]
-      service.workspacePreferences.portraitProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds =
-        [2]
-      let landscape = VideoLayersEditor(
-        stateService: service, appletData: serviceAppletData,
-        target: .landscape)
-      let portrait = VideoLayersEditor(
-        stateService: service, appletData: serviceAppletData,
-        target: .portrait)
-      let tabs = NSTabViewController()
-      tabs.addTabViewItem(NSTabViewItem(viewController: landscape))
-      tabs.addTabViewItem(NSTabViewItem(viewController: portrait))
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 720, height: 400), styleMask: [.titled],
-        backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.contentViewController = tabs
-      window.orderFront(nil)
-      defer { window.close() }
-      service.workspacePreferences.portraitProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds =
-        [2, 3]
-      tabs.selectedTabViewItemIndex = 1
-      for _ in 0..<100 {
-        if portrait.table.layerIDs == [2, 3] { break }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      #expect(portrait.table.layerIDs == [2, 3])
-    }
-
-    @Test("UCT-1007.5: Editor reuses rows and refreshes save connections")
-    func editorReusesRowsAndRefreshesSaveConnections() throws {
+    @Test func programChangeDiscardsDraftAndInvalidatesOldCallbacks() throws {
       let fixture = VideoLayersTestFixture()
-      let editor = fixture.makeEditor()
-      var saved: [Int64] = []
-      editor.update(
-        definition: .init(), programPreferences: .init(), layerIDs: [1, 2],
-        canvasWidth: 1920, canvasHeight: 1080,
-        onCommitTransform: { id, value in
-          saved.append(id)
-          return value
-        })
-      let row = try #require(editor.table.rows[1])
-      #expect(row.delegate === editor)
-      row.state.strings[0] = "960"
-      row.state.hasLocalTextChanges = true
-      editor.update(
-        definition: .init(), programPreferences: .init(), layerIDs: [2, 1],
-        canvasWidth: 1920, canvasHeight: 1080,
-        onCommitTransform: { id, value in
-          saved.append(id + 100)
-          return value
-        })
-      #expect(editor.table.rows[1] === row)
-      #expect(row.state.strings[0] == "960")
-      row.state.onCommit()
-      #expect(saved == [101])
-      editor.update(
-        definition: .init(), programPreferences: .init(), layerIDs: [2, 1],
-        canvasWidth: 1080, canvasHeight: 1920)
-      let replacement = try #require(editor.table.rows[1])
-      #expect(replacement !== row)
-      #expect(replacement.rootView.canvasWidth == 1080)
-      #expect(replacement.rootView.canvasHeight == 1920)
-      #expect(!row.state.hasLocalTextChanges)
+      let old = try #require(fixture.editor.rows[1])
+      old.edit("-", at: 0)
+      fixture.state.workspaceDefinition.programs = [.with { $0.internalID = 200 }]
+      fixture.state.workspacePreferences.landscapeProgramPreferences[200] =
+        fixture.state.workspacePreferences.landscapeProgramPreferences[100]
+      fixture.editor.synchronizeRows()
+      #expect(fixture.editor.rows[1] !== old)
+      #expect(fixture.editor.rows[1]?.hasLocalTextChanges == false)
+      let before = fixture.state.workspacePreferences
+      old.edit("960", at: 0)
+      old.onSetHidden(true)
+      #expect(fixture.state.workspacePreferences == before)
     }
 
-    @Test("UCT-1007.6: Resolves and updates names from definition")
-    func resolvesAndUpdatesNamesFromDefinition() throws {
+    @Test func canvasEditorsRemainIndependent() throws {
       let fixture = VideoLayersTestFixture()
-      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-      var device = Ldtx_Workspace_V4_VfxSourceComponent()
-      device.internalID = 1
-      device.displayName = "Camera"
-      var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      wrapper.vfxSource = device
-      definition.videoComponents = [wrapper]
-      var clock = Ldtx_Workspace_V4_ClockComponent()
-      clock.internalID = 3
-      clock.displayName = "Clock"
-      var component = Ldtx_Workspace_V4_VideoComponentWrapper()
-      component.clock = clock
-      definition.videoComponents.append(component)
-      let editor = fixture.makeEditor()
-      let table = editor.table
-      editor.update(
-        definition: definition, programPreferences: .init(), layerIDs: [1, 2, 3], canvasWidth: 1920,
-        canvasHeight: 1080)
-      let row = try #require(table.rows[1])
-      #expect(row.state.name == "Camera")
-      #expect(table.rows[3]?.state.name == "Clock")
-      definition.videoComponents[0].vfxSource.displayName = "Renamed"
-      editor.update(
-        definition: definition, programPreferences: .init(), layerIDs: [1, 2, 3], canvasWidth: 1920,
-        canvasHeight: 1080)
-      #expect(table.rows[1] === row)
-      #expect(row.state.name == "Renamed")
-      #expect(table.rows[2]?.state.name == "Missing Video Layer")
+      let portrait = VideoLayersEditorState(
+        stateService: fixture.state, appletData: fixture.data, target: .portrait)
+      #expect(portrait.layerIDs.isEmpty)
+      fixture.state.workspacePreferences.portraitProgramPreferences[100, default: .init()]
+        .videoLayerInternalIds = [2]
+      portrait.synchronizeRows()
+      #expect(portrait.rows.keys.sorted() == [2])
+      #expect(fixture.editor.rows.keys.sorted() == [1, 2, 3])
     }
 
-    @Test("UCT-1007.7: Changing program discards transform draft")
-    func changingProgramDiscardsTransformDraft() throws {
-      let stateAppletData = WorkspaceAppletData()
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 1
-      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-      definition.programs = [program]
-      let state = WorkspaceStateService(definition: definition, preferences: .init())
-      state.workspacePreferences.landscapeProgramPreferences[1, default: .init()]
-        .videoLayerInternalIds = [
-          1, 2, 3,
-        ]
-      let content = VideoLayersEditor(
-        stateService: state, appletData: stateAppletData,
-        target: .landscape)
-      let editor = content
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
-        backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.contentViewController = content
-      defer {
-        window.close()
-      }
-      content.refresh()
-      let old = try #require(editor.table.rows[1])
-      old.state.strings[0] = "draft"
-      old.state.hasLocalTextChanges = true
-      state.workspacePreferences.landscapeProgramPreferences[2] =
-        state.workspacePreferences.landscapeProgramPreferences[1]
-      state.workspaceDefinition.programs[0].internalID = 2
-      content.refresh()
-      #expect(editor.table.rows[1] !== old)
-      #expect(editor.table.rows[1]?.state.hasLocalTextChanges == false)
+    @Test func onlyPositionableComponentsExposePlacement() throws {
+      let fixture = VideoLayersTestFixture(ids: [1, 2, 3])
+      fixture.state.workspaceDefinition.videoComponents = [
+        .with { $0.vfxSource.internalID = 1 },
+        .with { $0.clock.internalID = 2 },
+        WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
+      ]
+      fixture.editor.synchronizeRows()
+      #expect(fixture.editor.rows[1]?.supportsPlacement == true)
+      #expect(fixture.editor.rows[2]?.supportsPlacement == true)
+      #expect(fixture.editor.rows[3]?.supportsPlacement == false)
     }
-
   }
 }

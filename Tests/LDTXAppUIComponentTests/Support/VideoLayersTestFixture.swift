@@ -2,117 +2,55 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXBackgroundSegmentation
 import LDTXProtos
 @testable import LDTXWorkspaceAppletUI
+import SwiftUI
 import Testing
 
 @MainActor
 final class VideoLayersTestFixture {
-  var editors: [ObjectIdentifier: VideoLayersEditor] = [:]
-  var reportedErrors: [String] = []
-  func makeEditor() -> VideoLayersEditor {
-    let editor = VideoLayersEditor(
-      stateService: WorkspaceStateService(definition: .init(), preferences: .init()),
-      appletData: WorkspaceAppletData(), target: .landscape)
-    _ = editor.view
-    return editor
-  }
+  let state = WorkspaceStateService(definition: .init(), preferences: .init())
+  let data = WorkspaceAppletData()
+  let editor: VideoLayersEditorState
 
-  func makeTable() -> VideoLayersTableView {
-    let editor = makeEditor()
-    editors[ObjectIdentifier(editor.table)] = editor
-    return editor.table
-  }
-
-  func makeContainer() -> (scrollView: NSScrollView, table: VideoLayersTableView) {
-    let table = makeTable()
-    let scrollView = NSScrollView()
-    scrollView.hasVerticalScroller = true
-    scrollView.documentView = table
-    return (scrollView, table)
-  }
-
-  func update(
-    _ table: VideoLayersTableView,
-    ids: [Int64] = [1, 2, 3],
-    preferences: Ldtx_Workspace_V4_ProgramPreferences = .init(),
-    commit: @escaping (Int64, Ldtx_Workspace_V4_BasicTransform) throws -> Void = { _, _ in },
-    order: @escaping ([Int64]) throws -> Void = { _ in },
-    setHidden: @escaping (Int64, Bool) throws -> Void = { _, _ in },
-    onError: @escaping (Error) -> Void = { _ in }
-  ) {
-    let editor = editors[ObjectIdentifier(table)] ?? makeEditor()
-    editors[ObjectIdentifier(table)] = editor
-    editor.update(
-      definition: .with { definition in
-        definition.videoComponents = ids.map { id in
-          .with { $0.vfxSource.internalID = id }
-        }
-      }, programPreferences: preferences, layerIDs: ids,
-      canvasWidth: 1920, canvasHeight: 1080,
-      onCommitTransform: { id, value in
-        try commit(id, value)
-        return value
-      },
-      onSetHidden: setHidden, onCommitLayerOrder: order,
-      onError: { [weak self] error in
-        self?.reportedErrors.append(error.localizedDescription)
-        onError(error)
-      })
-    if editor.table !== table {
-      table.update(
-        layerIDs: ids, rows: editor.table.rows,
-        onCommitLayerOrder: order, onError: onError)
+  init(ids: [Int64] = [1, 2, 3]) {
+    state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
+    state.workspaceDefinition.videoComponents = ids.map { id in
+      .with {
+        $0.vfxSource.internalID = id
+        $0.vfxSource.displayName = "Layer \(id)"
+      }
     }
+    state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+      .videoLayerInternalIds = ids
+    editor = VideoLayersEditorState(stateService: state, appletData: data, target: .landscape)
   }
-
-  func nativeFields(in view: NSView) -> [NSTextField] {
-    if let field = view as? NSTextField, field.isEditable { return [field] }
-    return view.subviews.flatMap { nativeFields(in: $0) }
+  func update(ids: [Int64]) {
+    state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+      .videoLayerInternalIds = ids
+    editor.synchronizeRows()
   }
-}
-@MainActor
-final class LayerDraggingInfo: NSObject, NSDraggingInfo {
-  let draggingSource: Any?
-  let draggingPasteboard = NSPasteboard.withUniqueName()
-  var draggingDestinationWindow: NSWindow? { nil }
-  var draggingSourceOperationMask: NSDragOperation { .move }
-  var draggingLocation: NSPoint = .zero
-  var draggedImageLocation: NSPoint { .zero }
-  nonisolated var draggedImage: NSImage? { nil }
-  var draggingSequenceNumber: Int { 1 }
-  var draggingFormation: NSDraggingFormation = .none
-  var animatesToDestination = false
-  var numberOfValidItemsForDrop = 1
-  var springLoadingHighlight: NSSpringLoadingHighlight { .none }
-
-  init(source: VideoLayersTableView, id: Int64) {
-    draggingSource = source
-    super.init()
-    let item = NSPasteboardItem()
-    item.setString(String(id), forType: VideoLayersTableView.pasteboardType)
-    draggingPasteboard.writeObjects([item])
-  }
-
-  func slideDraggedImage(to screenPoint: NSPoint) {}
-  nonisolated override func namesOfPromisedFilesDropped(atDestination dropDestination: URL)
-    -> [String]?
-  { nil }
-  func resetSpringLoading() {}
-  func enumerateDraggingItems(
-    options enumOpts: NSDraggingItemEnumerationOptions,
-    for view: NSView?, classes classArray: [AnyClass],
-    searchOptions: [NSPasteboard.ReadingOptionKey: Any],
-    using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void
-  ) {}
 }
 
 @MainActor
-final class DropRecordingTable: VideoLayersTableView {
-  var insertionRow = -1
-  override func setDropRow(_ row: Int, dropOperation: NSTableView.DropOperation) {
-    insertionRow = row
-    super.setDropRow(row, dropOperation: dropOperation)
-  }
+func workspaceDescendants(_ view: NSView) -> [NSView] {
+  [view] + view.subviews.flatMap { workspaceDescendants($0) }
+}
+
+@MainActor
+func hostWorkspaceView<V: View>(_ root: V, width: CGFloat = 720, height: CGFloat = 400) -> NSWindow
+{
+  let window = NSWindow(contentViewController: NSHostingController(rootView: root))
+  window.isReleasedWhenClosed = false
+  window.setContentSize(.init(width: width, height: height))
+  window.orderFront(nil)
+  window.contentView?.layoutSubtreeIfNeeded()
+  return window
+}
+
+@MainActor
+func editWorkspaceField(_ field: NSTextField, text: String, window: NSWindow) throws {
+  #expect(window.makeFirstResponder(field))
+  let editor = try #require(field.currentEditor() as? NSTextView)
+  editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
 }

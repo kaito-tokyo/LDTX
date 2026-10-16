@@ -1,223 +1,51 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
-//
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
 import LDTXProgram
 import MetalKit
+import SwiftUI
 
-final class AudioChannelControlView: NSView {
-  private enum Layout {
-    static let rowHeight: CGFloat = 48
-    static let meterHeight: CGFloat = 18
-    static let meterCornerRadius: CGFloat = 5
-    static let rowSpacing: CGFloat = 6
-  }
+struct AudioChannelControl: View {
+  @Binding var value: Double
+  let peakProvider: () -> Float
+  var showsValue = true
+  var title = "Gain"
 
-  private let slider = TrackingNSSlider(
-    value: 0,
-    minValue: ProgramPreferences.minimumAudioChannelGainDecibels,
-    maxValue: ProgramPreferences.maximumAudioChannelGainDecibels,
-    target: nil,
-    action: nil
-  )
-  private var titleSpacingConstraint: NSLayoutConstraint?
-  private var meterBottomConstraint: NSLayoutConstraint?
-  private var meterCenterConstraint: NSLayoutConstraint?
-  private let titleLabel = NSTextField(labelWithString: "")
-  private var valueWidthConstraint: NSLayoutConstraint?
-  private var valueGapConstraint: NSLayoutConstraint?
-  private var valueWidth: CGFloat = 0
-  private let valueLabel = NSTextField(labelWithString: "")
-  private let meterWindow = NSView()
-  private var meterView: AudioPeakMeterMTKView?
-  private var onPreview: (Double) -> Void = { _ in }
-  private var onCommit: (Double) -> Void = { _ in }
-
-  override var intrinsicContentSize: NSSize {
-    NSSize(
-      width: NSView.noIntrinsicMetric,
-      height: titleLabel.stringValue.isEmpty ? Layout.meterHeight : Layout.rowHeight)
-  }
-
-  override init(frame frameRect: NSRect) {
-    super.init(frame: frameRect)
-    setup()
-  }
-
-  required init?(coder: NSCoder) {
-    super.init(coder: coder)
-    setup()
-  }
-
-  func configure(
-    label: String,
-    value: Double,
-    showsValue: Bool = true,
-    isEnabled: Bool = true,
-    peakProvider: (() -> Float)?,
-    onPreview: @escaping (Double) -> Void,
-    onCommit: @escaping (Double) -> Void
-  ) {
-    valueLabel.isHidden = !showsValue
-    valueWidthConstraint?.constant = showsValue ? valueWidth : 0
-    valueGapConstraint?.constant = showsValue ? -8 : 0
-    slider.isEnabled = isEnabled
-    alphaValue = isEnabled ? 1 : 0.5
-    titleLabel.stringValue = label
-    titleLabel.isHidden = label.isEmpty
-    titleSpacingConstraint?.isActive = !label.isEmpty
-    meterBottomConstraint?.isActive = !label.isEmpty
-    meterCenterConstraint?.isActive = label.isEmpty
-    invalidateIntrinsicContentSize()
-    if let peakProvider {
-      if meterView == nil {
-        let meter = AudioPeakMeterMTKView()
-        meter.translatesAutoresizingMaskIntoConstraints = false
-        meter.isHidden = meter.device == nil
-        meterWindow.addSubview(meter, positioned: .below, relativeTo: slider)
-        NSLayoutConstraint.activate([
-          meter.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor),
-          meter.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor),
-          meter.topAnchor.constraint(equalTo: meterWindow.topAnchor),
-          meter.bottomAnchor.constraint(equalTo: meterWindow.bottomAnchor),
-        ])
-        meterView = meter
+  var body: some View {
+    HStack(spacing: 8) {
+      Slider(value: $value, in: -80...20)
+        .accessibilityLabel(title)
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .background {
+          AudioPeakMeter(peakProvider: peakProvider)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+      if showsValue {
+        Text(value, format: .number.precision(.fractionLength(1)))
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .frame(width: 44, alignment: .trailing)
+        Text("dB").foregroundStyle(.secondary)
       }
-      meterView?.peakProvider = peakProvider
-    } else {
-      meterView?.isPaused = true
-      meterView?.removeFromSuperview()
-      meterView = nil
-    }
-    self.onPreview = onPreview
-    self.onCommit = onCommit
-    if !slider.isEditing {
-      setValue(value)
-    } else {
-      updateValueLabel(slider.doubleValue)
     }
   }
+}
 
-  func setValue(_ value: Double) {
-    let decibels = ProgramPreferences.audioChannelGainDecibels(fromLinearGain: value)
-    setDecibelValue(decibels)
+private struct AudioPeakMeter: NSViewRepresentable {
+  let peakProvider: () -> Float
+  func makeNSView(context: Context) -> AudioPeakMeterMTKView {
+    let view = AudioPeakMeterMTKView()
+    view.peakProvider = peakProvider
+    return view
   }
-
-  private func setup() {
-    translatesAutoresizingMaskIntoConstraints = false
-
-    titleLabel.lineBreakMode = .byTruncatingMiddle
-    titleLabel.maximumNumberOfLines = 1
-    titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-    slider.isContinuous = true
-    slider.numberOfTickMarks = 0
-    slider.translatesAutoresizingMaskIntoConstraints = false
-    slider.controlSize = .small
-    slider.alphaValue = 0.92
-    slider.target = self
-    slider.action = #selector(sliderChanged(_:))
-    slider.onEditingEnded = { [weak self] slider in
-      self?.sliderEditingEnded(slider)
-    }
-
-    valueLabel.alignment = .right
-    valueLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-    valueLabel.textColor = .secondaryLabelColor
-    valueLabel.setContentHuggingPriority(.required, for: .horizontal)
-    valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-    meterWindow.wantsLayer = true
-    meterWindow.layer?.cornerRadius = Layout.meterCornerRadius
-    meterWindow.layer?.masksToBounds = true
-    meterWindow.translatesAutoresizingMaskIntoConstraints = false
-
-    meterWindow.addSubview(slider)
-
-    for view in [titleLabel, meterWindow, valueLabel] {
-      view.translatesAutoresizingMaskIntoConstraints = false
-      addSubview(view)
-    }
-
-    let preferredMeterWidth = meterWindow.widthAnchor.constraint(
-      greaterThanOrEqualToConstant: 190
-    )
-    preferredMeterWidth.priority = .defaultLow
-
-    // Reserve the widest dB text in the slider's range so changing the
-    // sign or digit count never changes the meter width.
-    let decibelLabels = [
-      String(format: "%+.1f dB", ProgramPreferences.minimumAudioChannelGainDecibels),
-      String(format: "%+.1f dB", ProgramPreferences.maximumAudioChannelGainDecibels),
-      "0.0 dB",
-    ]
-    valueWidth = ceil(
-      decibelLabels.map {
-        ($0 as NSString).size(withAttributes: [.font: valueLabel.font!]).width
-      }.max() ?? 0)
-
-    valueWidthConstraint = valueLabel.widthAnchor.constraint(equalToConstant: valueWidth)
-    valueGapConstraint = meterWindow.trailingAnchor.constraint(
-      equalTo: valueLabel.leadingAnchor, constant: -8)
-    NSLayoutConstraint.activate([
-      valueWidthConstraint!,
-      valueGapConstraint!,
-      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-      titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-      titleLabel.topAnchor.constraint(equalTo: topAnchor),
-      meterWindow.leadingAnchor.constraint(equalTo: leadingAnchor),
-      slider.leadingAnchor.constraint(equalTo: meterWindow.leadingAnchor, constant: 10),
-      slider.trailingAnchor.constraint(equalTo: meterWindow.trailingAnchor, constant: -10),
-      slider.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
-      meterWindow.heightAnchor.constraint(equalToConstant: Layout.meterHeight),
-      preferredMeterWidth,
-      valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-      valueLabel.centerYAnchor.constraint(equalTo: meterWindow.centerYAnchor),
-    ])
-    titleSpacingConstraint = titleLabel.bottomAnchor.constraint(
-      equalTo: meterWindow.topAnchor, constant: -Layout.rowSpacing)
-    titleSpacingConstraint?.isActive = true
-    meterBottomConstraint = meterWindow.bottomAnchor.constraint(equalTo: bottomAnchor)
-    meterCenterConstraint = meterWindow.centerYAnchor.constraint(equalTo: centerYAnchor)
-    meterBottomConstraint?.isActive = true
+  func updateNSView(_ view: AudioPeakMeterMTKView, context: Context) {
+    view.peakProvider = peakProvider
   }
-
-  private func setDecibelValue(_ decibels: Double) {
-    slider.doubleValue = decibels
-    updateValueLabel(decibels)
+  static func dismantleNSView(_ view: AudioPeakMeterMTKView, coordinator: ()) {
+    view.isPaused = true
+    view.peakProvider = nil
   }
-
-  private func updateValueLabel(_ decibels: Double) {
-    let clampedDecibels = min(
-      max(decibels, ProgramPreferences.minimumAudioChannelGainDecibels),
-      ProgramPreferences.maximumAudioChannelGainDecibels
-    )
-    if abs(clampedDecibels) < 0.05 {
-      valueLabel.stringValue = "0.0 dB"
-    } else {
-      valueLabel.stringValue = String(format: "%+.1f dB", clampedDecibels)
-    }
-  }
-
-  @objc private func sliderChanged(_ sender: TrackingNSSlider) {
-    let decibels = sender.doubleValue
-    let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
-    setDecibelValue(decibels)
-    onPreview(gain)
-    if !sender.isEditing {
-      onCommit(gain)
-    }
-  }
-
-  private func sliderEditingEnded(_ sender: TrackingNSSlider) {
-    let decibels = sender.doubleValue
-    let gain = ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
-    setDecibelValue(decibels)
-    onPreview(gain)
-    onCommit(gain)
-  }
-
 }
 
 final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
@@ -448,17 +276,5 @@ final class AudioPeakMeterMTKView: MTKView, MTKViewDelegate {
       x0, y1, 0, 1, color.0, color.1, color.2, color.3,
     ]
     vertices.append(contentsOf: rectVertices)
-  }
-}
-
-final class TrackingNSSlider: NSSlider {
-  var onEditingEnded: ((TrackingNSSlider) -> Void)?
-  private(set) var isEditing = false
-
-  override func mouseDown(with event: NSEvent) {
-    isEditing = true
-    super.mouseDown(with: event)
-    isEditing = false
-    onEditingEnded?(self)
   }
 }

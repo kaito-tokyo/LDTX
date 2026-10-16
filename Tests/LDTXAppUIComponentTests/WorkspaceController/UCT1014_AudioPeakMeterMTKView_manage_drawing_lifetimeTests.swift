@@ -57,28 +57,28 @@ extension AppUIComponentTestSuite {
       #expect(releasedMeter == nil)
 
       let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      var audio: AudioMixEditor? = AudioMixEditor(
-        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in })
-      var master: MasterVolumeEditor? = MasterVolumeEditor(
-        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in })
-      var layers: VideoLayersEditor? = VideoLayersEditor(
-        stateService: service, appletData: serviceAppletData,
-        target: .landscape)
-      weak var releasedAudio = audio
-      weak var releasedMaster = master
-      weak var releasedLayers = layers
-      _ = audio?.view
-      _ = master?.view
-      _ = layers?.view
-      audio = nil
-      master = nil
-      layers = nil
-      #expect(releasedAudio == nil)
-      #expect(releasedMaster == nil)
-      #expect(releasedLayers == nil)
+      var host: NSHostingController<MasterVolumeEditor>? = NSHostingController(
+        rootView: MasterVolumeEditor(
+          stateService: service, appletData: serviceAppletData, peakMeter: .init(),
+          reportError: { _ in }))
+      weak var releasedHost = host
+      let window = NSWindow(contentViewController: host!)
+      window.isReleasedWhenClosed = false
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      weak var hostedMeter = workspaceDescendants(host!.view)
+        .compactMap { $0 as? AudioPeakMeterMTKView }.first
+      #expect(hostedMeter != nil)
+      window.close()
+      #expect(hostedMeter?.isPaused != false)
+      window.contentViewController = nil
+      host = nil
+      for _ in 0..<50 {
+        if releasedHost == nil && hostedMeter == nil { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(releasedHost == nil)
+      #expect(hostedMeter == nil)
     }
-
   }
 }

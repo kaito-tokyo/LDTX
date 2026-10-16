@@ -92,17 +92,8 @@ extension AppUIComponentTestSuite {
       #expect(!document.hasTestModelChanges)
       service.isOutputActive = false
       try controller.selectProgram(internalID: 101)
-      let editor = MasterVolumeEditor(
-        stateService: service, appletData: document.appletData, peakMeter: .init(),
-        reportError: { _ in })
-      _ = editor.view
-      let field = editor.masterFields[0]
-      field.stringValue = "invalid"
-      field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      #expect(field.dirty && field.stringValue == "invalid")
-      #expect(!document.hasTestModelChanges)
-      field.stringValue = "-12"
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
+      service.workspacePreferences.landscapeProgramPreferences[101, default: .init()]
+        .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
       try controller.removeProgram(internalID: 101)
       #expect(service.workspaceDefinition.programs.map(\.internalID) == [100])
       #expect(service.workspacePreferences.landscapeProgramPreferences[101] == nil)

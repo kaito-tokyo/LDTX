@@ -96,7 +96,7 @@ extension AppUIComponentTestSuite {
         items.firstIndex { $0.itemIdentifier.rawValue == "workspace.runInference" })
       let item = items[index]
       #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
-      #expect(item.image != nil && !window.validateToolbarItem(item))
+      #expect(item.menuFormRepresentation != nil && !window.validateToolbarItem(item))
       store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2)
       await settleWorkspaceToolbar(window)
       #expect(!window.validateToolbarItem(item))

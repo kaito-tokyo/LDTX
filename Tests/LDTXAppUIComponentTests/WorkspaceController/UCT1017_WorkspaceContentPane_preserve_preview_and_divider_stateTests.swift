@@ -20,6 +20,20 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1017: preserve-preview-and-divider-state", .serialized)
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
+    @Test func hostingAndToolbarReleaseTheirController() async {
+      weak var released: WorkspaceViewController?
+      autoreleasepool {
+        let window = makeWorkspaceTestWindow()
+        released = window.content
+        window.close()
+        window.contentViewController = nil
+      }
+      for _ in 0..<50 {
+        if released == nil { break }
+        try? await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(released == nil)
+    }
     @Test func unrepresentedDocumentReleasesItsResourceRegistration() {
       var released: [UUID] = []
       var document: WorkspaceDocument? = WorkspaceDocument {
@@ -51,7 +65,6 @@ extension AppUIComponentTestSuite {
       #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)
       #expect(controller.windowRuntime.portraitRuntime === resources.portrait)
       #expect(controller.windowRuntime.captureSessionCoordinator === resources.capture)
-      #expect(view.superview === controller.pairedPreview)
       #expect(view.delegate === controller.previewRenderer)
       #expect(released.isEmpty)
       await controller.shutdown()
@@ -81,273 +94,73 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
-    @Test("UCT-1017.1: Content reflects output failures through AppKit Observation")
-    func editorsObserveStoreThroughAppKitLayout() async throws {
-      let serviceAppletData = WorkspaceAppletData()
-      _ = NSApplication.shared
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      let content = AudioMixEditor(
-        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in })
-      #expect(!content.isViewLoaded)
-      service.outputFailureMessage = "Initial failure"
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
-        backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.contentViewController = content
-      window.orderFront(nil)
-      defer { window.close() }
-      window.contentView?.layoutSubtreeIfNeeded()
-      #expect(content.outputErrorLabel.stringValue == "Initial failure")
-      service.outputFailureMessage = "Updated failure"
-      for _ in 0..<50 {
-        if content.outputErrorLabel.stringValue == "Updated failure" { break }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      #expect(content.outputErrorLabel.stringValue == "Updated failure")
-    }
-
-    @Test("UCT-1017.2: Video tabs and audio selection remain independent and Window local")
-    func contentTabsAndAudioTargetAreIndependentAndWindowLocal() {
+    @Test("SwiftUI preview keeps its Metal surface through layout and tab changes")
+    func previewIdentityAndCanvasSelection() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
       defer {
         first.close()
         second.close()
       }
-      #expect(
-        first.contentPane.testVideoTabs.tabViewItems.map(\.label) == [
-          "Landscape Video Layers", "Portrait Video Layers",
-        ])
-      #expect(first.contentPane.testVideoTabs.selectedTabViewItemIndex == 0)
-      #expect(
-        first.contentPane.testAudioMixEditor.view.isDescendant(
-          of: first.contentPane.view))
-      first.contentPane.testVideoTabs.selectedTabViewItemIndex = 1
-      #expect(first.contentPane.stateService.selectedAudioMix == .landscape)
-      first.contentPane.stateService.selectedAudioMix = .portrait
-      #expect(first.contentPane.stateService.selectedAudioMix == .portrait)
-      #expect(first.contentPane.testVideoTabs.selectedTabViewItemIndex == 1)
-      #expect(second.contentPane.testVideoTabs.selectedTabViewItemIndex == 0)
-    }
-
-    @Test("UCT-1017.3: Window shutdown stops the owned Preview renderer")
-    func controllerOwnsAndStopsPreviewRenderer() async throws {
-      _ = NSApplication.shared
-      let document = WorkspaceDocument()
-      defer { document.close() }
-      let frameKey = "NSWindow Frame WorkspaceV4.AppKit.v1"
-      let savedFrame = UserDefaults.standard.object(forKey: frameKey)
-      defer {
-        if let savedFrame {
-          UserDefaults.standard.set(savedFrame, forKey: frameKey)
-        } else {
-          UserDefaults.standard.removeObject(forKey: frameKey)
-        }
-      }
-      let controller = WorkspaceWindowController(
-        stateService: document.stateService,
-        persistenceCoordinator: document.persistenceCoordinator,
-        appletData: WorkspaceAppletData(), document: document)
-      document.addWindowController(controller)
-      let window = try #require(controller.window as? WorkspaceTestWindow)
-      #expect(
-        window.contentPane.testPairedPreview.metalView.delegate === controller.previewRenderer)
-      #expect(
-        controller.windowRuntime.landscapeRuntime
-          !== controller.windowRuntime.portraitRuntime)
-      await controller.shutdown()
-      #expect(window.contentPane.testPairedPreview.metalView.delegate == nil)
-      #expect(window.contentPane.testPairedPreview.metalView.isPaused)
-      window.close()
-      document.close()
-    }
-
-    @Test("UCT-1017.4: Preview uses injected runtimes and its own Program selection")
-    func contentPreviewUsesInjectedRuntimesAndTracksItsOwnProgram() {
-      _ = NSApplication.shared
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
-      let otherState = WorkspaceStateService(definition: .init(), preferences: .init())
-      let first = makeWorkspaceTestWindow(stateService: state)
-      let second = makeWorkspaceTestWindow(stateService: otherState)
-      defer {
-        first.close()
-        second.close()
-      }
-      let firstPreview = first.contentPane.testPairedPreview
-      let firstDelegate = firstPreview.metalView.delegate
-      #expect(firstPreview !== second.contentPane.testPairedPreview)
-      #expect(firstDelegate !== second.contentPane.testPairedPreview.metalView.delegate)
-      #expect(
-        first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.stateService.workspaceDefinition,
-          for: first.contentPane.stateService.localStateURL) == nil)
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 42
-      program.displayName = "Preview"
-      state.workspaceDefinition.programs = [program]
-      #expect(
-        first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.stateService.workspaceDefinition,
-          for: first.contentPane.stateService.localStateURL) != nil)
-      #expect(
-        second.contentPane.appletData.selectedProgram(
-          in: second.contentPane.stateService.workspaceDefinition,
-          for: second.contentPane.stateService.localStateURL) == nil)
-      for value in [WorkspaceRecordingState.idle, .recording, .paused] {
-        state.recordingState = value
-        #expect(
-          first.contentPane.appletData.selectedProgram(
-            in: first.contentPane.stateService.workspaceDefinition,
-            for: first.contentPane.stateService.localStateURL) != nil)
-        #expect(first.contentPane.testPairedPreview === firstPreview)
-        #expect(firstPreview.metalView.delegate === firstDelegate)
-      }
-      state.workspaceDefinition.programs = []
-      #expect(
-        first.contentPane.appletData.selectedProgram(
-          in: first.contentPane.stateService.workspaceDefinition,
-          for: first.contentPane.stateService.localStateURL) == nil)
-    }
-
-    @Test("UCT-1017.5: Preview selection and Divider position remain Window local")
-    func swiftUIPreviewSelectionAndSplitPositionAreWindowLocal() async throws {
-      _ = NSApplication.shared
-      let url = URL(fileURLWithPath: "/tmp/PreviewLayout-\(UUID()).ldtxworkspace")
-      let suite = "PreviewLayout-\(UUID())"
-      let defaults = try #require(UserDefaults(suiteName: suite))
-      defer { defaults.removePersistentDomain(forName: suite) }
-      let data = WorkspaceAppletData(userDefaults: defaults)
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
-      let definition = state.workspaceDefinition
-      let preferences = state.workspacePreferences
-      let outputSettings = state.workspaceOutputSettings
-      let externalID = UUID().uuidString.lowercased()
-      let dividerKey = "WorkspaceContentPane.\(externalID).previewHeight"
-      let savedDivider = UserDefaults.standard.object(forKey: dividerKey)
-      defer {
-        if let savedDivider {
-          UserDefaults.standard.set(savedDivider, forKey: dividerKey)
-        } else {
-          UserDefaults.standard.removeObject(forKey: dividerKey)
-        }
-      }
-      let first = makeWorkspaceTestWindow(
-        stateService: state, appletData: data, url: url, externalID: externalID)
-      defer { first.close() }
-      let pane = first.contentPane
-      #expect(pane.testPairedPreview.metalView.delegate != nil)
       first.orderFront(nil)
       await settleWorkspaceToolbar(first)
-      #expect(pane.testEditorScrollView.isDescendant(of: pane.view))
-      #expect(pane.testEditorScrollView.hasVerticalScroller)
-      pane.layout.resizePreview(to: pane.view.bounds.height - 80)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      let editorDocument = try #require(pane.testEditorScrollView.documentView)
-      #expect(editorDocument is NSStackView)
-      #expect(editorDocument.isFlipped)
-      #expect(editorDocument.frame.height > pane.testEditorScrollView.contentView.bounds.height)
-      #expect(
-        abs(editorDocument.frame.width - pane.testEditorScrollView.contentView.bounds.width) < 0.5)
-      editorDocument.scroll(NSPoint(x: 0, y: editorDocument.frame.height))
-      #expect(pane.testEditorScrollView.contentView.bounds.origin.y > 0)
-      editorDocument.scroll(.zero)
-      #expect(pane.testEditorScrollView.contentView.bounds.origin.y == 0)
-      pane.layout.resizePreview(to: 150)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      pane.testPairedPreview.layout()
-      let metalFrameInWindow = pane.testPairedPreview.metalView.convert(
-        pane.testPairedPreview.metalView.bounds, to: nil)
-      #expect(metalFrameInWindow.maxY <= first.contentLayoutRect.maxY + 0.5)
-      pane.testPairedPreview.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
-      pane.testPairedPreview.layout()
-      let size = pane.testPairedPreview.metalView.bounds.size
-      pane.testPairedPreview.selectCanvas(at: CGPoint(x: size.width - 20, y: size.height / 2))
-      #expect(state.selectedAudioMix == .portrait)
-      pane.testPairedPreview.selectCanvas(at: CGPoint(x: 20, y: size.height / 2))
-      #expect(state.selectedAudioMix == .landscape)
-      pane.layout.resizePreview(to: 220)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      let previewHeight = pane.testPairedPreview.frame.height
-      #expect(UserDefaults.standard.double(forKey: dividerKey) == 220)
-      first.setContentSize(NSSize(width: 1100, height: 800))
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      #expect(abs(pane.testPairedPreview.frame.height - previewHeight) < 0.5)
-      pane.layout.resizePreview(to: 100)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      #expect(editorDocument.frame.height < pane.testEditorScrollView.contentView.bounds.height)
-      #expect(editorDocument.frame.minY == 0)
-      #expect(pane.testEditorScrollView.contentView.bounds.minY == 0)
-      let reopened = makeWorkspaceTestWindow(
-        stateService: state, appletData: data,
-        url: URL(fileURLWithPath: "/tmp/Renamed-\(UUID()).ldtxworkspace"), externalID: externalID)
-      defer { reopened.close() }
-      #expect(reopened.contentPane.layout.previewHeight == 100)
-      #expect(state.workspaceDefinition == definition)
-      #expect(state.workspacePreferences == preferences)
-      #expect(state.workspaceOutputSettings == outputSettings)
-      pane.testPairedPreview.stop()
-      #expect(pane.testPairedPreview.metalView.delegate == nil)
-      #expect(pane.testPairedPreview.metalView.isPaused)
-    }
-
-    @Test("UCT-1017.6: Divider state restores and preserves user-adjusted height")
-    func initialDividerRestoresAndPreservesDraggedHeight() async throws {
-      let externalID = UUID().uuidString.lowercased()
-      let dividerKey = "WorkspaceContentPane.\(externalID).previewHeight"
-      let savedDivider = UserDefaults.standard.object(forKey: dividerKey)
-      defer {
-        if let savedDivider {
-          UserDefaults.standard.set(savedDivider, forKey: dividerKey)
-        } else {
-          UserDefaults.standard.removeObject(forKey: dividerKey)
-        }
-      }
-      let first = makeWorkspaceTestWindow(externalID: externalID)
-      defer { first.close() }
-      first.orderFront(nil)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
       let pane = first.contentPane
-      #expect(abs(pane.testPairedPreview.frame.height - 280) < 0.5)
-      let preview = pane.testPairedPreview
-      let delegate = preview.metalView.delegate
-      pane.layout.resizePreview(to: 360)
-      await settleWorkspaceToolbar(first)
-      first.contentView?.layoutSubtreeIfNeeded()
-      let draggedHeight = preview.frame.height
-      #expect(abs(draggedHeight - 360) < 1)
-      #expect(preview === pane.testPairedPreview)
-      #expect(preview.metalView.delegate === delegate)
-
-      for height: CGFloat in [800, 700] {
-        first.setContentSize(NSSize(width: 1062, height: height))
+      let preview = pane.pairedPreview
+      let metal = preview.metalView
+      let delegate = metal.delegate
+      #expect(metal.superview != nil)
+      #expect(metal.bounds.width > 0)
+      #expect(preview !== second.contentPane.pairedPreview)
+      pane.layout.isPortrait = true
+      #expect(!second.contentPane.layout.isPortrait)
+      #expect(first.stateService.selectedAudioMix == .landscape)
+      preview.selectCanvas(at: .init(x: metal.bounds.width - 1, y: metal.bounds.height / 2))
+      #expect(first.stateService.selectedAudioMix == .portrait)
+      preview.selectCanvas(at: .init(x: 1, y: metal.bounds.height / 2))
+      #expect(first.stateService.selectedAudioMix == .landscape)
+      for height: CGFloat in [100, 360, 200] {
+        pane.layout.resizePreview(to: height)
+        first.setContentSize(.init(width: 1100, height: 800))
         await settleWorkspaceToolbar(first)
-        first.contentView?.layoutSubtreeIfNeeded()
-        #expect(abs(preview.frame.height - draggedHeight) < 0.5)
+        #expect(pane.pairedPreview.metalView === metal)
+        #expect(metal.delegate === delegate)
+        #expect(metal.bounds.height > 0)
       }
-      first.close()
-      let reopened = makeWorkspaceTestWindow(externalID: externalID)
-      defer { reopened.close() }
-      reopened.orderFront(nil)
-      await settleWorkspaceToolbar(reopened)
-      reopened.contentView?.layoutSubtreeIfNeeded()
-      #expect(
-        abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
-      reopened.setContentSize(NSSize(width: 1100, height: 850))
-      await settleWorkspaceToolbar(reopened)
-      reopened.contentView?.layoutSubtreeIfNeeded()
-      #expect(
-        abs(reopened.contentPane.testPairedPreview.frame.height - draggedHeight) < 1)
+      preview.stop()
+      #expect(metal.delegate == nil && metal.isPaused)
     }
 
-    @Test("Preview height follows the saved ID adopted after constructing the pane")
+    @Test("SwiftUI editors scroll when the lower pane shrinks")
+    func editorsScrollAndObserveOutputFailures() async throws {
+      let window = makeWorkspaceTestWindow()
+      defer { window.close() }
+      window.orderFront(nil)
+      window.contentPane.layout.resizePreview(to: 600)
+      await settleWorkspaceToolbar(window)
+      let all = workspaceDescendants(window.contentView!)
+      let scrolls = all.compactMap { $0 as? NSScrollView }
+      #expect(
+        scrolls.contains {
+          ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
+        })
+      let scroll = try #require(
+        scrolls.first {
+          workspaceDescendants($0).contains { $0 is AudioPeakMeterMTKView }
+        })
+      let document = try #require(scroll.documentView)
+      let initialHeight = document.frame.height
+      window.stateService.outputFailureMessage = "Visible failure"
+      await settleWorkspaceToolbar(window)
+      #expect(document.frame.height > initialHeight)
+      scroll.contentView.scroll(
+        to: .init(
+          x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      await settleWorkspaceToolbar(window)
+      #expect(scroll.contentView.bounds.origin.y > 0)
+    }
+
+    @Test("Preview height follows late snapshot adoption and persists by external ID")
     func previewHeightFollowsLateSnapshotAdoption() async throws {
       let transientID = UUID().uuidString.lowercased()
       let savedID = UUID().uuidString.lowercased()
@@ -363,22 +176,24 @@ extension AppUIComponentTestSuite {
       defer { window.close() }
       window.orderFront(nil)
       await settleWorkspaceToolbar(window)
-      let pane = window.contentPane
-      let preview = pane.testPairedPreview
-      pane.layout.resizePreview(to: 300)
+      let layout = window.contentPane.layout
+      let metal = window.contentPane.pairedPreview.metalView
+      layout.resizePreview(to: 300)
       var snapshot = state.editingWorkspace
       snapshot.definitionExternalID = savedID
       state.replaceEditingWorkspace(snapshot)
       await settleWorkspaceToolbar(window)
-      #expect(pane.layout.previewHeight == 360)
-      #expect(abs(preview.frame.height - 360) < 1)
-      #expect(pane.testPairedPreview === preview)
-      pane.layout.resizePreview(to: 340)
+      #expect(layout.previewHeight == 360)
+      #expect(window.contentPane.pairedPreview.metalView === metal)
+      layout.resizePreview(to: 340)
       #expect(UserDefaults.standard.double(forKey: savedKey) == 340)
       #expect(UserDefaults.standard.double(forKey: transientKey) == 300)
+      let reopened = WorkspaceContentLayout()
+      reopened.restore(externalID: savedID)
+      #expect(reopened.previewHeight == 340)
       state.replaceEditingWorkspace(snapshot)
       await settleWorkspaceToolbar(window)
-      #expect(pane.layout.previewHeight == 340)
+      #expect(layout.previewHeight == 340)
     }
 
     @Test("Legacy AppKit divider height migrates once and never overrides a new value")

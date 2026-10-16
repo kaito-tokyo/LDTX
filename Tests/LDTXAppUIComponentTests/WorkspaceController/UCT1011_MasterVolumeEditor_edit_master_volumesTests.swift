@@ -2,169 +2,113 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
-import LDTXBackgroundSegmentation
-import LDTXDeviceRegistry
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
-import Observation
 import SwiftUI
 import Testing
 
 extension AppUIComponentTestSuite {
-  @Suite("UCT-1011: edit-master-volumes", .serialized)
-  @MainActor
+  @Suite("UCT-1011: SwiftUI master volumes", .serialized) @MainActor
   struct UCT1011MasterVolumeEditorIntegrationTestSuite {
-    private static var controller: NSDocumentController {
-      UIComponentTestEnvironment.documentController
-    }
-    init() { _ = Self.controller }
+    init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Injected AppletData selects the Program edited by the master volume field")
-    func programSelectionUsesInjectedAppletData() throws {
-      let suite = "InjectedProgramSelection.\(UUID())"
+    @Test func writesOnChangeAndPreservesInvalidDrafts() async throws {
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
+      let root = MasterVolumeEditor(
+        stateService: state, appletData: WorkspaceAppletData(),
+        peakMeter: .init(), reportError: { _ in })
+      let window = hostWorkspaceView(root)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let field = try #require(
+        workspaceDescendants(window.contentView!)
+          .compactMap { $0 as? NSTextField }.first { $0.isEditable })
+      try editWorkspaceField(field, text: "-12.04", window: window)
+      await settleWorkspaceToolbar(window)
+      #expect(
+        state.workspacePreferences.landscapeProgramPreferences[100]?
+          .audioMasterVolumeDecibels == .with { $0.set(num: -120, den: 10) })
+      let before = state.workspacePreferences
+      for text in ["-", "100", "-81", "20.1", "inf"] {
+        try editWorkspaceField(field, text: text, window: window)
+        await settleWorkspaceToolbar(window)
+        #expect(state.workspacePreferences == before)
+        #expect(field.currentEditor()?.string == text)
+      }
+      for text in ["-80", "20"] {
+        try editWorkspaceField(field, text: text, window: window)
+        await settleWorkspaceToolbar(window)
+        #expect(
+          state.workspacePreferences.landscapeProgramPreferences[100]?
+            .audioMasterVolumeDecibels.double == Double(text))
+      }
+      #expect(state.selectedAudioMix == .landscape)
+    }
+
+    @Test func injectedProgramSelectionAndModelChangesReachFields() async throws {
+      let suite = "SwiftUIMaster-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      let url = URL(fileURLWithPath: "/tmp/InjectedProgramSelection.ldtxworkspace")
-      store.localStateURL = url
-      store.workspaceDefinition.programs = [
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let url = URL(fileURLWithPath: "/tmp/SwiftUIMaster.ldtxworkspace")
+      state.localStateURL = url
+      state.workspaceDefinition.programs = [
         .with { $0.internalID = 100 }, .with { $0.internalID = 200 },
       ]
       data.updateState(for: url) { $0.selectedProgramInternalID = 200 }
-      let editor = MasterVolumeEditor(
-        stateService: store, appletData: data, peakMeter: .init(),
-        reportError: { _ in })
-      _ = editor.view
-      let field = editor.masterFields[0]
-      field.stringValue = "-12"
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(store.workspacePreferences.landscapeProgramPreferences[100] == nil)
-      #expect(
-        store.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
-          .double == -12)
-      data.updateState(for: url) { $0.selectedProgramInternalID = 100 }
-      editor.refresh()
-      field.stringValue = "-6"
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(
-        store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
-          .double == -6)
-      #expect(
-        store.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
-          .double == -12)
-    }
-
-    @Test("Master volume writes on text change without Return")
-    func volumeWritesImmediately() throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
-      let editor = MasterVolumeEditor(
-        stateService: store, appletData: WorkspaceAppletData(), peakMeter: .init(),
-        reportError: { _ in })
-      _ = editor.view
-      let field = editor.masterFields[0]
-      field.stringValue = "-12.5"
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(
-        store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
-          .double == -12.5)
-      let previous = store.workspacePreferences
-      field.stringValue = "-"
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(store.workspacePreferences == previous)
-      #expect(field.stringValue == "-")
-      for text in ["100", "-81", "20.1"] {
-        field.stringValue = text
-        field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-        #expect(store.workspacePreferences == previous)
-        #expect(field.stringValue == text)
-      }
-      for text in ["-80", "20"] {
-        field.stringValue = text
-        field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-        #expect(
-          store.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
-            .double == Double(text))
-      }
-    }
-
-    @Test("UCT-1011.1: Master volume edits and model updates are reflected independently")
-    func masterEditorObservesAndEditsVolumesIndependently() async throws {
-      let serviceAppletData = WorkspaceAppletData()
-      _ = NSApplication.shared
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      var program = Ldtx_Workspace_V4_ProgramDefinition()
-      program.internalID = 100
-      service.workspaceDefinition.programs = [program]
-      let editor = MasterVolumeEditor(
-        stateService: service, appletData: serviceAppletData, peakMeter: .init(),
-        reportError: { _ in })
-      #expect(!editor.isViewLoaded)
-      let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
-        backing: .buffered, defer: false)
-      window.isReleasedWhenClosed = false
-      window.contentViewController = editor
-      window.orderFront(nil)
+      let window = hostWorkspaceView(
+        MasterVolumeEditor(
+          stateService: state, appletData: data,
+          peakMeter: .init(), reportError: { _ in }))
       defer { window.close() }
-      window.contentView?.layoutSubtreeIfNeeded()
-      let field = editor.masterFields[0]
-      field.stringValue = "-12.04"
-      field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      field.controlTextDidChange(.init(name: NSControl.textDidChangeNotification))
-      #expect(
-        (service.workspacePreferences.landscapeProgramPreferences[100] ?? .init())
-          .audioMasterVolumeDecibels
-          == Ldtx_Workspace_V4_Rational32.with {
-            $0.set(num: -120, den: 10)
-          })
-      #expect(service.selectedAudioMix == .landscape)
-      service.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .audioMasterVolumeDecibels = .with { $0.set(num: -60, den: 10) }
-      for _ in 0..<50 {
-        if field.stringValue == "-6" { break }
-        try await Task.sleep(for: .milliseconds(10))
+      await settleWorkspaceToolbar(window)
+      func firstField() throws -> NSTextField {
+        try #require(
+          workspaceDescendants(window.contentView!)
+            .compactMap { $0 as? NSTextField }.first { $0.isEditable })
       }
-      #expect(field.stringValue == "-6")
-      let previous = service.workspacePreferences
-      field.stringValue = "invalid"
-      field.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
-      #expect(field.dirty)
-      #expect(service.workspacePreferences == previous)
+      try editWorkspaceField(firstField(), text: "-12", window: window)
+      await settleWorkspaceToolbar(window)
+      #expect(
+        state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
+          .double == -12)
+      #expect(state.workspacePreferences.landscapeProgramPreferences[100] == nil)
+      data.updateState(for: url) { $0.selectedProgramInternalID = 100 }
+      await settleWorkspaceToolbar(window)
+      try editWorkspaceField(firstField(), text: "-6", window: window)
+      await settleWorkspaceToolbar(window)
+      #expect(
+        state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
+          .double == -6)
+      window.makeFirstResponder(nil)
+      await settleWorkspaceToolbar(window)
+      state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
+        .audioMasterVolumeDecibels = .with { $0.set(num: -30, den: 10) }
+      await settleWorkspaceToolbar(window)
+      #expect(try firstField().stringValue == "-3")
     }
 
-    @Test("UCT-1011.2: Monitor volume remains local without marking the Workspace edited")
-    func monitorVolumeUsesAppletDataWithoutEditingDocument() throws {
-      let suite = "MonitorVolume.\(UUID())"
+    @Test func monitorVolumeStaysLocalAndRejectsNonFiniteValues() throws {
+      let suite = "MonitorVolume-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let document = WorkspaceDocument()
-      defer { document.close() }
-      let preferences = document.stateService.workspacePreferences
-      _ = document.testCoordinator
-      let url = try #require(document.stateService.localStateURL)
-      data.updateState(for: url) { $0.monitorVolume = -12.5 }
-      #expect(data.state(for: url).monitorVolume == -12.5)
-      #expect(document.stateService.workspacePreferences == preferences)
-      #expect(!document.hasTestModelChanges)
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let url = URL(fileURLWithPath: "/tmp/MonitorVolume.ldtxworkspace")
+      state.localStateURL = url
+      let before = state.editingWorkspace
       let editor = MasterVolumeEditor(
-        stateService: document.stateService, appletData: data, peakMeter: .init(),
-        reportError: { _ in })
+        stateService: state, appletData: data,
+        peakMeter: .init(), reportError: { _ in })
       #expect(editor.setMonitorVolume(-11.899999999999999))
       #expect(data.state(for: url).monitorVolume == -11.9)
       #expect(!editor.setMonitorVolume(.infinity))
       #expect(data.state(for: url).monitorVolume == -11.9)
-      #expect(document.stateService.workspacePreferences == preferences)
-      #expect(!document.hasTestModelChanges)
+      #expect(state.editingWorkspace == before)
     }
-
   }
 }
