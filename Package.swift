@@ -40,7 +40,7 @@ var targets: [Target] = [
 
 var products: [Product] = []
 var dependencies: [Package.Dependency] = [
-  .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.38.1"),
+  .package(url: "https://github.com/apple/swift-protobuf.git", exact: "1.39.0"),
   .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
 ]
 
