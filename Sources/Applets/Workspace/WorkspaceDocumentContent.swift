@@ -77,6 +77,7 @@ public struct WorkspaceDocumentContent: View {
       inspector: WorkspaceInspectorContainer(
         deviceRegistry: runtime.deviceRegistry, stateService: stateService,
         appletData: runtime.appletData, document: document,
+        variableStore: { [weak runtime] in runtime?.windowRuntime.variableStore },
         runtimeWorkspace: persistedWorkspace, runtimeActions: actions)
     )
     .environment(\.workspaceReportError, { [weak runtime] in runtime?.reportError($0) })

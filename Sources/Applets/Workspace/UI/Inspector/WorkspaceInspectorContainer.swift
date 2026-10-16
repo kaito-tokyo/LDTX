@@ -7,6 +7,7 @@ import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
 import LDTXTaskQueue
+import LDTXVariableStore
 import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import SwiftUI
@@ -18,6 +19,7 @@ public struct WorkspaceInspectorContainer: View {
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
+  private let variableStore: () -> VariableStore?
   private let runtimeWorkspace: () -> WorkspaceV4Bundle?
   private weak var document: (any WorkspaceDocumentContext)?
 
@@ -25,9 +27,11 @@ public struct WorkspaceInspectorContainer: View {
     deviceRegistry: DeviceRegistryService,
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
+    variableStore: @escaping () -> VariableStore? = { nil },
     runtimeWorkspace: @escaping () -> WorkspaceV4Bundle? = { nil },
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
+    self.variableStore = variableStore
     self.document = document
     self.runtimeWorkspace = runtimeWorkspace
     self.runtimeActions = runtimeActions
@@ -67,6 +71,8 @@ public struct WorkspaceInspectorContainer: View {
       WorkspaceProgramsInspector(
         stateService: stateService, appletData: appletData,
         runtimeActions: runtimeActions)
+    case .variableStore:
+      VariableStoreInspector(store: variableStore)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(stateService: stateService)
     case .workspaceOutput:

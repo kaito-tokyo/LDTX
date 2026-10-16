@@ -19,6 +19,7 @@ public enum WorkspaceInspectorKind: Int, Sendable {
   case ocrVision = 13
   case workspacePrograms = 14
   case ldtxSceneDetectorVision = 15
+  case variableStore = 16
 }
 
 public struct WorkspaceInspectorSelector: Hashable, Sendable {
