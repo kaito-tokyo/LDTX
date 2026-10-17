@@ -12,6 +12,24 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func dynamicTextRejectsExcessiveRasterMemoryBeforeAllocation() throws {
+    let renderer = try MetalClockOverlayRenderer(device: unwrap(MTLCreateSystemDefaultDevice()))
+    var component = ClockComponent(backgroundAlpha: 0)
+    component.resolvedText = "Text"
+    for (width, height) in [(16_384, 16_384), (4096, 2049)] {
+      do {
+        _ = try renderer.renderClockOverlay(
+          .init(text: "Text", component: component, pixelWidth: width, pixelHeight: height))
+        Issue.record("Expected oversized Dynamic Text to be rejected")
+      } catch MetalClockOverlayRendererError.invalidTextureSize {}
+    }
+    // Exercise the inclusive budget boundary without drawing millions of glyph pixels.
+    let overlay = try renderer.renderClockOverlay(
+      .init(text: "", component: component, pixelWidth: 4096, pixelHeight: 2048))
+    #expect(overlay.colorTexture.width == 4096)
+    #expect(overlay.colorTexture.height == 2048)
+  }
+
   @Test func dynamicTextTexturePreservesUprightGlyphOrientation() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)

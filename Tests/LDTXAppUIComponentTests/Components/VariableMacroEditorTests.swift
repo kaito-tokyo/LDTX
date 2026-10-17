@@ -128,10 +128,12 @@ extension AppUIComponentTestSuite {
       undo.beginUndoGrouping()
       native.insertVariable(second)
       native.insertText(
-        "追記", replacementRange: NSRange(location: native.string.utf16.count, length: 0))
+        "追記\u{0}\u{B}", replacementRange: NSRange(location: native.string.utf16.count, length: 0))
       connection.recordEdits()
       undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
       let after = native.document
+      #expect(after.plainText.hasSuffix("追記��"))
       undo.beginUndoGrouping()
       state.workspaceDefinition.displayName = "Renamed"
       connection.recordEdits()

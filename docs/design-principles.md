@@ -205,6 +205,10 @@ the relevant design or feature documentation instead.
 
 ## Overlay production is independent of Program frame rendering
 
+- Dynamic Text rasterization rejects more than 8,388,608 pixels before allocating
+  its CPU buffers or textures. At 10 bytes per pixel across staging buffers and
+  textures, this bounds those allocations to 80 MiB per render while permitting 4K UHD.
+
 - Workspace owns Clock and Dynamic Text texture producers separately from
   ProgramRuntime, preview consumers, output consumers, and on-demand frame rendering.
   Producers can prepare and update textures without requesting a Program frame.
@@ -234,6 +238,8 @@ the relevant design or feature documentation instead.
   declarations are rejected, and external entity loading
   is disabled. Serialization omits the XML declaration and formatting whitespace,
   escapes literal text, and preserves content whitespace and carriage returns.
+  XML 1.0-forbidden literal scalars are replaced with U+FFFD during serialization
+  so ordinary pasted text cannot persist an unreadable macro.
 - macro_document is authoritative when present, including an empty macro root.
   An empty string is invalid XML. The old text field is imported only when macro_document is absent.
   Reading old content does not rewrite the Definition. The first content edit

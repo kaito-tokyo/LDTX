@@ -8,6 +8,44 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func rejectsGeneratedOverlaysAsOCRInputs() {
+    var bundle = WorkspaceV4Bundle(
+      definition: .with {
+        $0.visions = [
+          .with {
+            $0.ocrVision = .with {
+              $0.internalID = 3
+              $0.videoComponentInternalID = 1
+            }
+          }
+        ]
+      }, preferences: .init())
+    let unsupported: [Ldtx_Workspace_V4_VideoComponentWrapper] = [
+      .with { $0.dynamicText.internalID = 1 },
+      .with { $0.clock.internalID = 1 },
+      .with { $0.solidColorFill.internalID = 1 },
+    ]
+    for component in unsupported {
+      bundle.definition.videoComponents = [component]
+      #expect(
+        WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+          $0.error == .unsupportedVisionInput
+            && $0.path == "definition.visions[0].ocr_vision.video_component_internal_id"
+        })
+    }
+    bundle.definition.videoComponents = [
+      .with {
+        $0.vfxSource.internalID = 1
+        $0.vfxSource.deviceWidth = 1920
+        $0.vfxSource.deviceHeight = 1080
+      }
+    ]
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .unsupportedVisionInput
+      })
+  }
+
   @Test func validatesStructuredMacroReferencesWithoutRequiringLiveVariables() throws {
     var bundle = WorkspaceV4Bundle(
       definition: .with {
@@ -373,8 +411,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("OCR can reference a generated Video Component")
-  func allowsGeneratedComponentForOCR() throws {
+  @Test("OCR rejects a generated Video Component")
+  func rejectsGeneratedComponentForOCR() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [
       .with {
@@ -393,7 +431,9 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         }
       }
     ]
-    try WorkspaceBundleValidatorV4.validate(definition)
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleValidatorV4.validate(definition)
+    }
   }
 
   @Test("rejects entity IDs reused across resource kinds")

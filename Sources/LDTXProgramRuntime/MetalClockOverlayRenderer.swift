@@ -81,6 +81,9 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   private static let atlasWidth = 2_048
   private static let atlasHeight = 1_024
   private static let atlasPixelHeight: Float = 96
+  // RGBA, RGB565, alpha staging and both textures total 10 bytes per pixel.
+  // Bound these allocations to 80 MiB per render, including a full 4K UHD frame.
+  private static let dynamicTextPixelBudget = 8_388_608
 
   private let device: MTLDevice
   private let commandQueue: MTLCommandQueue
@@ -236,6 +239,9 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   {
     let width = request.pixelWidth
     let height = request.pixelHeight
+    guard width <= Self.dynamicTextPixelBudget / height else {
+      throw MetalClockOverlayRendererError.invalidTextureSize
+    }
     let component = request.component
     var rgba = [UInt8](repeating: 0, count: width * height * 4)
     let rendered = rgba.withUnsafeMutableBytes { bytes -> Bool in

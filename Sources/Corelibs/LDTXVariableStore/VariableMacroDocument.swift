@@ -99,7 +99,7 @@ public struct VariableMacroDocument: Equatable, Sendable {
       + segments.map {
         switch $0 {
         case .text(let text):
-          text.replacingOccurrences(of: "&", with: "&amp;")
+          Self.xmlSafeText(text).replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\r", with: "&#13;")
@@ -107,6 +107,19 @@ public struct VariableMacroDocument: Equatable, Sendable {
           "<variable vision-id=\"\(key.visionID)\" item=\"\(key.item.rawValue)\"/>"
         }
       }.joined() + "</macro>"
+  }
+
+  private static func xmlSafeText(_ text: String) -> String {
+    String(
+      String.UnicodeScalarView(
+        text.unicodeScalars.map { scalar in
+          switch scalar.value {
+          case 0x9, 0xA, 0xD, 0x20...0xD7FF, 0xE000...0xFFFD, 0x10000...0x10FFFF:
+            scalar
+          default:
+            Unicode.Scalar(0xFFFD)!
+          }
+        }))
   }
 }
 

@@ -418,12 +418,12 @@ extension WorkspaceBundleValidatorV4 {
       if !present {
         add(path + ".video_component_internal_id", .missingVisionVideoComponent, id: id)
       } else if let component = components.first(where: { $0.internalID == input }) {
-        if case .ldtxSceneDetectorVision = wrapper.vision {
-          if !component.canBeVisionInput {
-            add(path + ".video_component_internal_id", .unsupportedVisionInput, id: id)
-          } else if component.renderingSize.map({ $0.width > 0 && $0.height > 0 }) != true {
-            add(path + ".video_component_internal_id", .invalidVisionInputSize, id: id)
-          }
+        if !component.canBeVisionInput {
+          add(path + ".video_component_internal_id", .unsupportedVisionInput, id: id)
+        } else if case .ldtxSceneDetectorVision = wrapper.vision,
+          component.renderingSize.map({ $0.width > 0 && $0.height > 0 }) != true
+        {
+          add(path + ".video_component_internal_id", .invalidVisionInputSize, id: id)
         }
       } else {
         add(path + ".video_component_internal_id", .missingVideoComponent(input), id: id)

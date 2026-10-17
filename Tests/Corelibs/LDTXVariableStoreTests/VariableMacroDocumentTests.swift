@@ -8,6 +8,21 @@ import Testing
 @Suite struct VariableMacroDocumentUnitTestSuite {
   let key = VariableKey(visionID: 11, item: .text)
 
+  @Test func serializingForbiddenXMLScalarsKeepsMacroReadable() throws {
+    let forbidden = (0..<0x20).filter { ![9, 10, 13].contains($0) } + [0xFFFE, 0xFFFF]
+    let text = String(String.UnicodeScalarView(forbidden.map { Unicode.Scalar($0)! }))
+    let document = VariableMacroDocument(segments: [
+      .text("Before" + text + "\t\n\r🙂"), .variable(key), .text("After"),
+    ])
+    let restored = try VariableMacroDocument(xml: document.xml)
+    #expect(
+      restored.segments == [
+        .text("Before" + String(repeating: "�", count: forbidden.count) + "\t\n\r🙂"),
+        .variable(key), .text("After"),
+      ])
+    #expect(try VariableMacroDocument(xml: restored.xml) == restored)
+  }
+
   @Test func structuredContentRoundTripsWithoutParsingLiteralTokens() throws {
     let document = VariableMacroDocument(segments: [
       .text("前  \t\n🙂 {{visions/11/text}} "), .variable(key), .text(" 後"), .variable(key),
