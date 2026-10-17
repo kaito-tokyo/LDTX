@@ -11,7 +11,6 @@ final class VideoLayersEditorState {
   let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let target: WorkspaceCanvasTarget
-  private var dragScope = UUID()
   private(set) var rows: [Int64: VideoLayersTableRowState] = [:]
   var failure: String?
 
@@ -36,29 +35,19 @@ final class VideoLayersEditorState {
     synchronizeRows()
   }
 
-  func token(for id: Int64) -> String {
-    "\(dragScope):\(programID ?? 0):\(id)"
-  }
-
-  func move(_ tokens: [String], before destination: Int64?) -> Bool {
-    guard tokens.count == 1, let source = layerIDs.first(where: { token(for: $0) == tokens[0] }),
-      let programID
-    else { return false }
+  func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+    guard let programID,
+      !source.isEmpty,
+      source.allSatisfy({ layerIDs.indices.contains($0) }),
+      (0...layerIDs.count).contains(destination)
+    else { return }
     var order = layerIDs
-    order.removeAll { $0 == source }
-    if let destination {
-      if destination == source { return true }
-      guard let index = order.firstIndex(of: destination) else { return false }
-      order.insert(source, at: index)
-    } else {
-      order.append(source)
-    }
+    order.move(fromOffsets: source, toOffset: destination)
     do {
       try commitLayerOrder(order, programID: programID)
-      return true
+      failure = nil
     } catch {
       failure = error.localizedDescription
-      return false
     }
   }
 
@@ -88,7 +77,7 @@ final class VideoLayersEditorState {
       let component = stateService.workspaceDefinition.videoComponents.first { $0.internalID == id }
       row.name = component?.displayName ?? "Missing Video Layer"
       switch component?.videoComponent {
-      case .vfxSource, .clock: row.supportsPlacement = true
+      case .vfxSource, .clock, .dynamicText: row.supportsPlacement = true
       default: row.supportsPlacement = false
       }
       row.isHidden = preferences.videoLayerHidden[id] ?? false
@@ -191,37 +180,18 @@ final class VideoLayersEditorState {
 }
 
 struct VideoLayersEditor: View {
-  @State var editor: VideoLayersEditorState
-
-  init(
-    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
-    target: WorkspaceCanvasTarget
-  ) {
-    _editor = State(
-      initialValue: VideoLayersEditorState(
-        stateService: stateService, appletData: appletData, target: target))
-  }
+  let editor: VideoLayersEditorState
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    Section {
       ForEach(editor.layerIDs, id: \.self) { id in
         if let row = editor.rows[id] {
           VideoLayersTableRowContent(
-            state: row, canvasWidth: 1920, canvasHeight: 1080,
-            dragToken: editor.token(for: id)
+            state: row, canvasWidth: 1920, canvasHeight: 1080
           )
-          .padding(4)
-          .dropDestination(for: String.self) { (values: [String], point: CGPoint) -> Bool in
-            editor.move(values, before: id)
-          }
-          Divider()
         }
       }
-      Color.clear.frame(height: 12)
-        .contentShape(Rectangle())
-        .dropDestination(for: String.self) { (values: [String], point: CGPoint) -> Bool in
-          editor.move(values, before: nil)
-        }
+      .onMove(perform: editor.move)
       if let message = editor.failure ?? editor.stateService.outputFailureMessage {
         Text(message).foregroundStyle(.secondary)
       } else if editor.programID == nil {
@@ -229,7 +199,10 @@ struct VideoLayersEditor: View {
       } else if editor.layerIDs.isEmpty {
         Text("No video layers").foregroundStyle(.secondary)
       }
+    } header: {
+      Text("Video Layers")
     }
+    .id(editor.programID)
     .onChange(of: editor.programID, initial: true) { _, _ in
       editor.synchronizeRows()
     }

@@ -27,14 +27,14 @@ struct WorkspaceVisionScheduleUnitTestSuite {
   }
 
   @MainActor
-  @Test func structuralReloadIsDeferredUntilOutputIsIdle() {
+  @Test func structuralReloadIsDeferredUntilOutputIsIdle() throws {
     var live = WorkspaceV4Bundle(definition: .init(), preferences: .init())
     live.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
       3, 5,
     ]
     let coordinator = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { live }, replaceWorkspace: { live = $0 })
-    coordinator.adoptRuntimeWorkspace(live)
+    try coordinator.adoptRuntimeWorkspace(live)
     coordinator.setOutputActive(true)
     live.preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [
       3, 7,

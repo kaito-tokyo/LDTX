@@ -4,7 +4,8 @@
 import CoreImage
 import Foundation
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import Testing
 
@@ -20,8 +21,8 @@ struct WorkspaceVisionVariableIntegrationTestSuite {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.visions = [.with { $0.ocrVision = vision }]
     }
-    let key = VariableKey(visionID: 11, item: .text)
-    var store = VariableStore(definition: definition)
+    let key = LDTXVariableKey(visionID: 11, item: .text)
+    var store = [LDTXVariableKey: String](definition: definition)
     try store.update([key: "previous"])
     let scheduler = WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false)
     let feature = WorkspaceV4VisionFeature(
@@ -47,7 +48,7 @@ struct WorkspaceVisionVariableIntegrationTestSuite {
           try store.update(
             Dictionary(
               uniqueKeysWithValues: values.map {
-                (VariableKey(visionID: id, item: $0.key), $0.value)
+                (LDTXVariableKey(visionID: id, item: $0.key), $0.value)
               }))
         } catch { Issue.record("Unexpected variable update: \(error)") }
         completion.resume()
@@ -59,7 +60,7 @@ struct WorkspaceVisionVariableIntegrationTestSuite {
         feature.submit(visionInternalID: 11, context: context)
       }
     }
-    #expect(try store.read(key) == (output == "failure" ? "" : output))
+    #expect(store[key] == (output == "failure" ? "" : output))
     #expect(failure == (output == "failure"))
     if !failure { #expect(display == output) }
     await feature.stop()

@@ -129,6 +129,11 @@ public struct WorkspaceSidebar: View {
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .clockVideoComponent, internalID: clock.internalID))
+              case .dynamicText(let text):
+                Label(text.displayName, systemImage: "text.badge.plus")
+                  .tag(
+                    WorkspaceInspectorSelector(
+                      kind: .dynamicTextVideoComponent, internalID: text.internalID))
               case .testPattern(let testPattern):
                 Label(testPattern.displayName, systemImage: "testtube.2")
                   .tag(

@@ -82,6 +82,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
   public var inputDeviceNamesByInputKey: [String: String]
   public var cameraInputColorOverrides: [String: CameraInputColorRangeOverride]
   public var backgroundRemovalInputKeys: Set<String>
+  public var overlayTextures: ProgramOverlayTextureStore?
   public var videoLayerProgramName: String
 
   public init(
@@ -99,7 +100,8 @@ public struct ProgramRuntimeConfiguration: Sendable {
     inputDeviceNamesByInputKey: [String: String] = [:],
     cameraInputColorOverrides: [String: CameraInputColorRangeOverride],
     backgroundRemovalInputKeys: Set<String>,
-    videoLayerProgramName: String = "New Program"
+    videoLayerProgramName: String = "New Program",
+    overlayTextures: ProgramOverlayTextureStore? = nil
   ) {
     self.outputProfile =
       outputProfile.width == outputWidth
@@ -131,6 +133,7 @@ public struct ProgramRuntimeConfiguration: Sendable {
     self.cameraInputColorOverrides = cameraInputColorOverrides
     self.backgroundRemovalInputKeys = backgroundRemovalInputKeys
     self.videoLayerProgramName = videoLayerProgramName
+    self.overlayTextures = overlayTextures
   }
 
 }
@@ -147,15 +150,22 @@ extension ProgramRuntimeConfiguration {
       && backgroundRemovalInputKeys == other.backgroundRemovalInputKeys
       && videoLayerProgramName == other.videoLayerProgramName
       && audioChannels == other.audioChannels
-      && composite.normalizingInputDeviceDestinations()
-        == other.composite.normalizingInputDeviceDestinations()
+      && overlayTextures === other.overlayTextures
+      && composite.normalizingLivePresentation()
+        == other.composite.normalizingLivePresentation()
   }
 }
 
 extension CompositeProgramDefinition {
-  fileprivate func normalizingInputDeviceDestinations() -> Self {
+  fileprivate func normalizingLivePresentation() -> Self {
     var normalized = self
     for index in normalized.steps.indices {
+      if case .clock(var overlay) = normalized.steps[index].component,
+        overlay.resolvedRTFD != nil
+      {
+        overlay.resolvedRTFD = Data()
+        normalized.steps[index].component = .clock(overlay)
+      }
       guard case .inputCameraDevice(var component) = normalized.steps[index].component else {
         continue
       }
@@ -243,7 +253,7 @@ extension ProgramRuntimeConfiguration {
 /// The revisioned canvas placement for one Program Runtime.
 ///
 /// Destination updates are deliberately kept out of `ProgramRuntimeState`:
-/// they alter only compositor command arguments and must not make the input
+/// they alter only compositor placement and must not make the input
 /// preprocessing pipeline reconsider its camera, crop, or removal setup.
 public final class ProgramDestinationState: @unchecked Sendable {
   private struct ClockDestination: Equatable, Sendable {
@@ -398,15 +408,13 @@ public final class ProgramPreviewController: ObservableObject, @unchecked Sendab
   public init(
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
     backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil,
-    clockCurrentTimeProvider: any ClockCurrentTimeProviding = SystemClockCurrentTimeProvider(),
     scheduler: any ProgramRuntimeScheduling = SystemProgramRuntimeScheduler()
   ) {
     programState = ProgramRuntimeState()
     backend = .standalone(
       ActiveProgramRenderer(
         captureSessionCoordinator: captureSessionCoordinator,
-        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory,
-        clockCurrentTimeProvider: clockCurrentTimeProvider
+        backgroundRemovalPreprocessorFactory: backgroundRemovalPreprocessorFactory
       )
     )
     self.scheduler = scheduler

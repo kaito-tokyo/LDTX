@@ -3,7 +3,7 @@
 
 import AppKit
 import LDTXDeviceRegistry
-import LDTXVariableStore
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Observation
 import SwiftUI
@@ -12,10 +12,11 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("Variable Store Inspector", .serialized)
   @MainActor
-  struct VariableStoreInspectorIntegrationTestSuite {
+  struct LDTXVariableStoreInspectorIntegrationTestSuite {
     @Observable final class Runtime {
-      var store = VariableStore(keys: [
-        .init(visionID: 11, item: .text), .init(visionID: 22, item: .confidence),
+      var store = [LDTXVariableKey: String](uniqueKeysWithValues: [
+        (LDTXVariableKey(visionID: 11, item: .text), ""),
+        (LDTXVariableKey(visionID: 22, item: .confidence), "0"),
       ])
     }
 
@@ -58,12 +59,13 @@ extension AppUIComponentTestSuite {
       let updated = await displayed()
       #expect(updated.contains("recognized text"), "Displayed: \(updated)")
       #expect(updated.split(separator: "\n").contains("0.75"))
-      runtime.store = VariableStore(keys: runtime.store.keys)
+      runtime.store = runtime.store.mapValues { _ in "" }
+      runtime.store[.init(visionID: 22, item: .confidence)] = "0"
       let reset = await displayed()
       #expect(!reset.contains("recognized text"))
       #expect(reset.contains("\"\""))
       #expect(reset.split(separator: "\n").contains("0"))
-      runtime.store = VariableStore(keys: [])
+      runtime.store = [:]
       let empty = await displayed()
       #expect(empty.contains("No variables"))
       #expect(!empty.contains("visions/11/text"))

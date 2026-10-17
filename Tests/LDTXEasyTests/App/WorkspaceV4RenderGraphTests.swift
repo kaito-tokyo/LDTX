@@ -4,6 +4,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXRichText
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService

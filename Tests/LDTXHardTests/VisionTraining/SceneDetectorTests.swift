@@ -6,9 +6,10 @@ import CoreML
 import CreateMLComponents
 import Foundation
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXVision
 import LDTXVisionTraining
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import Synchronization
 import Testing
@@ -208,7 +209,7 @@ struct SceneDetectorIntegrationTestSuite {
       [.with { $0.ldtxSceneDetectorVision = classifier }, .with { $0.ocrVision = ocr }]
     }
     var results: [(Int64, String)] = []
-    var variables: [Int64: [VariableItem: String]] = [:]
+    var variables: [Int64: [LDTXVariableItem: String]] = [:]
     var preparedModelIDs: [Int64] = []
     var failures: [Error] = []
     var archived: [Int64] = []

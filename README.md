@@ -15,6 +15,28 @@ Editor** for building user-defined Programs.
 - Place shapes, text, and images on it
 - Remove the background from your portrait
 
+## Dynamic Text
+
+Workspace edits support **Edit → Undo / Redo** and **Command-Z / Shift-Command-Z**
+while output is idle. Macro text and variable edits share Workspace's history.
+
+Add **Dynamic Text** under **Video Components**, then enter text and use
+the text editor's **Insert Variable** context menu to insert a Vision's OCR text,
+classification label,
+or confidence. Save the Workspace to apply the component to preview and output.
+Variable values update automatically as Vision results arrive. Variables appear
+as inline chips; click one to choose a replacement or remove it. Arrow keys,
+selection, and deletion use the native text editor; Undo/Redo uses Workspace's
+history. RTFD copying preserves formatting and variable attachments; RTF and
+plain-text export represent variables as `{{id/sel}}`. Ordinary pasted text stays
+literal. Missing variables render empty and retain their references for editing.
+Unicode and multiline text are supported. Content is stored exclusively as valid
+RTFD bytes in `rtfd_document`; earlier XML and token documents are unsupported.
+See [Dynamic Text persistence](docs/dynamic-text.md) for the format details.
+Width and height are relative to the Landscape Canvas; layer transforms control
+placement. Text wraps at its authored font sizes and clips to this extent,
+using a transparent background.
+
 ## Vision Programmer
 
 Open **LDTX → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
@@ -54,8 +76,8 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXRecording              | Media-track validation, playback composition, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
-| LDTXVariableMacro          | Target reserved for variable macro UI.                            |
-| LDTXVariableStore          | Variable data models, Definition projection, string storage, and readers. |
+| LDTXVariableMacro          | Variable Macro text editor and insertion UI.                      |
+| LDTXRichText          | macOS RTFD persistence, variable attachment validation, and rich-text expansion. |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVisionProgrammerApplet | Vision Programmer windows and training UI. |

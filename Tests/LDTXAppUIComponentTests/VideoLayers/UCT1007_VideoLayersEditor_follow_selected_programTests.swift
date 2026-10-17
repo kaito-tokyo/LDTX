@@ -58,16 +58,18 @@ extension AppUIComponentTestSuite {
     }
 
     @Test func onlyPositionableComponentsExposePlacement() throws {
-      let fixture = VideoLayersTestFixture(ids: [1, 2, 3])
+      let fixture = VideoLayersTestFixture(ids: [1, 2, 3, 4])
       fixture.state.workspaceDefinition.videoComponents = [
         .with { $0.vfxSource.internalID = 1 },
         .with { $0.clock.internalID = 2 },
         WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
+        try WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
       ]
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1]?.supportsPlacement == true)
       #expect(fixture.editor.rows[2]?.supportsPlacement == true)
       #expect(fixture.editor.rows[3]?.supportsPlacement == false)
+      #expect(fixture.editor.rows[4]?.supportsPlacement == true)
     }
   }
 }
