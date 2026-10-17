@@ -5,9 +5,10 @@ import AppKit
 import CoreImage
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXVision
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
@@ -23,7 +24,7 @@ extension AppUIComponentTestSuite {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
-      let component = try document.controller.windowRuntime.addClock(displayName: "Clock")
+      let component = try document.controller.windowRuntime.addVFXSource(displayName: "Camera")
       let id = try document.controller.windowRuntime.addOcrVision(
         displayName: "OCR", videoComponentInternalID: component)
       document.stateService.workspaceDefinition.visions[0].ocrVision.triggers = []
@@ -44,13 +45,13 @@ extension AppUIComponentTestSuite {
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) })
-      persistence.adoptRuntimeWorkspace(saved)
+      try persistence.adoptRuntimeWorkspace(saved)
       let controller = WorkspaceRuntimeCoordinator(
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
       await controller.refreshPersistedWorkspace(at: root) { true }
       let runtime = controller.windowRuntime
-      let key = VariableKey(visionID: id, item: .text)
+      let key = LDTXVariableKey(visionID: id, item: .text)
       runtime.visionFeatureContext.reportVariables(id, [.text: "first"])
       await controller.refreshPersistedWorkspace(at: root) { true }
       #expect(try runtime.readVariable(key) == "first")
@@ -119,11 +120,11 @@ extension AppUIComponentTestSuite {
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) })
-      persistence.adoptRuntimeWorkspace(saved)
+      try persistence.adoptRuntimeWorkspace(saved)
       let runtime = WorkspaceWindowRuntime(
         persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
       let vision = saved.definition.visions[0].ldtxSceneDetectorVision
-      let key = VariableKey(visionID: 5, item: .label)
+      let key = LDTXVariableKey(visionID: 5, item: .label)
       let oldContext = runtime.visionFeatureContext
       let dispatcher = ToolbarDispatcher()
       let started = AsyncStream<Void>.makeStream()
@@ -152,7 +153,7 @@ extension AppUIComponentTestSuite {
       #expect(try WorkspaceBundleReaderV4(at: url).read() == saved)
       // Drive the same persisted-adoption boundary after the successful unchanged save.
       // Keep model preparation outside this deterministic manual-inference test.
-      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       #expect(!oldContext.isCurrent())
       #expect(try runtime.readVariable(key) == "")
       if publishNew {
@@ -203,7 +204,7 @@ extension AppUIComponentTestSuite {
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) }, url: url)
-      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       let controller = WorkspaceRuntimeCoordinator(
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
@@ -231,15 +232,15 @@ extension AppUIComponentTestSuite {
       state.workspaceDefinition.programs.removeAll { $0.internalID == newProgramID }
       var staleRuntime = try WorkspaceBundleReaderV4(at: url).read()
       staleRuntime.definition.displayName = "Stale runtime"
-      persistence.adoptRuntimeWorkspace(staleRuntime)
+      try persistence.adoptRuntimeWorkspace(staleRuntime)
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
-      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       document.stateService.workspaceDefinition.displayName = "Pending save"
       _ = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
       #expect(document.stateService.recordingState == .idle)
       try await saveWorkspaceDocument(document, to: url)
-      persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
+      try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       try await controller.validateOutputWorkspace()
       try FileManager.default.removeItem(at: url)
       await #expect(throws: (any Error).self) { try await controller.startOutput() }

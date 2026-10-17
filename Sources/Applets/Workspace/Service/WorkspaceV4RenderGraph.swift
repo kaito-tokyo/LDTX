@@ -6,7 +6,7 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 
@@ -20,7 +20,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
   public init(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     canvas: WorkspaceProgramCanvasSnapshot,
-    variableStore: VariableStore? = nil
+    variableStore: [LDTXVariableKey: String]? = nil
   ) throws {
     let layerIDs = canvas.layerIDs
     let preference = canvas.preferences
@@ -104,7 +104,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
 
   static func componentsByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    variableStore: VariableStore? = nil
+    variableStore: [LDTXVariableKey: String]? = nil
   ) -> [Int64: ProgramComponent] {
     Dictionary(
       uniqueKeysWithValues: definition.videoComponents.compactMap {
@@ -198,14 +198,15 @@ public struct WorkspaceV4RenderGraph: Sendable {
         case .dynamicText(let text):
           var overlay = ClockComponent(
             destinationWidth: text.width.float, destinationHeight: text.height.float,
-            foregroundRed: text.foregroundExtendedSrgbColor.red,
-            foregroundGreen: text.foregroundExtendedSrgbColor.green,
-            foregroundBlue: text.foregroundExtendedSrgbColor.blue,
-            foregroundAlpha: text.foregroundExtendedSrgbColor.alpha,
             backgroundAlpha: 0)
-          overlay.resolvedText =
-            (try? VariableMacroDocument(component: text))?.expand(
-              using: variableStore ?? VariableStore(definition: definition)) ?? ""
+          overlay.resolvedRTFD = text.rtfdDocument
+          if let document = try? LDTXRichTextDocument(rtfd: text.rtfdDocument),
+            let expanded = try? document.expanded(resolve: { reference in
+              variableStore?[LDTXVariableKey(id: reference.id, sel: reference.sel)] ?? ""
+            }), let resolved = try? LDTXRichTextDocument(expanded)
+          {
+            overlay.resolvedRTFD = resolved.rtfd
+          }
           return (text.internalID, .clock(overlay))
         case .testPattern(let pattern): return (pattern.internalID, .testPattern)
         }
@@ -280,7 +281,7 @@ extension WorkspaceV4RenderGraph {
     canvas: WorkspaceProgramCanvasSnapshot,
     physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
     timeSeconds: Float,
-    variableStore: VariableStore? = nil
+    variableStore: [LDTXVariableKey: String]? = nil
   ) throws -> WorkspaceV4RuntimeProjection {
     let graph = try Self(definition: definition, canvas: canvas, variableStore: variableStore)
     let layerIDs = canvas.layerIDs
@@ -338,7 +339,7 @@ extension WorkspaceV4RenderGraph {
   static func componentConfiguration(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, componentID: Int64,
     physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080,
-    variableStore: VariableStore? = nil
+    variableStore: [LDTXVariableKey: String]? = nil
   ) throws -> ProgramRuntimeConfiguration {
     guard
       var component = componentsByInternalID(definition, variableStore: variableStore)[componentID]

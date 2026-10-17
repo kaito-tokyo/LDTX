@@ -1,18 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+import AppKit
 import LDTXProtos
+import LDTXRichText
 
 enum WorkspaceResourceFactory {
-  static func makeDynamicText(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  static func makeDynamicText(id: Int64, name: String) throws
+    -> Ldtx_Workspace_V4_VideoComponentWrapper
+  {
     var text = Ldtx_Workspace_V4_DynamicTextComponent()
     text.internalID = id
     text.displayName = name
-    text.macroDocument = "<macro version=\"1\">Dynamic Text</macro>"
+    text.rtfdDocument = try LDTXRichTextDocument(
+      NSAttributedString(
+        string: "Dynamic Text",
+        attributes: [.font: NSFont.systemFont(ofSize: 48), .foregroundColor: NSColor.white])
+    ).rtfd
     text.width.set(num: 1, den: 2)
     text.height.set(num: 1, den: 10)
-    text.foregroundExtendedSrgbColor = opaqueWhite
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.dynamicText = text
     return wrapper

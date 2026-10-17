@@ -9,7 +9,7 @@ targets:
     sources:
       - Tests/LDTXMediumTests
     dependencies:
-      - target: LDTXVariableStore
+      - target: LDTXRichText
       - target: LDTXVideoRendering
       - target: LDTXVideoComposition
       - target: LDTXTaskQueue

@@ -21,7 +21,8 @@ Workspace edits support **Edit → Undo / Redo** and **Command-Z / Shift-Command
 while output is idle. Macro text and variable edits share Workspace's history.
 
 Add **Dynamic Text** under **Video Components**, then enter text and use
-**Insert Variable** to insert a Vision's OCR text, classification label,
+the text editor's **Insert Variable** context menu to insert a Vision's OCR text,
+classification label,
 or confidence. Save the Workspace to apply the component to preview and output.
 Variable values update automatically as Vision results arrive. Variables appear
 as inline chips; click one to choose a replacement or remove it. Arrow keys,
@@ -76,7 +77,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |
 | LDTXVariableMacro          | Variable Macro text editor and insertion UI.                      |
-| LDTXVariableStore          | Variable data models, Definition projection, string storage, and readers. |
+| LDTXRichText          | macOS RTFD persistence, variable attachment validation, and rich-text expansion. |
 | LDTXVideoComposition       | Shared video composition model used by renderers and runtimes.     |
 | LDTXVideoRendering         | Metal-backed video compositing, shader loading, and render output. |
 | LDTXVisionProgrammerApplet | Vision Programmer windows and training UI. |

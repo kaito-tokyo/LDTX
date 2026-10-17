@@ -4,7 +4,7 @@
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
@@ -14,37 +14,6 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace render graph")
 struct WorkspaceV4RenderGraphUnitTestSuite {
-  @Test func dynamicTextProjectsVariableValuesWithoutMutatingDefinition() throws {
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.videoComponents = [
-      .with {
-        $0.dynamicText = .with {
-          $0.internalID = 2
-          $0.displayName = "Result"
-          $0.text = "Ignored legacy text"
-          $0.macroDocument =
-            "<macro version=\"1\">結果：<variable vision-id=\"11\" item=\"text\"/></macro>"
-          $0.width.set(num: 1, den: 2)
-          $0.height.set(num: 1, den: 10)
-        }
-      }
-    ]
-    let key = VariableKey(visionID: 11, item: .text)
-    var store = VariableStore(keys: [key])
-    try store.update([key: "勝利"])
-    let original = definition
-    let components = WorkspaceV4RenderGraph.componentsByInternalID(definition, variableStore: store)
-    guard case .clock(let overlay) = components[2] else {
-      Issue.record("Expected a retained text overlay")
-      return
-    }
-    #expect(overlay.resolvedText == "結果：勝利")
-    #expect(overlay.destinationWidth == 0.5)
-    #expect(overlay.backgroundAlpha == 0)
-    #expect(definition == original)
-    #expect(definition.videoComponents[0].canBeVisionInput == false)
-  }
-
   @Test func monitorConfigurationDoesNotRequirePrograms() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.audioDevices = [.with { $0.internalID = 7 }]

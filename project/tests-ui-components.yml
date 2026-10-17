@@ -9,7 +9,7 @@ targets:
       - Tests/LDTXAppUIComponentTests
     dependencies:
       - target: LDTXVariableMacro
-      - target: LDTXVariableStore
+      - target: LDTXRichText
       - target: LDTXVisionProgrammerApplet
       - target: LDTXSettingsApplet
       - target: LDTXProgramRuntime

@@ -89,9 +89,7 @@ p, td { white-space: pre-wrap; }
 <tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>—</td></tr>
 <tr><td><code>width</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>—</td></tr>
 <tr><td><code>height</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>—</td></tr>
-<tr><td><code>text</code></td><td>5</td><td><code>string</code></td><td></td><td>—</td><td>Legacy token text. Used only when macro_document is absent.</td></tr>
-<tr><td><code>foreground_extended_srgb_color</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>—</td></tr>
-<tr><td><code>macro_document</code></td><td>8</td><td><code>string</code></td><td></td><td>—</td><td>XML mixed content rooted at &lt;macro version=&quot;1&quot;&gt;. Authoritative when present.</td></tr></tbody></table></article>
+<tr><td><code>rtfd_document</code></td><td>9</td><td><code>bytes</code></td><td></td><td>—</td><td>Flattened RTFD including versioned JSON variable attachments.</td></tr></tbody></table></article>
 
 
 <article><h3 id="ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></h3><p>A Video Component that fills the entire Canvas with one uniform source color.

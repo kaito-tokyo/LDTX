@@ -43,7 +43,7 @@ targets:
         buildPhase: resources
     dependencies:
       - target: LDTXVariableMacro
-      - target: LDTXVariableStore
+      - target: LDTXRichText
       - target: LDTXVision
       - target: LDTXBackgroundSegmentation
       - target: LDTXInternalProtocols
@@ -242,7 +242,7 @@ targets:
         embed: true
       - target: LDTXVariableMacro
         embed: true
-      - target: LDTXVariableStore
+      - target: LDTXRichText
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true

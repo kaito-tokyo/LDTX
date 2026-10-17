@@ -2,20 +2,80 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import CoreVideo
 import CryptoKit
 import Foundation
 import LDTXProgram
 @testable import LDTXProgramRuntime
+import LDTXRichText
 import Metal
 import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func richTextPreservesColorsAndFontSizesWithoutShrinking() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let renderer = try MetalClockOverlayRenderer(device: device)
+    let text = NSMutableAttributedString(
+      string: "Red ",
+      attributes: [.font: NSFont(name: "Helvetica-Bold", size: 48)!, .foregroundColor: NSColor.red])
+    text.append(
+      NSAttributedString(
+        string: "Blue",
+        attributes: [
+          .font: NSFont(name: "Helvetica-Oblique", size: 24)!, .foregroundColor: NSColor.blue,
+        ]))
+    var component = ClockComponent(backgroundAlpha: 0)
+    component.resolvedRTFD = try LDTXRichTextDocument(text).rtfd
+    let overlay = try renderer.renderClockOverlay(
+      .init(text: "", component: component, pixelWidth: 256, pixelHeight: 80))
+    let alpha = try readR8Texture(unwrap(overlay.alphaTexture), using: device)
+    var color = [UInt16](repeating: 0, count: 256 * 80)
+    color.withUnsafeMutableBytes {
+      overlay.colorTexture.getBytes(
+        $0.baseAddress!, bytesPerRow: 512, from: MTLRegionMake2D(0, 0, 256, 80), mipmapLevel: 0)
+    }
+    let redPixels = color.indices.filter {
+      alpha[$0] > 128 && (color[$0] >> 11) > 20 && (color[$0] & 31) < 5
+    }
+    let bluePixels = color.indices.filter {
+      alpha[$0] > 128 && (color[$0] & 31) > 20 && (color[$0] >> 11) < 5
+    }
+    #expect(!redPixels.isEmpty)
+    #expect(!bluePixels.isEmpty)
+    let redRows = Set(redPixels.map { $0 / 256 })
+    let blueRows = Set(bluePixels.map { $0 / 256 })
+    #expect(redRows.count > blueRows.count)
+    let bitmap = try unwrap(
+      NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 80, bitsPerSample: 8,
+        samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+        bytesPerRow: 1024, bitsPerPixel: 32))
+    for index in color.indices {
+      let p = bitmap.bitmapData! + index * 4
+      p[0] = UInt8((color[index] >> 11) * 255 / 31)
+      p[1] = UInt8(((color[index] >> 5) & 63) * 255 / 63)
+      p[2] = UInt8((color[index] & 31) * 255 / 31)
+      p[3] = alpha[index]
+    }
+    try unwrap(bitmap.representation(using: .png, properties: [:])).write(
+      to: URL(fileURLWithPath: "/tmp/ldtx-rtfd-render.png"))
+    // Adding text beyond a one-line frame must not reduce the first glyph's size.
+    func cropped(_ value: String) throws -> [UInt8] {
+      var component = ClockComponent(backgroundAlpha: 0)
+      component.resolvedRTFD = try richTextData(value)
+      let output = try renderer.renderClockOverlay(
+        .init(text: "", component: component, pixelWidth: 40, pixelHeight: 60))
+      return try readR8Texture(unwrap(output.alphaTexture), using: device)
+    }
+    #expect(try cropped("M") == cropped(String(repeating: "M", count: 30)))
+  }
+
   @Test func dynamicTextRejectsExcessiveRasterMemoryBeforeAllocation() throws {
     let renderer = try MetalClockOverlayRenderer(device: unwrap(MTLCreateSystemDefaultDevice()))
     var component = ClockComponent(backgroundAlpha: 0)
-    component.resolvedText = "Text"
+    component.resolvedRTFD = try richTextData("Text")
     for (width, height) in [(16_384, 16_384), (4096, 2049)] {
       do {
         _ = try renderer.renderClockOverlay(
@@ -34,7 +94,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     var component = ClockComponent(backgroundAlpha: 0)
-    component.resolvedText = "F"
+    component.resolvedRTFD = try richTextData("F")
     let overlay = try renderer.renderClockOverlay(
       .init(
         text: "F", component: component, pixelWidth: 128, pixelHeight: 128))
@@ -53,7 +113,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let time = CountingClockCurrentTimeProvider(date: Date())
     let renderer = ClockOverlayRendererSpy(device: device)
     var component = ClockComponent()
-    component.resolvedText = "first"
+    component.resolvedRTFD = try richTextData("first")
     let runtime = ClockOverlayRuntime(
       component: component, currentTimeProvider: time, renderer: renderer)
     defer { runtime.deactivate() }
@@ -62,10 +122,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     try await Task.sleep(for: .milliseconds(1200))
     assertEqual(renderer.requests.count, 1)
     assertEqual(time.invocationCount, 0)
-    component.resolvedText = "second"
+    component.resolvedRTFD = try richTextData("second")
     runtime.update(component: component)
     try await waitForClock(timeout: 3) { renderer.requests.count == 2 }
-    assertEqual(renderer.requests.last?.text, "second")
+    assertEqual(renderer.requests.last?.component.resolvedRTFD, component.resolvedRTFD)
   }
 
   @Test func textureStoreRejectsRemovedAndReplacedGenerations() throws {
@@ -93,16 +153,14 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     var component = ClockComponent(backgroundAlpha: 0)
-    component.resolvedText = "勝利\nピカチュウ"
-    let formatter = ClockTextFormatter()
-    assertEqual(formatter.string(from: Date(), component: component), component.resolvedText!)
+    component.resolvedRTFD = try richTextData("勝利\nピカチュウ")
     let overlay = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
-        text: component.resolvedText!, component: component, pixelWidth: 320, pixelHeight: 100))
+        text: "", component: component, pixelWidth: 320, pixelHeight: 100))
     let alpha = try readR8Texture(unwrap(overlay.alphaTexture), using: device)
     assertEqual(alpha.min(), 0)
     assertGreaterThan(alpha.max() ?? 0, 0)
-    component.resolvedText = ""
+    component.resolvedRTFD = try richTextData("")
     let empty = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "", component: component, pixelWidth: 320, pixelHeight: 100))
@@ -1517,4 +1575,12 @@ private final class ClockOverlayRendererSpy: ClockOverlayRendering, @unchecked S
     return try ClockOverlayTexture(
       colorTexture: unwrap(device.makeTexture(descriptor: descriptor)))
   }
+}
+
+private func richTextData(_ value: String) throws -> Data {
+  try LDTXRichTextDocument(
+    NSAttributedString(
+      string: value,
+      attributes: [.font: NSFont(name: "Helvetica", size: 48)!, .foregroundColor: NSColor.white])
+  ).rtfd
 }

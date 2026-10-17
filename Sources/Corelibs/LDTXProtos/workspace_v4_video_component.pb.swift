@@ -12,6 +12,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -184,34 +189,15 @@ public nonisolated struct Ldtx_Workspace_V4_DynamicTextComponent: Sendable {
   /// Clears the value of `height`. Subsequent reads from it will return its default value.
   public mutating func clearHeight() {self._height = nil}
 
-  /// Legacy token text. Used only when macro_document is absent.
-  public var text: String {
-    get {_text ?? String()}
-    set {_text = newValue}
+  /// Flattened RTFD including versioned JSON variable attachments.
+  public var rtfdDocument: Data {
+    get {_rtfdDocument ?? Data()}
+    set {_rtfdDocument = newValue}
   }
-  /// Returns true if `text` has been explicitly set.
-  public var hasText: Bool {self._text != nil}
-  /// Clears the value of `text`. Subsequent reads from it will return its default value.
-  public mutating func clearText() {self._text = nil}
-
-  public var foregroundExtendedSrgbColor: Ldtx_Workspace_V4_Color {
-    get {_foregroundExtendedSrgbColor ?? Ldtx_Workspace_V4_Color()}
-    set {_foregroundExtendedSrgbColor = newValue}
-  }
-  /// Returns true if `foregroundExtendedSrgbColor` has been explicitly set.
-  public var hasForegroundExtendedSrgbColor: Bool {self._foregroundExtendedSrgbColor != nil}
-  /// Clears the value of `foregroundExtendedSrgbColor`. Subsequent reads from it will return its default value.
-  public mutating func clearForegroundExtendedSrgbColor() {self._foregroundExtendedSrgbColor = nil}
-
-  /// XML mixed content rooted at <macro version="1">. Authoritative when present.
-  public var macroDocument: String {
-    get {_macroDocument ?? String()}
-    set {_macroDocument = newValue}
-  }
-  /// Returns true if `macroDocument` has been explicitly set.
-  public var hasMacroDocument: Bool {self._macroDocument != nil}
-  /// Clears the value of `macroDocument`. Subsequent reads from it will return its default value.
-  public mutating func clearMacroDocument() {self._macroDocument = nil}
+  /// Returns true if `rtfdDocument` has been explicitly set.
+  public var hasRtfdDocument: Bool {self._rtfdDocument != nil}
+  /// Clears the value of `rtfdDocument`. Subsequent reads from it will return its default value.
+  public mutating func clearRtfdDocument() {self._rtfdDocument = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -221,9 +207,7 @@ public nonisolated struct Ldtx_Workspace_V4_DynamicTextComponent: Sendable {
   fileprivate var _displayName: String? = nil
   fileprivate var _width: Ldtx_Workspace_V4_Rational32? = nil
   fileprivate var _height: Ldtx_Workspace_V4_Rational32? = nil
-  fileprivate var _text: String? = nil
-  fileprivate var _foregroundExtendedSrgbColor: Ldtx_Workspace_V4_Color? = nil
-  fileprivate var _macroDocument: String? = nil
+  fileprivate var _rtfdDocument: Data? = nil
 }
 
 /// A Video Component that fills the entire Canvas with one uniform source color.
@@ -1057,7 +1041,7 @@ nonisolated extension Ldtx_Workspace_V4_VideoComponentWrapper: SwiftProtobuf.Mes
 
 nonisolated extension Ldtx_Workspace_V4_DynamicTextComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DynamicTextComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{1}text\0\u{3}foreground_extended_srgb_color\0\u{4}\u{2}macro_document\0\u{c}\u{7}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{4}\u{5}rtfd_document\0\u{b}text\0\u{b}foreground_extended_srgb_color\0\u{b}macro_document\0\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1069,9 +1053,7 @@ nonisolated extension Ldtx_Workspace_V4_DynamicTextComponent: SwiftProtobuf.Mess
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._width) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._height) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self._text) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._foregroundExtendedSrgbColor) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self._macroDocument) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self._rtfdDocument) }()
       default: break
       }
     }
@@ -1094,14 +1076,8 @@ nonisolated extension Ldtx_Workspace_V4_DynamicTextComponent: SwiftProtobuf.Mess
     try { if let v = self._height {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
-    try { if let v = self._text {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
-    } }()
-    try { if let v = self._foregroundExtendedSrgbColor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    } }()
-    try { if let v = self._macroDocument {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 8)
+    try { if let v = self._rtfdDocument {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 9)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1111,9 +1087,7 @@ nonisolated extension Ldtx_Workspace_V4_DynamicTextComponent: SwiftProtobuf.Mess
     if lhs._displayName != rhs._displayName {return false}
     if lhs._width != rhs._width {return false}
     if lhs._height != rhs._height {return false}
-    if lhs._text != rhs._text {return false}
-    if lhs._foregroundExtendedSrgbColor != rhs._foregroundExtendedSrgbColor {return false}
-    if lhs._macroDocument != rhs._macroDocument {return false}
+    if lhs._rtfdDocument != rhs._rtfdDocument {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

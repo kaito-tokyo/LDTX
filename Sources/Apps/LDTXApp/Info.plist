@@ -105,6 +105,19 @@ SPDX-License-Identifier: Apache-2.0
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>tokyo.kaito.ldtx.variable</string>
+			<key>UTTypeDescription</key>
+			<string>LDTX Variable</string>
+			<key>UTTypeConformsTo</key>
+			<array><string>public.data</string></array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array><string>ldtxvar</string></array>
+			</dict>
+		</dict>
+		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>com.apple.package</string>

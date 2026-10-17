@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+import AppKit
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXRichText
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceBundleFormat
 import Testing
@@ -23,16 +24,12 @@ import Testing
           .with {
             $0.dynamicText = .with {
               $0.internalID = 7
-              $0.macroDocument =
-                "<macro version=\"1\"><variable vision-id=\"11\" item=\"text\"/></macro>"
+              $0.rtfdDocument = try! LDTXRichTextDocument(
+                NSAttributedString(
+                  attachment: LDTXVariableReference(id: "11", sel: "text").attachment())
+              ).rtfd
               $0.width.set(num: 1, den: 2)
               $0.height.set(num: 1, den: 10)
-              $0.foregroundExtendedSrgbColor = .with {
-                $0.red = 1
-                $0.green = 1
-                $0.blue = 1
-                $0.alpha = 1
-              }
             }
           }
         ]
@@ -57,7 +54,7 @@ import Testing
     #expect(workspace.portraitRuntime == nil)
 
     // Successful adoption resets the observable variable inventory and the image.
-    persistence.adoptRuntimeWorkspace(bundle)
+    try persistence.adoptRuntimeWorkspace(bundle)
     try await waitUntil { store.snapshot()["v4-7"]?.colorTexture !== text.colorTexture }
     #expect(try workspace.readVariable(.init(visionID: 11, item: .text)).isEmpty)
     context.reportVariables(11, [.text: "stale"])

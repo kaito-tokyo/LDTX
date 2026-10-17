@@ -3,14 +3,17 @@
 
 import LDTXProtos
 import LDTXProtosMacOSExtra
+import LDTXRichText
 import LDTXVariableMacro
-import LDTXVariableStore
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct DynamicTextInspector: View {
   let stateService: WorkspaceStateService
   let appletData: WorkspaceAppletData
   let internalID: Int64
+
+  @State private var editorError: String?
 
   var body: some View {
     Form {
@@ -29,27 +32,41 @@ struct DynamicTextInspector: View {
               "Height", value: binding(\.height, fallback: component.height),
               format: RationalFormatStyle())
           }
-          if let document = try? VariableMacroDocument(component: component) {
-            VariableMacroEditor(
-              document: documentBinding(fallback: document),
-              keys: VariableStore(definition: stateService.workspaceDefinition).keys.sorted {
+          if let document = try? LDTXRichTextDocument(rtfd: component.rtfdDocument) {
+            let keys = [LDTXVariableKey: String](definition: stateService.workspaceDefinition).keys
+              .sorted {
                 $0.path < $1.path
-              },
+              }.map { LDTXVariableReference(id: $0.id, sel: $0.sel) }
+            LDTXVariableMacroEditor(
+              document: document,
+              keys: keys,
               name: { key in
                 let name = stateService.workspaceDefinition.visions.first {
-                  $0.internalID == key.visionID
+                  $0.internalID.map(String.init) == key.id
                 }?.displayName
-                return "\(name ?? String(key.visionID)) — \(key.item.rawValue)"
-              }
+                return "\(name ?? key.id) — \(key.sel)"
+              },
+              onDocumentChange: {
+                documentBinding(fallback: document).wrappedValue = $0
+                editorError = nil
+              },
+              onError: { editorError = $0.localizedDescription }
             )
             .id(internalID)
+            .frame(minHeight: 120)
+            Text(
+              keys.isEmpty
+                ? "Add a Vision to make variables available."
+                : "Right-click the text to insert a variable. Click a variable to replace it."
+            )
+            .font(.caption).foregroundStyle(.secondary)
           } else {
-            Text("This macro contains an unsupported variable reference.").foregroundStyle(
+            Text("This rich text document is invalid or unsupported.").foregroundStyle(
               .secondary)
           }
           Text("Variables update automatically after saving the Workspace.")
             .font(.caption).foregroundStyle(.secondary)
-          ColorPicker("Text Color", selection: colorBinding, supportsOpacity: true)
+          if let editorError { Text(editorError).foregroundStyle(.red) }
         }
       } else {
         Text("This item is no longer present in the Workspace.")
@@ -83,29 +100,12 @@ struct DynamicTextInspector: View {
       })
   }
 
-  private var colorBinding: Binding<Color> {
+  private func documentBinding(fallback: LDTXRichTextDocument) -> Binding<
+    LDTXRichTextDocument
+  > {
     Binding(
       get: {
-        let color = component?.foregroundExtendedSrgbColor ?? .init()
-        return Color(
-          .sRGB, red: Double(color.red), green: Double(color.green), blue: Double(color.blue),
-          opacity: Double(color.alpha))
-      },
-      set: { next in
-        guard let rgb = NSColor(next).usingColorSpace(.sRGB) else { return }
-        var color = Ldtx_Workspace_V4_Color()
-        color.red = Float(rgb.redComponent)
-        color.green = Float(rgb.greenComponent)
-        color.blue = Float(rgb.blueComponent)
-        color.alpha = Float(rgb.alphaComponent)
-        binding(\.foregroundExtendedSrgbColor, fallback: color).wrappedValue = color
-      })
-  }
-
-  private func documentBinding(fallback: VariableMacroDocument) -> Binding<VariableMacroDocument> {
-    Binding(
-      get: {
-        component.flatMap { try? VariableMacroDocument(component: $0) } ?? fallback
+        component.flatMap { try? LDTXRichTextDocument(rtfd: $0.rtfdDocument) } ?? fallback
       },
       set: { next in
         guard !stateService.isOutputActive, var value = component,
@@ -113,8 +113,7 @@ struct DynamicTextInspector: View {
             $0.internalID == internalID
           })
         else { return }
-        value.macroDocument = next.xml
-        value.clearText()
+        value.rtfdDocument = next.rtfd
         stateService.workspaceDefinition.videoComponents[index].dynamicText = value
       })
   }

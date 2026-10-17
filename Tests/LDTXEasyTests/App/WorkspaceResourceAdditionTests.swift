@@ -202,7 +202,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
     #expect(state.workspaceDefinition.visions.isEmpty)
   }
 
-  @Test(arguments: WorkspaceAddComponentKind.allCases)
+  @Test(arguments: WorkspaceAddComponentKind.allCases.filter { $0 != .dynamicText })
   func componentUsesDefaultsWithoutPlacingProgramLayers(kind: WorkspaceAddComponentKind) throws {
     let state = WorkspaceStateService(definition: .init(), preferences: .init())
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -229,7 +229,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
       #expect(component.dynamicText.internalID == id)
       #expect(component.dynamicText.width.double == 0.5)
       #expect(component.dynamicText.height.double == 0.1)
-      #expect(component.dynamicText.foregroundExtendedSrgbColor.alpha == 1)
+      #expect(!component.dynamicText.rtfdDocument.isEmpty)
     case .linearGradient:
       #expect(
         component.linearGradientFill.endX

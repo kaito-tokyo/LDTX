@@ -9,7 +9,7 @@ targets:
     sources:
       - Tests/LDTXEasyTests
     dependencies:
-      - target: LDTXVariableStore
+      - target: LDTXRichText
       - target: LDTXAudioEngine
       - target: LDTXAppletSupport
       - target: LDTXWorkspaceAppletUI

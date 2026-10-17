@@ -26,6 +26,7 @@ targets:
     sources:
       - Sources/LDTXProtosMacOSExtra
     dependencies:
+      - target: LDTXRichText
       - target: LDTXProtos
       - sdk: AppKit.framework
     settings:
@@ -267,7 +268,6 @@ targets:
       - Sources/Corelibs/LDTXWorkspaceBundleFormat
     dependencies:
       - target: LDTXProtos
-      - target: LDTXVariableStore
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -427,6 +427,7 @@ targets:
       - path: Resources/LDTX/Metal/ClockOverlayShaders.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXRichText
       - target: LDTXAudioEngine
       - target: LDTXCapture
       - target: LDTXDash
@@ -451,20 +452,17 @@ targets:
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
-  LDTXVariableStore:
+  LDTXRichText:
     type: framework
     platform: macOS
     sources:
-      - Sources/Corelibs/LDTXVariableStore
+      - Sources/LDTXRichText
     dependencies:
-      - target: LDTXProtos
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
+      - sdk: AppKit.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableStore
-        PRODUCT_MODULE_NAME: LDTXVariableStore
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRichText
+        PRODUCT_MODULE_NAME: LDTXRichText
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXVariableMacro:
@@ -473,11 +471,7 @@ targets:
     sources:
       - Sources/UI/LDTXVariableMacro
     dependencies:
-      - target: LDTXProtos
-      - target: LDTXVariableStore
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
+      - target: LDTXRichText
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableMacro
@@ -535,7 +529,7 @@ targets:
         includes:
           - Service
     dependencies:
-      - target: LDTXVariableStore
+      - target: LDTXRichText
       - target: LDTXBackgroundSegmentation
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

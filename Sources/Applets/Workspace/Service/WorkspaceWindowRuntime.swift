@@ -11,8 +11,8 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
+import LDTXRichText
 import LDTXTaskQueue
-import LDTXVariableStore
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
@@ -34,7 +34,7 @@ public final class WorkspaceWindowRuntime {
   public private(set) var recordingState: WorkspaceRecordingState = .idle
   public private(set) var visionFailureMessages: [Int64: String] = [:]
   public private(set) var visionResults: [Int64: String] = [:]
-  public private(set) var variableStore: VariableStore
+  public private(set) var variableStore: [LDTXVariableKey: String]
   private var variableStoreGeneration = UUID()
   @ObservationIgnored let landscapeOverlays = ProgramOverlayProducer()
   @ObservationIgnored let portraitOverlays = ProgramOverlayProducer()
@@ -56,10 +56,10 @@ public final class WorkspaceWindowRuntime {
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.selectProgramHandler = selectProgram
-    variableStore = VariableStore(definition: persistence.runtimeWorkspace.definition)
+    variableStore = [LDTXVariableKey: String](definition: persistence.runtimeWorkspace.definition)
     persistence.runtimeWorkspaceAdopted = { [weak self] workspace in
       guard let self else { return }
-      variableStore = VariableStore(definition: workspace.definition)
+      variableStore = [LDTXVariableKey: String](definition: workspace.definition)
       variableStoreGeneration = UUID()
     }
     observeVariableChanges()
@@ -393,19 +393,15 @@ public final class WorkspaceWindowRuntime {
     }
   }
 
-  /// MainActor-owned access for future macro execution and item-specific readers.
-  public func readVariable(_ key: VariableKey) throws -> String {
-    try variableStore.read(key)
+  public func readVariable(_ key: LDTXVariableKey) throws -> String {
+    guard let value = variableStore[key] else { throw WorkspaceVariableError.unregisteredKey(key) }
+    return value
   }
 
-  public func setVariableReader(_ reader: any VariableReader, for key: VariableKey) throws {
-    try variableStore.setReader(reader, for: key)
-  }
-
-  private func applyVisionVariables(_ values: [VariableItem: String], visionID: Int64) {
+  private func applyVisionVariables(_ values: [LDTXVariableItem: String], visionID: Int64) {
     let updates = Dictionary(
       uniqueKeysWithValues: values.map {
-        (VariableKey(visionID: visionID, item: $0.key), $0.value)
+        (LDTXVariableKey(visionID: visionID, item: $0.key), $0.value)
       })
     // Result producers must publish exactly the items registered by the Definition.
     do {

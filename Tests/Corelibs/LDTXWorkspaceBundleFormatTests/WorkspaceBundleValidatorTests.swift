@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import LDTXWorkspaceBundleFormat
 import Testing
@@ -46,7 +47,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test func validatesStructuredMacroReferencesWithoutRequiringLiveVariables() throws {
+  @Test func validatesOpaqueRichTextPresenceWithoutInterpretingContents() throws {
     var bundle = WorkspaceV4Bundle(
       definition: .with {
         $0.videoComponents = [
@@ -56,8 +57,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
               $0.displayName = "Text"
               $0.width.set(num: 1, den: 2)
               $0.height.set(num: 1, den: 10)
-              $0.macroDocument =
-                "<macro version=\"1\"><variable vision-id=\"11\" item=\"text\"/></macro>"
+              $0.rtfdDocument = Data("opaque RTFD".utf8)
             }
           }
         ]
@@ -66,13 +66,12 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
         $0.error == .invalidVariableMacro
       })
-    bundle.definition.videoComponents[0].dynamicText.macroDocument =
-      "<macro version=\"1\"><variable vision-id=\"11\" item=\"unknown\"/></macro>"
+    bundle.definition.videoComponents[0].dynamicText.rtfdDocument = Data()
     #expect(
       WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
         $0.error == .invalidVariableMacro
       })
-    bundle.definition.videoComponents[0].dynamicText.macroDocument = "<macro version=\"1\"/>"
+    bundle.definition.videoComponents[0].dynamicText.rtfdDocument = Data([1])
     #expect(
       !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
         $0.error == .invalidVariableMacro
@@ -84,10 +83,9 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       $0.dynamicText = .with {
         $0.internalID = 7
         $0.displayName = "Result"
-        $0.text = "結果：{{visions/11/text}}"
+        $0.rtfdDocument = Data([1, 2, 3])
         $0.width.set(num: 1, den: 2)
         $0.height.set(num: 1, den: 10)
-        $0.foregroundExtendedSrgbColor = .with { $0.alpha = 1 }
       }
     }
     #expect(

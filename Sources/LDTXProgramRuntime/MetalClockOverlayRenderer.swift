@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import AppKit
 import CoreText
 import Foundation
 import LDTXFontRasterizer
 import LDTXProgram
+import LDTXRichText
 import Metal
 import simd
 
@@ -145,7 +147,7 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       throw MetalClockOverlayRendererError.invalidTextureSize
     }
 
-    if request.component.resolvedText != nil {
+    if request.component.resolvedRTFD != nil {
       return try renderDynamicText(request)
     }
 
@@ -251,32 +253,28 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
           bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
       else { return false }
-      let color = CGColor(
-        colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-        components: [
-          CGFloat(component.foregroundRed), CGFloat(component.foregroundGreen),
-          CGFloat(component.foregroundBlue), CGFloat(component.foregroundAlpha),
-        ])!
-      // Fit the complete multiline value into the component's extent.
-      var fontSize = CGFloat(min(height, 96))
-      var framesetter: CTFramesetter!
-      let bounds = CGSize(width: max(1, width - 8), height: max(1, height - 8))
-      repeat {
-        let attributes: [NSAttributedString.Key: Any] = [
-          NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName(
-            "Helvetica" as CFString, fontSize, nil),
-          NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
-        ]
-        let string = NSAttributedString(string: request.text, attributes: attributes)
-        framesetter = CTFramesetterCreateWithAttributedString(string)
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(
-          framesetter, CFRange(location: 0, length: 0), nil,
-          CGSize(width: bounds.width, height: .greatestFiniteMagnitude), nil)
-        if size.height <= bounds.height || fontSize <= 1 { break }
-        fontSize = max(1, fontSize - 1)
-      } while true
-      let path = CGPath(
-        rect: CGRect(x: 4, y: 4, width: bounds.width, height: bounds.height), transform: nil)
+      guard let data = component.resolvedRTFD,
+        let document = try? LDTXRichTextDocument(rtfd: data),
+        let original = try? document.attributedString()
+      else { return false }
+      let string = NSMutableAttributedString(attributedString: original)
+      original.enumerateAttributes(in: NSRange(location: 0, length: original.length)) {
+        attributes, range, _ in
+        if let font = attributes[.font] as? NSFont {
+          string.addAttribute(
+            NSAttributedString.Key(kCTFontAttributeName as String),
+            value: CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil),
+            range: range)
+        }
+        if let color = attributes[.foregroundColor] as? NSColor {
+          string.addAttribute(
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String), value: color.cgColor,
+            range: range)
+        }
+      }
+      context.clip(to: CGRect(x: 0, y: 0, width: width, height: height))
+      let framesetter = CTFramesetterCreateWithAttributedString(string)
+      let path = CGPath(rect: CGRect(x: 0, y: 0, width: width, height: height), transform: nil)
       CTFrameDraw(
         CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil), context)
       return true

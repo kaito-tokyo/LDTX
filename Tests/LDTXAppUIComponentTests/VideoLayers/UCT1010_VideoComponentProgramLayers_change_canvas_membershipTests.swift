@@ -18,7 +18,7 @@ extension AppUIComponentTestSuite {
       let state = WorkspaceStateService(definition: .init(), preferences: .init())
       state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
       state.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeDynamicText(id: 10, name: "Text")
+        try WorkspaceResourceFactory.makeDynamicText(id: 10, name: "Text")
       ]
       let controls = VideoComponentProgramLayers(
         stateService: state, appletData: data, componentID: 10)

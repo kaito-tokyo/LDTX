@@ -70,6 +70,7 @@ struct LDTXApp: App {
     .windowToolbarStyle(.unified)
     .commands {
       WorkspaceCommands()
+      TextFormattingCommands()
     }
 
     Settings {

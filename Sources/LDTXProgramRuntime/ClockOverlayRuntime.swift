@@ -33,7 +33,6 @@ struct ClockTextFormatter: Sendable {
   }
 
   func string(from date: Date, component: ClockComponent) -> String {
-    if let text = component.resolvedText { return text }
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.calendar = Calendar(identifier: .gregorian)
@@ -196,7 +195,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
 
   /// Called only while holding the state lock.
   private func synchronizeTimerLocked() {
-    if state.component.resolvedText != nil {
+    if state.component.resolvedRTFD != nil {
       if state.timer != nil {
         state.timerGeneration &+= 1
         state.timer?.setEventHandler {}
@@ -317,8 +316,8 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       }
 
       let request = ClockOverlayRenderRequest(
-        text: component.resolvedText
-          ?? formatter.string(from: currentTimeProvider.now(), component: component),
+        text: component.resolvedRTFD == nil
+          ? formatter.string(from: currentTimeProvider.now(), component: component) : "",
         component: component,
         pixelWidth: pixelWidth,
         pixelHeight: pixelHeight
@@ -457,7 +456,7 @@ extension ClockComponent {
       && lhs.showsDate == rhs.showsDate
       && lhs.usesSystemTimeZone == rhs.usesSystemTimeZone
       && lhs.utcOffsetMinutes == rhs.utcOffsetMinutes
-      && lhs.resolvedText == rhs.resolvedText
+      && lhs.resolvedRTFD == rhs.resolvedRTFD
   }
 
   private static func normalizedUnit(_ value: Float, fallback: Float) -> Float {

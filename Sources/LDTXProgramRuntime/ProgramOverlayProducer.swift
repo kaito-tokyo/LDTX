@@ -100,7 +100,7 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
       var showsDate: Bool
       var usesSystemTimeZone: Bool
       var utcOffsetMinutes: Int32
-      var resolvedText: String?
+      var resolvedRTFD: Data?
       var background: String
       var outlineDescriptions: [String]
 
@@ -125,7 +125,7 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
         showsDate = component.showsDate
         usesSystemTimeZone = component.usesSystemTimeZone
         utcOffsetMinutes = component.utcOffsetMinutes
-        resolvedText = component.resolvedText
+        resolvedRTFD = component.resolvedRTFD
         background = component.background
         outlineDescriptions = component.outlines.map { "\($0.thickness.bitPattern):\($0.color)" }
       }

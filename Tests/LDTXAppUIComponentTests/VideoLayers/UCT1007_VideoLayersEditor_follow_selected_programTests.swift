@@ -63,7 +63,7 @@ extension AppUIComponentTestSuite {
         .with { $0.vfxSource.internalID = 1 },
         .with { $0.clock.internalID = 2 },
         WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
-        WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
+        try WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
       ]
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1]?.supportsPlacement == true)

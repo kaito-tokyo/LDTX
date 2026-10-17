@@ -1290,9 +1290,9 @@ public struct FillConicGradientComponent: ProgramComponentParameters {
 /// its own current-time provider; frame timestamps are intentionally absent
 /// from this persisted definition.
 public struct ClockComponent: ProgramComponentParameters {
-  /// A resolved text overlay shares the retained texture lifecycle with Clock.
-  /// Nil selects the clock formatter; an empty string renders no text.
-  public var resolvedText: String? = nil
+  /// A resolved native RTFD overlay shares the retained texture lifecycle with Clock.
+  /// Nil selects the clock formatter; an empty RTFD document renders no text.
+  public var resolvedRTFD: Data? = nil
   public var destinationX: Float
   public var destinationY: Float
   public var destinationWidth: Float
@@ -1327,7 +1327,7 @@ public struct ClockComponent: ProgramComponentParameters {
     case utcOffsetMinutes
     case background
     case outlines
-    case resolvedText
+    case resolvedRTFD
   }
 
   public init(
@@ -1401,7 +1401,7 @@ public struct ClockComponent: ProgramComponentParameters {
     background = try container.decodeIfPresent(String.self, forKey: .background) ?? ""
     outlines = Array(
       (try container.decodeIfPresent([ClockTextOutline].self, forKey: .outlines) ?? []).prefix(2))
-    resolvedText = try container.decodeIfPresent(String.self, forKey: .resolvedText)
+    resolvedRTFD = try container.decodeIfPresent(Data.self, forKey: .resolvedRTFD)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -1435,7 +1435,7 @@ public struct ClockComponent: ProgramComponentParameters {
     try container.encode(utcOffsetMinutes, forKey: .utcOffsetMinutes)
     try container.encode(background, forKey: .background)
     try container.encode(Array(outlines.prefix(2)), forKey: .outlines)
-    try container.encodeIfPresent(resolvedText, forKey: .resolvedText)
+    try container.encodeIfPresent(resolvedRTFD, forKey: .resolvedRTFD)
   }
 }
 

@@ -4,7 +4,6 @@
 
 import Foundation
 import LDTXProtos
-import LDTXVariableStore
 
 /// Validates V4 bundle metadata and content at the Read/Write boundary.
 public struct WorkspaceBundleValidatorV4 {
@@ -357,10 +356,8 @@ extension WorkspaceBundleValidatorV4 {
         color(fill.startExtendedSrgbColor, path: path + ".start_extended_srgb_color", id: id)
         color(fill.endExtendedSrgbColor, path: path + ".end_extended_srgb_color", id: id)
       case .dynamicText(let text):
-        if text.hasMacroDocument {
-          if (try? VariableMacroDocument(xml: text.macroDocument)) == nil {
-            add(path + ".macro_document", .invalidVariableMacro, id: id)
-          }
+        if !text.hasRtfdDocument || text.rtfdDocument.isEmpty {
+          add(path + ".rtfd_document", .invalidVariableMacro, id: id)
         }
         _ = unit(
           text.width, path: path + ".width", id: id, positive: true,
@@ -368,8 +365,7 @@ extension WorkspaceBundleValidatorV4 {
         _ = unit(
           text.height, path: path + ".height", id: id, positive: true,
           error: .invalidDynamicTextGeometry)
-        color(
-          text.foregroundExtendedSrgbColor, path: path + ".foreground_extended_srgb_color", id: id)
+
       case .clock(let clock):
         _ = unit(
           clock.width, path: path + ".width", id: id, positive: true, error: .invalidClockGeometry)
@@ -600,7 +596,7 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .invalidDynamicTextGeometry:
       "Dynamic Text width and height must be greater than zero and at most one."
     case .invalidVariableMacro:
-      "Variable Macro segments must contain text or a valid structured variable reference."
+      "The rich text document is missing or empty."
     case .invalidClockGeometry:
       "Clock dimensions must be greater than 0 and at most 1, with at most two outlines."
     case .invalidModelID(let id):

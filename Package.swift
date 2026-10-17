@@ -7,10 +7,6 @@
 import PackageDescription
 
 var targets: [Target] = [
-  .target(
-    name: "LDTXVariableStore",
-    dependencies: ["LDTXProtos", .product(name: "SwiftProtobuf", package: "swift-protobuf")],
-    path: "Sources/Corelibs/LDTXVariableStore"),
   .target(name: "LDTXRecordBundleFormat", path: "Sources/Corelibs/LDTXRecordBundleFormat"),
   .target(
     name: "LDTXProgram",
@@ -29,7 +25,6 @@ var targets: [Target] = [
     name: "LDTXWorkspaceBundleFormat",
     dependencies: [
       "LDTXProtos",
-      "LDTXVariableStore",
       .product(name: "SwiftProtobuf", package: "swift-protobuf"),
     ],
     path: "Sources/Corelibs/LDTXWorkspaceBundleFormat"
@@ -38,7 +33,6 @@ var targets: [Target] = [
     name: "LDTXCorelibsTests",
     dependencies: [
       "LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat", "LDTXRecordBundleFormat",
-      "LDTXVariableStore",
     ],
     path: "Tests/Corelibs"
   ),
@@ -53,9 +47,10 @@ var dependencies: [Package.Dependency] = [
 #if os(macOS)
   products.append(.executable(name: "ldtx", targets: ["ldtx"]))
   targets += [
+    .target(name: "LDTXRichText", path: "Sources/LDTXRichText"),
     .target(
       name: "LDTXProtosMacOSExtra",
-      dependencies: ["LDTXProtos"],
+      dependencies: ["LDTXProtos", "LDTXRichText"],
       path: "Sources/LDTXProtosMacOSExtra"
     ),
     .testTarget(
@@ -65,10 +60,7 @@ var dependencies: [Package.Dependency] = [
     ),
     .target(
       name: "LDTXVariableMacro",
-      dependencies: [
-        "LDTXVariableStore", "LDTXProtos",
-        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-      ],
+      dependencies: ["LDTXRichText"],
       path: "Sources/UI/LDTXVariableMacro"
     ),
     .target(

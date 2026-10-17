@@ -161,9 +161,9 @@ extension CompositeProgramDefinition {
     var normalized = self
     for index in normalized.steps.indices {
       if case .clock(var overlay) = normalized.steps[index].component,
-        overlay.resolvedText != nil
+        overlay.resolvedRTFD != nil
       {
-        overlay.resolvedText = ""
+        overlay.resolvedRTFD = Data()
         normalized.steps[index].component = .clock(overlay)
       }
       guard case .inputCameraDevice(var component) = normalized.steps[index].component else {
