@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Dynamic Text persistence
 
 Dynamic Text stores one flattened RTFD document in the Protobuf `bytes

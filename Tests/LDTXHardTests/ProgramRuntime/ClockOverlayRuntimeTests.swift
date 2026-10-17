@@ -14,6 +14,45 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func dynamicTextRetriesFailuresWithoutUpdatesAndStopsAfterSuccess() async throws {
+    let renderer = ClockOverlayRendererSpy(
+      device: try unwrap(MTLCreateSystemDefaultDevice()), failingCalls: [1, 3])
+    var component = ClockComponent()
+    component.resolvedRTFD = try richTextData("first")
+    let runtime = ClockOverlayRuntime(component: component, renderer: renderer)
+    defer { runtime.deactivate() }
+    runtime.activate()
+    try await waitForClock(timeout: 3) {
+      renderer.requests.count == 2 && runtime.retainedOverlay() != nil
+    }
+    let firstTexture = try unwrap(runtime.retainedOverlay())
+    component.resolvedRTFD = try richTextData("second")
+    runtime.update(component: component)
+    try await waitForClock(timeout: 3) { renderer.requests.count == 3 }
+    #expect(runtime.retainedOverlay() === firstTexture)
+    try await waitForClock(timeout: 3) {
+      renderer.requests.count == 4 && runtime.retainedOverlay() !== firstTexture
+    }
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(renderer.requests.count == 4)
+  }
+
+  @Test func dynamicTextDeactivationCancelsPendingRetry() async throws {
+    let renderer = ClockOverlayRendererSpy(
+      device: try unwrap(MTLCreateSystemDefaultDevice()), failingCalls: [1])
+    var component = ClockComponent()
+    component.resolvedRTFD = try richTextData("text")
+    let queue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.retry-cancellation")
+    let runtime = ClockOverlayRuntime(
+      component: component, renderer: renderer, rendererQueue: queue)
+    runtime.activate()
+    queue.sync {}
+    runtime.deactivate()
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(renderer.requests.count == 1)
+    #expect(runtime.retainedOverlay() == nil)
+  }
+
   @Test func richTextPreservesColorsAndFontSizesWithoutShrinking() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)

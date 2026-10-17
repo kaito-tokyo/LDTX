@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtosMacOSExtra
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Observation

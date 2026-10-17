@@ -38,7 +38,6 @@ public final class WorkspaceWindowRuntime {
   private var variableStoreGeneration = UUID()
   @ObservationIgnored let landscapeOverlays = ProgramOverlayProducer()
   @ObservationIgnored let portraitOverlays = ProgramOverlayProducer()
-  @ObservationIgnored private var componentOverlays: [Int64: ProgramOverlayProducer] = [:]
   @ObservationIgnored private var isShutDown = false
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
@@ -75,15 +74,12 @@ public final class WorkspaceWindowRuntime {
 
   public func installComponentFrameRenderer(_ renderer: VideoComponentFrameRenderer) {
     componentFrameRenderer = renderer
-    updateComponentOverlays()
   }
 
   public func shutdown() {
     isShutDown = true
     landscapeOverlays.stop()
     portraitOverlays.stop()
-    for producer in componentOverlays.values { producer.stop() }
-    componentOverlays.removeAll()
     componentFrameRenderer?.retainComponents([])
   }
 
@@ -101,7 +97,6 @@ public final class WorkspaceWindowRuntime {
   }
 
   private func refreshOverlayContent() {
-    updateComponentOverlays()
     guard let programID = selectedProgramInternalID else { return }
     _ = try? runtimeProjection(programInternalID: programID, target: .landscape)
     _ = try? runtimeProjection(programInternalID: programID, target: .portrait)
@@ -150,7 +145,6 @@ public final class WorkspaceWindowRuntime {
 
   public func updateRuntimes() {
     guard !isShutDown else { return }
-    updateComponentOverlays()
     componentFrameRenderer?.retainComponents(
       Set(
         definition.videoComponents.compactMap {
@@ -195,41 +189,6 @@ public final class WorkspaceWindowRuntime {
   func overlayProducer(for target: WorkspaceCanvasTarget) -> ProgramOverlayProducer {
     target.preferences == WorkspaceCanvasTarget.landscape.preferences
       ? landscapeOverlays : portraitOverlays
-  }
-
-  private func updateComponentOverlays() {
-    guard !isShutDown else { return }
-    var retained: Set<Int64> = []
-    for wrapper in definition.videoComponents {
-      let id: Int64
-      let width: Double
-      let height: Double
-      switch wrapper.videoComponent {
-      case .clock(let value):
-        id = value.internalID
-        width = value.width.double
-        height = value.height.double
-      case .dynamicText(let value):
-        id = value.internalID
-        width = value.width.double
-        height = value.height.double
-      default: continue
-      }
-      guard width.isFinite, height.isFinite else { continue }
-      guard
-        let configuration = try? WorkspaceV4RenderGraph.componentConfiguration(
-          definition: definition, componentID: id, physicalDeviceIDs: physicalDeviceIDs,
-          width: Int(min(max(width * 1920, 1), 16384)),
-          height: Int(min(max(height * 1080, 1), 16384)), variableStore: variableStore)
-      else { continue }
-      let producer = componentOverlays[id] ?? ProgramOverlayProducer()
-      componentOverlays[id] = producer
-      producer.update(configuration: configuration)
-      retained.insert(id)
-    }
-    for id in Array(componentOverlays.keys) where !retained.contains(id) {
-      componentOverlays.removeValue(forKey: id)?.stop()
-    }
   }
 
   public func synchronizeCaptureInputs(
@@ -446,10 +405,9 @@ public final class WorkspaceWindowRuntime {
     guard let renderer = componentFrameRenderer else {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
-    var configuration = try WorkspaceV4RenderGraph.componentConfiguration(
+    let configuration = try WorkspaceV4RenderGraph.componentConfiguration(
       definition: definition, componentID: componentID,
       physicalDeviceIDs: physicalDeviceIDsProvider(), width: width, height: height)
-    configuration.overlayTextures = componentOverlays[componentID]?.textures
     let frame = try await renderer.render(componentID: componentID, configuration: configuration)
     guard !frame.isPreparingRenderResources else {
       throw WorkspaceVisionFeatureError.frameUnavailable
