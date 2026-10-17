@@ -657,6 +657,27 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     waitUntil(timeout: 2) { attempts.value == 3 }
   }
 
+  @Test func producerRetriesUnchangedConfigurationAfterSetupFailure() async throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let attempts = ClockOverlayInitializationAttemptCounter()
+    let producer = ProgramOverlayProducer(registryFactory: {
+      attempts.increment()
+      if attempts.value == 1 { throw ClockOverlayRendererSpyError.requestedFailure }
+      return try ClockOverlayRuntimeRegistry(
+        device: device, currentTimeProvider: SystemClockCurrentTimeProvider())
+    })
+    defer { producer.stop() }
+    let configuration = clockRuntimeConfiguration(component: ClockComponent())
+    producer.update(configuration: configuration)
+    try await waitForClock(timeout: 2) { attempts.value == 1 }
+    producer.update(configuration: configuration)
+    try await Task.sleep(for: .milliseconds(1100))
+    #expect(attempts.value == 1)
+    producer.update(configuration: configuration)
+    try await waitForClock(timeout: 3) { !producer.textures.snapshot().isEmpty }
+    #expect(attempts.value == 2)
+  }
+
   @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() async throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let timeProvider = CountingClockCurrentTimeProvider(

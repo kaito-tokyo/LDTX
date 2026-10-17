@@ -72,6 +72,7 @@ targets:
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceBundleFormat
       - target: LDTXProtos
+      - target: LDTXProtosMacOSExtra
       - package: swift-argument-parser
         product: ArgumentParser
       - package: SwiftProtobuf

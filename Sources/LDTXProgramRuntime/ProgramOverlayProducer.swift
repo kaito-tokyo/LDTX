@@ -13,6 +13,7 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
   private final class State: @unchecked Sendable {
     var registry: ClockOverlayRuntimeRegistry?
     var failedConfiguration: InitializationConfiguration?
+    var retryAfter: TimeInterval = 0
     let factory: @Sendable () throws -> ClockOverlayRuntimeRegistry
     init(factory: @escaping @Sendable () throws -> ClockOverlayRuntimeRegistry) {
       self.factory = factory
@@ -59,12 +60,16 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
           return InitializationConfiguration.Step(name: $0.name, component: component)
         }, outputWidth: configuration.outputWidth, outputHeight: configuration.outputHeight)
       if state.registry == nil {
-        guard state.failedConfiguration != key else { return }
+        guard
+          state.failedConfiguration != key
+            || ProcessInfo.processInfo.systemUptime >= state.retryAfter
+        else { return }
         do {
           state.registry = try state.factory()
           state.failedConfiguration = nil
         } catch {
           state.failedConfiguration = key
+          state.retryAfter = ProcessInfo.processInfo.systemUptime + 1
           Logger(subsystem: "tokyo.kaito.ldtx", category: "overlay-producer").error(
             "Overlay preparation failed: \(error.localizedDescription, privacy: .public)")
           return

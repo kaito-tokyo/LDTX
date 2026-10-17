@@ -106,6 +106,7 @@ var dependencies: [Package.Dependency] = [
         "LDTXRecordBundleFormat",
         "LDTXWorkspaceBundleFormat",
         "LDTXProtos",
+        "LDTXProtosMacOSExtra",
         "LDTXWorkspaceAppletModel",
         "LDTXWorkspaceAppletStore",
         "LDTXWorkspaceAppletService",

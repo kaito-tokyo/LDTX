@@ -5,6 +5,7 @@
 import ArgumentParser
 import Foundation
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import LDTXRecordBundleFormat
 import LDTXRecording
 import LDTXWorkspaceAppletModel
@@ -125,6 +126,7 @@ public struct WorkspaceCommand: ParsableCommand {
               preferences: Ldtx_Workspace_V4_WorkspacePreferencesV4())
           }
           try WorkspaceBundleValidatorV4.validate(workspace)
+          try workspace.definition.validateRichTextDocuments()
           guard var writer = WorkspaceBundleWriterV4(at: url) else {
             throw ValidationError("Could not initialize Workspace writer: \(url.path)")
           }
@@ -185,6 +187,7 @@ public struct WorkspaceCommand: ParsableCommand {
         }
         let workspace = try reader.read()
         try WorkspaceBundleValidatorV4.validate(workspace)
+        try workspace.definition.validateRichTextDocuments()
         print("OK: Workspace v4 \(url.path)")
       }
     }

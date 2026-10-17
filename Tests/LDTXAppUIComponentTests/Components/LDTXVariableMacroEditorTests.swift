@@ -195,6 +195,22 @@ extension AppUIComponentTestSuite {
       #expect(try richExpressions(editor.document).last == .variable(second))
     }
 
+    @Test func externalDocumentDuringCompositionWinsWithoutPublishingStaleDraft() throws {
+      let editor = editor(document: richDocument([.text("original")]))
+      var changes = 0
+      editor.onDocumentChange = { _ in changes += 1 }
+      editor.setMarkedText(
+        "にほん", selectedRange: NSRange(location: 3, length: 0),
+        replacementRange: NSRange(location: 0, length: 8))
+      let restored = richDocument([.text("restored"), .variable(second)])
+      editor.update(
+        document: restored, keys: [first, second], names: editor.names, isEnabled: true)
+      #expect(editor.hasMarkedText())
+      editor.unmarkText()
+      #expect(try editor.document == restored)
+      #expect(changes == 0)
+    }
+
     @Test func hostedChipsSurviveUndoRedoAndRenderAfterRepeatedUpdates() async throws {
       let document = WorkspaceDocument()
       let state = document.stateService

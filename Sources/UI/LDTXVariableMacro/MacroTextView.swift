@@ -13,6 +13,7 @@ final class MacroTextView: NSTextView {
   private(set) var names: [LDTXVariableReference: String] = [:]
   var onError: (Error) -> Void = { _ in }
   private var lastPublished: LDTXRichTextDocument?
+  private var pendingDocument: LDTXRichTextDocument?
   private var adopting = false
 
   convenience init(frame frameRect: NSRect, usingTextLayoutManager: Bool) {
@@ -40,7 +41,11 @@ final class MacroTextView: NSTextView {
     self.keys = keys
     self.names = names
     isEditable = isEnabled
-    guard !hasMarkedText() else { return }
+    guard !hasMarkedText() else {
+      if document != lastPublished || pendingDocument != nil { pendingDocument = document }
+      return
+    }
+    pendingDocument = nil
     do {
       if lastPublished != document {
         let selection = selectedRange()
@@ -77,6 +82,11 @@ final class MacroTextView: NSTextView {
   private func reportChange() {
     guard !adopting else { return }
     guard !hasMarkedText() else { return }
+    if let pendingDocument {
+      lastPublished = nil
+      update(document: pendingDocument, keys: keys, names: names, isEnabled: isEditable)
+      return
+    }
     do {
       let next = try document
       guard next != lastPublished else { return }

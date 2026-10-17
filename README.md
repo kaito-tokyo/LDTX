@@ -27,15 +27,15 @@ or confidence. Save the Workspace to apply the component to preview and output.
 Variable values update automatically as Vision results arrive. Variables appear
 as inline chips; click one to choose a replacement or remove it. Arrow keys,
 selection, and deletion use the native text editor; Undo/Redo uses Workspace's
-history. Internal copying
-preserves references; copying to another app produces `{{visions/<internal_id>/<item>}}`.
-Ordinary pasted text stays literal, including token-shaped text. Existing token
-documents remain readable. Missing variables render empty and retain their references
-for editing. Unicode and multiline text are supported.
-Macro content is stored as XML (`<macro version="1">`) with literal text and
-`<variable vision-id="123" item="text"/>` references. Parsing is all-or-nothing.
+history. RTFD copying preserves formatting and variable attachments; RTF and
+plain-text export represent variables as `{{id/sel}}`. Ordinary pasted text stays
+literal. Missing variables render empty and retain their references for editing.
+Unicode and multiline text are supported. Content is stored exclusively as valid
+RTFD bytes in `rtfd_document`; earlier XML and token documents are unsupported.
+See [Dynamic Text persistence](docs/dynamic-text.md) for the format details.
 Width and height are relative to the Landscape Canvas; layer transforms control
-placement. Text fits within this extent and uses a transparent background.
+placement. Text wraps at its authored font sizes and clips to this extent,
+using a transparent background.
 
 ## Vision Programmer
 
