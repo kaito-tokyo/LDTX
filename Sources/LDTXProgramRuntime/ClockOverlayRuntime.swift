@@ -362,13 +362,18 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       } catch {
         // Retain the last successful texture/request. A future pulse or
         // configuration change will retry this request. Dynamic Text has no
-        // periodic pulse, so schedule a single delayed retry after each failure.
+        // periodic pulse, so schedule a delayed retry for transient failures.
+        // Size limits cannot recover until the configuration changes.
         clockOverlayRuntimeLogger.error(
           "Clock overlay render failed: \(error.localizedDescription, privacy: .public)"
         )
         lock.withLock {
           if state.isActive, state.renderGeneration == generation {
-            state.needsRetry = true
+            if case MetalClockOverlayRendererError.invalidTextureSize = error {
+              state.needsRetry = false
+            } else {
+              state.needsRetry = true
+            }
             synchronizeTimerLocked()
           }
         }

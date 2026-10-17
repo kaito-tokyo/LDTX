@@ -14,6 +14,28 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func dynamicTextSizeFailureWaitsForConfigurationChange() async throws {
+    let renderer = ClockOverlayRendererSpy(
+      device: try unwrap(MTLCreateSystemDefaultDevice()), failingCalls: [1],
+      failure: .invalidTextureSize)
+    var component = ClockComponent()
+    component.resolvedRTFD = try richTextData("text")
+    let queue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.invalid-size")
+    let runtime = ClockOverlayRuntime(
+      component: component, pixelWidth: 16_384, pixelHeight: 16_384,
+      renderer: renderer, rendererQueue: queue)
+    defer { runtime.deactivate() }
+    runtime.activate()
+    queue.sync {}
+    for _ in 0..<10 { runtime.update(component: component) }
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(renderer.requests.count == 1)
+    #expect(runtime.retainedOverlay() == nil)
+    runtime.update(component: component, pixelWidth: 256, pixelHeight: 96)
+    try await waitForClock(timeout: 3) { runtime.retainedOverlay() != nil }
+    #expect(renderer.requests.count == 2)
+  }
+
   @Test func dynamicTextRetriesFailuresWithoutUpdatesAndStopsAfterSuccess() async throws {
     let renderer = ClockOverlayRendererSpy(
       device: try unwrap(MTLCreateSystemDefaultDevice()), failingCalls: [1, 3])
@@ -1582,6 +1604,7 @@ private final class ClockOverlayRendererSpy: ClockOverlayRendering, @unchecked S
   private let lock = NSLock()
   private let device: MTLDevice
   private let failingCalls: Set<Int>
+  private let failure: MetalClockOverlayRendererError?
   private let blocksFirstCall: Bool
   private let onRender: @Sendable () -> Void
   private let firstCallStarted = DispatchSemaphore(value: 0)
@@ -1591,11 +1614,13 @@ private final class ClockOverlayRendererSpy: ClockOverlayRendering, @unchecked S
   init(
     device: MTLDevice,
     failingCalls: Set<Int> = [],
+    failure: MetalClockOverlayRendererError? = nil,
     blocksFirstCall: Bool = false,
     onRender: @escaping @Sendable () -> Void = {}
   ) {
     self.device = device
     self.failingCalls = failingCalls
+    self.failure = failure
     self.blocksFirstCall = blocksFirstCall
     self.onRender = onRender
   }
@@ -1623,6 +1648,7 @@ private final class ClockOverlayRendererSpy: ClockOverlayRendering, @unchecked S
       firstCallRelease.wait()
     }
     if failingCalls.contains(call) {
+      if let failure { throw failure }
       throw ClockOverlayRendererSpyError.requestedFailure
     }
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(

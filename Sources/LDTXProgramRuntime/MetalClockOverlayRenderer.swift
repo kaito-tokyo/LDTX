@@ -47,7 +47,7 @@ enum MetalClockOverlayRendererError: Error, LocalizedError {
     case .renderFailed:
       "The Clock Metal render pass failed."
     case .invalidTextureSize:
-      "The requested Clock overlay texture size is invalid."
+      "The overlay dimensions are invalid or exceed the raster pixel budget. Reduce the layer size or scale."
     }
   }
 }
