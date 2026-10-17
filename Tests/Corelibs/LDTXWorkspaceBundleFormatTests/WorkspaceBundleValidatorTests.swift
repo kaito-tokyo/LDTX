@@ -18,7 +18,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
               $0.displayName = "Text"
               $0.width.set(num: 1, den: 2)
               $0.height.set(num: 1, den: 10)
-              $0.macroDocument = "<macro version=\"1\"><variable vision-id=\"11\" item=\"text\"/></macro>"
+              $0.macroDocument =
+                "<macro version=\"1\"><variable vision-id=\"11\" item=\"text\"/></macro>"
             }
           }
         ]
