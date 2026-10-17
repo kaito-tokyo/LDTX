@@ -30,9 +30,10 @@ the relevant design or feature documentation instead.
 - The SwiftUI scene connection registers undo actions for content changes to participate
   in SwiftUI's unsaved-change tracking. StateService must not hide document-change
   callbacks or persistence notifications in its setters.
-  Workspace Undo/Redo menu commands and shortcuts are temporarily disabled;
-  registration remains enabled for change tracking. Other Applets keep their
-  standard Undo/Redo commands.
+  Workspace Undo/Redo menu commands and shortcuts use the standard document
+  history while output is idle. During output they are disabled so a snapshot
+  restoration cannot bypass editing restrictions. Registration remains enabled
+  for change tracking. Other Applets keep their standard Undo/Redo commands.
 
 ## Document content, editing state and runtime state have distinct roles
 
@@ -201,6 +202,50 @@ the relevant design or feature documentation instead.
   must not block the main actor.
 - Such work should use a serialized background executor when ordering is
   significant.
+
+## Overlay production is independent of Program frame rendering
+
+- Workspace owns Clock and Dynamic Text texture producers separately from
+  ProgramRuntime, preview consumers, output consumers, and on-demand frame rendering.
+  Producers can prepare and update textures without requesting a Program frame.
+- Dynamic Text observes the Workspace's ephemeral variable state. Changes schedule
+  texture generation independently; they do not poll at frame rate or reconfigure
+  ProgramRuntime. Clock updates use their own timer.
+- ProgramRuntime only reads snapshots of completed textures and composites them.
+  Its frame loop must not initialize, synchronize, or start texture generators.
+  Generation and publication never wait for the compositor, and composition never
+  waits for a new overlay. The last completed texture remains usable during refresh.
+- Published textures are immutable. Generation identity rejects late publication
+  after removal or shutdown. Each canvas owns its producer and placement projection;
+  failed refreshes retain the last successful texture. Definition changes still
+  reach producers only after successful persistence.
+
+## Variable Macro content is structured independently of its editor
+
+- A macro document contains ordered literal text and structured VariableKey
+  references. Display names are derived from the current Definition and do not
+  identify references. Models, persistence projection, and evaluation belong to
+  Corelibs/LDTXVariableStore; LDTXVariableMacro owns only the native editing UI.
+- Dynamic Text's macro_document stores XML mixed content rooted at
+  `<macro version="1">`. Text nodes are literal content; empty `variable` elements
+  carry `vision-id` and `item` attributes. XMLParser builds temporary segments in
+  one forward pass, and the complete result is discarded on any parsing or
+  schema failure. DTD syntax (`<!DOCTYPE`, even in comments or CDATA) and entity
+  declarations are rejected, and external entity loading
+  is disabled. Serialization omits the XML declaration and formatting whitespace,
+  escapes literal text, and preserves content whitespace and carriage returns.
+- macro_document is authoritative when present, including an empty macro root.
+  An empty string is invalid XML. The old text field is imported only when macro_document is absent.
+  Reading old content does not rewrite the Definition. The first content edit
+  writes the XML document and clears the old field.
+- Typing and ordinary pasting never parse text into references. Internal copying
+  preserves structured references; the plain-text clipboard representation is
+  a readable token string. Missing references remain editable and expand empty.
+- Editor synchronization must not replace its own unchanged content, disrupt
+  marked text, or introduce view-based attachment lifecycle dependencies.
+- Macro edits participate in Workspace document Undo/Redo through their binding.
+  The editor must not register native text undo actions, maintain a separate
+  history, intercept undo shortcuts, or clear the document's registrations.
 
 ## Protobuf defaults and Rational values
 

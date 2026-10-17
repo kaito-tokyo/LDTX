@@ -225,6 +225,11 @@ struct WorkspaceResourceAdditionUnitTestSuite {
       #expect(component.vfxSource.deviceWidth == 1920)
       #expect(component.vfxSource.deviceHeight == 1080)
     case .solidColor: #expect(component.solidColorFill.extendedSrgbColor.alpha == 1)
+    case .dynamicText:
+      #expect(component.dynamicText.internalID == id)
+      #expect(component.dynamicText.width.double == 0.5)
+      #expect(component.dynamicText.height.double == 0.1)
+      #expect(component.dynamicText.foregroundExtendedSrgbColor.alpha == 1)
     case .linearGradient:
       #expect(
         component.linearGradientFill.endX

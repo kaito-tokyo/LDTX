@@ -287,9 +287,17 @@ extension WorkspaceWindowRuntime {
   public func runtimeProjection(programInternalID: Int64, target: WorkspaceCanvasTarget) throws
     -> WorkspaceV4RuntimeProjection
   {
-    try persistenceCoordinator.runtimeProjection(
-      programInternalID: programInternalID, target: target,
-      localState: appletLocalState, physicalDeviceIDs: physicalDeviceIDs)
+    guard isRunning else { throw CancellationError() }
+    let canvas = try WorkspaceProgramCanvasSnapshot(
+      definition: definition, preferences: preferences,
+      programInternalID: programInternalID, target: target)
+    var projection = try WorkspaceV4RenderGraph.runtimeProjection(
+      definition: definition, canvas: canvas, physicalDeviceIDs: physicalDeviceIDs,
+      timeSeconds: Float(ProcessInfo.processInfo.systemUptime), variableStore: variableStore)
+    let producer = overlayProducer(for: target)
+    producer.update(configuration: projection.configuration, preferences: projection.preferences)
+    projection.configuration.overlayTextures = producer.textures
+    return projection
   }
 
   private static var opaqueWhite: Ldtx_Workspace_V4_Color {

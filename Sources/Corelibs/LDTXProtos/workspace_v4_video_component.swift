@@ -11,6 +11,7 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper {
     case .conicGradientFill(let component): component.hasInternalID ? component.internalID : nil
     case .vfxSource(let component): component.hasInternalID ? component.internalID : nil
     case .clock(let component): component.hasInternalID ? component.internalID : nil
+    case .dynamicText(let component): component.hasInternalID ? component.internalID : nil
     case .testPattern(let component): component.hasInternalID ? component.internalID : nil
     case nil: nil
     }
@@ -24,6 +25,7 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper {
     case .conicGradientFill(let component): component.hasDisplayName ? component.displayName : nil
     case .vfxSource(let component): component.hasDisplayName ? component.displayName : nil
     case .clock(let component): component.hasDisplayName ? component.displayName : nil
+    case .dynamicText(let component): component.hasDisplayName ? component.displayName : nil
     case .testPattern(let component): component.hasDisplayName ? component.displayName : nil
     case nil: nil
     }
@@ -33,7 +35,7 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper {
     switch videoComponent {
     case .vfxSource: true
     case .solidColorFill, .linearGradientFill, .radialGradientFill, .conicGradientFill,
-      .clock, .testPattern, nil:
+      .clock, .dynamicText, .testPattern, nil:
       false
     }
   }
@@ -42,7 +44,7 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper {
     switch videoComponent {
     case .vfxSource(let component): (component.deviceWidth, component.deviceHeight)
     case .solidColorFill, .linearGradientFill, .radialGradientFill, .conicGradientFill,
-      .clock, .testPattern, nil:
+      .clock, .dynamicText, .testPattern, nil:
       nil
     }
   }

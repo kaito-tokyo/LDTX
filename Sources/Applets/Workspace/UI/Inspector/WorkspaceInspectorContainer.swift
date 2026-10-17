@@ -137,6 +137,13 @@ public struct WorkspaceInspectorContainer: View {
       } else {
         emptyInspector
       }
+    case .dynamicTextVideoComponent:
+      if let internalID = selector.internalID {
+        DynamicTextInspector(
+          stateService: stateService, appletData: appletData, internalID: internalID)
+      } else {
+        emptyInspector
+      }
     case .clockVideoComponent:
       if let internalID = selector.internalID {
         ClockInspector(

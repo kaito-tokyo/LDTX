@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import CoreText
 import Foundation
 import LDTXFontRasterizer
 import LDTXProgram
@@ -141,6 +142,10 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       throw MetalClockOverlayRendererError.invalidTextureSize
     }
 
+    if request.component.resolvedText != nil {
+      return try renderDynamicText(request)
+    }
+
     let colorTexture = try makeTexture(
       pixelFormat: .b5g6r5Unorm,
       width: request.pixelWidth,
@@ -222,6 +227,89 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     commandBuffer.waitUntilCompleted()
     guard commandBuffer.status == .completed else {
       throw MetalClockOverlayRendererError.renderFailed
+    }
+    return try ClockOverlayTexture(colorTexture: colorTexture, alphaTexture: alphaTexture)
+  }
+
+  /// Core Text provides Unicode shaping and system font fallback on the overlay worker queue.
+  private func renderDynamicText(_ request: ClockOverlayRenderRequest) throws -> ClockOverlayTexture
+  {
+    let width = request.pixelWidth
+    let height = request.pixelHeight
+    let component = request.component
+    var rgba = [UInt8](repeating: 0, count: width * height * 4)
+    let rendered = rgba.withUnsafeMutableBytes { bytes -> Bool in
+      guard
+        let context = CGContext(
+          data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8,
+          bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+      else { return false }
+      let color = CGColor(
+        colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+        components: [
+          CGFloat(component.foregroundRed), CGFloat(component.foregroundGreen),
+          CGFloat(component.foregroundBlue), CGFloat(component.foregroundAlpha),
+        ])!
+      // Fit the complete multiline value into the component's extent.
+      var fontSize = CGFloat(min(height, 96))
+      var framesetter: CTFramesetter!
+      let bounds = CGSize(width: max(1, width - 8), height: max(1, height - 8))
+      repeat {
+        let attributes: [NSAttributedString.Key: Any] = [
+          NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName(
+            "Helvetica" as CFString, fontSize, nil),
+          NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
+        ]
+        let string = NSAttributedString(string: request.text, attributes: attributes)
+        framesetter = CTFramesetterCreateWithAttributedString(string)
+        let size = CTFramesetterSuggestFrameSizeWithConstraints(
+          framesetter, CFRange(location: 0, length: 0), nil,
+          CGSize(width: bounds.width, height: .greatestFiniteMagnitude), nil)
+        if size.height <= bounds.height || fontSize <= 1 { break }
+        fontSize = max(1, fontSize - 1)
+      } while true
+      let path = CGPath(
+        rect: CGRect(x: 4, y: 4, width: bounds.width, height: bounds.height), transform: nil)
+      CTFrameDraw(
+        CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil), context)
+      return true
+    }
+    guard rendered else { throw MetalClockOverlayRendererError.textureCreationFailed }
+    var rgb565 = [UInt16](repeating: 0, count: width * height)
+    var alpha = [UInt8](repeating: 0, count: width * height)
+    for index in alpha.indices {
+      // Core Graphics bitmap rows already match the texture's top-down storage.
+      let source = index * 4
+      let a = UInt32(rgba[source + 3])
+      alpha[index] = UInt8(a)
+      if a > 0 {
+        let r = UInt32(rgba[source]) * 255 / a
+        let g = UInt32(rgba[source + 1]) * 255 / a
+        let b = UInt32(rgba[source + 2]) * 255 / a
+        rgb565[index] = UInt16((r >> 3) << 11 | (g >> 2) << 5 | (b >> 3))
+      }
+    }
+    func texture(_ format: MTLPixelFormat) throws -> MTLTexture {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: format, width: width, height: height, mipmapped: false)
+      descriptor.storageMode = .shared
+      descriptor.usage = .shaderRead
+      guard let texture = device.makeTexture(descriptor: descriptor) else {
+        throw MetalClockOverlayRendererError.textureCreationFailed
+      }
+      return texture
+    }
+    let colorTexture = try texture(.b5g6r5Unorm)
+    let alphaTexture = try texture(.r8Unorm)
+    let region = MTLRegionMake2D(0, 0, width, height)
+    rgb565.withUnsafeBytes {
+      colorTexture.replace(
+        region: region, mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: width * 2)
+    }
+    alpha.withUnsafeBytes {
+      alphaTexture.replace(
+        region: region, mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: width)
     }
     return try ClockOverlayTexture(colorTexture: colorTexture, alphaTexture: alphaTexture)
   }

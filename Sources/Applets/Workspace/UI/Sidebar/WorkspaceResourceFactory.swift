@@ -5,6 +5,19 @@ import Foundation
 import LDTXProtos
 
 enum WorkspaceResourceFactory {
+  static func makeDynamicText(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+    var text = Ldtx_Workspace_V4_DynamicTextComponent()
+    text.internalID = id
+    text.displayName = name
+    text.macroDocument = "<macro version=\"1\">Dynamic Text</macro>"
+    text.width.set(num: 1, den: 2)
+    text.height.set(num: 1, den: 10)
+    text.foregroundExtendedSrgbColor = opaqueWhite
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.dynamicText = text
+    return wrapper
+  }
+
   static func makeAudioInput(id: Int64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id

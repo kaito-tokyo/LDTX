@@ -14,6 +14,8 @@ public struct WorkspaceContentPane: View {
   let pairedPreview: ProgramCanvasPairedPreview
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   @State var layout = WorkspaceContentLayout()
+  @State private var landscapeEditor: VideoLayersEditorState
+  @State private var portraitEditor: VideoLayersEditorState
 
   public init(
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
@@ -27,6 +29,12 @@ public struct WorkspaceContentPane: View {
     self.reportError = reportError
     self.pairedPreview = pairedPreview
     self.runtimeActions = runtimeActions
+    _landscapeEditor = State(
+      initialValue: VideoLayersEditorState(
+        stateService: stateService, appletData: appletData, target: .landscape))
+    _portraitEditor = State(
+      initialValue: VideoLayersEditorState(
+        stateService: stateService, appletData: appletData, target: .portrait))
   }
 
   public var body: some View {
@@ -49,36 +57,27 @@ public struct WorkspaceContentPane: View {
 
   private var editors: some View {
     @Bindable var layout = layout
-    return ScrollView {
-      VStack(alignment: .leading, spacing: 12) {
+    return List {
+      Section {
         MasterVolumeEditor(
           stateService: stateService, appletData: appletData, peakMeter: peakMeter,
           reportError: reportError, runtimeActions: runtimeActions)
         AudioMixEditor(
           stateService: stateService, appletData: appletData, peakMeter: peakMeter,
           reportError: reportError, runtimeActions: runtimeActions)
-        Picker("Video Layers", selection: $layout.isPortrait) {
-          Text("Landscape Video Layers").tag(false)
-          Text("Portrait Video Layers").tag(true)
-        }
-        .pickerStyle(.segmented)
-        ZStack(alignment: .topLeading) {
-          videoLayers(.landscape, isVisible: !layout.isPortrait)
-          videoLayers(.portrait, isVisible: layout.isPortrait)
-        }
       }
-      .padding(12)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      Picker("Video Layers", selection: $layout.isPortrait) {
+        Text("Landscape Video Layers").tag(false)
+        Text("Portrait Video Layers").tag(true)
+      }
+      .pickerStyle(.segmented)
+      if layout.isPortrait {
+        VideoLayersEditor(editor: portraitEditor)
+      } else {
+        VideoLayersEditor(editor: landscapeEditor)
+      }
     }
-  }
-
-  private func videoLayers(_ target: WorkspaceCanvasTarget, isVisible: Bool) -> some View {
-    VideoLayersEditor(stateService: stateService, appletData: appletData, target: target)
-      .frame(height: isVisible ? nil : 0, alignment: .top)
-      .clipped()
-      .opacity(isVisible ? 1 : 0)
-      .disabled(!isVisible)
-      .accessibilityHidden(!isVisible)
+    .listStyle(.inset)
   }
 }
 

@@ -33,6 +33,7 @@ struct ClockTextFormatter: Sendable {
   }
 
   func string(from date: Date, component: ClockComponent) -> String {
+    if let text = component.resolvedText { return text }
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.calendar = Calendar(identifier: .gregorian)
@@ -188,19 +189,34 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       guard !state.isActive else { return }
       state.isActive = true
       state.renderGeneration &+= 1
-      let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-      state.timerGeneration &+= 1
-      let generation = state.timerGeneration
-      timer.setEventHandler { [weak self] in
-        self?.requestRender(timerGeneration: generation)
-      }
-      timer.schedule(
-        deadline: .now() + .seconds(1), repeating: .seconds(1),
-        leeway: .milliseconds(100))
-      state.timer = timer
-      timer.resume()
+      synchronizeTimerLocked()
     }
     requestRender()
+  }
+
+  /// Called only while holding the state lock.
+  private func synchronizeTimerLocked() {
+    if state.component.resolvedText != nil {
+      if state.timer != nil {
+        state.timerGeneration &+= 1
+        state.timer?.setEventHandler {}
+        state.timer?.cancel()
+        state.timer = nil
+      }
+      return
+    }
+    guard state.timer == nil else { return }
+    let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+    state.timerGeneration &+= 1
+    let generation = state.timerGeneration
+    timer.setEventHandler { [weak self] in
+      self?.requestRender(timerGeneration: generation)
+    }
+    timer.schedule(
+      deadline: .now() + .seconds(1), repeating: .seconds(1),
+      leeway: .milliseconds(100))
+    state.timer = timer
+    timer.resume()
   }
 
   func update(
@@ -220,6 +236,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         || state.pixelWidth != nextPixelWidth
         || state.pixelHeight != nextPixelHeight
       state.component = component
+      if state.isActive { synchronizeTimerLocked() }
       state.pixelWidth = nextPixelWidth
       state.pixelHeight = nextPixelHeight
       if overlayContentChanged {
@@ -299,9 +316,9 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         return
       }
 
-      let date = currentTimeProvider.now()
       let request = ClockOverlayRenderRequest(
-        text: formatter.string(from: date, component: component),
+        text: component.resolvedText
+          ?? formatter.string(from: currentTimeProvider.now(), component: component),
         component: component,
         pixelWidth: pixelWidth,
         pixelHeight: pixelHeight
@@ -440,6 +457,7 @@ extension ClockComponent {
       && lhs.showsDate == rhs.showsDate
       && lhs.usesSystemTimeZone == rhs.usesSystemTimeZone
       && lhs.utcOffsetMinutes == rhs.utcOffsetMinutes
+      && lhs.resolvedText == rhs.resolvedText
   }
 
   private static func normalizedUnit(_ value: Float, fallback: Float) -> Float {

@@ -8,6 +8,7 @@ targets:
     sources:
       - Tests/LDTXAppUIComponentTests
     dependencies:
+      - target: LDTXVariableMacro
       - target: LDTXVariableStore
       - target: LDTXVisionProgrammerApplet
       - target: LDTXSettingsApplet

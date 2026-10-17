@@ -8,7 +8,8 @@ import PackageDescription
 
 var targets: [Target] = [
   .target(
-    name: "LDTXVariableStore", dependencies: ["LDTXProtos"],
+    name: "LDTXVariableStore",
+    dependencies: ["LDTXProtos", .product(name: "SwiftProtobuf", package: "swift-protobuf")],
     path: "Sources/Corelibs/LDTXVariableStore"),
   .target(name: "LDTXRecordBundleFormat", path: "Sources/Corelibs/LDTXRecordBundleFormat"),
   .target(
@@ -28,6 +29,7 @@ var targets: [Target] = [
     name: "LDTXWorkspaceBundleFormat",
     dependencies: [
       "LDTXProtos",
+      "LDTXVariableStore",
       .product(name: "SwiftProtobuf", package: "swift-protobuf"),
     ],
     path: "Sources/Corelibs/LDTXWorkspaceBundleFormat"
@@ -63,7 +65,10 @@ var dependencies: [Package.Dependency] = [
     ),
     .target(
       name: "LDTXVariableMacro",
-      dependencies: ["LDTXVariableStore"],
+      dependencies: [
+        "LDTXVariableStore", "LDTXProtos",
+        .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+      ],
       path: "Sources/UI/LDTXVariableMacro"
     ),
     .target(

@@ -79,7 +79,19 @@ p, td { white-space: pre-wrap; }
 <tr><td><code>clock</code></td><td>6</td><td><a href="#ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The clock Video Component definition. Mutually exclusive with the other
  fields.</td></tr>
 <tr><td><code>test_pattern</code></td><td>7</td><td><a href="#ldtx.workspace.v4.TestPatternComponent"><code>TestPatternComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>The test-pattern Video Component definition. Mutually exclusive with the
- other fields.</td></tr></tbody></table></article>
+ other fields.</td></tr>
+<tr><td><code>dynamic_text</code></td><td>8</td><td><a href="#ldtx.workspace.v4.DynamicTextComponent"><code>DynamicTextComponent</code></a></td><td>oneof <code>video_component</code></td><td>—</td><td>—</td></tr></tbody></table></article>
+
+
+<article><h3 id="ldtx.workspace.v4.DynamicTextComponent"><code>DynamicTextComponent</code></h3><p>Text with Variable Macro references, rendered relative to the Landscape Canvas.
+ No intrinsic image size; cannot be used as a Vision input.</p>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>sfixed64</code></td><td></td><td><code>0</code></td><td>—</td></tr>
+<tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>width</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>height</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>text</code></td><td>5</td><td><code>string</code></td><td></td><td>—</td><td>Legacy token text. Used only when macro_document is absent.</td></tr>
+<tr><td><code>foreground_extended_srgb_color</code></td><td>6</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>—</td></tr>
+<tr><td><code>macro_document</code></td><td>8</td><td><code>string</code></td><td></td><td>—</td><td>XML mixed content rooted at &lt;macro version=&quot;1&quot;&gt;. Authoritative when present.</td></tr></tbody></table></article>
 
 
 <article><h3 id="ldtx.workspace.v4.FillSolidColorComponent"><code>FillSolidColorComponent</code></h3><p>A Video Component that fills the entire Canvas with one uniform source color.

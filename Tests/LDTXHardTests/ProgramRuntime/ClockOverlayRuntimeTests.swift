@@ -12,6 +12,86 @@ import Testing
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func dynamicTextTexturePreservesUprightGlyphOrientation() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let renderer = try MetalClockOverlayRenderer(device: device)
+    var component = ClockComponent(backgroundAlpha: 0)
+    component.resolvedText = "F"
+    let overlay = try renderer.renderClockOverlay(
+      .init(
+        text: "F", component: component, pixelWidth: 128, pixelHeight: 128))
+    let alpha = try readR8Texture(unwrap(overlay.alphaTexture), using: device)
+    let rows = (0..<128).map { y in alpha[(y * 128)..<((y + 1) * 128)].filter { $0 > 128 }.count }
+    let top = try unwrap(rows.firstIndex(where: { $0 > 0 }))
+    let bottom = try unwrap(rows.lastIndex(where: { $0 > 0 }))
+    let quarter = max(1, (bottom - top + 1) / 4)
+    // F's top bar is wider than its lower stem. An inverted bitmap reverses this.
+    assertGreaterThan(
+      rows[top..<(top + quarter)].reduce(0, +), rows[(bottom - quarter + 1)...bottom].reduce(0, +))
+  }
+
+  @Test func dynamicTextUpdatesWithoutPollingTime() async throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let time = CountingClockCurrentTimeProvider(date: Date())
+    let renderer = ClockOverlayRendererSpy(device: device)
+    var component = ClockComponent()
+    component.resolvedText = "first"
+    let runtime = ClockOverlayRuntime(
+      component: component, currentTimeProvider: time, renderer: renderer)
+    defer { runtime.deactivate() }
+    runtime.activate()
+    try await waitForClock(timeout: 3) { renderer.requests.count == 1 }
+    try await Task.sleep(for: .milliseconds(1200))
+    assertEqual(renderer.requests.count, 1)
+    assertEqual(time.invocationCount, 0)
+    component.resolvedText = "second"
+    runtime.update(component: component)
+    try await waitForClock(timeout: 3) { renderer.requests.count == 2 }
+    assertEqual(renderer.requests.last?.text, "second")
+  }
+
+  @Test func textureStoreRejectsRemovedAndReplacedGenerations() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let texture = try ClockOverlayTexture(
+      colorTexture: makeTexture(
+        device: device, pixelFormat: .b5g6r5Unorm, width: 16, height: 16, usage: .shaderRead))
+    let store = ProgramOverlayTextureStore()
+    let old = UUID()
+    let current = UUID()
+    store.place(
+      "text", generation: old, destination: .init(0, 0, 16, 16), source: .init(0, 0, 1, 1))
+    store.place(
+      "text", generation: current, destination: .init(0, 0, 16, 16), source: .init(0, 0, 1, 1))
+    store.publish(texture, name: "text", generation: old)
+    assertTrue(store.snapshot().isEmpty)
+    store.publish(texture, name: "text", generation: current)
+    assertNotNil(store.snapshot()["text"])
+    store.retain([])
+    store.publish(texture, name: "text", generation: current)
+    assertTrue(store.snapshot().isEmpty)
+  }
+
+  @Test func dynamicTextRendersUnicodeAndClearsEmptyValues() throws {
+    let device = try unwrap(MTLCreateSystemDefaultDevice())
+    let renderer = try MetalClockOverlayRenderer(device: device)
+    var component = ClockComponent(backgroundAlpha: 0)
+    component.resolvedText = "勝利\nピカチュウ"
+    let formatter = ClockTextFormatter()
+    assertEqual(formatter.string(from: Date(), component: component), component.resolvedText!)
+    let overlay = try renderer.renderClockOverlay(
+      ClockOverlayRenderRequest(
+        text: component.resolvedText!, component: component, pixelWidth: 320, pixelHeight: 100))
+    let alpha = try readR8Texture(unwrap(overlay.alphaTexture), using: device)
+    assertEqual(alpha.min(), 0)
+    assertGreaterThan(alpha.max() ?? 0, 0)
+    component.resolvedText = ""
+    let empty = try renderer.renderClockOverlay(
+      ClockOverlayRenderRequest(
+        text: "", component: component, pixelWidth: 320, pixelHeight: 100))
+    let emptyAlpha = try readR8Texture(unwrap(empty.alphaTexture), using: device)
+    assertEqual(emptyAlpha.max(), 0)
+  }
+
   @Test func timerRefreshesOnlyWhileActiveAndRestartsAfterDeactivation() async throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let timeProvider = CountingClockCurrentTimeProvider(
@@ -435,37 +515,31 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertEqual(texture.sourceRect, SIMD4<Float>(0.5, 1, 0, 0))
   }
 
-  @Test func rendererInitializationFailureIsNotRetriedAtCanvasFrameRate() throws {
+  @Test func producerInitializationFailureIsNeverRetriedByFrameRendering() throws {
     _ = try unwrap(MTLCreateSystemDefaultDevice())
     let attempts = ClockOverlayInitializationAttemptCounter()
+    let producer = ProgramOverlayProducer(registryFactory: {
+      attempts.increment()
+      throw ClockOverlayRendererSpyError.requestedFailure
+    })
     let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      clockOverlayRegistryFactory: { _, _ in
-        attempts.increment()
-        throw ClockOverlayRendererSpyError.requestedFailure
-      }
-    )
-    var configuration = clockRuntimeConfiguration(
-      component: ClockComponent(foregroundRed: .nan)
-    )
-
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+    var configuration = clockRuntimeConfiguration(component: ClockComponent(foregroundRed: .nan))
+    configuration.overlayTextures = producer.textures
+    producer.update(configuration: configuration)
+    producer.update(configuration: configuration)
+    waitUntil(timeout: 2) { attempts.value == 1 }
     renderer.beginSession(1)
+    defer { renderer.endSession(1) }
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
     assertEqual(attempts.value, 1)
-
-    configuration = clockRuntimeConfiguration(
-      component: ClockComponent(showsSeconds: false)
-    )
-    _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
-    _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 4)
-    assertEqual(attempts.value, 2)
-
-    renderer.endSession(1)
-    renderer.beginSession(2)
-    _ = try renderer.render(configuration: configuration, sessionID: 2, frameID: 5)
-    assertEqual(attempts.value, 3)
-    renderer.endSession(2)
+    configuration = clockRuntimeConfiguration(component: ClockComponent(showsSeconds: false))
+    producer.update(configuration: configuration)
+    waitUntil(timeout: 2) { attempts.value == 2 }
+    producer.stop()
+    producer.update(configuration: configuration)
+    waitUntil(timeout: 2) { attempts.value == 3 }
   }
 
   @Test func canvasFrameTimestampsNeverDetermineDisplayedClockTime() async throws {
@@ -476,17 +550,17 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let registry = try ClockOverlayRuntimeRegistry(
       device: device, currentTimeProvider: timeProvider)
     let renderer = ActiveProgramRenderer(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      clockCurrentTimeProvider: timeProvider,
-      clockOverlayRegistryFactory: { _, _ in registry }
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
-    var configuration = clockRuntimeConfiguration(component: ClockComponent())
+    let producer = ProgramOverlayProducer(registryFactory: { registry })
+    var configuration = prepared(
+      clockRuntimeConfiguration(component: ClockComponent()), using: producer)
 
+    try await waitForClock(timeout: 10) { producer.textures.snapshot()["clock"] != nil }
+    let initial = try unwrap(producer.textures.snapshot()["clock"])
     renderer.beginSession(1)
     defer { renderer.endSession(1) }
     _ = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
-    try await waitForClock(timeout: 10) { registry.retainedTexture(forStepNamed: "clock") != nil }
-    let initial = try unwrap(registry.retainedTexture(forStepNamed: "clock"))
 
     for (index, frameTimestamp) in [0, 1, 60, 3_600, 86_400].enumerated() {
       configuration.timeSeconds = Float(frameTimestamp)
@@ -496,7 +570,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         frameID: UInt64(index + 2)
       )
       assertTrue(
-        registry.retainedTexture(forStepNamed: "clock")?.colorTexture === initial.colorTexture)
+        producer.textures.snapshot()["clock"]?.colorTexture === initial.colorTexture)
     }
 
     timeProvider.date = Date(timeIntervalSince1970: 1_700_000_001)
@@ -504,48 +578,47 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     // retained output, rather than assuming an exact number of wall-clock samples.
     // Only a change to the injected clock time should replace the clock texture.
     try await waitForClock(timeout: 10) {
-      guard let refreshed = registry.retainedTexture(forStepNamed: "clock") else { return false }
+      guard let refreshed = producer.textures.snapshot()["clock"] else { return false }
       return refreshed.colorTexture !== initial.colorTexture
     }
   }
 
   @Test func previewAndOutputConsumersActivateTheSameClockPath() throws {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
+    let producer = ProgramOverlayProducer()
     runtime.updateProgram(
-      ProgramRuntimeConfiguration(
-        composite: CompositeProgramDefinition(steps: [
-          CompositeProgramStep(
-            id: "clock",
-            component: .clock(
-              ClockComponent(
-                destinationX: 0.1,
-                destinationY: 0.1,
-                destinationWidth: 0.5,
-                destinationHeight: 0.2,
-                backgroundRed: 1,
-                backgroundGreen: 1,
-                backgroundBlue: 1,
-                backgroundAlpha: 0.5,
-                background: "rgba(255, 255, 255, 0.5)"
-              )))
-        ]),
-        audioChannels: [],
-        canvasWidth: 320,
-        canvasHeight: 180,
-        outputWidth: 320,
-        outputHeight: 180,
-        frameRate: 30,
-        timeSeconds: 0,
-        videoPTSMasterCameraID: nil,
-        cameraIDsByInputKey: [:],
-        cameraInputColorOverrides: [:],
-        backgroundRemovalInputKeys: []
-      ))
+      prepared(
+        ProgramRuntimeConfiguration(
+          composite: CompositeProgramDefinition(steps: [
+            CompositeProgramStep(
+              id: "clock",
+              component: .clock(
+                ClockComponent(
+                  destinationX: 0.1,
+                  destinationY: 0.1,
+                  destinationWidth: 0.5,
+                  destinationHeight: 0.2,
+                  backgroundRed: 1,
+                  backgroundGreen: 1,
+                  backgroundBlue: 1,
+                  backgroundAlpha: 0.5,
+                  background: "rgba(255, 255, 255, 0.5)"
+                )))
+          ]),
+          audioChannels: [],
+          canvasWidth: 320,
+          canvasHeight: 180,
+          outputWidth: 320,
+          outputHeight: 180,
+          frameRate: 30,
+          timeSeconds: 0,
+          videoPTSMasterCameraID: nil,
+          cameraIDsByInputKey: [:],
+          cameraInputColorOverrides: [:],
+          backgroundRemovalInputKeys: []
+        ), using: producer))
 
     runtime.startPreview()
     let previewFrame = try waitForVisibleClockFrame(from: runtime, afterFrameID: 0)
@@ -558,12 +631,11 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
   @Test func activeProgramAppliesClockAdditionAppearanceUpdateAndRemoval() throws {
     let runtime = ProgramRuntime(
-      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-      clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-        date: Date(timeIntervalSince1970: 1_700_000_000)
-      )
+      captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
-    runtime.updateProgram(clockRuntimeConfiguration(composite: CompositeProgramDefinition()))
+    let producer = ProgramOverlayProducer()
+    runtime.updateProgram(
+      prepared(clockRuntimeConfiguration(composite: CompositeProgramDefinition()), using: producer))
     runtime.startPreview()
     defer { runtime.stopPreview() }
 
@@ -578,7 +650,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       backgroundAlpha: 1,
       background: "#ff0000"
     )
-    runtime.updateProgram(clockRuntimeConfiguration(component: redClock))
+    runtime.updateProgram(prepared(clockRuntimeConfiguration(component: redClock), using: producer))
     let redFrame = try waitForFrame(from: runtime, afterFrameID: 0) { frame in
       let value = self.luma(in: frame.pixelBuffer, x: 1, y: 1)
       return value > 30 && value < 100
@@ -588,53 +660,57 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     greenClock.backgroundRed = 0
     greenClock.backgroundGreen = 1
     greenClock.background = "#00ff00"
-    runtime.updateProgram(clockRuntimeConfiguration(component: greenClock))
+    runtime.updateProgram(
+      prepared(clockRuntimeConfiguration(component: greenClock), using: producer))
     let greenFrame = try waitForFrame(from: runtime, afterFrameID: redFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) > 150
     }
 
-    runtime.updateProgram(clockRuntimeConfiguration(composite: CompositeProgramDefinition()))
+    runtime.updateProgram(
+      prepared(clockRuntimeConfiguration(composite: CompositeProgramDefinition()), using: producer))
     _ = try waitForFrame(from: runtime, afterFrameID: greenFrame.frameID) { frame in
       self.luma(in: frame.pixelBuffer, x: 1, y: 1) == 0
     }
   }
 
-  @Test func activeProgramRuntimeDeinitReleasesClockWithoutExplicitStop() {
+  @Test func consumerDeinitDoesNotStopExternalOverlayProduction() {
     weak var releasedRuntime: ProgramRuntime?
+    let producer = ProgramOverlayProducer()
 
     autoreleasepool {
       let runtime = ProgramRuntime(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-        clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-          date: Date(timeIntervalSince1970: 1_700_000_000)
-        )
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
       )
       releasedRuntime = runtime
-      runtime.updateProgram(clockRuntimeConfiguration(component: ClockComponent()))
+      runtime.updateProgram(
+        prepared(clockRuntimeConfiguration(component: ClockComponent()), using: producer))
       runtime.startPreview()
     }
 
     waitUntil(timeout: 2) { releasedRuntime == nil }
+    waitUntil(timeout: 3) { producer.textures.snapshot()["clock"] != nil }
+    assertNotNil(producer.textures.snapshot()["clock"])
   }
 
-  @Test func activeStandalonePreviewDeinitReleasesClockWithoutExplicitStop() {
+  @Test func standalonePreviewDeinitDoesNotStopExternalOverlayProduction() {
     weak var releasedController: ProgramPreviewController?
+    let producer = ProgramOverlayProducer()
 
     autoreleasepool {
       let controller = ProgramPreviewController(
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
-        clockCurrentTimeProvider: FixedClockCurrentTimeProvider(
-          date: Date(timeIntervalSince1970: 1_700_000_000)
-        )
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
       )
       releasedController = controller
       controller.configure(
-        configuration: clockRuntimeConfiguration(component: ClockComponent())
+        configuration: prepared(
+          clockRuntimeConfiguration(component: ClockComponent()), using: producer)
       )
       controller.start()
     }
 
     waitUntil(timeout: 2) { releasedController == nil }
+    waitUntil(timeout: 3) { producer.textures.snapshot()["clock"] != nil }
+    assertNotNil(producer.textures.snapshot()["clock"])
   }
 
   @Test func bundledNotoSansFamilyAndLicenseAreAvailable() throws {
@@ -1073,6 +1149,15 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       RunLoop.current.run(until: Date().addingTimeInterval(0.01))
     }
     assertTrue(condition())
+  }
+
+  private func prepared(
+    _ configuration: ProgramRuntimeConfiguration, using producer: ProgramOverlayProducer
+  ) -> ProgramRuntimeConfiguration {
+    producer.update(configuration: configuration)
+    var configuration = configuration
+    configuration.overlayTextures = producer.textures
+    return configuration
   }
 
   private func clockRuntimeConfiguration(

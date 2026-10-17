@@ -13,6 +13,26 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1010VideoComponentProgramLayersIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
+    @Test func dynamicTextCanBePlacedInBothProgramCanvases() throws {
+      let data = WorkspaceAppletData()
+      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
+      state.workspaceDefinition.videoComponents = [
+        WorkspaceResourceFactory.makeDynamicText(id: 10, name: "Text")
+      ]
+      let controls = VideoComponentProgramLayers(
+        stateService: state, appletData: data, componentID: 10)
+      for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+        let membership = controls.membership(for: 100, target: target)
+        membership.wrappedValue = true
+        #expect(membership.wrappedValue)
+        let editor = VideoLayersEditorState(stateService: state, appletData: data, target: target)
+        let row = try #require(editor.rows[10])
+        #expect(row.supportsPlacement)
+        #expect(row.name == "Text")
+      }
+    }
+
     @Test("Active output allows reordering but rejects membership and count changes")
     func activeOutputPreservesLayerMembership() throws {
       let serviceAppletData = WorkspaceAppletData()

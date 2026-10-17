@@ -104,7 +104,7 @@ struct WorkspaceProgramsInspector: View {
       }
       Button("Cancel", role: .cancel) {}
     } message: { target in
-      Text("Delete “\(target.name)” and its saved preferences? This cannot be undone.")
+      Text("Delete “\(target.name)” and its saved preferences?")
     }
   }
 

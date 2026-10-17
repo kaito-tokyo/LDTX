@@ -6,6 +6,7 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXVariableStore
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 
@@ -18,13 +19,14 @@ public struct WorkspaceV4RenderGraph: Sendable {
 
   public init(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
-    canvas: WorkspaceProgramCanvasSnapshot
+    canvas: WorkspaceProgramCanvasSnapshot,
+    variableStore: VariableStore? = nil
   ) throws {
     let layerIDs = canvas.layerIDs
     let preference = canvas.preferences
     let transforms = preference.videoLayerTransforms
     let hidden = preference.videoLayerHidden
-    let components = Self.componentsByInternalID(definition)
+    let components = Self.componentsByInternalID(definition, variableStore: variableStore)
     let canvasWidth = Float(canvas.outputProfile.width)
     let canvasHeight = Float(canvas.outputProfile.height)
     var steps: [CompositeProgramStep] = []
@@ -101,12 +103,14 @@ public struct WorkspaceV4RenderGraph: Sendable {
   }
 
   static func componentsByInternalID(
-    _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4
+    _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
+    variableStore: VariableStore? = nil
   ) -> [Int64: ProgramComponent] {
     Dictionary(
       uniqueKeysWithValues: definition.videoComponents.compactMap {
-        guard let definition = $0.videoComponent else { return nil }
-        switch definition {
+        wrapper -> (Int64, ProgramComponent)? in
+        guard let concrete = wrapper.videoComponent else { return nil }
+        switch concrete {
         case .solidColorFill(let fill):
           return (
             fill.internalID,
@@ -191,6 +195,18 @@ public struct WorkspaceV4RenderGraph: Sendable {
                     thickness: $0.thickness.float, color: colorString($0.extendedSrgbColor))
                 }))
           )
+        case .dynamicText(let text):
+          var overlay = ClockComponent(
+            destinationWidth: text.width.float, destinationHeight: text.height.float,
+            foregroundRed: text.foregroundExtendedSrgbColor.red,
+            foregroundGreen: text.foregroundExtendedSrgbColor.green,
+            foregroundBlue: text.foregroundExtendedSrgbColor.blue,
+            foregroundAlpha: text.foregroundExtendedSrgbColor.alpha,
+            backgroundAlpha: 0)
+          overlay.resolvedText =
+            (try? VariableMacroDocument(component: text))?.expand(
+              using: variableStore ?? VariableStore(definition: definition)) ?? ""
+          return (text.internalID, .clock(overlay))
         case .testPattern(let pattern): return (pattern.internalID, .testPattern)
         }
       })
@@ -263,9 +279,10 @@ extension WorkspaceV4RenderGraph {
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     canvas: WorkspaceProgramCanvasSnapshot,
     physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] = [:],
-    timeSeconds: Float
+    timeSeconds: Float,
+    variableStore: VariableStore? = nil
   ) throws -> WorkspaceV4RuntimeProjection {
-    let graph = try Self(definition: definition, canvas: canvas)
+    let graph = try Self(definition: definition, canvas: canvas, variableStore: variableStore)
     let layerIDs = canvas.layerIDs
     let resolvedProfile = canvas.outputProfile
     let frameRate = canvas.frameRate
@@ -320,9 +337,12 @@ extension WorkspaceV4RenderGraph {
   /// Projects one component without any Program transforms or visibility preferences.
   static func componentConfiguration(
     definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, componentID: Int64,
-    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080
+    physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID], width: Int = 1920, height: Int = 1080,
+    variableStore: VariableStore? = nil
   ) throws -> ProgramRuntimeConfiguration {
-    guard var component = componentsByInternalID(definition)[componentID] else {
+    guard
+      var component = componentsByInternalID(definition, variableStore: variableStore)[componentID]
+    else {
       throw WorkspaceV4RenderGraphError.missingVideoLayer(componentID)
     }
     if case .clock(var clock) = component {

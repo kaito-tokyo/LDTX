@@ -95,9 +95,8 @@ extension AppUIComponentTestSuite {
 
     @Test func hostedFieldsWriteWithoutReturn() async throws {
       let fixture = VideoLayersTestFixture(ids: [1])
-      let root = VideoLayersEditor(
-        stateService: fixture.state, appletData: fixture.data, target: .landscape)
-      let window = hostWorkspaceView(root)
+      let root = VideoLayersEditor(editor: fixture.editor)
+      let window = hostWorkspaceView(List { root })
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       let fields = workspaceDescendants(window.contentView!)

@@ -8,6 +8,71 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func validatesStructuredMacroReferencesWithoutRequiringLiveVariables() throws {
+    var bundle = WorkspaceV4Bundle(
+      definition: .with {
+        $0.videoComponents = [
+          .with {
+            $0.dynamicText = .with {
+              $0.internalID = 7
+              $0.displayName = "Text"
+              $0.width.set(num: 1, den: 2)
+              $0.height.set(num: 1, den: 10)
+              $0.macroDocument = "<macro version=\"1\"><variable vision-id=\"11\" item=\"text\"/></macro>"
+            }
+          }
+        ]
+      }, preferences: .init())
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+    bundle.definition.videoComponents[0].dynamicText.macroDocument =
+      "<macro version=\"1\"><variable vision-id=\"11\" item=\"unknown\"/></macro>"
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+    bundle.definition.videoComponents[0].dynamicText.macroDocument = "<macro version=\"1\"/>"
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+  }
+
+  @Test func dynamicTextRoundTripsAndValidatesGeometry() throws {
+    let wrapper = Ldtx_Workspace_V4_VideoComponentWrapper.with {
+      $0.dynamicText = .with {
+        $0.internalID = 7
+        $0.displayName = "Result"
+        $0.text = "結果：{{visions/11/text}}"
+        $0.width.set(num: 1, den: 2)
+        $0.height.set(num: 1, den: 10)
+        $0.foregroundExtendedSrgbColor = .with { $0.alpha = 1 }
+      }
+    }
+    #expect(
+      try Ldtx_Workspace_V4_VideoComponentWrapper(serializedBytes: wrapper.serializedData())
+        == wrapper)
+    var bundle = WorkspaceV4Bundle(
+      definition: .with { $0.videoComponents = [wrapper] }, preferences: .init())
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidDynamicTextGeometry
+      })
+    bundle.definition.videoComponents[0].dynamicText.width.set(num: 0, den: 1)
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidDynamicTextGeometry
+          && $0.path == "definition.video_components[0].dynamic_text.width"
+      })
+    bundle.definition.videoComponents[0].dynamicText.width.set(num: 1, den: 0)
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidRational
+      })
+  }
+
   @Test func channelGainsUseTheSupportedDecibelRange() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.displayName = "Test"

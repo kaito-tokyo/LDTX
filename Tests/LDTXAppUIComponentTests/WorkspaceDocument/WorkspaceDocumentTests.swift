@@ -745,18 +745,27 @@ extension AppUIComponentTestSuite {
       state.visionResults[7] = "Runtime result"
       coordinator.recordEdits()
       #expect(!undo.canUndo)
+      let original = state.editingWorkspace
       undo.beginUndoGrouping()
       state.workspaceDefinition.displayName = "Edited"
+      state.workspacePreferences.audioChannelGainsDecibels[7] = .with {
+        $0.set(num: -119, den: 10)
+      }
+      state.workspaceOutputSettings.recordingEnabled = true
+      state.visionModels[7] = URL(fileURLWithPath: "/tmp/undo-model.mlpackage")
       coordinator.recordEdits()
       undo.endUndoGrouping()
+      let edited = state.editingWorkspace
       #expect(undo.canUndo)
       #expect(document.workspaceSnapshot == nil)
       undo.undo()
+      #expect(state.editingWorkspace == original)
       #expect(state.workspaceDefinition.displayName == "Untitled")
       #expect(state.inspectorSelector == .init(kind: .workspaceCanvas))
       #expect(state.visionResults[7] == "Runtime result")
       #expect(undo.canRedo)
       undo.redo()
+      #expect(state.editingWorkspace == edited)
       #expect(state.workspaceDefinition.displayName == "Edited")
       #expect(document.workspaceSnapshot == nil)
       await coordinator.shutdown()

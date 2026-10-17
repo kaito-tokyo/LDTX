@@ -37,7 +37,7 @@ public struct WorkspaceDocumentContent: View {
         if let connection { workspace(connection.runtimeCoordinator) }
       }
       .frame(minWidth: document.stateService.minimumWindowWidth, minHeight: 400)
-      .focusedSceneValue(\.workspaceUndoDisabled, true)
+      .focusedSceneValue(\.workspaceUndoDisabled, document.stateService.isOutputActive)
       .task {
         if connection == nil {
           connection = WorkspaceDocumentConnection(

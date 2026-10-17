@@ -267,6 +267,7 @@ targets:
       - Sources/Corelibs/LDTXWorkspaceBundleFormat
     dependencies:
       - target: LDTXProtos
+      - target: LDTXVariableStore
       - package: SwiftProtobuf
         product: SwiftProtobuf
         embed: false
@@ -457,6 +458,9 @@ targets:
       - Sources/Corelibs/LDTXVariableStore
     dependencies:
       - target: LDTXProtos
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableStore
@@ -469,7 +473,11 @@ targets:
     sources:
       - Sources/UI/LDTXVariableMacro
     dependencies:
+      - target: LDTXProtos
       - target: LDTXVariableStore
+      - package: SwiftProtobuf
+        product: SwiftProtobuf
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVariableMacro

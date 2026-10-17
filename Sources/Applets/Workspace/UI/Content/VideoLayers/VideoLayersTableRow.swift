@@ -49,18 +49,23 @@ struct VideoLayersTableRowContent: View {
   @Bindable var state: VideoLayersTableRowState
   let canvasWidth: Double
   let canvasHeight: Double
-  var dragToken: String = ""
+  @State private var isHoveringHandle = false
   @FocusState private var focusedField: Int?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack {
+        Image(systemName: "line.3.horizontal")
+          .foregroundStyle(.secondary)
+          .frame(width: 24, height: 24)
+          .contentShape(Rectangle())
+          .onHover { isHoveringHandle = $0 }
+          .help("Drag to reorder")
+          .accessibilityLabel("Reorder layer")
         Text(state.name).lineLimit(1)
         Spacer()
       }
       .frame(height: 28)
-      .contentShape(Rectangle())
-      .draggable(dragToken)
       HStack {
         Toggle(
           "Hide", isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0) })
@@ -97,8 +102,13 @@ struct VideoLayersTableRowContent: View {
     .writingToolsBehavior(.disabled)
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 2)
+    .moveDisabled(!isHoveringHandle)
     .onChange(of: focusedField) { _, new in
       state.isEditing = new != nil
+    }
+    .onDisappear {
+      state.isEditing = false
+      isHoveringHandle = false
     }
   }
 }
