@@ -18,53 +18,24 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkspaceVideoComponentVisionIntegrationTestSuite {
-  @Test func generatedComponentAndROIWorkWithoutAProgram() async throws {
+  @Test(arguments: [false, true])
+  func generatedComponentsAreRejectedAsOCRInputs(isClock: Bool) throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = makeRuntime(capture: capture)
     runtime.installComponentFrameRenderer(
       VideoComponentFrameRenderer(
         captureSessionCoordinator: capture))
     defer { runtime.shutdown() }
-    let pattern = try runtime.addTestPattern(displayName: "Pattern")
-    let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: pattern)
-    var vision = try #require(runtime.visionFeatureContext.vision(id))
-    let full = try await runtime.visionFeatureContext.frameForVision(vision)
-    #expect(full.image.extent == CGRect(x: 0, y: 0, width: 1920, height: 1080))
-    vision.regionOfInterest = .with {
-      $0.x = .with {
-        $0.num = 1
-        $0.den = 4
-      }
-      $0.y = .with {
-        $0.num = 1
-        $0.den = 2
-      }
-      $0.width = .with {
-        $0.num = 1
-        $0.den = 2
-      }
-      $0.height = .with {
-        $0.num = 1
-        $0.den = 4
-      }
+    let component =
+      try isClock
+      ? runtime.addClock(displayName: "Clock") : runtime.addTestPattern(displayName: "Pattern")
+    do {
+      _ = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: component)
+      Issue.record("Expected unsupported OCR input to be rejected")
+    } catch let error as WorkspaceV4ValidationError {
+      #expect(error.diagnostics.contains { $0.error == .unsupportedVisionInput })
     }
-    let cropped = try await runtime.visionFeatureContext.frameForVision(vision)
-    #expect(cropped.image.extent == CGRect(x: 480, y: 540, width: 960, height: 270))
-    #expect(runtime.definition.programs.isEmpty)
-  }
-
-  @Test func clockUsesItsOwnLandscapePixelSize() async throws {
-    let capture = WorkspaceCaptureSessionCoordinator()
-    let runtime = makeRuntime(capture: capture)
-    runtime.installComponentFrameRenderer(
-      VideoComponentFrameRenderer(
-        captureSessionCoordinator: capture))
-    defer { runtime.shutdown() }
-    let clock = try runtime.addClock(displayName: "Clock")
-    let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: clock)
-    let vision = try #require(runtime.visionFeatureContext.vision(id))
-    let frame = try await readyFrame(runtime: runtime, vision: vision)
-    #expect(frame.image.extent == CGRect(x: 0, y: 0, width: 320, height: 80))
+    #expect(runtime.definition.visions.isEmpty)
     #expect(runtime.definition.programs.isEmpty)
   }
 
