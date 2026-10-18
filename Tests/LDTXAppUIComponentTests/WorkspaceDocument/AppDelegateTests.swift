@@ -111,3 +111,97 @@ extension AppUIComponentTestSuite {
     }
   }
 }
+
+extension AppUIComponentTestSuite {
+  @MainActor
+  @Suite("Document activities before standard termination", .serialized)
+  struct WorkspaceDocumentTerminationIntegrationTestSuite {
+    @MainActor final class Activity {
+      var completion: (() -> Void)?
+      func finish() {
+        completion?()
+        completion = nil
+      }
+    }
+
+    private func hold(_ document: NSDocument) async -> Activity {
+      let activity = Activity()
+      let started = AsyncStream<Void>.makeStream()
+      document.performActivity(withSynchronousWaiting: false) {
+        activity.completion = $0
+        started.continuation.yield(())
+        started.continuation.finish()
+      }
+      var iterator = started.stream.makeAsyncIterator()
+      _ = await iterator.next()
+      return activity
+    }
+
+    @Test func waitsForEveryDocumentAndCoalescesRepeatedQuit() async {
+      let first = NSDocument()
+      let second = NSDocument()
+      let firstActivity = await hold(first)
+      let secondActivity = await hold(second)
+      defer {
+        firstActivity.finish()
+        secondActivity.finish()
+        first.close()
+        second.close()
+      }
+      let termination = WorkspaceDocumentTermination(documents: { [first, second] })
+      var calls = 0
+      let finished = AsyncStream<Void>.makeStream()
+      let proceed = {
+        calls += 1
+        finished.continuation.yield(())
+      }
+      termination.request(proceed: proceed)
+      termination.request(proceed: proceed)
+      await Task.yield()
+      #expect(calls == 0)
+      firstActivity.finish()
+      await Task.yield()
+      #expect(calls == 0)
+      secondActivity.finish()
+      var iterator = finished.stream.makeAsyncIterator()
+      _ = await iterator.next()
+      #expect(calls == 1)
+      // A cancelled standard review must allow a later independent Quit.
+      termination.request(proceed: proceed)
+      _ = await iterator.next()
+      #expect(calls == 2)
+      finished.continuation.finish()
+    }
+
+    @Test func includesDocumentsOpenedWhileWaiting() async {
+      let first = NSDocument()
+      let second = NSDocument()
+      let firstActivity = await hold(first)
+      let secondActivity = await hold(second)
+      defer {
+        firstActivity.finish()
+        secondActivity.finish()
+        first.close()
+        second.close()
+      }
+      var documents = [first]
+      let termination = WorkspaceDocumentTermination(documents: { documents })
+      var proceeded = false
+      let finished = AsyncStream<Void>.makeStream()
+      termination.request {
+        proceeded = true
+        finished.continuation.yield(())
+      }
+      await Task.yield()
+      documents.append(second)
+      firstActivity.finish()
+      await Task.yield()
+      #expect(!proceeded)
+      secondActivity.finish()
+      var iterator = finished.stream.makeAsyncIterator()
+      _ = await iterator.next()
+      #expect(proceeded)
+      finished.continuation.finish()
+    }
+  }
+}
