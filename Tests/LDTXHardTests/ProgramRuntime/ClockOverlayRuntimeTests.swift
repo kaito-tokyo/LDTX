@@ -13,6 +13,40 @@ import Metal
 import Testing
 
 extension ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func oversizedClockRefreshPreservesPreviousTexture() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let registry = try ClockOverlayRuntimeRegistry(
+      device: device, currentTimeProvider: FixedClockCurrentTimeProvider(date: Date()))
+    defer { registry.deactivateAll() }
+    var component = ClockComponent(fontSize: 48)
+    func synchronize() {
+      registry.synchronize(
+        composite: .init(steps: [.init(id: "clock", component: .clock(component))]),
+        outputWidth: 1920, outputHeight: 1080)
+    }
+    synchronize()
+    waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: "clock") != nil }
+    let previous = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    component.fontSize = 20_000
+    synchronize()
+    let retained = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(retained.colorTexture === previous.colorTexture)
+    registry.synchronize(composite: .init(steps: []), outputWidth: 1920, outputHeight: 1080)
+    #expect(registry.retainedTexture(forStepNamed: "clock") == nil)
+  }
+
+  @Test func naturalClockExtentIncludesBothOutlines() throws {
+    let renderer = try MetalClockOverlayRenderer(device: #require(MTLCreateSystemDefaultDevice()))
+    var component = ClockComponent(fontSize: 48)
+    let plain = try #require(renderer.naturalClockSize(for: component))
+    component.outlines = [
+      ClockTextOutline(thickness: 8, color: "black"),
+      ClockTextOutline(thickness: 8, color: "white"),
+    ]
+    let outlined = try #require(renderer.naturalClockSize(for: component))
+    #expect(outlined == plain + SIMD2<Float>(repeating: 32))
+  }
+
   @Test func fontSizedClockUsesNativeRasterBeforeLayerScalingOnEitherCanvas() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)

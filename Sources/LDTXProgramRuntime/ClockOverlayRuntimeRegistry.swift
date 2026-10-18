@@ -7,6 +7,7 @@ import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
 import Metal
+import OSLog
 
 /// Confined to its producer queue; never synchronized from the frame-render loop.
 final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
@@ -52,7 +53,13 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
       if component.fontSize != nil, component.resolvedRTFD == nil {
         guard outputWidth > 0, outputHeight > 0,
           let size = renderer.naturalClockSize(for: component)
-        else { continue }
+        else {
+          // A rejected refresh must not discard the last successfully rendered Clock.
+          if entriesByStepName[step.name] != nil { activeStepNames.insert(step.name) }
+          Logger(subsystem: "tokyo.kaito.ldtx", category: "overlay-producer").error(
+            "Clock extent exceeds the rendering limits; retaining its previous texture.")
+          continue
+        }
         nativeSize = size
         component.destinationWidth *= size.x / Float(outputWidth)
         component.destinationHeight *= size.y / Float(outputHeight)

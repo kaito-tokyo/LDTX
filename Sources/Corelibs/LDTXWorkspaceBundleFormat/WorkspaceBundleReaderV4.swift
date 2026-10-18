@@ -36,7 +36,7 @@ public struct WorkspaceBundleReaderV4 {
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: bundleURL])
     }
 
-    let definitionEnvelope = try Ldtx_Envelope_WorkspaceDefinitionEnvelope(
+    var definitionEnvelope = try Ldtx_Envelope_WorkspaceDefinitionEnvelope(
       serializedBytes: try Data(contentsOf: definitionURL))
     let preferencesEnvelope = try Ldtx_Envelope_WorkspacePreferencesEnvelope(
       serializedBytes: try Data(contentsOf: preferencesURL))
@@ -53,6 +53,17 @@ public struct WorkspaceBundleReaderV4 {
       isUUIDv7(preferencesExternalID), isUUIDv7(outputSettingsExternalID)
     else {
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: bundleURL])
+    }
+
+    // Pre-font-size V4 Clocks only stored their fixed extent. Adopt the current
+    // default font size on import; reserved geometry remains in unknown fields.
+    for index in definitionEnvelope.workspaceDefinitionV4.videoComponents.indices {
+      guard
+        case .clock(var clock) = definitionEnvelope.workspaceDefinitionV4.videoComponents[index]
+          .videoComponent, !clock.hasFontSize
+      else { continue }
+      clock.fontSize.set(num: 48, den: 1)
+      definitionEnvelope.workspaceDefinitionV4.videoComponents[index].clock = clock
     }
 
     let workspace = WorkspaceV4Bundle(

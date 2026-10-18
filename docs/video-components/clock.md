@@ -35,6 +35,10 @@ The renderer creates an **SDF atlas** for the fixed **Clock** glyph set (digits,
 
 **Clock** text uses its authored Font Size. The renderer derives a stable extent from the glyph metrics and date/time format. Pixels outside the text and outlines are transparent. When the **Clock layer** is partly outside the **Output**, the renderer keeps the same texture and clips it at composition time; placement must not cause the text to be regenerated at a different size.
 
+Older V4 Workspaces without `font_size` import Clocks at the current default of 48 pixels. Their reserved width and height fields are preserved as unknown data, but no longer control text sizing. Reading does not rewrite the package; the new font size is stored on the next save.
+
+If an updated Clock exceeds the renderer's dimension or pixel limits, the producer logs the failure and keeps its previous successfully rendered texture until a renderable configuration is supplied. A Clock without a previous texture remains unavailable.
+
 ## Layer Placement
 
 **Clock** uses the selected Canvas's **Program Video Layer** X, Y, and uniform Scale. X and Y are in that Canvas's logical coordinate space: **1920 × 1080** for Landscape and **1080 × 1920** for Portrait. The **Clock** component definition does not persist width, height, or placement.

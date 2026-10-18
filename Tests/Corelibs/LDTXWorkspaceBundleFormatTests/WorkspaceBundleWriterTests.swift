@@ -2,11 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXProtos
 import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite
 struct WorkspaceBundleWriterIntegrationTestSuite {
+  @Test func importsClockWithoutFontSizeAndPreservesReservedGeometry() throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let workspace = WorkspaceV4Bundle(
+      definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
+      definition: .init(), preferences: .init())
+    try WorkspaceBundleWriterV4().write(workspace, to: url)
+    let definitionURL = url.appendingPathComponent("definition.pb")
+    var envelope = try Ldtx_Envelope_WorkspaceDefinitionEnvelope(
+      serializedBytes: Data(contentsOf: definitionURL))
+    let legacy = Data([0x1a, 0x04, 0x08, 0x02, 0x10, 0x0c, 0x22, 0x04, 0x08, 0x04, 0x10, 0x36])
+    var clock = try Ldtx_Workspace_V4_ClockComponent(serializedBytes: legacy)
+    clock.internalID = 1
+    clock.displayName = "Legacy Clock"
+    envelope.workspaceDefinitionV4.videoComponents = [.with { $0.clock = clock }]
+    let bytes = try envelope.serializedData()
+    try bytes.write(to: definitionURL)
+    let imported = try WorkspaceBundleReaderV4(at: url).read()
+    let result = imported.definition.videoComponents[0].clock
+    #expect(result.fontSize.double == 48)
+    #expect(result.unknownFields.data == legacy)
+    #expect(try Data(contentsOf: definitionURL) == bytes)
+    try WorkspaceBundleWriterV4().write(imported, to: url)
+    #expect(try WorkspaceBundleReaderV4(at: url).read().definition == imported.definition)
+  }
+
   private struct Metadata: Codable {
     var packageType: String
     var workspaceVersion: Int

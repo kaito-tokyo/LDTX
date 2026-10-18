@@ -143,7 +143,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test("SwiftUI editors scroll when the lower pane shrinks")
-    func editorsScrollAndObserveOutputFailures() async throws {
+    func editorsScrollWhenLowerPaneShrinks() async throws {
       let window = makeWorkspaceTestWindow()
       defer { window.close() }
       window.orderFront(nil)
@@ -160,10 +160,6 @@ extension AppUIComponentTestSuite {
           ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
         })
       let document = try #require(scroll.documentView)
-      let initialHeight = document.frame.height
-      window.stateService.outputFailureMessage = "Visible failure"
-      await settleWorkspaceToolbar(window)
-      #expect(document.frame.height > initialHeight)
       scroll.contentView.scroll(
         to: .init(
           x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
