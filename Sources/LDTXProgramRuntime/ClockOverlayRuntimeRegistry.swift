@@ -8,12 +8,11 @@ import LDTXProgramRendering
 import LDTXVideoComposition
 import Metal
 
-/// Render-queue-confined ownership for every Clock in one ProgramRuntime.
-final class ClockOverlayRuntimeRegistry {
+/// Confined to its producer queue; never synchronized from the frame-render loop.
+final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
   private struct Entry {
-    var destinationRect: SIMD4<UInt32>
-    var sourceRect: SIMD4<Float>
     var runtime: ClockOverlayRuntime
+    var generation: UUID
   }
 
   private struct Placement {
@@ -26,6 +25,7 @@ final class ClockOverlayRuntimeRegistry {
   private let currentTimeProvider: any ClockCurrentTimeProviding
   private let renderer: MetalClockOverlayRenderer
   private var entriesByStepName: [String: Entry] = [:]
+  private var textureStore = ProgramOverlayTextureStore()
 
   init(
     device: MTLDevice,
@@ -38,8 +38,13 @@ final class ClockOverlayRuntimeRegistry {
   func synchronize(
     composite: CompositeProgramDefinition,
     outputWidth: Int,
-    outputHeight: Int
+    outputHeight: Int,
+    textures: ProgramOverlayTextureStore? = nil
   ) {
+    if let textures, textures !== textureStore {
+      deactivateAll()
+      textureStore = textures
+    }
     var activeStepNames: Set<String> = []
     for step in composite.steps {
       guard case .clock(let component) = step.component else { continue }
@@ -52,29 +57,35 @@ final class ClockOverlayRuntimeRegistry {
       else { continue }
       activeStepNames.insert(step.name)
 
-      if var entry = entriesByStepName[step.name] {
-        entry.destinationRect = placement.destinationRect
-        entry.sourceRect = placement.sourceRect
+      if let entry = entriesByStepName[step.name] {
+        textureStore.place(
+          step.name, generation: entry.generation,
+          destination: placement.destinationRect, source: placement.sourceRect)
         entry.runtime.update(
           component: component,
           pixelWidth: placement.pixelWidth,
           pixelHeight: placement.pixelHeight
         )
-        entriesByStepName[step.name] = entry
         continue
       }
 
+      let generation = UUID()
+      textureStore.place(
+        step.name, generation: generation,
+        destination: placement.destinationRect, source: placement.sourceRect)
       let runtime = ClockOverlayRuntime(
         component: component,
         pixelWidth: placement.pixelWidth,
         pixelHeight: placement.pixelHeight,
         currentTimeProvider: currentTimeProvider,
-        renderer: renderer
+        renderer: renderer,
+        overlayDidChange: { [textureStore] texture in
+          textureStore.publish(texture, name: step.name, generation: generation)
+        }
       )
       entriesByStepName[step.name] = Entry(
-        destinationRect: placement.destinationRect,
-        sourceRect: placement.sourceRect,
-        runtime: runtime
+        runtime: runtime,
+        generation: generation
       )
       runtime.activate()
     }
@@ -83,21 +94,15 @@ final class ClockOverlayRuntimeRegistry {
     for stepName in removedStepNames {
       entriesByStepName.removeValue(forKey: stepName)?.runtime.deactivate()
     }
+    textureStore.retain(activeStepNames)
   }
 
   func retainedTexture(forStepNamed stepName: String) -> RetainedTextureComponent? {
-    guard let entry = entriesByStepName[stepName],
-      let overlay = entry.runtime.retainedOverlay()
-    else { return nil }
-    return RetainedTextureComponent(
-      colorTexture: overlay.colorTexture,
-      alphaTexture: overlay.alphaTexture,
-      destinationRect: entry.destinationRect,
-      sourceRect: entry.sourceRect
-    )
+    textureStore.snapshot()[stepName]
   }
 
   func deactivateAll() {
+    textureStore.retain([])
     let entries = entriesByStepName.values
     entriesByStepName.removeAll()
     for entry in entries {

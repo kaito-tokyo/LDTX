@@ -130,7 +130,8 @@ protocol ClockOverlayRendering: Sendable {
 /// It renders immediately when activated, runs a timer only while active, and
 /// coalesces requests while one render is in flight. A failed refresh leaves the
 /// previous texture and successful request intact, so the next notification or
-/// configuration update retries it.
+/// configuration update retries it. Dynamic Text failures schedule a one-second
+/// retry instead of polling at the canvas frame rate.
 final class ClockOverlayRuntime: @unchecked Sendable {
   typealias OverlayDidChange = @Sendable (ClockOverlayTexture) -> Void
 
@@ -188,19 +189,35 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       guard !state.isActive else { return }
       state.isActive = true
       state.renderGeneration &+= 1
-      let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-      state.timerGeneration &+= 1
-      let generation = state.timerGeneration
-      timer.setEventHandler { [weak self] in
-        self?.requestRender(timerGeneration: generation)
-      }
-      timer.schedule(
-        deadline: .now() + .seconds(1), repeating: .seconds(1),
-        leeway: .milliseconds(100))
-      state.timer = timer
-      timer.resume()
+      synchronizeTimerLocked()
     }
     requestRender()
+  }
+
+  /// Called only while holding the state lock.
+  private func synchronizeTimerLocked() {
+    let isDynamicText = state.component.resolvedRTFD != nil
+    if isDynamicText && !state.needsRetry {
+      if state.timer != nil {
+        state.timerGeneration &+= 1
+        state.timer?.setEventHandler {}
+        state.timer?.cancel()
+        state.timer = nil
+      }
+      return
+    }
+    guard state.timer == nil else { return }
+    let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+    state.timerGeneration &+= 1
+    let generation = state.timerGeneration
+    timer.setEventHandler { [weak self] in
+      self?.requestRender(timerGeneration: generation)
+    }
+    timer.schedule(
+      deadline: .now() + .seconds(1), repeating: isDynamicText ? .never : .seconds(1),
+      leeway: .milliseconds(100))
+    state.timer = timer
+    timer.resume()
   }
 
   func update(
@@ -220,6 +237,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         || state.pixelWidth != nextPixelWidth
         || state.pixelHeight != nextPixelHeight
       state.component = component
+      if state.isActive { synchronizeTimerLocked() }
       state.pixelWidth = nextPixelWidth
       state.pixelHeight = nextPixelHeight
       if overlayContentChanged {
@@ -245,6 +263,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       }
       state.isActive = false
       state.renderRequested = false
+      state.timerGeneration &+= 1
       state.timer?.setEventHandler {}
       state.timer?.cancel()
       state.timer = nil
@@ -268,6 +287,11 @@ final class ClockOverlayRuntime: @unchecked Sendable {
       guard state.isActive else { return false }
       // Cancellation does not remove callbacks already queued by an older timer.
       if let timerGeneration, timerGeneration != state.timerGeneration { return false }
+      if timerGeneration != nil, state.component.resolvedRTFD != nil {
+        state.timer?.setEventHandler {}
+        state.timer?.cancel()
+        state.timer = nil
+      }
       state.renderRequested = true
       guard !state.renderInFlight else { return false }
       state.renderInFlight = true
@@ -299,9 +323,9 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         return
       }
 
-      let date = currentTimeProvider.now()
       let request = ClockOverlayRenderRequest(
-        text: formatter.string(from: date, component: component),
+        text: component.resolvedRTFD == nil
+          ? formatter.string(from: currentTimeProvider.now(), component: component) : "",
         component: component,
         pixelWidth: pixelWidth,
         pixelHeight: pixelHeight
@@ -312,6 +336,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         }
         if state.renderGeneration == generation {
           state.needsRetry = false
+          synchronizeTimerLocked()
         }
         return true
       }
@@ -328,6 +353,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
           state.retainedTexture = texture
           state.lastSuccessfulRequest = request
           state.needsRetry = false
+          synchronizeTimerLocked()
           return true
         }
         if shouldPublish {
@@ -335,13 +361,20 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         }
       } catch {
         // Retain the last successful texture/request. A future pulse or
-        // configuration change will retry this request.
+        // configuration change will retry this request. Dynamic Text has no
+        // periodic pulse, so schedule a delayed retry for transient failures.
+        // Size limits cannot recover until the configuration changes.
         clockOverlayRuntimeLogger.error(
           "Clock overlay render failed: \(error.localizedDescription, privacy: .public)"
         )
         lock.withLock {
           if state.isActive, state.renderGeneration == generation {
-            state.needsRetry = true
+            if case MetalClockOverlayRendererError.invalidTextureSize = error {
+              state.needsRetry = false
+            } else {
+              state.needsRetry = true
+            }
+            synchronizeTimerLocked()
           }
         }
       }
@@ -440,6 +473,7 @@ extension ClockComponent {
       && lhs.showsDate == rhs.showsDate
       && lhs.usesSystemTimeZone == rhs.usesSystemTimeZone
       && lhs.utcOffsetMinutes == rhs.utcOffsetMinutes
+      && lhs.resolvedRTFD == rhs.resolvedRTFD
   }
 
   private static func normalizedUnit(_ value: Float, fallback: Float) -> Float {

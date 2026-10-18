@@ -155,6 +155,7 @@ extension WorkspaceBundleValidatorV4 {
       case .conicGradientFill: path + ".conic_gradient_fill"
       case .vfxSource: path + ".vfx_source"
       case .clock: path + ".clock"
+      case .dynamicText: path + ".dynamic_text"
       case .testPattern: path + ".test_pattern"
       case nil: path
       }
@@ -354,6 +355,17 @@ extension WorkspaceBundleValidatorV4 {
         _ = rational(fill.startAngleRadians, path: path + ".start_angle_radians", id: id)
         color(fill.startExtendedSrgbColor, path: path + ".start_extended_srgb_color", id: id)
         color(fill.endExtendedSrgbColor, path: path + ".end_extended_srgb_color", id: id)
+      case .dynamicText(let text):
+        if !text.hasRtfdDocument || text.rtfdDocument.isEmpty {
+          add(path + ".rtfd_document", .invalidVariableMacro, id: id)
+        }
+        _ = unit(
+          text.width, path: path + ".width", id: id, positive: true,
+          error: .invalidDynamicTextGeometry)
+        _ = unit(
+          text.height, path: path + ".height", id: id, positive: true,
+          error: .invalidDynamicTextGeometry)
+
       case .clock(let clock):
         _ = unit(
           clock.width, path: path + ".width", id: id, positive: true, error: .invalidClockGeometry)
@@ -402,12 +414,12 @@ extension WorkspaceBundleValidatorV4 {
       if !present {
         add(path + ".video_component_internal_id", .missingVisionVideoComponent, id: id)
       } else if let component = components.first(where: { $0.internalID == input }) {
-        if case .ldtxSceneDetectorVision = wrapper.vision {
-          if !component.canBeVisionInput {
-            add(path + ".video_component_internal_id", .unsupportedVisionInput, id: id)
-          } else if component.renderingSize.map({ $0.width > 0 && $0.height > 0 }) != true {
-            add(path + ".video_component_internal_id", .invalidVisionInputSize, id: id)
-          }
+        if !component.canBeVisionInput {
+          add(path + ".video_component_internal_id", .unsupportedVisionInput, id: id)
+        } else if case .ldtxSceneDetectorVision = wrapper.vision,
+          component.renderingSize.map({ $0.width > 0 && $0.height > 0 }) != true
+        {
+          add(path + ".video_component_internal_id", .invalidVisionInputSize, id: id)
         }
       } else {
         add(path + ".video_component_internal_id", .missingVideoComponent(input), id: id)
@@ -537,6 +549,8 @@ public enum WorkspaceV4IntegrityError: Error, Equatable, Sendable {
   case invalidLinearGradient
   case invalidConicGradient
   case invalidClockGeometry
+  case invalidDynamicTextGeometry
+  case invalidVariableMacro
   case invalidColor
   case invalidRational
   case invalidEnvelopeID
@@ -579,6 +593,10 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .invalidLinearGradient: "Linear gradient endpoints must be distinct and between 0 and 1."
     case .invalidConicGradient:
       "Conic gradient coordinates must be between 0 and 1 and its angle must be finite."
+    case .invalidDynamicTextGeometry:
+      "Dynamic Text width and height must be greater than zero and at most one."
+    case .invalidVariableMacro:
+      "The rich text document is missing or empty."
     case .invalidClockGeometry:
       "Clock dimensions must be greater than 0 and at most 1, with at most two outlines."
     case .invalidModelID(let id):

@@ -134,13 +134,17 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
         workspace.outputSettings = stateService.workspaceOutputSettings
         return workspace
       })
-    if let workspace = document.workspaceSnapshot { persistence.adoptRuntimeWorkspace(workspace) }
+    var adoptionError: Error?
+    if let workspace = document.workspaceSnapshot {
+      do { try persistence.adoptRuntimeWorkspace(workspace) } catch { adoptionError = error }
+    }
     self.init(
       stateService: stateService, persistenceCoordinator: persistence,
       appletData: appletData, document: document,
       landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime, metalView: metalView,
       captureSessionCoordinator: captureSessionCoordinator,
       releaseRuntimeResources: document.claimRuntimeResources())
+    if let adoptionError { reportError(adoptionError) }
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
       (
@@ -333,7 +337,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
           || modificationDate != adoptedContentModificationDate
       else { return }
       adoptedContentModificationDate = modificationDate
-      persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+      try persistenceCoordinator.adoptRuntimeWorkspace(workspace)
       confirmedContentsDidChange()
     } catch { reportError(error) }
   }

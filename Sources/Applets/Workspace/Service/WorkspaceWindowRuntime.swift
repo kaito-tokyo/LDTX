@@ -11,8 +11,8 @@ import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
+import LDTXRichText
 import LDTXTaskQueue
-import LDTXVariableStore
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
@@ -34,8 +34,11 @@ public final class WorkspaceWindowRuntime {
   public private(set) var recordingState: WorkspaceRecordingState = .idle
   public private(set) var visionFailureMessages: [Int64: String] = [:]
   public private(set) var visionResults: [Int64: String] = [:]
-  public private(set) var variableStore: VariableStore
+  public private(set) var variableStore: [LDTXVariableKey: String]
   private var variableStoreGeneration = UUID()
+  @ObservationIgnored let landscapeOverlays = ProgramOverlayProducer()
+  @ObservationIgnored let portraitOverlays = ProgramOverlayProducer()
+  @ObservationIgnored private var isShutDown = false
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
   var visionArchivePackageURL: URL?
@@ -52,15 +55,17 @@ public final class WorkspaceWindowRuntime {
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.selectProgramHandler = selectProgram
-    variableStore = VariableStore(definition: persistence.runtimeWorkspace.definition)
+    variableStore = [LDTXVariableKey: String](definition: persistence.runtimeWorkspace.definition)
     persistence.runtimeWorkspaceAdopted = { [weak self] workspace in
       guard let self else { return }
-      variableStore = VariableStore(definition: workspace.definition)
+      variableStore = [LDTXVariableKey: String](definition: workspace.definition)
       variableStoreGeneration = UUID()
     }
+    observeVariableChanges()
   }
 
   var physicalDeviceIDs: [Int64: WorkspacePhysicalDeviceID] { physicalDeviceIDsProvider() }
+  var isRunning: Bool { !isShutDown }
 
   public var workspace: WorkspaceV4Bundle { persistenceCoordinator.runtimeWorkspace }
   public var definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 { workspace.definition }
@@ -72,7 +77,29 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func shutdown() {
+    isShutDown = true
+    landscapeOverlays.stop()
+    portraitOverlays.stop()
     componentFrameRenderer?.retainComponents([])
+  }
+
+  private func observeVariableChanges() {
+    guard !isShutDown else { return }
+    withObservationTracking {
+      _ = variableStore
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in
+        guard let self, !self.isShutDown else { return }
+        self.refreshOverlayContent()
+        self.observeVariableChanges()
+      }
+    }
+  }
+
+  private func refreshOverlayContent() {
+    guard let programID = selectedProgramInternalID else { return }
+    _ = try? runtimeProjection(programInternalID: programID, target: .landscape)
+    _ = try? runtimeProjection(programInternalID: programID, target: .portrait)
   }
 
   public func setRecordingState(_ state: WorkspaceRecordingState) {
@@ -117,6 +144,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func updateRuntimes() {
+    guard !isShutDown else { return }
     componentFrameRenderer?.retainComponents(
       Set(
         definition.videoComponents.compactMap {
@@ -145,22 +173,22 @@ public final class WorkspaceWindowRuntime {
   }
 
   private func updateRuntime(_ runtime: ProgramRuntime?, target: WorkspaceCanvasTarget) {
-    guard let runtime else { return }
     guard let selectedProgramInternalID else {
-      runtime.clearProgram()
+      overlayProducer(for: target).stop()
+      runtime?.clearProgram()
       return
     }
     guard
-      let canvas = try? WorkspaceProgramCanvasSnapshot(
-        definition: workspace.definition, preferences: workspace.preferences,
-        programInternalID: selectedProgramInternalID, target: target),
-      let projection = try? WorkspaceV4RenderGraph.runtimeProjection(
-        definition: workspace.definition, canvas: canvas,
-        physicalDeviceIDs: physicalDeviceIDsProvider(),
-        timeSeconds: Float(ProcessInfo.processInfo.systemUptime))
+      let projection = try? runtimeProjection(
+        programInternalID: selectedProgramInternalID, target: target)
     else { return }
-    runtime.updateProgram(projection.configuration)
-    runtime.updateProgramPreferences(projection.preferences)
+    runtime?.updateProgram(projection.configuration)
+    runtime?.updateProgramPreferences(projection.preferences)
+  }
+
+  func overlayProducer(for target: WorkspaceCanvasTarget) -> ProgramOverlayProducer {
+    target.preferences == WorkspaceCanvasTarget.landscape.preferences
+      ? landscapeOverlays : portraitOverlays
   }
 
   public func synchronizeCaptureInputs(
@@ -324,22 +352,20 @@ public final class WorkspaceWindowRuntime {
     }
   }
 
-  /// MainActor-owned access for future macro execution and item-specific readers.
-  public func readVariable(_ key: VariableKey) throws -> String {
-    try variableStore.read(key)
+  public func readVariable(_ key: LDTXVariableKey) throws -> String {
+    guard let value = variableStore[key] else { throw WorkspaceVariableError.unregisteredKey(key) }
+    return value
   }
 
-  public func setVariableReader(_ reader: any VariableReader, for key: VariableKey) throws {
-    try variableStore.setReader(reader, for: key)
-  }
-
-  private func applyVisionVariables(_ values: [VariableItem: String], visionID: Int64) {
+  private func applyVisionVariables(_ values: [LDTXVariableItem: String], visionID: Int64) {
     let updates = Dictionary(
       uniqueKeysWithValues: values.map {
-        (VariableKey(visionID: visionID, item: $0.key), $0.value)
+        (LDTXVariableKey(visionID: visionID, item: $0.key), $0.value)
       })
     // Result producers must publish exactly the items registered by the Definition.
-    do { try variableStore.update(updates) } catch {
+    do {
+      try variableStore.update(updates)
+    } catch {
       assertionFailure("Invalid Vision variable update: \(error)")
     }
   }

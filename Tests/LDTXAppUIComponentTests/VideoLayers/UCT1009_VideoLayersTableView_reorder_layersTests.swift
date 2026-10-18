@@ -10,21 +10,23 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1009: SwiftUI layer reordering", .serialized) @MainActor
   struct UCT1009VideoLayersTableViewIntegrationTestSuite {
-    @Test func acceptsSingleLocalMovesAndRejectsForeignOrStaleTokens() throws {
+    @Test func standardMovesSupportBothDirectionsAndMultipleRows() throws {
       let fixture = VideoLayersTestFixture()
       let editor = fixture.editor
-      let other = VideoLayersTestFixture()
-      #expect(!editor.move([other.editor.token(for: 1)], before: 2))
-      #expect(!editor.move([editor.token(for: 1), editor.token(for: 2)], before: 3))
-      #expect(!editor.move([editor.token(for: 999)], before: 2))
-      #expect(!editor.move([editor.token(for: 1)], before: 999))
-      #expect(editor.move([editor.token(for: 3)], before: 1))
+      editor.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
       #expect(editor.layerIDs == [3, 1, 2])
-      #expect(editor.move([editor.token(for: 3)], before: nil))
+      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
       #expect(editor.layerIDs == [1, 2, 3])
-      let token = editor.token(for: 1)
-      fixture.state.workspaceDefinition.programs = [.with { $0.internalID = 200 }]
-      #expect(!editor.move([token], before: nil))
+      editor.move(fromOffsets: IndexSet([0, 1]), toOffset: 3)
+      #expect(editor.layerIDs == [3, 1, 2])
+      editor.move(fromOffsets: IndexSet(integer: 99), toOffset: 0)
+      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 99)
+      #expect(editor.layerIDs == [3, 1, 2])
+      fixture.state.workspaceDefinition.programs = []
+      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
+      #expect(
+        fixture.state.workspacePreferences.landscapeProgramPreferences[100]?.videoLayerInternalIds
+          == [3, 1, 2])
     }
 
     @Test func reorderingRetainsDraftsAndCannotChangeMembership() throws {
@@ -32,7 +34,8 @@ extension AppUIComponentTestSuite {
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)
       fixture.state.isOutputActive = true
-      #expect(fixture.editor.move([fixture.editor.token(for: 1)], before: nil))
+      fixture.editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
+      #expect(fixture.editor.layerIDs == [2, 3, 1])
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[0] == "-")

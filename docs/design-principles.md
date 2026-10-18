@@ -30,9 +30,10 @@ the relevant design or feature documentation instead.
 - The SwiftUI scene connection registers undo actions for content changes to participate
   in SwiftUI's unsaved-change tracking. StateService must not hide document-change
   callbacks or persistence notifications in its setters.
-  Workspace Undo/Redo menu commands and shortcuts are temporarily disabled;
-  registration remains enabled for change tracking. Other Applets keep their
-  standard Undo/Redo commands.
+  Workspace Undo/Redo menu commands and shortcuts use the standard document
+  history while output is idle. During output they are disabled so a snapshot
+  restoration cannot bypass editing restrictions. Registration remains enabled
+  for change tracking. Other Applets keep their standard Undo/Redo commands.
 
 ## Document content, editing state and runtime state have distinct roles
 
@@ -104,15 +105,14 @@ the relevant design or feature documentation instead.
 
 ## Vision interval execution is best effort
 
-- Each Workspace runtime owns an ephemeral `VariableStore` value. Its fixed key
-  inventory is projected from the persisted Definition, using structured Vision
-  IDs and variable items. Paths such as `visions/123/text` are serialized key
-  representations, not internal identifiers. Stored values are always strings;
-  missing results use each item's natural empty value rather than Optional.
-- All variable data models, readers, and Definition projection belong to
-  `Sources/Corelibs/LDTXVariableStore`, with shared tests under `Tests/Corelibs`.
-  `Sources/UI/LDTXVariableMacro` is exclusively for UI; model execution and tests
-  must not depend on that target or on UI frameworks.
+- Each Workspace runtime owns an ephemeral `[LDTXVariableKey: String]` dictionary.
+  Its inventory and item defaults are projected from the saved Definition. Keys
+  belong to the Workspace model and contain opaque `id` and `sel` strings.
+  OCR and Scene Detector producers interpret them as Vision IDs and item names.
+  Updates validate all keys before mutation; reset preserves the inventory.
+- Native rich text persistence and attachment data belong to the macOS-only
+  `LDTXRichText` target. `LDTXVariableMacro` owns the editor and chip presentation.
+  Corelibs holds RTFD as opaque bytes and does not claim to validate its contents.
 - Successful persisted Workspace adoption recreates the entire Store, including
   when a save leaves the Definition unchanged. Editing or a failed save does not
   reset it. In-flight results from an earlier Store generation cannot update the
@@ -201,6 +201,57 @@ the relevant design or feature documentation instead.
   must not block the main actor.
 - Such work should use a serialized background executor when ordering is
   significant.
+
+## Overlay production is independent of Program frame rendering
+
+- Dynamic Text rasterization rejects more than 8,388,608 pixels before allocating
+  its CPU buffers or textures. At 10 bytes per pixel across staging buffers and
+  textures, this bounds those allocations to 80 MiB per render while permitting 4K UHD.
+
+- Workspace owns Clock and Dynamic Text texture producers separately from
+  ProgramRuntime, preview consumers, output consumers, and on-demand frame rendering.
+  Producers can prepare and update textures without requesting a Program frame.
+- Dynamic Text observes the Workspace's ephemeral variable state. Changes schedule
+  texture generation independently; they do not poll at frame rate or reconfigure
+  ProgramRuntime. Clock updates use their own timer.
+- ProgramRuntime only reads snapshots of completed textures and composites them.
+  Its frame loop must not initialize, synchronize, or start texture generators.
+  Generation and publication never wait for the compositor, and composition never
+  waits for a new overlay. The last completed texture remains usable during refresh.
+- Published textures are immutable. Generation identity rejects late publication
+  after removal or shutdown. Each canvas owns its producer and placement projection;
+  failed refreshes retain the last successful texture. Definition changes still
+  reach producers only after successful persistence.
+
+## Dynamic Text uses native rich text persistence
+
+- `rtfd_document` is the sole authoritative content. It contains flattened RTFD
+  produced by NSAttributedString. An empty document has valid RTFD data; absent
+  or empty bytes are invalid. Legacy XML/text fields are reserved and unsupported.
+- The RTFD document owns fonts, sizes, colors and paragraph formatting. Standard
+  native formatting commands are used. Program preserves font sizes and wraps
+  and clips to the configured extent; it never automatically shrinks text.
+- Variables are NSTextAttachment files with extension `.ldtxvar` and UTF-8 JSON:
+  `{ "version": 1, "id": "...", "sel": "...", "body": "..." }`.
+  All fields are required. Identifiers, selectors and bodies are opaque strings;
+  no script evaluation is performed. Unsupported versions, malformed JSON and
+  non-variable attachments are rejected. Filenames do not identify variables.
+- Persistent data lives in the attachment FileWrapper, independently of its
+  regenerated chip cell. Custom character attributes and chip images are not
+  the source of variable identity. Reading or refreshing labels never rewrites
+  persisted bytes. Semantic equality ignores generated filenames and images.
+- The same codec validates macOS Workspace reads, writes, adoption and paste.
+  Failed reads do not become empty documents; failed exports retain the editor
+  draft and report an error without overwriting the authoritative bytes.
+- Clipboard RTFD preserves variables and formatting. RTF and plain-text exports
+  replace variables with readable reference text. Literal pasting never parses
+  reference syntax. Unresolved variables remain editable and expand to empty.
+- Variable expansion replaces attachments with literal values using each run's
+  formatting. The producer generates textures outside frame rendering; the
+  compositor only reads retained textures. The raster pixel budget still applies.
+- Editor synchronization preserves marked text and does not replace an unchanged
+  edit echo. Text and attribute changes share Workspace document Undo/Redo; native
+  text undo is disabled and no private history or undo shortcut interception exists.
 
 ## Protobuf defaults and Rational values
 

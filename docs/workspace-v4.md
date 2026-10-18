@@ -127,9 +127,10 @@ Video Components, and the optional PTS master references a VFX Source.
 
 OCR Visions reference `video_component_internal_id` and analyze the component
 after effects, before Program cropping, placement, visibility, and compositing.
-Camera components use their input resolution, Clock uses its Landscape-based
-size, and other generated components use 1920 by 1080 pixels. The ROI is applied
-to that component image. OCR does not require a selected Program or active output.
+Only VFX Source components are supported as OCR inputs, using their input
+resolution. Clock, Dynamic Text, and other generated components are rejected
+with `unsupportedVisionInput`. The ROI is applied to the VFX Source image.
+OCR does not require a selected Program or active output.
 A referenced component cannot be deleted until its Program, OCR, and PTS
 references are removed.
 

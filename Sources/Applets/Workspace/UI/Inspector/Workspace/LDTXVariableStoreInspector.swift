@@ -1,21 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXVariableStore
+import LDTXWorkspaceAppletModel
 import SwiftUI
 
 /// Reads the observable Workspace runtime when SwiftUI evaluates the inspector.
-public struct VariableStoreInspector: View {
-  private let store: () -> VariableStore?
+public struct LDTXVariableStoreInspector: View {
+  private let store: () -> [LDTXVariableKey: String]?
 
-  public init(store: @escaping () -> VariableStore?) {
+  public init(store: @escaping () -> [LDTXVariableKey: String]?) {
     self.store = store
   }
 
   private struct Entry: Identifiable {
-    let key: VariableKey
+    let key: LDTXVariableKey
     let value: Result<String, any Error>
-    var id: VariableKey { key }
+    var id: LDTXVariableKey { key }
   }
 
   public var body: some View {
@@ -30,7 +30,7 @@ public struct VariableStoreInspector: View {
           } else {
             ForEach(
               store.keys.sorted { $0.path < $1.path }.map { key in
-                Entry(key: key, value: Result(catching: { try store.read(key) }))
+                Entry(key: key, value: Result(catching: { store[key] ?? "" }))
               }
             ) { entry in
               VStack(alignment: .leading, spacing: 4) {

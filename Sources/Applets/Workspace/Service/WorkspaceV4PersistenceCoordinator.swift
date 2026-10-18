@@ -6,6 +6,7 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
@@ -39,7 +40,9 @@ public final class WorkspaceV4PersistenceCoordinator {
     let selectedReader = makeWorkspaceBundleReader(at: url)
     switch selectedReader {
     case .v4(let reader):
-      return try reader.read()
+      let workspace = try reader.read()
+      try workspace.definition.validateRichTextDocuments()
+      return workspace
     case .failure:
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: url])
     }
@@ -58,7 +61,8 @@ public final class WorkspaceV4PersistenceCoordinator {
     return adopted
   }
 
-  public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) {
+  public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) throws {
+    try workspace.definition.validateRichTextDocuments()
     adoptedRuntimeWorkspace = workspace
     runtimeWorkspaceAdopted?(workspace)
   }
@@ -106,6 +110,7 @@ public final class WorkspaceV4PersistenceCoordinator {
 
   public func open(_ workspace: WorkspaceV4Bundle, at packageURL: URL) throws {
     try WorkspaceBundleValidatorV4.validate(workspace)
+    try workspace.definition.validateRichTextDocuments()
     url = packageURL.standardizedFileURL
   }
 

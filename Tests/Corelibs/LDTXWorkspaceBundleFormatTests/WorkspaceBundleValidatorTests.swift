@@ -2,12 +2,114 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func rejectsGeneratedOverlaysAsOCRInputs() {
+    var bundle = WorkspaceV4Bundle(
+      definition: .with {
+        $0.visions = [
+          .with {
+            $0.ocrVision = .with {
+              $0.internalID = 3
+              $0.videoComponentInternalID = 1
+            }
+          }
+        ]
+      }, preferences: .init())
+    let unsupported: [Ldtx_Workspace_V4_VideoComponentWrapper] = [
+      .with { $0.dynamicText.internalID = 1 },
+      .with { $0.clock.internalID = 1 },
+      .with { $0.solidColorFill.internalID = 1 },
+    ]
+    for component in unsupported {
+      bundle.definition.videoComponents = [component]
+      #expect(
+        WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+          $0.error == .unsupportedVisionInput
+            && $0.path == "definition.visions[0].ocr_vision.video_component_internal_id"
+        })
+    }
+    bundle.definition.videoComponents = [
+      .with {
+        $0.vfxSource.internalID = 1
+        $0.vfxSource.deviceWidth = 1920
+        $0.vfxSource.deviceHeight = 1080
+      }
+    ]
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .unsupportedVisionInput
+      })
+  }
+
+  @Test func validatesOpaqueRichTextPresenceWithoutInterpretingContents() throws {
+    var bundle = WorkspaceV4Bundle(
+      definition: .with {
+        $0.videoComponents = [
+          .with {
+            $0.dynamicText = .with {
+              $0.internalID = 7
+              $0.displayName = "Text"
+              $0.width.set(num: 1, den: 2)
+              $0.height.set(num: 1, den: 10)
+              $0.rtfdDocument = Data("opaque RTFD".utf8)
+            }
+          }
+        ]
+      }, preferences: .init())
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+    bundle.definition.videoComponents[0].dynamicText.rtfdDocument = Data()
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+    bundle.definition.videoComponents[0].dynamicText.rtfdDocument = Data([1])
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidVariableMacro
+      })
+  }
+
+  @Test func dynamicTextRoundTripsAndValidatesGeometry() throws {
+    let wrapper = Ldtx_Workspace_V4_VideoComponentWrapper.with {
+      $0.dynamicText = .with {
+        $0.internalID = 7
+        $0.displayName = "Result"
+        $0.rtfdDocument = Data([1, 2, 3])
+        $0.width.set(num: 1, den: 2)
+        $0.height.set(num: 1, den: 10)
+      }
+    }
+    #expect(
+      try Ldtx_Workspace_V4_VideoComponentWrapper(serializedBytes: wrapper.serializedData())
+        == wrapper)
+    var bundle = WorkspaceV4Bundle(
+      definition: .with { $0.videoComponents = [wrapper] }, preferences: .init())
+    #expect(
+      !WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidDynamicTextGeometry
+      })
+    bundle.definition.videoComponents[0].dynamicText.width.set(num: 0, den: 1)
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidDynamicTextGeometry
+          && $0.path == "definition.video_components[0].dynamic_text.width"
+      })
+    bundle.definition.videoComponents[0].dynamicText.width.set(num: 1, den: 0)
+    #expect(
+      WorkspaceBundleValidatorV4.validationIssues(in: bundle).contains {
+        $0.error == .invalidRational
+      })
+  }
+
   @Test func channelGainsUseTheSupportedDecibelRange() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.displayName = "Test"
@@ -307,8 +409,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("OCR can reference a generated Video Component")
-  func allowsGeneratedComponentForOCR() throws {
+  @Test("OCR rejects a generated Video Component")
+  func rejectsGeneratedComponentForOCR() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [
       .with {
@@ -327,7 +429,9 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         }
       }
     ]
-    try WorkspaceBundleValidatorV4.validate(definition)
+    #expect(throws: WorkspaceV4ValidationError.self) {
+      try WorkspaceBundleValidatorV4.validate(definition)
+    }
   }
 
   @Test("rejects entity IDs reused across resource kinds")

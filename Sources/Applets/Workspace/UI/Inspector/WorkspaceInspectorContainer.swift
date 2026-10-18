@@ -6,8 +6,9 @@ import AppKit
 import LDTXAppletSupport
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
+import LDTXRichText
 import LDTXTaskQueue
-import LDTXVariableStore
+import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import SwiftUI
@@ -19,7 +20,7 @@ public struct WorkspaceInspectorContainer: View {
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var stateService: WorkspaceStateService
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  private let variableStore: () -> VariableStore?
+  private let variableStore: () -> [LDTXVariableKey: String]?
   private let runtimeWorkspace: () -> WorkspaceV4Bundle?
   private weak var document: (any WorkspaceDocumentContext)?
 
@@ -27,7 +28,7 @@ public struct WorkspaceInspectorContainer: View {
     deviceRegistry: DeviceRegistryService,
     stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
-    variableStore: @escaping () -> VariableStore? = { nil },
+    variableStore: @escaping () -> [LDTXVariableKey: String]? = { nil },
     runtimeWorkspace: @escaping () -> WorkspaceV4Bundle? = { nil },
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
@@ -72,7 +73,7 @@ public struct WorkspaceInspectorContainer: View {
         stateService: stateService, appletData: appletData,
         runtimeActions: runtimeActions)
     case .variableStore:
-      VariableStoreInspector(store: variableStore)
+      LDTXVariableStoreInspector(store: variableStore)
     case .workspaceCanvas:
       WorkspaceCanvasInspector(stateService: stateService)
     case .workspaceOutput:
@@ -134,6 +135,13 @@ public struct WorkspaceInspectorContainer: View {
           stateService: stateService,
           appletData: appletData,
           videoComponentID: internalID)
+      } else {
+        emptyInspector
+      }
+    case .dynamicTextVideoComponent:
+      if let internalID = selector.internalID {
+        DynamicTextInspector(
+          stateService: stateService, appletData: appletData, internalID: internalID)
       } else {
         emptyInspector
       }

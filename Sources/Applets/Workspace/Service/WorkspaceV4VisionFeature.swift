@@ -4,8 +4,9 @@
 import CoreImage
 import Foundation
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXVision
+import LDTXWorkspaceAppletModel
 import OSLog
 import Observation
 
@@ -227,7 +228,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       let frame: WorkspaceVisionAnalysisFrame
       let recordingPackageURL: URL?
       let output: String
-      let variables: [VariableItem: String]
+      let variables: [LDTXVariableItem: String]
       if let ocr {
         frame = try await context.frameForVision(ocr)
         recordingPackageURL = context.recordingPackageURL()

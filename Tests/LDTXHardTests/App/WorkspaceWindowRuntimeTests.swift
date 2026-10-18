@@ -6,7 +6,7 @@ import CoreImage
 import Foundation
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXVariableStore
+import LDTXRichText
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
@@ -27,10 +27,10 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
       .with { $0.ocrVision = .with { $0.internalID = 11 } },
       .with { $0.ldtxSceneDetectorVision = .with { $0.internalID = 22 } },
     ]
-    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
-    let text = VariableKey(visionID: 11, item: .text)
-    let label = VariableKey(visionID: 22, item: .label)
-    let confidence = VariableKey(visionID: 22, item: .confidence)
+    try runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    let text = LDTXVariableKey(visionID: 11, item: .text)
+    let label = LDTXVariableKey(visionID: 22, item: .label)
+    let confidence = LDTXVariableKey(visionID: 22, item: .confidence)
     let oldContext = runtime.visionFeatureContext
     oldContext.reportVariables(11, [.text: "recognized"])
     oldContext.reportVariables(22, [.label: "battle", .confidence: "0.8"])
@@ -47,7 +47,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     try runtime.editWorkspace { $0.definition.displayName = "Pending edit" }
     runtime.updateRuntimes()
     #expect(try runtime.readVariable(text) == "recognized")
-    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    try runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
     #expect(try runtime.readVariable(text) == "")
     #expect(!oldContext.isCurrent())
     oldContext.reportVariables(11, [.text: "stale"])
@@ -58,12 +58,12 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     #expect(try runtime.readVariable(text) == "new")
 
     let other = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
-    other.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    try other.persistenceCoordinator.adoptRuntimeWorkspace(saved)
     #expect(try other.readVariable(text) == "")
     saved.definition.visions.removeAll()
-    runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
+    try runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
     #expect(runtime.variableStore.keys.isEmpty)
-    #expect(throws: VariableStoreError.unregisteredKey(text)) { try runtime.readVariable(text) }
+    #expect(throws: WorkspaceVariableError.unregisteredKey(text)) { try runtime.readVariable(text) }
   }
 
   @Test(
@@ -74,7 +74,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with { $0.internalID = 22 }
     var workspace = runtime.workspace
     workspace.definition.visions = [.with { $0.ldtxSceneDetectorVision = vision }]
-    runtime.persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+    try runtime.persistenceCoordinator.adoptRuntimeWorkspace(workspace)
     runtime.visionFeatureContext.reportResult(22, "Previous result")
     runtime.visionFeatureContext.reportVariables(22, [.label: "Previous", .confidence: "0.5"])
     do {

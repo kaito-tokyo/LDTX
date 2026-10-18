@@ -12,6 +12,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -102,6 +107,14 @@ public nonisolated struct Ldtx_Workspace_V4_VideoComponentWrapper: Sendable {
     set {videoComponent = .testPattern(newValue)}
   }
 
+  public var dynamicText: Ldtx_Workspace_V4_DynamicTextComponent {
+    get {
+      if case .dynamicText(let v)? = videoComponent {return v}
+      return Ldtx_Workspace_V4_DynamicTextComponent()
+    }
+    set {videoComponent = .dynamicText(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_VideoComponent: Equatable, Sendable {
@@ -126,10 +139,75 @@ public nonisolated struct Ldtx_Workspace_V4_VideoComponentWrapper: Sendable {
     /// The test-pattern Video Component definition. Mutually exclusive with the
     /// other fields.
     case testPattern(Ldtx_Workspace_V4_TestPatternComponent)
+    case dynamicText(Ldtx_Workspace_V4_DynamicTextComponent)
 
   }
 
   public init() {}
+}
+
+/// Text with Variable Macro references, rendered relative to the Landscape Canvas.
+/// No intrinsic image size; cannot be used as a Vision input.
+public nonisolated struct Ldtx_Workspace_V4_DynamicTextComponent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var internalID: Int64 {
+    get {_internalID ?? 0}
+    set {_internalID = newValue}
+  }
+  /// Returns true if `internalID` has been explicitly set.
+  public var hasInternalID: Bool {self._internalID != nil}
+  /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
+  public mutating func clearInternalID() {self._internalID = nil}
+
+  public var displayName: String {
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
+  }
+  /// Returns true if `displayName` has been explicitly set.
+  public var hasDisplayName: Bool {self._displayName != nil}
+  /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
+  public mutating func clearDisplayName() {self._displayName = nil}
+
+  public var width: Ldtx_Workspace_V4_Rational32 {
+    get {_width ?? Ldtx_Workspace_V4_Rational32()}
+    set {_width = newValue}
+  }
+  /// Returns true if `width` has been explicitly set.
+  public var hasWidth: Bool {self._width != nil}
+  /// Clears the value of `width`. Subsequent reads from it will return its default value.
+  public mutating func clearWidth() {self._width = nil}
+
+  public var height: Ldtx_Workspace_V4_Rational32 {
+    get {_height ?? Ldtx_Workspace_V4_Rational32()}
+    set {_height = newValue}
+  }
+  /// Returns true if `height` has been explicitly set.
+  public var hasHeight: Bool {self._height != nil}
+  /// Clears the value of `height`. Subsequent reads from it will return its default value.
+  public mutating func clearHeight() {self._height = nil}
+
+  /// Flattened RTFD including versioned JSON variable attachments.
+  public var rtfdDocument: Data {
+    get {_rtfdDocument ?? Data()}
+    set {_rtfdDocument = newValue}
+  }
+  /// Returns true if `rtfdDocument` has been explicitly set.
+  public var hasRtfdDocument: Bool {self._rtfdDocument != nil}
+  /// Clears the value of `rtfdDocument`. Subsequent reads from it will return its default value.
+  public mutating func clearRtfdDocument() {self._rtfdDocument = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _internalID: Int64? = nil
+  fileprivate var _displayName: String? = nil
+  fileprivate var _width: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _height: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _rtfdDocument: Data? = nil
 }
 
 /// A Video Component that fills the entire Canvas with one uniform source color.
@@ -794,7 +872,7 @@ fileprivate nonisolated let _protobuf_package = "ldtx.workspace.v4"
 
 nonisolated extension Ldtx_Workspace_V4_VideoComponentWrapper: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoComponentWrapper"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}vfx_source\0\u{1}clock\0\u{3}test_pattern\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}solid_color_fill\0\u{3}linear_gradient_fill\0\u{3}radial_gradient_fill\0\u{3}conic_gradient_fill\0\u{3}vfx_source\0\u{1}clock\0\u{3}test_pattern\0\u{3}dynamic_text\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -893,6 +971,19 @@ nonisolated extension Ldtx_Workspace_V4_VideoComponentWrapper: SwiftProtobuf.Mes
           self.videoComponent = .testPattern(v)
         }
       }()
+      case 8: try {
+        var v: Ldtx_Workspace_V4_DynamicTextComponent?
+        var hadOneofValue = false
+        if let current = self.videoComponent {
+          hadOneofValue = true
+          if case .dynamicText(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.videoComponent = .dynamicText(v)
+        }
+      }()
       default: break
       }
     }
@@ -932,6 +1023,10 @@ nonisolated extension Ldtx_Workspace_V4_VideoComponentWrapper: SwiftProtobuf.Mes
       guard case .testPattern(let v)? = self.videoComponent else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
+    case .dynamicText?: try {
+      guard case .dynamicText(let v)? = self.videoComponent else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -939,6 +1034,60 @@ nonisolated extension Ldtx_Workspace_V4_VideoComponentWrapper: SwiftProtobuf.Mes
 
   public static func ==(lhs: Ldtx_Workspace_V4_VideoComponentWrapper, rhs: Ldtx_Workspace_V4_VideoComponentWrapper) -> Bool {
     if lhs.videoComponent != rhs.videoComponent {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Ldtx_Workspace_V4_DynamicTextComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DynamicTextComponent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{4}\u{5}rtfd_document\0\u{b}text\0\u{b}foreground_extended_srgb_color\0\u{b}macro_document\0\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}\u{c}\u{8}\u{1}")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._width) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._height) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self._rtfdDocument) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._internalID {
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._width {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._height {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try { if let v = self._rtfdDocument {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 9)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Ldtx_Workspace_V4_DynamicTextComponent, rhs: Ldtx_Workspace_V4_DynamicTextComponent) -> Bool {
+    if lhs._internalID != rhs._internalID {return false}
+    if lhs._displayName != rhs._displayName {return false}
+    if lhs._width != rhs._width {return false}
+    if lhs._height != rhs._height {return false}
+    if lhs._rtfdDocument != rhs._rtfdDocument {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -260,6 +260,38 @@ struct CommandsSystemTestSuite {
     }
   }
 
+  @Test func rejectsInvalidRichTextOnCreateAndValidate() async throws {
+    try await withTemporaryDirectory { root in
+      var workspace = makeWorkspace(displayName: "Invalid RTFD")
+      workspace.definition.videoComponents = [
+        .with {
+          $0.dynamicText.internalID = 1
+          $0.dynamicText.displayName = "Invalid RTFD"
+          $0.dynamicText.width = .with {
+            $0.num = 1
+            $0.den = 1
+          }
+          $0.dynamicText.height = .with {
+            $0.num = 1
+            $0.den = 1
+          }
+          $0.dynamicText.rtfdDocument = Data("<macro/>".utf8)
+        }
+      ]
+      let json = root.appendingPathComponent("definition.json")
+      try WorkspaceBundleValidatorV4.validate(workspace)
+      try workspace.definition.jsonUTF8Data().write(to: json)
+      let created = root.appendingPathComponent("Created.ldtxworkspace")
+      var create = try WorkspaceCommand.Create.parse([created.path, "--json", json.path])
+      await #expect(throws: (any Error).self) { try await create.run() }
+      #expect(!FileManager.default.fileExists(atPath: created.path))
+      let imported = root.appendingPathComponent("Imported.ldtxworkspace")
+      try writeWorkspace(workspace, to: imported)
+      var validate = try WorkspaceCommand.Validate.parse([imported.path])
+      #expect(throws: (any Error).self) { try validate.run() }
+    }
+  }
+
   private func makeWorkspace(displayName: String) -> WorkspaceV4Bundle {
     return WorkspaceV4Bundle(
       definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4.with { $0.displayName = displayName },

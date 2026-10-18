@@ -7,27 +7,28 @@ Feature: Reorder layers
 
   @UCT-1009.1
   Scenario: Uses standard row dragging
-    Given a table row has a designated top drag band
-    When drag eligibility is checked inside and outside that band
-    Then only the top band permits a row drag
+    Given Video Layers are displayed in a SwiftUI List
+    And each row has a reorder handle that enables moving while hovered
+    When a row is dragged from its handle to another insertion position
+    Then the standard List insertion indicator shows the destination
 
   @UCT-1009.2
-  Scenario: Accepts single local moves and rejects foreign
-    Given a table contains three layers
-    When local, foreign, missing, and invalid-position drops are attempted
-    Then valid single local moves produce the requested permutations and invalid drops are rejected
+  Scenario: Standard moves preserve membership
+    Given a list contains three layers
+    When one or more rows are moved with the standard onMove action
+    Then the requested permutation is saved without changing layer membership
 
   @UCT-1009.3
-  Scenario: Lower half of last row targets end insertion
-    Given a dragged layer targets the lower half of the last row
-    When the proposed insertion location is resolved
-    Then the drop inserts after the last row while an upper-half drop inserts before it
+  Scenario: Supports end insertion
+    Given a layer is dragged to the end of the List
+    When SwiftUI supplies the end insertion offset
+    Then the layer becomes the last row
 
   @UCT-1009.4
-  Scenario: Container scrolls independently and updates rows in place
-    Given a table is embedded in an external scroll container
+  Scenario: One List scrolls the editors and layers
+    Given audio editors and Video Layers share one List
     When membership, ordering, and container width change
-    Then retained rows are reused and table width follows the external container
+    Then retained row state is reused and the List manages scrolling and width
 
   @UCT-1009.5
   Scenario: Mixed membership and order updates keep retained rows
@@ -36,7 +37,7 @@ Feature: Reorder layers
     Then retained rows keep their drafts and table placement matches every updated list
 
   @UCT-1009.6
-  Scenario: Failed order commit does not accept drop
-    Given a table has a failing order commit callback
-    When a layer is dropped at a new position
-    Then the drop is rejected, order is unchanged, and the failure is reported
+  Scenario: Failed order commit preserves the saved order
+    Given a list has a failing order commit callback
+    When a layer is moved to a new position
+    Then the saved order is unchanged and the failure is reported

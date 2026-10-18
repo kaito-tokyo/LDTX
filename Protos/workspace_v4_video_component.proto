@@ -34,7 +34,21 @@ message VideoComponentWrapper {
     // The test-pattern Video Component definition. Mutually exclusive with the
     // other fields.
     TestPatternComponent test_pattern = 7;
+    DynamicTextComponent dynamic_text = 8;
   }
+}
+
+// Text with Variable Macro references, rendered relative to the Landscape Canvas.
+// No intrinsic image size; cannot be used as a Vision input.
+message DynamicTextComponent {
+  sfixed64 internal_id = 1 [default = 0];
+  string display_name = 2;
+  Rational32 width = 3;
+  Rational32 height = 4;
+  reserved 5, 6, 7, 8;
+  reserved text, foreground_extended_srgb_color, macro_document;
+  // Flattened RTFD including versioned JSON variable attachments.
+  bytes rtfd_document = 9;
 }
 
 // A Video Component that fills the entire Canvas with one uniform source color.

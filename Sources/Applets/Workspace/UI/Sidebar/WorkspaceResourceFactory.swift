@@ -1,10 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+import AppKit
 import LDTXProtos
+import LDTXRichText
 
 enum WorkspaceResourceFactory {
+  static func makeDynamicText(id: Int64, name: String) throws
+    -> Ldtx_Workspace_V4_VideoComponentWrapper
+  {
+    var text = Ldtx_Workspace_V4_DynamicTextComponent()
+    text.internalID = id
+    text.displayName = name
+    text.rtfdDocument = try LDTXRichTextDocument(
+      NSAttributedString(
+        string: "Dynamic Text",
+        attributes: [.font: NSFont.systemFont(ofSize: 48), .foregroundColor: NSColor.white])
+    ).rtfd
+    text.width.set(num: 1, den: 2)
+    text.height.set(num: 1, den: 10)
+    var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
+    wrapper.dynamicText = text
+    return wrapper
+  }
+
   static func makeAudioInput(id: Int64, name: String) -> Ldtx_Workspace_V4_AudioInputDevice {
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id

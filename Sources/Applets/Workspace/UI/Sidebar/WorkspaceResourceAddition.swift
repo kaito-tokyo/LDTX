@@ -24,6 +24,7 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
   case radialGradient = "Radial Gradient"
   case conicGradient = "Conic Gradient"
   case clock = "Clock"
+  case dynamicText = "Dynamic Text"
   case testPattern = "Test Pattern"
   var id: Self { self }
   var inspectorKind: WorkspaceInspectorKind {
@@ -34,10 +35,11 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
     case .radialGradient: .radialGradientFillVideoComponent
     case .conicGradient: .conicGradientFillVideoComponent
     case .clock: .clockVideoComponent
+    case .dynamicText: .dynamicTextVideoComponent
     case .testPattern: .testPatternVideoComponent
     }
   }
-  func make(id: Int64, name: String) -> Ldtx_Workspace_V4_VideoComponentWrapper {
+  func make(id: Int64, name: String) throws -> Ldtx_Workspace_V4_VideoComponentWrapper {
     switch self {
     case .vfxSource: WorkspaceResourceFactory.makeVFXSource(id: id, name: name)
     case .solidColor: WorkspaceResourceFactory.makeSolidColor(id: id, name: name)
@@ -45,6 +47,7 @@ enum WorkspaceAddComponentKind: String, CaseIterable, Identifiable {
     case .radialGradient: WorkspaceResourceFactory.makeRadialGradient(id: id, name: name)
     case .conicGradient: WorkspaceResourceFactory.makeConicGradient(id: id, name: name)
     case .clock: WorkspaceResourceFactory.makeClock(id: id, name: name)
+    case .dynamicText: try WorkspaceResourceFactory.makeDynamicText(id: id, name: name)
     case .testPattern: WorkspaceResourceFactory.makeTestPattern(id: id, name: name)
     }
   }
@@ -156,7 +159,7 @@ enum WorkspaceResourceAddition {
       definition.audioDevices.append(WorkspaceResourceFactory.makeAudioInput(id: id, name: name))
       inspectorKind = .audioInputDevice
     case .videoComponent:
-      var component = draft.componentKind.make(id: id, name: name)
+      var component = try draft.componentKind.make(id: id, name: name)
       if draft.componentKind == .vfxSource,
         let device = devices.first(where: { $0.id == draft.physicalDeviceID && !$0.isAudio })
       {

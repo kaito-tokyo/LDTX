@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Observation
@@ -83,6 +84,7 @@ extension WorkspaceDocument: ReadableDocument {
       -> sending Snapshot
     {
       let workspace = try WorkspaceBundleReaderV4(at: source).read()
+      try workspace.definition.validateRichTextDocuments()
       return workspace
     }
 
@@ -96,6 +98,7 @@ extension WorkspaceDocument: ReadableDocument {
   public func apply(snapshot: sending Reader.Snapshot, previous: sending Reader.Snapshot?)
     async throws
   {
+    try snapshot.definition.validateRichTextDocuments()
     workspaceSnapshot = snapshot
     incrementReadGeneration()
   }
@@ -109,6 +112,7 @@ extension WorkspaceDocument: WritableDocument {
       snapshot: sending Snapshot, to destination: sending URL,
       previous: sending Snapshot?, progress: consuming Subprogress
     ) async throws {
+      try snapshot.definition.validateRichTextDocuments()
       try WorkspaceBundleWriterV4().write(snapshot, to: destination)
     }
   }

@@ -73,9 +73,10 @@ is already waiting for shutdown, termination owns that presentation instead.
 
 The scene connection registers Undo/Redo for content changes, including pending
 model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
-Workspace Undo and Redo menu commands and their keyboard shortcuts are temporarily
-disabled while a Workspace scene is active. Other scenes retain their standard
-commands. Undo registration itself remains enabled for document change tracking.
+Workspace uses standard Undo and Redo menu commands and keyboard shortcuts while
+output is idle. They are disabled during output to prevent snapshot restoration
+from bypassing editing restrictions. Other scenes retain their standard commands.
+Undo registration remains enabled for document change tracking.
 UI selections and runtime results are not undoable document
 changes. Reads and confirmation synchronization do not register Undo. Saving
 captures Document's StateService values without requiring a represented editor.
