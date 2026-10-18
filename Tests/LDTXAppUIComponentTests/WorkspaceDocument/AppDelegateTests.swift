@@ -151,7 +151,7 @@ extension AppUIComponentTestSuite {
       let termination = WorkspaceDocumentTermination(documents: { [first, second] })
       var calls = 0
       let finished = AsyncStream<Void>.makeStream()
-      let proceed = {
+      let proceed: @MainActor () -> Void = {
         calls += 1
         finished.continuation.yield(())
       }
@@ -201,6 +201,56 @@ extension AppUIComponentTestSuite {
       var iterator = finished.stream.makeAsyncIterator()
       _ = await iterator.next()
       #expect(proceeded)
+      finished.continuation.finish()
+    }
+
+    @Test func rechecksDocumentsAtRunLoopHandoff() async {
+      @MainActor final class Inventory {
+        var documents: [NSDocument]
+        let addedDocument: NSDocument
+        var reads = 0
+        init(first: NSDocument, second: NSDocument) {
+          documents = [first]
+          addedDocument = second
+        }
+      }
+      let first = NSDocument()
+      let second = NSDocument()
+      let secondActivity = await hold(second)
+      defer {
+        secondActivity.finish()
+        first.close()
+        second.close()
+      }
+      let inventory = Inventory(first: first, second: second)
+      let changed = AsyncStream<Void>.makeStream()
+      let finished = AsyncStream<Void>.makeStream()
+      var proceeded = false
+      let termination = WorkspaceDocumentTermination(documents: {
+        inventory.reads += 1
+        if inventory.reads == 2 {
+          RunLoop.main.perform(inModes: [.common]) {
+            MainActor.assumeIsolated {
+              inventory.documents.append(inventory.addedDocument)
+              changed.continuation.yield(())
+            }
+          }
+        }
+        return inventory.documents
+      })
+      termination.request {
+        proceeded = true
+        finished.continuation.yield(())
+      }
+      var changes = changed.stream.makeAsyncIterator()
+      _ = await changes.next()
+      #expect(!proceeded)
+      secondActivity.finish()
+      var completion = finished.stream.makeAsyncIterator()
+      _ = await completion.next()
+      #expect(proceeded)
+      #expect(inventory.reads >= 5)
+      changed.continuation.finish()
       finished.continuation.finish()
     }
   }

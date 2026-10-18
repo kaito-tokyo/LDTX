@@ -76,6 +76,71 @@ private enum ProbeState {
   static var quitRequested = false
   static var closeButtonCalls = 0
   static var closeForwarder: CloseProbeForwarder?
+  static var saveForwarder: SaveProbeForwarder?
+}
+
+@MainActor
+private final class SaveProbeForwarder: NSResponder, WorkspaceSaveActionTarget {
+  weak var documentForWorkspaceSave: NSDocument?
+  init(document: NSDocument) {
+    documentForWorkspaceSave = document
+    super.init()
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+  @objc func saveDocument(_ sender: Any?) {
+    guard let documentForWorkspaceSave else { return }
+    report("native Save reached the Workspace save target")
+    WorkspaceDocumentCloseCoordinator.save(documentForWorkspaceSave)
+  }
+  @objc func saveDocumentAs(_ sender: Any?) {
+    guard let documentForWorkspaceSave else { return }
+    WorkspaceDocumentCloseCoordinator.save(documentForWorkspaceSave, saveAs: true)
+  }
+}
+
+@MainActor
+private func nativeMenuSave(_ window: NSWindow, keyboard: Bool, protected: Bool) {
+  func findSave(_ menu: NSMenu) -> (NSMenu, Int)? {
+    for (index, item) in menu.items.enumerated() {
+      if item.action == #selector(NSDocument.save(_:)) { return (menu, index) }
+      if let submenu = item.submenu, let result = findSave(submenu) { return result }
+    }
+    return nil
+  }
+  guard let main = NSApplication.shared.mainMenu, let (menu, index) = findSave(main) else {
+    report("FAIL: native Save menu missing")
+    finish(96)
+  }
+  let item = menu.items[index]
+  let resolved = NSApplication.shared.target(forAction: item.action!, to: item.target, from: item)
+  if protected, resolved as AnyObject? !== ProbeState.saveForwarder {
+    report(
+      "Save action=\(NSStringFromSelector(item.action!)); app=\(type(of: NSApplication.shared)); key=\(String(describing: NSApplication.shared.keyWindow)); expected=\(String(describing: ProbeState.saveForwarder)); resolved=\(String(describing: resolved)); responds=\(ProbeState.saveForwarder?.responds(to: item.action!) ?? false)"
+    )
+    report("FAIL: native Save bypassed the Workspace save target")
+    finish(96)
+  }
+  if let document = window.windowController?.document as? NSDocument,
+    NSApplication.shared.target(forAction: item.action!, to: document, from: item) as AnyObject?
+      !== document
+  {
+    report("FAIL: explicit document Save target was redirected")
+    finish(96)
+  }
+  if keyboard {
+    let event = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: .command,
+      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+      context: nil, characters: "s", charactersIgnoringModifiers: "s", isARepeat: false, keyCode: 1)!
+    guard main.performKeyEquivalent(with: event) else { finish(96) }
+  } else {
+    menu.performActionForItem(at: index)
+  }
+  if protected, WorkspaceDocumentCloseCoordinator.saveGeneration == 0 {
+    report("FAIL: native Save dispatch bypassed the Workspace save target")
+    finish(96)
+  }
+  report("native Save menu action returned")
 }
 
 /// Observe the button target without changing the production gate or its action.
@@ -151,6 +216,14 @@ private final class ProbeDelegate: NSObject, NSApplicationDelegate {
     {
       return .terminateCancel
     }
+    if CommandLine.arguments.contains("--async-reply") {
+      Task { @MainActor in
+        await Task.yield()
+        report("MainActor shutdown task replied to standard Quit")
+        sender.reply(toApplicationShouldTerminate: true)
+      }
+      return .terminateLater
+    }
     return .terminateNow
   }
   func applicationWillTerminate(_ notification: Notification) {
@@ -218,6 +291,12 @@ private struct WorkspaceSaveCloseProbe: App {
         let menuClose = CommandLine.arguments.contains("--menu-close")
         let keyboardClose = CommandLine.arguments.contains("--key-close")
         if menuClose || keyboardClose {
+          if !unprotected {
+            let actions = SaveProbeForwarder(document: document)
+            actions.nextResponder = window.nextResponder
+            window.nextResponder = actions
+            ProbeState.saveForwarder = actions
+          }
           ProbeState.closeForwarder = CloseProbeForwarder(
             button: window.standardWindowButton(.closeButton)!)
           NSApplication.shared.activate()
@@ -225,7 +304,9 @@ private struct WorkspaceSaveCloseProbe: App {
           try? await Task.sleep(for: .milliseconds(200))
         }
         let save: @MainActor @Sendable () -> Void = {
-          if unprotected {
+          if menuClose || keyboardClose {
+            nativeMenuSave(window, keyboard: keyboardClose, protected: !unprotected)
+          } else if unprotected {
             document.save(nil)
           } else {
             WorkspaceDocumentCloseCoordinator.save(document)
