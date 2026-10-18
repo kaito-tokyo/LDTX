@@ -31,6 +31,31 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
     synchronize()
     let retained = try #require(registry.retainedTexture(forStepNamed: "clock"))
     #expect(retained.colorTexture === previous.colorTexture)
+    component.destinationX = 0.25
+    component.destinationY = 0.125
+    component.destinationWidth = 0.5
+    component.destinationHeight = 2
+    synchronize()
+    let moved = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(moved.colorTexture === previous.colorTexture)
+    #expect(
+      moved.destinationRect
+        == SIMD4(
+          480, 135, 480 + UInt32(previous.colorTexture.width / 2),
+          135 + UInt32(previous.colorTexture.height * 2)))
+    component.destinationX = -0.01
+    synchronize()
+    let clipped = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(clipped.destinationRect.x == 0)
+    #expect(clipped.sourceRect.x > 0)
+    component.destinationX = 2
+    synchronize()
+    #expect(registry.retainedTexture(forStepNamed: "clock")?.destinationRect == .zero)
+    component.destinationX = 0.25
+    synchronize()
+    let returned = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(returned.colorTexture === previous.colorTexture)
+    #expect(returned.destinationRect == moved.destinationRect)
     registry.synchronize(composite: .init(steps: []), outputWidth: 1920, outputHeight: 1080)
     #expect(registry.retainedTexture(forStepNamed: "clock") == nil)
   }

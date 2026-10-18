@@ -50,15 +50,20 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
     for step in composite.steps {
       guard case .clock(var component) = step.component else { continue }
       var nativeSize: SIMD2<Float>?
+      var preservesRaster = false
       if component.fontSize != nil, component.resolvedRTFD == nil {
-        guard outputWidth > 0, outputHeight > 0,
-          let size = renderer.naturalClockSize(for: component)
-        else {
-          // A rejected refresh must not discard the last successfully rendered Clock.
-          if entriesByStepName[step.name] != nil { activeStepNames.insert(step.name) }
+        guard outputWidth > 0, outputHeight > 0 else { continue }
+        let size: SIMD2<Float>
+        if let renderedSize = renderer.naturalClockSize(for: component) {
+          size = renderedSize
+        } else {
           Logger(subsystem: "tokyo.kaito.ldtx", category: "overlay-producer").error(
             "Clock extent exceeds the rendering limits; retaining its previous texture.")
-          continue
+          guard let texture = entriesByStepName[step.name]?.runtime.retainedOverlay() else {
+            continue
+          }
+          size = SIMD2(Float(texture.colorTexture.width), Float(texture.colorTexture.height))
+          preservesRaster = true
         }
         nativeSize = size
         component.destinationWidth *= size.x / Float(outputWidth)
@@ -70,7 +75,15 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
           outputWidth: outputWidth,
           outputHeight: outputHeight
         )
-      else { continue }
+      else {
+        if preservesRaster, let entry = entriesByStepName[step.name] {
+          activeStepNames.insert(step.name)
+          textureStore.place(
+            step.name, generation: entry.generation,
+            destination: .zero, source: SIMD4(0, 0, 1, 1))
+        }
+        continue
+      }
       // Rasterize at the authored font size. The compositor applies layer scale
       // to the whole retained image, including padding and outlines.
       if let nativeSize {
@@ -83,11 +96,13 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
         textureStore.place(
           step.name, generation: entry.generation,
           destination: placement.destinationRect, source: placement.sourceRect)
-        entry.runtime.update(
-          component: component,
-          pixelWidth: placement.pixelWidth,
-          pixelHeight: placement.pixelHeight
-        )
+        if !preservesRaster {
+          entry.runtime.update(
+            component: component,
+            pixelWidth: placement.pixelWidth,
+            pixelHeight: placement.pixelHeight
+          )
+        }
         continue
       }
 

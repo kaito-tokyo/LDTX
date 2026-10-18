@@ -44,9 +44,10 @@ components). The same pixel size applies on the Portrait Canvas. The renderer
 derives a stable text extent from the bundled font metrics and the enabled date
 and time fields; layer Scale X/Y scale the resulting image.
 
-Clock's former `width` and `height` Protobuf fields are reserved. Older Clock
-definitions must be converted to a positive `font_size` before opening;
-this change does not automatically migrate existing Workspaces.
+Clock's former `width` and `height` Protobuf fields are reserved. Older V4 Clocks
+without `font_size` automatically import at 48 pixels, preserving the reserved
+geometry as unknown data. Reading does not rewrite the package; the new font
+size is stored on the next save.
 
 ## Vision Programmer
 
