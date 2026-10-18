@@ -16,7 +16,6 @@ import LDTXYouTubeAuth
 import MetalKit
 import SwiftUI
 
-@main
 @MainActor
 struct LDTXApp: App {
   @State private var workspaceResources: [UUID: WorkspaceRuntimeResources] = [:]
@@ -87,6 +86,17 @@ struct LDTXApp: App {
     .commands {
       VisionProgrammerCommands()
     }
+  }
+}
+
+@main
+@MainActor
+enum LDTXMain {
+  static func main() {
+    // SwiftUI creates NSApplication before consulting NSPrincipalClass. Install
+    // the public subclass first so every Quit entry point passes its save gate.
+    _ = WorkspaceApplication.shared
+    LDTXApp.main()
   }
 }
 

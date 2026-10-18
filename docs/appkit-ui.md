@@ -5,7 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Application and pane ownership
 
-LDTX enters through `LDTXApp`, a SwiftUI `App`. Its body directly declares
+LDTXMain creates the public WorkspaceApplication subclass before invoking
+`LDTXApp.main()`. `LDTXApp` is a SwiftUI `App`; its body directly declares
 the Record Player and Workspace `DocumentGroup`s, `Settings`, and the Vision
 Programmer `Window`. Applets provide documents, content Views, and their processing.
 App initialization configures authentication storage.
@@ -59,6 +60,43 @@ Scene disappearance stops document observation and initiates idempotent shutdown
 connection release also initiates cleanup. A small NSViewRepresentable obtains
 the framework-owned window from PairedProgramPreview and installs a document
 action responder that prevents Revert and Browse Versions during output.
+The connection also routes the standard close button action (including Command-W)
+through an asynchronous NSDocument activity. Its continuation invokes the original
+action inside `continueActivity`, so AppKit's nested save/close serialization does
+not synchronously block the executor needed by SwiftUI's save completion.
+Save and Save As enter the same asynchronous activity mechanism through the
+document action responder. Their activities remain open until the standard
+NSDocument save delegate reports completion, including failure or cancellation;
+returning from the save action is not sufficient. This keeps repeated saves and
+closure ordered without letting a later command synchronously acquire file access
+while SwiftUI is still finishing the preceding write.
+AppKit retains ownership of save confirmation and failure handling. Disconnecting
+restores the original button target and action.
+
+`Tools/Regression/workspace-save-close.sh` runs the real macOS 27 SwiftUI save
+bridge in disposable processes with delayed writes, repeated saves and write
+failure, Save As cancellation, and retry after acknowledging a save error.
+It checks event-loop responsiveness, closure or unsaved-content
+retention, and the disk contents. `--baseline` bypasses the production activity
+coordination and requires the watchdog to detect the original hang. Component
+tests separately exercise the production Workspace snapshots, safe bundle IO,
+close-action restoration, and queued saves. No running LDTX Workspace is used.
+Quit is also checked with pending saves, multiple documents, cancellation of
+standard document confirmation, and save failure. `--quit` runs just these
+termination cases. The baseline includes the original pending-save Quit hang.
+
+WorkspaceApplication overrides the public `terminate` entry point to await
+pending save requests and asynchronous NSDocument activity barriers for every
+open document. Requests made while waiting are coalesced. The save generation
+and document inventory are rechecked before proceeding, so new saves or windows
+are included. Barriers are released before calling `super.terminate`; no document
+activity is held during standard confirmation or another document's wait.
+SwiftUI performs its document review before calling the adapted application
+delegate, so placing this wait only in AppDelegate would be too late. Creating
+the subclass before SwiftUI starts is necessary; NSPrincipalClass alone does not
+select the application instance created by SwiftUI. The gate does not decide
+whether documents should be saved or discarded and does not issue termination
+replies; standard review owns save confirmation, cancellation and write errors.
 
 The SwiftUI App installs its application-owned AppDelegate through
 `NSApplicationDelegateAdaptor`. AppDelegate delegates asynchronous Workspace

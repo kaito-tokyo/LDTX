@@ -16,6 +16,7 @@ final class WorkspaceDocumentConnection {
   private var isDisconnected = false
   private var documentTask: Task<Void, Never>?
   private var readGeneration = 0
+  private let closeCoordinator = WorkspaceDocumentCloseCoordinator()
 
   init(document: WorkspaceDocument, runtimeCoordinator: WorkspaceRuntimeCoordinator) {
     self.document = document
@@ -25,7 +26,8 @@ final class WorkspaceDocumentConnection {
     runtimeCoordinator.pairedPreview.attachWindow = { [weak self] window in
       self?.attachWindow(window)
       guard let self else { return nil }
-      return WorkspaceDocumentActions(stateService: self.runtimeCoordinator.stateService)
+      return WorkspaceDocumentActions(
+        stateService: self.runtimeCoordinator.stateService, window: window)
     }
     let state = runtimeCoordinator.stateService
     let changes = Observations {
@@ -49,6 +51,7 @@ final class WorkspaceDocumentConnection {
   }
 
   isolated deinit {
+    closeCoordinator.detach()
     editsTask?.cancel()
     documentTask?.cancel()
     let owner = runtimeCoordinator
@@ -57,6 +60,7 @@ final class WorkspaceDocumentConnection {
 
   func attachWindow(_ window: NSWindow?) {
     runtimeCoordinator.attachWindow(window)
+    closeCoordinator.attach(to: window)
     if undoManager == nil { setUndoManager(window?.undoManager) }
   }
 
@@ -103,6 +107,7 @@ final class WorkspaceDocumentConnection {
   func disconnect() {
     guard !isDisconnected else { return }
     isDisconnected = true
+    closeCoordinator.detach()
     editsTask?.cancel()
     documentTask?.cancel()
     undoManager?.removeAllActions(withTarget: self)
@@ -122,15 +127,33 @@ final class WorkspaceDocumentConnection {
 
 final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
   private weak var stateService: WorkspaceStateService?
+  private weak var window: NSWindow?
 
-  init(stateService: WorkspaceStateService) {
+  init(stateService: WorkspaceStateService, window: NSWindow? = nil) {
     self.stateService = stateService
+    self.window = window
     super.init()
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
   private var canRevert: Bool {
     stateService.map { !$0.isClosed && !$0.isOutputActive } ?? false
+  }
+
+  @objc func saveDocument(_ sender: Any?) {
+    guard let document = window?.windowController?.document as? NSDocument else {
+      nextResponder?.tryToPerform(#selector(NSDocument.save(_:)), with: sender)
+      return
+    }
+    WorkspaceDocumentCloseCoordinator.save(document)
+  }
+
+  @objc func saveDocumentAs(_ sender: Any?) {
+    guard let document = window?.windowController?.document as? NSDocument else {
+      nextResponder?.tryToPerform(#selector(NSDocument.saveAs(_:)), with: sender)
+      return
+    }
+    WorkspaceDocumentCloseCoordinator.save(document, saveAs: true)
   }
 
   @objc func revertDocumentToSaved(_ sender: Any?) {
@@ -142,6 +165,12 @@ final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
     nextResponder?.tryToPerform(#selector(browseDocumentVersions(_:)), with: sender)
   }
   func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(NSDocument.save(_:))
+      || item.action == #selector(NSDocument.saveAs(_:))
+    {
+      guard let document = window?.windowController?.document as? NSDocument else { return false }
+      return document.validateUserInterfaceItem(item)
+    }
     if item.action == #selector(revertDocumentToSaved(_:))
       || item.action == #selector(browseDocumentVersions(_:))
     {

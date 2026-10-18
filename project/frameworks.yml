@@ -571,7 +571,9 @@ targets:
           - WorkspaceDocumentContent.swift
           - WorkspaceCommands.swift
           - WorkspaceApplicationTermination.swift
+          - WorkspaceApplication.swift
           - WorkspaceDocumentConnection.swift
+          - WorkspaceDocumentCloseCoordinator.swift
           - WorkspaceRuntimeCoordinator.swift
     dependencies:
       - target: LDTXProtos
