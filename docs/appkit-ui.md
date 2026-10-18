@@ -70,6 +70,12 @@ NSDocument save delegate reports completion, including failure or cancellation;
 returning from the save action is not sufficient. This keeps repeated saves and
 closure ordered without letting a later command synchronously acquire file access
 while SwiftUI is still finishing the preceding write.
+AppKit's document-action lookup can select the SwiftUI document before the
+window's custom responder. WorkspaceApplication therefore resolves nil-target
+Save and Save As actions to the matching Workspace responder and explicitly
+dispatches them there. Explicit targets and other document types retain their
+standard routing. Native-menu regression cases verify both target resolution
+and actual arrival at the asynchronous save coordinator.
 AppKit retains ownership of save confirmation and failure handling. Disconnecting
 restores the original button target and action.
 
@@ -100,6 +106,11 @@ open document. Requests made while waiting are coalesced. The save generation
 and document inventory are rechecked before proceeding, so new saves or windows
 are included. Barriers are released before calling `super.terminate`; no document
 activity is held during standard confirmation or another document's wait.
+The gate hands standard termination to the main RunLoop, outside both its Swift
+Task and the main dispatch queue. This lets a delegate's MainActor shutdown task
+run while AppKit waits for its asynchronous termination reply. The handoff
+rechecks save generation and document inventory and coalesces repeated Quit
+requests until that check completes.
 SwiftUI performs its document review before calling the adapted application
 delegate, so placing this wait only in AppDelegate would be too late. Creating
 the subclass before SwiftUI starts is necessary; NSPrincipalClass alone does not

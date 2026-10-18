@@ -125,7 +125,9 @@ final class WorkspaceDocumentConnection {
   }
 }
 
-final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
+final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations,
+  WorkspaceSaveActionTarget
+{
   private weak var stateService: WorkspaceStateService?
   private weak var window: NSWindow?
 
@@ -138,6 +140,10 @@ final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations {
 
   private var canRevert: Bool {
     stateService.map { !$0.isClosed && !$0.isOutputActive } ?? false
+  }
+
+  var documentForWorkspaceSave: NSDocument? {
+    window?.windowController?.document as? NSDocument
   }
 
   @objc func saveDocument(_ sender: Any?) {

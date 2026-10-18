@@ -47,6 +47,8 @@ check_menu() {
   [ -f "$result_file" ] && [ "$(cat "$result_file")" -eq "$expected" ]
 }
 check_quit() {
+  LDTX_SAVE_CLOSE_DESTINATION="$probe_directory/async-quit.txt" "$probe_directory/probe" --quit --async-reply
+  [ "$(cat "$probe_directory/async-quit.txt")" = latest ]
   LDTX_SAVE_CLOSE_DESTINATION="$probe_directory/quit.txt" "$probe_directory/probe" --quit
   [ "$(cat "$probe_directory/quit.txt")" = latest ]
   LDTX_SAVE_CLOSE_DESTINATION="$probe_directory/multiple.txt" "$probe_directory/probe" --quit --multiple
