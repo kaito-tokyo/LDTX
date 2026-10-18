@@ -106,7 +106,6 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
       var usesSystemTimeZone: Bool
       var utcOffsetMinutes: Int32
       var resolvedRTFD: Data?
-      var background: String
       var outlineDescriptions: [String]
 
       init(name: String, component: ClockComponent) {
@@ -116,14 +115,11 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
           component.destinationY.bitPattern,
           component.destinationWidth.bitPattern,
           component.destinationHeight.bitPattern,
+          component.fontSize?.bitPattern ?? 0,
           component.foregroundRed.bitPattern,
           component.foregroundGreen.bitPattern,
           component.foregroundBlue.bitPattern,
           component.foregroundAlpha.bitPattern,
-          component.backgroundRed.bitPattern,
-          component.backgroundGreen.bitPattern,
-          component.backgroundBlue.bitPattern,
-          component.backgroundAlpha.bitPattern,
         ]
         showsSeconds = component.showsSeconds
         uses24HourTime = component.uses24HourTime
@@ -131,7 +127,6 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
         usesSystemTimeZone = component.usesSystemTimeZone
         utcOffsetMinutes = component.utcOffsetMinutes
         resolvedRTFD = component.resolvedRTFD
-        background = component.background
         outlineDescriptions = component.outlines.map { "\($0.thickness.bitPattern):\($0.color)" }
       }
     }

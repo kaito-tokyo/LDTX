@@ -19,6 +19,7 @@ struct VfxVideoComponentInspector: View {
       VideoComponentProgramLayers(
         stateService: stateService, appletData: appletData, componentID: internalID)
       formContent
+      VideoComponentDeleteButton(stateService: stateService, componentID: internalID)
     }
     .formStyle(.grouped)
   }

@@ -215,25 +215,17 @@ p, td { white-space: pre-wrap; }
 
 
 <article><h3 id="ldtx.workspace.v4.ClockComponent"><code>ClockComponent</code></h3><p>A Video Component that renders the current date and time.
- It has no intrinsic image size. Its width and height define the rendering
- extent relative to the Canvas, not an independent image size.
+ Its rendering extent is derived from the formatted text and font size.
  It must not be referenced as a Vision input.</p>
 <table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>internal_id</code></td><td>1</td><td><code>sfixed64</code></td><td></td><td><code>0</code></td><td>An LdtxInternalId for this entity.</td></tr>
 <tr><td><code>display_name</code></td><td>2</td><td><code>string</code></td><td></td><td>—</td><td>The name of this Video Component shown in the Workspace sidebar.</td></tr>
-<tr><td><code>width</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The Clock width, normalized by the Landscape Canvas width, in [0, 1].
- The same reference applies to Portrait projection.</td></tr>
-<tr><td><code>height</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The Clock height, normalized by the Landscape Canvas height, in [0, 1].
- The same reference applies to Portrait projection.</td></tr>
+<tr><td><code>font_size</code></td><td>12</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>Positive font size in Landscape Canvas pixels, before layer scaling.
+ The same pixel size is used on the Portrait Canvas.</td></tr>
 <tr><td><code>shows_date</code></td><td>5</td><td><code>bool</code></td><td></td><td><code>false</code></td><td>Whether the rendered Clock includes the date.</td></tr>
 <tr><td><code>shows_seconds</code></td><td>6</td><td><code>bool</code></td><td></td><td><code>false</code></td><td>Whether the rendered time includes seconds.</td></tr>
 <tr><td><code>uses_24_hour_time</code></td><td>7</td><td><code>bool</code></td><td></td><td><code>false</code></td><td>Whether the rendered time uses a 24-hour clock.</td></tr>
 <tr><td><code>utc_offset_minutes</code></td><td>8</td><td><code>sint32</code></td><td></td><td><code>0</code></td><td>The fixed offset from UTC in minutes.</td></tr>
 <tr><td><code>foreground_extended_srgb_color</code></td><td>9</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The color of the rendered date and time text, in extended sRGB.
- RGB components use the nonlinear sRGB transfer function and may extend
- beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
- encoded. Conversion to an output or display color space, alpha compositing,
- filtering, and pixel quantization are implementation-defined.</td></tr>
-<tr><td><code>background_extended_srgb_color</code></td><td>10</td><td><a href="#ldtx.workspace.v4.Color"><code>Color</code></a></td><td></td><td>—</td><td>The background color of this Clock, in extended sRGB.
  RGB components use the nonlinear sRGB transfer function and may extend
  beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
  encoded. Conversion to an output or display color space, alpha compositing,

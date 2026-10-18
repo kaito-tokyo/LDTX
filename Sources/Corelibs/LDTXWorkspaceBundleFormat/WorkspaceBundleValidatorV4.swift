@@ -367,11 +367,9 @@ extension WorkspaceBundleValidatorV4 {
           error: .invalidDynamicTextGeometry)
 
       case .clock(let clock):
-        _ = unit(
-          clock.width, path: path + ".width", id: id, positive: true, error: .invalidClockGeometry)
-        _ = unit(
-          clock.height, path: path + ".height", id: id, positive: true, error: .invalidClockGeometry
-        )
+        if rational(clock.fontSize, path: path + ".font_size", id: id), clock.fontSize.num <= 0 {
+          add(path + ".font_size", .invalidClockGeometry, id: id)
+        }
         if clock.outlines.count > 2 { add(path + ".outlines", .invalidClockGeometry, id: id) }
         for (i, outline) in clock.outlines.enumerated() {
           let p = path + ".outlines[\(i)].thickness"
@@ -598,7 +596,7 @@ extension WorkspaceV4IntegrityError: LocalizedError {
     case .invalidVariableMacro:
       "The rich text document is missing or empty."
     case .invalidClockGeometry:
-      "Clock dimensions must be greater than 0 and at most 1, with at most two outlines."
+      "Clock font size must be positive, with at most two outlines."
     case .invalidModelID(let id):
       "Model ID \(id) must be positive, or zero for an unassigned Vision."
     case .missingVisionModel(let id): "Model \(id) referenced by Vision is missing."

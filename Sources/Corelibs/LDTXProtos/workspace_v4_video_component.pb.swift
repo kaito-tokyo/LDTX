@@ -695,95 +695,83 @@ public nonisolated struct Ldtx_Workspace_V4_TestPatternComponent: Sendable {
 }
 
 /// A Video Component that renders the current date and time.
-/// It has no intrinsic image size. Its width and height define the rendering
-/// extent relative to the Canvas, not an independent image size.
+/// Its rendering extent is derived from the formatted text and font size.
 /// It must not be referenced as a Vision input.
-public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable {
+public nonisolated struct Ldtx_Workspace_V4_ClockComponent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// An LdtxInternalId for this entity.
   public var internalID: Int64 {
-    get {_storage._internalID ?? 0}
-    set {_uniqueStorage()._internalID = newValue}
+    get {_internalID ?? 0}
+    set {_internalID = newValue}
   }
   /// Returns true if `internalID` has been explicitly set.
-  public var hasInternalID: Bool {_storage._internalID != nil}
+  public var hasInternalID: Bool {self._internalID != nil}
   /// Clears the value of `internalID`. Subsequent reads from it will return its default value.
-  public mutating func clearInternalID() {_uniqueStorage()._internalID = nil}
+  public mutating func clearInternalID() {self._internalID = nil}
 
   /// The name of this Video Component shown in the Workspace sidebar.
   public var displayName: String {
-    get {_storage._displayName ?? String()}
-    set {_uniqueStorage()._displayName = newValue}
+    get {_displayName ?? String()}
+    set {_displayName = newValue}
   }
   /// Returns true if `displayName` has been explicitly set.
-  public var hasDisplayName: Bool {_storage._displayName != nil}
+  public var hasDisplayName: Bool {self._displayName != nil}
   /// Clears the value of `displayName`. Subsequent reads from it will return its default value.
-  public mutating func clearDisplayName() {_uniqueStorage()._displayName = nil}
+  public mutating func clearDisplayName() {self._displayName = nil}
 
-  /// The Clock width, normalized by the Landscape Canvas width, in [0, 1].
-  /// The same reference applies to Portrait projection.
-  public var width: Ldtx_Workspace_V4_Rational32 {
-    get {_storage._width ?? Ldtx_Workspace_V4_Rational32()}
-    set {_uniqueStorage()._width = newValue}
+  /// Positive font size in Landscape Canvas pixels, before layer scaling.
+  /// The same pixel size is used on the Portrait Canvas.
+  public var fontSize: Ldtx_Workspace_V4_Rational32 {
+    get {_fontSize ?? Ldtx_Workspace_V4_Rational32()}
+    set {_fontSize = newValue}
   }
-  /// Returns true if `width` has been explicitly set.
-  public var hasWidth: Bool {_storage._width != nil}
-  /// Clears the value of `width`. Subsequent reads from it will return its default value.
-  public mutating func clearWidth() {_uniqueStorage()._width = nil}
-
-  /// The Clock height, normalized by the Landscape Canvas height, in [0, 1].
-  /// The same reference applies to Portrait projection.
-  public var height: Ldtx_Workspace_V4_Rational32 {
-    get {_storage._height ?? Ldtx_Workspace_V4_Rational32()}
-    set {_uniqueStorage()._height = newValue}
-  }
-  /// Returns true if `height` has been explicitly set.
-  public var hasHeight: Bool {_storage._height != nil}
-  /// Clears the value of `height`. Subsequent reads from it will return its default value.
-  public mutating func clearHeight() {_uniqueStorage()._height = nil}
+  /// Returns true if `fontSize` has been explicitly set.
+  public var hasFontSize: Bool {self._fontSize != nil}
+  /// Clears the value of `fontSize`. Subsequent reads from it will return its default value.
+  public mutating func clearFontSize() {self._fontSize = nil}
 
   /// Whether the rendered Clock includes the date.
   public var showsDate: Bool {
-    get {_storage._showsDate ?? false}
-    set {_uniqueStorage()._showsDate = newValue}
+    get {_showsDate ?? false}
+    set {_showsDate = newValue}
   }
   /// Returns true if `showsDate` has been explicitly set.
-  public var hasShowsDate: Bool {_storage._showsDate != nil}
+  public var hasShowsDate: Bool {self._showsDate != nil}
   /// Clears the value of `showsDate`. Subsequent reads from it will return its default value.
-  public mutating func clearShowsDate() {_uniqueStorage()._showsDate = nil}
+  public mutating func clearShowsDate() {self._showsDate = nil}
 
   /// Whether the rendered time includes seconds.
   public var showsSeconds: Bool {
-    get {_storage._showsSeconds ?? false}
-    set {_uniqueStorage()._showsSeconds = newValue}
+    get {_showsSeconds ?? false}
+    set {_showsSeconds = newValue}
   }
   /// Returns true if `showsSeconds` has been explicitly set.
-  public var hasShowsSeconds: Bool {_storage._showsSeconds != nil}
+  public var hasShowsSeconds: Bool {self._showsSeconds != nil}
   /// Clears the value of `showsSeconds`. Subsequent reads from it will return its default value.
-  public mutating func clearShowsSeconds() {_uniqueStorage()._showsSeconds = nil}
+  public mutating func clearShowsSeconds() {self._showsSeconds = nil}
 
   /// Whether the rendered time uses a 24-hour clock.
   public var uses24HourTime: Bool {
-    get {_storage._uses24HourTime ?? false}
-    set {_uniqueStorage()._uses24HourTime = newValue}
+    get {_uses24HourTime ?? false}
+    set {_uses24HourTime = newValue}
   }
   /// Returns true if `uses24HourTime` has been explicitly set.
-  public var hasUses24HourTime: Bool {_storage._uses24HourTime != nil}
+  public var hasUses24HourTime: Bool {self._uses24HourTime != nil}
   /// Clears the value of `uses24HourTime`. Subsequent reads from it will return its default value.
-  public mutating func clearUses24HourTime() {_uniqueStorage()._uses24HourTime = nil}
+  public mutating func clearUses24HourTime() {self._uses24HourTime = nil}
 
   /// The fixed offset from UTC in minutes.
   public var utcOffsetMinutes: Int32 {
-    get {_storage._utcOffsetMinutes ?? 0}
-    set {_uniqueStorage()._utcOffsetMinutes = newValue}
+    get {_utcOffsetMinutes ?? 0}
+    set {_utcOffsetMinutes = newValue}
   }
   /// Returns true if `utcOffsetMinutes` has been explicitly set.
-  public var hasUtcOffsetMinutes: Bool {_storage._utcOffsetMinutes != nil}
+  public var hasUtcOffsetMinutes: Bool {self._utcOffsetMinutes != nil}
   /// Clears the value of `utcOffsetMinutes`. Subsequent reads from it will return its default value.
-  public mutating func clearUtcOffsetMinutes() {_uniqueStorage()._utcOffsetMinutes = nil}
+  public mutating func clearUtcOffsetMinutes() {self._utcOffsetMinutes = nil}
 
   /// The color of the rendered date and time text, in extended sRGB.
   /// RGB components use the nonlinear sRGB transfer function and may extend
@@ -791,41 +779,31 @@ public nonisolated struct Ldtx_Workspace_V4_ClockComponent: @unchecked Sendable 
   /// encoded. Conversion to an output or display color space, alpha compositing,
   /// filtering, and pixel quantization are implementation-defined.
   public var foregroundExtendedSrgbColor: Ldtx_Workspace_V4_Color {
-    get {_storage._foregroundExtendedSrgbColor ?? Ldtx_Workspace_V4_Color()}
-    set {_uniqueStorage()._foregroundExtendedSrgbColor = newValue}
+    get {_foregroundExtendedSrgbColor ?? Ldtx_Workspace_V4_Color()}
+    set {_foregroundExtendedSrgbColor = newValue}
   }
   /// Returns true if `foregroundExtendedSrgbColor` has been explicitly set.
-  public var hasForegroundExtendedSrgbColor: Bool {_storage._foregroundExtendedSrgbColor != nil}
+  public var hasForegroundExtendedSrgbColor: Bool {self._foregroundExtendedSrgbColor != nil}
   /// Clears the value of `foregroundExtendedSrgbColor`. Subsequent reads from it will return its default value.
-  public mutating func clearForegroundExtendedSrgbColor() {_uniqueStorage()._foregroundExtendedSrgbColor = nil}
-
-  /// The background color of this Clock, in extended sRGB.
-  /// RGB components use the nonlinear sRGB transfer function and may extend
-  /// beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
-  /// encoded. Conversion to an output or display color space, alpha compositing,
-  /// filtering, and pixel quantization are implementation-defined.
-  public var backgroundExtendedSrgbColor: Ldtx_Workspace_V4_Color {
-    get {_storage._backgroundExtendedSrgbColor ?? Ldtx_Workspace_V4_Color()}
-    set {_uniqueStorage()._backgroundExtendedSrgbColor = newValue}
-  }
-  /// Returns true if `backgroundExtendedSrgbColor` has been explicitly set.
-  public var hasBackgroundExtendedSrgbColor: Bool {_storage._backgroundExtendedSrgbColor != nil}
-  /// Clears the value of `backgroundExtendedSrgbColor`. Subsequent reads from it will return its default value.
-  public mutating func clearBackgroundExtendedSrgbColor() {_uniqueStorage()._backgroundExtendedSrgbColor = nil}
+  public mutating func clearForegroundExtendedSrgbColor() {self._foregroundExtendedSrgbColor = nil}
 
   /// The text outlines rendered around the Clock text in back-to-front
   /// compositing order. The first entry is the backmost outline; the last
   /// entry is the frontmost outline.
-  public var outlines: [Ldtx_Workspace_V4_ClockTextOutline] {
-    get {_storage._outlines}
-    set {_uniqueStorage()._outlines = newValue}
-  }
+  public var outlines: [Ldtx_Workspace_V4_ClockTextOutline] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _internalID: Int64? = nil
+  fileprivate var _displayName: String? = nil
+  fileprivate var _fontSize: Ldtx_Workspace_V4_Rational32? = nil
+  fileprivate var _showsDate: Bool? = nil
+  fileprivate var _showsSeconds: Bool? = nil
+  fileprivate var _uses24HourTime: Bool? = nil
+  fileprivate var _utcOffsetMinutes: Int32? = nil
+  fileprivate var _foregroundExtendedSrgbColor: Ldtx_Workspace_V4_Color? = nil
 }
 
 /// A text outline rendered by a Clock.
@@ -1534,139 +1512,73 @@ nonisolated extension Ldtx_Workspace_V4_TestPatternComponent: SwiftProtobuf.Mess
 
 nonisolated extension Ldtx_Workspace_V4_ClockComponent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClockComponent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{1}width\0\u{1}height\0\u{3}shows_date\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}utc_offset_minutes\0\u{3}foreground_extended_srgb_color\0\u{3}background_extended_srgb_color\0\u{1}outlines\0")
-
-  fileprivate class _StorageClass {
-    var _internalID: Int64? = nil
-    var _displayName: String? = nil
-    var _width: Ldtx_Workspace_V4_Rational32? = nil
-    var _height: Ldtx_Workspace_V4_Rational32? = nil
-    var _showsDate: Bool? = nil
-    var _showsSeconds: Bool? = nil
-    var _uses24HourTime: Bool? = nil
-    var _utcOffsetMinutes: Int32? = nil
-    var _foregroundExtendedSrgbColor: Ldtx_Workspace_V4_Color? = nil
-    var _backgroundExtendedSrgbColor: Ldtx_Workspace_V4_Color? = nil
-    var _outlines: [Ldtx_Workspace_V4_ClockTextOutline] = []
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _internalID = source._internalID
-      _displayName = source._displayName
-      _width = source._width
-      _height = source._height
-      _showsDate = source._showsDate
-      _showsSeconds = source._showsSeconds
-      _uses24HourTime = source._uses24HourTime
-      _utcOffsetMinutes = source._utcOffsetMinutes
-      _foregroundExtendedSrgbColor = source._foregroundExtendedSrgbColor
-      _backgroundExtendedSrgbColor = source._backgroundExtendedSrgbColor
-      _outlines = source._outlines
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}internal_id\0\u{3}display_name\0\u{4}\u{3}shows_date\0\u{3}shows_seconds\0\u{3}uses_24_hour_time\0\u{3}utc_offset_minutes\0\u{3}foreground_extended_srgb_color\0\u{2}\u{2}outlines\0\u{3}font_size\0\u{b}width\0\u{b}height\0\u{b}background_extended_srgb_color\0\u{b}background_color\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{a}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularSFixed64Field(value: &_storage._internalID) }()
-        case 2: try { try decoder.decodeSingularStringField(value: &_storage._displayName) }()
-        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._width) }()
-        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._height) }()
-        case 5: try { try decoder.decodeSingularBoolField(value: &_storage._showsDate) }()
-        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._showsSeconds) }()
-        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._uses24HourTime) }()
-        case 8: try { try decoder.decodeSingularSInt32Field(value: &_storage._utcOffsetMinutes) }()
-        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._foregroundExtendedSrgbColor) }()
-        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._backgroundExtendedSrgbColor) }()
-        case 11: try { try decoder.decodeRepeatedMessageField(value: &_storage._outlines) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSFixed64Field(value: &self._internalID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._displayName) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self._showsDate) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self._showsSeconds) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self._uses24HourTime) }()
+      case 8: try { try decoder.decodeSingularSInt32Field(value: &self._utcOffsetMinutes) }()
+      case 9: try { try decoder.decodeSingularMessageField(value: &self._foregroundExtendedSrgbColor) }()
+      case 11: try { try decoder.decodeRepeatedMessageField(value: &self.outlines) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._fontSize) }()
+      default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      try { if let v = _storage._internalID {
-        try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
-      } }()
-      try { if let v = _storage._displayName {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 2)
-      } }()
-      try { if let v = _storage._width {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-      } }()
-      try { if let v = _storage._height {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      } }()
-      try { if let v = _storage._showsDate {
-        try visitor.visitSingularBoolField(value: v, fieldNumber: 5)
-      } }()
-      try { if let v = _storage._showsSeconds {
-        try visitor.visitSingularBoolField(value: v, fieldNumber: 6)
-      } }()
-      try { if let v = _storage._uses24HourTime {
-        try visitor.visitSingularBoolField(value: v, fieldNumber: 7)
-      } }()
-      try { if let v = _storage._utcOffsetMinutes {
-        try visitor.visitSingularSInt32Field(value: v, fieldNumber: 8)
-      } }()
-      try { if let v = _storage._foregroundExtendedSrgbColor {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
-      } }()
-      try { if let v = _storage._backgroundExtendedSrgbColor {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
-      } }()
-      if !_storage._outlines.isEmpty {
-        try visitor.visitRepeatedMessageField(value: _storage._outlines, fieldNumber: 11)
-      }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._internalID {
+      try visitor.visitSingularSFixed64Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._displayName {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._showsDate {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._showsSeconds {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 6)
+    } }()
+    try { if let v = self._uses24HourTime {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 7)
+    } }()
+    try { if let v = self._utcOffsetMinutes {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 8)
+    } }()
+    try { if let v = self._foregroundExtendedSrgbColor {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+    } }()
+    if !self.outlines.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.outlines, fieldNumber: 11)
     }
+    try { if let v = self._fontSize {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Ldtx_Workspace_V4_ClockComponent, rhs: Ldtx_Workspace_V4_ClockComponent) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._internalID != rhs_storage._internalID {return false}
-        if _storage._displayName != rhs_storage._displayName {return false}
-        if _storage._width != rhs_storage._width {return false}
-        if _storage._height != rhs_storage._height {return false}
-        if _storage._showsDate != rhs_storage._showsDate {return false}
-        if _storage._showsSeconds != rhs_storage._showsSeconds {return false}
-        if _storage._uses24HourTime != rhs_storage._uses24HourTime {return false}
-        if _storage._utcOffsetMinutes != rhs_storage._utcOffsetMinutes {return false}
-        if _storage._foregroundExtendedSrgbColor != rhs_storage._foregroundExtendedSrgbColor {return false}
-        if _storage._backgroundExtendedSrgbColor != rhs_storage._backgroundExtendedSrgbColor {return false}
-        if _storage._outlines != rhs_storage._outlines {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs._internalID != rhs._internalID {return false}
+    if lhs._displayName != rhs._displayName {return false}
+    if lhs._fontSize != rhs._fontSize {return false}
+    if lhs._showsDate != rhs._showsDate {return false}
+    if lhs._showsSeconds != rhs._showsSeconds {return false}
+    if lhs._uses24HourTime != rhs._uses24HourTime {return false}
+    if lhs._utcOffsetMinutes != rhs._utcOffsetMinutes {return false}
+    if lhs._foregroundExtendedSrgbColor != rhs._foregroundExtendedSrgbColor {return false}
+    if lhs.outlines != rhs.outlines {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

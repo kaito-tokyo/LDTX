@@ -110,8 +110,8 @@ extension AppUIComponentTestSuite {
       #expect(metal.superview != nil)
       #expect(metal.bounds.width > 0)
       #expect(preview !== second.contentPane.pairedPreview)
-      pane.layout.isPortrait = true
-      #expect(!second.contentPane.layout.isPortrait)
+      pane.layout.selectedEditor = .portrait
+      #expect(second.contentPane.layout.selectedEditor == .audio)
       #expect(first.stateService.selectedAudioMix == .landscape)
       let regions = ProgramPairPreviewRegions(
         drawable: metal.convertToBacking(metal.bounds).size,
@@ -124,6 +124,12 @@ extension AppUIComponentTestSuite {
         at: metal.convertFromBacking(
           CGPoint(x: regions.landscape.midX, y: regions.landscape.midY)))
       #expect(first.stateService.selectedAudioMix == .landscape)
+      for editor: WorkspaceContentLayout.Editor in [.audio, .landscape, .portrait] {
+        pane.layout.selectedEditor = editor
+        await settleWorkspaceToolbar(first)
+        #expect(pane.pairedPreview.metalView === metal)
+        #expect(metal.delegate === delegate)
+      }
       for height: CGFloat in [100, 360, 200] {
         pane.layout.resizePreview(to: height)
         first.setContentSize(.init(width: 1100, height: 800))

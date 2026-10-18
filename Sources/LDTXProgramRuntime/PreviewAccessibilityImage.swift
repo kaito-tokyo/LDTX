@@ -1,0 +1,124 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+// SPDX-License-Identifier: Apache-2.0
+
+import CoreGraphics
+import Foundation
+import Metal
+
+// The GPU completion handler transfers exclusive read ownership to the worker queue.
+private struct CompletedPreviewBuffer: @unchecked Sendable {
+  let buffer: MTLBuffer
+}
+
+/// A completed preview render. Storage is immutable and independent of the drawable's lifetime.
+public struct PreviewAccessibilityImage: @unchecked Sendable {
+  public let image: CGImage
+
+  public init(image: CGImage) { self.image = image }
+
+  /// WebKit's AXImageData dictionary contract, returning tightly packed, straight-alpha sRGB RGBA.
+  public func data(for parameters: NSDictionary) -> Data? {
+    guard parameters["AXImageDataFormat"] as? String == "RGBA" else { return nil }
+    func dimension(_ key: String) -> Int? {
+      guard let value = parameters[key] else { return 0 }
+      guard let number = value as? NSNumber,
+        CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite,
+        number.doubleValue >= 0, number.doubleValue <= 16384,
+        number.doubleValue.rounded(.towardZero) == number.doubleValue
+      else { return nil }
+      return number.intValue
+    }
+    guard let rw = dimension("AXImageDataResizeWidth"),
+      let rh = dimension("AXImageDataResizeHeight"),
+      let left = dimension("AXImageDataLeft"), let top = dimension("AXImageDataTop"),
+      let sw = dimension("AXImageDataWidth"), let sh = dimension("AXImageDataHeight")
+    else { return nil }
+    var width = rw == 0 ? image.width : rw
+    var height = rh == 0 ? image.height : rh
+    let limit = 4_000_000
+    if width * height > limit {
+      let scale = sqrt(Double(limit) / Double(width * height))
+      width = max(1, Int(Double(width) * scale))
+      height = max(1, Int(Double(height) * scale))
+    }
+    let cropped = sw > 0 && sh > 0
+    let outWidth = cropped ? sw : width, outHeight = cropped ? sh : height
+    guard outWidth * outHeight <= limit else { return nil }
+    var result = Data(count: outWidth * outHeight * 4)
+    let success = result.withUnsafeMutableBytes { raw -> Bool in
+      guard let context = CGContext(
+        data: raw.baseAddress, width: outWidth, height: outHeight, bitsPerComponent: 8,
+        bytesPerRow: outWidth * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+        bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue)
+      else { return false }
+      // CGImage/bitmap storage already has top-first rows. Convert only the crop's
+      // top-left coordinates to Quartz's bottom-left drawing coordinates.
+      context.interpolationQuality = .high
+      context.draw(image, in: CGRect(x: cropped ? -left : 0, y: cropped ? outHeight - height + top : 0,
+        width: width, height: height))
+      let bytes = raw.bindMemory(to: UInt8.self)
+      for offset in stride(from: 0, to: bytes.count, by: 4) {
+        let alpha = Int(bytes[offset + 3])
+        if alpha > 0 && alpha < 255 {
+          for channel in 0..<3 {
+            bytes[offset + channel] = UInt8(min(255, (Int(bytes[offset + channel]) * 255 + alpha / 2) / alpha))
+          }
+        }
+      }
+      return true
+    }
+    return success ? result : nil
+  }
+}
+
+/// Serializes GPU readback and AX conversion off the main actor, with at most one readback in flight.
+public final class PreviewAccessibilityImageStore: @unchecked Sendable {
+  private let lock = NSLock()
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.preview-accessibility")
+  private var latest: PreviewAccessibilityImage?
+  private var busy = false
+  private var generation = 0
+
+  public init() {}
+  public var size: CGSize { lock.withLock { latest.map { CGSize(width: $0.image.width, height: $0.image.height) } ?? .zero } }
+  public func data(for parameters: NSDictionary) -> Data? {
+    let snapshot = lock.withLock { latest }
+    return queue.sync { snapshot?.data(for: parameters) }
+  }
+  public func clear() {
+    lock.withLock { generation += 1; latest = nil }
+  }
+
+  func capture(texture: MTLTexture, command: MTLCommandBuffer, device: MTLDevice) {
+    let width = texture.width, height = texture.height
+    guard width > 0, height > 0, width * height <= 16_000_000 else { clear(); return }
+    let token: Int? = lock.withLock {
+      guard !busy else { return nil }; busy = true; return generation
+    }
+    guard let token else { return }
+    let row = (width * 4 + 255) & ~255
+    guard let buffer = device.makeBuffer(length: row * height, options: .storageModeShared),
+      let blit = command.makeBlitCommandEncoder()
+    else { lock.withLock { busy = false }; return }
+    blit.copy(from: texture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(),
+      sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer,
+      destinationOffset: 0, destinationBytesPerRow: row, destinationBytesPerImage: row * height)
+    blit.endEncoding()
+    let readback = CompletedPreviewBuffer(buffer: buffer)
+    command.addCompletedHandler { [self] completed in
+      let succeeded = completed.status == .completed
+      queue.async { [self] in
+        defer { lock.withLock { busy = false } }
+        guard succeeded else { return }
+        let data = Data(bytes: readback.buffer.contents(), count: row * height)
+        guard let provider = CGDataProvider(data: data as CFData),
+          let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: row, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: [.byteOrder32Little, CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)],
+            provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+        else { return }
+        lock.withLock { if generation == token { latest = PreviewAccessibilityImage(image: image) } }
+      }
+    }
+  }
+}

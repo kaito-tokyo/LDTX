@@ -253,7 +253,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
           })
     case .clock:
       #expect(component.clock.showsSeconds)
-      #expect(component.clock.width.float > 0)
+      #expect(component.clock.fontSize.float == 48)
     case .testPattern: #expect(component.testPattern.internalID == id)
     }
     #expect(state.workspaceDefinition.programs == [program])

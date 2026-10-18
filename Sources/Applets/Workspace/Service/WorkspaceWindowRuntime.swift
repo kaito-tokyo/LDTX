@@ -296,12 +296,6 @@ public final class WorkspaceWindowRuntime {
       }
       width = Int(size.width)
       height = Int(size.height)
-    case .clock(let clock):
-      guard clock.width.double.isFinite, clock.height.double.isFinite else {
-        throw WorkspaceVisionFeatureError.frameUnavailable
-      }
-      width = max(1, Int((clock.width.double * 1920).rounded()))
-      height = max(1, Int((clock.height.double * 1080).rounded()))
     default: break
     }
     return CGSize(width: width, height: height)

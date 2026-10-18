@@ -33,3 +33,14 @@ Implementation, tests, and reviews should follow these rules alongside the
   whether its physical device is currently connected. Selection of the physical
   device itself remains subject to the dynamic-resource rule above.
 
+## Video Components are deleted from their Inspectors
+
+- Each Video Component Inspector ends with a right-aligned, borderless Delete
+  button with red foreground text. Keep this infrequent action visually subdued.
+- Disable deletion during output and after Workspace closure. A component used
+  as a Vision input must be reassigned before deletion; show that reason beside
+  the disabled action rather than leaving a required input invalid.
+- Deletion removes the component from every Program canvas and clears its layer
+  transforms and visibility preferences. Clear a matching PTS master selection.
+  These edits participate in the existing Workspace Undo history.
+

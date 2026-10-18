@@ -164,16 +164,8 @@ extension WorkspaceWindowRuntime {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = displayName
-    component.width = .with {
-      $0.set(num: 1, den: 6)
-    }
-    component.height = .with {
-      $0.set(num: 2, den: 27)
-    }
+    component.fontSize = .with { $0.set(num: 48, den: 1) }
     component.foregroundExtendedSrgbColor = Self.opaqueWhite
-    var backgroundColor = Ldtx_Workspace_V4_Color()
-    backgroundColor.alpha = 0.65
-    component.backgroundExtendedSrgbColor = backgroundColor
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()

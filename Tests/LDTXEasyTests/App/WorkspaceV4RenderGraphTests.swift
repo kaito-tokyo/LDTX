@@ -63,18 +63,12 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(try graph().layerPreferences.first?.destinationScaleX == 0)
   }
 
-  @Test("clock dimensions preserve the same pixel size on both canvases")
+  @Test("Clock font size is independent of the target canvas")
   func preservesClockDimensions() throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
-    clock.width = .with {
-      $0.num = 1
-      $0.den = 6
-    }
-    clock.height = .with {
-      $0.num = 2
-      $0.den = 27
-    }
+    clock.fontSize = .with { $0.set(num: 48, den: 1) }
+    clock.foregroundExtendedSrgbColor = .with { $0.red = 0.25; $0.green = 0.5; $0.blue = 1; $0.alpha = 0.75 }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.clock = clock
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -93,8 +87,11 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         Issue.record("Clock component missing")
         return
       }
-      #expect(abs(value.destinationWidth * Float(canvas.outputProfile.width) - 320) < 0.001)
-      #expect(abs(value.destinationHeight * Float(canvas.outputProfile.height) - 80) < 0.001)
+      #expect(value.fontSize == 48)
+      #expect(value.destinationWidth == 1)
+      #expect(value.destinationHeight == 1)
+      #expect(value.foregroundRed == 0.25 && value.foregroundGreen == 0.5
+        && value.foregroundBlue == 1 && value.foregroundAlpha == 0.75)
     }
   }
 

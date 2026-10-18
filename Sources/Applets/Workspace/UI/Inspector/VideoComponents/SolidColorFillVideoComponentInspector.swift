@@ -55,6 +55,7 @@ struct SolidColorFillVideoComponentInspector: View {
 
         ColorPicker("Color", selection: $color, supportsOpacity: true)
       }
+      VideoComponentDeleteButton(stateService: stateService, componentID: videoComponentID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive || component == nil)

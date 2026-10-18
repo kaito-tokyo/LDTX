@@ -37,6 +37,17 @@ Width and height are relative to the Landscape Canvas; layer transforms control
 placement. Text wraps at its authored font sizes and clips to this extent,
 using a transparent background.
 
+## Clock
+
+Clock uses **Font Size** in Landscape Canvas pixels (48 by default for new
+components). The same pixel size applies on the Portrait Canvas. The renderer
+derives a stable text extent from the bundled font metrics and the enabled date
+and time fields; layer Scale X/Y scale the resulting image.
+
+Clock's former `width` and `height` Protobuf fields are reserved. Older Clock
+definitions must be converted to a positive `font_size` before opening;
+this change does not automatically migrate existing Workspaces.
+
 ## Vision Programmer
 
 Open **LDTX → Vision Programmer…** to train an LDTX Scene Detector. Choose a folder
@@ -65,7 +76,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
-| LDTXProgram                | Program runtime definitions, output profiles, and clock backgrounds.        |
+| LDTXProgram                | Program runtime definitions and output profiles.                           |
 | LDTXProtos                 | SwiftProtobuf messages and Workspace integrity validation. |
 | LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
 | LDTXWorkspaceBundleFormat  | Workspace bundle values, `.ldtxworkspace` package IO, and on-disk format validation. |
@@ -102,3 +113,5 @@ layout, MPEG-DASH timing model, and remux requirements.
 
 See [`docs/appkit-ui.md`](docs/appkit-ui.md) for application and pane ownership,
 and [`docs/ui-rules.md`](docs/ui-rules.md) for UI behavior rules.
+See [`docs/preview-accessibility.md`](docs/preview-accessibility.md) for preview
+image retrieval through the `AXImageData` accessibility attribute.

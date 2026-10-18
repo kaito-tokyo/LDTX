@@ -67,14 +67,9 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
 
   private struct Uniforms {
     var foregroundColor: SIMD4<Float>
-    var backgroundColor0: SIMD4<Float>
-    var backgroundColor1: SIMD4<Float>
     var outlineColor0: SIMD4<Float>
     var outlineColor1: SIMD4<Float>
-    var overlaySize: SIMD2<Float>
-    var gradientDirection: SIMD2<Float>
     var outlineThickness: SIMD2<Float>
-    var backgroundKind: UInt32
     var glyphCount: UInt32
   }
 
@@ -91,7 +86,6 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   private let commandQueue: MTLCommandQueue
   private let atlasTexture: MTLTexture
   private let metrics: [GlyphMetric]
-  private let colorPipeline: MTLRenderPipelineState
   private let colorAlphaPipeline: MTLRenderPipelineState
 
   convenience init(device: MTLDevice) throws {
@@ -116,18 +110,10 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
 
     let library = try Self.makeShaderLibrary(device: device)
     guard let vertex = library.makeFunction(name: "clockOverlayVertex"),
-      let colorFragment = library.makeFunction(name: "clockOverlayColorFragment"),
       let colorAlphaFragment = library.makeFunction(name: "clockOverlayColorAlphaFragment")
     else {
       throw MetalClockOverlayRendererError.shaderFunctionUnavailable
     }
-
-    let colorDescriptor = MTLRenderPipelineDescriptor()
-    colorDescriptor.label = "Clock Overlay RGB565"
-    colorDescriptor.vertexFunction = vertex
-    colorDescriptor.fragmentFunction = colorFragment
-    colorDescriptor.colorAttachments[0].pixelFormat = .b5g6r5Unorm
-    colorPipeline = try device.makeRenderPipelineState(descriptor: colorDescriptor)
 
     let colorAlphaDescriptor = MTLRenderPipelineDescriptor()
     colorAlphaDescriptor.label = "Clock Overlay RGB565 + R8 Alpha"
@@ -156,28 +142,14 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       width: request.pixelWidth,
       height: request.pixelHeight
     )
-    // An opaque background makes the final overlay opaque even when the
-    // foreground itself is translucent. Only allocate R8 when the retained
-    // layer needs alpha at the compositor boundary.
-    let backgroundStyle = ClockBackgroundStyle.parse(request.component.background)
     let outlines = request.component.outlines.prefix(2).map {
       (
         max($0.thickness, 0),
-        ClockCSSBackground.parseColor($0.color)?.simd ?? SIMD4<Float>(0, 0, 0, 1)
+        ClockOutlineColor.parse($0.color)?.simd ?? SIMD4<Float>(0, 0, 0, 1)
       )
     }
-    let needsAlpha =
-      backgroundStyle.minimumAlpha < 1
-      || request.component.foregroundAlpha < 1
-      || outlines.contains { $0.1.w < 1 }
-    let alphaTexture =
-      needsAlpha
-      ? try makeTexture(
-        pixelFormat: .r8Unorm,
-        width: request.pixelWidth,
-        height: request.pixelHeight
-      )
-      : nil
+    let alphaTexture = try makeTexture(
+      pixelFormat: .r8Unorm, width: request.pixelWidth, height: request.pixelHeight)
 
     let glyphs = makeGlyphInstances(for: request)
     guard !glyphs.isEmpty,
@@ -190,20 +162,14 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       throw MetalClockOverlayRendererError.glyphBufferCreationFailed
     }
 
-    let direction = backgroundStyle.direction
     var uniforms = Uniforms(
       foregroundColor: request.component.foregroundColor,
-      backgroundColor0: backgroundStyle.color0,
-      backgroundColor1: backgroundStyle.color1,
       outlineColor0: outlines.indices.contains(0) ? outlines[0].1 : .zero,
       outlineColor1: outlines.indices.contains(1) ? outlines[1].1 : .zero,
-      overlaySize: SIMD2(Float(request.pixelWidth), Float(request.pixelHeight)),
-      gradientDirection: direction,
       outlineThickness: SIMD2(
         outlines.indices.contains(0) ? outlines[0].0 : 0,
         outlines.indices.contains(1) ? outlines[1].0 : 0
       ),
-      backgroundKind: backgroundStyle.isGradient ? 1 : 0,
       glyphCount: UInt32(glyphs.count)
     )
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
@@ -213,16 +179,14 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     pass.colorAttachments[0].texture = colorTexture
     pass.colorAttachments[0].loadAction = .dontCare
     pass.colorAttachments[0].storeAction = .store
-    if let alphaTexture {
-      pass.colorAttachments[1].texture = alphaTexture
-      pass.colorAttachments[1].loadAction = .dontCare
-      pass.colorAttachments[1].storeAction = .store
-    }
+    pass.colorAttachments[1].texture = alphaTexture
+    pass.colorAttachments[1].loadAction = .dontCare
+    pass.colorAttachments[1].storeAction = .store
     guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
       throw MetalClockOverlayRendererError.renderEncoderCreationFailed
     }
     encoder.label = "Clock Overlay Retained Texture"
-    encoder.setRenderPipelineState(alphaTexture == nil ? colorPipeline : colorAlphaPipeline)
+    encoder.setRenderPipelineState(colorAlphaPipeline)
     encoder.setFragmentTexture(atlasTexture, index: 0)
     encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
     encoder.setFragmentBuffer(glyphBuffer, offset: 0, index: 1)
@@ -337,6 +301,34 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     return texture
   }
 
+  /// Reserve enough room for every formatted digit, avoiding a size change on each tick.
+  /// This uses the same bundled-font atlas metrics as glyph rendering, on the producer queue.
+  func naturalClockSize(for component: ClockComponent) -> SIMD2<Float>? {
+    guard let fontSize = component.fontSize, fontSize.isFinite, fontSize > 0 else { return nil }
+    func metric(_ character: Character) -> GlyphMetric {
+      metrics[Int(character.asciiValue! - UInt8(Self.firstCodePoint))]
+    }
+    let widestDigit = "0123456789".max { metric($0).advance < metric($1).advance }!
+    let date = String(repeating: widestDigit, count: 4) + "/" + String(repeating: widestDigit, count: 2)
+      + "/" + String(repeating: widestDigit, count: 2)
+    let time = String(repeating: widestDigit, count: 2) + ":" + String(repeating: widestDigit, count: 2)
+      + (component.showsSeconds ? ":" + String(repeating: widestDigit, count: 2) : "")
+    let timeWidth = time.reduce(Float(0)) { $0 + metric($1).advance }
+      + (component.uses24HourTime ? 0 : max(" AM".reduce(Float(0)) { $0 + metric($1).advance },
+        " PM".reduce(Float(0)) { $0 + metric($1).advance }))
+    let width = component.showsDate ? max(timeWidth, date.reduce(Float(0)) { $0 + metric($1).advance }) : timeWidth
+    let glyphs = "0123456789/: APM".map(metric)
+    let lineHeight = (glyphs.map { $0.offset.y + $0.size.y }.max() ?? 0)
+      - (glyphs.map { $0.offset.y }.min() ?? 0)
+    let height = component.showsDate ? lineHeight * 2 + Self.atlasPixelHeight * 0.12 : lineHeight
+    let padding = 4 + (component.outlines.map(\.thickness).max() ?? 0)
+    let size = SIMD2(ceil(width * fontSize / Self.atlasPixelHeight + padding * 2),
+      ceil(height * fontSize / Self.atlasPixelHeight + padding * 2))
+    guard size.x.isFinite, size.y.isFinite, size.x <= 16384, size.y <= 16384,
+      size.x * size.y <= Float(Self.dynamicTextPixelBudget) else { return nil }
+    return size
+  }
+
   private func makeGlyphInstances(for request: ClockOverlayRenderRequest) -> [GlyphInstance] {
     let lines = request.text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
       line.unicodeScalars.compactMap { scalar -> GlyphMetric? in
@@ -375,22 +367,27 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       ? Float(request.pixelHeight) * 0.9 / unscaledBlockHeight
       : 1
     let scale = min(widthScale, heightScale)
-    let interlineGap = unscaledInterlineGap * scale
-    let blockHeight = unscaledBlockHeight * scale
+    let natural = naturalClockSize(for: request.component)
+    let horizontalScale = natural.map { request.component.fontSize! / Self.atlasPixelHeight
+      * Float(request.pixelWidth) / $0.x } ?? scale
+    let verticalScale = natural.map { request.component.fontSize! / Self.atlasPixelHeight
+      * Float(request.pixelHeight) / $0.y } ?? scale
+    let interlineGap = unscaledInterlineGap * verticalScale
+    let blockHeight = unscaledBlockHeight * verticalScale
     var lineTop = (Float(request.pixelHeight) - blockHeight) * 0.5
     var instances: [GlyphInstance] = []
     instances.reserveCapacity(lines.reduce(0) { $0 + $1.count })
 
     for layout in layouts {
-      let baseline = lineTop - layout.minY * scale
-      var penX = (Float(request.pixelWidth) - layout.advance * scale) * 0.5
+      let baseline = lineTop - layout.minY * verticalScale
+      var penX = (Float(request.pixelWidth) - layout.advance * horizontalScale) * 0.5
       for metric in layout.metrics {
         if metric.size.x > 0, metric.size.y > 0 {
           let origin = SIMD2<Float>(
-            penX + metric.offset.x * scale,
-            baseline + metric.offset.y * scale
+            penX + metric.offset.x * horizontalScale,
+            baseline + metric.offset.y * verticalScale
           )
-          let size = metric.size * scale
+          let size = metric.size * SIMD2(horizontalScale, verticalScale)
           instances.append(
             GlyphInstance(
               destinationRect: SIMD4<Float>(
@@ -399,9 +396,9 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
             ),
           )
         }
-        penX += metric.advance * scale
+        penX += metric.advance * horizontalScale
       }
-      lineTop += layout.contentHeight * scale + interlineGap
+      lineTop += layout.contentHeight * verticalScale + interlineGap
     }
     return instances
   }
@@ -495,49 +492,7 @@ extension ClockComponent {
   }
 }
 
-private enum ClockBackgroundStyle {
-  case solid(SIMD4<Float>)
-  case linear(angleDegrees: Float, SIMD4<Float>, SIMD4<Float>)
-
-  var color0: SIMD4<Float> {
-    switch self {
-    case .solid(let color), .linear(_, let color, _): color
-    }
-  }
-
-  var color1: SIMD4<Float> {
-    switch self {
-    case .solid(let color): color
-    case .linear(_, _, let color): color
-    }
-  }
-
-  var isGradient: Bool {
-    if case .linear = self { true } else { false }
-  }
-
-  var minimumAlpha: Float { min(color0.w, color1.w) }
-
-  var direction: SIMD2<Float> {
-    guard case .linear(let degrees, _, _) = self else { return SIMD2(0, 1) }
-    let radians = degrees * .pi / 180
-    return SIMD2(sin(radians), -cos(radians))
-  }
-
-  static func parse(_ source: String) -> Self {
-    guard let parsed = ClockCSSBackground.parse(source) else {
-      return .solid(.zero)
-    }
-    switch parsed {
-    case .solid(let color):
-      return .solid(color.simd)
-    case .linearGradient(let degrees, let startColor, let endColor):
-      return .linear(angleDegrees: degrees, startColor.simd, endColor.simd)
-    }
-  }
-}
-
-extension ClockCSSColor {
+extension ClockOutlineColor {
   fileprivate var simd: SIMD4<Float> {
     SIMD4(red, green, blue, alpha)
   }

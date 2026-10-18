@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
+import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct ClockInspector: View {
@@ -15,6 +16,7 @@ struct ClockInspector: View {
       VideoComponentProgramLayers(
         stateService: stateService, appletData: appletData, componentID: internalID)
       formContent
+      VideoComponentDeleteButton(stateService: stateService, componentID: internalID)
     }
     .formStyle(.grouped)
     .disabled(isRecording)
@@ -27,9 +29,7 @@ struct ClockInspector: View {
         TextField("Name", text: componentBinding(\.displayName, initial: component.displayName))
           .disabled(isRecording)
         numericField(
-          "Width", value: rationalBinding(\.width, initial: component.width))
-        numericField(
-          "Height", value: rationalBinding(\.height, initial: component.height))
+          "Font Size", value: rationalBinding(\.fontSize, initial: component.fontSize))
         Toggle("Show Date", isOn: componentBinding(\.showsDate, initial: component.showsDate))
         Toggle(
           "Show Seconds", isOn: componentBinding(\.showsSeconds, initial: component.showsSeconds))
@@ -44,26 +44,9 @@ struct ClockInspector: View {
               .frame(width: 90)
           }
         }
-        numericField(
-          "Text Red",
-          value: colorBinding(
-            \.foregroundExtendedSrgbColor, \.red, initial: component.foregroundExtendedSrgbColor.red
-          ))
-        numericField(
-          "Text Green",
-          value: colorBinding(
-            \.foregroundExtendedSrgbColor, \.green,
-            initial: component.foregroundExtendedSrgbColor.green))
-        numericField(
-          "Text Blue",
-          value: colorBinding(
-            \.foregroundExtendedSrgbColor, \.blue,
-            initial: component.foregroundExtendedSrgbColor.blue))
-        numericField(
-          "Text Alpha",
-          value: colorBinding(
-            \.foregroundExtendedSrgbColor, \.alpha,
-            initial: component.foregroundExtendedSrgbColor.alpha))
+        ColorPicker(
+          "Foreground Color",
+          selection: colorBinding(\.foregroundExtendedSrgbColor), supportsOpacity: true)
         LabeledContent("Text Outlines", value: "\(component.outlines.count)")
       }
     } else {
@@ -112,17 +95,14 @@ struct ClockInspector: View {
   private func colorBinding(
     _ colorKeyPath: WritableKeyPath<
       Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Color
-    >,
-    _ channel: WritableKeyPath<Ldtx_Workspace_V4_Color, Float>,
-    initial: Float
-  ) -> Binding<Float> {
+    >
+  ) -> Binding<Color> {
     Binding(
-      get: { component.map { $0[keyPath: colorKeyPath][keyPath: channel] } ?? initial },
+      get: { component?[keyPath: colorKeyPath].extendedSRGBSwiftUIColor ?? .clear },
       set: { next in
+        guard let color = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateVideoComponent { wrapper in
           guard case .clock(var value) = wrapper.videoComponent else { return }
-          var color = value[keyPath: colorKeyPath]
-          color[keyPath: channel] = next
           value[keyPath: colorKeyPath] = color
           wrapper.videoComponent = .clock(value)
         }
@@ -164,17 +144,10 @@ struct ClockInspector: View {
         .multilineTextAlignment(.trailing).frame(width: 90).disabled(isRecording)
     }
   }
-  private func numericField(_ title: String, value: Binding<Float>) -> some View {
-    LabeledContent(title) {
-      TextField(title, value: value, format: .number.precision(.fractionLength(3)))
-        .multilineTextAlignment(.trailing)
-        .frame(width: 90)
-        .disabled(isRecording)
-    }
-  }
   private func updateVideoComponent(
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
+    guard !stateService.isOutputActive, !stateService.isClosed else { return }
     var definition = stateService.workspaceDefinition
     guard
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })

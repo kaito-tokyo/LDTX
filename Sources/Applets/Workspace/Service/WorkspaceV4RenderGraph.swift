@@ -64,8 +64,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
       if case .clock(var clock) = component {
         clock.destinationX = translationXRational
         clock.destinationY = translationYRational
-        clock.destinationWidth *= 1_920 / canvasWidth
-        clock.destinationHeight *= 1_080 / canvasHeight
+        if clock.fontSize == nil {
+          clock.destinationWidth *= 1_920 / canvasWidth
+          clock.destinationHeight *= 1_080 / canvasHeight
+        }
         clock.destinationWidth *= scaleX
         clock.destinationHeight *= scaleY
         component = .clock(clock)
@@ -177,17 +179,12 @@ public struct WorkspaceV4RenderGraph: Sendable {
             clock.internalID,
             .clock(
               ClockComponent(
-                destinationWidth: clock.width.float,
-                destinationHeight: clock.height.float,
+                fontSize: clock.fontSize.float,
                 showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
                 foregroundRed: clock.foregroundExtendedSrgbColor.red,
                 foregroundGreen: clock.foregroundExtendedSrgbColor.green,
                 foregroundBlue: clock.foregroundExtendedSrgbColor.blue,
                 foregroundAlpha: clock.foregroundExtendedSrgbColor.alpha,
-                backgroundRed: clock.backgroundExtendedSrgbColor.red,
-                backgroundGreen: clock.backgroundExtendedSrgbColor.green,
-                backgroundBlue: clock.backgroundExtendedSrgbColor.blue,
-                backgroundAlpha: clock.backgroundExtendedSrgbColor.alpha,
                 showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
                 utcOffsetMinutes: clock.utcOffsetMinutes,
                 outlines: clock.outlines.map {
@@ -197,8 +194,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
           )
         case .dynamicText(let text):
           var overlay = ClockComponent(
-            destinationWidth: text.width.float, destinationHeight: text.height.float,
-            backgroundAlpha: 0)
+            destinationWidth: text.width.float, destinationHeight: text.height.float)
           overlay.resolvedRTFD = text.rtfdDocument
           if let document = try? LDTXRichTextDocument(rtfd: text.rtfdDocument),
             let expanded = try? document.expanded(resolve: { reference in

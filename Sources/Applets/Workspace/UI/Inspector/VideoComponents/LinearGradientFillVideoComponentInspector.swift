@@ -93,6 +93,7 @@ struct LinearGradientFillVideoComponentInspector: View {
         ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
         ColorPicker("End Color", selection: $endColor, supportsOpacity: true)
       }
+      VideoComponentDeleteButton(stateService: stateService, componentID: videoComponentID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive || component == nil)

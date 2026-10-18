@@ -19,17 +19,11 @@ struct ProgramComponentPersistenceUnitTestSuite {
     #expect(destination.scaleY == 1.5)
   }
 
-  @Test func clockCSSBackgroundValidationUsesRenderingGrammar() throws {
-    #expect(ClockCSSBackground.isValid(""))
-    #expect(ClockCSSBackground.isValid("#10203080"))
-    #expect(ClockCSSBackground.isValid("rgba(16, 32, 48, 0.5)"))
-    #expect(ClockCSSBackground.isValid("linear-gradient(90deg, #102030, transparent)"))
-    #expect(!ClockCSSBackground.isValid("not-a-background"))
-    #expect(!ClockCSSBackground.isValid("linear-gradient(nandeg, #000, #fff)"))
-    #expect(!ClockCSSBackground.isValid("linear-gradient(infdeg, #000, #fff)"))
-
-    let empty = try #require(ClockCSSBackground.parse(""))
-    #expect(empty == .solid(.clear))
+  @Test func clockOutlineColorParsing() {
+    #expect(ClockOutlineColor.parse("#10203080") != nil)
+    #expect(ClockOutlineColor.parse("rgba(16, 32, 48, 0.5)") != nil)
+    #expect(ClockOutlineColor.parse("transparent") == .clear)
+    #expect(ClockOutlineColor.parse("invalid") == nil)
   }
 
 }

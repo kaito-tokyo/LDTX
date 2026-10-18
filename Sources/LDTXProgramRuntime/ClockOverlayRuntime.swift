@@ -414,19 +414,6 @@ extension ClockComponent {
       foregroundAlpha,
       fallback: defaults.foregroundAlpha
     )
-    normalized.backgroundRed = Self.normalizedUnit(backgroundRed, fallback: defaults.backgroundRed)
-    normalized.backgroundGreen = Self.normalizedUnit(
-      backgroundGreen,
-      fallback: defaults.backgroundGreen
-    )
-    normalized.backgroundBlue = Self.normalizedUnit(
-      backgroundBlue,
-      fallback: defaults.backgroundBlue
-    )
-    normalized.backgroundAlpha = Self.normalizedUnit(
-      backgroundAlpha,
-      fallback: defaults.backgroundAlpha
-    )
     normalized.utcOffsetMinutes = min(max(utcOffsetMinutes, -840), 840)
     normalized.outlines = outlines.prefix(2).map { outline in
       ClockTextOutline(
@@ -457,6 +444,7 @@ extension ClockComponent {
     let lhs = normalizedForClockOverlayRendering
     let rhs = other.normalizedForClockOverlayRendering
     return lhs.destinationX.bitPattern == rhs.destinationX.bitPattern
+      && lhs.fontSize?.bitPattern == rhs.fontSize?.bitPattern
       && lhs.destinationY.bitPattern == rhs.destinationY.bitPattern
       && lhs.destinationWidth.bitPattern == rhs.destinationWidth.bitPattern
       && lhs.destinationHeight.bitPattern == rhs.destinationHeight.bitPattern
@@ -464,10 +452,6 @@ extension ClockComponent {
       && lhs.foregroundGreen.bitPattern == rhs.foregroundGreen.bitPattern
       && lhs.foregroundBlue.bitPattern == rhs.foregroundBlue.bitPattern
       && lhs.foregroundAlpha.bitPattern == rhs.foregroundAlpha.bitPattern
-      && lhs.backgroundRed.bitPattern == rhs.backgroundRed.bitPattern
-      && lhs.backgroundGreen.bitPattern == rhs.backgroundGreen.bitPattern
-      && lhs.backgroundBlue.bitPattern == rhs.backgroundBlue.bitPattern
-      && lhs.backgroundAlpha.bitPattern == rhs.backgroundAlpha.bitPattern
       && lhs.showsSeconds == rhs.showsSeconds
       && lhs.uses24HourTime == rhs.uses24HourTime
       && lhs.showsDate == rhs.showsDate

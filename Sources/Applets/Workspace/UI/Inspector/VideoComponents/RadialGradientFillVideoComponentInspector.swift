@@ -93,6 +93,7 @@ struct RadialGradientFillVideoComponentInspector: View {
         ColorPicker("Inner Color", selection: $innerColor, supportsOpacity: true)
         ColorPicker("Outer Color", selection: $outerColor, supportsOpacity: true)
       }
+      VideoComponentDeleteButton(stateService: stateService, componentID: videoComponentID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive || component == nil)

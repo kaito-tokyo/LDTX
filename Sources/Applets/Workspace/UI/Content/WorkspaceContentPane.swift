@@ -57,27 +57,33 @@ public struct WorkspaceContentPane: View {
 
   private var editors: some View {
     @Bindable var layout = layout
-    return List {
-      Section {
-        MasterVolumeEditor(
-          stateService: stateService, appletData: appletData, peakMeter: peakMeter,
-          reportError: reportError, runtimeActions: runtimeActions)
-        AudioMixEditor(
-          stateService: stateService, appletData: appletData, peakMeter: peakMeter,
-          reportError: reportError, runtimeActions: runtimeActions)
-      }
-      Picker("Video Layers", selection: $layout.isPortrait) {
-        Text("Landscape Video Layers").tag(false)
-        Text("Portrait Video Layers").tag(true)
+    return VStack(spacing: 0) {
+      Picker("Content editor", selection: $layout.selectedEditor) {
+        Text("Audio").tag(WorkspaceContentLayout.Editor.audio)
+        Text("Landscape").tag(WorkspaceContentLayout.Editor.landscape)
+        Text("Portrait").tag(WorkspaceContentLayout.Editor.portrait)
       }
       .pickerStyle(.segmented)
-      if layout.isPortrait {
-        VideoLayersEditor(editor: portraitEditor)
-      } else {
-        VideoLayersEditor(editor: landscapeEditor)
+      .padding(8)
+      List {
+        switch layout.selectedEditor {
+        case .audio:
+          Section {
+            MasterVolumeEditor(
+              stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+              reportError: reportError, runtimeActions: runtimeActions)
+            AudioMixEditor(
+              stateService: stateService, appletData: appletData, peakMeter: peakMeter,
+              reportError: reportError, runtimeActions: runtimeActions)
+          }
+        case .landscape:
+          VideoLayersEditor(editor: landscapeEditor)
+        case .portrait:
+          VideoLayersEditor(editor: portraitEditor)
+        }
       }
+      .listStyle(.inset)
     }
-    .listStyle(.inset)
   }
 }
 
@@ -85,7 +91,11 @@ public struct WorkspaceContentPane: View {
 final class WorkspaceContentLayout {
   init() {}
 
-  var isPortrait = false
+  enum Editor: Hashable {
+    case audio, landscape, portrait
+  }
+
+  var selectedEditor: Editor = .audio
   var previewHeight: CGFloat = 280
   private var persistenceKey: String?
 

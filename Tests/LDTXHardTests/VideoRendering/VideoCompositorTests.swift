@@ -134,7 +134,7 @@ struct VideoCompositorIntegrationTestSuite {
           foregroundRed: 1,
           foregroundGreen: 0,
           foregroundBlue: 0,
-          background: "rgba(255, 0, 0, 0.5)"
+          foregroundAlpha: 0.5
         ),
         pixelWidth: 96,
         pixelHeight: 56
@@ -158,17 +158,16 @@ struct VideoCompositorIntegrationTestSuite {
       ),
     ])
 
-    // RGB565 is sampled into 8-bit RGB, converted with the compositor's
-    // integer full-range coefficients, then blended with R8 alpha. For
-    // opaque red at alpha 128 over black this is exactly YCbCr 27/113/192.
-    #expect(luma(in: output, x: 16, y: 8) == 27)
-    #expect(chroma(in: output, x: 8, y: 4) == SIMD2<UInt8>(113, 192))
+    // Outside the glyphs the retained image must leave the canvas untouched.
+    #expect(luma(in: output, x: 16, y: 8) == 0)
+    #expect(chroma(in: output, x: 8, y: 4) == SIMD2<UInt8>(128, 128))
+    #expect(lumaExtrema(in: output).maximum == 27)
     #expect(luma(in: output, x: 8, y: 4) == 0)
 
     let transparentGlyphs = try clockRenderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "12:34:56",
-        component: ClockComponent(backgroundAlpha: 0),
+        component: ClockComponent(),
         pixelWidth: 128,
         pixelHeight: 72
       ))
@@ -198,7 +197,6 @@ struct VideoCompositorIntegrationTestSuite {
           foregroundRed: 1,
           foregroundGreen: 0,
           foregroundBlue: 0,
-          backgroundAlpha: 0
         ),
         pixelWidth: width,
         pixelHeight: height
@@ -251,20 +249,16 @@ struct VideoCompositorIntegrationTestSuite {
   @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
   func opaqueRetainedTextureBlendsEveryPartialChromaCellAtOddBounds() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
-    let clockRenderer = try MetalClockOverlayRenderer(device: device)
-    let overlay = try clockRenderer.renderClockOverlay(
-      ClockOverlayRenderRequest(
-        text: "12",
-        component: ClockComponent(
-          foregroundRed: 1,
-          foregroundGreen: 0,
-          foregroundBlue: 0,
-          background: "#ff0000"
-        ),
-        pixelWidth: 2,
-        pixelHeight: 2
-      ))
-    #expect(overlay.alphaTexture == nil)
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .b5g6r5Unorm, width: 2, height: 2, mipmapped: false)
+    descriptor.storageMode = .shared
+    descriptor.usage = .shaderRead
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let red = [UInt16](repeating: 0xf800, count: 4)
+    red.withUnsafeBytes {
+      texture.replace(region: MTLRegionMake2D(0, 0, 2, 2), mipmapLevel: 0,
+        withBytes: $0.baseAddress!, bytesPerRow: 4)
+    }
     let compositor = try VideoCompositor(
       configuration: VideoCompositorConfiguration(
         width: 4,
@@ -274,7 +268,7 @@ struct VideoCompositorIntegrationTestSuite {
 
     let output = try compositor.render([
       RetainedTextureComponent(
-        colorTexture: overlay.colorTexture,
+        colorTexture: texture,
         destinationRect: SIMD4<UInt32>(1, 1, 3, 3)
       )
     ])

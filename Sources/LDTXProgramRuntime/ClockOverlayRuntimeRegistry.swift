@@ -47,14 +47,28 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
     }
     var activeStepNames: Set<String> = []
     for step in composite.steps {
-      guard case .clock(let component) = step.component else { continue }
+      guard case .clock(var component) = step.component else { continue }
+      var nativeSize: SIMD2<Float>?
+      if component.fontSize != nil, component.resolvedRTFD == nil {
+        guard outputWidth > 0, outputHeight > 0,
+          let size = renderer.naturalClockSize(for: component) else { continue }
+        nativeSize = size
+        component.destinationWidth *= size.x / Float(outputWidth)
+        component.destinationHeight *= size.y / Float(outputHeight)
+      }
       guard
-        let placement = Self.placement(
+        var placement = Self.placement(
           component: component,
           outputWidth: outputWidth,
           outputHeight: outputHeight
         )
       else { continue }
+      // Rasterize at the authored font size. The compositor applies layer scale
+      // to the whole retained image, including padding and outlines.
+      if let nativeSize {
+        placement.pixelWidth = Int(nativeSize.x)
+        placement.pixelHeight = Int(nativeSize.y)
+      }
       activeStepNames.insert(step.name)
 
       if let entry = entriesByStepName[step.name] {
