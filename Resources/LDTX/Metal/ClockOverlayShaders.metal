@@ -16,14 +16,9 @@ struct ClockGlyphInstance {
 
 struct ClockOverlayUniforms {
     float4 foregroundColor;
-    float4 backgroundColor0;
-    float4 backgroundColor1;
     float4 outlineColor0;
     float4 outlineColor1;
-    float2 overlaySize;
-    float2 gradientDirection;
     float2 outlineThickness;
-    uint backgroundKind;
     uint glyphCount;
 };
 
@@ -70,18 +65,6 @@ static inline half clockGlyphCoverage(
     return distance;
 }
 
-static inline half4 clockBackground(float2 pixel, constant ClockOverlayUniforms& uniforms) {
-    if (uniforms.backgroundKind == 0) {
-        return half4(uniforms.backgroundColor0);
-    }
-    float2 size = max(uniforms.overlaySize, float2(1.0f));
-    float2 centered = pixel / size - 0.5f;
-    float2 direction = uniforms.gradientDirection;
-    float extent = max(abs(direction.x) + abs(direction.y), 0.0001f);
-    float amount = clamp(dot(centered, direction) / extent + 0.5f, 0.0f, 1.0f);
-    return mix(half4(uniforms.backgroundColor0), half4(uniforms.backgroundColor1), half(amount));
-}
-
 static inline half4 clockOverlayColor(
     float2 pixel,
     texture2d<half, access::sample> atlas,
@@ -98,32 +81,17 @@ static inline half4 clockOverlayColor(
     half4 foreground = half4(uniforms.foregroundColor);
     half4 outline1 = half4(uniforms.outlineColor0);
     half4 outline2 = half4(uniforms.outlineColor1);
-    half4 background = clockBackground(pixel, uniforms);
     half fillAlpha = clamp(foreground.a * fillCoverage, 0.0h, 1.0h);
     half outline1Alpha = clamp(outline1.a * max(outline1Coverage - fillCoverage, 0.0h), 0.0h, 1.0h);
     half outline2Alpha = clamp(outline2.a * max(outline2Coverage - outline1Coverage, 0.0h), 0.0h, 1.0h);
     half foregroundAlpha = fillAlpha + outline1Alpha + outline2Alpha;
     half3 foregroundPremultiplied =
         foreground.rgb * fillAlpha + outline1.rgb * outline1Alpha + outline2.rgb * outline2Alpha;
-    half backgroundAlpha = clamp(background.a, 0.0h, 1.0h);
-    half outputAlpha = foregroundAlpha + backgroundAlpha * (1.0h - foregroundAlpha);
-    half3 premultiplied =
-        foregroundPremultiplied +
-        background.rgb * backgroundAlpha * (1.0h - foregroundAlpha);
+    half outputAlpha = foregroundAlpha;
     half3 straightColor = outputAlpha > 0.0h
-        ? premultiplied / outputAlpha
+        ? foregroundPremultiplied / outputAlpha
         : half3(0.0h);
     return half4(clamp(straightColor, half3(0.0h), half3(1.0h)), outputAlpha);
-}
-
-fragment half4 clockOverlayColorFragment(
-    ClockOverlayVertexOutput input [[stage_in]],
-    texture2d<half, access::sample> atlas [[texture(0)]],
-    constant ClockOverlayUniforms& uniforms [[buffer(0)]],
-    const device ClockGlyphInstance* glyphs [[buffer(1)]]
-) {
-    half4 overlay = clockOverlayColor(input.position.xy, atlas, uniforms, glyphs);
-    return half4(overlay.rgb, 1.0h);
 }
 
 fragment ClockOverlayColorAlphaOutput clockOverlayColorAlphaFragment(

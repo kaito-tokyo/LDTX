@@ -121,12 +121,7 @@
       var clock = Ldtx_Workspace_V4_ClockComponent()
       clock.internalID = 8
       clock.displayName = "On Air Clock"
-      clock.width = .with {
-        $0.set(num: 1, den: 6)
-      }
-      clock.height = .with {
-        $0.set(num: 2, den: 27)
-      }
+      clock.fontSize = .with { $0.set(num: 48, den: 1) }
       var clockWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
       clockWrapper.clock = clock
 

@@ -12,6 +12,125 @@ import LDTXRichText
 import Metal
 import Testing
 
+extension ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func oversizedClockRefreshPreservesPreviousTexture() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let registry = try ClockOverlayRuntimeRegistry(
+      device: device, currentTimeProvider: FixedClockCurrentTimeProvider(date: Date()))
+    defer { registry.deactivateAll() }
+    var component = ClockComponent(fontSize: 48)
+    func synchronize() {
+      registry.synchronize(
+        composite: .init(steps: [.init(id: "clock", component: .clock(component))]),
+        outputWidth: 1920, outputHeight: 1080)
+    }
+    synchronize()
+    waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: "clock") != nil }
+    let previous = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    component.fontSize = 20_000
+    synchronize()
+    let retained = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(retained.colorTexture === previous.colorTexture)
+    component.destinationX = 0.25
+    component.destinationY = 0.125
+    component.destinationWidth = 0.5
+    component.destinationHeight = 2
+    synchronize()
+    let moved = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(moved.colorTexture === previous.colorTexture)
+    #expect(
+      moved.destinationRect
+        == SIMD4(
+          480, 135, 480 + UInt32(previous.colorTexture.width / 2),
+          135 + UInt32(previous.colorTexture.height * 2)))
+    component.destinationX = -0.01
+    synchronize()
+    let clipped = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(clipped.destinationRect.x == 0)
+    #expect(clipped.sourceRect.x > 0)
+    component.destinationX = 2
+    synchronize()
+    #expect(registry.retainedTexture(forStepNamed: "clock")?.destinationRect == .zero)
+    component.destinationX = 0.25
+    synchronize()
+    let returned = try #require(registry.retainedTexture(forStepNamed: "clock"))
+    #expect(returned.colorTexture === previous.colorTexture)
+    #expect(returned.destinationRect == moved.destinationRect)
+    registry.synchronize(composite: .init(steps: []), outputWidth: 1920, outputHeight: 1080)
+    #expect(registry.retainedTexture(forStepNamed: "clock") == nil)
+  }
+
+  @Test func naturalClockExtentIncludesBothOutlines() throws {
+    let renderer = try MetalClockOverlayRenderer(device: #require(MTLCreateSystemDefaultDevice()))
+    var component = ClockComponent(fontSize: 48)
+    let plain = try #require(renderer.naturalClockSize(for: component))
+    component.outlines = [
+      ClockTextOutline(thickness: 8, color: "black"),
+      ClockTextOutline(thickness: 8, color: "white"),
+    ]
+    let outlined = try #require(renderer.naturalClockSize(for: component))
+    #expect(outlined == plain + SIMD2<Float>(repeating: 32))
+    for thickness: Float in [64, 65, 20_000] {
+      component.outlines = [
+        ClockTextOutline(thickness: thickness, color: "black"),
+        ClockTextOutline(thickness: thickness, color: "white"),
+      ]
+      let capped = try #require(renderer.naturalClockSize(for: component))
+      #expect(capped == plain + SIMD2<Float>(repeating: 256))
+    }
+    component.outlines = [ClockTextOutline(thickness: .infinity, color: "black")]
+    #expect(renderer.naturalClockSize(for: component) == plain)
+  }
+
+  @Test func fontSizedClockUsesNativeRasterBeforeLayerScalingOnEitherCanvas() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let renderer = try MetalClockOverlayRenderer(device: device)
+    let component = ClockComponent(destinationWidth: 0.5, destinationHeight: 0.5, fontSize: 48)
+    let native = try #require(renderer.naturalClockSize(for: component))
+    for (width, height) in [(1920, 1080), (1080, 1920)] {
+      let registry = try ClockOverlayRuntimeRegistry(
+        device: device,
+        currentTimeProvider: FixedClockCurrentTimeProvider(
+          date: Date(timeIntervalSince1970: 1_700_000_000)))
+      defer { registry.deactivateAll() }
+      registry.synchronize(
+        composite: .init(steps: [.init(id: "font-sized", component: .clock(component))]),
+        outputWidth: width, outputHeight: height)
+      waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: "font-sized") != nil }
+      let texture = try #require(registry.retainedTexture(forStepNamed: "font-sized"))
+      #expect(texture.colorTexture.width == Int(native.x))
+      #expect(texture.colorTexture.height == Int(native.y))
+      #expect(texture.destinationRect.z == UInt32((native.x * 0.5).rounded(.down)))
+      #expect(texture.destinationRect.w == UInt32((native.y * 0.5).rounded(.down)))
+    }
+  }
+
+  @Test func fontSizeDeterminesNaturalExtentAndRetainedTexture() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let renderer = try MetalClockOverlayRenderer(device: device)
+    let small = ClockComponent(fontSize: 24)
+    var large = small
+    large.fontSize = 48
+    let smallSize = try #require(renderer.naturalClockSize(for: small))
+    let largeSize = try #require(renderer.naturalClockSize(for: large))
+    #expect(largeSize.x > smallSize.x && largeSize.y > smallSize.y)
+    var dated = large
+    dated.showsDate = true
+    let dateSize = try #require(renderer.naturalClockSize(for: dated))
+    #expect(dateSize.y > largeSize.y)
+    let rendered = try renderer.renderClockOverlay(
+      .init(
+        text: "12:34:56", component: large,
+        pixelWidth: Int(largeSize.x), pixelHeight: Int(largeSize.y)))
+    #expect(rendered.colorTexture.width == Int(largeSize.x))
+    #expect(rendered.colorTexture.height == Int(largeSize.y))
+    let alpha = try readR8Texture(#require(rendered.alphaTexture), using: device)
+    #expect(alpha.contains { $0 > 0 })
+    large.fontSize = .infinity
+    #expect(renderer.naturalClockSize(for: large) == nil)
+  }
+}
+
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func dynamicTextSizeFailureWaitsForConfigurationChange() async throws {
@@ -87,7 +206,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         attributes: [
           .font: NSFont(name: "Helvetica-Oblique", size: 24)!, .foregroundColor: NSColor.blue,
         ]))
-    var component = ClockComponent(backgroundAlpha: 0)
+    var component = ClockComponent()
     component.resolvedRTFD = try LDTXRichTextDocument(text).rtfd
     let overlay = try renderer.renderClockOverlay(
       .init(text: "", component: component, pixelWidth: 256, pixelHeight: 80))
@@ -124,7 +243,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       to: URL(fileURLWithPath: "/tmp/ldtx-rtfd-render.png"))
     // Adding text beyond a one-line frame must not reduce the first glyph's size.
     func cropped(_ value: String) throws -> [UInt8] {
-      var component = ClockComponent(backgroundAlpha: 0)
+      var component = ClockComponent()
       component.resolvedRTFD = try richTextData(value)
       let output = try renderer.renderClockOverlay(
         .init(text: "", component: component, pixelWidth: 40, pixelHeight: 60))
@@ -135,7 +254,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
 
   @Test func dynamicTextRejectsExcessiveRasterMemoryBeforeAllocation() throws {
     let renderer = try MetalClockOverlayRenderer(device: unwrap(MTLCreateSystemDefaultDevice()))
-    var component = ClockComponent(backgroundAlpha: 0)
+    var component = ClockComponent()
     component.resolvedRTFD = try richTextData("Text")
     for (width, height) in [(16_384, 16_384), (4096, 2049)] {
       do {
@@ -154,7 +273,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func dynamicTextTexturePreservesUprightGlyphOrientation() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
-    var component = ClockComponent(backgroundAlpha: 0)
+    var component = ClockComponent()
     component.resolvedRTFD = try richTextData("F")
     let overlay = try renderer.renderClockOverlay(
       .init(
@@ -213,13 +332,15 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
   @Test func dynamicTextRendersUnicodeAndClearsEmptyValues() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
-    var component = ClockComponent(backgroundAlpha: 0)
+    var component = ClockComponent()
     component.resolvedRTFD = try richTextData("勝利\nピカチュウ")
     let overlay = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "", component: component, pixelWidth: 320, pixelHeight: 100))
     let alpha = try readR8Texture(unwrap(overlay.alphaTexture), using: device)
     assertEqual(alpha.min(), 0)
+    assertEqual(alpha.first, 0)
+    assertEqual(alpha.last, 0)
     assertGreaterThan(alpha.max() ?? 0, 0)
     component.resolvedRTFD = try richTextData("")
     let empty = try renderer.renderClockOverlay(
@@ -363,7 +484,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     }
   }
 
-  @Test func metalRendererCreatesRetainedRGB565AndOptionalR8Textures() throws {
+  @Test func metalRendererCreatesRetainedRGB565AndR8Textures() throws {
     let device = try unwrap(MTLCreateSystemDefaultDevice())
     let renderer = try MetalClockOverlayRenderer(device: device)
     let translucent = try renderer.renderClockOverlay(
@@ -379,24 +500,6 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertEqual(translucent.colorTexture.width, 320)
     assertEqual(translucent.colorTexture.height, 96)
 
-    let opaque = try renderer.renderClockOverlay(
-      ClockOverlayRenderRequest(
-        text: "12:34",
-        component: ClockComponent(background: "#000000"),
-        pixelWidth: 256,
-        pixelHeight: 80
-      ))
-    assertNil(opaque.alphaTexture)
-
-    let nearlyOpaque = try renderer.renderClockOverlay(
-      ClockOverlayRenderRequest(
-        text: "12:34",
-        component: ClockComponent(background: "rgba(0, 0, 0, 0.9995)"),
-        pixelWidth: 256,
-        pixelHeight: 80
-      ))
-    assertEqual(nearlyOpaque.alphaTexture?.pixelFormat, .r8Unorm)
-
     let malformed = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "12:34",
@@ -404,8 +507,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
           foregroundRed: .nan,
           foregroundGreen: -1,
           foregroundBlue: 2,
-          backgroundAlpha: .infinity,
-          background: "invalid"
+          foregroundAlpha: .infinity
         ),
         pixelWidth: 128,
         pixelHeight: 64
@@ -420,7 +522,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let overlay = try renderer.renderClockOverlay(
       ClockOverlayRenderRequest(
         text: "88:88",
-        component: ClockComponent(background: "transparent"),
+        component: ClockComponent(),
         pixelWidth: 192,
         pixelHeight: 96
       ))
@@ -758,11 +860,10 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
                   destinationY: 0.1,
                   destinationWidth: 0.5,
                   destinationHeight: 0.2,
-                  backgroundRed: 1,
-                  backgroundGreen: 1,
-                  backgroundBlue: 1,
-                  backgroundAlpha: 0.5,
-                  background: "rgba(255, 255, 255, 0.5)"
+                  foregroundRed: 1,
+                  foregroundGreen: 1,
+                  foregroundBlue: 1,
+                  foregroundAlpha: 0.5,
                 )))
           ]),
           audioChannels: [],
@@ -802,32 +903,30 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
       destinationY: 0,
       destinationWidth: 1,
       destinationHeight: 1,
-      backgroundRed: 1,
-      backgroundGreen: 0,
-      backgroundBlue: 0,
-      backgroundAlpha: 1,
-      background: "#ff0000"
+      foregroundRed: 1,
+      foregroundGreen: 0,
+      foregroundBlue: 0,
+      foregroundAlpha: 1,
     )
     runtime.updateProgram(prepared(clockRuntimeConfiguration(component: redClock), using: producer))
     let redFrame = try waitForFrame(from: runtime, afterFrameID: 0) { frame in
-      let value = self.luma(in: frame.pixelBuffer, x: 1, y: 1)
+      let value = self.maximumLuma(in: frame.pixelBuffer)
       return value > 30 && value < 100
     }
 
     var greenClock = redClock
-    greenClock.backgroundRed = 0
-    greenClock.backgroundGreen = 1
-    greenClock.background = "#00ff00"
+    greenClock.foregroundRed = 0
+    greenClock.foregroundGreen = 1
     runtime.updateProgram(
       prepared(clockRuntimeConfiguration(component: greenClock), using: producer))
     let greenFrame = try waitForFrame(from: runtime, afterFrameID: redFrame.frameID) { frame in
-      self.luma(in: frame.pixelBuffer, x: 1, y: 1) > 150
+      self.maximumLuma(in: frame.pixelBuffer) > 150
     }
 
     runtime.updateProgram(
       prepared(clockRuntimeConfiguration(composite: CompositeProgramDefinition()), using: producer))
     _ = try waitForFrame(from: runtime, afterFrameID: greenFrame.frameID) { frame in
-      self.luma(in: frame.pixelBuffer, x: 1, y: 1) == 0
+      self.maximumLuma(in: frame.pixelBuffer) == 0
     }
   }
 
@@ -979,7 +1078,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let firstTexture = try unwrap(runtime.retainedOverlay())
 
     var changed = ClockComponent()
-    changed.backgroundAlpha = 0.9
+    changed.foregroundAlpha = 0.9
     runtime.update(component: changed)
     waitUntil(timeout: 2) { renderer.requests.count == 2 }
     assertTrue(runtime.retainedOverlay() === firstTexture)
@@ -1010,7 +1109,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.activate()
     rendererQueue.sync {}
 
-    let changed = ClockComponent(backgroundAlpha: 0.9)
+    let changed = ClockComponent(foregroundAlpha: 0.9)
     runtime.update(component: changed)
     rendererQueue.sync {}
     assertEqual(renderer.requests.count, 2)
@@ -1049,7 +1148,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let firstTexture = try unwrap(runtime.retainedOverlay())
 
     var changed = ClockComponent()
-    changed.backgroundAlpha = 0.9
+    changed.foregroundAlpha = 0.9
     runtime.update(component: changed)
     rendererQueue.sync {}
     assertEqual(renderer.requests.count, 2)
@@ -1128,7 +1227,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertEqual(renderer.requests.count, 1)
     assertTrue(runtime.retainedOverlay() === initialTexture)
 
-    runtime.update(component: ClockComponent(backgroundAlpha: 0.5))
+    runtime.update(component: ClockComponent(foregroundAlpha: 0.5))
     rendererQueue.sync {}
     assertEqual(renderer.requests.count, 2)
     assertFalse(runtime.retainedOverlay() === initialTexture)
@@ -1145,7 +1244,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
         foregroundRed: .nan,
         foregroundGreen: -1,
         foregroundBlue: 2,
-        backgroundAlpha: .infinity
+        foregroundAlpha: .infinity
       ),
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
@@ -1165,7 +1264,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     assertEqual(request.component.foregroundRed, ClockComponent().foregroundRed)
     assertEqual(request.component.foregroundGreen, 0)
     assertEqual(request.component.foregroundBlue, 1)
-    assertEqual(request.component.backgroundAlpha, ClockComponent().backgroundAlpha)
+    assertEqual(request.component.foregroundAlpha, ClockComponent().foregroundAlpha)
     runtime.deactivate()
   }
 
@@ -1175,7 +1274,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.coalescing")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
-      component: ClockComponent(backgroundAlpha: 0.8),
+      component: ClockComponent(foregroundAlpha: 0.8),
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1188,14 +1287,14 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.activate()
     assertTrue(renderer.waitForFirstCall(timeout: 2))
 
-    runtime.update(component: ClockComponent(backgroundAlpha: 0.6))
-    runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
+    runtime.update(component: ClockComponent(foregroundAlpha: 0.6))
+    runtime.update(component: ClockComponent(foregroundAlpha: 0.4))
     runtime.requestRender()
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
     assertEqual(renderer.requests.count, 2)
-    assertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
+    assertEqual(renderer.requests.last?.component.foregroundAlpha, 0.4)
     assertEqual(publicationCount.value, 1)
     runtime.deactivate()
   }
@@ -1260,7 +1359,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let rendererQueue = DispatchQueue(label: "ClockOverlayRuntimeIntegrationTestSuite.reactivation")
     let publicationCount = ClockOverlayPublicationCounter()
     let runtime = ClockOverlayRuntime(
-      component: ClockComponent(backgroundAlpha: 0.8),
+      component: ClockComponent(foregroundAlpha: 0.8),
       currentTimeProvider: FixedClockCurrentTimeProvider(
         date: Date(timeIntervalSince1970: 1_700_000_000)
       ),
@@ -1273,14 +1372,14 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     runtime.activate()
     assertTrue(renderer.waitForFirstCall(timeout: 2))
     runtime.deactivate()
-    runtime.update(component: ClockComponent(backgroundAlpha: 0.4))
+    runtime.update(component: ClockComponent(foregroundAlpha: 0.4))
     runtime.activate()
 
     renderer.unblockFirstCall()
     rendererQueue.sync {}
 
     assertEqual(renderer.requests.count, 2)
-    assertEqual(renderer.requests.last?.component.backgroundAlpha, 0.4)
+    assertEqual(renderer.requests.last?.component.foregroundAlpha, 0.4)
     assertEqual(publicationCount.value, 1)
     assertNotNil(runtime.retainedOverlay())
 
@@ -1380,7 +1479,7 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     let subscription = runtime.subscribeFrames(replayLatestFrame: false) { frame in
       let shouldFulfill = lock.withLock { () -> Bool in
         guard matchedFrame == nil, frame.frameID > afterFrameID,
-          self.luma(in: frame.pixelBuffer, x: 40, y: 24) > 100,
+          self.maximumLuma(in: frame.pixelBuffer) > 100,
           self.luma(in: frame.pixelBuffer, x: 8, y: 4) == 0
         else { return false }
         matchedFrame = frame
@@ -1391,6 +1490,21 @@ struct ClockOverlayRuntimeIntegrationTestSuite {
     wait(for: [published], timeout: 3)
     subscription.cancel()
     return try unwrap(lock.withLock { matchedFrame })
+  }
+
+  private func maximumLuma(in pixelBuffer: CVPixelBuffer) -> UInt8 {
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return 0 }
+    let bytes = base.assumingMemoryBound(to: UInt8.self)
+    let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+    var maximum: UInt8 = 0
+    for y in 0..<CVPixelBufferGetHeight(pixelBuffer) {
+      for x in 0..<CVPixelBufferGetWidth(pixelBuffer) {
+        maximum = max(maximum, bytes[y * stride + x])
+      }
+    }
+    return maximum
   }
 
   private func luma(in pixelBuffer: CVPixelBuffer, x: Int, y: Int) -> UInt8 {

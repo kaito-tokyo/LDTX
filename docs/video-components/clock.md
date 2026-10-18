@@ -17,7 +17,6 @@ SPDX-License-Identifier: Apache-2.0
 - **Show Date:** show `yyyy/MM/dd` on the first line and time on the second line.
 - **Use System Time Zone:** use the host **System Time Zone**. When disabled, use a supplied **Fixed UTC offset** in ISO 8601 form, such as `+09:00` or `-05:00`.
 - **Text Color:** an RGBA color.
-- **Background:** a supported CSS-like color or linear gradient.
 - **Outline:** zero, one, or two outlines; each has a thickness and color.
 
 **Clock** deliberately does not localize date or time strings. The supported format options above are the complete customization surface.
@@ -28,32 +27,17 @@ With **Use System Time Zone** enabled, **Clock** uses the **System Time Zone** o
 
 The time zone name is not displayed.
 
-## Background Values
-
-The **Background** field accepts the subset needed for solid backgrounds and two-stop linear gradients:
-
-- `transparent`
-- Hex colors: `#RGB`, `#RGBA`, `#RRGGBB`, and `#RRGGBBAA`
-- Numeric `rgb(...)` and `rgba(...)` colors, with channels from 0 through 255 and alpha from 0 through 1
-- `linear-gradient(<angle>deg, <color>, <color>)`
-
-For example:
-
-```text
-#202124cc
-rgba(0, 0, 0, 0.65)
-linear-gradient(135deg, #152238, #5c2d91)
-```
-
-An empty **Background** is transparent. An unsupported value is visibly marked as invalid in the editor and renders as a fully transparent background. The editor does not provide a separate CSS syntax guide.
-
 ## Typography and Rendering
 
 **Clock** always uses the bundled upright Noto Sans font. Font selection and font import are intentionally not supported.
 
 The renderer creates an **SDF atlas** for the fixed **Clock** glyph set (digits, separators, space, and AM/PM). Metal renders the fill and up to two outlines from that atlas.
 
-**Clock** text is fitted within the **Clock layer**'s own rendered canvas while preserving its aspect ratio. When the **Clock layer** is partly outside the **Output**, the renderer keeps the same texture and clips it at composition time; placement must not cause the text to be regenerated at a different size.
+**Clock** text uses its authored Font Size. The renderer derives a stable extent from the glyph metrics and date/time format. Pixels outside the text and outlines are transparent. When the **Clock layer** is partly outside the **Output**, the renderer keeps the same texture and clips it at composition time; placement must not cause the text to be regenerated at a different size.
+
+Older V4 Workspaces without `font_size` import Clocks at the current default of 48 pixels. Their reserved width and height fields are preserved as unknown data, but no longer control text sizing. Reading does not rewrite the package; the new font size is stored on the next save.
+
+If an updated Clock exceeds the renderer's dimension or pixel limits, the producer logs the failure and keeps its previous successfully rendered texture until a renderable configuration is supplied. A Clock without a previous texture remains unavailable.
 
 ## Layer Placement
 
@@ -71,7 +55,7 @@ runtime adoption is in progress.
 
 - **Active Program:** The single **Program** currently selected by the application; every **Output** uses its resolved **Clock layers**.
 - **Clock:** A **Video Component** that renders the current time.
-- **Clock appearance:** **Clock** settings stored with the **Video Component**, including format, time zone, colors, background, and outlines.
+- **Clock appearance:** **Clock** settings stored with the **Video Component**, including font size, format, time zone, text color, and outlines.
 - **Clock layer:** A **Video Layer** that refers to a **Clock** component and supplies that **Program**'s X, Y, Scale, and order.
 - **Fixed UTC offset:** A time-zone offset supplied as `+HH:MM` or `-HH:MM`, without displaying a time-zone name.
 - **Monitor:** An audio observation surface that spies, with near-zero latency, on every audio device whose monitor setting is enabled. It is not an **Output** and does not necessarily depend on the **Active Program**.

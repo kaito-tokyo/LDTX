@@ -1290,6 +1290,9 @@ public struct FillConicGradientComponent: ProgramComponentParameters {
 /// its own current-time provider; frame timestamps are intentionally absent
 /// from this persisted definition.
 public struct ClockComponent: ProgramComponentParameters {
+  /// Nil retains the legacy fixed-extent Program representation. Workspace Clocks
+  /// specify a pixel font size and use destinationWidth/Height as layer scales.
+  public var fontSize: Float?
   /// A resolved native RTFD overlay shares the retained texture lifecycle with Clock.
   /// Nil selects the clock formatter; an empty RTFD document renders no text.
   public var resolvedRTFD: Data? = nil
@@ -1303,17 +1306,13 @@ public struct ClockComponent: ProgramComponentParameters {
   public var foregroundGreen: Float
   public var foregroundBlue: Float
   public var foregroundAlpha: Float
-  public var backgroundRed: Float
-  public var backgroundGreen: Float
-  public var backgroundBlue: Float
-  public var backgroundAlpha: Float
   public var showsDate: Bool
   public var usesSystemTimeZone: Bool
   public var utcOffsetMinutes: Int32
-  public var background: String
   public var outlines: [ClockTextOutline]
 
   enum CodingKeys: String, CodingKey {
+    case fontSize
     case destinationX
     case destinationY
     case destinationWidth
@@ -1321,11 +1320,9 @@ public struct ClockComponent: ProgramComponentParameters {
     case showsSeconds
     case uses24HourTime
     case foregroundColor
-    case backgroundColor
     case showsDate
     case usesSystemTimeZone
     case utcOffsetMinutes
-    case background
     case outlines
     case resolvedRTFD
   }
@@ -1335,40 +1332,32 @@ public struct ClockComponent: ProgramComponentParameters {
     destinationY: Float = 0,
     destinationWidth: Float = 1,
     destinationHeight: Float = 1,
+    fontSize: Float? = nil,
     showsSeconds: Bool = true,
     uses24HourTime: Bool = true,
     foregroundRed: Float = 1,
     foregroundGreen: Float = 1,
     foregroundBlue: Float = 1,
     foregroundAlpha: Float = 1,
-    backgroundRed: Float = 0,
-    backgroundGreen: Float = 0,
-    backgroundBlue: Float = 0,
-    backgroundAlpha: Float = 0.65,
     showsDate: Bool = false,
     usesSystemTimeZone: Bool = true,
     utcOffsetMinutes: Int32 = 0,
-    background: String = "",
     outlines: [ClockTextOutline] = []
   ) {
     self.destinationX = destinationX
     self.destinationY = destinationY
     self.destinationWidth = destinationWidth
     self.destinationHeight = destinationHeight
+    self.fontSize = fontSize
     self.showsSeconds = showsSeconds
     self.uses24HourTime = uses24HourTime
     self.foregroundRed = foregroundRed
     self.foregroundGreen = foregroundGreen
     self.foregroundBlue = foregroundBlue
     self.foregroundAlpha = foregroundAlpha
-    self.backgroundRed = backgroundRed
-    self.backgroundGreen = backgroundGreen
-    self.backgroundBlue = backgroundBlue
-    self.backgroundAlpha = backgroundAlpha
     self.showsDate = showsDate
     self.usesSystemTimeZone = usesSystemTimeZone
     self.utcOffsetMinutes = utcOffsetMinutes
-    self.background = background
     self.outlines = Array(outlines.prefix(2))
   }
 
@@ -1378,6 +1367,7 @@ public struct ClockComponent: ProgramComponentParameters {
     destinationY = try container.decodeIfPresent(Float.self, forKey: .destinationY) ?? 0
     destinationWidth = try container.decodeIfPresent(Float.self, forKey: .destinationWidth) ?? 1
     destinationHeight = try container.decodeIfPresent(Float.self, forKey: .destinationHeight) ?? 1
+    fontSize = try container.decodeIfPresent(Float.self, forKey: .fontSize)
     showsSeconds = try container.decodeIfPresent(Bool.self, forKey: .showsSeconds) ?? true
     uses24HourTime = try container.decodeIfPresent(Bool.self, forKey: .uses24HourTime) ?? true
     let foreground =
@@ -1387,18 +1377,10 @@ public struct ClockComponent: ProgramComponentParameters {
     foregroundGreen = foreground.green
     foregroundBlue = foreground.blue
     foregroundAlpha = foreground.alpha
-    let legacyBackgroundColor =
-      try container.decodeIfPresent(CSSRGBAColor.self, forKey: .backgroundColor)
-      ?? CSSRGBAColor(red: 0, green: 0, blue: 0, alpha: 0.65)
-    backgroundRed = legacyBackgroundColor.red
-    backgroundGreen = legacyBackgroundColor.green
-    backgroundBlue = legacyBackgroundColor.blue
-    backgroundAlpha = legacyBackgroundColor.alpha
     showsDate = try container.decodeIfPresent(Bool.self, forKey: .showsDate) ?? false
     usesSystemTimeZone =
       try container.decodeIfPresent(Bool.self, forKey: .usesSystemTimeZone) ?? true
     utcOffsetMinutes = try container.decodeIfPresent(Int32.self, forKey: .utcOffsetMinutes) ?? 0
-    background = try container.decodeIfPresent(String.self, forKey: .background) ?? ""
     outlines = Array(
       (try container.decodeIfPresent([ClockTextOutline].self, forKey: .outlines) ?? []).prefix(2))
     resolvedRTFD = try container.decodeIfPresent(Data.self, forKey: .resolvedRTFD)
@@ -1410,6 +1392,7 @@ public struct ClockComponent: ProgramComponentParameters {
     try container.encode(destinationY, forKey: .destinationY)
     try container.encode(destinationWidth, forKey: .destinationWidth)
     try container.encode(destinationHeight, forKey: .destinationHeight)
+    try container.encodeIfPresent(fontSize, forKey: .fontSize)
     try container.encode(showsSeconds, forKey: .showsSeconds)
     try container.encode(uses24HourTime, forKey: .uses24HourTime)
     try container.encode(
@@ -1421,19 +1404,9 @@ public struct ClockComponent: ProgramComponentParameters {
       ),
       forKey: .foregroundColor
     )
-    try container.encode(
-      CSSRGBAColor(
-        red: backgroundRed,
-        green: backgroundGreen,
-        blue: backgroundBlue,
-        alpha: backgroundAlpha
-      ),
-      forKey: .backgroundColor
-    )
     try container.encode(showsDate, forKey: .showsDate)
     try container.encode(usesSystemTimeZone, forKey: .usesSystemTimeZone)
     try container.encode(utcOffsetMinutes, forKey: .utcOffsetMinutes)
-    try container.encode(background, forKey: .background)
     try container.encode(Array(outlines.prefix(2)), forKey: .outlines)
     try container.encodeIfPresent(resolvedRTFD, forKey: .resolvedRTFD)
   }

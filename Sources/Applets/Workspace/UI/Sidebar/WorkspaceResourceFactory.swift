@@ -61,16 +61,8 @@ enum WorkspaceResourceFactory {
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = name
-    component.width = .with {
-      $0.set(num: 1, den: 6)
-    }
-    component.height = .with {
-      $0.set(num: 2, den: 27)
-    }
+    component.fontSize = .with { $0.set(num: 48, den: 1) }
     component.foregroundExtendedSrgbColor = opaqueWhite
-    var background = Ldtx_Workspace_V4_Color()
-    background.alpha = 0.65
-    component.backgroundExtendedSrgbColor = background
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()

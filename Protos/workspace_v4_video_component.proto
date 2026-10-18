@@ -213,20 +213,18 @@ message TestPatternComponent {
 }
 
 // A Video Component that renders the current date and time.
-// It has no intrinsic image size. Its width and height define the rendering
-// extent relative to the Canvas, not an independent image size.
+// Its rendering extent is derived from the formatted text and font size.
 // It must not be referenced as a Vision input.
 message ClockComponent {
   // An LdtxInternalId for this entity.
   sfixed64 internal_id = 1 [default = 0];
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
-  // The Clock width, normalized by the Landscape Canvas width, in [0, 1].
-  // The same reference applies to Portrait projection.
-  Rational32 width = 3;
-  // The Clock height, normalized by the Landscape Canvas height, in [0, 1].
-  // The same reference applies to Portrait projection.
-  Rational32 height = 4;
+  reserved 3, 4;
+  reserved width, height;
+  // Positive font size in Landscape Canvas pixels, before layer scaling.
+  // The same pixel size is used on the Portrait Canvas.
+  Rational32 font_size = 12;
   // Whether the rendered Clock includes the date.
   bool shows_date = 5 [default = false];
   // Whether the rendered time includes seconds.
@@ -241,12 +239,8 @@ message ClockComponent {
   // encoded. Conversion to an output or display color space, alpha compositing,
   // filtering, and pixel quantization are implementation-defined.
   Color foreground_extended_srgb_color = 9;
-  // The background color of this Clock, in extended sRGB.
-  // RGB components use the nonlinear sRGB transfer function and may extend
-  // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function
-  // encoded. Conversion to an output or display color space, alpha compositing,
-  // filtering, and pixel quantization are implementation-defined.
-  Color background_extended_srgb_color = 10;
+  reserved 10;
+  reserved background_extended_srgb_color, background_color;
   // The text outlines rendered around the Clock text in back-to-front
   // compositing order. The first entry is the backmost outline; the last
   // entry is the frontmost outline.

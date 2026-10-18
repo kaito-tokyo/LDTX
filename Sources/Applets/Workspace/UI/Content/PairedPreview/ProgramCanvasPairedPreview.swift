@@ -11,8 +11,11 @@ public final class ProgramCanvasPairedPreview {
   public var attachWindow: ((NSWindow?) -> NSResponder?)?
   public let metalView: MTKView
   private let previewDelegate: any MTKViewDelegate
-  private let onSelectLandscape: () -> Void
-  private let onSelectPortrait: () -> Void
+  fileprivate let onSelectLandscape: () -> Void
+  fileprivate let onSelectPortrait: () -> Void
+  var accessibilityImage: PreviewAccessibilityImageStore? {
+    (previewDelegate as? any ProgramPreviewAccessibilityImageSource)?.accessibilityImage
+  }
 
   public init(
     metalView: MTKView, delegate: any MTKViewDelegate, onSelectLandscape: @escaping () -> Void,
@@ -43,12 +46,6 @@ public final class ProgramCanvasPairedPreview {
         .frame(width: height * ratio, height: height)
         .contentShape(Rectangle())
         .onTapGesture { point in self.selectCanvas(at: point) }
-        .accessibilityElement()
-        .accessibilityAddTraits(.isImage)
-        .accessibilityLabel("Landscape and Portrait preview")
-        .accessibilityIdentifier("canvasPairPreview")
-        .accessibilityAction(named: Text("Select Landscape"), self.onSelectLandscape)
-        .accessibilityAction(named: Text("Select Portrait"), self.onSelectPortrait)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(.background)
@@ -68,6 +65,7 @@ public final class ProgramCanvasPairedPreview {
   }
 
   public func stop() {
+    accessibilityImage?.clear()
     metalView.isPaused = true
     metalView.delegate = nil
   }
@@ -90,11 +88,22 @@ private struct PairedProgramPreview: NSViewRepresentable {
     let preview: ProgramCanvasPairedPreview
     private weak var responderHost: NSWindow?
     private var documentActions: NSResponder?
+    private lazy var imageElement = PreviewImageAccessibilityElement(
+      host: self,
+      store: preview.accessibilityImage,
+      selectLandscape: preview.onSelectLandscape, selectPortrait: preview.onSelectPortrait)
+
+    override func accessibilityChildren() -> [Any]? { [imageElement] }
+    override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+      MainActor.assumeIsolated { imageElement }
+    }
 
     init(preview: ProgramCanvasPairedPreview) {
       self.preview = preview
       super.init(frame: .zero)
+      setAccessibilityElement(false)
       let metalView = preview.metalView
+      metalView.setAccessibilityElement(false)
       metalView.translatesAutoresizingMaskIntoConstraints = false
       addSubview(metalView)
       NSLayoutConstraint.activate([

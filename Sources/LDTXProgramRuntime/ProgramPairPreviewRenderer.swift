@@ -7,9 +7,14 @@ import LDTXVideoRendering
 import Metal
 import MetalKit
 
-/// Renders two ProgramRuntime frames into a drawable supplied by the UI.
-/// The owner provides the single MTKView; this object only acts as its delegate.
-public final class ProgramPairPreviewRenderer: NSObject, MTKViewDelegate {
+/// Supplies completed drawable snapshots to the preview's accessibility element.
+public protocol ProgramPreviewAccessibilityImageSource: MTKViewDelegate {
+  var accessibilityImage: PreviewAccessibilityImageStore { get }
+}
+
+/// Renders two ProgramRuntime frames into the owner's single MTKView.
+public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibilityImageSource {
+  public let accessibilityImage = PreviewAccessibilityImageStore()
   private struct Configuration {
     var landscapeSize: CGSize
     var portraitSize: CGSize
@@ -84,6 +89,7 @@ public final class ProgramPairPreviewRenderer: NSObject, MTKViewDelegate {
   }
 
   public func stop() {
+    accessibilityImage.clear()
     let shouldStop = lock.withLock { () -> Bool in
       guard isRunning else { return false }
       isRunning = false
@@ -170,6 +176,10 @@ public final class ProgramPairPreviewRenderer: NSObject, MTKViewDelegate {
     command.addCompletedHandler { _ in withExtendedLifetime(lease) {} }
     command.present(drawable)
     command.commit()
+    if let commandQueue {
+      accessibilityImage.update(
+        texture: drawable.texture, commandQueue: commandQueue, drawable: drawable)
+    }
   }
 }
 

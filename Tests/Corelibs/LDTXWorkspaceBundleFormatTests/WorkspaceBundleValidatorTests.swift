@@ -9,6 +9,27 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
+  @Test func clockRequiresAPositiveFontSizeWithoutUnitIntervalRestriction() {
+    for (num, den, valid): (Int32, UInt32, Bool) in [
+      (48, 1, true), (97, 2, true),
+      (0, 1, false), (-1, 1, false), (48, 0, false),
+    ] {
+      let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
+        $0.videoComponents = [
+          .with {
+            $0.clock.internalID = 1
+            $0.clock.displayName = "Clock"
+            $0.clock.fontSize.set(num: num, den: den)
+          }
+        ]
+      }
+      #expect(
+        WorkspaceBundleValidatorV4.validationIssues(
+          in: definition,
+          preferences: .init()
+        ).isEmpty == valid)
+    }
+  }
   @Test func rejectsGeneratedOverlaysAsOCRInputs() {
     var bundle = WorkspaceV4Bundle(
       definition: .with {

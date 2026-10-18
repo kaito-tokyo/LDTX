@@ -71,6 +71,7 @@ struct DynamicTextInspector: View {
       } else {
         Text("This item is no longer present in the Workspace.")
       }
+      VideoComponentDeleteButton(stateService: stateService, componentID: internalID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive)
