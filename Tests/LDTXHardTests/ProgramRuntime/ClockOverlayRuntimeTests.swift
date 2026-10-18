@@ -70,6 +70,16 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
     ]
     let outlined = try #require(renderer.naturalClockSize(for: component))
     #expect(outlined == plain + SIMD2<Float>(repeating: 32))
+    for thickness: Float in [64, 65, 20_000] {
+      component.outlines = [
+        ClockTextOutline(thickness: thickness, color: "black"),
+        ClockTextOutline(thickness: thickness, color: "white"),
+      ]
+      let capped = try #require(renderer.naturalClockSize(for: component))
+      #expect(capped == plain + SIMD2<Float>(repeating: 256))
+    }
+    component.outlines = [ClockTextOutline(thickness: .infinity, color: "black")]
+    #expect(renderer.naturalClockSize(for: component) == plain)
   }
 
   @Test func fontSizedClockUsesNativeRasterBeforeLayerScalingOnEitherCanvas() throws {

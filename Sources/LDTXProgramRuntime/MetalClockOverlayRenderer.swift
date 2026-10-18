@@ -330,7 +330,8 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       (glyphs.map { $0.offset.y + $0.size.y }.max() ?? 0)
       - (glyphs.map { $0.offset.y }.min() ?? 0)
     let height = component.showsDate ? lineHeight * 2 + Self.atlasPixelHeight * 0.12 : lineHeight
-    let padding = 4 + component.outlines.prefix(2).reduce(Float(0)) { $0 + max($1.thickness, 0) }
+    let outlines = component.normalizedForClockOverlayRendering.outlines
+    let padding = 4 + outlines.reduce(Float(0)) { $0 + $1.thickness }
     let size = SIMD2(
       ceil(width * fontSize / Self.atlasPixelHeight + padding * 2),
       ceil(height * fontSize / Self.atlasPixelHeight + padding * 2))
