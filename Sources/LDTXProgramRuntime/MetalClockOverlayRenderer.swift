@@ -309,23 +309,34 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       metrics[Int(character.asciiValue! - UInt8(Self.firstCodePoint))]
     }
     let widestDigit = "0123456789".max { metric($0).advance < metric($1).advance }!
-    let date = String(repeating: widestDigit, count: 4) + "/" + String(repeating: widestDigit, count: 2)
+    let date =
+      String(repeating: widestDigit, count: 4) + "/" + String(repeating: widestDigit, count: 2)
       + "/" + String(repeating: widestDigit, count: 2)
-    let time = String(repeating: widestDigit, count: 2) + ":" + String(repeating: widestDigit, count: 2)
+    let time =
+      String(repeating: widestDigit, count: 2) + ":" + String(repeating: widestDigit, count: 2)
       + (component.showsSeconds ? ":" + String(repeating: widestDigit, count: 2) : "")
-    let timeWidth = time.reduce(Float(0)) { $0 + metric($1).advance }
-      + (component.uses24HourTime ? 0 : max(" AM".reduce(Float(0)) { $0 + metric($1).advance },
-        " PM".reduce(Float(0)) { $0 + metric($1).advance }))
-    let width = component.showsDate ? max(timeWidth, date.reduce(Float(0)) { $0 + metric($1).advance }) : timeWidth
+    let timeWidth =
+      time.reduce(Float(0)) { $0 + metric($1).advance }
+      + (component.uses24HourTime
+        ? 0
+        : max(
+          " AM".reduce(Float(0)) { $0 + metric($1).advance },
+          " PM".reduce(Float(0)) { $0 + metric($1).advance }))
+    let width =
+      component.showsDate
+      ? max(timeWidth, date.reduce(Float(0)) { $0 + metric($1).advance }) : timeWidth
     let glyphs = "0123456789/: APM".map(metric)
-    let lineHeight = (glyphs.map { $0.offset.y + $0.size.y }.max() ?? 0)
+    let lineHeight =
+      (glyphs.map { $0.offset.y + $0.size.y }.max() ?? 0)
       - (glyphs.map { $0.offset.y }.min() ?? 0)
     let height = component.showsDate ? lineHeight * 2 + Self.atlasPixelHeight * 0.12 : lineHeight
     let padding = 4 + (component.outlines.map(\.thickness).max() ?? 0)
-    let size = SIMD2(ceil(width * fontSize / Self.atlasPixelHeight + padding * 2),
+    let size = SIMD2(
+      ceil(width * fontSize / Self.atlasPixelHeight + padding * 2),
       ceil(height * fontSize / Self.atlasPixelHeight + padding * 2))
     guard size.x.isFinite, size.y.isFinite, size.x <= 16384, size.y <= 16384,
-      size.x * size.y <= Float(Self.dynamicTextPixelBudget) else { return nil }
+      size.x * size.y <= Float(Self.dynamicTextPixelBudget)
+    else { return nil }
     return size
   }
 
@@ -368,10 +379,16 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       : 1
     let scale = min(widthScale, heightScale)
     let natural = naturalClockSize(for: request.component)
-    let horizontalScale = natural.map { request.component.fontSize! / Self.atlasPixelHeight
-      * Float(request.pixelWidth) / $0.x } ?? scale
-    let verticalScale = natural.map { request.component.fontSize! / Self.atlasPixelHeight
-      * Float(request.pixelHeight) / $0.y } ?? scale
+    let horizontalScale =
+      natural.map {
+        request.component.fontSize! / Self.atlasPixelHeight
+          * Float(request.pixelWidth) / $0.x
+      } ?? scale
+    let verticalScale =
+      natural.map {
+        request.component.fontSize! / Self.atlasPixelHeight
+          * Float(request.pixelHeight) / $0.y
+      } ?? scale
     let interlineGap = unscaledInterlineGap * verticalScale
     let blockHeight = unscaledBlockHeight * verticalScale
     var lineTop = (Float(request.pixelHeight) - blockHeight) * 0.5

@@ -88,7 +88,8 @@ private struct PairedProgramPreview: NSViewRepresentable {
     let preview: ProgramCanvasPairedPreview
     private weak var responderHost: NSWindow?
     private var documentActions: NSResponder?
-    private lazy var imageElement = PreviewImageAccessibilityElement(host: self,
+    private lazy var imageElement = PreviewImageAccessibilityElement(
+      host: self,
       store: preview.accessibilityImage,
       selectLandscape: preview.onSelectLandscape, selectPortrait: preview.onSelectPortrait)
 

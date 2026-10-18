@@ -173,7 +173,9 @@ public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibi
       encoder.endEncoding()
     }
 
-    if let device { accessibilityImage.capture(texture: drawable.texture, command: command, device: device) }
+    if let device {
+      accessibilityImage.capture(texture: drawable.texture, command: command, device: device)
+    }
     command.addCompletedHandler { _ in withExtendedLifetime(lease) {} }
     command.present(drawable)
     command.commit()

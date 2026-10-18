@@ -9,8 +9,10 @@ import Testing
 struct EditionCompatibilityUnitTestSuite {
   @Test func clockFontSizeUsesNewTagAndPreservesReservedFieldsAsUnknown() throws {
     // Former width/height fields are no longer interpreted as Clock geometry.
-    let legacy = Data([0x1a, 0x04, 0x08, 0x02, 0x10, 0x0c,
-                       0x22, 0x04, 0x08, 0x04, 0x10, 0x36, 0x52, 0x00])
+    let legacy = Data([
+      0x1a, 0x04, 0x08, 0x02, 0x10, 0x0c,
+      0x22, 0x04, 0x08, 0x04, 0x10, 0x36, 0x52, 0x00,
+    ])
     var clock = try Ldtx_Workspace_V4_ClockComponent(serializedBytes: legacy)
     #expect(!clock.hasFontSize)
     #expect(clock.unknownFields.data == legacy)
@@ -18,7 +20,7 @@ struct EditionCompatibilityUnitTestSuite {
     let restored = try Ldtx_Workspace_V4_ClockComponent(serializedBytes: clock.serializedData())
     #expect(restored.fontSize.double == 48)
     #expect(restored.unknownFields.data == legacy)
-    #expect(try clock.serializedData().contains(0x62)) // field 12, length-delimited
+    #expect(try clock.serializedData().contains(0x62))  // field 12, length-delimited
   }
   @Test func preservesExplicitFalseForRecordingEnabled() throws {
     var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()

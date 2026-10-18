@@ -68,7 +68,12 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
     clock.fontSize = .with { $0.set(num: 48, den: 1) }
-    clock.foregroundExtendedSrgbColor = .with { $0.red = 0.25; $0.green = 0.5; $0.blue = 1; $0.alpha = 0.75 }
+    clock.foregroundExtendedSrgbColor = .with {
+      $0.red = 0.25
+      $0.green = 0.5
+      $0.blue = 1
+      $0.alpha = 0.75
+    }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.clock = clock
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -90,8 +95,9 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       #expect(value.fontSize == 48)
       #expect(value.destinationWidth == 1)
       #expect(value.destinationHeight == 1)
-      #expect(value.foregroundRed == 0.25 && value.foregroundGreen == 0.5
-        && value.foregroundBlue == 1 && value.foregroundAlpha == 0.75)
+      #expect(
+        value.foregroundRed == 0.25 && value.foregroundGreen == 0.5
+          && value.foregroundBlue == 1 && value.foregroundAlpha == 0.75)
     }
   }
 

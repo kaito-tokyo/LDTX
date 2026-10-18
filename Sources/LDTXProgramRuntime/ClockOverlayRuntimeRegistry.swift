@@ -51,7 +51,8 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
       var nativeSize: SIMD2<Float>?
       if component.fontSize != nil, component.resolvedRTFD == nil {
         guard outputWidth > 0, outputHeight > 0,
-          let size = renderer.naturalClockSize(for: component) else { continue }
+          let size = renderer.naturalClockSize(for: component)
+        else { continue }
         nativeSize = size
         component.destinationWidth *= size.x / Float(outputWidth)
         component.destinationHeight *= size.y / Float(outputHeight)

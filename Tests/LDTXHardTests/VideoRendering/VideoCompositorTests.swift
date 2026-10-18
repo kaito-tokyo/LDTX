@@ -256,7 +256,8 @@ struct VideoCompositorIntegrationTestSuite {
     let texture = try #require(device.makeTexture(descriptor: descriptor))
     let red = [UInt16](repeating: 0xf800, count: 4)
     red.withUnsafeBytes {
-      texture.replace(region: MTLRegionMake2D(0, 0, 2, 2), mipmapLevel: 0,
+      texture.replace(
+        region: MTLRegionMake2D(0, 0, 2, 2), mipmapLevel: 0,
         withBytes: $0.baseAddress!, bytesPerRow: 4)
     }
     let compositor = try VideoCompositor(

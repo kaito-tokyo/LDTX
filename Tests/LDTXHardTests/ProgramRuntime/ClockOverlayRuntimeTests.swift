@@ -19,10 +19,13 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
     let component = ClockComponent(destinationWidth: 0.5, destinationHeight: 0.5, fontSize: 48)
     let native = try #require(renderer.naturalClockSize(for: component))
     for (width, height) in [(1920, 1080), (1080, 1920)] {
-      let registry = try ClockOverlayRuntimeRegistry(device: device,
-        currentTimeProvider: FixedClockCurrentTimeProvider(date: Date(timeIntervalSince1970: 1_700_000_000)))
+      let registry = try ClockOverlayRuntimeRegistry(
+        device: device,
+        currentTimeProvider: FixedClockCurrentTimeProvider(
+          date: Date(timeIntervalSince1970: 1_700_000_000)))
       defer { registry.deactivateAll() }
-      registry.synchronize(composite: .init(steps: [.init(id: "font-sized", component: .clock(component))]),
+      registry.synchronize(
+        composite: .init(steps: [.init(id: "font-sized", component: .clock(component))]),
         outputWidth: width, outputHeight: height)
       waitUntil(timeout: 2) { registry.retainedTexture(forStepNamed: "font-sized") != nil }
       let texture = try #require(registry.retainedTexture(forStepNamed: "font-sized"))
@@ -46,8 +49,10 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
     dated.showsDate = true
     let dateSize = try #require(renderer.naturalClockSize(for: dated))
     #expect(dateSize.y > largeSize.y)
-    let rendered = try renderer.renderClockOverlay(.init(text: "12:34:56", component: large,
-      pixelWidth: Int(largeSize.x), pixelHeight: Int(largeSize.y)))
+    let rendered = try renderer.renderClockOverlay(
+      .init(
+        text: "12:34:56", component: large,
+        pixelWidth: Int(largeSize.x), pixelHeight: Int(largeSize.y)))
     #expect(rendered.colorTexture.width == Int(largeSize.x))
     #expect(rendered.colorTexture.height == Int(largeSize.y))
     let alpha = try readR8Texture(#require(rendered.alphaTexture), using: device)

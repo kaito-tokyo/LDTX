@@ -17,8 +17,10 @@ final class PreviewImageAccessibilityElement: NSObject {
   private let selectLandscape: () -> Void
   private let selectPortrait: () -> Void
 
-  init(host: NSView, store: PreviewAccessibilityImageStore?,
-    selectLandscape: @escaping () -> Void, selectPortrait: @escaping () -> Void) {
+  init(
+    host: NSView, store: PreviewAccessibilityImageStore?,
+    selectLandscape: @escaping () -> Void, selectPortrait: @escaping () -> Void
+  ) {
     self.host = host
     self.store = store
     self.selectLandscape = selectLandscape
@@ -27,16 +29,21 @@ final class PreviewImageAccessibilityElement: NSObject {
 
   override func accessibilityIsIgnored() -> Bool { false }
   override func accessibilityAttributeNames() -> [NSAccessibility.Attribute] {
-    ["AXRole", "AXRoleDescription", "AXParent", "AXWindow", "AXTopLevelUIElement",
-     "AXPosition", "AXSize", "AXDescription", "AXIdentifier", "AXEnabled",
-     "AXImageDataSize", "AXCustomActions"].map { NSAccessibility.Attribute(rawValue: $0) }
+    [
+      "AXRole", "AXRoleDescription", "AXParent", "AXWindow", "AXTopLevelUIElement",
+      "AXPosition", "AXSize", "AXDescription", "AXIdentifier", "AXEnabled",
+      "AXImageDataSize", "AXCustomActions",
+    ].map { NSAccessibility.Attribute(rawValue: $0) }
   }
   override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
     MainActor.assumeIsolated { AXCallbackValue(value: attributeValue(attribute)) }.value
   }
 
   private func attributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
-    let frame = host.flatMap { host in host.window.map { $0.convertToScreen(host.convert(host.bounds, to: nil)) } } ?? .zero
+    let frame =
+      host.flatMap { host in
+        host.window.map { $0.convertToScreen(host.convert(host.bounds, to: nil)) }
+      } ?? .zero
     switch attribute.rawValue {
     case "AXRole": return NSAccessibility.Role.image.rawValue
     case "AXRoleDescription": return NSAccessibility.Role.image.description(with: nil)
@@ -50,27 +57,47 @@ final class PreviewImageAccessibilityElement: NSObject {
     case "AXImageDataSize": return NSValue(size: store?.size ?? .zero)
     case "AXCustomActions":
       return [
-        NSAccessibilityCustomAction(name: String(localized: "Select Landscape"), handler: { [weak self] in
-          guard let self else { return false }; self.selectLandscape(); return true
-        }),
-        NSAccessibilityCustomAction(name: String(localized: "Select Portrait"), handler: { [weak self] in
-          guard let self else { return false }; self.selectPortrait(); return true
-        })]
+        NSAccessibilityCustomAction(
+          name: String(localized: "Select Landscape"),
+          handler: { [weak self] in
+            guard let self else { return false }
+            self.selectLandscape()
+            return true
+          }),
+        NSAccessibilityCustomAction(
+          name: String(localized: "Select Portrait"),
+          handler: { [weak self] in
+            guard let self else { return false }
+            self.selectPortrait()
+            return true
+          }),
+      ]
     default: return nil
     }
   }
-  override func accessibilityIsAttributeSettable(_ attribute: NSAccessibility.Attribute) -> Bool { false }
-  override func accessibilityParameterizedAttributeNames() -> [NSAccessibility.ParameterizedAttribute] {
+  override func accessibilityIsAttributeSettable(_ attribute: NSAccessibility.Attribute) -> Bool {
+    false
+  }
+  override func accessibilityParameterizedAttributeNames() -> [NSAccessibility
+    .ParameterizedAttribute]
+  {
     [NSAccessibility.ParameterizedAttribute(rawValue: "AXImageData")]
   }
-  override func accessibilityAttributeValue(_ attribute: NSAccessibility.ParameterizedAttribute, forParameter parameter: Any?) -> Any? {
+  override func accessibilityAttributeValue(
+    _ attribute: NSAccessibility.ParameterizedAttribute, forParameter parameter: Any?
+  ) -> Any? {
     let argument = AXCallbackValue(value: parameter)
-    return MainActor.assumeIsolated { AXCallbackValue(value: imageData(attribute, parameter: argument.value)) }.value
+    return MainActor.assumeIsolated {
+      AXCallbackValue(value: imageData(attribute, parameter: argument.value))
+    }.value
   }
 
-  private func imageData(_ attribute: NSAccessibility.ParameterizedAttribute, parameter: Any?) -> Any? {
+  private func imageData(_ attribute: NSAccessibility.ParameterizedAttribute, parameter: Any?)
+    -> Any?
+  {
     guard attribute.rawValue == "AXImageData", let parameters = parameter as? NSDictionary,
-      host?.window != nil else { return nil }
+      host?.window != nil
+    else { return nil }
     return store?.data(for: parameters)
   }
 }
