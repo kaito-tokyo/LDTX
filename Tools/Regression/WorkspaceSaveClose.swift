@@ -14,6 +14,14 @@ private func report(_ message: String) {
   FileHandle.standardOutput.write(Data((message + "\n").utf8))
 }
 
+// LaunchServices does not propagate the child's exit status through `open -W`.
+private func finish(_ status: Int32) -> Never {
+  if let path = ProcessInfo.processInfo.environment["LDTX_SAVE_CLOSE_RESULT"] {
+    try? String(status).write(toFile: path, atomically: true, encoding: .utf8)
+  }
+  exit(status)
+}
+
 @MainActor
 @Observable
 private final class SaveCloseDocument: Document {
@@ -65,6 +73,72 @@ private enum ProbeState {
   static var expectedFiles: [(URL, String)] = []
   static var terminationReviewed = false
   static var handledPanels: Set<ObjectIdentifier> = []
+  static var quitRequested = false
+  static var closeButtonCalls = 0
+  static var closeForwarder: CloseProbeForwarder?
+}
+
+/// Observe the button target without changing the production gate or its action.
+@MainActor
+private final class CloseProbeForwarder: NSObject {
+  private weak var target: AnyObject?
+  private let action: Selector
+
+  init(button: NSButton) {
+    target = button.target
+    action = button.action!
+    super.init()
+    button.target = self
+    button.action = #selector(closeButton(_:))
+  }
+
+  @objc private func closeButton(_ sender: Any?) {
+    ProbeState.closeButtonCalls += 1
+    report("native Close reached the close button target")
+    NSApplication.shared.sendAction(action, to: target, from: sender)
+  }
+}
+
+@MainActor
+private func nativeMenuClose(_ window: NSWindow, keyboard: Bool) {
+  @MainActor func findClose(_ menu: NSMenu) -> (NSMenu, Int)? {
+    for (index, item) in menu.items.enumerated() {
+      if item.keyEquivalent == "w", item.keyEquivalentModifierMask == .command {
+        return (menu, index)
+      }
+      if let submenu = item.submenu, let result = findClose(submenu) { return result }
+    }
+    return nil
+  }
+  guard NSApplication.shared.keyWindow === window,
+    let main = NSApplication.shared.mainMenu, let (menu, index) = findClose(main)
+  else {
+    report("FAIL: isolated key window/native Close menu missing")
+    finish(96)
+  }
+  let item = menu.items[index]
+  guard item.action == #selector(NSWindow.performClose(_:)), item.target == nil,
+    NSApplication.shared.target(forAction: item.action!) as AnyObject? === window
+  else {
+    report("FAIL: unexpected native Close action/target")
+    finish(96)
+  }
+  report("native Close action=performClose:, target=nil, resolved window verified")
+  if keyboard {
+    let event = NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: .command,
+      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+      context: nil, characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13
+    )!
+    guard main.performKeyEquivalent(with: event) else {
+      report("FAIL: native Command-W key equivalent was not handled")
+      finish(96)
+    }
+    report("native Command-W key equivalent handled")
+  } else {
+    menu.performActionForItem(at: index)
+    report("native File > Close menu action returned")
+  }
 }
 
 @MainActor
@@ -83,7 +157,7 @@ private final class ProbeDelegate: NSObject, NSApplicationDelegate {
     for (url, expected) in ProbeState.expectedFiles {
       guard (try? String(contentsOf: url, encoding: .utf8)) == expected else {
         report("FAIL: Quit lost confirmed content")
-        exit(97)
+        finish(97)
       }
     }
     report("PASS: standard Quit; all document files verified")
@@ -91,6 +165,22 @@ private final class ProbeDelegate: NSObject, NSApplicationDelegate {
 }
 
 private struct WorkspaceSaveCloseProbe: App {
+  init() {
+    if CommandLine.arguments.contains("--menu-close")
+      || CommandLine.arguments.contains("--key-close")
+    {
+      // A bundled DocumentGroup may initially show Open instead of a document.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        if NSDocumentController.shared.documents.isEmpty {
+          _ = try? NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
+        }
+      }
+      DispatchQueue.global().asyncAfter(deadline: .now() + 12) {
+        report("FAIL: isolated application startup timed out")
+        finish(98)
+      }
+    }
+  }
   @NSApplicationDelegateAdaptor(ProbeDelegate.self) private var delegate
   var body: some Scene {
     DocumentGroup { (content: SaveCloseDocument) in
@@ -102,7 +192,7 @@ private struct WorkspaceSaveCloseProbe: App {
           let window = document.windowControllers.first?.window
         else {
           report("FAIL: document window missing")
-          exit(98)
+          finish(98)
         }
         let url =
           ProcessInfo.processInfo.environment["LDTX_SAVE_CLOSE_DESTINATION"]
@@ -111,7 +201,7 @@ private struct WorkspaceSaveCloseProbe: App {
           .appendingPathComponent("ldtx-save-close-\(UUID().uuidString).txt")
         do { try "baseline".write(to: url, atomically: true, encoding: .utf8) } catch {
           report("FAIL: fixture: \(error)")
-          exit(98)
+          finish(98)
         }
         let unprotected = CommandLine.arguments.contains("--unprotected")
         let failure = CommandLine.arguments.contains("--failure")
@@ -124,6 +214,15 @@ private struct WorkspaceSaveCloseProbe: App {
         if !unprotected {
           ProbeState.gate = WorkspaceDocumentCloseCoordinator()
           ProbeState.gate?.attach(to: window)
+        }
+        let menuClose = CommandLine.arguments.contains("--menu-close")
+        let keyboardClose = CommandLine.arguments.contains("--key-close")
+        if menuClose || keyboardClose {
+          ProbeState.closeForwarder = CloseProbeForwarder(
+            button: window.standardWindowButton(.closeButton)!)
+          NSApplication.shared.activate()
+          window.makeKeyAndOrderFront(nil)
+          try? await Task.sleep(for: .milliseconds(200))
         }
         let save: @MainActor @Sendable () -> Void = {
           if unprotected {
@@ -171,7 +270,14 @@ private struct WorkspaceSaveCloseProbe: App {
                 report("cancel Save As")
                 savePanel.cancel(nil)
               } else if quitCancel {
-                report("cancel standard Quit confirmation")
+                guard ProbeState.quitRequested, WorkspaceDocumentCloseCoordinator.pendingSaves == 0,
+                  attempts.withLock({ $0 }) == 0
+                else {
+                  report("FAIL: cancelled a pre-Quit save instead of standard Quit review")
+                  finish(96)
+                }
+                report(
+                  "cancel standard Quit confirmation; Quit already requested, saves=0, writes=0")
                 if let savePanel = panel as? NSSavePanel {
                   savePanel.cancel(nil)
                 } else if let parent = panel.sheetParent {
@@ -204,7 +310,7 @@ private struct WorkspaceSaveCloseProbe: App {
                 }
               } else {
                 report("FAIL: Save As panel missing")
-                exit(96)
+                finish(96)
               }
               if cancelSaveAs || retry {
                 save()
@@ -225,8 +331,11 @@ private struct WorkspaceSaveCloseProbe: App {
           report("close requested")
           if !cancelSaveAs && !retry {
             if quit {
+              ProbeState.quitRequested = true
               report("Quit requested")
               NSApplication.shared.terminate(nil)
+            } else if menuClose || keyboardClose {
+              nativeMenuClose(window, keyboard: keyboardClose)
             } else {
               window.performClose(nil)
             }
@@ -236,7 +345,14 @@ private struct WorkspaceSaveCloseProbe: App {
           MainActor.assumeIsolated {
             let saved = try? String(contentsOf: url, encoding: .utf8)
             let open = NSDocumentController.shared.documents.contains { $0 === document }
-            let success =
+            let closeRouteVerified =
+              !(menuClose || keyboardClose) || ProbeState.closeButtonCalls == 1
+            let quitCancelVerified =
+              !quitCancel
+              || (ProbeState.quitRequested && WorkspaceDocumentCloseCoordinator.pendingSaves == 0
+                && attempts.withLock { $0 } == 0 && window.attachedSheet == nil
+                && NSApplication.shared.modalWindow == nil)
+            let documentVerified =
               (failure || quitCancel || quitFailure)
               ? open && document.isDocumentEdited && content.text == "latest" && saved == "baseline"
                 && (!(quitCancel || quitFailure)
@@ -244,6 +360,7 @@ private struct WorkspaceSaveCloseProbe: App {
                 && (!quitFailure || attempts.withLock { $0 > 0 })
               : !open && saved == (retry ? "retried" : "latest")
                 && (!cancelSaveAs || ProbeState.handledPanel)
+            let success = documentVerified && closeRouteVerified && quitCancelVerified
             if !success {
               report(
                 "state open=\(open) edited=\(document.isDocumentEdited) handled=\(ProbeState.handledPanel) reviewed=\(ProbeState.terminationReviewed) disk=\(saved ?? "missing")"
@@ -253,14 +370,14 @@ private struct WorkspaceSaveCloseProbe: App {
               success ? "PASS: responsive; document and disk verified" : "FAIL: document/disk state"
             )
             try? FileManager.default.removeItem(at: url)
-            exit(success ? 0 : 97)
+            finish(success ? 0 : 97)
           }
         }
         RunLoop.main.add(timer, forMode: .common)
         RunLoop.main.add(timer, forMode: .modalPanel)
         DispatchQueue.global().asyncAfter(deadline: .now() + 7) {
           report("FAIL: main event loop blocked")
-          exit(99)
+          finish(99)
         }
       }
     } makeDocument: { _, _ in

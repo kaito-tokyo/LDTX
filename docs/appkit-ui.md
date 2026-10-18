@@ -84,6 +84,15 @@ close-action restoration, and queued saves. No running LDTX Workspace is used.
 Quit is also checked with pending saves, multiple documents, cancellation of
 standard document confirmation, and save failure. `--quit` runs just these
 termination cases. The baseline includes the original pending-save Quit hang.
+`--menu` launches a separate, uniquely identified test app through LaunchServices
+and exercises the actual File > Close item and Command-W key equivalent. It
+checks the generated `performClose:` action, nil target, responder resolution to
+the test window, and dispatch through the close button's existing target. These
+cases are also included in the default run and the unprotected baseline.
+They require a GUI login session; only the isolated probe is activated.
+The quit-cancellation case asserts that no save or write preceded Quit, that the
+cancelled panel appeared after Quit was requested, and that no sheet/modal panel
+or pending save remains after cancellation.
 
 WorkspaceApplication overrides the public `terminate` entry point to await
 pending save requests and asynchronous NSDocument activity barriers for every
