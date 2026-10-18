@@ -4,11 +4,7 @@
 import CoreGraphics
 import Foundation
 import Metal
-
-// The GPU completion handler transfers exclusive read ownership to the worker queue.
-private struct CompletedPreviewBuffer: @unchecked Sendable {
-  let buffer: MTLBuffer
-}
+import QuartzCore
 
 /// A completed preview render. Storage is immutable and independent of the drawable's lifetime.
 public struct PreviewAccessibilityImage: @unchecked Sendable {
@@ -78,75 +74,89 @@ public struct PreviewAccessibilityImage: @unchecked Sendable {
   }
 }
 
-/// Serializes GPU readback and AX conversion off the main actor, with at most one readback in flight.
+/// Keeps one preview drawable alive; GPU readback and conversion run only for AXImageData requests.
 public final class PreviewAccessibilityImageStore: @unchecked Sendable {
+  private struct Source: @unchecked Sendable {
+    let texture: MTLTexture
+    let commandQueue: MTLCommandQueue
+    // Retaining the drawable prevents its texture from being recycled during an AX read.
+    let drawable: CAMetalDrawable?
+  }
+
   private let lock = NSLock()
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.preview-accessibility")
-  private var latest: PreviewAccessibilityImage?
-  private var busy = false
+  private var source: Source?
   private var generation = 0
 
   public init() {}
   public var size: CGSize {
-    lock.withLock { latest.map { CGSize(width: $0.image.width, height: $0.image.height) } ?? .zero }
+    lock.withLock {
+      source.map { CGSize(width: $0.texture.width, height: $0.texture.height) } ?? .zero
+    }
   }
   public func data(for parameters: NSDictionary) -> Data? {
-    let snapshot = lock.withLock { latest }
-    return queue.sync { snapshot?.data(for: parameters) }
+    guard parameters["AXImageDataFormat"] as? String == "RGBA" else { return nil }
+    let (snapshot, token) = lock.withLock { (source, generation) }
+    guard let snapshot else { return nil }
+    return queue.sync {
+      guard let image = readImage(from: snapshot) else { return nil }
+      let data = image.data(for: parameters)
+      return lock.withLock { generation == token ? data : nil }
+    }
   }
   public func clear() {
     lock.withLock {
       generation += 1
-      latest = nil
+      source = nil
     }
   }
 
-  func capture(texture: MTLTexture, command: MTLCommandBuffer, device: MTLDevice) {
+  /// Publish only after committing rendering on this queue. No pixels are read here.
+  func update(
+    texture: MTLTexture, commandQueue: MTLCommandQueue, drawable: CAMetalDrawable? = nil
+  ) {
     let width = texture.width
     let height = texture.height
     guard width > 0, height > 0, width * height <= 16_000_000 else {
       clear()
       return
     }
-    let token: Int? = lock.withLock {
-      guard !busy else { return nil }
-      busy = true
-      return generation
+    lock.withLock {
+      source = Source(texture: texture, commandQueue: commandQueue, drawable: drawable)
     }
-    guard let token else { return }
+  }
+
+  private func readImage(from source: Source) -> PreviewAccessibilityImage? {
+    let texture = source.texture
+    let width = texture.width
+    let height = texture.height
     let row = (width * 4 + 255) & ~255
-    guard let buffer = device.makeBuffer(length: row * height, options: .storageModeShared),
+    guard
+      let buffer = source.commandQueue.device.makeBuffer(
+        length: row * height, options: .storageModeShared),
+      let command = source.commandQueue.makeCommandBuffer(),
       let blit = command.makeBlitCommandEncoder()
-    else {
-      lock.withLock { busy = false }
-      return
-    }
+    else { return nil }
     blit.copy(
       from: texture, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(),
       sourceSize: MTLSize(width: width, height: height, depth: 1), to: buffer,
       destinationOffset: 0, destinationBytesPerRow: row, destinationBytesPerImage: row * height)
     blit.endEncoding()
-    let readback = CompletedPreviewBuffer(buffer: buffer)
-    command.addCompletedHandler { [self] completed in
-      let succeeded = completed.status == .completed
-      queue.async { [self] in
-        defer { lock.withLock { busy = false } }
-        guard succeeded else { return }
-        let data = Data(bytes: readback.buffer.contents(), count: row * height)
-        guard let provider = CGDataProvider(data: data as CFData),
-          let image = CGImage(
-            width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
-            bytesPerRow: row, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-            bitmapInfo: [
-              .byteOrder32Little,
-              CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue),
-            ],
-            provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
-        else { return }
-        lock.withLock {
-          if generation == token { latest = PreviewAccessibilityImage(image: image) }
-        }
-      }
-    }
+    command.commit()
+    // Only GPU work on the already-committed render queue is awaited; no UI callback is needed.
+    withExtendedLifetime(source.drawable) { command.waitUntilCompleted() }
+    guard command.status == .completed else { return nil }
+    let data = Data(bytes: buffer.contents(), count: row * height)
+    guard let provider = CGDataProvider(data: data as CFData),
+      let image = CGImage(
+        width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+        bytesPerRow: row, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+        bitmapInfo: [
+          .byteOrder32Little,
+          CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue),
+        ],
+        provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    else { return nil }
+    return PreviewAccessibilityImage(image: image)
   }
 }

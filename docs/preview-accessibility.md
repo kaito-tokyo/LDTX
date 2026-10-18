@@ -45,25 +45,28 @@ Detached elements do not return image data.
 
 ## Rendering and cost
 
-`ProgramPairPreviewRenderer` copies the actual composed BGRA drawable into a
-shared Metal buffer in the same command buffer, before presentation. This
-includes both canvases, color preference, loading placeholders and transparent
-gap. GPU completion owns the readback buffer until a serialized worker copies
-it into an immutable CGImage. One readback is allowed in flight; intervening
-renders skip capture rather than queueing more work. Native drawables over
-16,000,000 pixels are not captured. The cache does not retain a drawable.
+`ProgramPairPreviewRenderer` retains the latest composed BGRA drawable after
+committing its render command, without reading any pixels. This includes both
+canvases, color preference, loading placeholders and transparent gap. Size queries
+read only texture metadata. Only an `AXImageData` request allocates a shared Metal
+buffer and submits a readback on the same command queue, after rendering. A
+serialized worker waits for that GPU copy and converts it into an immutable
+CGImage. The retained drawable prevents recycling while a request reads it;
+replacement and shutdown release it. Native drawables over 16,000,000 pixels
+are not captured.
 
 Image resizing, extraction and alpha conversion execute on the worker queue.
-AX requests are synchronous, so the caller waits for conversion to finish.
-Continuous readback adds a GPU copy and CPU memory copy per captured preview
-frame; production workload performance has not yet been benchmarked. No
-recording or streaming pipeline is changed.
+AX requests are synchronous, so the caller waits for GPU readback and conversion
+to finish; neither operation needs a main-thread callback. No readback buffers,
+GPU copies or CPU image copies are produced while no client requests image data.
+No recording or streaming pipeline is changed.
 
 ## Validation (2026-10-18)
 
 - LDTXApp Debug build, with code signing disabled.
 - `PreviewAccessibilityImageIntegrationTestSuite`: actual Metal BGRA readback,
-  row orientation, straight alpha, crop zero-fill, malformed inputs and limits.
+  row orientation, straight alpha, crop zero-fill, malformed inputs and limits;
+  metadata-only size queries and fresh pixels on successive image requests.
 - `AppUIComponentTestSuite.PreviewImageAccessibilityUnitTestSuite`: identity,
   parameter advertisement and both selection custom actions.
 - Independent process using the production `ProgramCanvasPairedPreview` and

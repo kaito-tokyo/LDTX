@@ -10,7 +10,7 @@ import Testing
 @Suite struct PreviewAccessibilityImageIntegrationTestSuite {
   @Test func gpuReadbackAndAXPixels() async throws {
     let device = try #require(MTLCreateSystemDefaultDevice())
-    let command = try #require(device.makeCommandQueue()?.makeCommandBuffer())
+    let commandQueue = try #require(device.makeCommandQueue())
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
       pixelFormat: .bgra8Unorm,
       width: 2, height: 2, mipmapped: false)
@@ -25,12 +25,7 @@ import Testing
     }
     let store = PreviewAccessibilityImageStore()
     #expect(store.data(for: ["AXImageDataFormat": "RGBA"]) == nil)
-    store.capture(texture: texture, command: command, device: device)
-    command.commit()
-    for _ in 0..<200 {
-      if store.size != .zero { break }
-      try await Task.sleep(for: .milliseconds(10))
-    }
+    store.update(texture: texture, commandQueue: commandQueue)
     #expect(store.size == CGSize(width: 2, height: 2))
     let full = try #require(store.data(for: ["AXImageDataFormat": "RGBA"]))
     #expect(Array(full) == [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 0, 0, 128])
@@ -62,5 +57,29 @@ import Testing
       ])?.count == 4_000_000 * 4)
     store.clear()
     #expect(store.size == .zero)
+    #expect(store.data(for: ["AXImageDataFormat": "RGBA"]) == nil)
+  }
+
+  @Test func sizeQueriesDoNotReadPixelsAndEachImageRequestReadsCurrentPixels() throws {
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let queue = try #require(device.makeCommandQueue())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .bgra8Unorm, width: 1, height: 1, mipmapped: false)
+    descriptor.storageMode = .shared
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let store = PreviewAccessibilityImageStore()
+    store.update(texture: texture, commandQueue: queue)
+    #expect(store.size == CGSize(width: 1, height: 1))
+    // Mutate after publishing the source and querying its size. Only AXImageData
+    // should sample it, and later requests must not return an earlier CPU snapshot.
+    for bgra: [UInt8] in [[0, 0, 255, 255], [255, 0, 0, 255]] {
+      bgra.withUnsafeBytes {
+        texture.replace(
+          region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0,
+          withBytes: $0.baseAddress!, bytesPerRow: 4)
+      }
+      let data = try #require(store.data(for: ["AXImageDataFormat": "RGBA"]))
+      #expect(Array(data) == [bgra[2], bgra[1], bgra[0], bgra[3]])
+    }
   }
 }
