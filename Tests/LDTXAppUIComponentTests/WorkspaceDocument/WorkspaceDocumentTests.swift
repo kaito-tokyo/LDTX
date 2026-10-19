@@ -265,7 +265,7 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
-    @Test("Headless capture adopts Reader content once and retains later edits")
+    @Test("Reader applies content immediately and headless snapshots retain later edits")
     func headlessReadThenSave() async throws {
       let document = WorkspaceDocument()
       var read = document.stateService.editingWorkspace
@@ -402,7 +402,7 @@ extension AppUIComponentTestSuite {
       }
       #expect(document.workspaceSnapshot == nil)
       #expect(document.stateService.workspaceDefinition.displayName == "Later")
-      #expect(document.workspaceSnapshot == nil)
+      #expect(snapshot.definition.displayName == "Confirmed")
     }
 
     @Test("Invalid data fails before creating a destination")
@@ -516,7 +516,7 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("Document synchronization explicitly overwrites content or updates existing model URLs")
+    @Test("Reader apply is immediate and URL synchronization preserves subsequent edits")
     func explicitSynchronizationModes() async throws {
       let document = WorkspaceDocument()
       let coordinator = document.testCoordinator
@@ -528,6 +528,8 @@ extension AppUIComponentTestSuite {
         13: URL(fileURLWithPath: "/Saved/13/Other.mlpackage"),
       ]
       try await document.apply(snapshot: incoming, previous: nil)
+      #expect(state.editingWorkspace == incoming)
+      #expect(document.workspaceSnapshot == incoming)
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.displayName = "Local edits"
       }
@@ -567,10 +569,15 @@ extension AppUIComponentTestSuite {
       #expect(state.visionModels[13] == nil)
       #expect(state.visionModels[15] == local.visionModels[15])
 
-      // The connection adopts the newly read document without registering an edit.
+      // Reader applied synchronously. Later edits and explicit URL replacements
+      // belong to the current editable value; URL routing must not replay the read.
       coordinator.synchronizeDocument()
-      #expect(state.editingWorkspace == incoming)
+      #expect(state.editingWorkspace == expected)
+      #expect(document.workspaceSnapshot == incoming)
+      #expect(state.visionModels[13] == nil)
+      #expect(state.visionModels[15] == local.visionModels[15])
       #expect(state.inspectorSelector == .init(kind: .workspaceCanvas))
+      await coordinator.shutdown()
     }
 
     @Test("UI observes document changes and the host supplies the runtime's saved URL")

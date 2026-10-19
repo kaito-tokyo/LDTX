@@ -248,14 +248,19 @@ extension AppUIComponentTestSuite {
         .appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: root) }
       let source = WorkspaceDocument()
+      #expect(source.workspaceSnapshot == nil)
       let baseline = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       try WorkspaceBundleWriterV4().write(baseline, to: root)
+      // Neither capture nor Writer IO confirms a canonical read on the source.
+      #expect(source.workspaceSnapshot == nil)
       source.stateService.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.displayName = "Unsaved after failure"
       }
       let changed = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(source.workspaceSnapshot == nil)
+      #expect(changed != baseline)
       let document = SaveBridgeDocument(snapshot: changed, fail: true)
       document.fileURL = root
       document.fileType = WorkspaceDocument.readableContentTypes[0].identifier
@@ -274,8 +279,10 @@ extension AppUIComponentTestSuite {
       #expect(document.isDocumentEdited)
       #expect(!document.timedOut.withLock { $0 })
       #expect(try WorkspaceBundleReaderV4(at: root).read() == baseline)
-      #expect(source.workspaceSnapshot == changed)
-      #expect(source.stateService.editingWorkspace == changed)
+      #expect(source.workspaceSnapshot == nil)
+      #expect(source.workspace == changed)
+      #expect(source.workspace != baseline)
+      #expect(document.snapshot.withLock { $0 } == changed)
     }
   }
 }

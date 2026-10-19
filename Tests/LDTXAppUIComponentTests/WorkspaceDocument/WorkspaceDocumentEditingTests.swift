@@ -14,6 +14,42 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace synchronous document editing", .serialized)
   @MainActor
   struct WorkspaceDocumentEditingUnitTestSuite {
+    @Test func applyIsImmediateAndSnapshotPreservesLaterEdits() async throws {
+      let document = WorkspaceDocument()
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      document.isSidebarVisible = false
+      document.visionResults[7] = "Live result"
+      var incoming = document.workspace
+      incoming.definition.displayName = "Canonical read"
+      incoming.visionModels[11] = URL(fileURLWithPath: "/Saved/11/Model.mlmodel")
+      try await document.apply(snapshot: incoming, previous: nil)
+      #expect(document.workspace == incoming)
+      #expect(document.workspaceSnapshot == incoming)
+      #expect(!undo.canUndo)
+      #expect(!document.isSidebarVisible)
+      #expect(document.visionResults[7] == "Live result")
+      undo.beginUndoGrouping()
+      document.editWorkspace(undoManager: undo) {
+        $0.definition.displayName = "Local edit after reading"
+        $0.outputSettings.recordingEnabled = true
+        $0.visionModels[15] = URL(fileURLWithPath: "/Pending/15/Model.mlpackage")
+      }
+      undo.endUndoGrouping()
+      let pending = document.workspace
+      let captured = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(captured == pending)
+      #expect(document.workspace == pending)
+      #expect(document.workspaceSnapshot == incoming)
+      undo.undo()
+      #expect(document.workspace == incoming)
+      #expect(document.workspaceSnapshot == incoming)
+      undo.redo()
+      #expect(document.workspace == pending)
+      #expect(document.workspaceSnapshot == incoming)
+    }
+
     @Test func unchangedPersistedConfirmationDoesNotNotifyOrReplacePendingEdits() {
       let document = WorkspaceDocument()
       let saved = document.workspace
@@ -261,17 +297,23 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace snapshot writing without a represented editor", .serialized)
   @MainActor
   struct WorkspaceDocumentWritingIntegrationTestSuite {
-    @Test(arguments: [false, true])
-    func writerRetainsLaterEditsAndDoesNotPublishPersistence(fail: Bool) async throws {
+    @Test(arguments: [false, true], [false, true])
+    func writerRetainsLaterEditsAndDoesNotPublishPersistence(
+      fail: Bool, hasCanonicalRead: Bool
+    ) async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
       let loaded = document.workspace
-      try await document.apply(snapshot: loaded, previous: nil)
+      #expect(document.workspaceSnapshot == nil)
+      if hasCanonicalRead { try await document.apply(snapshot: loaded, previous: nil) }
+      let canonicalBeforeWriting = document.workspaceSnapshot
+      #expect(canonicalBeforeWriting == (hasCanonicalRead ? loaded : nil))
       document.editWorkspace(undoManager: nil) { $0.definition.displayName = "Captured" }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(document.workspaceSnapshot == canonicalBeforeWriting)
       document.editWorkspace(undoManager: nil) { $0.definition.displayName = "Later edit" }
       let destination: URL
       if fail {
@@ -293,7 +335,8 @@ extension AppUIComponentTestSuite {
         #expect(fail)
       }
       #expect(document.workspace.definition.displayName == "Later edit")
-      #expect(document.workspaceSnapshot == loaded)
+      #expect(document.workspaceSnapshot == canonicalBeforeWriting)
+      #expect(snapshot.definition.displayName == "Captured")
     }
   }
 }
