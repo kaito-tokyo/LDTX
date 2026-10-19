@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import LDTXProtosMacOSExtra
 import SwiftUI
@@ -12,15 +13,6 @@ struct ConicGradientFillVideoComponentInspector: View {
   let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
-  private let component: Ldtx_Workspace_V4_FillConicGradientComponent?
-
-  @State private var name: String
-  @State private var centerX: Ldtx_Workspace_V4_Rational32
-  @State private var centerY: Ldtx_Workspace_V4_Rational32
-  @State private var startAngleRadians: Ldtx_Workspace_V4_Rational32
-  @State private var startColor: Color
-  @State private var endColor: Color
-
   init(
     stateService: WorkspaceDocument,
     appletData: WorkspaceAppletData,
@@ -29,32 +21,44 @@ struct ConicGradientFillVideoComponentInspector: View {
     self.stateService = stateService
     self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = stateService.workspaceDefinition.videoComponents
+  }
+
+  private var component: Ldtx_Workspace_V4_FillConicGradientComponent? {
+    stateService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .conicGradientFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
-    self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._centerX = State(
-      initialValue: component?.centerX
-        ?? .with {
-          $0.set(num: 1, den: 2)
-        })
-    self._centerY = State(
-      initialValue: component?.centerY
-        ?? .with {
-          $0.set(num: 1, den: 2)
-        })
-    self._startAngleRadians = State(
-      initialValue: component?.startAngleRadians
-        ?? .with {
-          $0.set(num: 0, den: 1)
-        })
-    self._startColor = State(
-      initialValue: component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black)
-    self._endColor = State(
-      initialValue: component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white)
+  }
+
+  private var centerX: Ldtx_Workspace_V4_Rational32 {
+    component?.centerX
+      ?? .with {
+        $0.set(num: 1, den: 2)
+      }
+  }
+
+  private var centerY: Ldtx_Workspace_V4_Rational32 {
+    component?.centerY
+      ?? .with {
+        $0.set(num: 1, den: 2)
+      }
+  }
+
+  private var startAngleRadians: Ldtx_Workspace_V4_Rational32 {
+    component?.startAngleRadians
+      ?? .with {
+        $0.set(num: 0, den: 1)
+      }
+  }
+
+  private var startColor: Color {
+    component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black
+  }
+
+  private var endColor: Color {
+    component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white
   }
 
   var body: some View {
@@ -72,43 +76,69 @@ struct ConicGradientFillVideoComponentInspector: View {
         }
         .aspectRatio(16 / 9 + 9 / 16, contentMode: .fit)
 
-        TextField("Name", text: $name)
+        TextField(
+          "Name",
+          text: componentBinding(\.displayName, initial: "(invalid)", undoManager: undoManager))
         LabeledContent("Center X") {
-          Slider(value: $centerX.sliderValue(denominator: 1_000_000), in: 0...1)
+          Slider(
+            value: componentBinding(\.centerX, initial: centerX, undoManager: undoManager)
+              .sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Center Y") {
-          Slider(value: $centerY.sliderValue(denominator: 1_000_000), in: 0...1)
+          Slider(
+            value: componentBinding(\.centerY, initial: centerY, undoManager: undoManager)
+              .sliderValue(denominator: 1_000_000), in: 0...1)
         }
         LabeledContent("Start Angle") {
           Slider(
-            value: $startAngleRadians.sliderValue(denominator: 1_000_000), in: 0...(Double.pi * 2))
+            value: componentBinding(
+              \.startAngleRadians, initial: startAngleRadians, undoManager: undoManager
+            ).sliderValue(denominator: 1_000_000), in: 0...(Double.pi * 2))
         }
-        ColorPicker("Start Color", selection: $startColor, supportsOpacity: true)
-        ColorPicker("End Color", selection: $endColor, supportsOpacity: true)
+        ColorPicker(
+          "Start Color",
+          selection: colorBinding(
+            \.startExtendedSrgbColor, initial: startColor, undoManager: undoManager),
+          supportsOpacity: true)
+        ColorPicker(
+          "End Color",
+          selection: colorBinding(
+            \.endExtendedSrgbColor, initial: endColor, undoManager: undoManager),
+          supportsOpacity: true)
       }
       VideoComponentDeleteButton(stateService: stateService, componentID: videoComponentID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive || component == nil)
-    .onChange(of: name) { updateComponent { $0.displayName = name } }
-    .onChange(of: centerX) { updateComponent { $0.centerX = centerX } }
-    .onChange(of: centerY) { updateComponent { $0.centerY = centerY } }
-    .onChange(of: startAngleRadians) {
-      updateComponent { $0.startAngleRadians = startAngleRadians }
-    }
-    .onChange(of: startColor) {
-      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: startColor) else {
-        return
-      }
-      updateComponent { $0.startExtendedSrgbColor = value }
-    }
-    .onChange(of: endColor) {
-      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: endColor) else { return }
-      updateComponent { $0.endExtendedSrgbColor = value }
-    }
+  }
+
+  func componentBinding<Value>(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillConicGradientComponent, Value>,
+    initial: Value, undoManager: UndoManager?
+  ) -> Binding<Value> {
+    Binding(
+      get: { component?[keyPath: keyPath] ?? initial },
+      set: { next in
+        updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = next }
+      })
+  }
+
+  func colorBinding(
+    _ keyPath: WritableKeyPath<
+      Ldtx_Workspace_V4_FillConicGradientComponent, Ldtx_Workspace_V4_Color
+    >,
+    initial: Color, undoManager: UndoManager?
+  ) -> Binding<Color> {
+    Binding(
+      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      set: { next in
+        guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
+        updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }
+      })
   }
 
   private func updateComponent(
+    undoManager: UndoManager?,
     _ mutation: (inout Ldtx_Workspace_V4_FillConicGradientComponent) -> Void
   ) {
     guard !stateService.isOutputActive else { return }

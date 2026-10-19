@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXProtos
 import LDTXProtosMacOSExtra
 import SwiftUI
@@ -12,11 +13,6 @@ struct SolidColorFillVideoComponentInspector: View {
   let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
-  private let component: Ldtx_Workspace_V4_FillSolidColorComponent?
-
-  @State private var name: String
-  @State private var color: Color
-
   init(
     stateService: WorkspaceDocument,
     appletData: WorkspaceAppletData,
@@ -25,16 +21,20 @@ struct SolidColorFillVideoComponentInspector: View {
     self.stateService = stateService
     self.appletData = appletData
     self.videoComponentID = videoComponentID
-    self.component = stateService.workspaceDefinition.videoComponents
+  }
+
+  private var component: Ldtx_Workspace_V4_FillSolidColorComponent? {
+    stateService.workspaceDefinition.videoComponents
       .first(where: { $0.internalID == videoComponentID })
       .flatMap { wrapper in
         guard case .solidColorFill(let component) = wrapper.videoComponent else { return nil }
         return component
       }
-    self._name = State(initialValue: component?.displayName ?? "(invalid)")
-    self._color = State(
-      initialValue: component?.extendedSrgbColor.extendedSRGBSwiftUIColor
-        ?? Color(red: 1, green: 0, blue: 1))
+  }
+
+  private var color: Color {
+    component?.extendedSrgbColor.extendedSRGBSwiftUIColor
+      ?? Color(red: 1, green: 0, blue: 1)
   }
 
   var body: some View {
@@ -52,23 +52,46 @@ struct SolidColorFillVideoComponentInspector: View {
         }
         .aspectRatio(16 / 9 + 9 / 16, contentMode: .fit)
 
-        TextField("Name", text: $name)
+        TextField(
+          "Name",
+          text: componentBinding(\.displayName, initial: "(invalid)", undoManager: undoManager))
 
-        ColorPicker("Color", selection: $color, supportsOpacity: true)
+        ColorPicker(
+          "Color",
+          selection: colorBinding(\.extendedSrgbColor, initial: color, undoManager: undoManager),
+          supportsOpacity: true)
       }
       VideoComponentDeleteButton(stateService: stateService, componentID: videoComponentID)
     }
     .formStyle(.grouped)
     .disabled(stateService.isOutputActive || component == nil)
-    .onChange(of: name) { updateComponent { $0.displayName = name } }
-    .onChange(of: color) {
-      guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color) else { return }
-      updateComponent { $0.extendedSrgbColor = value }
-    }
+  }
+
+  func componentBinding<Value>(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Value>,
+    initial: Value, undoManager: UndoManager?
+  ) -> Binding<Value> {
+    Binding(
+      get: { component?[keyPath: keyPath] ?? initial },
+      set: { next in
+        updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = next }
+      })
+  }
+
+  func colorBinding(
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Ldtx_Workspace_V4_Color>,
+    initial: Color, undoManager: UndoManager?
+  ) -> Binding<Color> {
+    Binding(
+      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      set: { next in
+        guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
+        updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }
+      })
   }
 
   private func updateComponent(
-    _ mutation: (inout Ldtx_Workspace_V4_FillSolidColorComponent) -> Void
+    undoManager: UndoManager?, _ mutation: (inout Ldtx_Workspace_V4_FillSolidColorComponent) -> Void
   ) {
     guard !stateService.isOutputActive else { return }
     var definition = stateService.workspaceDefinition
