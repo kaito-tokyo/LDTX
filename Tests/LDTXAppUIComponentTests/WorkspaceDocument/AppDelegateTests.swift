@@ -3,12 +3,39 @@
 
 import AppKit
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace application termination", .serialized)
   struct WorkspaceApplicationTerminationUnitTestSuite {
+    @Test func closeFailureBetweenQuitRequestAndShutdownTaskCancelsQuit() async {
+      var failures: [String] = []
+      var replies: [Bool] = []
+      var presented: [String] = []
+      let termination = WorkspaceApplicationTermination(
+        hasPendingShutdown: { true },
+        shutdown: {
+          let result = failures
+          failures.removeAll()
+          return result
+        },
+        reply: { _, allowed in replies.append(allowed) },
+        presentFailure: { _, error in
+          presented.append((error as NSError).localizedFailureReason ?? "")
+        })
+      #expect(!termination.isTerminationPending)
+      #expect(termination.applicationShouldTerminate(.shared) == .terminateLater)
+      // Complete an already-closing window synchronously, before the scheduled task runs.
+      #expect(termination.isTerminationPending)
+      if termination.isTerminationPending { failures.append("Window cleanup failed") }
+      while replies.isEmpty { await Task.yield() }
+      #expect(presented == ["Window cleanup failed"])
+      #expect(replies == [false])
+      #expect(!termination.isTerminationPending)
+    }
+
     @Test func idleApplicationTerminatesImmediately() {
       let delegate = WorkspaceApplicationTermination(
         hasPendingShutdown: { false },

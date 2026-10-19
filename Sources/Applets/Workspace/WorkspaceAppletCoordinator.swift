@@ -31,7 +31,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   let deviceRegistry = DeviceRegistryService()
   var peakMeter: ProgramAudioPeakMeter { audioCoordinator.peakMeter }
   private var inferenceTask: Task<Void, Never>?
-  public let stateService: WorkspaceStateService
+  public let stateService: WorkspaceDocument
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let appletData: WorkspaceAppletData
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID())")!
@@ -150,7 +150,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     stateService.localStateURL = document.fileURL
     let persistence = WorkspaceV4PersistenceCoordinator(
       workspaceSnapshot: { stateService.editingWorkspace },
-      replaceWorkspace: { stateService.replaceEditingWorkspace($0) }, url: document.fileURL,
+      replaceWorkspace: { stateService.replaceEditingWorkspace($0, undoManager: nil) },
+      url: document.fileURL,
       runtimeSnapshot: {
         var workspace = WorkspaceV4Bundle(
           definition: .init(), preferences: .init())
@@ -185,7 +186,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public init(
-    stateService: WorkspaceStateService,
+    stateService: WorkspaceDocument,
     persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData,
     document: any WorkspaceDocumentContext,
@@ -355,11 +356,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       else { return }
       let modificationDate = workspaceDocument?.lastContentModificationDate
       guard
-        workspace != windowRuntime.workspace
+        workspace != persistenceCoordinator.persistedWorkspace
           || modificationDate != adoptedContentModificationDate
       else { return }
-      adoptedContentModificationDate = modificationDate
       try persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+      adoptedContentModificationDate = modificationDate
+      (workspaceDocument as? WorkspaceDocument)?.confirmPersistedWorkspace(workspace)
       confirmedContentsDidChange()
     } catch { reportError(error) }
   }
@@ -412,7 +414,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     persistenceCoordinator.setDocumentURL(url)
   }
 
-  public func removeProgram(internalID: Int64) throws {
+  public func removeProgram(internalID: Int64, undoManager: UndoManager? = nil) throws {
     guard shutdownTask == nil, !stateService.isOutputActive else {
       throw NSError(
         domain: "WorkspaceProgramDeletion", code: 1,
@@ -420,7 +422,9 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
           NSLocalizedDescriptionKey: "Programs cannot be deleted during output or shutdown."
         ])
     }
-    try windowRuntime.removeProgram(internalID: internalID)
+    try windowRuntime.removeProgram(internalID: internalID) { workspace in
+      self.stateService.replaceEditingWorkspace(workspace, undoManager: undoManager)
+    }
     synchronizeDeviceAssignments()
     synchronizeVision()
     synchronizeAudioMonitor()

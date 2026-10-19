@@ -11,7 +11,7 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1015WorkspaceAppletCoordinatorIntegrationTestSuite {
     @Test func alertAcknowledgesQueuedErrorsInOrder() async throws {
-      let state = WorkspaceStateService()
+      let state = WorkspaceDocument()
       let window = makeWorkspaceTestWindow(stateService: state)
       defer { window.close() }
       await settleWorkspaceToolbar(window)

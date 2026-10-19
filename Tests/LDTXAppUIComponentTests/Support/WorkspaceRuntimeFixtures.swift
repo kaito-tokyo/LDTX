@@ -41,7 +41,7 @@ extension WorkspaceAppletCoordinator {
   }
 
   convenience init(
-    stateService: WorkspaceStateService, persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
+    stateService: WorkspaceDocument, persistenceCoordinator: WorkspaceV4PersistenceCoordinator,
     appletData: WorkspaceAppletData, document: any WorkspaceDocumentContext
   ) {
     let resources = WorkspaceRuntimeFixture()

@@ -10,7 +10,7 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OcrVisionInspector: View {
-  @Bindable var stateService: WorkspaceStateService
+  @Bindable var stateService: WorkspaceDocument
   @Binding var vision: Ldtx_Workspace_V4_OcrVision
 
   var body: some View {

@@ -233,7 +233,7 @@ private struct RecordingFolderPicker: View {
 
   @MainActor
   private enum WorkspaceOutputInspectorPreviewFixtures {
-    static func makeStore(isOutputActive: Bool = false) -> WorkspaceStateService {
+    static func makeStore(isOutputActive: Bool = false) -> WorkspaceDocument {
       let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       var outputSettings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
       outputSettings.recordingEnabled = true
@@ -244,7 +244,7 @@ private struct RecordingFolderPicker: View {
         "game": "Pokémon UNITE",
         "player": "Preview Player",
       ]
-      return WorkspaceStateService(
+      return WorkspaceDocument(
         definition: definition, preferences: .init(), isOutputActive: isOutputActive,
         outputSettings: outputSettings)
     }
@@ -265,7 +265,8 @@ private struct RecordingFolderPicker: View {
 
     @Bindable var boundStore = stateService
     WorkspaceOutputInspector(
-      outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
+      outputSettings: boundStore.editingBinding(\.outputSettings, undoManager: nil),
+      externalID: UUID(),
       isOutputActive: stateService.isOutputActive, appletData: appletData,
       reportError: { _ in }
     )
@@ -279,7 +280,8 @@ private struct RecordingFolderPicker: View {
 
     @Bindable var boundStore = stateService
     WorkspaceOutputInspector(
-      outputSettings: $boundStore.workspaceOutputSettings, externalID: UUID(),
+      outputSettings: boundStore.editingBinding(\.outputSettings, undoManager: nil),
+      externalID: UUID(),
       isOutputActive: stateService.isOutputActive, appletData: appletData,
       reportError: { _ in }
     )

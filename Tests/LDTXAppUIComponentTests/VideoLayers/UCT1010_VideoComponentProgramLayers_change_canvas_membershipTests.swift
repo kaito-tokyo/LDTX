@@ -15,11 +15,15 @@ extension AppUIComponentTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
     @Test func dynamicTextCanBePlacedInBothProgramCanvases() throws {
       let data = WorkspaceAppletData()
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
-      state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
-      state.workspaceDefinition.videoComponents = [
-        try WorkspaceResourceFactory.makeDynamicText(id: 10, name: "Text")
-      ]
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [.with { $0.internalID = 100 }]
+      }
+      try state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          try WorkspaceResourceFactory.makeDynamicText(id: 10, name: "Text")
+        ]
+      }
       let controls = VideoComponentProgramLayers(
         stateService: state, appletData: data, componentID: 10)
       for target in [WorkspaceCanvasTarget.landscape, .portrait] {
@@ -36,13 +40,15 @@ extension AppUIComponentTestSuite {
     @Test("Active output allows reordering but rejects membership and count changes")
     func activeOutputPreservesLayerMembership() throws {
       let serviceAppletData = WorkspaceAppletData()
-      let service = WorkspaceStateService(
+      let service = WorkspaceDocument(
         definition: .with {
           $0.programs = [.with { $0.internalID = 100 }]
         }, preferences: .init())
       var preferences = Ldtx_Workspace_V4_ProgramPreferences()
       preferences.videoLayerInternalIds = [10, 20]
-      service.workspacePreferences.landscapeProgramPreferences[100] = preferences
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100] = preferences
+      }
       service.isOutputActive = true
       preferences.videoLayerInternalIds = [20, 10]
       try VideoLayersEditorState(
@@ -69,22 +75,30 @@ extension AppUIComponentTestSuite {
       "UCT-1010.1: Component inspector membership uses latest program and preserves preferences")
     func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {
       let serviceAppletData = WorkspaceAppletData()
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
+      let service = WorkspaceDocument(definition: .init(), preferences: .init())
       var first = Ldtx_Workspace_V4_ProgramDefinition()
       first.internalID = 100
       var second = Ldtx_Workspace_V4_ProgramDefinition()
       second.internalID = 200
-      service.workspaceDefinition.programs = [first, second]
-      service.workspacePreferences.landscapeProgramPreferences[100] = .with {
-        $0.videoLayerInternalIds = [20]
-        $0.audioMasterVolumeDecibels = .with { $0.set(num: -8, den: 1) }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [first, second]
       }
-      service.workspaceDefinition.videoComponents = [10, 20].map {
-        WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100] = .with {
+          $0.videoLayerInternalIds = [20]
+          $0.audioMasterVolumeDecibels = .with { $0.set(num: -8, den: 1) }
+        }
       }
-      service.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerHidden[10] =
-        true
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [10, 20].map {
+          WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
+        }
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+          .videoLayerHidden[10] =
+          true
+      }
       let preferences = service.workspacePreferences
       let controls = VideoComponentProgramLayers(
         stateService: service, appletData: serviceAppletData, componentID: 10)
@@ -117,7 +131,9 @@ extension AppUIComponentTestSuite {
       portrait.wrappedValue = false
       #expect(portrait.wrappedValue)
       service.isOutputActive = false
-      service.workspaceDefinition.programs.swapAt(0, 1)
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs.swapAt(0, 1)
+      }
       portrait.wrappedValue = false
       #expect(
         (service.workspacePreferences.portraitProgramPreferences[100]?.videoLayerInternalIds ?? [])
@@ -127,7 +143,9 @@ extension AppUIComponentTestSuite {
       #expect(
         (service.workspacePreferences.portraitProgramPreferences[200]?.videoLayerInternalIds ?? [])
           == [10])
-      service.workspaceDefinition.videoComponents.removeAll { $0.internalID == 10 }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents.removeAll { $0.internalID == 10 }
+      }
       newProgram.wrappedValue = false
       #expect(
         (service.workspacePreferences.portraitProgramPreferences[200]?.videoLayerInternalIds ?? [])
@@ -149,15 +167,19 @@ extension AppUIComponentTestSuite {
     @Test("UCT-1010.2: Canvas membership and ordering remain local during output")
     func videoLayersEditorEditsBothCanvases() throws {
       _ = NSApplication.shared
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       program.displayName = "Main"
-      state.workspaceDefinition.programs = [program]
-      state.workspaceDefinition.videoComponents = [10, 20, 30].map {
-        WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [program]
       }
-      let other = WorkspaceStateService(definition: state.workspaceDefinition, preferences: .init())
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [10, 20, 30].map {
+          WorkspaceResourceFactory.makeSolidColor(id: Int64($0), name: "Color \($0)")
+        }
+      }
+      let other = WorkspaceDocument(definition: state.workspaceDefinition, preferences: .init())
       let first = makeWorkspaceTestWindow(stateService: state)
       let second = makeWorkspaceTestWindow(stateService: other)
       defer {
@@ -196,7 +218,9 @@ extension AppUIComponentTestSuite {
           $0.set(num: -80, den: 10)
         }
         preference.videoLayerHidden[10] = true
-        content.stateService.workspacePreferences[keyPath: target.preferences][100] = preference
+        content.stateService.editWorkspace(undoManager: nil) { workspace in
+          workspace.preferences[keyPath: target.preferences][100] = preference
+        }
         #expect(
           state.workspacePreferences[keyPath: target.preferences][100]?.videoLayerHidden[10] == true
         )

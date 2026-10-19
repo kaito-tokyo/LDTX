@@ -249,11 +249,9 @@ targets:
       - target: LDTXWorkspaceBundleFormat
         embed: true
         embed: true
-      # The Controller framework links this dynamic framework. Embed it in the
-      # application bundle as a transitive runtime dependency without linking
-      # it into the app target.
+      # The app directly constructs WorkspaceDocument from the UI framework.
       - target: LDTXWorkspaceAppletUI
-        link: false
+        link: true
         embed: true
       - target: LDTXFontRasterizer
         embed: true

@@ -10,7 +10,8 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
-  @Bindable var stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  @Bindable var stateService: WorkspaceDocument
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private let deviceRegistry: DeviceRegistryService
   private let appletData: WorkspaceAppletData
@@ -20,7 +21,7 @@ public struct WorkspaceSidebar: View {
   @State private var additionFailure: String?
 
   public init(
-    stateService: WorkspaceStateService, deviceRegistry: DeviceRegistryService,
+    stateService: WorkspaceDocument, deviceRegistry: DeviceRegistryService,
     appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
@@ -257,6 +258,7 @@ public struct WorkspaceSidebar: View {
     }
     let id = try WorkspaceResourceAddition.add(
       sheet: sheet, draft: draft, devices: deviceOptions, stateService: stateService,
+      undoManager: undoManager,
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device || selectsCamera {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)

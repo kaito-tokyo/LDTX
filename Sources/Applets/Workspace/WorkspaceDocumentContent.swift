@@ -6,7 +6,6 @@ import LDTXWorkspaceAppletUI
 import SwiftUI
 
 public struct WorkspaceDocumentContent: View {
-  @Environment(\.undoManager) private var undoManager
   @State private var connection: WorkspaceDocumentConnection?
   let document: WorkspaceDocument
   @Environment(\.workspaceAppletDelegate) private var appletDelegate
@@ -34,9 +33,7 @@ public struct WorkspaceDocumentContent: View {
           ?? WorkspaceDocumentConnection(
             document: document, runtimeCoordinator: coordinator)
       }
-      connection?.setUndoManager(undoManager)
     }
-    .onChange(of: undoManager) { _, manager in connection?.setUndoManager(manager) }
   }
 
   private func workspace(_ runtime: WorkspaceAppletCoordinator) -> some View {

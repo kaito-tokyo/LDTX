@@ -6,7 +6,7 @@ import LDTXWorkspaceBundleFormat
 
 extension WorkspaceRuntimeActions {
   @MainActor public func inferSelectedVision(
-    stateService: WorkspaceStateService, document: (any WorkspaceDocumentContext)?,
+    stateService: WorkspaceDocument, document: (any WorkspaceDocumentContext)?,
     runtimeWorkspace: @escaping () -> WorkspaceV4Bundle?
   ) async {
     guard !stateService.isClosed, !stateService.isInferring,
@@ -39,7 +39,7 @@ extension WorkspaceRuntimeActions {
   }
 
   @MainActor public func toggleOutput(
-    stateService: WorkspaceStateService, document: (any WorkspaceDocumentContext)?
+    stateService: WorkspaceDocument, document: (any WorkspaceDocumentContext)?
   ) async {
     guard !stateService.isClosed else { return }
     let state = stateService.recordingState

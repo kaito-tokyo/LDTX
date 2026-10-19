@@ -28,10 +28,12 @@ extension AppUIComponentTestSuite {
     }
 
     @Test func classifierAdditionRejectsZeroSizedInput() throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
-      ]
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
+        ]
+      }
       var draft = WorkspaceAddDraft()
       draft.name = "Scene"
       draft.visionKind = .createMlImageClassifier
@@ -41,15 +43,19 @@ extension AppUIComponentTestSuite {
           sheet: .vision, draft: draft, devices: [], stateService: store)
       }
       #expect(store.workspaceDefinition.visions.isEmpty)
-      store.workspaceDefinition.videoComponents[0].vfxSource.deviceWidth = 1920
-      store.workspaceDefinition.videoComponents[0].vfxSource.deviceHeight = 1080
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[0].vfxSource.deviceWidth = 1920
+      }
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[0].vfxSource.deviceHeight = 1080
+      }
       _ = try WorkspaceResourceAddition.add(
         sheet: .vision, draft: draft, devices: [], stateService: store)
       #expect(store.workspaceDefinition.visions.count == 1)
     }
 
     @Test func revertValidationFollowsOutputState() {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
       defer { window.close() }
       let responder = WorkspaceDocumentActions(stateService: store)
@@ -73,18 +79,22 @@ extension AppUIComponentTestSuite {
 
     @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")
     func toolbarInference() async throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.videoComponents = [
-        .with {
-          $0.vfxSource.internalID = 7
-          $0.vfxSource.deviceWidth = 1920
-          $0.vfxSource.deviceHeight = 1080
-        }
-      ]
-      store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
-          id: 2, name: "Scene", componentID: 7)
-      ]
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with {
+            $0.vfxSource.internalID = 7
+            $0.vfxSource.deviceWidth = 1920
+            $0.vfxSource.deviceHeight = 1080
+          }
+        ]
+      }
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
+            id: 2, name: "Scene", componentID: 7)
+        ]
+      }
       store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
       let dispatcher = ToolbarDispatcher()
       let context = InferenceDocumentContext()
@@ -98,12 +108,14 @@ extension AppUIComponentTestSuite {
       let item = items[index]
       #expect(items[index + 1].itemIdentifier.rawValue == "workspace.toggleInspector")
       #expect(item.menuFormRepresentation != nil && !window.validateToolbarItem(item))
-      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2)
+      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2, undoManager: nil)
       await settleWorkspaceToolbar(window)
       #expect(!window.validateToolbarItem(item))
       context.adopt(store)
       // Source and persisted URLs differ, but both refer to the same model ID.
-      store.visionModels[5] = URL(fileURLWithPath: "/tmp/model.mlmodel")
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.visionModels[5] = URL(fileURLWithPath: "/tmp/model.mlmodel")
+      }
       await settleWorkspaceToolbar(window)
       #expect(window.validateToolbarItem(item))
       try performWorkspaceToolbarAction(item)
@@ -118,19 +130,23 @@ extension AppUIComponentTestSuite {
       "Inference discards obsolete results and failures",
       arguments: ["model", "input", "roi", "failure"])
     func discardObsoleteInference(change: String) async throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.videoComponents = [7, 9].map { id in
-        .with {
-          $0.vfxSource.internalID = Int64(id)
-          $0.vfxSource.deviceWidth = 1920
-          $0.vfxSource.deviceHeight = 1080
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [7, 9].map { id in
+          .with {
+            $0.vfxSource.internalID = Int64(id)
+            $0.vfxSource.deviceWidth = 1920
+            $0.vfxSource.deviceHeight = 1080
+          }
         }
       }
-      store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(id: 2, name: "Scene", componentID: 7)
-      ]
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          WorkspaceResourceFactory.makeLdtxSceneDetectorVision(id: 2, name: "Scene", componentID: 7)
+        ]
+      }
       store.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 2)
-      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2)
+      store.setVisionModelURL(URL(fileURLWithPath: "/tmp/model.mlmodel"), for: 2, undoManager: nil)
       let dispatcher = ToolbarDispatcher()
       let context = InferenceDocumentContext()
       context.adopt(store)
@@ -146,12 +162,17 @@ extension AppUIComponentTestSuite {
       let pending = try #require(completion)
       switch change {
       case "input":
-        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.videoComponentInternalID = 9
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.visions[0].ldtxSceneDetectorVision.videoComponentInternalID = 9
+        }
       case "roi":
-        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(
-          num: 1, den: 10)
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(
+            num: 1, den: 10)
+        }
       default:
-        store.setVisionModelURL(URL(fileURLWithPath: "/tmp/replacement.mlmodel"), for: 2)
+        store.setVisionModelURL(
+          URL(fileURLWithPath: "/tmp/replacement.mlmodel"), for: 2, undoManager: nil)
       }
       if change == "failure" {
         pending.resume(throwing: CocoaError(.fileReadUnknown))
@@ -208,11 +229,13 @@ extension AppUIComponentTestSuite {
 
     @Test("Nested ROI bindings update the Store directly")
     func immediateROIBindings() throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
-          id: 2, name: "Scene", componentID: 1)
-      ]
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
+            id: 2, name: "Scene", componentID: 1)
+        ]
+      }
       let boundStore = Bindable(wrappedValue: store)
       let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
       binding.regionOfInterest.width.num.wrappedValue = 3
@@ -230,11 +253,17 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       defer { document.close() }
       let store = document.stateService
-      store.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
-      ]
-      store.workspaceDefinition.videoComponents[0].vfxSource.deviceWidth = 1920
-      store.workspaceDefinition.videoComponents[0].vfxSource.deviceHeight = 1080
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Source")
+        ]
+      }
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[0].vfxSource.deviceWidth = 1920
+      }
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[0].vfxSource.deviceHeight = 1080
+      }
       var draft = WorkspaceAddDraft()
       draft.name = "Scene"
       draft.visionKind = .createMlImageClassifier
@@ -263,11 +292,13 @@ extension AppUIComponentTestSuite {
 
     @Test("Invalid classifier ROI is rejected; bindings do not overwrite a different Vision")
     func rejectInvalidRegionAndRemovedBinding() throws {
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
-      store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
-          id: 2, name: "Scene", componentID: 1)
-      ]
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
+            id: 2, name: "Scene", componentID: 1)
+        ]
+      }
       let boundStore = Bindable(wrappedValue: store)
       let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
       let invalidRegion: Ldtx_Workspace_V4_VisionRegionOfInterest = .with {
@@ -279,9 +310,11 @@ extension AppUIComponentTestSuite {
       #expect(throws: (any Error).self) {
         try WorkspaceBundleValidatorV4.validateRegionOfInterest(invalidRegion)
       }
-      store.workspaceDefinition.visions = [
-        WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1)
-      ]
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          WorkspaceResourceFactory.makeOcrVision(id: 2, name: "OCR", componentID: 1)
+        ]
+      }
       binding.wrappedValue.displayName = "Removed classifier"
       #expect(store.workspaceDefinition.visions.first?.ocrVision.displayName == "OCR")
       #expect(boundStore.ldtxSceneDetectorVision(internalID: 2) == nil)

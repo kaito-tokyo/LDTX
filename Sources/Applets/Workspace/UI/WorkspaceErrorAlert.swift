@@ -4,7 +4,7 @@
 import SwiftUI
 
 private struct WorkspaceErrorAlert: ViewModifier {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   @State private var error: NSError?
 
   func body(content: Content) -> some View {
@@ -32,7 +32,7 @@ private struct WorkspaceErrorAlert: ViewModifier {
 }
 
 extension View {
-  public func workspaceErrorAlert(stateService: WorkspaceStateService) -> some View {
+  public func workspaceErrorAlert(stateService: WorkspaceDocument) -> some View {
     modifier(WorkspaceErrorAlert(stateService: stateService))
   }
 }

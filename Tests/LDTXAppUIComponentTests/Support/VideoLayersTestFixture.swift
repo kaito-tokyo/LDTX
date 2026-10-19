@@ -9,25 +9,33 @@ import Testing
 
 @MainActor
 final class VideoLayersTestFixture {
-  let state = WorkspaceStateService(definition: .init(), preferences: .init())
+  let state = WorkspaceDocument(definition: .init(), preferences: .init())
   let data = WorkspaceAppletData()
   let editor: VideoLayersEditorState
 
   init(ids: [Int64] = [1, 2, 3]) {
-    state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
-    state.workspaceDefinition.videoComponents = ids.map { id in
-      .with {
-        $0.vfxSource.internalID = id
-        $0.vfxSource.displayName = "Layer \(id)"
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.programs = [.with { $0.internalID = 100 }]
+    }
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.videoComponents = ids.map { id in
+        .with {
+          $0.vfxSource.internalID = id
+          $0.vfxSource.displayName = "Layer \(id)"
+        }
       }
     }
-    state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-      .videoLayerInternalIds = ids
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+        .videoLayerInternalIds = ids
+    }
     editor = VideoLayersEditorState(stateService: state, appletData: data, target: .landscape)
   }
   func update(ids: [Int64]) {
-    state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-      .videoLayerInternalIds = ids
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+        .videoLayerInternalIds = ids
+    }
     editor.synchronizeRows()
   }
 }

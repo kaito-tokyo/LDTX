@@ -17,27 +17,35 @@ extension AppUIComponentTestSuite {
 
     @Test("UCT-1024.1: Rename validates all resource names and preserves rejected edits")
     func renameValidatesResourceNames() throws {
-      let service = WorkspaceStateService(definition: .init(), preferences: .init())
-      service.workspaceDefinition.programs = [
-        .with {
-          $0.internalID = 1
-          $0.displayName = "Program"
-        }
-      ]
-      service.workspaceDefinition.audioDevices = [
-        WorkspaceResourceFactory.makeAudioInput(id: 2, name: "Audio")
-      ]
-      service.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeVFXSource(id: 3, name: "Video")
-      ]
-      service.workspaceDefinition.visions = [
-        .with {
-          $0.ocrVision = .with {
-            $0.internalID = 4
-            $0.displayName = "Vision"
+      let service = WorkspaceDocument(definition: .init(), preferences: .init())
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [
+          .with {
+            $0.internalID = 1
+            $0.displayName = "Program"
           }
-        }
-      ]
+        ]
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.audioDevices = [
+          WorkspaceResourceFactory.makeAudioInput(id: 2, name: "Audio")
+        ]
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          WorkspaceResourceFactory.makeVFXSource(id: 3, name: "Video")
+        ]
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            $0.ocrVision = .with {
+              $0.internalID = 4
+              $0.displayName = "Vision"
+            }
+          }
+        ]
+      }
       let inspector = WorkspaceProgramsInspector(
         stateService: service, appletData: WorkspaceAppletData())
       for name in ["", "Audio", "Video", "Vision"] {
@@ -62,18 +70,24 @@ extension AppUIComponentTestSuite {
       _ = NSApplication.shared
       let document = WorkspaceDocument()
       let service = document.stateService
-      service.workspaceDefinition.programs = [
-        .with {
-          $0.internalID = 100
-          $0.displayName = "First"
-        },
-        .with {
-          $0.internalID = 101
-          $0.displayName = "Second"
-        },
-      ]
-      service.workspacePreferences.landscapeProgramPreferences[101] = .init()
-      service.workspacePreferences.portraitProgramPreferences[101] = .init()
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [
+          .with {
+            $0.internalID = 100
+            $0.displayName = "First"
+          },
+          .with {
+            $0.internalID = 101
+            $0.displayName = "Second"
+          },
+        ]
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[101] = .init()
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.portraitProgramPreferences[101] = .init()
+      }
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -92,8 +106,10 @@ extension AppUIComponentTestSuite {
       #expect(!document.hasTestModelChanges)
       service.isOutputActive = false
       try controller.selectProgram(internalID: 101)
-      service.workspacePreferences.landscapeProgramPreferences[101, default: .init()]
-        .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[101, default: .init()]
+          .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
+      }
       try controller.removeProgram(internalID: 101)
       #expect(service.workspaceDefinition.programs.map(\.internalID) == [100])
       #expect(service.workspacePreferences.landscapeProgramPreferences[101] == nil)

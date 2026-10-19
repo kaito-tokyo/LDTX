@@ -20,6 +20,19 @@ import Testing
 @MainActor
 @Suite("Version 4 Workspace persistence coordinator")
 struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
+  @Test func persistedBaselineRemainsIndependentOfPendingLiveSettings() throws {
+    let saved = cleanWorkspace(displayName: "Saved")
+    let box = WorkspaceBox(saved)
+    let coordinator = makeCoordinator(box)
+    try coordinator.adoptRuntimeWorkspace(saved)
+    box.workspace.preferences.audioChannelGainsDecibels[7, default: .init()].set(num: -10, den: 10)
+    box.workspace.outputSettings.recordingEnabled = true
+    #expect(coordinator.runtimeWorkspace != saved)
+    #expect(coordinator.persistedWorkspace == saved)
+    #expect(coordinator.runtimeWorkspace.preferences == box.workspace.preferences)
+    #expect(coordinator.runtimeWorkspace.outputSettings == box.workspace.outputSettings)
+  }
+
   @Test func generatedIDsPreserveTimestampAndSetLowBit() {
     let generator = WorkspaceInternalIDGenerator()
     let milliseconds: Int64 = 1_800_000_000_000

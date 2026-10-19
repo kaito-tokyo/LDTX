@@ -3,11 +3,11 @@
 
 import AppKit
 import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var workspaceCoordinators: [UUID: WorkspaceAppletCoordinator] = [:]
-  private var isTerminating = false
   private var shutdownFailures: [String] = []
   private lazy var termination = WorkspaceApplicationTermination(
     hasPendingShutdown: { [weak self] in
@@ -16,8 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     },
     shutdown: { [weak self] in
       guard let self else { return [] }
-      isTerminating = true
-      defer { isTerminating = false }
       // Keep closing coordinators alive until their existing cleanup has drained.
       while !workspaceCoordinators.isEmpty {
         let coordinators = Array(workspaceCoordinators.values)
@@ -47,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     guard let coordinator = workspaceCoordinators.removeValue(forKey: runtimeID) else { return }
     updateRecordingDockBadge()
     guard let failure = coordinator.takeShutdownFailureForPresentation() else { return }
-    if isTerminating {
+    if termination.isTerminationPending {
       shutdownFailures.append(failure)
     } else {
       NSApplication.shared.presentError(

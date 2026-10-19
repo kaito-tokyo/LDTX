@@ -40,7 +40,7 @@ func performWorkspaceToolbarAction(_ item: NSToolbarItem) throws {
 
 @MainActor
 func makeWorkspaceTestWindow(
-  stateService: WorkspaceStateService? = nil,
+  stateService: WorkspaceDocument? = nil,
   dispatcher: (any WorkspaceRuntimeActions)? = nil,
   reportError: @escaping (Error) -> Void = { _ in },
   appletData: WorkspaceAppletData? = nil,
@@ -50,7 +50,9 @@ func makeWorkspaceTestWindow(
 ) -> WorkspaceTestWindow {
   let document = WorkspaceDocument()
   let state = stateService ?? document.stateService
-  state.externalID = externalID
+  state.editWorkspace(undoManager: nil) { workspace in
+    workspace.definitionExternalID = externalID
+  }
   let data = appletData ?? WorkspaceAppletData()
   let renderer = ProgramPairPreviewRenderer(
     landscapeRuntime: ProgramRuntime(
@@ -103,7 +105,7 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) { completionHandler([]) }
-  func removeProgram(internalID: Int64) throws {}
+  func removeProgram(internalID: Int64, undoManager: UndoManager?) throws {}
   func selectProgram(internalID: Int64) throws {}
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}

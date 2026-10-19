@@ -99,7 +99,7 @@ enum WorkspaceResourceAddition {
 
   static func validationMessage(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
+    stateService: WorkspaceDocument, audioDiscoveryError: String? = nil
   ) -> String? {
     if stateService.isOutputActive { return "Stop output before adding a resource." }
     if sheet == .device, case .coreAudioDevice? = draft.physicalDeviceID,
@@ -142,7 +142,8 @@ enum WorkspaceResourceAddition {
 
   static func add(
     sheet: WorkspaceAddSheet, draft: WorkspaceAddDraft, devices: [WorkspaceAddDeviceOption],
-    stateService: WorkspaceStateService, audioDiscoveryError: String? = nil
+    stateService: WorkspaceDocument, undoManager: UndoManager? = nil,
+    audioDiscoveryError: String? = nil
   ) throws -> Int64 {
     if let message = validationMessage(
       sheet: sheet, draft: draft, devices: devices, stateService: stateService,
@@ -181,7 +182,9 @@ enum WorkspaceResourceAddition {
       definition.visions.append(vision)
       inspectorKind = draft.visionKind.inspectorKind
     }
-    stateService.workspaceDefinition = definition
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+    }
     stateService.inspectorSelector = .init(kind: inspectorKind, internalID: id)
     return id
   }

@@ -7,7 +7,8 @@ import LDTXProtos
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   let appletData: WorkspaceAppletData
@@ -136,7 +137,9 @@ struct VfxVideoComponentInspector: View {
       let index = definition.videoComponents.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.videoComponents[index])
-    stateService.workspaceDefinition = definition
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+    }
   }
 
 }

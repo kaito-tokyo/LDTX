@@ -6,51 +6,52 @@ SPDX-License-Identifier: Apache-2.0
 
 # Workspace state responsibility inventory
 
-WorkspaceStateService holds editable protobuf values and observable UI/runtime
-facts for one Workspace document. WorkspaceDocument owns it alongside its
-workspaceSnapshot and persistence. UI receives that same instance through
-Bindable; WorkspaceAppletCoordinator retains a reference while managing runtime resources.
-Assignments to StateService's stored properties remain transparent; direct
-Bindable access does not hide validation, persistence, or runtime synchronization.
+WorkspaceDocument is the observable owner of one editable WorkspaceV4Bundle
+and the UI status for one document. UI receives the same Document. Runtime
+resources belong to AppDelegate-owned WorkspaceAppletCoordinators.
+Read-only content projections and explicit editing Bindings enter the Document's
+synchronous edit operation; they do not perform validation, IO or runtime adoption.
 
 | Responsibility | Owner |
 | --- | --- |
 | Confirmed definition, preferences, output settings and embedded models | WorkspaceDocument |
-| Editable definition, preferences, output settings and model resource URLs | WorkspaceStateService, owned by Document |
-| UI selection, Inspector visibility, output and Vision status | WorkspaceStateService |
+| Editable definition, preferences, output settings and model resource URLs | WorkspaceDocument (one editable value) |
+| UI selection, Inspector visibility, output and Vision status | WorkspaceDocument |
 | Reading and writing content snapshots | WorkspaceDocument and its Reader/Writer |
 | Snapshot capture | WorkspaceDocument |
 | Save validation | WorkspaceBundleWriterV4, invoked by DocumentWriter |
 | Persisted runtime adoption and output-time deferral | WorkspaceAppletCoordinator |
-| Applying read snapshots to editing state | WorkspaceDocumentConnection |
-| Undo/Redo and standard unsaved-change tracking | WorkspaceDocumentConnection and the window's UndoManager |
+| Applying read snapshots to editing state | WorkspaceDocument |
+| Undo/Redo and standard unsaved-change tracking | WorkspaceDocument and the environment's document UndoManager |
 | Runtime projection and recording/capture/audio/Vision lifetimes | WorkspaceAppletCoordinator and its runtime services |
 | ProgramRuntime and Vision definition/model inputs | Last successfully persisted content, separate from in-memory confirmation |
-| Live preferences | StateService, projected by the runtime coordinator |
+| Live preferences | Document, projected by the runtime coordinator |
 | Local state URL and transient state migration | WorkspaceAppletCoordinator |
 | Device assignments, output folders, stream keys and monitor assignments | Shared AppletData |
 | Program selection | Program Inspector and controller, using injected AppletData |
 | Program deletion, layer membership and resource operations | Explicit controller/runtime editing operations |
 | Layer transforms, audio gains, master volumes and mute edits | Direct bindings and editors with explicit numeric encoding |
 | Output, screenshot and inference commands | UI actions and RuntimeCoordinator; manual inference tasks are runtime-owned |
-| Runtime errors awaiting acknowledgement | WorkspaceStateService |
+| Runtime errors awaiting acknowledgement | WorkspaceDocument |
 | Alert and screenshot popover display | Local State in the presenting UI View |
 | Pane widths, preview height and canvas tab | Local State in the owning UI View |
 | Dock recording badge | AppDelegate observes output changes from its registered WorkspaceAppletCoordinators |
 
 There is no Apply/Submit registry or navigation guard for unconfirmed input.
-Representable edits update StateService; incomplete numeric text may remain local
-to its input control. Semantic validation runs during snapshot preparation. A
-validation failure leaves Document unchanged. Successful preparation confirms
-the captured content in Document before writing; write failure leaves that
-content unsaved. Later edits remain pending in StateService. UI adopts Document
-changes through Observation, rather than callbacks from apply.
+Representable edits enter one synchronous Document operation, capturing the old
+Workspace value and registering its restoration for Undo with the input View's
+environment UndoManager passed directly into the operation. Document and Connection
+do not cache that manager or wait for a later connection. Reverse restoration
+registers Redo in the standard UndoManager invocation. Compound content changes
+commit as one operation. UI selections and runtime status remain outside history.
+Incomplete numeric text stays local to its control. Snapshot capture only returns
+content; Writer validates it before writing, and failure leaves edits intact.
 
-The connection updates StateService fields directly. Adopting a read snapshot
-replaces the three documents, envelope IDs and model URL dictionary.
-An explicit URL-only update changes existing model-ID entries without adding or deleting
-entries or touching document edits. Neither operation overwrites UI selections or
-runtime status. No independent field-level merge is performed.
+Reader applies a complete loaded value directly without registering Undo. Loaded
+and canonically persisted content are distinguished from values captured for a
+pending write. Runtime adoption continues to read the canonical package after
+metadata changes while idle, and defers adoption during output. Its generation
+and VariableStore reset behavior is unchanged.
 
 The Coordinator is retained by the Representable, not Document. Dismantling the
 representation stops UI observation and starts idempotent async

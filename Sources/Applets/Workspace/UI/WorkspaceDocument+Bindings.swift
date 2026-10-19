@@ -5,9 +5,11 @@
 import LDTXProtos
 import SwiftUI
 
-extension Bindable where Value == WorkspaceStateService {
+extension Bindable where Value == WorkspaceDocument {
   @MainActor
-  func ocrVision(internalID: Int64) -> Binding<Ldtx_Workspace_V4_OcrVision>? {
+  func ocrVision(internalID: Int64, undoManager: UndoManager? = nil) -> Binding<
+    Ldtx_Workspace_V4_OcrVision
+  >? {
     let store = wrappedValue
     func currentVision() -> Ldtx_Workspace_V4_OcrVision? {
       store.workspaceDefinition.visions.compactMap { wrapper in
@@ -28,11 +30,13 @@ extension Bindable where Value == WorkspaceStateService {
             return vision.internalID == internalID
           })
         else { return }
-        store.workspaceDefinition.visions[index].vision = .ocrVision(updated)
+        store.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition.visions[index].vision = .ocrVision(updated)
+        }
       })
   }
   @MainActor
-  func ldtxSceneDetectorVision(internalID: Int64) -> Binding<
+  func ldtxSceneDetectorVision(internalID: Int64, undoManager: UndoManager? = nil) -> Binding<
     Ldtx_Workspace_V4_LdtxSceneDetectorVision
   >? {
     let store = wrappedValue
@@ -57,7 +61,9 @@ extension Bindable where Value == WorkspaceStateService {
             return vision.internalID == internalID
           })
         else { return }
-        store.workspaceDefinition.visions[index].vision = .ldtxSceneDetectorVision(updated)
+        store.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition.visions[index].vision = .ldtxSceneDetectorVision(updated)
+        }
       })
   }
 }

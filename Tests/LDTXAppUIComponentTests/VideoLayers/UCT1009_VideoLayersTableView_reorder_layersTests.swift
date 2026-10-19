@@ -22,7 +22,9 @@ extension AppUIComponentTestSuite {
       editor.move(fromOffsets: IndexSet(integer: 99), toOffset: 0)
       editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 99)
       #expect(editor.layerIDs == [3, 1, 2])
-      fixture.state.workspaceDefinition.programs = []
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = []
+      }
       editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
       #expect(
         fixture.state.workspacePreferences.landscapeProgramPreferences[100]?.videoLayerInternalIds

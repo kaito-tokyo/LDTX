@@ -8,14 +8,14 @@ import QuickLookThumbnailing
 import SwiftUI
 
 public struct WorkspaceToolbar: ToolbarContent {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let document: (any WorkspaceDocumentContext)?
   let runtimeWorkspace: () -> WorkspaceV4Bundle?
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   let runInference: () -> Void
 
   public init(
-    stateService: WorkspaceStateService, document: (any WorkspaceDocumentContext)?,
+    stateService: WorkspaceDocument, document: (any WorkspaceDocumentContext)?,
     runtimeWorkspace: @escaping () -> WorkspaceV4Bundle?,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)?,
     runInference: @escaping () -> Void
@@ -79,7 +79,7 @@ public struct WorkspaceToolbar: ToolbarContent {
 }
 
 private struct WorkspaceScreenshotButton: View {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   @State private var result: WorkspaceScreenshotResult?
 

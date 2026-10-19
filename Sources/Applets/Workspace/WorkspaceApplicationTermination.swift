@@ -12,6 +12,7 @@ public final class WorkspaceApplicationTermination: NSObject {
   private let reply: @MainActor (NSApplication, Bool) -> Void
   private let presentFailure: @MainActor (NSApplication, Error) -> Void
   private var terminationTask: Task<Void, Never>?
+  public var isTerminationPending: Bool { terminationTask != nil }
   private static let logger = Logger(
     subsystem: "tokyo.kaito.ldtx", category: "WorkspaceTermination")
 

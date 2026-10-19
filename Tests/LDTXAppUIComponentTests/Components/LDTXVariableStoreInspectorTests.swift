@@ -24,7 +24,7 @@ extension AppUIComponentTestSuite {
 
     @Test func displaysLiveValuesAndRecreatedInventory() async throws {
       let runtime = Runtime()
-      let state = WorkspaceStateService(
+      let state = WorkspaceDocument(
         definition: .init(), preferences: .init(),
         inspectorSelector: .init(kind: .variableStore))
       let hosting = NSHostingView(
