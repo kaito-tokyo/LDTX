@@ -21,7 +21,7 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
     @Test func hostingAndToolbarReleaseTheirController() async {
-      weak var released: WorkspaceStateService?
+      weak var released: WorkspaceDocument?
       autoreleasepool {
         let window = makeWorkspaceTestWindow()
         released = window.stateService
@@ -49,16 +49,17 @@ extension AppUIComponentTestSuite {
     @Test func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
-      let document = WorkspaceDocument { id in
-        #expect(resources.metalView.isPaused)
-        #expect(resources.metalView.delegate == nil)
-        #expect(resources.metalView.superview == nil)
-        released.append(id)
-      }
-      let controller = WorkspaceRuntimeCoordinator(
+      let document = WorkspaceDocument()
+      let controller = WorkspaceAppletCoordinator(
         document: document, appletData: WorkspaceAppletData(),
         landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
-        metalView: resources.metalView, captureSessionCoordinator: resources.capture)
+        metalView: resources.metalView, captureSessionCoordinator: resources.capture,
+        onShutdown: {
+          #expect(resources.metalView.isPaused)
+          #expect(resources.metalView.delegate == nil)
+          #expect(resources.metalView.superview == nil)
+          released.append(document.runtimeID)
+        })
       let view = controller.pairedPreview.metalView
       #expect(view === resources.metalView)
       #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)
@@ -75,17 +76,27 @@ extension AppUIComponentTestSuite {
       #expect(released == [document.runtimeID])
     }
 
-    @Test func runtimeOwnsCleanupAfterDocumentIsReleased() {
-      var released: [UUID] = []
-      var document: WorkspaceDocument? = WorkspaceDocument { released.append($0) }
-      let id = document!.runtimeID
+    @Test func coordinatorKeepsDocumentAliveThroughCleanup() async {
+      var documentReleased = false
+      var runtimeReleased = false
+      var document: WorkspaceDocument? = WorkspaceDocument { _ in documentReleased = true }
+      let resources = WorkspaceRuntimeFixture()
+      var coordinator: WorkspaceAppletCoordinator? = WorkspaceAppletCoordinator(
+        document: document!, landscapeRuntime: resources.landscape,
+        portraitRuntime: resources.portrait, metalView: resources.metalView,
+        captureSessionCoordinator: resources.capture,
+        onShutdown: { runtimeReleased = true })
       weak var retained = document
-      let finishShutdown = document!.claimRuntimeResources()
       document = nil
+      #expect(retained != nil)
+      #expect(!documentReleased)
+      #expect(!runtimeReleased)
+      await coordinator?.shutdown()
+      #expect(runtimeReleased)
+      coordinator = nil
+      for _ in 0..<100 where retained != nil { await Task.yield() }
       #expect(retained == nil)
-      #expect(released.isEmpty)
-      finishShutdown()
-      #expect(released == [id])
+      #expect(documentReleased)
     }
 
     private static var controller: NSDocumentController {
@@ -179,7 +190,7 @@ extension AppUIComponentTestSuite {
         UserDefaults.standard.removeObject(forKey: savedKey)
       }
       UserDefaults.standard.set(360.0, forKey: savedKey)
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: state, externalID: transientID)
       defer { window.close() }
       window.orderFront(nil)
@@ -189,7 +200,7 @@ extension AppUIComponentTestSuite {
       layout.resizePreview(to: 300)
       var snapshot = state.editingWorkspace
       snapshot.definitionExternalID = savedID
-      state.replaceEditingWorkspace(snapshot)
+      state.replaceEditingWorkspace(snapshot, undoManager: nil)
       await settleWorkspaceToolbar(window)
       #expect(layout.previewHeight == 360)
       #expect(window.contentPane.pairedPreview.metalView === metal)
@@ -199,7 +210,7 @@ extension AppUIComponentTestSuite {
       let reopened = WorkspaceContentLayout()
       reopened.restore(externalID: savedID)
       #expect(reopened.previewHeight == 340)
-      state.replaceEditingWorkspace(snapshot)
+      state.replaceEditingWorkspace(snapshot, undoManager: nil)
       await settleWorkspaceToolbar(window)
       #expect(layout.previewHeight == 340)
     }
@@ -259,7 +270,7 @@ extension AppUIComponentTestSuite {
     }
     @Test("UCT-1017.8: Output status preserves failure information")
     func storesOutputStatusForWorkspaceUI() {
-      let stateService = WorkspaceStateService(definition: .init(), preferences: .init())
+      let stateService = WorkspaceDocument(definition: .init(), preferences: .init())
 
       stateService.isOutputActive = true
       stateService.isLocalRecording = true

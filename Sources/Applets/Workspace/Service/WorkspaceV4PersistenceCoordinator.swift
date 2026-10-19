@@ -49,6 +49,8 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   var workspace: WorkspaceV4Bundle { currentWorkspace }
+  /// Canonical persisted content, without pending live preferences or output settings.
+  public var persistedWorkspace: WorkspaceV4Bundle? { adoptedRuntimeWorkspace }
   public var hasPersistedWorkspace: Bool { adoptedRuntimeWorkspace != nil }
   var runtimeWorkspace: WorkspaceV4Bundle {
     let live = runtimeSnapshot()

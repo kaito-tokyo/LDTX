@@ -16,14 +16,20 @@ extension AppUIComponentTestSuite {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)
-      fixture.state.workspaceDefinition.videoComponents[0].vfxSource.displayName = "Renamed"
-      fixture.state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .videoLayerHidden[1] = true
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[0].vfxSource.displayName = "Renamed"
+      }
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+          .videoLayerHidden[1] = true
+      }
       fixture.editor.synchronizeRows()
       #expect(row.name == "Renamed")
       #expect(row.isHidden)
       #expect(row.strings[0] == "-")
-      fixture.state.workspaceDefinition.videoComponents.removeAll()
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents.removeAll()
+      }
       fixture.editor.synchronizeRows()
       #expect(row.name == "Missing Video Layer")
       #expect(!row.supportsPlacement)
@@ -33,15 +39,19 @@ extension AppUIComponentTestSuite {
       let fixture = VideoLayersTestFixture()
       let old = try #require(fixture.editor.rows[1])
       old.edit("-", at: 0)
-      fixture.state.workspaceDefinition.programs = [.with { $0.internalID = 200 }]
-      fixture.state.workspacePreferences.landscapeProgramPreferences[200] =
-        fixture.state.workspacePreferences.landscapeProgramPreferences[100]
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [.with { $0.internalID = 200 }]
+      }
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[200] =
+          fixture.state.workspacePreferences.landscapeProgramPreferences[100]
+      }
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1] !== old)
       #expect(fixture.editor.rows[1]?.hasLocalTextChanges == false)
       let before = fixture.state.workspacePreferences
       old.edit("960", at: 0)
-      old.onSetHidden(true)
+      old.onSetHidden(true, nil)
       #expect(fixture.state.workspacePreferences == before)
     }
 
@@ -50,8 +60,10 @@ extension AppUIComponentTestSuite {
       let portrait = VideoLayersEditorState(
         stateService: fixture.state, appletData: fixture.data, target: .portrait)
       #expect(portrait.layerIDs.isEmpty)
-      fixture.state.workspacePreferences.portraitProgramPreferences[100, default: .init()]
-        .videoLayerInternalIds = [2]
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.portraitProgramPreferences[100, default: .init()]
+          .videoLayerInternalIds = [2]
+      }
       portrait.synchronizeRows()
       #expect(portrait.rows.keys.sorted() == [2])
       #expect(fixture.editor.rows.keys.sorted() == [1, 2, 3])
@@ -59,12 +71,14 @@ extension AppUIComponentTestSuite {
 
     @Test func onlyPositionableComponentsExposePlacement() throws {
       let fixture = VideoLayersTestFixture(ids: [1, 2, 3, 4])
-      fixture.state.workspaceDefinition.videoComponents = [
-        .with { $0.vfxSource.internalID = 1 },
-        .with { $0.clock.internalID = 2 },
-        WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
-        try WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
-      ]
+      try fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with { $0.vfxSource.internalID = 1 },
+          .with { $0.clock.internalID = 2 },
+          WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
+          try WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
+        ]
+      }
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1]?.supportsPlacement == true)
       #expect(fixture.editor.rows[2]?.supportsPlacement == true)

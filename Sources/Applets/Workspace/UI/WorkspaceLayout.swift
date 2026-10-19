@@ -6,13 +6,13 @@ import SwiftUI
 public struct WorkspaceLayout<Sidebar: View, Content: View, Inspector: View>: View {
   @State private var sidebarWidth: CGFloat = 240
   @State private var inspectorWidth: CGFloat = 320
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let sidebar: Sidebar
   let content: Content
   let inspector: Inspector
 
   public init(
-    stateService: WorkspaceStateService, sidebar: Sidebar, content: Content, inspector: Inspector
+    stateService: WorkspaceDocument, sidebar: Sidebar, content: Content, inspector: Inspector
   ) {
     self.stateService = stateService
     self.sidebar = sidebar

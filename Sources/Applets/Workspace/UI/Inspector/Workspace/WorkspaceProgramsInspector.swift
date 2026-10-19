@@ -28,8 +28,9 @@ struct WorkspaceProgramSelector: View {
 }
 
 struct WorkspaceProgramsInspector: View {
+  @Environment(\.undoManager) private var undoManager
   @Environment(\.workspaceReportError) private var reportError
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   @Bindable var appletData: WorkspaceAppletData
 
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
@@ -97,7 +98,7 @@ struct WorkspaceProgramsInspector: View {
           guard let runtimeActions = runtimeActions() else {
             throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
           }
-          try runtimeActions.removeProgram(internalID: target.id)
+          try runtimeActions.removeProgram(internalID: target.id, undoManager: undoManager)
         } catch {
           reportError(error)
         }
@@ -127,7 +128,9 @@ struct WorkspaceProgramsInspector: View {
     else {
       throw WorkspaceSelectionError(message: "Enter a unique, nonempty Program name.")
     }
-    stateService.workspaceDefinition.programs[index].displayName = candidate
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition.programs[index].displayName = candidate
+    }
     runtimeActions()?.updateProgramRuntimes()
   }
 
@@ -138,7 +141,9 @@ struct WorkspaceProgramsInspector: View {
     program.displayName = uniqueProgramDisplayName("Program")
     var definition = stateService.workspaceDefinition
     definition.programs.append(program)
-    stateService.workspaceDefinition = definition
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+    }
     if let workspaceURL {
       var state = appletData.state(for: workspaceURL)
       if state.selectedProgramInternalID == nil {

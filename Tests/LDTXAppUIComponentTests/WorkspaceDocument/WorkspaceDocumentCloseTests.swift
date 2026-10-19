@@ -3,6 +3,7 @@
 
 import AppKit
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Synchronization
 import Testing
@@ -109,7 +110,9 @@ extension AppUIComponentTestSuite {
       let baseline = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       try WorkspaceBundleWriterV4().write(baseline, to: root)
-      source.stateService.workspaceDefinition.displayName = "First save"
+      source.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "First save"
+      }
       let first = try await source.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
       let document = SaveBridgeDocument(snapshot: first)
       document.fileURL = root
@@ -148,7 +151,9 @@ extension AppUIComponentTestSuite {
       }
       termination.request { Issue.record("A repeated pending Quit must be coalesced") }
 
-      source.stateService.workspaceDefinition.displayName = "Latest queued save"
+      source.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Latest queued save"
+      }
       let latest = try await source.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
       document.snapshot.withLock { $0 = latest }
       document.updateChangeCount(.changeDone)
@@ -174,7 +179,9 @@ extension AppUIComponentTestSuite {
         .appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: root) }
       let source = WorkspaceDocument()
-      source.stateService.workspaceDefinition.displayName = "Latest confirmed content"
+      source.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Latest confirmed content"
+      }
       let snapshot = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       let document = SaveBridgeDocument(snapshot: snapshot)
@@ -200,7 +207,9 @@ extension AppUIComponentTestSuite {
       }
       var started = document.started.stream.makeAsyncIterator()
       for index in 0..<saveCount {
-        source.stateService.workspaceDefinition.displayName = "Confirmed save \(index)"
+        source.stateService.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.displayName = "Confirmed save \(index)"
+        }
         let expected = try await source.snapshot(
           contentType: WorkspaceDocument.readableContentTypes[0])
         document.snapshot.withLock { $0 = expected }
@@ -239,12 +248,19 @@ extension AppUIComponentTestSuite {
         .appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: root) }
       let source = WorkspaceDocument()
+      #expect(source.workspaceSnapshot == nil)
       let baseline = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       try WorkspaceBundleWriterV4().write(baseline, to: root)
-      source.stateService.workspaceDefinition.displayName = "Unsaved after failure"
+      // Neither capture nor Writer IO confirms a canonical read on the source.
+      #expect(source.workspaceSnapshot == nil)
+      source.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Unsaved after failure"
+      }
       let changed = try await source.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(source.workspaceSnapshot == nil)
+      #expect(changed != baseline)
       let document = SaveBridgeDocument(snapshot: changed, fail: true)
       document.fileURL = root
       document.fileType = WorkspaceDocument.readableContentTypes[0].identifier
@@ -263,8 +279,10 @@ extension AppUIComponentTestSuite {
       #expect(document.isDocumentEdited)
       #expect(!document.timedOut.withLock { $0 })
       #expect(try WorkspaceBundleReaderV4(at: root).read() == baseline)
-      #expect(source.workspaceSnapshot == changed)
-      #expect(source.stateService.editingWorkspace == changed)
+      #expect(source.workspaceSnapshot == nil)
+      #expect(source.workspace == changed)
+      #expect(source.workspace != baseline)
+      #expect(document.snapshot.withLock { $0 } == changed)
     }
   }
 }

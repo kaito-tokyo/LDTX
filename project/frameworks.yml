@@ -567,14 +567,14 @@ targets:
     sources:
       - path: Sources/Applets/Workspace
         includes:
-          - WorkspaceDocument.swift
           - WorkspaceDocumentContent.swift
           - WorkspaceCommands.swift
           - WorkspaceApplicationTermination.swift
           - WorkspaceApplication.swift
           - WorkspaceDocumentConnection.swift
           - WorkspaceDocumentCloseCoordinator.swift
-          - WorkspaceRuntimeCoordinator.swift
+          - WorkspaceAppletCoordinator.swift
+          - WorkspaceAppletDelegate.swift
     dependencies:
       - target: LDTXProtos
       - target: LDTXWorkspaceBundleFormat

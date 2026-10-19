@@ -101,7 +101,7 @@ Feature: Commit transform drafts
     Then only VFX Sources and Clocks expose position and scale fields
     And full-canvas layers retain their visibility controls without placement fields
 
-  @UCT-1006.16 @WorkspaceStateService
+  @UCT-1006.16 @WorkspaceDocument
   Scenario: Invalid transform drafts block navigation until corrected
     Given a layer has an invalid position or negative scale draft
     When navigation or saving validates pending edits

@@ -14,10 +14,12 @@ extension AppUIComponentTestSuite {
   struct UCT1012AudioMixEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
     @Test func gainEditsDoNotRequireProgramOrCanvasSelection() throws {
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
-      state.workspaceDefinition.audioDevices = [
-        WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
-      ]
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.audioDevices = [
+          WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
+        ]
+      }
       state.selectedAudioMix = .portrait
       let editor = AudioMixEditor(
         stateService: state, appletData: WorkspaceAppletData(),
@@ -31,7 +33,7 @@ extension AppUIComponentTestSuite {
       #expect(state.selectedAudioMix == .portrait)
     }
     @Test func hostedMixerUpdatesWhenDevicesChange() async throws {
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let editor = AudioMixEditor(
         stateService: state, appletData: WorkspaceAppletData(),
         peakMeter: .init(), reportError: { _ in })
@@ -40,12 +42,16 @@ extension AppUIComponentTestSuite {
       let host = try #require(window.contentViewController as? NSHostingController<AudioMixEditor>)
       let proposal = NSSize(width: 720, height: CGFloat.greatestFiniteMagnitude)
       let emptyHeight = host.sizeThatFits(in: proposal).height
-      state.workspaceDefinition.audioDevices = [
-        WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
-      ]
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.audioDevices = [
+          WorkspaceResourceFactory.makeAudioInput(id: 10, name: "Input")
+        ]
+      }
       await settleWorkspaceToolbar(window)
       #expect(host.sizeThatFits(in: proposal).height > emptyHeight)
-      state.workspaceDefinition.audioDevices = []
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.audioDevices = []
+      }
       await settleWorkspaceToolbar(window)
       #expect(abs(host.sizeThatFits(in: proposal).height - emptyHeight) < 1)
     }

@@ -8,7 +8,7 @@ import SwiftUI
 
 @MainActor @Observable
 final class VideoLayersEditorState {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let target: WorkspaceCanvasTarget
   private(set) var rows: [Int64: VideoLayersTableRowState] = [:]
@@ -26,7 +26,7 @@ final class VideoLayersEditorState {
 
   private var displayedProgramID: Int64?
   init(
-    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     target: WorkspaceCanvasTarget
   ) {
     self.stateService = stateService
@@ -35,7 +35,9 @@ final class VideoLayersEditorState {
     synchronizeRows()
   }
 
-  func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+  func move(
+    fromOffsets source: IndexSet, toOffset destination: Int, undoManager: UndoManager? = nil
+  ) {
     guard let programID,
       !source.isEmpty,
       source.allSatisfy({ layerIDs.indices.contains($0) }),
@@ -44,14 +46,14 @@ final class VideoLayersEditorState {
     var order = layerIDs
     order.move(fromOffsets: source, toOffset: destination)
     do {
-      try commitLayerOrder(order, programID: programID)
+      try commitLayerOrder(order, programID: programID, undoManager: undoManager)
       failure = nil
     } catch {
       failure = error.localizedDescription
     }
   }
 
-  func commitLayerOrder(_ ids: [Int64], programID: Int64) throws {
+  func commitLayerOrder(_ ids: [Int64], programID: Int64, undoManager: UndoManager? = nil) throws {
     guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID })
     else { throw WorkspaceSelectionError(message: "The Program is unavailable.") }
     let current =
@@ -60,8 +62,10 @@ final class VideoLayersEditorState {
     guard current.sorted() == ids.sorted() else {
       throw WorkspaceSelectionError(message: "The video layer order changed.")
     }
-    stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
-      .videoLayerInternalIds = ids
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+        .videoLayerInternalIds = ids
+    }
   }
 
   func synchronizeRows() {
@@ -85,7 +89,7 @@ final class VideoLayersEditorState {
         row.display(
           preferences.videoLayerTransforms[id] ?? .init(), canvasWidth: 1920, canvasHeight: 1080)
       }
-      row.onCommit = { [weak self, weak row] in
+      row.onCommit = { [weak self, weak row] undoManager in
         guard let self, let row, row.hasLocalTextChanges, let program,
           self.programID == program,
           self.rows[id] === row,
@@ -102,23 +106,23 @@ final class VideoLayersEditorState {
           row.hasLocalTextChanges = incomplete
           return
         }
-        self.stateService.workspacePreferences[keyPath: self.target.preferences][
-          program, default: .init()
-        ]
-        .videoLayerTransforms[id] = transform
+        self.stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.preferences[keyPath: self.target.preferences][program, default: .init()]
+            .videoLayerTransforms[id] = transform
+        }
         row.transform = transform
         row.hasLocalTextChanges = incomplete
       }
-      row.onSetHidden = { [weak self, weak row] hidden in
+      row.onSetHidden = { [weak self, weak row] hidden, undoManager in
         guard let self, let row, let program, self.programID == program,
           self.rows[id] === row,
           self.stateService.workspacePreferences[keyPath: self.target.preferences][program]?
             .videoLayerInternalIds.contains(id) == true
         else { return }
-        self.stateService.workspacePreferences[keyPath: self.target.preferences][
-          program, default: .init()
-        ]
-        .videoLayerHidden[id] = hidden
+        self.stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.preferences[keyPath: self.target.preferences][program, default: .init()]
+            .videoLayerHidden[id] = hidden
+        }
         row.isHidden = hidden
       }
       rows[id] = row
@@ -180,6 +184,7 @@ final class VideoLayersEditorState {
 }
 
 struct VideoLayersEditor: View {
+  @Environment(\.undoManager) private var undoManager
   let editor: VideoLayersEditorState
 
   var body: some View {
@@ -191,7 +196,7 @@ struct VideoLayersEditor: View {
           )
         }
       }
-      .onMove(perform: editor.move)
+      .onMove { editor.move(fromOffsets: $0, toOffset: $1, undoManager: undoManager) }
       if let message = editor.failure ?? editor.stateService.outputFailureMessage {
         Text(message).foregroundStyle(.secondary)
       } else if editor.programID == nil {

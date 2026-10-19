@@ -5,7 +5,7 @@ import Foundation
 import LDTXProtos
 import LDTXWorkspaceBundleFormat
 
-extension WorkspaceStateService {
+extension WorkspaceDocument {
   public func inferenceRequest(
     document: (any WorkspaceDocumentContext)?, workspace: WorkspaceV4Bundle?
   ) -> (vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, url: URL)? {

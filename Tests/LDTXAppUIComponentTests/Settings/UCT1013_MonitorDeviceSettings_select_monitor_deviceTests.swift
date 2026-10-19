@@ -5,6 +5,7 @@ import AppKit
 @testable import LDTXProgramRuntime
 @testable import LDTXSettingsApplet
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {

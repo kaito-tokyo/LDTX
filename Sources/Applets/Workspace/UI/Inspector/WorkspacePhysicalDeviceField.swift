@@ -10,7 +10,7 @@ struct WorkspacePhysicalDeviceField: View {
   let title: String
   let internalID: Int64
   let isAudio: Bool
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let deviceRegistry: DeviceRegistryService
   var isEditable = true

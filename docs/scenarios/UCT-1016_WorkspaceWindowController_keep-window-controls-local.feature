@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@UCT-1016 @WorkspaceRuntimeCoordinator
+@UCT-1016 @WorkspaceAppletCoordinator
 Feature: Keep window controls local
 
   @UCT-1016.1

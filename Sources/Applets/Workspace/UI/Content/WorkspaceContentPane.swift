@@ -7,7 +7,7 @@ import Observation
 import SwiftUI
 
 public struct WorkspaceContentPane: View {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let peakMeter: ProgramAudioPeakMeter
   let reportError: (Error) -> Void
@@ -18,7 +18,7 @@ public struct WorkspaceContentPane: View {
   @State private var portraitEditor: VideoLayersEditorState
 
   public init(
-    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     peakMeter: ProgramAudioPeakMeter, reportError: @escaping (Error) -> Void,
     pairedPreview: ProgramCanvasPairedPreview,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }

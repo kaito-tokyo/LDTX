@@ -6,7 +6,8 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct VideoComponentDeleteButton: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let componentID: Int64
 
   var body: some View {
@@ -14,7 +15,7 @@ struct VideoComponentDeleteButton: View {
       HStack {
         Spacer()
         Button("Delete", role: .destructive) {
-          VideoComponentDeletion.delete(componentID, from: stateService)
+          VideoComponentDeletion.delete(componentID, from: stateService, undoManager: undoManager)
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.red)
@@ -37,7 +38,7 @@ struct VideoComponentDeleteButton: View {
 
 @MainActor
 enum VideoComponentDeletion {
-  static func hasVisionInputReference(_ componentID: Int64, in stateService: WorkspaceStateService)
+  static func hasVisionInputReference(_ componentID: Int64, in stateService: WorkspaceDocument)
     -> Bool
   {
     stateService.workspaceDefinition.visions.contains { wrapper in
@@ -51,7 +52,9 @@ enum VideoComponentDeletion {
     }
   }
 
-  static func delete(_ componentID: Int64, from stateService: WorkspaceStateService) {
+  static func delete(
+    _ componentID: Int64, from stateService: WorkspaceDocument, undoManager: UndoManager? = nil
+  ) {
     guard !stateService.isOutputActive, !stateService.isClosed,
       !hasVisionInputReference(componentID, in: stateService),
       stateService.workspaceDefinition.videoComponents.contains(where: {
@@ -81,10 +84,12 @@ enum VideoComponentDeletion {
     preferences.portraitProgramPreferences = preferences.portraitProgramPreferences.mapValues(
       removingReferences)
 
-    // Both content assignments participate in the document connection's Workspace Undo snapshot.
+    // Both sections are one synchronous document edit and one Undo action.
     // Retain app-local device assignments so Undo can restore the source with its device.
-    stateService.workspaceDefinition = definition
-    stateService.workspacePreferences = preferences
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+      workspace.preferences = preferences
+    }
     if stateService.inspectorSelector?.internalID == componentID {
       stateService.inspectorSelector = nil
     }

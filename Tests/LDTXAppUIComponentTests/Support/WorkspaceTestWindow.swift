@@ -10,14 +10,14 @@ import SwiftUI
 
 @MainActor
 final class WorkspaceTestWindow: NSWindow {
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let contentPane: WorkspaceContentPane
   let workspaceDocument: (any WorkspaceDocumentContext)?
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private var inferenceTask: Task<Void, Never>?
 
   init(
-    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     deviceRegistry: DeviceRegistryService, peakMeter: ProgramAudioPeakMeter,
     pairedPreview: ProgramCanvasPairedPreview,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)?,

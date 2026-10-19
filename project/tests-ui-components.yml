@@ -7,6 +7,7 @@ targets:
     platform: macOS
     sources:
       - Tests/LDTXAppUIComponentTests
+      - Sources/Apps/LDTXApp/AppDelegate.swift
     dependencies:
       - target: LDTXVariableMacro
       - target: LDTXRichText

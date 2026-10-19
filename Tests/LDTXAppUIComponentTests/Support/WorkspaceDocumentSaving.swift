@@ -36,7 +36,6 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
   let snapshot = try await WorkspaceDocument.Reader().read(
     from: url, progress: progress.subprogress(assigningCount: 1))
   try await document.apply(snapshot: snapshot, previous: nil)
-  document.adoptReadSnapshotForEditing()
   document.testSavedWorkspace = document.workspace
   return document
 }
@@ -46,7 +45,7 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
 private final class WorkspaceTestHost {
   var savedURL: URL?
   var coordinator: WorkspaceDocumentConnection?
-  var controllers: [WorkspaceRuntimeCoordinator] = []
+  var controllers: [WorkspaceAppletCoordinator] = []
   var windows: [NSWindow] = []
   var saved: WorkspaceV4Bundle?
 }
@@ -81,20 +80,19 @@ extension WorkspaceDocument {
     testHost.coordinator = coordinator
     return coordinator
   }
-  var controller: WorkspaceRuntimeCoordinator { testCoordinator.runtimeCoordinator }
+  var controller: WorkspaceAppletCoordinator { testCoordinator.runtimeCoordinator }
   var appletData: WorkspaceAppletData { controller.appletData }
   var persistenceCoordinator: WorkspaceV4PersistenceCoordinator {
     controller.persistenceCoordinator
   }
-  var workspace: WorkspaceV4Bundle { stateService.editingWorkspace }
   func shutdown() async { await testCoordinator.shutdown() }
   var hasTestModelChanges: Bool {
     testHost.saved.map { workspace != $0 }
       ?? (workspace.definition.displayName != "Untitled" || !workspace.definition.programs.isEmpty)
   }
-  var windowControllers: [WorkspaceRuntimeCoordinator] { testHost.controllers }
+  var windowControllers: [WorkspaceAppletCoordinator] { testHost.controllers }
   func makeWindowControllers() { if windowControllers.isEmpty { addWindowController(controller) } }
-  func addWindowController(_ controller: WorkspaceRuntimeCoordinator) {
+  func addWindowController(_ controller: WorkspaceAppletCoordinator) {
     if testHost.coordinator?.runtimeCoordinator !== controller {
       testHost.coordinator?.disconnect()
       testHost.coordinator = WorkspaceDocumentConnection(
@@ -110,7 +108,7 @@ extension WorkspaceDocument {
     controller.window = window
     testHost.windows.append(window)
   }
-  func removeWindowController(_ controller: WorkspaceRuntimeCoordinator) {
+  func removeWindowController(_ controller: WorkspaceAppletCoordinator) {
     testHost.controllers.removeAll { $0 === controller }
   }
   func close() {

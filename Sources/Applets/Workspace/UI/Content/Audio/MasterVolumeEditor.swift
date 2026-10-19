@@ -7,7 +7,8 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct MasterVolumeEditor: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let peakMeter: ProgramAudioPeakMeter
   let reportError: (Error) -> Void
@@ -54,8 +55,10 @@ struct MasterVolumeEditor: View {
         guard let id,
           stateService.workspaceDefinition.programs.contains(where: { $0.internalID == id })
         else { return }
-        stateService.workspacePreferences[keyPath: target.preferences][id, default: .init()]
-          .audioMasterVolumeDecibels = value
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.preferences[keyPath: target.preferences][id, default: .init()]
+            .audioMasterVolumeDecibels = value
+        }
       })
     return HStack(spacing: 8) {
       Image(systemName: symbol).frame(width: 20).accessibilityLabel(name)
