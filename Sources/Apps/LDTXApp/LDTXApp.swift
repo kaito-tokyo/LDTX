@@ -40,12 +40,12 @@ struct LDTXApp: App {
 
     DocumentGroup { (document: WorkspaceDocument) in
       WorkspaceDocumentContent(document: document)
-        .environment(\.workspaceAppletDelegate, appDelegate)
     } makeDocument: { [appDelegate] configuration, _ in
       WorkspaceDocument(configuration: configuration) { [weak appDelegate] id in
         appDelegate?.closeWorkspace(runtimeID: id)
       }
     }
+    .environment(\.workspaceAppletDelegate, appDelegate)
     .defaultSize(width: 1062, height: 700)
     .windowToolbarStyle(.unified)
     .commands {

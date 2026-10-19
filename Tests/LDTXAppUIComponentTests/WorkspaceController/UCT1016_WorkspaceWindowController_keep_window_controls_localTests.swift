@@ -649,20 +649,16 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.12: Dock badges follow registered runtime controllers")
+    @Test("UCT-1016.12: Dock badges follow AppDelegate's registered coordinators")
     func dockBadgeFollowsRegisteredControllers() async {
       let dockTile = NSApplication.shared.dockTile
       let originalBadge = dockTile.badgeLabel
+      defer { dockTile.badgeLabel = originalBadge }
+      let appDelegate = AppDelegate()
       let first = WorkspaceDocument()
       let second = WorkspaceDocument()
-      _ = first.controller
-      _ = second.controller
-      defer {
-        first.close()
-        second.close()
-        dockTile.badgeLabel = originalBadge
-      }
-      first.stateService.isOutputActive = true
+      let firstCoordinator = appDelegate.workspaceCoordinator(for: first)
+      let secondCoordinator = appDelegate.workspaceCoordinator(for: second)
       first.stateService.isOutputActive = true
       second.stateService.isOutputActive = true
       await drainWorkspaceTestTasks()
@@ -675,12 +671,11 @@ extension AppUIComponentTestSuite {
       #expect(dockTile.badgeLabel == nil)
       first.stateService.isOutputActive = true
       second.stateService.isOutputActive = true
-      first.close()
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
-      second.close()
-      await drainWorkspaceTestTasks()
-      #expect(dockTile.badgeLabel == nil)
+      await firstCoordinator.shutdown()
+      #expect(dockTile.badgeLabel == "REC")
+      await secondCoordinator.shutdown()
       #expect(dockTile.badgeLabel == nil)
     }
 

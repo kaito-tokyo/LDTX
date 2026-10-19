@@ -23,6 +23,10 @@ public struct WorkspaceDocumentContent: View {
     .focusedSceneValue(\.workspaceUndoDisabled, document.stateService.isOutputActive)
     .task {
       guard !document.stateService.isClosed else { return }
+      guard let appletDelegate else {
+        preconditionFailure(
+          "WorkspaceAppletDelegate must be injected at the application entry point")
+      }
       if connection == nil {
         let coordinator = appletDelegate.workspaceCoordinator(for: document)
         connection =

@@ -45,8 +45,12 @@ WorkspaceDocumentContent creates its document connection lazily and retains it i
 State. WorkspaceDocumentConnection tracks edits and references WorkspaceAppletCoordinator.
 The Applet defines WorkspaceAppletDelegate and its Environment key. The AppDelegate
 implements that protocol in an extension. The application's existing adaptor instance
-is explicitly injected through `.environment(\.workspaceAppletDelegate, appDelegate)`.
-The Environment getter detects missing injection in one place; component tests may
+is explicitly injected on the Workspace DocumentGroup through
+`.environment(\.workspaceAppletDelegate, appDelegate)`. The standard `@Entry`
+property is Optional and defaults to nil, allowing SwiftUI's environment updates
+to read the previous value while writing through its key path. Content unwraps
+and requires the delegate in its installed `.task`, before requesting runtime
+resources; initialization does not read the environment. Component tests may
 supply a fake delegate. No NSApplication delegate cast or injection relay is used.
 WorkspaceDocumentContent places the UI views directly and connects their toolbar,
 error reporting, UndoManager, and lifecycle. There is no intermediate Scene or
