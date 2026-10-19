@@ -363,7 +363,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       adoptedContentModificationDate = modificationDate
       (workspaceDocument as? WorkspaceDocument)?.confirmPersistedWorkspace(workspace)
       confirmedContentsDidChange()
-    } catch { reportError(error) }
+    } catch {
+      // Save As can replace an autosaved URL while its canonical read is in flight.
+      // Discard failures from that obsolete location just like successful reads.
+      guard isCurrent() else { return }
+      reportError(error)
+    }
   }
 
   @concurrent private static func readPersistedWorkspace(at url: URL) async throws
