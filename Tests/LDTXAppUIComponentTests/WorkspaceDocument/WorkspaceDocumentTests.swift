@@ -193,6 +193,20 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
+    @Test(
+      "Persisted read failures are reported only for the current document URL",
+      arguments: [false, true])
+    func persistedReadFailureRequiresCurrentURL(isCurrent: Bool) async {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      await coordinator.refreshPersistedWorkspace(at: missing) { isCurrent }
+      #expect(document.operationErrors.count == (isCurrent ? 1 : 0))
+      #expect(document.workspaceSnapshot == nil)
+      #expect(document.recordingState == .idle)
+      await coordinator.shutdown()
+    }
+
     @Test("Output requires canonical document content, runtime, and disk to agree")
     func outputValidatesCanonicalContentAndRejectsMismatches() async throws {
       let url = FileManager.default.temporaryDirectory
