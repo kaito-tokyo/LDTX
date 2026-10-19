@@ -217,38 +217,43 @@ extension AppUIComponentTestSuite {
       let original = richDocument([
         .text("現在のシーン："), .variable(second), .text("\n残り時間："), .variable(first),
       ])
-      state.workspaceDefinition.videoComponents = [
-        .with {
-          $0.dynamicText.internalID = 33
-          $0.dynamicText.rtfdDocument = original.rtfd
-        }
-      ]
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with {
+            $0.dynamicText.internalID = 33
+            $0.dynamicText.rtfdDocument = original.rtfd
+          }
+        ]
+      }
       let connection = WorkspaceDocumentConnection(document: document)
       let root = HostedEditor(state: state, keys: [first, second])
       let window = hostWorkspaceView(root.padding(16), width: 480, height: 260)
       defer { window.close() }
+      let undo: UndoManager = try #require(window.undoManager)
+      window.contentView = NSHostingView(
+        rootView: HostedEditor(state: state, keys: [first, second], undoManager: undo).padding(16))
       await settleWorkspaceToolbar(window)
       let native = try #require(
         workspaceDescendants(window.contentView!).compactMap { $0 as? MacroTextView }.first)
       window.makeFirstResponder(native)
       #expect(try #require(native.enclosingScrollView).bounds.height >= 120)
-      let undo = try #require(window.undoManager)
       undo.groupsByEvent = false
-      connection.setUndoManager(undo)
       #expect(!native.allowsUndo)
       native.setSelectedRange(NSRange(location: native.string.utf16.count, length: 0))
       undo.beginUndoGrouping()
       native.insertVariable(second)
       native.insertText(
         "追記🙂", replacementRange: NSRange(location: native.string.utf16.count, length: 0))
-      connection.recordEdits()
+
       undo.endUndoGrouping()
       await settleWorkspaceToolbar(window)
       let after = try native.document
       #expect(try after.plainText().hasSuffix("追記🙂"))
       undo.beginUndoGrouping()
-      state.workspaceDefinition.displayName = "Renamed"
-      connection.recordEdits()
+      state.editWorkspace(undoManager: undo) { workspace in
+        workspace.definition.displayName = "Renamed"
+      }
+
       undo.endUndoGrouping()
       undo.undo()
       await settleWorkspaceToolbar(window)
@@ -267,7 +272,7 @@ extension AppUIComponentTestSuite {
         undo.beginUndoGrouping()
         native.insertText(
           "追記", replacementRange: NSRange(location: native.string.utf16.count, length: 0))
-        connection.recordEdits()
+
         undo.endUndoGrouping()
         native.update(
           document: try native.document, keys: [first, second], names: native.names, isEnabled: true
@@ -294,16 +299,19 @@ extension AppUIComponentTestSuite {
 
 @MainActor
 private struct HostedEditor: View {
-  let state: WorkspaceStateService
+  let state: WorkspaceDocument
   let keys: [LDTXVariableReference]
+  var undoManager: UndoManager? = nil
 
   var body: some View {
     LDTXVariableMacroEditor(
       document: try! LDTXRichTextDocument(
         rtfd: state.workspaceDefinition.videoComponents[0].dynamicText.rtfdDocument),
       keys: keys, name: { $0.sel },
-      onDocumentChange: {
-        state.workspaceDefinition.videoComponents[0].dynamicText.rtfdDocument = $0.rtfd
+      onDocumentChange: { richText in
+        state.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition.videoComponents[0].dynamicText.rtfdDocument = richText.rtfd
+        }
       }
     )
     .frame(minHeight: 120)

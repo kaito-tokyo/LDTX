@@ -567,7 +567,6 @@ targets:
     sources:
       - path: Sources/Applets/Workspace
         includes:
-          - WorkspaceDocument.swift
           - WorkspaceDocumentContent.swift
           - WorkspaceCommands.swift
           - WorkspaceApplicationTermination.swift

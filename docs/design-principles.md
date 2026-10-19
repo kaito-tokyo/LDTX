@@ -23,59 +23,48 @@ the relevant design or feature documentation instead.
   of a V4 Workspace.
 - Runtime state, editor state, and persistence code must project from that
   model rather than maintaining an independent parallel representation.
-- WorkspaceStateService exposes its editable protobuf values as ordinary stored
-  properties. Assignments must remain transparent: setters must not silently
-  reject, reinterpret, or replace an assigned value. Editing restrictions and
-  validation belong to explicit editing operations and their UI owners.
-- The SwiftUI scene connection registers undo actions for content changes to participate
-  in SwiftUI's unsaved-change tracking. StateService must not hide document-change
-  callbacks or persistence notifications in its setters.
-  Workspace Undo/Redo menu commands and shortcuts use the standard document
-  history while output is idle. During output they are disabled so a snapshot
-  restoration cannot bypass editing restrictions. Registration remains enabled
-  for change tracking. Other Applets keep their standard Undo/Redo commands.
+- WorkspaceDocument owns one observable WorkspaceV4Bundle as the authoritative
+  editable value, together with observable UI status. Runtime resources remain
+  outside the Document.
+- User edits enter a synchronous MainActor document operation, directly or
+  through an explicit editing Binding. The operation captures the previous
+  Workspace value and registers its restoration with the View environment's
+  document UndoManager, supplied by the input View at the synchronous call site.
+  Restoration uses that same manager to register Redo.
+  Compound edits, including model selection and component deletion, commit once.
+- No asynchronous observer reconstructs user edits or registers Undo afterward.
+  Read-only field projections cannot bypass the edit operation. Reading content
+  replaces the value directly without creating a user-edit Undo action.
+- Workspace uses the standard document history while output is idle. Undo/Redo
+  commands remain disabled during output; registration still tracks content edits.
+  Other Applets retain their standard commands.
 
 ## Document content, editing state and runtime state have distinct roles
 
-- WorkspaceDocument owns the confirmed in-memory Workspace content.
-  StateService values are confirmed in Document before their snapshot is validated and written
-  to disk. The direction is StateService → Document → Disk; write failure does
-  not roll back the confirmed content, which remains unsaved.
-- WorkspaceDocument owns WorkspaceStateService and its temporary editing values
-  and UI state. Document captures those values directly when saving; Writer
-  validates them before writing. Saving does not require a represented UI or an editing connection.
-- WorkspaceDocumentContent receives Document and retains its document connection through SwiftUI State.
-  The connection owns the runtime WorkspaceRuntimeCoordinator.
-  UI receives Document's StateService through Bindable. Runtime
-  ProgramRuntime pairs and preview MTKViews are constructed and retained by App
-  State, keyed by the Document's transient UUID, and injected through initializers.
-  WorkspaceRuntimeCoordinator operates those resources and releases their App registration
-  only after asynchronous shutdown. Document does not own the controller.
-  WorkspaceStateService is the shared observable state; there is no parallel
-  Workspace view-state or presentation model. Alert and popover visibility,
-  pane widths, and other view-local values belong to the owning View's State.
-- Snapshot preparation confirms only captured values; newer edits stay in
-  StateService. Model IDs are assigned on selection and remain unchanged during
-  saving. Snapshots contain model source URLs; Writer copies those resources
-  without modifying the Definition and holds no shared
-  receipts or callbacks into Document. Runtime persistence tracking is separate
-  from in-memory document confirmation.
+- WorkspaceDocument owns the editable Workspace value and UI state directly;
+  there is no parallel mutable StateService. UI selections, runtime results and
+  output status are not part of the undoable Workspace value.
+- Snapshot capture returns the current value without publishing a confirmation,
+  changing editable content or adopting runtime state. Writer validates and writes
+  the supplied snapshot to the supplied destination. Failure retains the edits.
+- Reader applies loaded content directly to the Document without registering Undo.
+  The last canonical content read is distinct from a pre-write snapshot.
+- WorkspaceDocumentContent retains the connection through SwiftUI State. The
+  connection owns WorkspaceRuntimeCoordinator. It neither connects an UndoManager
+  later nor observes edits for Undo registration. Input Views pass their environment
+  UndoManager directly; the Document holds no cached manager or readiness state.
+  App State retains runtime Program pairs, previews and capture resources keyed
+  by the Document's transient identity. Shutdown remains asynchronous and explicit.
+- Snapshots contain captured values and model source URLs. Model IDs are assigned
+  on selection and remain unchanged during saving. Writer copies resources
+  without modifying Definition and holds no callbacks into Document.
 - Reader and Writer snapshots are WorkspaceV4Bundle values. Configuration owns
-  the document location separately. Model resource URLs are keyed by their model
-  IDs within the Bundle and Document's StateService.
-- Applying a Reader snapshot only replaces Document's content. UI and runtime
-  consumers observe Document changes and independently adopt or defer
-  updates. A consumer's output state must not prevent Document from updating.
-- The connection updates StateService fields directly. Full overwrite
-  replaces Definition, Preferences, OutputSettings, envelope IDs and model URLs.
-  URL-only synchronization updates URLs for model IDs already present in
-  StateService; it does not add or remove models or change Vision references or
-  other editing values. There is no implicit three-way or field-level merge.
-- Reader content is adopted with full overwrite by the SwiftUI scene connection.
-  Snapshot capture also adopts an unread Reader generation into StateService,
-  so headless saving cannot replace read content with initial editing values.
-  Adoption is shared and runs once per Reader generation.
-  URL-only synchronization is an explicit operation, not a side effect of saving.
+  document location separately. Applying a Reader snapshot replaces the whole
+  editable value without Undo, preserving UI status. There is no implicit
+  three-way merge, and snapshot capture never adopts or replaces editing data.
+- Runtime adoption remains independent of editable content and snapshot capture.
+  A canonical package read may update the recorded persisted content; pending
+  edits stay in the Document until explicitly changed or a Reader applies data.
 
 ## Definition changes reach the runtime only after persistence
 
@@ -100,7 +89,7 @@ the relevant design or feature documentation instead.
   subject to the runtime's supported operations and output restrictions.
 - RecordingSession captures OutputSettings before entering the starting state.
   Service construction, subscriptions, and session reconfiguration use that
-  snapshot until cleanup, even if Document or StateService changes meanwhile.
+  snapshot until cleanup, even if Document content changes meanwhile.
   The next start captures new settings; live mix preferences remain independent.
 
 ## Vision interval execution is best effort
@@ -288,15 +277,15 @@ the relevant design or feature documentation instead.
 - Reject non-finite or unrepresentable decibel edits before changing the model,
   preserving the previous value and the invalid editing draft.
 
-## Editing writes directly to WorkspaceStateService
+## Editing commits synchronously to WorkspaceDocument
 
-- SwiftUI edits update the Store's authoritative documents directly. There
+- SwiftUI edits commit the Document's authoritative Workspace value. There
   is no separate Submit or Apply operation and no window-wide draft registry.
 - Input controls may retain incomplete or unrepresentable numeric text locally;
   they must write representable values without requiring Return. Navigation does
   not require a separate confirmation operation.
 - Semantic validation, including Vision ROI bounds and rational denominators,
-  occurs when saving. Failed validation preserves the edits in the Store and
+  occurs when saving. Failed validation preserves the edits in the Document and
   leaves the persisted Definition and runtime unchanged.
 - Changing screens or starting output does not implicitly save the Definition.
 

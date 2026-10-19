@@ -7,7 +7,8 @@ import LDTXProtos
 import SwiftUI
 
 struct WorkspaceCanvasInspector: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
 
   var body: some View {
     Form {
@@ -72,7 +73,9 @@ struct WorkspaceCanvasInspector: View {
       set: { value in
         var definition = stateService.workspaceDefinition
         definition.canvasConfiguration.frameRate = UInt32(value)
-        stateService.workspaceDefinition = definition
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition = definition
+        }
       }
     )
   }
@@ -94,7 +97,9 @@ struct WorkspaceCanvasInspector: View {
         let rate = UInt32(min(max(value, 100_000), 100_000_000))
         var definition = stateService.workspaceDefinition
         definition.canvasConfiguration[keyPath: keyPath] = rate
-        stateService.workspaceDefinition = definition
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition = definition
+        }
       }
     )
   }
@@ -112,7 +117,9 @@ struct WorkspaceCanvasInspector: View {
         } else {
           definition.canvasConfiguration.clearPtsMasterVfxSourceInternalID()
         }
-        stateService.workspaceDefinition = definition
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition = definition
+        }
       }
     )
   }

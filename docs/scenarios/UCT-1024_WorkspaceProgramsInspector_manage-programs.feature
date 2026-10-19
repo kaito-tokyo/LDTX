@@ -6,7 +6,7 @@ Feature: Manage Programs
   Rename and confirmed deletion are available for each Program while output is inactive.
   Cancelling either dialog leaves the Workspace unchanged.
 
-  @UCT-1024.1 @WorkspaceStateService
+  @UCT-1024.1 @WorkspaceDocument
   Scenario: Rename validates all resource names and preserves rejected edits
     Given a Workspace contains named Programs, audio devices, video components, and Visions
     When a Program is renamed
@@ -14,7 +14,7 @@ Feature: Manage Programs
     And valid names are trimmed and saved
     And missing Programs and edits during output are rejected
 
-  @UCT-1024.2 @WorkspaceRuntimeCoordinator @WorkspaceStateService
+  @UCT-1024.2 @WorkspaceRuntimeCoordinator @WorkspaceDocument
   Scenario: Delete removes only the requested Program and its preferences
     Given a Workspace contains two Programs with saved preferences
     When the user confirms deletion of one Program

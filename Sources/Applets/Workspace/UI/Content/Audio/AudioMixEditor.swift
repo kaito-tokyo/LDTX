@@ -7,7 +7,8 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct AudioMixEditor: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let peakMeter: ProgramAudioPeakMeter
   let reportError: (Error) -> Void
@@ -85,10 +86,10 @@ struct AudioMixEditor: View {
             stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID }
             )
           else { return }
-          stateService.workspacePreferences[keyPath: target.preferences][
-            programID, default: .init()
-          ]
-          .audioChannelMuted[input.internalID] = !enabled
+          stateService.editWorkspace(undoManager: undoManager) { workspace in
+            workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+              .audioChannelMuted[input.internalID] = !enabled
+          }
         })
     )
     .disabled(programID == nil)
@@ -103,8 +104,10 @@ struct AudioMixEditor: View {
       return false
     }
     do {
-      stateService.workspacePreferences.audioChannelGainsDecibels[id] =
-        try Rational32DecibelEncoding.encode(decibels)
+      try stateService.editWorkspace(undoManager: undoManager) { workspace in
+        workspace.preferences.audioChannelGainsDecibels[id] =
+          try Rational32DecibelEncoding.encode(decibels)
+      }
       return true
     } catch {
       reportError(error)

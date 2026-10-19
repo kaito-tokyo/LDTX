@@ -11,39 +11,47 @@ extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct VideoComponentDeletionIntegrationTestSuite {
     @Test func deletionClearsReferencesAcrossProgramsAndPreservesOtherContent() throws {
-      let state = WorkspaceStateService()
-      state.workspaceDefinition.programs = [100, 200].map { id in
-        .with {
-          $0.internalID = Int64(id)
-          $0.displayName = "Program \(id)"
+      let state = WorkspaceDocument()
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [100, 200].map { id in
+          .with {
+            $0.internalID = Int64(id)
+            $0.displayName = "Program \(id)"
+          }
         }
       }
-      state.workspaceDefinition.videoComponents = [10, 20].map { id in
-        .with {
-          $0.vfxSource.internalID = Int64(id)
-          $0.vfxSource.displayName = "Source \(id)"
-          $0.vfxSource.deviceWidth = 1920
-          $0.vfxSource.deviceHeight = 1080
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [10, 20].map { id in
+          .with {
+            $0.vfxSource.internalID = Int64(id)
+            $0.vfxSource.displayName = "Source \(id)"
+            $0.vfxSource.deviceWidth = 1920
+            $0.vfxSource.deviceHeight = 1080
+          }
         }
       }
-      state.workspaceDefinition.canvasConfiguration.ptsMasterVfxSourceInternalID = 10
-      state.workspaceDefinition.visions = [
-        .with {
-          $0.ocrVision.internalID = 30
-          $0.ocrVision.displayName = "OCR"
-          $0.ocrVision.videoComponentInternalID = 20
-        },
-        .with {
-          $0.ldtxSceneDetectorVision.internalID = 40
-          $0.ldtxSceneDetectorVision.displayName = "Scene"
-          $0.ldtxSceneDetectorVision.videoComponentInternalID = 20
-        },
-        .with {
-          $0.ocrVision.internalID = 50
-          $0.ocrVision.displayName = "Other OCR"
-          $0.ocrVision.videoComponentInternalID = 20
-        },
-      ]
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 10
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            $0.ocrVision.internalID = 30
+            $0.ocrVision.displayName = "OCR"
+            $0.ocrVision.videoComponentInternalID = 20
+          },
+          .with {
+            $0.ldtxSceneDetectorVision.internalID = 40
+            $0.ldtxSceneDetectorVision.displayName = "Scene"
+            $0.ldtxSceneDetectorVision.videoComponentInternalID = 20
+          },
+          .with {
+            $0.ocrVision.internalID = 50
+            $0.ocrVision.displayName = "Other OCR"
+            $0.ocrVision.videoComponentInternalID = 20
+          },
+        ]
+      }
       let program = Ldtx_Workspace_V4_ProgramPreferences.with {
         $0.videoLayerInternalIds = [10, 20, 10]
         $0.videoLayerTransforms = [10: .init(), 20: .init()]
@@ -51,8 +59,12 @@ extension AppUIComponentTestSuite {
         $0.audioMasterVolumeDecibels.set(num: -30, den: 10)
       }
       for id: Int64 in [100, 200] {
-        state.workspacePreferences.landscapeProgramPreferences[id] = program
-        state.workspacePreferences.portraitProgramPreferences[id] = program
+        state.editWorkspace(undoManager: nil) { workspace in
+          workspace.preferences.landscapeProgramPreferences[id] = program
+        }
+        state.editWorkspace(undoManager: nil) { workspace in
+          workspace.preferences.portraitProgramPreferences[id] = program
+        }
       }
       state.inspectorSelector = .init(kind: .vfxVideoComponent, internalID: 10)
       let original = state.editingWorkspace
@@ -79,15 +91,17 @@ extension AppUIComponentTestSuite {
           preferences: state.workspacePreferences
         ).isEmpty)
       // Document Undo restores this same complete editing snapshot.
-      state.replaceEditingWorkspace(original)
+      state.replaceEditingWorkspace(original, undoManager: nil)
       #expect(state.editingWorkspace == original)
     }
 
     @Test func activeOutputClosedAndMissingTargetsDoNotChangeContent() {
-      let state = WorkspaceStateService()
-      state.workspaceDefinition.videoComponents = [
-        WorkspaceResourceFactory.makeSolidColor(id: 10, name: "Color")
-      ]
+      let state = WorkspaceDocument()
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          WorkspaceResourceFactory.makeSolidColor(id: 10, name: "Color")
+        ]
+      }
       let original = state.editingWorkspace
       state.isOutputActive = true
       VideoComponentDeletion.delete(10, from: state)
@@ -103,19 +117,23 @@ extension AppUIComponentTestSuite {
 
     @Test func visionInputsMustBeReassignedBeforeDeletion() {
       for sceneDetector in [false, true] {
-        let state = WorkspaceStateService()
-        state.workspaceDefinition.videoComponents = [.with { $0.vfxSource.internalID = 10 }]
-        state.workspaceDefinition.visions = [
-          .with {
-            if sceneDetector {
-              $0.ldtxSceneDetectorVision.internalID = 30
-              $0.ldtxSceneDetectorVision.videoComponentInternalID = 10
-            } else {
-              $0.ocrVision.internalID = 30
-              $0.ocrVision.videoComponentInternalID = 10
+        let state = WorkspaceDocument()
+        state.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.videoComponents = [.with { $0.vfxSource.internalID = 10 }]
+        }
+        state.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.visions = [
+            .with {
+              if sceneDetector {
+                $0.ldtxSceneDetectorVision.internalID = 30
+                $0.ldtxSceneDetectorVision.videoComponentInternalID = 10
+              } else {
+                $0.ocrVision.internalID = 30
+                $0.ocrVision.videoComponentInternalID = 10
+              }
             }
-          }
-        ]
+          ]
+        }
         let original = state.editingWorkspace
         #expect(VideoComponentDeletion.hasVisionInputReference(10, in: state))
         VideoComponentDeletion.delete(10, from: state)

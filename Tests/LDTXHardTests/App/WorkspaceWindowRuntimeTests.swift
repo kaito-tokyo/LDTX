@@ -44,7 +44,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
 
     // Updating editable content, including snapshot preparation for a failed save,
     // does not constitute persisted adoption.
-    try runtime.editWorkspace { $0.definition.displayName = "Pending edit" }
+    try runtime.editWorkspace(undoManager: nil) { $0.definition.displayName = "Pending edit" }
     runtime.updateRuntimes()
     #expect(try runtime.readVariable(text) == "recognized")
     try runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)

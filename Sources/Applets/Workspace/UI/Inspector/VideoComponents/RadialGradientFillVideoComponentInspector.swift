@@ -7,7 +7,8 @@ import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct RadialGradientFillVideoComponentInspector: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let videoComponentID: Int64
 
@@ -22,7 +23,7 @@ struct RadialGradientFillVideoComponentInspector: View {
   @State private var outerColor: Color
 
   init(
-    stateService: WorkspaceStateService,
+    stateService: WorkspaceDocument,
     appletData: WorkspaceAppletData,
     videoComponentID: Int64
   ) {
@@ -128,7 +129,9 @@ struct RadialGradientFillVideoComponentInspector: View {
     else { return }
     mutation(&component)
     definition.videoComponents[index].videoComponent = .radialGradientFill(component)
-    stateService.workspaceDefinition = definition
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+    }
   }
 
   private var gradient: RadialGradient {

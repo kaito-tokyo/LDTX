@@ -8,8 +8,9 @@ import LDTXProtos
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {
+  @Environment(\.undoManager) private var undoManager
   weak var document: (any WorkspaceDocumentContext)? = nil
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let internalID: Int64
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
@@ -69,7 +70,9 @@ struct AudioInputDeviceInspector: View {
       let index = definition.audioDevices.firstIndex(where: { $0.internalID == internalID })
     else { return }
     mutation(&definition.audioDevices[index])
-    stateService.workspaceDefinition = definition
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.definition = definition
+    }
   }
 
 }

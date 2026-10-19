@@ -16,37 +16,47 @@ extension AppUIComponentTestSuite {
     @Test("Fill inspectors edit the component with the requested internal ID", arguments: 0..<4)
     func editsByInternalID(_ kind: Int) async throws {
       let storeAppletData = WorkspaceAppletData()
-      let store = WorkspaceStateService(definition: .init(), preferences: .init())
+      let store = WorkspaceDocument(definition: .init(), preferences: .init())
       let component: Ldtx_Workspace_V4_VideoComponentWrapper
       let root: AnyView
       switch kind {
       case 0:
         component = WorkspaceResourceFactory.makeSolidColor(id: 11, name: "Source")
-        store.workspaceDefinition.videoComponents = [component]
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.videoComponents = [component]
+        }
         root = AnyView(
           SolidColorFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
       case 1:
         component = WorkspaceResourceFactory.makeLinearGradient(id: 11, name: "Source")
-        store.workspaceDefinition.videoComponents = [component]
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.videoComponents = [component]
+        }
         root = AnyView(
           LinearGradientFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
       case 2:
         component = WorkspaceResourceFactory.makeRadialGradient(id: 11, name: "Source")
-        store.workspaceDefinition.videoComponents = [component]
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.videoComponents = [component]
+        }
         root = AnyView(
           RadialGradientFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
       default:
         component = WorkspaceResourceFactory.makeConicGradient(id: 11, name: "Source")
-        store.workspaceDefinition.videoComponents = [component]
+        store.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.videoComponents = [component]
+        }
         root = AnyView(
           ConicGradientFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
       }
-      store.workspaceDefinition.videoComponents.append(
-        WorkspaceResourceFactory.makeSolidColor(id: 21, name: "Other"))
+      store.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents.append(
+          WorkspaceResourceFactory.makeSolidColor(id: 21, name: "Other"))
+      }
       let hosting = NSHostingView(rootView: root.frame(width: 480, height: 800))
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 480, height: 800),

@@ -37,7 +37,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
         $0.displayName = "Program 4"
       }
     ]
-    let store = WorkspaceStateService(definition: definition, preferences: .init())
+    let store = WorkspaceDocument(definition: definition, preferences: .init())
     let inspector = WorkspaceProgramsInspector(
       stateService: store, appletData: WorkspaceAppletData())
     #expect(inspector.uniqueProgramDisplayName("Program") == "Program 5")
@@ -45,7 +45,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func vfxRequiresAnAvailableCameraWithPositiveDimensions() {
-    let store = WorkspaceStateService()
+    let store = WorkspaceDocument()
     var draft = WorkspaceAddDraft()
     draft.name = "Camera"
     let camera = WorkspaceAddDeviceOption(
@@ -69,10 +69,12 @@ struct WorkspaceResourceAdditionUnitTestSuite {
 
   @Test(arguments: WorkspaceAddVisionKind.allCases)
   func visionRejectsGeneratedInputs(kind: WorkspaceAddVisionKind) {
-    let store = WorkspaceStateService()
-    store.workspaceDefinition.videoComponents = [
-      WorkspaceResourceFactory.makeSolidColor(id: 1, name: "Fill")
-    ]
+    let store = WorkspaceDocument()
+    store.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.videoComponents = [
+        WorkspaceResourceFactory.makeSolidColor(id: 1, name: "Fill")
+      ]
+    }
     var draft = WorkspaceAddDraft()
     draft.name = "Vision"
     draft.visionKind = kind
@@ -85,7 +87,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func cameraCannotBeAddedAsAudioDevice() {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
     var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = camera.id
@@ -97,7 +99,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func audioDiscoveryFailureRejectsAddition() {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "audio"), name: "Audio")
     var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = audio.id
@@ -110,7 +112,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func outputStateLocksDefinitionChangesDuringTransitions() {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     var draft = WorkspaceAddDraft()
     draft.componentKind = .solidColor
     draft.name = "Color"
@@ -131,7 +133,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     let camera = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
     var draft = WorkspaceAddDraft()
     draft.physicalDeviceID = camera.id
@@ -149,7 +151,7 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func rejectedAddsLeaveDefinitionAndSelectionUnchanged() throws {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     var draft = WorkspaceAddDraft()
     draft.componentKind = .solidColor
     draft.name = "  "
@@ -182,10 +184,12 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func duplicateNamesAreRejectedAcrossResourceKinds() throws {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
-    state.workspaceDefinition.videoComponents = [
-      WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Shared")
-    ]
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.videoComponents = [
+        WorkspaceResourceFactory.makeVFXSource(id: 1, name: "Shared")
+      ]
+    }
     var draft = WorkspaceAddDraft()
     draft.name = " Shared "
     draft.componentKind = .clock
@@ -204,10 +208,12 @@ struct WorkspaceResourceAdditionUnitTestSuite {
 
   @Test(arguments: WorkspaceAddComponentKind.allCases.filter { $0 != .dynamicText })
   func componentUsesDefaultsWithoutPlacingProgramLayers(kind: WorkspaceAddComponentKind) throws {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 2
-    state.workspaceDefinition.programs = [program]
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.programs = [program]
+    }
     var draft = WorkspaceAddDraft()
     draft.componentKind = kind
     draft.name = kind.rawValue
@@ -260,10 +266,12 @@ struct WorkspaceResourceAdditionUnitTestSuite {
   }
 
   @Test func visionReferencesChosenInputAndUsesFiveSecondTrigger() throws {
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
-    state.workspaceDefinition.videoComponents = [
-      WorkspaceResourceFactory.makeVFXSource(id: 7, name: "Camera")
-    ]
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
+    state.editWorkspace(undoManager: nil) { workspace in
+      workspace.definition.videoComponents = [
+        WorkspaceResourceFactory.makeVFXSource(id: 7, name: "Camera")
+      ]
+    }
     var draft = WorkspaceAddDraft()
     draft.name = "OCR"
     draft.videoComponentID = 7

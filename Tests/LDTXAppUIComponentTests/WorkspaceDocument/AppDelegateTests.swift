@@ -3,6 +3,7 @@
 
 import AppKit
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {

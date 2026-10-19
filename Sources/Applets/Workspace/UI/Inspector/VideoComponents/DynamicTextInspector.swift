@@ -9,7 +9,8 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 
 struct DynamicTextInspector: View {
-  let stateService: WorkspaceStateService
+  @Environment(\.undoManager) private var undoManager
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let internalID: Int64
 
@@ -97,7 +98,9 @@ struct DynamicTextInspector: View {
           var value = component
         else { return }
         value[keyPath: key] = next
-        stateService.workspaceDefinition.videoComponents[index].dynamicText = value
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition.videoComponents[index].dynamicText = value
+        }
       })
   }
 
@@ -115,7 +118,9 @@ struct DynamicTextInspector: View {
           })
         else { return }
         value.rtfdDocument = next.rtfd
-        stateService.workspaceDefinition.videoComponents[index].dynamicText = value
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.definition.videoComponents[index].dynamicText = value
+        }
       })
   }
 }

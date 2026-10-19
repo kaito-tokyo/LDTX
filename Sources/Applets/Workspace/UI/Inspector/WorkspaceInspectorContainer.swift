@@ -14,11 +14,12 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceInspectorContainer: View {
+  @Environment(\.undoManager) private var undoManager
   @Environment(\.workspaceReportError) private var reportError
   private var workspaceURL: URL? { stateService.localStateURL }
   let deviceRegistry: DeviceRegistryService
   @Bindable var appletData: WorkspaceAppletData
-  @Bindable var stateService: WorkspaceStateService
+  @Bindable var stateService: WorkspaceDocument
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
   private let variableStore: () -> [LDTXVariableKey: String]?
   private let runtimeWorkspace: () -> WorkspaceV4Bundle?
@@ -26,7 +27,7 @@ public struct WorkspaceInspectorContainer: View {
 
   public init(
     deviceRegistry: DeviceRegistryService,
-    stateService: WorkspaceStateService, appletData: WorkspaceAppletData,
+    stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
     variableStore: @escaping () -> [LDTXVariableKey: String]? = { nil },
     runtimeWorkspace: @escaping () -> WorkspaceV4Bundle? = { nil },
@@ -79,7 +80,8 @@ public struct WorkspaceInspectorContainer: View {
     case .workspaceOutput:
       if let externalID = stateService.externalID.flatMap(UUID.init(uuidString:)) {
         WorkspaceOutputInspector(
-          outputSettings: $stateService.workspaceOutputSettings, externalID: externalID,
+          outputSettings: stateService.editingBinding(\.outputSettings, undoManager: undoManager),
+          externalID: externalID,
           isOutputActive: stateService.isOutputActive, appletData: appletData,
           reportError: reportError)
       } else {
@@ -161,7 +163,7 @@ public struct WorkspaceInspectorContainer: View {
       }
     case .ocrVision:
       if let internalID = selector.internalID,
-        let vision = $stateService.ocrVision(internalID: internalID)
+        let vision = $stateService.ocrVision(internalID: internalID, undoManager: undoManager)
       {
         OcrVisionInspector(
           stateService: stateService, vision: vision)
@@ -170,7 +172,8 @@ public struct WorkspaceInspectorContainer: View {
       }
     case .ldtxSceneDetectorVision:
       if let internalID = selector.internalID,
-        let vision = $stateService.ldtxSceneDetectorVision(internalID: internalID)
+        let vision = $stateService.ldtxSceneDetectorVision(
+          internalID: internalID, undoManager: undoManager)
       {
         LdtxSceneDetectorVisionInspector(
           videoComponents: stateService.workspaceDefinition.videoComponents,
@@ -181,7 +184,7 @@ public struct WorkspaceInspectorContainer: View {
           vision: vision,
           modelURL: Binding(
             get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
-            set: { stateService.setVisionModelURL($0, for: internalID) }),
+            set: { stateService.setVisionModelURL($0, for: internalID, undoManager: undoManager) }),
           persistedModelURL: runtimeWorkspace()?.visionModels[
             vision.wrappedValue.modelInternalID],
           inferenceResult: stateService.visionResults[internalID],

@@ -27,7 +27,9 @@ extension AppUIComponentTestSuite {
       let component = try document.controller.windowRuntime.addVFXSource(displayName: "Camera")
       let id = try document.controller.windowRuntime.addOcrVision(
         displayName: "OCR", videoComponentInternalID: component)
-      document.stateService.workspaceDefinition.visions[0].ocrVision.triggers = []
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions[0].ocrVision.triggers = []
+      }
       try await saveWorkspaceDocument(document, to: root)
       let saved = try WorkspaceBundleReaderV4(at: root).read()
       final class SavedContext: WorkspaceDocumentContext {
@@ -44,7 +46,7 @@ extension AppUIComponentTestSuite {
       let state = document.stateService
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
-        replaceWorkspace: { state.replaceEditingWorkspace($0) })
+        replaceWorkspace: { state.replaceEditingWorkspace($0, undoManager: nil) })
       try persistence.adoptRuntimeWorkspace(saved)
       let controller = WorkspaceRuntimeCoordinator(
         stateService: state, persistenceCoordinator: persistence,
@@ -59,7 +61,9 @@ extension AppUIComponentTestSuite {
       await controller.refreshPersistedWorkspace(at: root) { true }
       #expect(try runtime.readVariable(key) == "")
       runtime.visionFeatureContext.reportVariables(id, [.text: "second"])
-      state.workspaceDefinition.visions[0].ocrVision.regionOfInterest.width.set(num: 1, den: 0)
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions[0].ocrVision.regionOfInterest.width.set(num: 1, den: 0)
+      }
       await #expect(throws: (any Error).self) {
         try await saveWorkspaceDocument(document, to: root)
       }
@@ -85,32 +89,38 @@ extension AppUIComponentTestSuite {
       try Data([1]).write(to: model)
       let document = WorkspaceDocument()
       let editingState = document.stateService
-      editingState.workspaceDefinition.videoComponents = [
-        .with {
-          $0.vfxSource = .with {
-            $0.internalID = 7
-            $0.displayName = "Camera"
-            $0.deviceWidth = 1920
-            $0.deviceHeight = 1080
+      editingState.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with {
+            $0.vfxSource = .with {
+              $0.internalID = 7
+              $0.displayName = "Camera"
+              $0.deviceWidth = 1920
+              $0.deviceHeight = 1080
+            }
           }
-        }
-      ]
-      editingState.workspaceDefinition.visions = [
-        .with {
-          $0.ldtxSceneDetectorVision = .with {
-            $0.internalID = 5
-            $0.displayName = "Classifier"
-            $0.videoComponentInternalID = 7
+        ]
+      }
+      editingState.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            $0.ldtxSceneDetectorVision = .with {
+              $0.internalID = 5
+              $0.displayName = "Classifier"
+              $0.videoComponentInternalID = 7
+            }
           }
-        }
-      ]
-      editingState.setVisionModelURL(model, for: 5)
+        ]
+      }
+      editingState.setVisionModelURL(model, for: 5, undoManager: nil)
       editingState.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 5)
       try await saveWorkspaceDocument(document, to: url)
       let saved = try WorkspaceBundleReaderV4(at: url).read()
-      let state = WorkspaceStateService(
+      let state = WorkspaceDocument(
         definition: saved.definition, preferences: saved.preferences)
-      state.visionModels = saved.visionModels
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.visionModels = saved.visionModels
+      }
       state.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 5)
       final class SavedContext: WorkspaceDocumentContext {
         let fileURL: URL?
@@ -119,7 +129,7 @@ extension AppUIComponentTestSuite {
       let context = SavedContext(url: url)
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
-        replaceWorkspace: { state.replaceEditingWorkspace($0) })
+        replaceWorkspace: { state.replaceEditingWorkspace($0, undoManager: nil) })
       try persistence.adoptRuntimeWorkspace(saved)
       let runtime = WorkspaceWindowRuntime(
         persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
@@ -203,7 +213,7 @@ extension AppUIComponentTestSuite {
       let state = document.stateService
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { state.editingWorkspace },
-        replaceWorkspace: { state.replaceEditingWorkspace($0) }, url: url)
+        replaceWorkspace: { state.replaceEditingWorkspace($0, undoManager: nil) }, url: url)
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       let controller = WorkspaceRuntimeCoordinator(
         stateService: state, persistenceCoordinator: persistence,
@@ -224,18 +234,24 @@ extension AppUIComponentTestSuite {
       }
       try WorkspaceBundleWriterV4().write(baseline, to: url)
       let newProgramID: Int64 = 123
-      state.workspaceDefinition.programs.append(.with { $0.internalID = newProgramID })
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs.append(.with { $0.internalID = newProgramID })
+      }
       try controller.selectProgram(internalID: newProgramID)
       #expect(controller.appletData.state(for: url).selectedProgramInternalID == newProgramID)
       #expect(
         !controller.windowRuntime.definition.programs.contains { $0.internalID == newProgramID })
-      state.workspaceDefinition.programs.removeAll { $0.internalID == newProgramID }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs.removeAll { $0.internalID == newProgramID }
+      }
       var staleRuntime = try WorkspaceBundleReaderV4(at: url).read()
       staleRuntime.definition.displayName = "Stale runtime"
       try persistence.adoptRuntimeWorkspace(staleRuntime)
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
-      document.stateService.workspaceDefinition.displayName = "Pending save"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Pending save"
+      }
       _ = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
       #expect(document.stateService.recordingState == .idle)
@@ -258,7 +274,9 @@ extension AppUIComponentTestSuite {
       let first = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(first == read)
-      document.stateService.workspaceDefinition.displayName = "Later edit"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Later edit"
+      }
       let second = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(second.definition.displayName == "Later edit")
@@ -277,14 +295,18 @@ extension AppUIComponentTestSuite {
       #expect(firstID.uuid.6 >> 4 == 7)
       let coordinator = WorkspaceDocumentConnection(document: first)
       let state = first.stateService
-      state.workspaceDefinition.displayName = "Draft"
-      state.workspaceDefinition.programs = [
-        .with {
-          $0.internalID = 7
-          $0.displayName = "Program"
-        }
-      ]
-      coordinator.recordEdits()
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Draft"
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [
+          .with {
+            $0.internalID = 7
+            $0.displayName = "Program"
+          }
+        ]
+      }
+
       try coordinator.runtimeCoordinator.selectProgram(internalID: 7)
       let localURL = try #require(state.localStateURL)
       #expect(
@@ -309,7 +331,9 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.displayName = "Main"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Main"
+      }
       try await saveWorkspaceDocument(document, to: url)
       let reopened = try await loadWorkspaceDocument(at: url)
       #expect(reopened.workspace == document.workspace)
@@ -325,12 +349,16 @@ extension AppUIComponentTestSuite {
       let url = root.appendingPathComponent("Formal.ldtxworkspace")
       let staged = root.appendingPathComponent("Staging.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.displayName = "Saved"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Saved"
+      }
       try await saveWorkspaceDocument(document, to: url)
-      document.stateService.workspaceDefinition.displayName = "Pending"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Pending"
+      }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(document.workspaceSnapshot == snapshot)
+      #expect(document.workspace == snapshot)
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Saved")
       let progress = ProgressManager(totalCount: 1)
       try await WorkspaceDocument.Writer().write(
@@ -339,26 +367,32 @@ extension AppUIComponentTestSuite {
       await document.refreshTestPersistedWorkspace()
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Saved")
       #expect(document.stateService.workspaceDefinition.displayName == "Pending")
-      #expect(document.workspaceSnapshot?.definition.displayName == "Pending")
+      #expect(document.workspaceSnapshot?.definition.displayName == "Saved")
       #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Saved")
       try FileManager.default.removeItem(at: url)
       try FileManager.default.moveItem(at: staged, to: url)
-      document.stateService.workspaceDefinition.displayName = "Later"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Later"
+      }
       await document.refreshTestPersistedWorkspace()
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Pending")
       #expect(document.stateService.workspaceDefinition.displayName == "Later")
     }
 
-    @Test("Write failure retains the confirmed document and temporary edits")
+    @Test("Write failure retains edits without publishing a captured snapshot")
     func writeFailureKeepsConfirmedContent() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       try Data([1]).write(to: root)
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.displayName = "Confirmed"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Confirmed"
+      }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      document.stateService.workspaceDefinition.displayName = "Later"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Later"
+      }
       let progress = ProgressManager(totalCount: 1)
       await #expect(throws: (any Error).self) {
         try await WorkspaceDocument.Writer().write(
@@ -366,9 +400,9 @@ extension AppUIComponentTestSuite {
           to: root.appendingPathComponent("Impossible.ldtxworkspace"), previous: nil,
           progress: progress.subprogress(assigningCount: 1))
       }
-      #expect(document.workspaceSnapshot?.definition.displayName == "Confirmed")
+      #expect(document.workspaceSnapshot == nil)
       #expect(document.stateService.workspaceDefinition.displayName == "Later")
-      #expect(document.workspaceSnapshot?.definition.displayName == "Confirmed")
+      #expect(document.workspaceSnapshot == nil)
     }
 
     @Test("Invalid data fails before creating a destination")
@@ -376,7 +410,9 @@ extension AppUIComponentTestSuite {
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(
         "\(UUID()).ldtxworkspace")
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.programs = [.with { $0.internalID = 0 }]
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [.with { $0.internalID = 0 }]
+      }
       do {
         try await saveWorkspaceDocument(document, to: url)
         Issue.record("Expected validation error")
@@ -388,8 +424,10 @@ extension AppUIComponentTestSuite {
     @Test("Preferences are visible to the runtime before saving")
     func livePreferences() async throws {
       let document = WorkspaceDocument()
-      document.stateService.workspacePreferences.landscapeProgramPreferences[7] = .with {
-        $0.audioMasterVolumeDecibels.set(num: -50, den: 10)
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[7] = .with {
+          $0.audioMasterVolumeDecibels.set(num: -50, den: 10)
+        }
       }
       #expect(
         document.persistenceCoordinator.runtimeWorkspace.preferences
@@ -406,31 +444,37 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: url) }
       try await saveWorkspaceDocument(document, to: url)
       let persisted = document.persistenceCoordinator.runtimeWorkspace
-      document.stateService.workspaceDefinition.videoComponents = [
-        .with {
-          $0.vfxSource = .with {
-            $0.internalID = 7
-            $0.displayName = "Camera"
-            $0.deviceWidth = 1920
-            $0.deviceHeight = 1080
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with {
+            $0.vfxSource = .with {
+              $0.internalID = 7
+              $0.displayName = "Camera"
+              $0.deviceWidth = 1920
+              $0.deviceHeight = 1080
+            }
           }
-        }
-      ]
-      document.stateService.workspaceDefinition.visions = [
-        .with {
-          $0.ocrVision = .with {
-            $0.internalID = 9
-            $0.displayName = "OCR"
-            $0.videoComponentInternalID = 7
+        ]
+      }
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            $0.ocrVision = .with {
+              $0.internalID = 9
+              $0.displayName = "OCR"
+              $0.videoComponentInternalID = 7
+            }
           }
-        }
-      ]
-      document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x
-        .set(num: 2, den: 1)
+        ]
+      }
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions[0].ocrVision.regionOfInterest.x
+          .set(num: 2, den: 1)
+      }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot == document.stateService.editingWorkspace)
-      #expect(document.workspaceSnapshot == snapshot)
+      #expect(document.workspace == snapshot)
       await #expect(throws: (any Error).self) { try await saveWorkspaceDocument(document, to: url) }
       #expect(document.persistenceCoordinator.runtimeWorkspace == persisted)
       #expect(
@@ -453,7 +497,9 @@ extension AppUIComponentTestSuite {
       let readProgress = ProgressManager(totalCount: 1)
       let incoming = try await WorkspaceDocument.Reader().read(
         from: url, progress: readProgress.subprogress(assigningCount: 1))
-      document.stateService.workspaceDefinition.displayName = "Local"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Local"
+      }
       try await document.apply(snapshot: incoming, previous: previous)
       document.testCoordinator.synchronizeDocument()
       await document.refreshTestPersistedWorkspace()
@@ -482,22 +528,38 @@ extension AppUIComponentTestSuite {
         13: URL(fileURLWithPath: "/Saved/13/Other.mlpackage"),
       ]
       try await document.apply(snapshot: incoming, previous: nil)
-      state.workspaceDefinition.displayName = "Local edits"
-      state.workspacePreferences.audioChannelGainsDecibels[7] = .with {
-        $0.set(num: -20, den: 10)
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Local edits"
       }
-      state.workspaceOutputSettings.recordingEnabled = true
-      state.externalID = "Local definition envelope"
-      state.preferencesExternalID = "Local preferences envelope"
-      state.outputSettingsExternalID = "Local output envelope"
-      state.visionModels = [
-        11: URL(fileURLWithPath: "/External/Model.mlmodel"),
-        15: URL(fileURLWithPath: "/External/Pending.mlpackage"),
-      ]
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.audioChannelGainsDecibels[7] = .with {
+          $0.set(num: -20, den: 10)
+        }
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.outputSettings.recordingEnabled = true
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definitionExternalID = "Local definition envelope"
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferencesExternalID = "Local preferences envelope"
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.outputSettingsExternalID = "Local output envelope"
+      }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.visionModels = [
+          11: URL(fileURLWithPath: "/External/Model.mlmodel"),
+          15: URL(fileURLWithPath: "/External/Pending.mlpackage"),
+        ]
+      }
       state.inspectorSelector = .init(kind: .workspaceCanvas)
       let local = state.editingWorkspace
       for (id, url) in incoming.visionModels where state.visionModels[id] != nil {
-        state.visionModels[id] = url
+        state.editWorkspace(undoManager: nil) { workspace in
+          workspace.visionModels[id] = url
+        }
       }
       var expected = local
       expected.visionModels[11] = incoming.visionModels[11]
@@ -557,36 +619,40 @@ extension AppUIComponentTestSuite {
       try Data([1]).write(to: first)
       try Data([2]).write(to: second)
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.videoComponents = [
-        .with {
-          $0.vfxSource = .with {
-            $0.internalID = 7
-            $0.displayName = "Camera"
-            $0.deviceWidth = 1920
-            $0.deviceHeight = 1080
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [
+          .with {
+            $0.vfxSource = .with {
+              $0.internalID = 7
+              $0.displayName = "Camera"
+              $0.deviceWidth = 1920
+              $0.deviceHeight = 1080
+            }
           }
-        }
-      ]
-      document.stateService.workspaceDefinition.visions = [
-        .with {
-          $0.ldtxSceneDetectorVision = .with {
-            $0.internalID = 5
-            $0.displayName = "Classifier"
-            $0.videoComponentInternalID = 7
+        ]
+      }
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            $0.ldtxSceneDetectorVision = .with {
+              $0.internalID = 5
+              $0.displayName = "Classifier"
+              $0.videoComponentInternalID = 7
+            }
           }
-        }
-      ]
+        ]
+      }
       let state = document.stateService
-      state.setVisionModelURL(first, for: 5)
+      state.setVisionModelURL(first, for: 5, undoManager: nil)
       let firstID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
       #expect(firstID > 0)
-      state.setVisionModelURL(first, for: 5)
+      state.setVisionModelURL(first, for: 5, undoManager: nil)
       #expect(
         state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot.definition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
-      state.setVisionModelURL(second, for: 5)
+      state.setVisionModelURL(second, for: 5, undoManager: nil)
       let secondID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
       #expect(secondID != firstID)
       let progress = ProgressManager(totalCount: 1)
@@ -605,8 +671,12 @@ extension AppUIComponentTestSuite {
       let secondURL = url.appendingPathComponent("VisionModels/\(secondID)/Second.mlmodel")
       #expect(state.visionModels[firstID] == first)
       #expect(state.visionModels[secondID] == second)
-      #expect(document.workspaceSnapshot?.visionModels[firstID] == first)
-      #expect(document.workspaceSnapshot?.visionModels[secondID] == second)
+      #expect(
+        document.workspaceSnapshot?.visionModels[firstID]?.resolvingSymlinksInPath()
+          == firstURL.resolvingSymlinksInPath())
+      #expect(
+        document.workspaceSnapshot?.visionModels[secondID]?.resolvingSymlinksInPath()
+          == secondURL.resolvingSymlinksInPath())
       let reloaded = try WorkspaceBundleReaderV4(at: url).read()
       #expect(
         reloaded.visionModels[firstID]?.resolvingSymlinksInPath()
@@ -616,13 +686,13 @@ extension AppUIComponentTestSuite {
           == secondURL.resolvingSymlinksInPath())
       #expect(try Data(contentsOf: firstURL) == Data([1]))
       #expect(try Data(contentsOf: secondURL) == Data([2]))
-      state.setVisionModelURL(nil, for: 5)
+      state.setVisionModelURL(nil, for: 5, undoManager: nil)
       #expect(state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == 0)
       try await saveWorkspaceDocument(document, to: url)
       #expect(try Data(contentsOf: firstURL) == Data([1]))
       #expect(try Data(contentsOf: secondURL) == Data([2]))
       let missing = root.appendingPathComponent("Missing.mlmodel")
-      state.setVisionModelURL(missing, for: 5)
+      state.setVisionModelURL(missing, for: 5, undoManager: nil)
       let missingID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
       let saved = document.persistenceCoordinator.runtimeWorkspace
       do {
@@ -638,7 +708,9 @@ extension AppUIComponentTestSuite {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
-      document.stateService.workspaceDefinition.displayName = "Original"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Original"
+      }
       try await saveWorkspaceDocument(document, to: root)
       let previous = try #require(document.workspaceSnapshot)
       var incoming = previous
@@ -712,7 +784,9 @@ extension AppUIComponentTestSuite {
     func documentOwnsEditingState() async throws {
       let document = WorkspaceDocument()
       let state = document.stateService
-      state.workspaceDefinition.displayName = "Editing"
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Editing"
+      }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot.definition.displayName == "Editing")
@@ -726,7 +800,9 @@ extension AppUIComponentTestSuite {
       let coordinator = WorkspaceDocumentConnection(document: document)
       #expect(coordinator.runtimeCoordinator.stateService === state)
       coordinator.disconnect()
-      state.workspaceDefinition.displayName = "Disconnected"
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Disconnected"
+      }
       let disconnected = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(disconnected.definition.displayName == "Disconnected")
@@ -741,20 +817,27 @@ extension AppUIComponentTestSuite {
       let state = coordinator.runtimeCoordinator.stateService
       let undo = UndoManager()
       undo.groupsByEvent = false
-      coordinator.setUndoManager(undo)
       state.inspectorSelector = .init(kind: .workspaceCanvas)
       state.visionResults[7] = "Runtime result"
-      coordinator.recordEdits()
+
       #expect(!undo.canUndo)
       let original = state.editingWorkspace
       undo.beginUndoGrouping()
-      state.workspaceDefinition.displayName = "Edited"
-      state.workspacePreferences.audioChannelGainsDecibels[7] = .with {
-        $0.set(num: -119, den: 10)
+      state.editWorkspace(undoManager: undo) { workspace in
+        workspace.definition.displayName = "Edited"
       }
-      state.workspaceOutputSettings.recordingEnabled = true
-      state.visionModels[7] = URL(fileURLWithPath: "/tmp/undo-model.mlpackage")
-      coordinator.recordEdits()
+      state.editWorkspace(undoManager: undo) { workspace in
+        workspace.preferences.audioChannelGainsDecibels[7] = .with {
+          $0.set(num: -119, den: 10)
+        }
+      }
+      state.editWorkspace(undoManager: undo) { workspace in
+        workspace.outputSettings.recordingEnabled = true
+      }
+      state.editWorkspace(undoManager: undo) { workspace in
+        workspace.visionModels[7] = URL(fileURLWithPath: "/tmp/undo-model.mlpackage")
+      }
+
       undo.endUndoGrouping()
       let edited = state.editingWorkspace
       #expect(undo.canUndo)
@@ -770,7 +853,8 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.displayName == "Edited")
       #expect(document.workspaceSnapshot == nil)
       await coordinator.shutdown()
-      #expect(!undo.canUndo)
+      // History belongs to the still-live Document, not its representation.
+      #expect(undo.canUndo)
     }
 
     @Test("Reading without an editor initializes later editing without registering Undo")
@@ -778,7 +862,9 @@ extension AppUIComponentTestSuite {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let original = WorkspaceDocument()
-      original.stateService.workspaceDefinition.displayName = "Loaded"
+      original.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Loaded"
+      }
       try await saveWorkspaceDocument(original, to: root)
       let progress = ProgressManager(totalCount: 1)
       let read = try await WorkspaceDocument.Reader().read(
@@ -789,8 +875,7 @@ extension AppUIComponentTestSuite {
       let coordinator = WorkspaceDocumentConnection(document: document)
       await coordinator.runtimeCoordinator.refreshPersistedWorkspace(at: root) { true }
       let undo = UndoManager()
-      coordinator.setUndoManager(undo)
-      coordinator.recordEdits()
+
       #expect(!undo.canUndo)
       #expect(
         coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName == "Loaded")
@@ -818,7 +903,9 @@ extension AppUIComponentTestSuite {
         await Task.yield()
       }
       #expect(owner == nil)
-      document.stateService.workspaceDefinition.displayName = "Still editable"
+      document.stateService.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = "Still editable"
+      }
       #expect(document.stateService.workspaceDefinition.displayName == "Still editable")
       #expect(document.workspaceSnapshot == nil)
     }

@@ -20,7 +20,7 @@ Feature: Edit master volumes
     Then local state updates without marking the Document edited
     And the monitor volume is rounded to 0.1 dB while non-finite edits retain its previous value
 
-  @UCT-1011.3 @WorkspaceStateService
+  @UCT-1011.3 @WorkspaceDocument
   Scenario: Invalid volume drafts block navigation until corrected
     Given either master volume contains an invalid text draft
     When navigation or saving validates pending edits

@@ -36,19 +36,20 @@ The external ID is assigned before the first save. Output controls stay disabled
 until a document location exists, and the output controller also requires a
 persisted runtime snapshot before starting.
 
-Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
+Document owns one editable Workspace value, its last canonical read and UI
 state, and file persistence. App State owns the ProgramRuntime pair, preview view,
 capture coordinator, and update registry for each Document UUID.
-WorkspaceRuntimeCoordinator receives those resources and the Document-owned
-StateService, owns their runtime projection coordinator, and coordinates shutdown.
+WorkspaceRuntimeCoordinator receives those resources and the same Document,
+owns their runtime projection coordinator, and coordinates shutdown.
 WorkspaceDocumentContent creates its document connection lazily and retains it in
-State. WorkspaceDocumentConnection tracks edits and owns WorkspaceRuntimeCoordinator.
+State. WorkspaceDocumentConnection routes document URLs and owns WorkspaceRuntimeCoordinator.
 WorkspaceDocumentContent places the UI views directly and connects their toolbar,
-error reporting, UndoManager, and lifecycle. There is no intermediate Scene or
+error reporting and lifecycle. Input Views supply their environment UndoManager
+to synchronous document editing operations. There is no intermediate Scene or
 RootView, and no separate view-state or presentation model.
-UI views read the Document's WorkspaceStateService. RuntimeCoordinator owns manual
+UI views read WorkspaceDocument directly. RuntimeCoordinator owns manual
 inference tasks; isInferring, isClosed, results, failures, and queued operation
-errors are observable StateService facts. The alert owns its current error in
+errors are observable Document facts. The alert owns its current error in
 State, and the screenshot button owns its popover result in State. WorkspaceLayout
 owns pane widths; WorkspaceContentPane owns its preview height and canvas tab.
 Reconstructing views preserves those SwiftUI State values and injected runtimes.
@@ -129,32 +130,23 @@ proceed. Standard document save confirmation remains owned by SwiftUI.
 The ordinary-close presentation acknowledges its queued shutdown failure. If Quit
 is already waiting for shutdown, termination owns that presentation instead.
 
-The scene connection registers Undo/Redo for content changes, including pending
-model selections, to preserve DocumentGroup's unsaved-change and autosave tracking.
-Workspace uses standard Undo and Redo menu commands and keyboard shortcuts while
-output is idle. They are disabled during output to prevent snapshot restoration
-from bypassing editing restrictions. Other scenes retain their standard commands.
-Undo registration remains enabled for document change tracking.
-UI selections and runtime results are not undoable document
-changes. Reads and confirmation synchronization do not register Undo. Saving
-captures Document's StateService values without requiring a represented editor.
-Removing the UI does not discard editing values or prevent saving. Snapshot
-capture reflects content into Document; Writer validates it before writing.
-Write failure preserves that content as unsaved. Edits made during writing
-remain in StateService.
+User edits synchronously update the Document's single Workspace value and
+register the previous value with the standard UndoManager passed from the input
+View's environment. No asynchronous manager connection is required. Undo
+restoration uses that same operation to register Redo. Editing Bindings enter
+this operation with the same manager; read-only content projections cannot bypass it.
+Standard event grouping remains owned by UndoManager; one Binding assignment is
+not necessarily a separate user-visible Undo step. The connection
+has no asynchronous edit observer or Undo baseline. UI selections and runtime
+results are not undoable. Undo/Redo commands remain disabled during output.
 
-Reader and Writer use WorkspaceV4Bundle directly as their Snapshot. Reader does
-not attach its source URL to that content. Applying a read replaces only the
-Document's workspaceSnapshot; it never restores an earlier URL or calls UI or
-runtime update hooks. The scene connection observes read generations
-and directly assigns StateService fields using full overwrite. Full overwrite replaces all document
-values and model URLs, while preserving UI and runtime status. The alternative
-URL-only operation changes only URLs for IDs already in StateService; it preserves
-other edits and does not add or remove models. There is no implicit merge. The
-connection observes content and URL changes for Undo baselines and UI routing.
-WorkspaceRuntimeCoordinator independently observes content, URL, persistence notifications,
-and output state. It adopts persisted runtime content while idle and defers that
-adoption during output. Document does not keep a second runtime bundle.
+Reader and Writer use WorkspaceV4Bundle snapshots. Reader applies loaded values
+directly without Undo. Snapshot capture returns the current value without changing
+model or persisted state. Writer validates and writes its supplied snapshot and
+destination. Failed writes retain editable content. The connection tracks only
+URL routing and runtime lifetime. RuntimeCoordinator independently observes loaded content, URL,
+canonical modification metadata and output state to read and adopt persisted
+runtime content while idle. Adoption is deferred during output.
 
 UI receives the document explicitly as a weak WorkspaceDocumentContext whose
 fileURL is supplied by URLDocumentConfiguration. No document environment box is
@@ -182,7 +174,7 @@ embeds only the retained Metal preview surface inside PairedProgramPreview.
 Audio meters use SwiftUI TimelineView and Canvas.
 MasterVolumeEditor and AudioMixEditor remain visible above the Landscape Video
 Layers and Portrait Video Layers choices. Both canvas editors retain their local
-drafts when switching tabs. SwiftUI observes the shared WorkspaceStateService.
+drafts when switching tabs. SwiftUI observes the shared WorkspaceDocument.
 Reducing the lower pane height scrolls all editors together.
 Output and canvas settings, including their supporting types and helpers, live
 under `Sources/Applets/Workspace/UI/Inspector`. Physical-device assignment is
@@ -192,7 +184,7 @@ WorkspacePhysicalDeviceField for selecting, clearing, and refreshing devices.
 WorkspaceLayout presents a SwiftUI horizontal layout containing Sidebar,
 Content, and Inspector, with draggable dividers. Its View observes window-local
 pane visibility and widths directly.
-WorkspaceStateService exposes shared UI and runtime state. Window attachment uses the preview bridge;
+WorkspaceDocument exposes shared UI and runtime state. Window attachment uses the preview bridge;
 DocumentGroup owns the window and SwiftUI installs the toolbar directly.
 Record Player lives under Sources/Applets/RecordPlayer in the
 LDTXRecordPlayerApplet module. Its small implementation uses a flat directory.
@@ -359,7 +351,7 @@ toolbar modifier. Output state updates labels, images, and enabled state.
 The toolbar has no Apply item or Inspector title. Sidebar and Inspector actions
 update the SwiftUI visibility bindings. SwiftUI owns native toolbar presentation.
 
-Editors write representable values directly to WorkspaceStateService. OCR ROI
+Editors commit representable values through WorkspaceDocument editing operations. OCR ROI
 uses the same bound RegionOfInterestEditor as Scene Detector ROI. Master-volume
 and transform fields write numeric values as they change; incomplete numeric text
 remains local to the control. There is no separate WorkspaceEditingState, Apply,
@@ -495,7 +487,7 @@ Each Video Component Inspector has separate Landscape and Portrait membership
 Toggles and displays the selected Program name. Turning a Toggle on appends the
 component to that canvas; turning it off removes the layer without deleting the
 component or its saved preferences. The controls read current membership and
-commit immediately through WorkspaceStateService. They are unavailable without
+commit immediately through WorkspaceDocument. They are unavailable without
 a Program or while output is active. Submission revalidates the Program,
 component, and output state. Content retains ordering, visibility, and transform
 editing; it has no membership management button or sheet.
@@ -509,10 +501,10 @@ default folder, then the built-in default.
 
 ## Workspace state and cross-layer operations
 
-WorkspaceDocument owns one Observable `WorkspaceStateService` for editable
-values and UI/runtime status. WorkspaceRuntimeCoordinator receives that same instance.
-Simple state changes may assign variables directly; operations that require
-validation or coordinated updates use methods. There is no separate UI Dispatcher.
+WorkspaceDocument is the Observable owner of the editable Workspace value and
+UI/runtime status. WorkspaceRuntimeCoordinator receives that same instance.
+Transient UI status may change directly. Persistent user edits use synchronous
+document operations or editing Bindings, including coordinated multi-field edits. There is no separate UI Dispatcher.
 The service does not reference runtime actions or assemble capture, rendering,
 or output resources. UI owners receive runtime actions through weak providers.
 Disconnected runtime operations that need a result report an explicit error.
@@ -567,7 +559,7 @@ Inspectors receive the error-reporting boundary explicitly or through the SwiftU
 error environment. Output-session failures and continuous OCR results retain
 their existing state and display paths.
 
-The UI error modifier presents StateService operation errors using a SwiftUI alert.
+The UI error modifier presents Document operation errors using a SwiftUI alert.
 The alert includes the failure reason and recovery suggestion. Dismissing an
 alert advances the queue. Closing the UI or starting shutdown discards queued
 and late errors. The alert owns its display state and acknowledges the queued error on dismissal.

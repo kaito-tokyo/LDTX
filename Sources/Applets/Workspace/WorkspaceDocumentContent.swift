@@ -9,7 +9,6 @@ import MetalKit
 import SwiftUI
 
 public struct WorkspaceDocumentContent: View {
-  @Environment(\.undoManager) private var undoManager
   @State private var connection: WorkspaceDocumentConnection?
   let document: WorkspaceDocument
   let landscapeRuntime: ProgramRuntime?
@@ -47,9 +46,7 @@ public struct WorkspaceDocumentContent: View {
               portraitRuntime: portraitRuntime,
               metalView: metalView, captureSessionCoordinator: captureSessionCoordinator))
         }
-        connection?.setUndoManager(undoManager)
       }
-      .onChange(of: undoManager) { _, manager in connection?.setUndoManager(manager) }
       .onDisappear {
         guard let connection else { return }
         connection.disconnect()

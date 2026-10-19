@@ -20,15 +20,21 @@
       var secondInput = Ldtx_Workspace_V4_AudioInputDevice()
       secondInput.internalID = 11
       secondInput.displayName = "Game Audio"
-      service.workspaceDefinition.audioDevices.append(secondInput)
-      service.workspacePreferences.audioChannelGainsDecibels[2] = .with {
-        $0.set(num: -60, den: 10)
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.audioDevices.append(secondInput)
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.audioChannelGainsDecibels[2] = .with {
+          $0.set(num: -60, den: 10)
+        }
       }
       if hasProgram {
         var program = Ldtx_Workspace_V4_ProgramDefinition()
         program.internalID = 100
         program.displayName = "Studio"
-        service.workspaceDefinition.programs = [program]
+        service.editWorkspace(undoManager: nil) { workspace in
+          workspace.definition.programs = [program]
+        }
         for (index, target) in [WorkspaceCanvasTarget.landscape, .portrait].enumerated() {
           var preferences = Ldtx_Workspace_V4_ProgramPreferences()
           preferences.videoLayerInternalIds = index == 0 ? [4, 3, 8] : [3, 8]
@@ -52,7 +58,9 @@
             preferences.videoLayerTransforms[id] = transform
           }
           preferences.videoLayerHidden[8] = true
-          service.workspacePreferences[keyPath: target.preferences][100] = preferences
+          service.editWorkspace(undoManager: nil) { workspace in
+            workspace.preferences[keyPath: target.preferences][100] = preferences
+          }
         }
       }
       let delegate = PreviewDelegate()

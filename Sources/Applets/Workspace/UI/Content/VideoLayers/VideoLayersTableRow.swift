@@ -6,8 +6,8 @@ import Observation
 import SwiftUI
 
 @MainActor @Observable final class VideoLayersTableRowState {
-  @ObservationIgnored var onCommit: () -> Void = {}
-  @ObservationIgnored var onSetHidden: (Bool) -> Void = { _ in }
+  @ObservationIgnored var onCommit: (UndoManager?) -> Void = { _ in }
+  @ObservationIgnored var onSetHidden: (Bool, UndoManager?) -> Void = { _, _ in }
   var name = ""
   var isHidden = false
   var supportsPlacement = true
@@ -16,10 +16,10 @@ import SwiftUI
   @ObservationIgnored private var displayedStrings = ["0", "0", "1", "1"]
   var hasLocalTextChanges = false
 
-  func edit(_ text: String, at index: Int) {
+  func edit(_ text: String, at index: Int, undoManager: UndoManager? = nil) {
     strings[index] = text
     hasLocalTextChanges = strings != displayedStrings
-    onCommit()
+    onCommit(undoManager)
   }
   var isEditing = false
 
@@ -46,6 +46,7 @@ import SwiftUI
 }
 
 struct VideoLayersTableRowContent: View {
+  @Environment(\.undoManager) private var undoManager
   @Bindable var state: VideoLayersTableRowState
   let canvasWidth: Double
   let canvasHeight: Double
@@ -68,7 +69,8 @@ struct VideoLayersTableRowContent: View {
       .frame(height: 28)
       HStack {
         Toggle(
-          "Hide", isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0) })
+          "Hide",
+          isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0, undoManager) })
         )
         .toggleStyle(.checkbox)
         .fixedSize()
@@ -85,7 +87,7 @@ struct VideoLayersTableRowContent: View {
                       get: { state.strings[index] },
                       set: {
                         guard state.strings[index] != $0 else { return }
-                        state.edit($0, at: index)
+                        state.edit($0, at: index, undoManager: undoManager)
                       })
                   )
                   .focused($focusedField, equals: index)

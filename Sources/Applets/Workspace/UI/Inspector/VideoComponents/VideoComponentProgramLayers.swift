@@ -10,8 +10,9 @@ import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct VideoComponentProgramLayers: View {
+  @Environment(\.undoManager) private var undoManager
   @Environment(\.workspaceReportError) private var reportError
-  let stateService: WorkspaceStateService
+  let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let componentID: Int64
 
@@ -56,8 +57,10 @@ struct VideoComponentProgramLayers: View {
       guard ids.contains(componentID) else { return }
       ids.removeAll { $0 == componentID }
     }
-    stateService.workspacePreferences[keyPath: target.preferences][programID, default: .init()]
-      .videoLayerInternalIds = ids
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+        .videoLayerInternalIds = ids
+    }
   }
 
   func membership(for programID: Int64, target: WorkspaceCanvasTarget) -> Binding<Bool> {
@@ -100,9 +103,13 @@ struct VideoComponentProgramLayers: View {
       var program = Ldtx_Workspace_V4_ProgramDefinition()
       program.internalID = 100
       program.displayName = "Studio"
-      service.workspaceDefinition.programs = [program]
-      service.workspacePreferences.landscapeProgramPreferences[100] = .with {
-        $0.videoLayerInternalIds = [4]
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [program]
+      }
+      service.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100] = .with {
+          $0.videoLayerInternalIds = [4]
+        }
       }
     }
   }

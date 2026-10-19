@@ -36,7 +36,6 @@ func loadWorkspaceDocument(at url: URL) async throws -> WorkspaceDocument {
   let snapshot = try await WorkspaceDocument.Reader().read(
     from: url, progress: progress.subprogress(assigningCount: 1))
   try await document.apply(snapshot: snapshot, previous: nil)
-  document.adoptReadSnapshotForEditing()
   document.testSavedWorkspace = document.workspace
   return document
 }
@@ -86,7 +85,6 @@ extension WorkspaceDocument {
   var persistenceCoordinator: WorkspaceV4PersistenceCoordinator {
     controller.persistenceCoordinator
   }
-  var workspace: WorkspaceV4Bundle { stateService.editingWorkspace }
   func shutdown() async { await testCoordinator.shutdown() }
   var hasTestModelChanges: Bool {
     testHost.saved.map { workspace != $0 }

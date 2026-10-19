@@ -66,7 +66,7 @@ import Testing
     let draft = WorkspaceAddDraft()
     #expect(draft.physicalDeviceID == nil)
     #expect(draft.videoComponentID == nil)
-    let state = WorkspaceStateService(definition: .init(), preferences: .init())
+    let state = WorkspaceDocument(definition: .init(), preferences: .init())
     #expect(state.inspectorSelector == nil)
     let before = state.workspaceDefinition
     #expect(

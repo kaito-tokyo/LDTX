@@ -67,13 +67,13 @@ extension AppUIComponentTestSuite {
       fixture.update(ids: [2, 3])
       let before = fixture.state.workspacePreferences
       row.edit("960", at: 0)
-      row.onSetHidden(true)
+      row.onSetHidden(true, nil)
       #expect(fixture.state.workspacePreferences == before)
       #expect(row.strings[0] == "960")
       fixture.update(ids: [1, 2, 3])
       let readded = fixture.state.workspacePreferences
       row.edit("192", at: 0)
-      row.onSetHidden(true)
+      row.onSetHidden(true, nil)
       #expect(fixture.state.workspacePreferences == readded)
     }
 
@@ -90,7 +90,7 @@ extension AppUIComponentTestSuite {
       #expect(editor == nil)
       #expect(row == nil)
       retained?.edit("960", at: 0)
-      retained?.onSetHidden(true)
+      retained?.onSetHidden(true, nil)
     }
 
     @Test func hostedFieldsWriteWithoutReturn() async throws {

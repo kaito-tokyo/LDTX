@@ -15,8 +15,10 @@ extension AppUIComponentTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
     @Test func writesOnChangeAndPreservesInvalidDrafts() async throws {
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
-      state.workspaceDefinition.programs = [.with { $0.internalID = 100 }]
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [.with { $0.internalID = 100 }]
+      }
       let root = MasterVolumeEditor(
         stateService: state, appletData: WorkspaceAppletData(),
         peakMeter: .init(), reportError: { _ in })
@@ -53,12 +55,14 @@ extension AppUIComponentTestSuite {
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let url = URL(fileURLWithPath: "/tmp/SwiftUIMaster.ldtxworkspace")
       state.localStateURL = url
-      state.workspaceDefinition.programs = [
-        .with { $0.internalID = 100 }, .with { $0.internalID = 200 },
-      ]
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.programs = [
+          .with { $0.internalID = 100 }, .with { $0.internalID = 200 },
+        ]
+      }
       data.updateState(for: url) { $0.selectedProgramInternalID = 200 }
       let window = hostWorkspaceView(
         MasterVolumeEditor(
@@ -86,8 +90,10 @@ extension AppUIComponentTestSuite {
           .double == -6)
       window.makeFirstResponder(nil)
       await settleWorkspaceToolbar(window)
-      state.workspacePreferences.landscapeProgramPreferences[100, default: .init()]
-        .audioMasterVolumeDecibels = .with { $0.set(num: -30, den: 10) }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+          .audioMasterVolumeDecibels = .with { $0.set(num: -30, den: 10) }
+      }
       await settleWorkspaceToolbar(window)
       #expect(try firstField().stringValue == "-3")
     }
@@ -97,7 +103,7 @@ extension AppUIComponentTestSuite {
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(userDefaults: defaults)
-      let state = WorkspaceStateService(definition: .init(), preferences: .init())
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let url = URL(fileURLWithPath: "/tmp/MonitorVolume.ldtxworkspace")
       state.localStateURL = url
       let before = state.editingWorkspace

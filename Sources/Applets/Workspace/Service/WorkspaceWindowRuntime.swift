@@ -154,7 +154,9 @@ public final class WorkspaceWindowRuntime {
     updateRuntime(portraitRuntime, target: .portrait)
   }
 
-  public func removeProgram(internalID: Int64) throws {
+  public func removeProgram(
+    internalID: Int64, replace: ((WorkspaceV4Bundle) throws -> Void)? = nil
+  ) throws {
     var workspace = persistenceCoordinator.workspace
     workspace.definition.programs.removeAll { $0.internalID == internalID }
     guard
@@ -165,7 +167,7 @@ public final class WorkspaceWindowRuntime {
     }
     workspace.preferences.landscapeProgramPreferences.removeValue(forKey: internalID)
     workspace.preferences.portraitProgramPreferences.removeValue(forKey: internalID)
-    try replaceWorkspace(workspace)
+    if let replace { try replace(workspace) } else { try replaceWorkspace(workspace) }
     if selectedProgramInternalID == internalID {
       selectProgramHandler(workspace.definition.programs.first?.internalID)
     }
