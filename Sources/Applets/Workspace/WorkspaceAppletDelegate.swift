@@ -8,19 +8,6 @@ public protocol WorkspaceAppletDelegate: AnyObject, Sendable {
   func workspaceCoordinator(for document: WorkspaceDocument) -> WorkspaceAppletCoordinator
 }
 
-private struct WorkspaceAppletDelegateKey: EnvironmentKey {
-  static let defaultValue: (any WorkspaceAppletDelegate)? = nil
-}
-
 extension EnvironmentValues {
-  public var workspaceAppletDelegate: any WorkspaceAppletDelegate {
-    get {
-      guard let delegate = self[WorkspaceAppletDelegateKey.self] else {
-        preconditionFailure(
-          "WorkspaceAppletDelegate must be injected at the application entry point")
-      }
-      return delegate
-    }
-    set { self[WorkspaceAppletDelegateKey.self] = newValue }
-  }
+  @Entry public var workspaceAppletDelegate: (any WorkspaceAppletDelegate)? = nil
 }
