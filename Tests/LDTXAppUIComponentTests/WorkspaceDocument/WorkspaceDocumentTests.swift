@@ -193,8 +193,8 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
-    @Test("Output requires the document, runtime, and disk to agree")
-    func outputRejectsUnwrittenSnapshotAndUnreadableDisk() async throws {
+    @Test("Output requires canonical document content, runtime, and disk to agree")
+    func outputValidatesCanonicalContentAndRejectsMismatches() async throws {
       let url = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString).appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: url) }
@@ -252,9 +252,21 @@ extension AppUIComponentTestSuite {
       document.stateService.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.displayName = "Pending save"
       }
-      _ = try await document.snapshot(contentType: WorkspaceDocument.readableContentTypes[0])
-      await #expect(throws: (any Error).self) { try await controller.startOutput() }
+      let captured = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
+      #expect(captured.definition.displayName == "Pending save")
+      #expect(document.runtimeWorkspace == baseline)
+      #expect(controller.windowRuntime.workspace == baseline)
+      #expect(try WorkspaceBundleReaderV4(at: url).read() == baseline)
+      // Capturing pending edits does not replace the last canonical read or start output.
+      try await controller.validateOutputWorkspace()
       #expect(document.stateService.recordingState == .idle)
+      // A mismatching canonical confirmation must still fail the output gate.
+      document.confirmPersistedWorkspace(captured)
+      await #expect(throws: (any Error).self) {
+        try await controller.validateOutputWorkspace()
+      }
+      document.confirmPersistedWorkspace(baseline)
       try await saveWorkspaceDocument(document, to: url)
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
       try await controller.validateOutputWorkspace()

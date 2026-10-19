@@ -3,6 +3,7 @@
 
 import AppKit
 import LDTXProtos
+@testable import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import Observation
@@ -297,6 +298,38 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace snapshot writing without a represented editor", .serialized)
   @MainActor
   struct WorkspaceDocumentWritingIntegrationTestSuite {
+    @Test func stagingWritePreservesCanonicalOutputInputs() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let canonicalURL = root.appendingPathComponent("Canonical.ldtxworkspace")
+      let stagedURL = root.appendingPathComponent("Staged.ldtxworkspace")
+      let document = WorkspaceDocument()
+      try WorkspaceBundleWriterV4().write(document.workspace, to: canonicalURL)
+      let canonical = try WorkspaceBundleReaderV4(at: canonicalURL).read()
+      try await document.apply(snapshot: canonical, previous: nil)
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { document.workspace },
+        replaceWorkspace: { document.replaceEditingWorkspace($0, undoManager: nil) },
+        url: canonicalURL)
+      try persistence.adoptRuntimeWorkspace(canonical)
+      document.editWorkspace(undoManager: nil) { $0.definition.displayName = "Unwritten edit" }
+      let captured = try await document.snapshot(
+        contentType: WorkspaceDocument.readableContentTypes[0])
+      let progress = ProgressManager(totalCount: 1)
+      try await WorkspaceDocument.Writer().write(
+        snapshot: captured, to: stagedURL, previous: nil,
+        progress: progress.subprogress(assigningCount: 1))
+      #expect(captured.definition.displayName == "Unwritten edit")
+      #expect(try WorkspaceBundleReaderV4(at: stagedURL).read() == captured)
+      #expect(document.workspace == captured)
+      #expect(document.runtimeWorkspace == canonical)
+      #expect(persistence.persistedWorkspace == canonical)
+      #expect(persistence.runtimeWorkspace == canonical)
+      #expect(try WorkspaceBundleReaderV4(at: canonicalURL).read() == canonical)
+      #expect(document.recordingState == .idle)
+      #expect(!document.isOutputActive)
+    }
+
     @Test(arguments: [false, true], [false, true])
     func writerRetainsLaterEditsAndDoesNotPublishPersistence(
       fail: Bool, hasCanonicalRead: Bool
