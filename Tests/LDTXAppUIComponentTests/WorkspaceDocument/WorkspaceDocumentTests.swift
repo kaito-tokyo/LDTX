@@ -46,7 +46,7 @@ extension AppUIComponentTestSuite {
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) })
       try persistence.adoptRuntimeWorkspace(saved)
-      let controller = WorkspaceRuntimeCoordinator(
+      let controller = WorkspaceAppletCoordinator(
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
       await controller.refreshPersistedWorkspace(at: root) { true }
@@ -205,7 +205,7 @@ extension AppUIComponentTestSuite {
         workspaceSnapshot: { state.editingWorkspace },
         replaceWorkspace: { state.replaceEditingWorkspace($0) }, url: url)
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
-      let controller = WorkspaceRuntimeCoordinator(
+      let controller = WorkspaceAppletCoordinator(
         stateService: state, persistenceCoordinator: persistence,
         appletData: WorkspaceAppletData(), document: context)
       defer { document.close() }
@@ -660,12 +660,16 @@ extension AppUIComponentTestSuite {
     func stableRuntimeLifetime() async throws {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
-      let document = WorkspaceDocument { released.append($0) }
-      func scene() -> WorkspaceDocumentContent {
-        WorkspaceDocumentContent(
-          document: document, landscapeRuntime: resources.landscape,
-          portraitRuntime: resources.portrait, metalView: resources.metalView,
-          captureSessionCoordinator: resources.capture)
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(
+        document: document, landscapeRuntime: resources.landscape,
+        portraitRuntime: resources.portrait, metalView: resources.metalView,
+        captureSessionCoordinator: resources.capture,
+        onShutdown: { released.append(document.runtimeID) })
+      let delegate = WorkspaceAppletDelegateFixture(coordinator: coordinator)
+      func scene() -> some View {
+        WorkspaceDocumentContent(document: document)
+          .environment(\.workspaceAppletDelegate, delegate)
       }
       let host = NSHostingController(rootView: scene())
       let window = NSWindow(contentViewController: host)

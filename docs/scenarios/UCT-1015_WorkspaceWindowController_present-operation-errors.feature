@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@UCT-1015 @WorkspaceRuntimeCoordinator
+@UCT-1015 @WorkspaceAppletCoordinator
 Feature: Present operation errors
 
   @UCT-1015.1

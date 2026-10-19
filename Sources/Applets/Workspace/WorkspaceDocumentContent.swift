@@ -2,63 +2,40 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
-import LDTXTaskQueue
 import LDTXWorkspaceAppletUI
-import MetalKit
 import SwiftUI
 
 public struct WorkspaceDocumentContent: View {
   @Environment(\.undoManager) private var undoManager
   @State private var connection: WorkspaceDocumentConnection?
   let document: WorkspaceDocument
-  let landscapeRuntime: ProgramRuntime?
-  let portraitRuntime: ProgramRuntime?
-  let metalView: MTKView?
-  let captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?
+  @Environment(\.workspaceAppletDelegate) private var appletDelegate
 
-  public init(
-    document: WorkspaceDocument,
-    landscapeRuntime: ProgramRuntime?, portraitRuntime: ProgramRuntime?,
-    metalView: MTKView?, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator?
-  ) {
+  public init(document: WorkspaceDocument) {
     self.document = document
-    self.landscapeRuntime = landscapeRuntime
-    self.portraitRuntime = portraitRuntime
-    self.metalView = metalView
-    self.captureSessionCoordinator = captureSessionCoordinator
   }
 
   public var body: some View {
-    if let landscapeRuntime, let portraitRuntime, let metalView,
-      let captureSessionCoordinator
-    {
-      ZStack {
-        if let connection { workspace(connection.runtimeCoordinator) }
-      }
-      .frame(minWidth: document.stateService.minimumWindowWidth, minHeight: 400)
-      .focusedSceneValue(\.workspaceUndoDisabled, document.stateService.isOutputActive)
-      .task {
-        if connection == nil {
-          connection = WorkspaceDocumentConnection(
-            document: document,
-            runtimeCoordinator: WorkspaceRuntimeCoordinator(
-              document: document, landscapeRuntime: landscapeRuntime,
-              portraitRuntime: portraitRuntime,
-              metalView: metalView, captureSessionCoordinator: captureSessionCoordinator))
-        }
-        connection?.setUndoManager(undoManager)
-      }
-      .onChange(of: undoManager) { _, manager in connection?.setUndoManager(manager) }
-      .onDisappear {
-        guard let connection else { return }
-        connection.disconnect()
-        Task { await connection.shutdown() }
-      }
+    ZStack {
+      if let connection { workspace(connection.runtimeCoordinator) }
     }
+    .frame(minWidth: document.stateService.minimumWindowWidth, minHeight: 400)
+    .focusedSceneValue(\.workspaceUndoDisabled, document.stateService.isOutputActive)
+    .task {
+      guard !document.stateService.isClosed else { return }
+      if connection == nil {
+        let coordinator = appletDelegate.workspaceCoordinator(for: document)
+        connection =
+          coordinator.documentConnection
+          ?? WorkspaceDocumentConnection(
+            document: document, runtimeCoordinator: coordinator)
+      }
+      connection?.setUndoManager(undoManager)
+    }
+    .onChange(of: undoManager) { _, manager in connection?.setUndoManager(manager) }
   }
 
-  private func workspace(_ runtime: WorkspaceRuntimeCoordinator) -> some View {
+  private func workspace(_ runtime: WorkspaceAppletCoordinator) -> some View {
     let stateService = document.stateService
     let actions: () -> (any WorkspaceRuntimeActions)? = { [weak runtime] in
       guard !stateService.isClosed else { return nil }

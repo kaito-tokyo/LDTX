@@ -81,7 +81,7 @@ extension AppUIComponentTestSuite {
       try await saveWorkspaceDocument(document, to: url)
       document.captureTestBaseline()
       #expect(!document.hasTestModelChanges)
-      let controller = WorkspaceRuntimeCoordinator(
+      let controller = WorkspaceAppletCoordinator(
         stateService: service,
         persistenceCoordinator: document.persistenceCoordinator,
         appletData: document.appletData, document: document)

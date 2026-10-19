@@ -9,7 +9,7 @@ import Observation
 @MainActor
 final class WorkspaceDocumentConnection {
   private weak var document: WorkspaceDocument?
-  let runtimeCoordinator: WorkspaceRuntimeCoordinator
+  let runtimeCoordinator: WorkspaceAppletCoordinator
   private weak var undoManager: UndoManager?
   private var lastObservedSnapshot: WorkspaceV4Bundle
   private var editsTask: Task<Void, Never>?
@@ -18,10 +18,11 @@ final class WorkspaceDocumentConnection {
   private var readGeneration = 0
   private let closeCoordinator = WorkspaceDocumentCloseCoordinator()
 
-  init(document: WorkspaceDocument, runtimeCoordinator: WorkspaceRuntimeCoordinator) {
+  init(document: WorkspaceDocument, runtimeCoordinator: WorkspaceAppletCoordinator) {
     self.document = document
     self.runtimeCoordinator = runtimeCoordinator
     lastObservedSnapshot = runtimeCoordinator.stateService.editingWorkspace
+    runtimeCoordinator.documentConnection = self
     synchronizeDocument()
     runtimeCoordinator.pairedPreview.attachWindow = { [weak self] window in
       self?.attachWindow(window)
@@ -54,8 +55,6 @@ final class WorkspaceDocumentConnection {
     closeCoordinator.detach()
     editsTask?.cancel()
     documentTask?.cancel()
-    let owner = runtimeCoordinator
-    Task { await owner.shutdown() }
   }
 
   func attachWindow(_ window: NSWindow?) {

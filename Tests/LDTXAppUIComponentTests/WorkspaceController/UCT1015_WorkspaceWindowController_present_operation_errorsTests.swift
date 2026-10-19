@@ -9,7 +9,7 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
-  struct UCT1015WorkspaceRuntimeCoordinatorIntegrationTestSuite {
+  struct UCT1015WorkspaceAppletCoordinatorIntegrationTestSuite {
     @Test func alertAcknowledgesQueuedErrorsInOrder() async throws {
       let state = WorkspaceStateService()
       let window = makeWorkspaceTestWindow(stateService: state)
@@ -45,7 +45,7 @@ extension AppUIComponentTestSuite {
 
     @Test func queuesErrorsAndPreservesDetails() async throws {
       let document = WorkspaceDocument()
-      let coordinator = WorkspaceRuntimeCoordinator(document: document)
+      let coordinator = WorkspaceAppletCoordinator(document: document)
       let error = NSError(
         domain: "test", code: 1,
         userInfo: [
@@ -73,8 +73,8 @@ extension AppUIComponentTestSuite {
     @Test func runtimeFailuresAreScopedAndCanRecurAfterRecovery() async {
       let firstDocument = WorkspaceDocument()
       let secondDocument = WorkspaceDocument()
-      let first = WorkspaceRuntimeCoordinator(document: firstDocument)
-      let second = WorkspaceRuntimeCoordinator(document: secondDocument)
+      let first = WorkspaceAppletCoordinator(document: firstDocument)
+      let second = WorkspaceAppletCoordinator(document: secondDocument)
       first.updateMonitorFailure(-50)
       #expect(first.stateService.operationErrors.first != nil)
       #expect(second.stateService.operationErrors.first == nil)

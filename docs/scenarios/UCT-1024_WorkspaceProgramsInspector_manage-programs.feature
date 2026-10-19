@@ -14,7 +14,7 @@ Feature: Manage Programs
     And valid names are trimmed and saved
     And missing Programs and edits during output are rejected
 
-  @UCT-1024.2 @WorkspaceRuntimeCoordinator @WorkspaceStateService
+  @UCT-1024.2 @WorkspaceAppletCoordinator @WorkspaceStateService
   Scenario: Delete removes only the requested Program and its preferences
     Given a Workspace contains two Programs with saved preferences
     When the user confirms deletion of one Program

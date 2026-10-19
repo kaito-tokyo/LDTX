@@ -37,12 +37,17 @@ until a document location exists, and the output controller also requires a
 persisted runtime snapshot before starting.
 
 Document owns workspaceSnapshot, WorkspaceStateService's editable values and UI
-state, and file persistence. App State owns the ProgramRuntime pair, preview view,
-capture coordinator, and update registry for each Document UUID.
-WorkspaceRuntimeCoordinator receives those resources and the Document-owned
-StateService, owns their runtime projection coordinator, and coordinates shutdown.
+state, and file persistence. AppDelegate strongly retains a WorkspaceAppletCoordinator
+for each Document runtime UUID. That Coordinator constructs and owns the ProgramRuntime
+pair, preview view, capture coordinator, output, audio, and Vision services, receives
+the Document-owned StateService, and coordinates shutdown.
 WorkspaceDocumentContent creates its document connection lazily and retains it in
-State. WorkspaceDocumentConnection tracks edits and owns WorkspaceRuntimeCoordinator.
+State. WorkspaceDocumentConnection tracks edits and references WorkspaceAppletCoordinator.
+The Applet defines WorkspaceAppletDelegate and its Environment key. The AppDelegate
+implements that protocol in an extension. The application's existing adaptor instance
+is explicitly injected through `.environment(\.workspaceAppletDelegate, appDelegate)`.
+The Environment getter detects missing injection in one place; component tests may
+supply a fake delegate. No NSApplication delegate cast or injection relay is used.
 WorkspaceDocumentContent places the UI views directly and connects their toolbar,
 error reporting, UndoManager, and lifecycle. There is no intermediate Scene or
 RootView, and no separate view-state or presentation model.
@@ -56,8 +61,9 @@ Horizontal and vertical pane resizing share WorkspaceDivider.
 The runtime controller holds the framework's window weakly and does not replace
 its delegate or install its own restoration policy. Window closure finalizes
 output and tears down capture, audio, Vision, and preview resources asynchronously.
-Scene disappearance stops document observation and initiates idempotent shutdown;
-connection release also initiates cleanup. A small NSViewRepresentable obtains
+View disappearance and connection release do not shut down the Coordinator.
+Document release requests idempotent cleanup as a fallback for a discarded Document.
+A small NSViewRepresentable obtains
 the framework-owned window from PairedProgramPreview and installs a document
 action responder that prevents Revert and Browse Versions during output.
 The connection also routes the standard close button action (including Command-W)
@@ -152,7 +158,7 @@ values and model URLs, while preserving UI and runtime status. The alternative
 URL-only operation changes only URLs for IDs already in StateService; it preserves
 other edits and does not add or remove models. There is no implicit merge. The
 connection observes content and URL changes for Undo baselines and UI routing.
-WorkspaceRuntimeCoordinator independently observes content, URL, persistence notifications,
+WorkspaceAppletCoordinator independently observes content, URL, persistence notifications,
 and output state. It adopts persisted runtime content while idle and defers that
 adoption during output. Document does not keep a second runtime bundle.
 
@@ -248,7 +254,7 @@ files and past models. Save failure leaves the current edits intact.
 Snapshots exclude edits made after their capture.
 
 Writing the staging package alone does not update runtime definitions. After
-URLDocumentConfiguration reports a committed URL/modification date, WorkspaceRuntimeCoordinator
+URLDocumentConfiguration reports a committed URL/modification date, WorkspaceAppletCoordinator
 reads the formal package independently and adopts that
 persisted Definition for ProgramRuntime and Vision. Newer edits and model
 selections remain pending. Preferences can reach the runtime immediately.
@@ -272,16 +278,14 @@ The minimum window width includes only visible panes: 480 points for Content,
 The Sidebar and Inspector stay mounted at zero visible width while collapsed,
 retaining local editing drafts, scroll state, and task results without accepting interaction.
 
-LDTXApp constructs the Landscape and Portrait ProgramRuntimes, their shared capture
-coordinator, and a Program preview `MTKView` when
-creating each Document. App retains them in an `@State` dictionary keyed by the
-Document's non-persisted runtime UUID. WorkspaceDocumentContent and WorkspaceRuntimeCoordinator
-receive those instances through initializers. Document admits one active runtime
-owner. The controller passes the view to `ProgramCanvasPairedPreview` for layout and input.
+WorkspaceAppletCoordinator constructs the Landscape and Portrait ProgramRuntimes,
+their shared capture coordinator, and a Program preview `MTKView` when AppDelegate
+first resolves the Document's non-persisted runtime UUID. AppDelegate reuses the
+same Coordinator for subsequent requests, including View reconstruction. The
+Coordinator passes the view to `ProgramCanvasPairedPreview` for layout and input.
 Shutdown pauses and disconnects drawing before stopping runtime resources, then
-detaches the view and removes the App State entry. A Document discarded before a
-runtime is attached also removes its entry. Component tests and Xcode previews
-construct their own dependencies. A
+detaches the view and removes the AppDelegate registration. Component tests and
+Xcode previews construct their own dependencies. A
 `ProgramPairPreviewRenderer` supplied as its delegate reads the latest
 `ProgramFrame` from the Landscape and Portrait runtimes and draws the 16:9 and
 9:16 images at equal height into the drawable. The four-pixel gap is transparent
@@ -374,7 +378,7 @@ keep definition editing and output toolbar actions disabled, and finalization
 failures remain visible. Pause state is not persisted in the Workspace package.
 
 The Workspace Content pane uses SwiftUI for preview placement, gestures, audio
-controls, canvas selection, and layer rows. `WorkspaceRuntimeCoordinator` owns the
+controls, canvas selection, and layer rows. `WorkspaceAppletCoordinator` owns the
 `ProgramPairPreviewRenderer`, which reads the same Program runtimes used for
 output. `ProgramCanvasPairedPreview` receives its Metal device and delegate,
 centers a fixed 16:9 plus 9:16 pair with 12-point padding, and shows black when
@@ -510,7 +514,7 @@ default folder, then the built-in default.
 ## Workspace state and cross-layer operations
 
 WorkspaceDocument owns one Observable `WorkspaceStateService` for editable
-values and UI/runtime status. WorkspaceRuntimeCoordinator receives that same instance.
+values and UI/runtime status. WorkspaceAppletCoordinator receives that same instance.
 Simple state changes may assign variables directly; operations that require
 validation or coordinated updates use methods. There is no separate UI Dispatcher.
 The service does not reference runtime actions or assemble capture, rendering,
@@ -562,7 +566,7 @@ exact Rational32 ranges before writing the Workspace. Workspace Version remains
 ## Workspace operation errors
 
 Save validation errors are surfaced by the document framework. Runtime operation
-errors use WorkspaceRuntimeCoordinator's queued error presentation. Editors and
+errors use WorkspaceAppletCoordinator's queued error presentation. Editors and
 Inspectors receive the error-reporting boundary explicitly or through the SwiftUI
 error environment. Output-session failures and continuous OCR results retain
 their existing state and display paths.

@@ -71,44 +71,38 @@ extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace termination lifecycle", .serialized)
   struct WorkspaceTerminationIntegrationTestSuite {
-    @Test func acknowledgingOneCloseDoesNotConsumeAnotherWindowsFailure() async {
-      let first = WorkspaceRuntimeCoordinator(document: WorkspaceDocument())
-      let second = WorkspaceRuntimeCoordinator(document: WorkspaceDocument())
+    @Test func shutdownFailuresBelongToTheirCoordinator() async {
+      let first = WorkspaceAppletCoordinator(document: WorkspaceDocument())
+      let second = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       await first.shutdown()
       await second.shutdown()
-      first.queueShutdownFailure("Recording failed")
-      second.queueShutdownFailure("Recording failed")
-      #expect(first.takeShutdownFailureForPresentation() == "Recording failed")
-      #expect(
-        await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination() == [
-          "Recording failed"
-        ])
-      #expect(second.takeShutdownFailureForPresentation() == nil)
-      #expect(await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination().isEmpty)
+      first.queueShutdownFailure("First recording failed")
+      second.queueShutdownFailure("Second recording failed")
+      #expect(first.takeShutdownFailureForPresentation() == "First recording failed")
+      #expect(first.takeShutdownFailureForPresentation() == nil)
+      #expect(second.takeShutdownFailureForPresentation() == "Second recording failed")
     }
 
-    @Test func ordinaryCloseAcknowledgesItsPresentedFailure() async {
-      let controller = WorkspaceRuntimeCoordinator(document: WorkspaceDocument())
-      await controller.shutdown()
-      controller.queueShutdownFailure("Recording failed")
-      #expect(WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown)
-      #expect(controller.takeShutdownFailureForPresentation() == "Recording failed")
-      #expect(controller.takeShutdownFailureForPresentation() == nil)
-      #expect(!WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown)
-      #expect(await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination().isEmpty)
-    }
-
-    @Test func allControllersIncludingExistingShutdownAreDrained() async {
-      let first = WorkspaceRuntimeCoordinator(document: WorkspaceDocument())
-      let second = WorkspaceRuntimeCoordinator(document: WorkspaceDocument())
-      #expect(WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown)
-      let closing = Task { await first.shutdown() }
-      let failures = await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination()
+    @Test func concurrentShutdownReleasesResourcesOnceAfterCleanup() async {
+      let document = WorkspaceDocument()
+      let resources = WorkspaceRuntimeFixture()
+      var releases = 0
+      let coordinator = WorkspaceAppletCoordinator(
+        document: document, landscapeRuntime: resources.landscape,
+        portraitRuntime: resources.portrait, metalView: resources.metalView,
+        captureSessionCoordinator: resources.capture,
+        onShutdown: {
+          #expect(resources.metalView.delegate == nil)
+          #expect(resources.metalView.isPaused)
+          releases += 1
+        })
+      let closing = Task { await coordinator.shutdown() }
+      await coordinator.shutdown()
       await closing.value
-      #expect(failures.isEmpty)
-      #expect(!WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown)
-      await second.shutdown()
+      await coordinator.shutdown()
+      #expect(releases == 1)
     }
+
   }
 }
 

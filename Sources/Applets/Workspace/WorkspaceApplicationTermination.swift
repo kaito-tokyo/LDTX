@@ -7,29 +7,23 @@ import OSLog
 /// Workspace shutdown policy used by the application's delegate.
 @MainActor
 public final class WorkspaceApplicationTermination: NSObject {
-  private let hasPendingShutdown: () -> Bool
-  private let shutdown: () async -> [String]
-  private let reply: (NSApplication, Bool) -> Void
-  private let presentFailure: (NSApplication, Error) -> Void
+  private let hasPendingShutdown: @MainActor () -> Bool
+  private let shutdown: @MainActor () async -> [String]
+  private let reply: @MainActor (NSApplication, Bool) -> Void
+  private let presentFailure: @MainActor (NSApplication, Error) -> Void
   private var terminationTask: Task<Void, Never>?
   private static let logger = Logger(
     subsystem: "tokyo.kaito.ldtx", category: "WorkspaceTermination")
 
-  public override convenience init() {
-    self.init(
-      hasPendingShutdown: { WorkspaceRuntimeCoordinator.hasPendingApplicationShutdown },
-      shutdown: { await WorkspaceRuntimeCoordinator.shutdownForApplicationTermination() },
-      reply: { application, shouldTerminate in
-        application.reply(toApplicationShouldTerminate: shouldTerminate)
-      },
-      presentFailure: { application, error in _ = application.presentError(error) })
-  }
-
-  init(
-    hasPendingShutdown: @escaping () -> Bool,
-    shutdown: @escaping () async -> [String],
-    reply: @escaping (NSApplication, Bool) -> Void,
-    presentFailure: @escaping (NSApplication, Error) -> Void
+  public init(
+    hasPendingShutdown: @escaping @MainActor () -> Bool,
+    shutdown: @escaping @MainActor () async -> [String],
+    reply: @escaping @MainActor (NSApplication, Bool) -> Void = {
+      $0.reply(toApplicationShouldTerminate: $1)
+    },
+    presentFailure: @escaping @MainActor (NSApplication, Error) -> Void = {
+      _ = $0.presentError($1)
+    }
   ) {
     self.hasPendingShutdown = hasPendingShutdown
     self.shutdown = shutdown

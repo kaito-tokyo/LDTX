@@ -3,24 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXBackgroundSegmentation
-import LDTXInternalProtocols
-import LDTXProgramRuntime
 import LDTXRecordPlayerApplet
 import LDTXSettingsApplet
-import LDTXTaskQueue
 import LDTXVisionProgrammerApplet
 import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletUI
 import LDTXYouTubeAuth
-import MetalKit
 import SwiftUI
 
 @MainActor
 struct LDTXApp: App {
-  @State private var workspaceResources: [UUID: WorkspaceRuntimeResources] = [:]
-
-  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+  @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
 
   init() {
     if let bundleIdentifier = Bundle.main.bundleIdentifier,
@@ -34,10 +27,6 @@ struct LDTXApp: App {
   }
 
   var body: some Scene {
-    // Read State here so resource registration updates the Scene's editor
-    // closure; reading only inside DocumentGroup leaves its initial snapshot.
-    let currentResources = workspaceResources
-    let resourceStorage = $workspaceResources
     DocumentGroup(allowCreating: false) { (document: RecordPlayerDocument) in
       RecordPlayerDocumentContent(document: document)
     } makeDocument: { configuration, _ in
@@ -50,20 +39,12 @@ struct LDTXApp: App {
     }
 
     DocumentGroup { (document: WorkspaceDocument) in
-      let resources = currentResources[document.runtimeID]
-      WorkspaceDocumentContent(
-        document: document,
-        landscapeRuntime: resources?.landscape,
-        portraitRuntime: resources?.portrait,
-        metalView: resources?.metalView,
-        captureSessionCoordinator: resources?.capture)
-    } makeDocument: { configuration, _ in
-      let resources = resourceStorage
-      let document = WorkspaceDocument(configuration: configuration) { id in
-        resources.wrappedValue.removeValue(forKey: id)
+      WorkspaceDocumentContent(document: document)
+        .environment(\.workspaceAppletDelegate, appDelegate)
+    } makeDocument: { [appDelegate] configuration, _ in
+      WorkspaceDocument(configuration: configuration) { [weak appDelegate] id in
+        appDelegate?.closeWorkspace(runtimeID: id)
       }
-      resources.wrappedValue[document.runtimeID] = WorkspaceRuntimeResources()
-      return document
     }
     .defaultSize(width: 1062, height: 700)
     .windowToolbarStyle(.unified)
@@ -97,32 +78,5 @@ enum LDTXMain {
     // the public subclass first so every Quit entry point passes its save gate.
     _ = WorkspaceApplication.shared
     LDTXApp.main()
-  }
-}
-
-/// Resources retained by App State until the Workspace finishes shutting down.
-@MainActor
-private struct WorkspaceRuntimeResources {
-  let landscape: ProgramRuntime
-  let portrait: ProgramRuntime
-  let metalView: MTKView
-  let capture: WorkspaceCaptureSessionCoordinator
-
-  init() {
-    let capture = WorkspaceCaptureSessionCoordinator()
-    let backgroundRemoval: BackgroundRemovalPreprocessorFactory = { device, textureCache in
-      BackgroundRemovalVideoInputPreprocessor(device: device, textureCache: textureCache)
-    }
-    self.capture = capture
-    landscape = ProgramRuntime(
-      captureSessionCoordinator: capture,
-      backgroundRemovalPreprocessorFactory: backgroundRemoval
-    )
-    portrait = ProgramRuntime(
-      captureSessionCoordinator: capture,
-      backgroundRemovalPreprocessorFactory: backgroundRemoval
-    )
-    metalView = MTKView(frame: .zero, device: nil)
-    metalView.isPaused = true
   }
 }

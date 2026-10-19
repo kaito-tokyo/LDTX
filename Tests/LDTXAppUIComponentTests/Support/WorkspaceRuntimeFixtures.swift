@@ -31,7 +31,7 @@ struct WorkspaceRuntimeFixture {
   }
 }
 
-extension WorkspaceRuntimeCoordinator {
+extension WorkspaceAppletCoordinator {
   convenience init(document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared) {
     let resources = WorkspaceRuntimeFixture()
     self.init(
@@ -50,23 +50,26 @@ extension WorkspaceRuntimeCoordinator {
       appletData: appletData, document: document,
       landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
       metalView: resources.metalView, captureSessionCoordinator: resources.capture,
-      releaseRuntimeResources: {})
-  }
-}
-
-extension WorkspaceDocumentContent {
-  init(document: WorkspaceDocument) {
-    let resources = WorkspaceRuntimeFixture()
-    self.init(
-      document: document, landscapeRuntime: resources.landscape,
-      portraitRuntime: resources.portrait,
-      metalView: resources.metalView, captureSessionCoordinator: resources.capture)
+      onShutdown: {})
   }
 }
 
 extension WorkspaceDocumentConnection {
   convenience init(document: WorkspaceDocument) {
     self.init(
-      document: document, runtimeCoordinator: WorkspaceRuntimeCoordinator(document: document))
+      document: document, runtimeCoordinator: WorkspaceAppletCoordinator(document: document))
+  }
+}
+
+@MainActor
+final class WorkspaceAppletDelegateFixture: WorkspaceAppletDelegate {
+  let coordinator: WorkspaceAppletCoordinator
+
+  init(coordinator: WorkspaceAppletCoordinator) {
+    self.coordinator = coordinator
+  }
+
+  func workspaceCoordinator(for document: WorkspaceDocument) -> WorkspaceAppletCoordinator {
+    coordinator
   }
 }

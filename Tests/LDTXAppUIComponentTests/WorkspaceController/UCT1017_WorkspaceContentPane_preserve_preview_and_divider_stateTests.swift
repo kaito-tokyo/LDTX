@@ -49,16 +49,17 @@ extension AppUIComponentTestSuite {
     @Test func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
-      let document = WorkspaceDocument { id in
-        #expect(resources.metalView.isPaused)
-        #expect(resources.metalView.delegate == nil)
-        #expect(resources.metalView.superview == nil)
-        released.append(id)
-      }
-      let controller = WorkspaceRuntimeCoordinator(
+      let document = WorkspaceDocument()
+      let controller = WorkspaceAppletCoordinator(
         document: document, appletData: WorkspaceAppletData(),
         landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
-        metalView: resources.metalView, captureSessionCoordinator: resources.capture)
+        metalView: resources.metalView, captureSessionCoordinator: resources.capture,
+        onShutdown: {
+          #expect(resources.metalView.isPaused)
+          #expect(resources.metalView.delegate == nil)
+          #expect(resources.metalView.superview == nil)
+          released.append(document.runtimeID)
+        })
       let view = controller.pairedPreview.metalView
       #expect(view === resources.metalView)
       #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)
@@ -75,17 +76,23 @@ extension AppUIComponentTestSuite {
       #expect(released == [document.runtimeID])
     }
 
-    @Test func runtimeOwnsCleanupAfterDocumentIsReleased() {
-      var released: [UUID] = []
-      var document: WorkspaceDocument? = WorkspaceDocument { released.append($0) }
-      let id = document!.runtimeID
+    @Test func runtimeOwnsCleanupAfterDocumentIsReleased() async {
+      var documentReleased = false
+      var runtimeReleased = false
+      var document: WorkspaceDocument? = WorkspaceDocument { _ in documentReleased = true }
+      let resources = WorkspaceRuntimeFixture()
+      let coordinator = WorkspaceAppletCoordinator(
+        document: document!, landscapeRuntime: resources.landscape,
+        portraitRuntime: resources.portrait, metalView: resources.metalView,
+        captureSessionCoordinator: resources.capture,
+        onShutdown: { runtimeReleased = true })
       weak var retained = document
-      let finishShutdown = document!.claimRuntimeResources()
       document = nil
       #expect(retained == nil)
-      #expect(released.isEmpty)
-      finishShutdown()
-      #expect(released == [id])
+      #expect(documentReleased)
+      #expect(!runtimeReleased)
+      await coordinator.shutdown()
+      #expect(runtimeReleased)
     }
 
     private static var controller: NSDocumentController {

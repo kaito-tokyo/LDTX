@@ -22,7 +22,7 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
-  struct UCT1016WorkspaceRuntimeCoordinatorIntegrationTestSuite {
+  struct UCT1016WorkspaceAppletCoordinatorIntegrationTestSuite {
     @Test("Stream-key candidate loss clears only the editing choice")
     func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
       let suite = "StreamKeyDraft.\(UUID())"
@@ -486,7 +486,7 @@ extension AppUIComponentTestSuite {
         "sdr-landscape-1080p60"
       first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
-      let firstWindow = WorkspaceRuntimeCoordinator(
+      let firstWindow = WorkspaceAppletCoordinator(
         stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
@@ -496,7 +496,7 @@ extension AppUIComponentTestSuite {
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
       second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
       second.stateService.workspacePreferences = first.stateService.workspacePreferences
-      let secondWindow = WorkspaceRuntimeCoordinator(
+      let secondWindow = WorkspaceAppletCoordinator(
         stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)
@@ -544,7 +544,7 @@ extension AppUIComponentTestSuite {
       first.close()
       let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
-      let reopenedWindow = WorkspaceRuntimeCoordinator(
+      let reopenedWindow = WorkspaceAppletCoordinator(
         stateService: reopened.stateService,
         persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
         document: reopened)
@@ -583,7 +583,7 @@ extension AppUIComponentTestSuite {
         "sdr-landscape-1080p60"
       first.stateService.workspaceDefinition.canvasConfiguration.portraitProfileID =
         "sdr-portrait-1080p60"
-      let firstWindow = WorkspaceRuntimeCoordinator(
+      let firstWindow = WorkspaceAppletCoordinator(
         stateService: first.stateService,
         persistenceCoordinator: first.persistenceCoordinator, appletData: data,
         document: first)
@@ -598,7 +598,7 @@ extension AppUIComponentTestSuite {
       }
       second.stateService.workspaceDefinition = first.stateService.workspaceDefinition
       second.stateService.workspacePreferences = first.stateService.workspacePreferences
-      let secondWindow = WorkspaceRuntimeCoordinator(
+      let secondWindow = WorkspaceAppletCoordinator(
         stateService: second.stateService,
         persistenceCoordinator: second.persistenceCoordinator, appletData: data,
         document: second)

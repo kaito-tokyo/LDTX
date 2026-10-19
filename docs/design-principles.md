@@ -45,12 +45,13 @@ the relevant design or feature documentation instead.
   and UI state. Document captures those values directly when saving; Writer
   validates them before writing. Saving does not require a represented UI or an editing connection.
 - WorkspaceDocumentContent receives Document and retains its document connection through SwiftUI State.
-  The connection owns the runtime WorkspaceRuntimeCoordinator.
-  UI receives Document's StateService through Bindable. Runtime
-  ProgramRuntime pairs and preview MTKViews are constructed and retained by App
-  State, keyed by the Document's transient UUID, and injected through initializers.
-  WorkspaceRuntimeCoordinator operates those resources and releases their App registration
-  only after asynchronous shutdown. Document does not own the controller.
+  AppDelegate strongly retains one WorkspaceAppletCoordinator per Document runtime UUID.
+  The Coordinator constructs and owns the ProgramRuntime pair, capture, output, audio,
+  Vision, and preview resources. The Applet obtains it through its MainActor delegate
+  protocol, explicitly injected into Environment at the application entry point.
+  Reconstructing a View does not create another Coordinator or initiate shutdown.
+  Window closure initiates idempotent cleanup; AppDelegate removes the registration
+  only after asynchronous shutdown completes. Document does not own the controller.
   WorkspaceStateService is the shared observable state; there is no parallel
   Workspace view-state or presentation model. Alert and popover visibility,
   pane widths, and other view-local values belong to the owning View's State.

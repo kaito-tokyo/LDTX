@@ -23,7 +23,9 @@ import Observation
 import SwiftUI
 
 @MainActor
-public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
+public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
+  // Reuse a live scene connection without creating a parent/child retain cycle.
+  weak var documentConnection: WorkspaceDocumentConnection?
   public weak var window: NSWindow?
   private weak var workspaceDocument: (any WorkspaceDocumentContext)?
   let deviceRegistry = DeviceRegistryService()
@@ -39,7 +41,8 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
 
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
-  private var releaseRuntimeResources: (@MainActor () -> Void)?
+  public var outputStateDidChange: (@MainActor () -> Void)?
+  private var onShutdown: (@MainActor () -> Void)?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
@@ -117,10 +120,31 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
         ]))
   }
 
+  /// Creates the Workspace's runtime resources once under the application owner.
+  public convenience init(
+    document: WorkspaceDocument, onShutdown: @escaping @MainActor () -> Void
+  ) {
+    let capture = WorkspaceCaptureSessionCoordinator()
+    let backgroundRemoval: BackgroundRemovalPreprocessorFactory = { device, textureCache in
+      BackgroundRemovalVideoInputPreprocessor(device: device, textureCache: textureCache)
+    }
+    let landscape = ProgramRuntime(
+      captureSessionCoordinator: capture, backgroundRemovalPreprocessorFactory: backgroundRemoval)
+    let portrait = ProgramRuntime(
+      captureSessionCoordinator: capture, backgroundRemovalPreprocessorFactory: backgroundRemoval)
+    let metalView = MTKView(frame: .zero, device: nil)
+    metalView.isPaused = true
+    self.init(
+      document: document, landscapeRuntime: landscape, portraitRuntime: portrait,
+      metalView: metalView, captureSessionCoordinator: capture,
+      onShutdown: onShutdown)
+  }
+
   public convenience init(
     document: WorkspaceDocument, appletData: WorkspaceAppletData = .shared,
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
-    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator
+    captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
+    onShutdown: @escaping @MainActor () -> Void = {}
   ) {
     let stateService = document.stateService
     stateService.localStateURL = document.fileURL
@@ -143,7 +167,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       appletData: appletData, document: document,
       landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime, metalView: metalView,
       captureSessionCoordinator: captureSessionCoordinator,
-      releaseRuntimeResources: document.claimRuntimeResources())
+      onShutdown: onShutdown)
     if let adoptionError { reportError(adoptionError) }
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
@@ -167,9 +191,9 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     document: any WorkspaceDocumentContext,
     landscapeRuntime: ProgramRuntime, portraitRuntime: ProgramRuntime, metalView: MTKView,
     captureSessionCoordinator: WorkspaceCaptureSessionCoordinator,
-    releaseRuntimeResources: @escaping @MainActor () -> Void
+    onShutdown: @escaping @MainActor () -> Void
   ) {
-    self.releaseRuntimeResources = releaseRuntimeResources
+    self.onShutdown = onShutdown
     self.workspaceDocument = document
     self.stateService = stateService
     self.persistenceCoordinator = persistenceCoordinator
@@ -240,8 +264,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     outputObservationTask = Task { @MainActor [weak self] in
       for await _ in outputChanges {
         guard let self, !Task.isCancelled else { return }
-        Self.activeControllers.add(self)
-        Self.updateRecordingDockBadge()
+        outputStateDidChange?()
         visionFeature.outputStateDidChange()
       }
     }
@@ -300,7 +323,6 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       stateService.outputFailureMessage = message
     }
     synchronizeVision()
-    Self.activeControllers.add(self)
   }
 
   isolated deinit {
@@ -356,43 +378,15 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
     return try result.get()
   }
 
-  private static let activeControllers = NSHashTable<WorkspaceRuntimeCoordinator>.weakObjects()
-  private let shutdownID = UUID()
-  private static var pendingShutdownFailures: [UUID: String] = [:]
-  private static var isTerminating = false
+  private var pendingShutdownFailure: String?
 
   func queueShutdownFailure(_ message: String) {
-    Self.pendingShutdownFailures[shutdownID] = message
+    pendingShutdownFailure = message
   }
 
-  func takeShutdownFailureForPresentation() -> String? {
-    guard !Self.isTerminating else { return nil }
-    return Self.pendingShutdownFailures.removeValue(forKey: shutdownID)
-  }
-
-  static var hasPendingApplicationShutdown: Bool {
-    !activeControllers.allObjects.isEmpty || !pendingShutdownFailures.isEmpty
-  }
-
-  /// Includes closed windows whose idempotent shutdown is still running.
-  static func shutdownForApplicationTermination() async -> [String] {
-    isTerminating = true
-    defer { isTerminating = false }
-    let controllers = activeControllers.allObjects
-    await withTaskGroup(of: Void.self) { group in
-      for controller in controllers {
-        group.addTask { await controller.shutdown() }
-      }
-    }
-    let failures = Array(pendingShutdownFailures.values)
-    pendingShutdownFailures.removeAll()
-    return failures
-  }
-  private static func updateRecordingDockBadge() {
-    NSApplication.shared.dockTile.badgeLabel =
-      activeControllers.allObjects.contains {
-        $0.stateService.isOutputActive
-      } ? "REC" : nil
+  public func takeShutdownFailureForPresentation() -> String? {
+    defer { pendingShutdownFailure = nil }
+    return pendingShutdownFailure
   }
 
   func attachWindow(_ window: NSWindow?) {
@@ -517,6 +511,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       return
     }
     stateService.isClosed = true
+    documentConnection?.disconnect()
     closeErrorPresentation()
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     closeObserver = nil
@@ -540,12 +535,11 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
       await audioCoordinator.stopAndReset()
       windowRuntime.shutdown()
       pairedPreview.metalView.removeFromSuperview()
-      let release = releaseRuntimeResources
-      releaseRuntimeResources = nil
-      release?()
+      let release = onShutdown
+      onShutdown = nil
       if let shutdownFailureMessage { queueShutdownFailure(shutdownFailureMessage) }
-      Self.activeControllers.remove(self)
-      Self.updateRecordingDockBadge()
+      outputStateDidChange?()
+      release?()
     }
     shutdownTask = task
     await task.value
@@ -574,7 +568,7 @@ public final class WorkspaceRuntimeCoordinator: WorkspaceRuntimeActions {
   }
 }
 
-extension WorkspaceRuntimeCoordinator {
+extension WorkspaceAppletCoordinator {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
