@@ -19,6 +19,7 @@ final class StreamDeckHID: @unchecked Sendable {
     var frame = StreamDeckFrame()
   }
   private let mailbox = Mutex(Mailbox())
+  private let completion = DispatchGroup()
   private let onPress: @Sendable (Int, StreamDeckFrame, UInt64) -> Void
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "StreamDeck")
   private var device: IOHIDDevice?
@@ -45,8 +46,18 @@ final class StreamDeckHID: @unchecked Sendable {
   func isCurrent(_ generation: UInt64) -> Bool {
     mailbox.withLock { !$0.stopped && $0.generation == generation }
   }
-  func stop() { mailbox.withLock { $0.stopped = true } }
-  func start() { Thread.detachNewThread { [self] in run() } }
+  func stop() {
+    mailbox.withLock { $0.stopped = true }
+    // The worker never waits on MainActor, so termination can drain it here.
+    completion.wait()
+  }
+  func start() {
+    completion.enter()
+    Thread.detachNewThread { [self] in
+      defer { completion.leave() }
+      run()
+    }
+  }
 
   private func run() {
     // The manager discovers devices; this worker owns each device's scheduling
@@ -58,11 +69,21 @@ final class StreamDeckHID: @unchecked Sendable {
       [
         kIOHIDVendorIDKey: 0x0fd9, kIOHIDProductIDKey: 0x0080,
       ] as CFDictionary)
+    // Leave the manager's device-level removal callback intact so its
+    // enumeration set drops unplugged devices before discovery runs again.
+    IOHIDManagerRegisterDeviceRemovalCallback(
+      manager,
+      { context, _, _, removed in
+        guard let context else { return }
+        let worker = Unmanaged<StreamDeckHID>.fromOpaque(context).takeUnretainedValue()
+        if worker.device == removed { worker.disconnect() }
+      }, Unmanaged.passUnretained(self).toOpaque())
     // Discovery does not open every device. Seize only a single unambiguous MK.2.
     IOHIDManagerScheduleWithRunLoop(
       manager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
     defer {
       disconnect()
+      IOHIDManagerRegisterDeviceRemovalCallback(manager, nil, nil)
       IOHIDManagerUnscheduleFromRunLoop(
         manager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
       IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -151,12 +172,6 @@ final class StreamDeckHID: @unchecked Sendable {
         Unmanaged<StreamDeckHID>.fromOpaque(context).takeUnretainedValue().received(
           bytes, count: count)
       }, Unmanaged.passUnretained(self).toOpaque())
-    IOHIDDeviceRegisterRemovalCallback(
-      candidate,
-      { context, _, _ in
-        guard let context else { return }
-        Unmanaged<StreamDeckHID>.fromOpaque(context).takeUnretainedValue().disconnect()
-      }, Unmanaged.passUnretained(self).toOpaque())
     IOHIDDeviceScheduleWithRunLoop(
       candidate, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
     logger.notice("Stream Deck MK.2 connected")
@@ -164,7 +179,6 @@ final class StreamDeckHID: @unchecked Sendable {
 
   private func disconnect() {
     guard let device else { return }
-    IOHIDDeviceRegisterRemovalCallback(device, nil, nil)
     IOHIDDeviceRegisterInputReportCallback(device, report, 1024, nil, nil)
     IOHIDDeviceUnscheduleFromRunLoop(
       device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
