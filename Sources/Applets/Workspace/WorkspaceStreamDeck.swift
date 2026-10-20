@@ -53,7 +53,7 @@ public final class WorkspaceStreamDeck {
 
   private func refresh() {
     var frame = StreamDeckFrame()
-    if let coordinator = target() {
+    if let coordinator = target(), !coordinator.isClosing {
       let controls = coordinator.streamDeckControls
       frame.target = coordinator.stateService.runtimeID
       frame.enabled =

@@ -97,7 +97,17 @@ final class StreamDeckHID: @unchecked Sendable {
         }
         let (frame, generation) = mailbox.withLock { ($0.frame, $0.generation) }
         if let device, displayed != frame || displayedGeneration != generation {
-          let old = displayed
+          if frame.target == nil {
+            if restoreLogo(on: device) {
+              displayed = frame
+              displayedGeneration = generation
+            } else {
+              disconnect()
+            }
+            return
+          }
+          // The logo can occupy all keys, so redraw the whole layout after reset.
+          let old = displayed?.target == nil ? nil : displayed
           var succeeded = true
           // Clear unused keys once on attachment; never leave another app's actions visible.
           for key in 0..<15 {
@@ -183,13 +193,18 @@ final class StreamDeckHID: @unchecked Sendable {
     IOHIDDeviceUnscheduleFromRunLoop(
       device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
     // Restore the device logo only while we still own the exclusive connection.
-    var reset: [UInt8] = [0x03, 0x02] + Array(repeating: 0, count: 30)
-    _ = IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, 0x03, &reset, reset.count)
+    _ = restoreLogo(on: device)
     IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
     mailbox.withLock { $0.generation &+= 1 }
     self.device = nil
     pressState = StreamDeckPressState()
     displayed = nil
+  }
+
+  private func restoreLogo(on device: IOHIDDevice) -> Bool {
+    var reset: [UInt8] = [0x03, 0x02] + Array(repeating: 0, count: 30)
+    return IOHIDDeviceSetReport(device, kIOHIDReportTypeFeature, 0x03, &reset, reset.count)
+      == kIOReturnSuccess
   }
 
   private func received(_ bytes: UnsafeMutablePointer<UInt8>, count: Int) {

@@ -46,6 +46,9 @@ A bounded latest-frame mailbox coalesces changes; unchanged images are cached an
 not resent. UI state is sampled every 100 ms, and rechecked on MainActor at press
 execution. Runtime commands continue to use the existing Workspace command queue.
 On a clean disconnect/shutdown the device logo is restored on the worker thread.
+The logo is also restored when there is no eligible target or its Workspace
+begins closing, while the application keeps the device connection. Selecting
+another eligible Workspace redraws the complete key layout.
 Shutdown waits for the worker to restore the logo, close the device, and tear
 down discovery before returning. Removal notifications are registered with the
 HID manager so unplugged devices are removed from its enumeration set.

@@ -815,6 +815,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     recordingSession.updateMixPreferences()
   }
 
+  public var isClosing: Bool { closeRequestTask != nil }
+
   public var streamDeckControls: WorkspaceOutputControls {
     .init(
       stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil,
