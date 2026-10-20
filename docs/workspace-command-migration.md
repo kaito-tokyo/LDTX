@@ -24,10 +24,10 @@ The subsequent local UI runs verified saved reconstruction, actual recorded
 Program content switching, GCNeo video/audio assignment and reassignment,
 recording/finalization, active-output assignment/Close restrictions, save-review
 cancellation and independent Workspace closure. Starting Stop/Close used the
-bounded Coordinator-preparation gate described below; clicks inside the native
-output service's own short startup subphase were not observed through UI. A
-subsequent hostless test now exercises native dual-output startup interrupted by
-Stop, as described in the follow-up below. The initial
+bounded Coordinator-preparation gate described below. A subsequent UI run also
+verified Stop and Close inside native startup using the bounded native gate
+recorded in the final section. A hostless test separately exercises native
+dual-output startup interrupted by Stop. The initial
 FileProvider/iCloud response stall remains unexplained; its absence under changed
 local conditions does not establish an OS defect or a repaired product bug.
 
@@ -424,3 +424,44 @@ claiming a fix for that incident. The user subsequently confirmed that the
 ordinary app does not reproduce the stall. The incident therefore remains an
 unexplained observation from the isolated test copy, with no confirmed
 ordinary-app defect and no speculative persistence workaround applied.
+
+## Native-start Stop and Close UI verification
+
+After commit `116c4d31`, the user requested completion of the remaining Stop/Close
+UI checks. The working tree was clean at the start. A separate local app copy,
+`/tmp/LDTX-v027-Native-Start-QA.app`, used the existing isolated test Bundle ID
+and local Local-A fixture; its copied iCloud declaration was removed. The
+production app at PID 93581 was left running and unchanged throughout.
+
+Temporary instrumentation awaited a hold file in the native output pipeline
+after successful mixer startup, immediately before activation. The actual
+ActiveProgramOutputSession lifecycle and WorkspaceV4RecordingSession state were
+both starting. This moves the controlled window inside native startup, beyond
+the Coordinator preparation phase tested previously. Waiting was asynchronous,
+bounded to 45 seconds, and explicitly released after approximately 11 and 13
+seconds; neither run timed out. The local fixture recorded Landscape output
+from synthetic content, without a physical capture device or external stream.
+
+The actual UI buttons were operated through accessibility:
+
+- Stop during native startup: Start was disabled and Stop enabled. Clicking Stop
+  logged `stop_requested ui=starting native=starting`; the window remained in
+  starting until release. Logs then showed start_completed, stop_operation_started
+  and stop_completed, in order. UI returned to Start enabled and Stop disabled.
+- Close during a separate native startup: clicking the native close button logged
+  `close_validation ui=starting native=starting`. The alert required Stop first
+  and included Force Quit/data-loss guidance. Dismissing it preserved the same
+  Workspace URL and starting UI. Releasing the hold completed recording normally.
+  Stop then returned idle; a new Close completed cleanup once and closed the
+  Workspace, returning to the Open panel.
+
+The test app subsequently exited normally. Process inspection showed only the
+unchanged production app PID 93581. Source backups were restored byte-for-byte
+immediately after the instrumented build, before launching the copy. No QA delay
+or hook remains in Sources or Tests. Evidence and the temporary build script are
+in `/tmp/ldtx-v027-native-start-qa/`, including `events.log`, `native-*.log`,
+source backups and the instrumented build log. This closes the remaining native
+startup UI verification item for this fixture; it is not an exhaustive test of
+every physical device or streaming failure mode. The subsequent ordinary unsigned
+Debug rebuild succeeded (`normal-build.log`), restoring the ordinary build
+products as well. The only retained repository change is this verification record.
