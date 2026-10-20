@@ -3,18 +3,26 @@
 
 /// Stream Deck MK.2 input report state.
 struct StreamDeckPressState {
-  private var previous: [Bool]?
+  private var previous = [Bool](repeating: false, count: 15)
   private var startPauseArmed = false
 
-  mutating func receive(_ bytes: [UInt8]) -> [Int] {
+  private static func decode(_ bytes: [UInt8]) -> [Bool]? {
     guard bytes.count >= 19,
       bytes[0] == 0x01, bytes[1] == 0x00, bytes[2] == 15, bytes[3] == 0,
       bytes[4..<19].allSatisfy({ $0 == 0 || $0 == 1 })
-    else { return [] }
-    let pressed = (0..<15).map { bytes[$0 + 4] == 1 }
+    else { return nil }
+    return (0..<15).map { bytes[$0 + 4] == 1 }
+  }
+
+  mutating func seed(_ bytes: [UInt8]) {
+    guard let pressed = Self.decode(bytes) else { return }
+    previous = pressed
+    startPauseArmed = false
+  }
+
+  mutating func receive(_ bytes: [UInt8]) -> [Int] {
+    guard let pressed = Self.decode(bytes) else { return [] }
     defer { previous = pressed }
-    // Treat the first valid report as a baseline; a held key never starts output.
-    guard let previous else { return [] }
     var edges: [Int] = []
     for key in 0..<3 {
       if key == 1 {

@@ -32,8 +32,10 @@ One application-owned worker discovers devices once per second. Zero or multiple
 matching devices disable the connection. Device open uses IOKit's exclusive seize
 option; a busy or denied device is left alone. No permission requests, security
 changes, or other-process termination are performed. The connection retries after
-unplug/replug or a busy owner releases it. Initial held keys must be released;
-the first valid input report establishes a baseline. Malformed reports are ignored.
+unplug/replug or a busy owner releases it. When an initial key-state snapshot is
+available through GET_REPORT, held keys must be released before use. Otherwise,
+incoming input reports are handled immediately without discarding the first press.
+Malformed reports are ignored.
 Stop and Take Screenshot trigger on key down. Start/Pause triggers only on key up
 after a key down observed on the current connection. Repeated reports do not
 repeat commands, and there is no timed debounce. During an admitted hardware action other

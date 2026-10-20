@@ -163,7 +163,7 @@ final class StreamDeckHID: @unchecked Sendable {
     if IOHIDDeviceGetReport(candidate, kIOHIDReportTypeInput, 0x01, &initial, &length)
       == kIOReturnSuccess
     {
-      _ = pressState.receive(Array(initial.prefix(length)))
+      pressState.seed(Array(initial.prefix(length)))
     }
     IOHIDDeviceRegisterInputReportCallback(
       candidate, report, 1024,

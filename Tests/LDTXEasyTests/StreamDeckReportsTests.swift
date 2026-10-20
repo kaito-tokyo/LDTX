@@ -13,6 +13,7 @@ import Testing
 
   @Test func heldKeysRepeatedReportsAndMalformedReports() {
     var state = StreamDeckPressState()
+    state.seed(report([1]))
     #expect(state.receive(report([1])).isEmpty)
     #expect(state.receive(report([1])).isEmpty)
     #expect(state.receive(report()).isEmpty)
@@ -24,6 +25,7 @@ import Testing
     #expect(state.receive(report()) == [1])
     #expect(state.receive(report()).isEmpty)
     state = StreamDeckPressState()
+    state.seed(report([0]))
     #expect(state.receive(report([0])).isEmpty)
   }
 
@@ -48,6 +50,7 @@ import Testing
   @Test func malformedReportsPreserveHeldState() {
     for index in [0, 1, 2, 3, 4, 18] {
       var state = StreamDeckPressState()
+      state.seed(report([0]))
       #expect(state.receive(report([0])).isEmpty)
       var malformed = report()
       malformed[index] = 0xff
@@ -59,15 +62,21 @@ import Testing
     }
   }
 
-  @Test func malformedReportDoesNotEstablishBaseline() {
+  @Test func malformedInitialSnapshotDoesNotConsumeFirstPress() {
     var state = StreamDeckPressState()
     var malformed = report()
     malformed[2] = 14
-    #expect(state.receive(malformed).isEmpty)
-    #expect(state.receive(report([1])).isEmpty)
-    #expect(state.receive(report()).isEmpty)
+    state.seed(malformed)
     #expect(state.receive(report([1])).isEmpty)
     #expect(state.receive(report()) == [1])
+  }
+
+  @Test(arguments: 0..<3)
+  func firstPressWorksWithoutInitialSnapshot(key: Int) {
+    var state = StreamDeckPressState()
+    #expect(state.receive(report([key])) == (key == 1 ? [] : [key]))
+    #expect(state.receive(report([key])).isEmpty)
+    #expect(state.receive(report()) == (key == 1 ? [key] : []))
   }
 
   @Test func startPauseFiresOnlyOnKeyUp() {
