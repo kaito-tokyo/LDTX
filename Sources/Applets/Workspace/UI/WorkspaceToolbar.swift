@@ -27,6 +27,10 @@ public struct WorkspaceToolbar: ToolbarContent {
     self.runInference = runInference
   }
 
+  private var controls: WorkspaceOutputControls {
+    .init(stateService: stateService, hasSavedURL: document?.fileURL != nil)
+  }
+
   public var body: some ToolbarContent {
     ToolbarItem(id: "workspace.toggleSidebar", placement: .navigation) {
       Button("Toggle Sidebar", systemImage: "sidebar.left") {
@@ -38,23 +42,19 @@ public struct WorkspaceToolbar: ToolbarContent {
       Button("Stop Output", systemImage: "stop.fill") {
         Task { await runtimeActions()?.stopOutput() }
       }
-      .disabled(!stateService.recordingState.canStop || stateService.isClosed)
+      .disabled(!controls.stopEnabled)
       .accessibilityIdentifier("workspace.stopOutput")
     }
     ToolbarItem(id: "workspace.startPauseOutput", placement: .navigation) {
       Button(
-        stateService.recordingState == .recording ? "Pause Output" : "Start Output",
-        systemImage: stateService.recordingState == .recording ? "pause.fill" : "play.fill"
+        controls.showsPause ? "Pause Output" : "Start Output",
+        systemImage: controls.showsPause ? "pause.fill" : "play.fill"
       ) {
         Task {
           await runtimeActions()?.toggleOutput(stateService: stateService, document: document)
         }
       }
-      .disabled(
-        stateService.isClosed
-          || !((stateService.recordingState.canStart && document?.fileURL != nil)
-            || stateService.recordingState == .recording)
-      )
+      .disabled(!controls.startPauseEnabled)
       .accessibilityIdentifier("workspace.startPauseOutput")
     }
     ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) {
@@ -87,7 +87,9 @@ private struct WorkspaceScreenshotButton: View {
     Button("Capture Screenshot(s)", systemImage: "camera") {
       result = WorkspaceScreenshotResult.capture(using: runtimeActions())
     }
-    .disabled(stateService.isClosed)
+    .disabled(
+      !WorkspaceOutputControls(stateService: stateService, hasSavedURL: false).screenshotEnabled
+    )
     .accessibilityIdentifier("workspace.captureScreenshots")
     .popover(item: $result) {
       ScreenshotResultView(title: $0.title, message: $0.message, screenshots: $0.screenshots)

@@ -20,6 +20,7 @@ public struct WorkspaceDocumentContent: View {
     }
     .frame(minWidth: document.stateService.minimumWindowWidth, minHeight: 400)
     .focusedSceneValue(\.workspaceUndoDisabled, document.stateService.isOutputActive)
+    .focusedSceneValue(\.streamDeckWorkspace, connection?.runtimeCoordinator)
     .task {
       guard !document.stateService.isClosed else { return }
       guard let appletDelegate else {
