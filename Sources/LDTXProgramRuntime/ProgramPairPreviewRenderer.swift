@@ -22,6 +22,7 @@ public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibi
   }
 
   private let lock = NSLock()
+  private let drawLock = NSLock()
   private var configuration: Configuration
   private var isRunning = false
   private let landscapeRuntime: ProgramRuntime
@@ -102,7 +103,24 @@ public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibi
 
   public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
+  /// Called after stop: no later draw can submit work beyond this GPU barrier.
+  @MainActor public func drainDrawing() async {
+    await withCheckedContinuation { continuation in
+      drawLock.withLock {
+        guard let command = commandQueue?.makeCommandBuffer() else {
+          continuation.resume()
+          return
+        }
+        command.addCompletedHandler { _ in continuation.resume() }
+        command.commit()
+      }
+    }
+  }
+
   public func draw(in view: MTKView) {
+    drawLock.lock()
+    defer { drawLock.unlock() }
+    guard lock.withLock({ isRunning }) else { return }
     guard let drawable = view.currentDrawable,
       let command = commandQueue?.makeCommandBuffer()
     else { return }

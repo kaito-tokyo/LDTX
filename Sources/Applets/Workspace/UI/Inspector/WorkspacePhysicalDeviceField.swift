@@ -71,12 +71,14 @@ struct WorkspacePhysicalDeviceField: View {
           Button("Choose") {
             do {
               try applySelection(draft)
-              runtimeActions()?.synchronizeCaptureInputs(
-                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-              ) { _ in }
-              runtimeActions()?.synchronizeAudioMonitor()
+              try runtimeActions()?.updateDeviceAssignments(
+                availableCameraIDs: Set(deviceRegistry.cameras.map(\.id)))
               isShowingPicker = false
-            } catch { reportError(error) }
+            } catch {
+              reportError(
+                WorkspaceCommandFailureNotification.stalledCommands([.updateDeviceAssignment])[0]
+                  .error(causedBy: error as NSError))
+            }
           }
           .disabled(!isEditable || stateService.isOutputActive)
           .keyboardShortcut(.defaultAction)

@@ -55,10 +55,24 @@ public final class WorkspaceApplication: NSApplication {
   }
 
   public override func terminate(_ sender: Any?) {
+    for window in windows {
+      if let gate = window.delegate as? WorkspaceDocumentCloseCoordinator,
+        !gate.checkCloseAdmission()
+      {
+        return
+      }
+    }
     documentTermination.request { [weak self] in self?.terminateAfterSaving(sender) }
   }
 
   private func terminateAfterSaving(_ sender: Any?) {
+    for window in windows {
+      if let gate = window.delegate as? WorkspaceDocumentCloseCoordinator,
+        !gate.checkCloseAdmission()
+      {
+        return
+      }
+    }
     super.terminate(sender)
   }
 }

@@ -27,6 +27,7 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
   private let renderer: MetalClockOverlayRenderer
   private var entriesByStepName: [String: Entry] = [:]
   private var textureStore = ProgramOverlayTextureStore()
+  private let draining = DispatchGroup()
 
   init(
     device: MTLDevice,
@@ -129,7 +130,7 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
 
     let removedStepNames = Set(entriesByStepName.keys).subtracting(activeStepNames)
     for stepName in removedStepNames {
-      entriesByStepName.removeValue(forKey: stepName)?.runtime.deactivate()
+      if let runtime = entriesByStepName.removeValue(forKey: stepName)?.runtime { retire(runtime) }
     }
     textureStore.retain(activeStepNames)
   }
@@ -138,12 +139,20 @@ final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
     textureStore.snapshot()[stepName]
   }
 
-  func deactivateAll() {
+  func deactivateAll(completionHandler: @escaping @Sendable () -> Void = {}) {
     textureStore.retain([])
     let entries = entriesByStepName.values
     entriesByStepName.removeAll()
     for entry in entries {
-      entry.runtime.deactivate()
+      retire(entry.runtime)
+    }
+    draining.notify(queue: .global(qos: .utility), execute: completionHandler)
+  }
+
+  private func retire(_ runtime: ClockOverlayRuntime) {
+    draining.enter()
+    runtime.deactivateAndDrain { [draining, runtime] in
+      withExtendedLifetime(runtime) { draining.leave() }
     }
   }
 

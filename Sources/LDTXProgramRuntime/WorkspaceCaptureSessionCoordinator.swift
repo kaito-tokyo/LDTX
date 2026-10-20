@@ -12,6 +12,16 @@ import OSLog
 public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
   public let audioEngine: WorkspaceAudioEngine
 
+  public struct SynchronizationResult: Sendable {
+    public let unavailableCameraIDs: Set<String>
+    public let failures: [String: NSError]
+    public let operationError: NSError?
+
+    public var unavailableOrFailedCameraIDs: Set<String> {
+      unavailableCameraIDs.union(failures.keys)
+    }
+  }
+
   public struct AudioSubscription: Hashable, Sendable {
     fileprivate let id: UUID
     fileprivate let deviceID: String
@@ -345,8 +355,28 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     frameRate: Int,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
+    synchronizePhysicalInputCapturesReportingResult(
+      videoCameraIDs: videoCameraIDs, audioDeviceIDs: audioDeviceIDs,
+      availableCameraIDs: availableCameraIDs, canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight, frameRate: frameRate
+    ) { result in
+      completionHandler(
+        result.operationError == nil ? result.unavailableOrFailedCameraIDs : videoCameraIDs)
+    }
+  }
+
+  public func synchronizePhysicalInputCapturesReportingResult(
+    videoCameraIDs: Set<String>, audioDeviceIDs: Set<String>, availableCameraIDs: Set<String>,
+    canvasWidth: Int, canvasHeight: Int, frameRate: Int,
+    completionHandler: @escaping @Sendable (SynchronizationResult) -> Void
+  ) {
     guard stateLock.withLock({ !isStopping }) else {
-      completionHandler(videoCameraIDs)
+      let error = CancellationError() as NSError
+      completionHandler(
+        .init(
+          unavailableCameraIDs: [],
+          failures: Dictionary(uniqueKeysWithValues: videoCameraIDs.map { ($0, error) }),
+          operationError: error))
       return
     }
     audioEngine.synchronizePhysicalInputs(audioDeviceIDs)
@@ -370,11 +400,27 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         nextRequests: nextRequests
       )
     }
-    synchronizeCaptures(
-      for: Array(cameraIDs),
-      failedCameraIDs: unavailableCameraIDs,
-      completionHandler: completionHandler
-    )
+    synchronizeCaptureResults(for: Array(cameraIDs), failures: [:]) { failures in
+      completionHandler(
+        .init(unavailableCameraIDs: unavailableCameraIDs, failures: failures, operationError: nil))
+    }
+  }
+
+  private func synchronizeCaptureResults(
+    for cameraIDs: [String], failures: [String: NSError],
+    completionHandler: @escaping @Sendable ([String: NSError]) -> Void
+  ) {
+    guard let cameraID = cameraIDs.first else {
+      completionHandler(failures)
+      return
+    }
+    synchronizeCapture(cameraID: cameraID) { [self] result in
+      var failures = failures
+      if case .failure(let error) = result { failures[cameraID] = error as NSError }
+      synchronizeCaptureResults(
+        for: Array(cameraIDs.dropFirst()), failures: failures,
+        completionHandler: completionHandler)
+    }
   }
 
   public func releaseInputDeviceCaptures(

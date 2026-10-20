@@ -83,6 +83,25 @@ public final class WorkspaceWindowRuntime {
     componentFrameRenderer?.retainComponents([])
   }
 
+  public func shutdownAndWait() async {
+    isShutDown = true
+    for runtime in [landscapeRuntime, portraitRuntime].compactMap({ $0 }) {
+      await withCheckedContinuation { continuation in
+        runtime.drainRendering { continuation.resume() }
+      }
+    }
+    for overlay in [landscapeOverlays, portraitOverlays] {
+      await withCheckedContinuation { continuation in
+        overlay.stop { continuation.resume() }
+      }
+    }
+    if let componentFrameRenderer {
+      await withCheckedContinuation { continuation in
+        componentFrameRenderer.stopAndDrain { continuation.resume() }
+      }
+    }
+  }
+
   private func observeVariableChanges() {
     guard !isShutDown else { return }
     withObservationTracking {
@@ -97,7 +116,7 @@ public final class WorkspaceWindowRuntime {
   }
 
   private func refreshOverlayContent() {
-    guard let programID = selectedProgramInternalID else { return }
+    guard !isShutDown, let programID = selectedProgramInternalID else { return }
     _ = try? runtimeProjection(programInternalID: programID, target: .landscape)
     _ = try? runtimeProjection(programInternalID: programID, target: .portrait)
   }
@@ -155,7 +174,8 @@ public final class WorkspaceWindowRuntime {
   }
 
   public func removeProgram(
-    internalID: Int64, replace: ((WorkspaceV4Bundle) throws -> Void)? = nil
+    internalID: Int64, applyRuntimeChanges: Bool = true,
+    replace: ((WorkspaceV4Bundle) throws -> Void)? = nil
   ) throws {
     var workspace = persistenceCoordinator.workspace
     workspace.definition.programs.removeAll { $0.internalID == internalID }
@@ -168,6 +188,7 @@ public final class WorkspaceWindowRuntime {
     workspace.preferences.landscapeProgramPreferences.removeValue(forKey: internalID)
     workspace.preferences.portraitProgramPreferences.removeValue(forKey: internalID)
     if let replace { try replace(workspace) } else { try replaceWorkspace(workspace) }
+    guard applyRuntimeChanges else { return }
     if selectedProgramInternalID == internalID {
       selectProgramHandler(workspace.definition.programs.first?.internalID)
     }
@@ -197,6 +218,16 @@ public final class WorkspaceWindowRuntime {
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
+    synchronizeCaptureInputsReportingResult(availableCameraIDs: availableCameraIDs) {
+      completionHandler($0.unavailableOrFailedCameraIDs)
+    }
+  }
+
+  public func synchronizeCaptureInputsReportingResult(
+    availableCameraIDs: Set<String>,
+    completionHandler:
+      @escaping @Sendable (WorkspaceCaptureSessionCoordinator.SynchronizationResult) -> Void
+  ) {
     var videoCameraIDs: Set<String> = []
     var audioDeviceIDs: Set<String> = []
     let assignments = physicalDeviceIDsProvider()
@@ -212,7 +243,7 @@ public final class WorkspaceWindowRuntime {
       audioDeviceIDs.insert(id)
     }
     let canvas = workspace.definition.canvasConfiguration
-    captureSessionCoordinator.synchronizePhysicalInputCaptures(
+    captureSessionCoordinator.synchronizePhysicalInputCapturesReportingResult(
       videoCameraIDs: videoCameraIDs,
       audioDeviceIDs: audioDeviceIDs,
       availableCameraIDs: availableCameraIDs,

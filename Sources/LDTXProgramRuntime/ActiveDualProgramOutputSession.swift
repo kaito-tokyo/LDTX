@@ -87,8 +87,11 @@ public final class ActiveDualProgramOutputSession {
     }
     var landscapeResult: Result<Void, any Error>?
     var portraitResult: Result<Void, any Error>?
+    var didComplete = false
     func completeIfReady() {
-      guard let landscapeResult, let portraitResult else { return }
+      guard !didComplete, let landscapeResult, let portraitResult else { return }
+      // A child can reject startup synchronously, before the final readiness check.
+      didComplete = true
       switch (landscapeResult, portraitResult) {
       case (.success, .success): completionHandler(.success(()))
       case (.failure(let error), _), (_, .failure(let error)):
@@ -174,6 +177,23 @@ public final class ActiveDualProgramOutputSession {
 
   public func updateProgramPreferences(_ preferences: ProgramPreferences) {
     landscape.updateProgramPreferences(preferences)
+  }
+
+  public func reconfigureAudioAndWait(
+    landscapePreferences: ProgramPreferences, portraitPreferences: ProgramPreferences,
+    audioDeviceIDsByInputKey: [String: String]
+  ) async throws {
+    self.portraitPreferences = portraitPreferences
+    self.portraitAudioDeviceIDsByInputKey = audioDeviceIDsByInputKey
+    if runsLandscape {
+      try await landscape.reconfigureAudioAndWait(
+        programPreferences: landscapePreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey
+      )
+    }
+    if runsPortrait {
+      try await portrait.reconfigureAudioAndWait(
+        programPreferences: portraitPreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey)
+    }
   }
 
   public func updatePortraitProgramPreferences(_ preferences: ProgramPreferences) {

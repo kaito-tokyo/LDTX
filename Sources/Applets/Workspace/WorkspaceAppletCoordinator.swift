@@ -35,6 +35,13 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   public let persistenceCoordinator: WorkspaceV4PersistenceCoordinator
   public let appletData: WorkspaceAppletData
   private let transientURL = URL(string: "ldtx-untitled://workspace/\(UUID())")!
+  private lazy var closeCoordinator = WorkspaceDocumentCloseCoordinator(
+    validateClose: { [weak self] in try self?.validateCloseAdmission() },
+    closeWorkspace: { [weak self] in
+      guard let self else { return false }
+      if case .succeeded = await self.closeWorkspace() { return true }
+      return false
+    }, reportError: { [weak self] in self?.reportError($0) })
   private var closeObserver: NSObjectProtocol?
   private weak var observedWindow: NSWindow?
   private var outputObservationTask: Task<Void, Never>?
@@ -47,7 +54,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   private let recordingSession: WorkspaceV4RecordingSession
   private let audioCoordinator: WorkspaceAudioCoordinator
   private let visionFeature: WorkspaceV4VisionFeature
-  private var shutdownTask: Task<Void, Never>?
+  private var closeRequestTask: Task<WorkspaceCommandOutcome, Never>?
   public private(set) var shutdownFailureMessage: String?
   private var deviceAssignmentsObservationTask: Task<Void, Never>?
   private var preferencesObservationTask: Task<Void, Never>?
@@ -56,8 +63,34 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   private var monitorFailureStatus: Int32?
   private var captureFailureIDs: Set<String> = []
 
+  // Resource-operation migration uses this one per-Workspace command queue.
+  // Each operation awaits its own resource completion before releasing admission.
+  lazy var transactionalCommands = WorkspaceCommandQueue(
+    label: "tokyo.kaito.ldtx.workspace.commands"
+  ) { [weak self] notifications, cause in
+    if let error = WorkspaceCommandFailureNotification.aggregatedError(
+      notifications, causedBy: cause)
+    {
+      guard let self else { return }
+      if stateService.isClosed {
+        shutdownFailureMessage = [
+          shutdownFailureMessage, error.localizedDescription,
+          error.localizedFailureReason, error.localizedRecoverySuggestion,
+        ]
+        .compactMap { $0 }.joined(separator: "\n\n")
+      } else {
+        reportError(error)
+      }
+    }
+  }
+
+  private func commandFailure(_ command: WorkspaceTransactionalCommand, _ error: Error) -> NSError {
+    return WorkspaceCommandFailureNotification.stalledCommands([command])[0]
+      .error(causedBy: error as NSError)
+  }
+
   func reportError(_ error: Error) {
-    guard !stateService.isClosed, shutdownTask == nil else { return }
+    guard !stateService.isClosed else { return }
     stateService.operationErrors.append(error as NSError)
   }
 
@@ -70,7 +103,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public func runInference() {
-    guard !stateService.isClosed, inferenceTask == nil else { return }
+    guard closeRequestTask == nil, !stateService.isClosed, inferenceTask == nil else { return }
     inferenceTask = Task { [self] in
       defer { inferenceTask = nil }
       await inferSelectedVision(
@@ -80,7 +113,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   func updateMonitorFailure(_ status: Int32?) {
-    guard !stateService.isClosed, shutdownTask == nil else { return }
+    guard !stateService.isClosed else { return }
     defer { monitorFailureStatus = status }
     guard let status, status != monitorFailureStatus else { return }
     reportError(
@@ -94,11 +127,11 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         ]))
   }
 
-  func updateCaptureFailures(_ failures: Set<String>) {
-    guard !stateService.isClosed, shutdownTask == nil else { return }
+  func updateCaptureFailures(_ failures: Set<String>, reportErrors: Bool = true) {
+    guard !stateService.isClosed else { return }
     let newlyFailed = failures.subtracting(captureFailureIDs)
     captureFailureIDs = failures
-    guard !newlyFailed.isEmpty else { return }
+    guard reportErrors, !newlyFailed.isEmpty else { return }
     let descriptions = newlyFailed.sorted().map { uid in
       let names = stateService.workspaceDefinition.videoComponents.compactMap {
         component -> String? in
@@ -169,7 +202,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       landscapeRuntime: landscapeRuntime, portraitRuntime: portraitRuntime, metalView: metalView,
       captureSessionCoordinator: captureSessionCoordinator,
       onShutdown: onShutdown)
-    if let adoptionError { reportError(adoptionError) }
+    if let adoptionError { reportError(commandFailure(.reconstructRuntime, adoptionError)) }
     if let url = document.fileURL { adoptDocumentURL(url) }
     let changes = Observations { [weak document, weak stateService] in
       (
@@ -257,20 +290,31 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     pairedPreview.attachWindow = { [weak self] window in
       self?.attachWindow(window)
       guard let self else { return nil }
-      return WorkspaceDocumentActions(stateService: self.stateService)
+      return WorkspaceDocumentActions(
+        stateService: self.stateService, window: window,
+        onSaveSucceeded: { [weak self] in
+          Task { await self?.refreshPersistedWorkspace(userInitiated: true) }
+        })
     }
     appletData.registerTransientState(at: transientURL)
     if stateService.localStateURL == nil { stateService.localStateURL = transientURL }
     let outputChanges = Observations { stateService.isOutputActive }
     outputObservationTask = Task { @MainActor [weak self] in
-      for await _ in outputChanges {
+      for await isOutputActive in outputChanges {
         guard let self, !Task.isCancelled else { return }
         outputStateDidChange?()
         visionFeature.outputStateDidChange()
+        // Re-read current assignments and monitor output after leaving output.
+        // Active-output notifications cannot admit resource work; this submits
+        // fresh work without reopening Stall or replaying discarded commands.
+        if !isOutputActive { synchronizeDeviceAssignments() }
       }
     }
 
     let engine = captureSessionCoordinator.audioEngine
+    engine.setMonitorDeviceChangeHandler { [weak self] in
+      Task { @MainActor [weak self] in self?.synchronizeDeviceAssignments() }
+    }
     let engineID = engine.statusIdentifier
     audioStatusObserver = NotificationCenter.default.addObserver(
       forName: WorkspaceAudioEngine.statusDidChange, object: nil, queue: nil
@@ -282,12 +326,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
     updateMonitorFailure(engine.currentFailures["Monitor"])
     previewRenderer.start()
-    synchronizeAudioMonitor()
+    synchronizeDeviceAssignments()
 
     let assignmentChanges = Observations { appletData.physicalDeviceIDsByResourceInternalID }
     deviceAssignmentsObservationTask = Task { @MainActor [weak self] in
       for await _ in assignmentChanges {
-        guard !Task.isCancelled, let self, shutdownTask == nil else { return }
+        guard !Task.isCancelled, let self else { return }
         synchronizeDeviceAssignments()
       }
     }
@@ -303,7 +347,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         }
         self.updateProgramRuntimes()
         self.updateMixPreferences()
-        self.synchronizeAudioMonitor()
+        self.updateAudioMonitorValues()
       }
     }
 
@@ -312,6 +356,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       self.stateService.recordingState = state
       self.stateService.isOutputActive = state.isOutputActive
       self.stateService.isLocalRecording = self.recordingSession.isLocalRecording
+      self.visionFeature.outputStateDidChange()
       self.stateService.outputFailureMessage = {
         guard case .failed(let message) = state else { return nil }
         return message
@@ -340,34 +385,78 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   private var adoptedContentModificationDate: Date?
 
   // Runtime adoption is independent of Document's in-memory confirmation.
-  func refreshPersistedWorkspace() async {
+  func refreshPersistedWorkspace(userInitiated: Bool = false) async {
     guard let url = workspaceDocument?.fileURL else { return }
-    await refreshPersistedWorkspace(at: url) { [weak self] in
+    await refreshPersistedWorkspace(at: url, userInitiated: userInitiated) { [weak self] in
       self?.workspaceDocument?.fileURL == url
     }
   }
 
-  func refreshPersistedWorkspace(at url: URL, isCurrent: () -> Bool) async {
-    guard shutdownTask == nil, !stateService.isOutputActive else { return }
+  func refreshPersistedWorkspace(
+    at url: URL, userInitiated: Bool = false,
+    isCurrent: @escaping @MainActor () -> Bool
+  ) async {
+    guard closeRequestTask == nil, !stateService.isOutputActive,
+      !transactionalCommands.contains(.startOutputSession)
+    else { return }
     do {
       let workspace = try await Self.readPersistedWorkspace(at: url)
-      guard shutdownTask == nil, !stateService.isOutputActive,
+      guard !stateService.isOutputActive,
         isCurrent()
       else { return }
       let modificationDate = workspaceDocument?.lastContentModificationDate
       guard
-        workspace != persistenceCoordinator.persistedWorkspace
+        userInitiated || workspace != persistenceCoordinator.persistedWorkspace
           || modificationDate != adoptedContentModificationDate
       else { return }
-      try persistenceCoordinator.adoptRuntimeWorkspace(workspace)
-      adoptedContentModificationDate = modificationDate
-      (workspaceDocument as? WorkspaceDocument)?.confirmPersistedWorkspace(workspace)
-      confirmedContentsDidChange()
+      try WorkspaceV4PersistenceCoordinator.validateRuntimeWorkspace(workspace)
+      if transactionalCommands.isStalled {
+        guard userInitiated else { return }
+        await transactionalCommands.resumeForNewRequests()
+      }
+      _ = await transactionalCommands.submit(
+        .reconstructRuntime,
+        validate: { [self] in
+          guard closeRequestTask == nil, !stateService.isClosed, !stateService.isOutputActive,
+            isCurrent()
+          else {
+            throw NSError(
+              domain: "WorkspaceRuntime", code: 1,
+              userInfo: [
+                NSLocalizedDescriptionKey:
+                  "Runtime reconstruction is unavailable during output or closure."
+              ])
+          }
+          try WorkspaceV4PersistenceCoordinator.validateRuntimeWorkspace(workspace)
+        },
+        operation: { [self] in
+          guard !stateService.isOutputActive, isCurrent() else {
+            throw NSError(
+              domain: "WorkspaceRuntime", code: 1,
+              userInfo: [NSLocalizedDescriptionKey: "The saved Workspace can no longer be applied."]
+            )
+          }
+          guard
+            userInitiated || workspace != persistenceCoordinator.persistedWorkspace
+              || modificationDate != adoptedContentModificationDate
+          else { return }
+          try persistenceCoordinator.adoptRuntimeWorkspace(workspace)
+          adoptedContentModificationDate = modificationDate
+          (workspaceDocument as? WorkspaceDocument)?.confirmPersistedWorkspace(workspace)
+          synchronizeVision()
+          let cameraIDs = Set(CaptureSessionManager().availableCameras().map(\.id))
+          var deviceError: Error?
+          do { try await applyDeviceAssignment(availableCameraIDs: cameraIDs) } catch {
+            deviceError = error
+          }
+          await visionFeature.prepareForOutput()
+          if let deviceError { throw deviceError }
+        })
     } catch {
       // Save As can replace an autosaved URL while its canonical read is in flight.
       // Discard failures from that obsolete location just like successful reads.
       guard isCurrent() else { return }
-      reportError(error)
+      reportError(commandFailure(.reconstructRuntime, error))
     }
   }
 
@@ -398,6 +487,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
 
   func attachWindow(_ window: NSWindow?) {
     self.window = window
+    closeCoordinator.attach(to: window)
     guard let window, observedWindow !== window else { return }
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     observedWindow = window
@@ -420,28 +510,58 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public func removeProgram(internalID: Int64, undoManager: UndoManager? = nil) throws {
-    guard shutdownTask == nil, !stateService.isOutputActive else {
+    guard !stateService.isClosed, closeRequestTask == nil, !stateService.isOutputActive else {
       throw NSError(
         domain: "WorkspaceProgramDeletion", code: 1,
         userInfo: [
           NSLocalizedDescriptionKey: "Programs cannot be deleted during output or shutdown."
         ])
     }
-    try windowRuntime.removeProgram(internalID: internalID) { workspace in
+    try windowRuntime.removeProgram(internalID: internalID, applyRuntimeChanges: false) {
+      workspace in
       self.stateService.replaceEditingWorkspace(workspace, undoManager: undoManager)
     }
-    synchronizeDeviceAssignments()
-    synchronizeVision()
-    synchronizeAudioMonitor()
   }
 
-  public func selectProgram(internalID: Int64) throws {
+  @discardableResult
+  public func selectProgram(internalID: Int64) throws -> Task<WorkspaceCommandQueue.Outcome, Never>
+  {
+    do {
+      _ = try validatedProgramSelectionURL(internalID: internalID)
+    } catch {
+      throw commandFailure(.switchProgram, error)
+    }
+    return Task { @MainActor [self] in
+      // A new explicit user request can reopen admission, but never reuses any
+      // item invalidated by the previous Stall.
+      if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+      return await transactionalCommands.submit(
+        .switchProgram,
+        validate: { [self] in _ = try validatedProgramSelectionURL(internalID: internalID) },
+        operation: { [self] in try await applyProgramSelection(internalID: internalID) })
+    }
+  }
+
+  public var programSelectionState: WorkspaceCommandState<Int64?> {
+    let selected = stateService.localStateURL.flatMap {
+      appletData.state(for: $0).selectedProgramInternalID
+    }
+    let programs = stateService.workspaceDefinition.programs
+    return .init(
+      value: (programs.first { $0.internalID == selected } ?? programs.first)?.internalID,
+      retryNumber: transactionalCommands.retryNumber)
+  }
+
+  private func validatedProgramSelectionURL(internalID: Int64, admitted: Bool = false) throws -> URL
+  {
     guard let document = workspaceDocument else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The Workspace document is unavailable."])
     }
-    guard shutdownTask == nil, recordingSession.state.canSelectProgram else {
+    guard admitted || closeRequestTask == nil, !stateService.isClosed,
+      recordingSession.state.canSelectProgram
+    else {
       throw NSError(
         domain: "WorkspaceProgramSelection", code: 1,
         userInfo: [
@@ -456,32 +576,108 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         domain: "WorkspaceProgramSelection", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program is unavailable."])
     }
+    if persistenceCoordinator.hasPersistedWorkspace,
+      windowRuntime.definition.programs.contains(where: { $0.internalID == internalID })
+    {
+      for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+        let canvas = try WorkspaceProgramCanvasSnapshot(
+          definition: windowRuntime.definition,
+          preferences: windowRuntime.preferences, programInternalID: internalID, target: target)
+        _ = try WorkspaceV4RenderGraph(
+          definition: windowRuntime.definition, canvas: canvas,
+          variableStore: windowRuntime.variableStore)
+      }
+    }
+    return url
+  }
+
+  private func applyProgramSelection(internalID: Int64) async throws {
+    let url = try validatedProgramSelectionURL(internalID: internalID, admitted: true)
     if !persistenceCoordinator.hasPersistedWorkspace
       || !windowRuntime.definition.programs.contains(where: { $0.internalID == internalID })
     {
       appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
       return
     }
-    for target in [WorkspaceCanvasTarget.landscape, .portrait] {
-      _ = try windowRuntime.runtimeProjection(programInternalID: internalID, target: target)
+    let previousSelection = appletData.state(for: url).selectedProgramInternalID
+    do {
+      for target in [WorkspaceCanvasTarget.landscape, .portrait] {
+        _ = try windowRuntime.runtimeProjection(programInternalID: internalID, target: target)
+      }
+      appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
+      windowRuntime.updateRuntimes()
+      try await recordingSession.reconfigureProgramOutputAndWait()
+      // Selection does not change the Workspace-wide device or Vision inventory.
+      // Only the peak-meter projection changes; do not restart input resources.
+      updatePeakMeterGains()
+    } catch {
+      // Repair only selection and its projections after application began.
+      // Preserve edits and output failure/finalization; never restart output.
+      appletData.updateState(for: url) { $0.selectedProgramInternalID = previousSelection }
+      windowRuntime.updateRuntimes()
+      throw error
     }
-    appletData.updateState(for: url) { $0.selectedProgramInternalID = internalID }
-    windowRuntime.updateRuntimes()
-    try recordingSession.reconfigureProgramOutput()
-    synchronizeDeviceAssignments()
-    synchronizeVision()
   }
 
   public func startOutput() async throws {
-    guard recordingSession.state.canStart else { return }
+    try validateOutputStartAdmission()
     try await validateOutputWorkspace()
-    guard shutdownTask == nil, recordingSession.state.canStart else { return }
-    windowRuntime.updateRuntimes()
-    await visionFeature.prepareForOutput()
-    guard shutdownTask == nil, recordingSession.state.canStart else { return }
-    try await validateOutputWorkspace()
-    guard shutdownTask == nil, recordingSession.state.canStart else { return }
-    await recordingSession.start()
+    if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+    var began = false
+    let result = await transactionalCommands.submit(
+      .startOutputSession,
+      validate: { [self] in try validateOutputStartAdmission() },
+      reconcile: { [self] in
+        if began { _ = await recordingSession.stopWithResult() }
+      },
+      operation: { [self] in
+        began = true
+        stateService.recordingState = .starting
+        stateService.isOutputActive = true
+        defer {
+          stateService.recordingState = recordingSession.state
+          stateService.isOutputActive = recordingSession.state.isOutputActive
+        }
+        windowRuntime.updateRuntimes()
+        await visionFeature.prepareForOutput()
+        try await validateOutputWorkspace()
+        try await recordingSession.startWithResult().get()
+      })
+    switch result {
+    case .succeeded: return
+    case .failed(let error), .rejected(let error): throw error
+    }
+  }
+
+  private func validateOutputStartAdmission() throws {
+    guard closeRequestTask == nil, !stateService.isClosed, !stateService.isOutputActive,
+      recordingSession.state.canStart, !transactionalCommands.contains(.startOutputSession)
+    else {
+      throw NSError(
+        domain: "WorkspaceOutput", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Output is already active or transitioning."])
+    }
+    let output = windowRuntime.workspace.outputSettings
+    guard
+      (output.recordingEnabled
+        && (output.recordingSettings.recordsLandscape || output.recordingSettings.recordsPortrait))
+        || output.youtubeEnabled
+    else {
+      throw NSError(
+        domain: "WorkspaceOutput", code: 2,
+        userInfo: [
+          NSLocalizedDescriptionKey: "Enable recording or streaming before starting output."
+        ])
+    }
+    guard
+      let programID = appletData.selectedProgram(
+        in: windowRuntime.definition, for: stateService.localStateURL)?.internalID
+    else {
+      throw NSError(
+        domain: "WorkspaceOutput", code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "Select a Program before starting output."])
+    }
+    _ = try validatedProgramSelectionURL(internalID: programID)
   }
 
   func validateOutputWorkspace() async throws {
@@ -514,52 +710,105 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
   }
 
-  public func shutdown() async {
-    if let shutdownTask {
-      await shutdownTask.value
-      return
+  func validateCloseAdmission() throws {
+    guard !stateService.isOutputActive, !recordingSession.state.isOutputActive,
+      !transactionalCommands.contains(.startOutputSession)
+    else {
+      throw commandFailure(
+        .closeWorkspace,
+        NSError(
+          domain: "WorkspaceClose", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Stop output before closing the Workspace."]))
     }
-    stateService.isClosed = true
-    documentConnection?.disconnect()
-    closeErrorPresentation()
-    if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
-    closeObserver = nil
+  }
+
+  @discardableResult
+  public func closeWorkspace() async -> WorkspaceCommandOutcome {
+    if stateService.isClosed { return .succeeded }
+    if let closeRequestTask { return await closeRequestTask.value }
+    do { try validateCloseAdmission() } catch {
+      reportError(error)
+      return .rejected(error as NSError)
+    }
+    let task = Task { @MainActor [self] in
+      if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+      let result = await transactionalCommands.submit(
+        .closeWorkspace,
+        validate: { [self] in try validateCloseAdmission() },
+        operation: { [self] in try await drainWorkspaceResources() })
+      if case .succeeded = result {
+        stateService.isClosed = true
+        documentConnection?.disconnect()
+        closeErrorPresentation()
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = nil
+        closeCoordinator.detach()
+        pairedPreview.metalView.removeFromSuperview()
+        let release = onShutdown
+        onShutdown = nil
+        outputStateDidChange?()
+        release?()
+      }
+      closeRequestTask = nil
+      return result
+    }
+    closeRequestTask = task
+    return await task.value
+  }
+
+  public func shutdown() async {
+    _ = await closeWorkspace()
+  }
+
+  private func drainWorkspaceResources() async throws {
     documentObservationTask?.cancel()
     outputObservationTask?.cancel()
-    let task = Task { @MainActor in
-      await inferenceTask?.value
-      pairedPreview.stop()
-      previewRenderer.stop()
-      deviceAssignmentsObservationTask?.cancel()
-      preferencesObservationTask?.cancel()
-      await visionFeature.stop()
-      let priorFailure = stateService.outputFailureMessage
-      await recordingSession.stop()
-      if stateService.outputFailureMessage != priorFailure {
-        shutdownFailureMessage = stateService.outputFailureMessage
-      }
-      await withCheckedContinuation { continuation in
-        windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
-      }
-      await audioCoordinator.stopAndReset()
-      windowRuntime.shutdown()
-      pairedPreview.metalView.removeFromSuperview()
-      let release = onShutdown
-      onShutdown = nil
-      if let shutdownFailureMessage { queueShutdownFailure(shutdownFailureMessage) }
-      outputStateDidChange?()
-      release?()
+    deviceAssignmentsObservationTask?.cancel()
+    preferencesObservationTask?.cancel()
+    await inferenceTask?.value
+    pairedPreview.stop()
+    previewRenderer.stop()
+    await previewRenderer.drainDrawing()
+    await visionFeature.stop()
+    let stopResult = await recordingSession.stopWithResult()
+    await windowRuntime.shutdownAndWait()
+    await withCheckedContinuation { continuation in
+      windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
     }
-    shutdownTask = task
-    await task.value
+    await audioCoordinator.stopAndReset()
+    guard windowRuntime.captureSessionCoordinator.isFullyStopped(),
+      audioCoordinator.isFullyStopped()
+    else {
+      throw NSError(
+        domain: "WorkspaceClose", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "Workspace resources have not finished stopping."])
+    }
+    try stopResult.get()
   }
 
   public func pauseOutput() async {
-    await recordingSession.pause()
+    guard recordingSession.state == .recording else { return }
+    if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+    _ = await transactionalCommands.submit(
+      .stopOutputSession,
+      validate: { [self] in try validateOutputStop() },
+      operation: { [self] in try await recordingSession.pauseWithResult().get() })
   }
 
   public func stopOutput() async {
-    await recordingSession.stop()
+    if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+    _ = await transactionalCommands.submit(
+      .stopOutputSession,
+      validate: { [self] in try validateOutputStop() },
+      operation: { [self] in try await recordingSession.stopWithResult().get() })
+  }
+
+  private func validateOutputStop() throws {
+    guard closeRequestTask == nil, !stateService.isClosed else {
+      throw NSError(
+        domain: "WorkspaceOutput", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "The Workspace is closing."])
+    }
   }
 
   public func updateMixPreferences() {
@@ -604,7 +853,7 @@ extension WorkspaceAppletCoordinator {
     return try await windowRuntime.classify(vision: vision, service: service)
   }
 
-  public func synchronizeVision() {
+  private func synchronizeVision() {
     let ids = Set(
       windowRuntime.definition.visions.compactMap {
         $0.internalID
@@ -614,7 +863,9 @@ extension WorkspaceAppletCoordinator {
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
-    context.isOutputActive = { [weak stateService] in stateService?.isOutputActive ?? false }
+    // The UI's starting status includes preparation. Vision must still prepare
+    // models before the actual output service enters its starting state.
+    context.isOutputActive = { [weak self] in self?.recordingSession.state.isOutputActive ?? false }
     context.reportModelPrepared = { [weak stateService] _ in
       stateService?.modelPreparationGeneration &+= 1
     }
@@ -642,42 +893,143 @@ extension WorkspaceAppletCoordinator {
   }
 
   private func synchronizeDeviceAssignments() {
+    guard closeRequestTask == nil, !stateService.isClosed, !stateService.isOutputActive else {
+      return
+    }
+    // Observation can update an accepting queue, but never resumes a stalled
+    // queue or replays work merely because retryNumber changed.
+    Task { @MainActor [weak self] in
+      guard let self, !transactionalCommands.isStalled, !transactionalCommands.isRecovering else {
+        return
+      }
+      let cameraIDs = Set(CaptureSessionManager().availableCameras().map(\.id))
+      _ = await transactionalCommands.submit(
+        .updateDeviceAssignment,
+        validate: { [self] in try validateDeviceAssignment() },
+        operation: { [self] in try await applyDeviceAssignment(availableCameraIDs: cameraIDs) })
+    }
+  }
+
+  private func validateDeviceAssignment(admitted: Bool = false) throws {
+    guard admitted || closeRequestTask == nil, !stateService.isClosed, !stateService.isOutputActive
+    else {
+      throw NSError(
+        domain: "WorkspaceDeviceAssignment", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Pause output before changing device assignments."])
+    }
+  }
+
+  @discardableResult
+  public func updateDeviceAssignments(availableCameraIDs: Set<String>) throws -> Task<
+    WorkspaceCommandOutcome, Never
+  > {
+    guard closeRequestTask == nil else { throw CocoaError(.userCancelled) }
+    try validateDeviceAssignment()
+    return Task { @MainActor [self] in
+      if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+      return await transactionalCommands.submit(
+        .updateDeviceAssignment,
+        validate: { [self] in try validateDeviceAssignment() },
+        operation: { [self] in
+          try await applyDeviceAssignment(availableCameraIDs: availableCameraIDs)
+        })
+    }
+  }
+
+  private func applyDeviceAssignment(availableCameraIDs: Set<String>) async throws {
+    try validateDeviceAssignment(admitted: true)
     windowRuntime.updateRuntimes()
-    let cameraIDs = Set(CaptureSessionManager().availableCameras().map(\.id))
-    synchronizeCaptureInputs(availableCameraIDs: cameraIDs) { _ in }
-    synchronizeAudioMonitor()
+    // Both configurations are captured before this operation first suspends.
+    // Launch the monitor task, start Capture, and join both terminal results.
+    let audio = makeAudioMonitorTask(reportErrors: false)
+    let capture = await withCheckedContinuation { continuation in
+      windowRuntime.synchronizeCaptureInputsReportingResult(availableCameraIDs: availableCameraIDs)
+      {
+        continuation.resume(returning: $0)
+      }
+    }
+    let audioResult = await audio.value
+    updateAudioMonitorValues()
+    updateCaptureFailures(capture.unavailableOrFailedCameraIDs, reportErrors: false)
+    if let error = capture.operationError { throw error }
+    if let first = capture.failures.sorted(by: { $0.key < $1.key }).first {
+      throw NSError(
+        domain: first.value.domain, code: first.value.code,
+        userInfo: [
+          NSLocalizedDescriptionKey: "Camera assignment failed.",
+          NSLocalizedFailureReasonErrorKey: capture.failures.keys.sorted().joined(separator: ", "),
+          NSUnderlyingErrorKey: first.value,
+        ])
+    }
+    try audioResult.get()
   }
 
   public func updateProgramRuntimes() {
     windowRuntime.updateRuntimes()
   }
 
-  func confirmedContentsDidChange() {
-    guard shutdownTask == nil else { return }
-    synchronizeDeviceAssignments()
-    synchronizeVision()
-  }
-
   public func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) {
-    windowRuntime.synchronizeCaptureInputs(
-      availableCameraIDs: availableCameraIDs,
-      completionHandler: { [weak self] failures in
-        Task { @MainActor [weak self] in self?.updateCaptureFailures(failures) }
-        completionHandler(failures)
-      })
+    Task { @MainActor [self] in
+      do {
+        _ = await (try updateDeviceAssignments(availableCameraIDs: availableCameraIDs)).value
+      } catch {
+        reportError(error)
+      }
+      completionHandler(captureFailureIDs)
+    }
   }
 
-  public func synchronizeAudioMonitor() {
-    let localState = stateService.localStateURL.map { appletData.state(for: $0) } ?? .init()
+  private func updatePeakMeterGains() {
     let audioChannels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
     let programInternalID = appletData.selectedProgram(
       in: windowRuntime.definition, for: stateService.localStateURL)?.internalID
     let projection = programInternalID.flatMap {
       try? windowRuntime.runtimeProjection(programInternalID: $0, target: .landscape)
     }
+    let portraitProjection = programInternalID.flatMap {
+      try? windowRuntime.runtimeProjection(programInternalID: $0, target: .portrait)
+    }
+    audioCoordinator.peakMeter.updateMasterGains(
+      landscapeChannels: audioChannels,
+      portraitChannels: portraitProjection?.configuration.audioChannels ?? [],
+      landscape: projection?.preferences ?? .init(),
+      portrait: portraitProjection?.preferences ?? .init())
+  }
+
+  public func synchronizeAudioMonitor() {
+    Task { @MainActor [weak self] in
+      guard let self, closeRequestTask == nil else { return }
+      do { try validateDeviceAssignment() } catch {
+        reportError(error)
+        return
+      }
+      if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+      _ = await transactionalCommands.submit(
+        .updateDeviceAssignment,
+        validate: { [self] in try validateDeviceAssignment() },
+        operation: { [self] in
+          try await makeAudioMonitorTask(reportErrors: false).value.get()
+          updateAudioMonitorValues()
+        })
+    }
+  }
+
+  public func updateAudioMonitorValues() {
+    guard !stateService.isClosed else { return }
+    let local = stateService.localStateURL.map { appletData.state(for: $0) } ?? .init()
+    let channels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
+    let preferences = WorkspaceV4RenderGraph.monitorPreferences(
+      definition: windowRuntime.definition, preferences: stateService.workspacePreferences,
+      volumeDecibels: local.monitorVolume ?? 0)
+    audioCoordinator.monitor.updateValues(audioChannels: channels, preferences: preferences)
+  }
+
+  private func makeAudioMonitorTask(reportErrors: Bool) -> Task<Result<Void, NSError>, Never> {
+    let localState = stateService.localStateURL.map { appletData.state(for: $0) } ?? .init()
+    let audioChannels = WorkspaceV4RenderGraph.audioChannels(windowRuntime.definition)
     let audioDeviceIDs = Dictionary(
       uniqueKeysWithValues: windowRuntime.definition.audioDevices.compactMap {
         input -> (String, String)? in
@@ -694,18 +1046,11 @@ extension WorkspaceAppletCoordinator {
         else { return nil }
         return "v4-\(input.internalID)"
       })
-    let portraitProjection = programInternalID.flatMap {
-      try? windowRuntime.runtimeProjection(programInternalID: $0, target: .portrait)
-    }
-    audioCoordinator.peakMeter.updateMasterGains(
-      landscapeChannels: audioChannels,
-      portraitChannels: portraitProjection?.configuration.audioChannels ?? [],
-      landscape: projection?.preferences ?? .init(),
-      portrait: portraitProjection?.preferences ?? .init())
+    updatePeakMeterGains()
     let preferences = WorkspaceV4RenderGraph.monitorPreferences(
       definition: windowRuntime.definition, preferences: stateService.workspacePreferences,
       volumeDecibels: localState.monitorVolume ?? 0)
-    _ = audioCoordinator.restart(
+    return audioCoordinator.restart(
       audioChannels: audioChannels,
       inputAudioDeviceMappings: audioDeviceIDs,
       programPreferences: preferences,
@@ -713,7 +1058,7 @@ extension WorkspaceAppletCoordinator {
       shouldRemainRunning: { true },
       failureHandler: { _ in },
       errorHandler: { [weak self] error in
-        guard let self else { return }
+        guard reportErrors, let self else { return }
         // Restart completion reports orchestration errors; hardware errors arrive via status.
         reportError(error)
       })

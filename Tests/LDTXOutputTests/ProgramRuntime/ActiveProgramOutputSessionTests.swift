@@ -19,6 +19,50 @@ extension OutputTestSuite {
   @MainActor
   @Suite
   struct ActiveProgramOutputSessionIntegrationTestSuite {
+    @Test func audioReconfigurationWaitsForMixerCompletion() async throws {
+      try await checkAudioReconfiguration(failure: false)
+    }
+
+    @Test func audioReconfigurationPropagatesMixerFailure() async throws {
+      try await checkAudioReconfiguration(failure: true)
+    }
+
+    private func checkAudioReconfiguration(failure: Bool) async throws {
+      let runtime = makeProgramRuntime()
+      runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
+      let mixer = ProgramMainAudioMixerSpy()
+      let session = ActiveProgramOutputSession(
+        currentProgramRuntime: runtime, mediaHub: ProgramOutputMediaHub(), audioMixer: mixer)
+      let started = expectation(description: "session started")
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { _ in started.fulfill() })
+      #expect(await waitUntil { mixer.isStartPending })
+      mixer.completeStart()
+      await fulfillment(of: [started], timeout: 2)
+      var completed = false
+      let reconfiguration = Task {
+        try await session.reconfigureAudioAndWait(
+          programPreferences: .init(), audioDeviceIDsByInputKey: [:])
+        completed = true
+      }
+      #expect(await waitUntil { mixer.isStartPending })
+      #expect(!completed)
+      mixer.completeStart(
+        with: failure ? .failure(NSError(domain: "test-mixer", code: 93)) : .success(()))
+      do {
+        try await reconfiguration.value
+        #expect(!failure)
+        #expect(completed)
+      } catch {
+        #expect(failure)
+        #expect((error as NSError).code == 93)
+        #expect(!completed)
+      }
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+    }
+
     @Test func sessionKeepsInjectedDiagnosticIdentifier() {
       let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
       let session = ActiveProgramOutputSession(
@@ -81,6 +125,64 @@ extension OutputTestSuite {
       await fulfillment(of: [started], timeout: 2)
       assertTrue(session.isRunning)
       await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+    }
+
+    @Test(arguments: [(true, true), (true, false), (false, true)])
+    func stoppedDualSessionRejectsStartExactlyOnce(enabled: (Bool, Bool)) async {
+      let landscape = makeProgramRuntime()
+      landscape.updateProgram(Self.outputConfiguration())
+      let portrait = makeProgramRuntime()
+      portrait.updateProgram(Self.outputConfiguration())
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: landscape, portraitRuntime: portrait,
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+        runsLandscape: enabled.0, runsPortrait: enabled.1)
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+      var completions = 0
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { result in
+          completions += 1
+          guard case .failure = result else {
+            Issue.record("A stopped session must reject startup")
+            return
+          }
+        })
+      #expect(completions == 1)
+      #expect(!session.isRunning)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func dualStopDuringNativeStartupCompletesOnceAndDrainsBothCanvases() async {
+      let landscape = makeProgramRuntime()
+      landscape.updateProgram(Self.outputConfiguration())
+      let portrait = makeProgramRuntime()
+      portrait.updateProgram(Self.outputConfiguration())
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: landscape, portraitRuntime: portrait,
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+      let started = expectation(description: "interrupted dual start completed")
+      var completions = 0
+      var startError: Error?
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { result in
+          completions += 1
+          if case .failure(let error) = result { startError = error }
+          started.fulfill()
+        })
+      // No actor suspension occurs between native Start and Stop: both children
+      // have entered startup, but their asynchronous mixer completion is pending.
+      #expect(completions == 0)
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+      await fulfillment(of: [started], timeout: 2)
+      #expect(completions == 1)
+      #expect(startError is CancellationError)
+      #expect(!session.landscape.isRunning)
+      #expect(!session.portrait.isRunning)
+      #expect(!session.isRunning)
     }
 
     @Test func dualStartAcceptsAnEmptyPortraitMix() async {
@@ -1082,13 +1184,13 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
     lock.withLock { startCompletion = completionHandler }
   }
 
-  func completeStart() {
+  func completeStart(with result: Result<Void, any Error> = .success(())) {
     let completion = lock.withLock {
       let completion = startCompletion
       startCompletion = nil
       return completion
     }
-    completion?(.success(()))
+    completion?(result)
   }
 
   func addMainAudioMixHandler(

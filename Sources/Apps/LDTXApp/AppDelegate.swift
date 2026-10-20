@@ -17,12 +17,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     shutdown: { [weak self] in
       guard let self else { return [] }
       // Keep closing coordinators alive until their existing cleanup has drained.
-      while !workspaceCoordinators.isEmpty {
-        let coordinators = Array(workspaceCoordinators.values)
-        await withTaskGroup(of: Void.self) { group in
-          for coordinator in coordinators {
-            group.addTask { await coordinator.shutdown() }
+      let coordinators = Array(workspaceCoordinators.values)
+      await withTaskGroup(of: String?.self) { group in
+        for coordinator in coordinators {
+          group.addTask {
+            switch await coordinator.closeWorkspace() {
+            case .succeeded: return nil
+            case .failed(let error), .rejected(let error):
+              return [
+                error.localizedDescription, error.localizedFailureReason,
+                error.localizedRecoverySuggestion,
+              ]
+              .compactMap { $0 }.joined(separator: "\n\n")
+            }
           }
+        }
+        for await failure in group {
+          if let failure { shutdownFailures.append(failure) }
         }
       }
       let failures = shutdownFailures

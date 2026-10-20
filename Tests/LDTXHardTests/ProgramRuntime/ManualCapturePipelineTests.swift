@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreMedia
+import Foundation
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRendering
@@ -11,6 +12,33 @@ import Testing
 
 @Suite(.serialized)
 struct ManualCapturePipelineIntegrationTestSuite {
+  @Test func structuredAssignmentResultSeparatesUnavailableFromFailedCaptureStart() async {
+    let coordinator = WorkspaceCaptureSessionCoordinator()
+    let cameraID = "nonexistent-camera-\(UUID())"
+    let unavailable = await withCheckedContinuation { continuation in
+      coordinator.synchronizePhysicalInputCapturesReportingResult(
+        videoCameraIDs: [cameraID], audioDeviceIDs: [], availableCameraIDs: [],
+        canvasWidth: 320, canvasHeight: 180, frameRate: 30,
+        completionHandler: { continuation.resume(returning: $0) })
+    }
+    #expect(unavailable.unavailableCameraIDs == [cameraID])
+    #expect(unavailable.failures.isEmpty)
+    #expect(unavailable.operationError == nil)
+    // Exercise AVFoundation discovery, but never open an actual camera.
+    let failed = await withCheckedContinuation { continuation in
+      coordinator.synchronizePhysicalInputCapturesReportingResult(
+        videoCameraIDs: [cameraID], audioDeviceIDs: [], availableCameraIDs: [cameraID],
+        canvasWidth: 320, canvasHeight: 180, frameRate: 30,
+        completionHandler: { continuation.resume(returning: $0) })
+    }
+    #expect(failed.unavailableCameraIDs.isEmpty)
+    #expect(Set(failed.failures.keys) == [cameraID])
+    #expect(failed.operationError == nil)
+    await withCheckedContinuation { continuation in
+      coordinator.stopAndReset { continuation.resume() }
+    }
+  }
+
   @Test func runtimeFailureInvalidatesFrameAndRestartsCapture() async throws {
     let service = ManualCameraCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })

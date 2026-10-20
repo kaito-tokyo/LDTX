@@ -37,6 +37,9 @@ void LDTXAudioConfigureBus(LDTXWorkspaceAudioEngine *, LDTXAudioID, const LDTXAu
 void LDTXAudioRemoveBus(LDTXWorkspaceAudioEngine *, LDTXAudioID);
 // An empty or null output UID follows the system default output device.
 // An empty route list or a list with no connected routes stops monitoring.
+// Values must match the connected configuration's route count and input order.
+// Repeated input IDs retain independent gains; membership cannot change here.
+void LDTXAudioUpdateMonitorValues(LDTXWorkspaceAudioEngine *, const LDTXAudioRoute *, uint32_t count, float master);
 void LDTXAudioConfigureMonitor(LDTXWorkspaceAudioEngine *, const char *outputUID, const LDTXAudioRoute *,
                                uint32_t count, float masterGain);
 // A bus renders in host-clock time. Session PTS mapping is a subscription concern.

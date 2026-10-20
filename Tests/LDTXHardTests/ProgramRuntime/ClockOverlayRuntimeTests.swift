@@ -133,6 +133,31 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
 
 @Suite(.serialized)
 struct ClockOverlayRuntimeIntegrationTestSuite {
+  @Test func deactivateDrainWaitsForInFlightRender() async throws {
+    let renderer = ClockOverlayRendererSpy(
+      device: try #require(MTLCreateSystemDefaultDevice()), blocksFirstCall: true)
+    let runtime = ClockOverlayRuntime(component: ClockComponent(), renderer: renderer)
+    runtime.activate()
+    guard renderer.waitForFirstCall(timeout: 2) else {
+      renderer.unblockFirstCall()
+      Issue.record("Expected running overlay render")
+      return
+    }
+    let completed = DrainCompletionCounter()
+    let finished = AsyncStream<Void>.makeStream()
+    runtime.deactivateAndDrain {
+      completed.increment()
+      finished.continuation.yield(())
+      finished.continuation.finish()
+    }
+    #expect(completed.value == 0)
+    renderer.unblockFirstCall()
+    var events = finished.stream.makeAsyncIterator()
+    _ = await events.next()
+    #expect(completed.value == 1)
+    #expect(runtime.retainedOverlay() == nil)
+  }
+
   @Test func dynamicTextSizeFailureWaitsForConfigurationChange() async throws {
     let renderer = ClockOverlayRendererSpy(
       device: try unwrap(MTLCreateSystemDefaultDevice()), failingCalls: [1],
@@ -1783,4 +1808,11 @@ private func richTextData(_ value: String) throws -> Data {
       string: value,
       attributes: [.font: NSFont(name: "Helvetica", size: 48)!, .foregroundColor: NSColor.white])
   ).rtfd
+}
+
+private final class DrainCompletionCounter: @unchecked Sendable {
+  private let lock = NSLock()
+  private var count = 0
+  var value: Int { lock.withLock { count } }
+  func increment() { lock.withLock { count += 1 } }
 }

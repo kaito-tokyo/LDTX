@@ -37,6 +37,7 @@ public final class EventTaskQueue: @unchecked Sendable {
 
   private enum State {
     case accepting
+    case stalled
     case stopping
     case stopped
   }
@@ -52,6 +53,7 @@ public final class EventTaskQueue: @unchecked Sendable {
 
   private let controlQueue: DispatchQueue
   private let executionQueue: DispatchQueue
+  private let notificationQueue: DispatchQueue
   private var state = State.accepting
   private var pending: [Entry] = []
   private var runningID: UUID?
@@ -61,6 +63,22 @@ public final class EventTaskQueue: @unchecked Sendable {
   public init(label: String) {
     controlQueue = DispatchQueue(label: label)
     executionQueue = DispatchQueue(label: "\(label).execution")
+    notificationQueue = DispatchQueue(label: "\(label).notifications")
+  }
+
+  /// Invalidates pending work after an execution failure and rejects future
+  /// submissions. The running task still owns its completion and cleanup.
+  /// Notification runs independently of the execution/cleanup lane. This does
+  /// not request cooperative stop or provide a recovery policy.
+  /// Call this before the failed task's bound completion so no successor starts.
+  /// Repeated calls have no effect. Use stop to join cleanup and running work.
+  public func stall(onStall: @escaping Completion = {}) {
+    controlQueue.async { [self] in
+      guard state == .accepting else { return }
+      state = .stalled
+      notificationQueue.async(execute: onStall)
+      discardPending()
+    }
   }
 
   /// Constructs a task after binding its one-shot completion closure. The
@@ -97,7 +115,7 @@ public final class EventTaskQueue: @unchecked Sendable {
   ) {
     controlQueue.async { [self] in
       switch state {
-      case .accepting:
+      case .accepting, .stalled:
         state = .stopping
         stopToken.requestStop()
         discardPending()

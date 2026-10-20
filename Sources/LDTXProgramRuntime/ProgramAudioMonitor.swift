@@ -44,6 +44,7 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
         connected = true
       }
       return WorkspaceAudioEngine.Route(
+        channelKey: key,
         input: input,
         gain: Float(preferences.audioChannelGain(for: channel, in: audioChannels)),
         connected: connected)
@@ -55,5 +56,18 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
   public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
     engine.configureMonitor(routes: [], master: 1)
     completionHandler()
+  }
+
+  /// Applies values to the already configured topology. It never creates an
+  /// input, changes monitor membership, or cancels a resource operation.
+  public func updateValues(audioChannels: [ProgramAudioChannel], preferences: ProgramPreferences) {
+    var gains: [String: Float] = [:]
+    for channel in audioChannels {
+      let key = audioChannels.audioChannelKey(for: channel)
+      gains[key] = Float(preferences.audioChannelGain(for: channel, in: audioChannels))
+    }
+    engine.updateMonitorValues(
+      gains: gains,
+      master: Float(ProgramPreferences.clampedAudioChannelGain(preferences.masterVolume)))
   }
 }

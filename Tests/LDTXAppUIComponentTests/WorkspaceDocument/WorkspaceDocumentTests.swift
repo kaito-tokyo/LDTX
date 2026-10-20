@@ -251,7 +251,7 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs.append(.with { $0.internalID = newProgramID })
       }
-      try controller.selectProgram(internalID: newProgramID)
+      _ = await (try controller.selectProgram(internalID: newProgramID)).value
       #expect(controller.appletData.state(for: url).selectedProgramInternalID == newProgramID)
       #expect(
         !controller.windowRuntime.definition.programs.contains { $0.internalID == newProgramID })
@@ -333,7 +333,7 @@ extension AppUIComponentTestSuite {
         ]
       }
 
-      try coordinator.runtimeCoordinator.selectProgram(internalID: 7)
+      _ = await (try coordinator.runtimeCoordinator.selectProgram(internalID: 7)).value
       let localURL = try #require(state.localStateURL)
       #expect(
         coordinator.runtimeCoordinator.appletData.state(for: localURL)

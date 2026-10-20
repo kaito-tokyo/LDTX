@@ -12,7 +12,6 @@ final class WorkspaceDocumentConnection {
   let runtimeCoordinator: WorkspaceAppletCoordinator
   private var isDisconnected = false
   private var documentTask: Task<Void, Never>?
-  private let closeCoordinator = WorkspaceDocumentCloseCoordinator()
 
   init(document: WorkspaceDocument, runtimeCoordinator: WorkspaceAppletCoordinator) {
     self.document = document
@@ -23,7 +22,10 @@ final class WorkspaceDocumentConnection {
       self?.attachWindow(window)
       guard let self else { return nil }
       return WorkspaceDocumentActions(
-        stateService: self.runtimeCoordinator.stateService, window: window)
+        stateService: self.runtimeCoordinator.stateService, window: window,
+        onSaveSucceeded: { [weak self] in
+          Task { await self?.runtimeCoordinator.refreshPersistedWorkspace(userInitiated: true) }
+        })
     }
     let documentChanges = Observations { [weak document] in
       document?.fileURL
@@ -37,13 +39,11 @@ final class WorkspaceDocumentConnection {
   }
 
   isolated deinit {
-    closeCoordinator.detach()
     documentTask?.cancel()
   }
 
   func attachWindow(_ window: NSWindow?) {
     runtimeCoordinator.attachWindow(window)
-    closeCoordinator.attach(to: window)
   }
 
   func synchronizeDocument() {
@@ -54,7 +54,6 @@ final class WorkspaceDocumentConnection {
   func disconnect() {
     guard !isDisconnected else { return }
     isDisconnected = true
-    closeCoordinator.detach()
     documentTask?.cancel()
   }
 
@@ -75,10 +74,15 @@ final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations,
 {
   private weak var stateService: WorkspaceDocument?
   private weak var window: NSWindow?
+  private let onSaveSucceeded: @MainActor () -> Void
 
-  init(stateService: WorkspaceDocument, window: NSWindow? = nil) {
+  init(
+    stateService: WorkspaceDocument, window: NSWindow? = nil,
+    onSaveSucceeded: @escaping @MainActor () -> Void = {}
+  ) {
     self.stateService = stateService
     self.window = window
+    self.onSaveSucceeded = onSaveSucceeded
     super.init()
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -96,7 +100,7 @@ final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations,
       nextResponder?.tryToPerform(#selector(NSDocument.save(_:)), with: sender)
       return
     }
-    WorkspaceDocumentCloseCoordinator.save(document)
+    WorkspaceDocumentCloseCoordinator.save(document, onSuccess: onSaveSucceeded)
   }
 
   @objc func saveDocumentAs(_ sender: Any?) {
@@ -104,7 +108,7 @@ final class WorkspaceDocumentActions: NSResponder, NSUserInterfaceValidations,
       nextResponder?.tryToPerform(#selector(NSDocument.saveAs(_:)), with: sender)
       return
     }
-    WorkspaceDocumentCloseCoordinator.save(document, saveAs: true)
+    WorkspaceDocumentCloseCoordinator.save(document, saveAs: true, onSuccess: onSaveSucceeded)
   }
 
   @objc func revertDocumentToSaved(_ sender: Any?) {

@@ -12,6 +12,38 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace asynchronous close", .serialized)
   @MainActor
   struct WorkspaceDocumentCloseIntegrationTestSuite {
+    @Test(arguments: [true, false])
+    func nativeReviewPrecedesResourceDrainAndClose(allowed: Bool) async throws {
+      let document = CloseReviewDocument(allowed: allowed)
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+        styleMask: [.titled, .closable], backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      document.addWindowController(NSWindowController(window: window))
+      var drainCalls = 0
+      var finishDrain: CheckedContinuation<Void, Never>?
+      let gate = WorkspaceDocumentCloseCoordinator(closeWorkspace: {
+        drainCalls += 1
+        await withCheckedContinuation { finishDrain = $0 }
+        return true
+      })
+      gate.attach(to: window)
+      #expect(!gate.windowShouldClose(window))
+      for _ in 0..<1000 where document.reviews == 0 || (allowed && finishDrain == nil) {
+        await Task.yield()
+      }
+      #expect(document.reviews == 1)
+      #expect(document.closes == 0)
+      #expect(drainCalls == (allowed ? 1 : 0))
+      if allowed {
+        finishDrain?.resume()
+        for _ in 0..<1000 where document.closes == 0 { await Task.yield() }
+        #expect(document.closes == 1)
+      }
+      gate.detach()
+      document.close()
+    }
+
     @Test func pendingActivityDefersAndCoalescesCloseWithoutBlockingMainActor() async throws {
       let document = NSDocument()
       let window = NSWindow(
@@ -190,7 +222,7 @@ extension AppUIComponentTestSuite {
         styleMask: [.titled, .closable], backing: .buffered, defer: false)
       window.isReleasedWhenClosed = false
       document.addWindowController(NSWindowController(window: window))
-      let gate = WorkspaceDocumentCloseCoordinator()
+      let gate = WorkspaceDocumentCloseCoordinator(closeWorkspace: { true })
       gate.attach(to: window)
       let closed = AsyncStream<Void>.makeStream()
       let closeObserver = NotificationCenter.default.addObserver(
@@ -330,5 +362,30 @@ private final class SaveBridgeDocument: NSDocument {
     }
     if fail { throw CocoaError(.fileWriteNoPermission) }
     try WorkspaceBundleWriterV4().write(captured, to: url)
+  }
+}
+
+@MainActor private final class CloseReviewDocument: NSDocument {
+  let allowed: Bool
+  var reviews = 0
+  var closes = 0
+  init(allowed: Bool) {
+    self.allowed = allowed
+    super.init()
+  }
+  required init?(coder: NSCoder) { fatalError("unavailable") }
+  override func canClose(
+    withDelegate delegate: Any, shouldClose selector: Selector?,
+    contextInfo: UnsafeMutableRawPointer?
+  ) {
+    reviews += 1
+    guard let target = delegate as? NSObject, let selector else { return }
+    typealias Completion =
+      @convention(c) (AnyObject, Selector, NSDocument, Bool, UnsafeMutableRawPointer?) -> Void
+    let completion = unsafeBitCast(target.method(for: selector), to: Completion.self)
+    completion(target, selector, self, allowed, contextInfo)
+  }
+  override func close() {
+    closes += 1
   }
 }

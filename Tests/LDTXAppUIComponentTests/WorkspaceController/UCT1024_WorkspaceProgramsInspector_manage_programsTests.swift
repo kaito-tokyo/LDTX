@@ -105,12 +105,18 @@ extension AppUIComponentTestSuite {
       #expect(service.workspaceDefinition.programs.count == 2)
       #expect(!document.hasTestModelChanges)
       service.isOutputActive = false
-      try controller.selectProgram(internalID: 101)
+      _ = await (try controller.selectProgram(internalID: 101)).value
       service.editWorkspace(undoManager: nil) { workspace in
         workspace.preferences.landscapeProgramPreferences[101, default: .init()]
           .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
       }
+      let selectionBeforeDelete = controller.programSelectionState.value
       try controller.removeProgram(internalID: 101)
+      #expect(controller.programSelectionState.value == 100)
+      #expect(
+        controller.windowRuntime.definition.programs.contains {
+          $0.internalID == selectionBeforeDelete
+        })
       #expect(service.workspaceDefinition.programs.map(\.internalID) == [100])
       #expect(service.workspacePreferences.landscapeProgramPreferences[101] == nil)
       #expect(service.workspacePreferences.portraitProgramPreferences[101] == nil)

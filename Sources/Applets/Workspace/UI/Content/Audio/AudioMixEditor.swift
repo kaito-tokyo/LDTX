@@ -45,7 +45,7 @@ struct AudioMixEditor: View {
                   runtimeActions()?.synchronizeAudioMonitor()
                 })
             )
-            .disabled(stateService.localStateURL == nil)
+            .disabled(stateService.localStateURL == nil || stateService.isOutputActive)
             .accessibilityLabel("Monitor " + input.displayName)
           }
           .toggleStyle(.checkbox)

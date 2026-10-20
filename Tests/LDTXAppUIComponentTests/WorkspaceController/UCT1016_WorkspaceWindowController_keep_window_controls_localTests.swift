@@ -382,7 +382,7 @@ extension AppUIComponentTestSuite {
         items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
       for (value, stopEnabled, toggleEnabled, label) in [
         (WorkspaceRecordingState.idle, false, true, "Start Output"),
-        (.starting, false, false, "Start Output"),
+        (.starting, true, false, "Start Output"),
         (.recording, true, true, "Pause Output"),
         (.pausing, false, false, "Start Output"),
         (.paused, true, true, "Start Output"),
@@ -529,12 +529,12 @@ extension AppUIComponentTestSuite {
         first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
       try await saveWorkspaceDocument(
         second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
-      try secondWindow.selectProgram(internalID: a)
+      _ = await (try secondWindow.selectProgram(internalID: a)).value
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
       let definition = first.stateService.workspaceDefinition
       first.stateService.inspectorSelector = .init(kind: .workspacePrograms)
-      try firstWindow.selectProgram(internalID: b)
+      _ = await (try firstWindow.selectProgram(internalID: b)).value
       #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
       #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
       #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == b)
@@ -553,13 +553,13 @@ extension AppUIComponentTestSuite {
       #expect(second.stateService.inspectorSelector == nil)
       #expect(first.stateService.workspaceDefinition == definition)
       #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: Int64.max) }
-      try firstWindow.selectProgram(internalID: a)
+      _ = await (try firstWindow.selectProgram(internalID: a)).value
       #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == a)
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("Selection.ldtxworkspace")
       try await saveWorkspaceDocument(first, to: url)
-      try firstWindow.selectProgram(internalID: b)
+      _ = await (try firstWindow.selectProgram(internalID: b)).value
       await firstWindow.shutdown()
       first.close()
       let reopened = try await loadWorkspaceDocument(at: url)
@@ -702,7 +702,14 @@ extension AppUIComponentTestSuite {
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       await firstCoordinator.shutdown()
+      #expect(!first.isClosed)
       #expect(dockTile.badgeLabel == "REC")
+      // This test projects output status without constructing live sessions.
+      // Project Stop completion before asking either Workspace to close.
+      first.stateService.isOutputActive = false
+      await firstCoordinator.shutdown()
+      #expect(dockTile.badgeLabel == "REC")
+      second.stateService.isOutputActive = false
       await secondCoordinator.shutdown()
       #expect(dockTile.badgeLabel == nil)
     }
