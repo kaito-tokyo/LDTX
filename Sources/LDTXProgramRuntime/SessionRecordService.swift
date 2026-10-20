@@ -219,6 +219,7 @@ public final class SessionRecordService: @unchecked Sendable {
   public var recordsLandscapeOutput: Bool { recordsLandscape }
   public var recordsPortraitOutput: Bool { recordsPortrait }
   private var finalizationResult: SessionRecordFinalizationResult?
+  private let firstVideoAccepted: @MainActor @Sendable (URL) -> Void
 
   public init(
     baseDirectory: URL,
@@ -229,6 +230,7 @@ public final class SessionRecordService: @unchecked Sendable {
     recordsLandscape: Bool = true,
     recordsPortrait: Bool = false,
     customFields: [String: String] = [:],
+    firstVideoAccepted: @escaping @MainActor @Sendable (URL) -> Void = { _ in },
     failureHandler: @escaping @MainActor (Error) -> Void
   ) throws {
     packageDirectory =
@@ -240,6 +242,7 @@ public final class SessionRecordService: @unchecked Sendable {
     }
     self.audioTracks = audioTracks
     self.customFields = customFields
+    self.firstVideoAccepted = firstVideoAccepted
     self.recordsLandscape = recordsLandscape
     self.recordsPortrait = recordsPortrait
     self.recordID = recordID
@@ -408,6 +411,9 @@ public final class SessionRecordService: @unchecked Sendable {
     stateLock.withLock {
       acceptedFirstVideo = pendingFirstVideo != nil
       acceptedFirstPortraitVideo = pendingFirstPortraitVideo != nil
+    }
+    Task { @MainActor [firstVideoAccepted, packageDirectory] in
+      firstVideoAccepted(packageDirectory)
     }
     let landscapeStart = pendingFirstVideo?.sampleBuffer.presentationTimeStamp
     for pending in pendingAudioWindow.drain(startingAt: origin) {

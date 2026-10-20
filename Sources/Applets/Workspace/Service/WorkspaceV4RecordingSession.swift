@@ -189,6 +189,9 @@ public final class WorkspaceV4RecordingSession {
           recordsLandscape: recordsLandscape,
           recordsPortrait: recordsPortrait,
           customFields: output.recordingSettings.customFields,
+          firstVideoAccepted: { [weak self] url in
+            self?.latestRecordingBundleURL = url
+          },
           failureHandler: { [weak self] error in
             Task { @MainActor in await self?.fail(error) }
           })
@@ -237,7 +240,6 @@ public final class WorkspaceV4RecordingSession {
     }
     activeSession = outputSession
     recordService = service
-    if let service { latestRecordingBundleURL = service.packageDirectory }
     self.landscapeHub = landscapeHub
     self.portraitHub = portraitHub
 
