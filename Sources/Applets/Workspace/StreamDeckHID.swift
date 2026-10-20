@@ -116,10 +116,10 @@ final class StreamDeckHID: @unchecked Sendable {
               ? "stop.fill"
               : key == 1
                 ? (frame.pause ? "pause.fill" : "play.fill")
-                : key == 2 ? "camera" : ""
-            let enabled = key < 3 && frame.enabled[key]
-            if old != nil, key >= 3 { continue }
-            if let old, key < 3, old.enabled[key] == enabled,
+                : key == 2 ? "camera" : key == 3 ? "folder" : ""
+            let enabled = key < 4 && frame.enabled[key]
+            if old != nil, key >= 4 { continue }
+            if let old, key < 4, old.enabled[key] == enabled,
               key != 1 || old.pause == frame.pause
             {
               continue

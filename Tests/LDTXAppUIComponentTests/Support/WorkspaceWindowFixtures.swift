@@ -83,6 +83,7 @@ private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  var latestRecordingBundleURL: URL?
   var classificationHandler: (() async throws -> String)?
   func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL

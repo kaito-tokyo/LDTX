@@ -71,7 +71,7 @@ import Testing
     #expect(state.receive(report()) == [1])
   }
 
-  @Test(arguments: 0..<3)
+  @Test(arguments: 0..<4)
   func firstPressWorksWithoutInitialSnapshot(key: Int) {
     var state = StreamDeckPressState()
     #expect(state.receive(report([key])) == (key == 1 ? [] : [key]))
@@ -107,8 +107,8 @@ import Testing
     #expect(state.receive(report(), generation: 4).isEmpty)
   }
 
-  @Test(arguments: [0, 2])
-  func stopAndScreenshotFireOnKeyDownWithoutDelay(key: Int) {
+  @Test(arguments: [0, 2, 3])
+  func immediateActionsFireOnKeyDownWithoutDelay(key: Int) {
     var state = StreamDeckPressState()
     #expect(state.receive(report()).isEmpty)
     for _ in 0..<3 {

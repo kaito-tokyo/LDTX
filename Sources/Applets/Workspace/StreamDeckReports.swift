@@ -24,7 +24,7 @@ struct StreamDeckPressState {
     guard let pressed = Self.decode(bytes) else { return [] }
     defer { previous = pressed }
     var edges: [Int] = []
-    for key in 0..<3 {
+    for key in 0..<4 {
       if key == 1 {
         if pressed[key] && !previous[key] { startPauseGeneration = generation }
         if !pressed[key] && previous[key] {

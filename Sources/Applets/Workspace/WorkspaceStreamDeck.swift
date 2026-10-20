@@ -58,9 +58,10 @@ public final class WorkspaceStreamDeck {
       frame.target = coordinator.stateService.runtimeID
       frame.enabled =
         busy
-        ? [false, false, false]
+        ? [false, false, false, false]
         : [
           controls.stopEnabled, controls.startPauseEnabled, controls.screenshotEnabled,
+          coordinator.latestRecordingBundleURL != nil,
         ]
       frame.pause = controls.showsPause
     }
@@ -88,6 +89,6 @@ public final class WorkspaceStreamDeck {
 
 struct StreamDeckFrame: Equatable, Sendable {
   var target: UUID?
-  var enabled = [false, false, false]
+  var enabled = [false, false, false, false]
   var pause = false
 }

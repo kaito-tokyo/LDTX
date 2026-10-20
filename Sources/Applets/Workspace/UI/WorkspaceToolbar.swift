@@ -60,6 +60,15 @@ public struct WorkspaceToolbar: ToolbarContent {
     ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) {
       WorkspaceScreenshotButton(stateService: stateService, runtimeActions: runtimeActions)
     }
+    ToolbarItem(id: "workspace.showRecordingInFinder", placement: .navigation) {
+      Button("Show Recording in Finder", systemImage: "folder") {
+        guard let url = runtimeActions()?.latestRecordingBundleURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+      }
+      .help("Show the latest recording bundle in Finder")
+      .disabled(stateService.isClosed || runtimeActions()?.latestRecordingBundleURL == nil)
+      .accessibilityIdentifier("workspace.showRecordingInFinder")
+    }
     ToolbarItem(id: "workspace.runInference", placement: .primaryAction) {
       Button("Run Inference", systemImage: "sparkles", action: runInference)
         .disabled(

@@ -831,6 +831,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       await toggleOutput(stateService: stateService, document: workspaceDocument)
     case 2 where controls.screenshotEnabled:
       do { _ = try captureScreenshots() } catch { reportError(error) }
+    case 3 where !isClosing && !stateService.isClosed:
+      if let url = latestRecordingBundleURL {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+      }
     default: break
     }
   }
@@ -843,6 +847,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     if let url = recordingSession.screenshotsDirectory {
       NSWorkspace.shared.open(url)
     }
+  }
+
+  public var latestRecordingBundleURL: URL? {
+    recordingSession.latestRecordingBundleURL
   }
 }
 

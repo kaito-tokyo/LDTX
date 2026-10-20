@@ -47,6 +47,7 @@ public final class WorkspaceV4RecordingSession {
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
+  public private(set) var latestRecordingBundleURL: URL?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue: DispatchQueue
@@ -236,6 +237,7 @@ public final class WorkspaceV4RecordingSession {
     }
     activeSession = outputSession
     recordService = service
+    if let service { latestRecordingBundleURL = service.packageDirectory }
     self.landscapeHub = landscapeHub
     self.portraitHub = portraitHub
 
