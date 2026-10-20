@@ -32,6 +32,7 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
   private var observer: NSObjectProtocol?
   private var monitorRoutes: [Route] = []
   private var monitorMaster: Float = 1
+  var monitorRouteValues: [Route] { lock.withLock { monitorRoutes } }
   private let defaults: UserDefaults
   private let errors: Errors
   private final class Errors: Sendable {
@@ -39,6 +40,7 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
     init(_ id: UUID) { self.id = id }
   }
   struct Route: Equatable {
+    var channelKey: String? = nil
     var input: UInt64
     var gain: Float
     var connected: Bool
@@ -196,13 +198,16 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
     lock.withLock { inputs["\(kind):\(uid)"] }
   }
 
-  func updateMonitorValues(gains: [UInt64: Float], master: Float) {
+  func updateMonitorValues(gains: [String: Float], master: Float) {
     lock.withLock {
       for index in monitorRoutes.indices {
-        if let gain = gains[monitorRoutes[index].input] { monitorRoutes[index].gain = gain }
+        if let key = monitorRoutes[index].channelKey, let gain = gains[key] {
+          monitorRoutes[index].gain = gain
+        }
       }
       monitorMaster = master
-      let values = monitorRoutes.map(\.value)
+      // Native configuration retains only connected routes, preserving their order.
+      let values = monitorRoutes.filter(\.connected).map(\.value)
       values.withUnsafeBufferPointer {
         LDTXAudioUpdateMonitorValues(native, $0.baseAddress, UInt32($0.count), monitorMaster)
       }

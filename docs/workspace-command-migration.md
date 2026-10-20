@@ -465,3 +465,47 @@ startup UI verification item for this fixture; it is not an exhaustive test of
 every physical device or streaming failure mode. The subsequent ordinary unsigned
 Debug rebuild succeeded (`normal-build.log`), restoring the ordinary build
 products as well. The only retained repository change is this verification record.
+
+## PR #367 monitor review follow-up
+
+Both review findings were reproduced against HEAD `27c00c4c` before their fixes.
+An inactive-output transition did not submit assignment synchronization, and
+value updates collapsed two logical monitor routes sharing one physical input
+to the last projected gain. The failing regression logs are
+`/tmp/ldtx-pr367-component-red.log` and `/tmp/ldtx-pr367-gains-red.log`.
+
+The output observer now requests synchronization when output is inactive. It
+reads current assignment and global monitor-device values through a new ordinary
+UpdateDeviceAssignment item on the same Workspace queue. Active output still
+rejects resource changes; an inactive observation neither reopens Stall nor
+replays an invalidated request. Tests cover FIFO admission behind accepted work
+and preservation of Stall after an inactive transition.
+
+Monitor routes retain their logical channel keys. Synchronous value exchange
+matches gains by those keys and preserves configured route order and membership.
+The native layer receives connected routes in that order, retaining separate
+gains even for repeated input IDs. It rejects mismatched route counts or input
+order without changing topology. Regression coverage includes reversed value
+projection order, a disconnected logical route sharing the input, and native
+gain updates with repeated IDs and mismatched configurations.
+
+The two reported golden_gate failures also reproduced locally. UCT-1016.8 still
+expected Stop to be disabled during starting, contrary to the confirmed FIFO
+Stop contract. Its expectation now enables Stop. UCT-1016.12 attempted shutdown
+while its synthetic output status was active; Close correctly refused it and
+kept the Workspace registered. The test now verifies that refusal, then projects
+Stop completion before closing each Workspace. No production Close restriction
+was relaxed and no tests were removed or skipped.
+
+The related Medium suites passed 9 tests and the two Coordinator UI component
+suites passed 37 tests, including both golden_gate failures. Native CMake tests
+also passed (Thread Sanitizer disabled for this local run). Logs are
+`/tmp/ldtx-pr367-medium-green.log`, `/tmp/ldtx-pr367-component-green.log` and
+`/tmp/ldtx-pr367-cmake-tests.log`. No running app, physical device assignment or
+existing capture session was manipulated for this follow-up.
+The related Output suites passed another 40 tests
+(`/tmp/ldtx-pr367-output-green.log`), for 86 selected Swift tests in total.
+The ordinary unsigned Debug app build succeeded
+(`/tmp/ldtx-pr367-app-build.log`). Swift strict formatting, native clang-format
+and diff checks passed. The remote CI pipeline and Thread Sanitizer were not
+rerun, and no commit, push or review-state change was made.

@@ -300,10 +300,14 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     if stateService.localStateURL == nil { stateService.localStateURL = transientURL }
     let outputChanges = Observations { stateService.isOutputActive }
     outputObservationTask = Task { @MainActor [weak self] in
-      for await _ in outputChanges {
+      for await isOutputActive in outputChanges {
         guard let self, !Task.isCancelled else { return }
         outputStateDidChange?()
         visionFeature.outputStateDidChange()
+        // Re-read current assignments and monitor output after leaving output.
+        // Active-output notifications cannot admit resource work; this submits
+        // fresh work without reopening Stall or replaying discarded commands.
+        if !isOutputActive { synchronizeDeviceAssignments() }
       }
     }
 

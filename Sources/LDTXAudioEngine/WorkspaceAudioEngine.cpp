@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LDTXAudioEngine/WorkspaceAudioEngine.h"
 #include "Internal/HALInput.hpp"
+#include "Internal/MonitorRoutes.hpp"
 #include "LDTXAudioEngine/AudioMixEngine.hpp"
 #include <condition_variable>
 #include <deque>
@@ -772,12 +773,8 @@ void LDTXAudioUpdateMonitorValues(LDTXWorkspaceAudioEngine *e, const LDTXAudioRo
   for (uint32_t i = 0; i < count; ++i)
     copy.push_back(routes[i]);
   e->sync([=] {
-    for (auto &route : e->monitorRoutes)
-      for (const auto &value : copy)
-        if (route.input == value.input) {
-          route.gain = value.gain;
-          break;
-        }
+    if (!updateMonitorRouteGains(e->monitorRoutes, copy))
+      return;
     e->monitorMaster = std::isfinite(master) ? master : 0;
     e->applyMonitorGains();
   });

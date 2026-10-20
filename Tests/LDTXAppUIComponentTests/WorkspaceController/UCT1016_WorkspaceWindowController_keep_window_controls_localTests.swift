@@ -382,7 +382,7 @@ extension AppUIComponentTestSuite {
         items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
       for (value, stopEnabled, toggleEnabled, label) in [
         (WorkspaceRecordingState.idle, false, true, "Start Output"),
-        (.starting, false, false, "Start Output"),
+        (.starting, true, false, "Start Output"),
         (.recording, true, true, "Pause Output"),
         (.pausing, false, false, "Start Output"),
         (.paused, true, true, "Start Output"),
@@ -702,7 +702,14 @@ extension AppUIComponentTestSuite {
       await drainWorkspaceTestTasks()
       #expect(dockTile.badgeLabel == "REC")
       await firstCoordinator.shutdown()
+      #expect(!first.isClosed)
       #expect(dockTile.badgeLabel == "REC")
+      // This test projects output status without constructing live sessions.
+      // Project Stop completion before asking either Workspace to close.
+      first.stateService.isOutputActive = false
+      await firstCoordinator.shutdown()
+      #expect(dockTile.badgeLabel == "REC")
+      second.stateService.isOutputActive = false
       await secondCoordinator.shutdown()
       #expect(dockTile.badgeLabel == nil)
     }

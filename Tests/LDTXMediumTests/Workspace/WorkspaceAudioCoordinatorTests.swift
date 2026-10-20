@@ -14,6 +14,38 @@ import Testing
 @Suite
 @MainActor
 struct WorkspaceAudioCoordinatorIntegrationTestSuite {
+  @Test(arguments: [true, false])
+  func sharedPhysicalInputKeepsLogicalMonitorGains(secondConnected: Bool) {
+    let engine = WorkspaceAudioEngine(hardwareEnabled: false)
+    let monitor = ProgramAudioMonitor(engine: engine)
+    let channels = [
+      ProgramAudioChannel(id: "first", component: .inputAudioDevice(.init())),
+      ProgramAudioChannel(id: "second", component: .inputAudioDevice(.init())),
+    ]
+    let keys = channels.map { channels.audioChannelKey(for: $0) }
+    let mappings = Dictionary(
+      uniqueKeysWithValues: channels.map {
+        (channels.inputAudioDeviceMappingKey(for: $0), "shared-physical-input")
+      })
+    monitor.restart(
+      audioChannels: channels, inputAudioDeviceMappings: mappings,
+      programPreferences: .init(),
+      inputPassthroughChannelKeys: Set(secondConnected ? keys : [keys[0]]),
+      peakMeter: .init(), completionHandler: { _ in })
+    defer { monitor.stop() }
+    let original = engine.monitorRouteValues
+    #expect(original.count == 2)
+    #expect(original[0].input == original[1].input)
+    var preferences = ProgramPreferences()
+    preferences.audioChannelGainsByName = [keys[0]: 0.25, keys[1]: 0.75]
+    // Preference projection order must not replace the configured route order.
+    monitor.updateValues(audioChannels: channels.reversed(), preferences: preferences)
+    let updated = engine.monitorRouteValues
+    #expect(updated.map(\.gain) == [0.25, 0.75])
+    #expect(updated.map(\.connected) == original.map(\.connected))
+    #expect(updated.map(\.input) == original.map(\.input))
+  }
+
   @Test func outputDevicePreferenceNotifiesOwnerOnlyWhenDeviceChanges() throws {
     let suite = "monitor-preference-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: suite))

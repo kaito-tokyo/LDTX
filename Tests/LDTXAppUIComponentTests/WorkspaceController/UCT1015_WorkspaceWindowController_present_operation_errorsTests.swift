@@ -13,6 +13,62 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
   struct UCT1015WorkspaceAppletCoordinatorIntegrationTestSuite {
+    @Test func inactiveOutputDoesNotReopenStalledAssignments() async {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      await Task.yield()
+      await coordinator.transactionalCommands.waitForCurrentRequests()
+      _ = await coordinator.transactionalCommands.submit(.updateDeviceAssignment) {
+        throw CocoaError(.fileReadUnknown)
+      }
+      document.isOutputActive = true
+      for _ in 0..<100 { await Task.yield() }
+      document.isOutputActive = false
+      for _ in 0..<100 { await Task.yield() }
+      #expect(coordinator.transactionalCommands.isStalled)
+      #expect(coordinator.transactionalCommands.retryNumber == 1)
+      #expect(!coordinator.transactionalCommands.contains(.updateDeviceAssignment))
+      await coordinator.shutdown()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func inactiveOutputResynchronizesAssignmentsWithoutInterruptingAcceptedWork() async throws {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      await Task.yield()
+      await coordinator.transactionalCommands.waitForCurrentRequests()
+      let entered = AsyncStream<Void>.makeStream()
+      var release: CheckedContinuation<Void, Never>?
+      let running = Task {
+        await coordinator.transactionalCommands.submit(.switchProgram) {
+          await withCheckedContinuation { continuation in
+            release = continuation
+            entered.continuation.yield(())
+            entered.continuation.finish()
+          }
+        }
+      }
+      var events = entered.stream.makeAsyncIterator()
+      _ = await events.next()
+      defer { release?.resume() }
+      document.isOutputActive = true
+      for _ in 0..<100 { await Task.yield() }
+      #expect(!coordinator.transactionalCommands.contains(.updateDeviceAssignment))
+      document.isOutputActive = false
+      for _ in 0..<1_000 where !coordinator.transactionalCommands.contains(.updateDeviceAssignment)
+      {
+        await Task.yield()
+      }
+      #expect(coordinator.transactionalCommands.contains(.updateDeviceAssignment))
+      #expect(coordinator.transactionalCommands.contains(.switchProgram))
+      release?.resume()
+      release = nil
+      _ = await running.value
+      await coordinator.transactionalCommands.waitForCurrentRequests()
+      #expect(!coordinator.transactionalCommands.isStalled)
+      await coordinator.shutdown()
+    }
+
     @Test func closeRejectsStartingAndActiveOutputWithoutStall() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
