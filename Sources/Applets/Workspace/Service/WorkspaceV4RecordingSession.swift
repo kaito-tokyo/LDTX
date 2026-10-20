@@ -47,6 +47,7 @@ public final class WorkspaceV4RecordingSession {
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
+  public private(set) var latestRecordingBundleURL: URL?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue: DispatchQueue
@@ -188,6 +189,9 @@ public final class WorkspaceV4RecordingSession {
           recordsLandscape: recordsLandscape,
           recordsPortrait: recordsPortrait,
           customFields: output.recordingSettings.customFields,
+          firstVideoAccepted: { [weak self] url in
+            self?.latestRecordingBundleURL = url
+          },
           failureHandler: { [weak self] error in
             Task { @MainActor in await self?.fail(error) }
           })

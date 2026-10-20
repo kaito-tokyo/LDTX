@@ -7,6 +7,7 @@ import LDTXProtos
 import LDTXWorkspaceAppletModel
 
 public protocol WorkspaceRuntimeActions: AnyObject {
+  @MainActor var latestRecordingBundleURL: URL? { get }
   @MainActor func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String

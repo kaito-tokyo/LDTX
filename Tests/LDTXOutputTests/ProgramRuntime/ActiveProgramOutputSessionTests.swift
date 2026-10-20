@@ -959,6 +959,7 @@ extension OutputTestSuite {
         writerConfiguration: SegmentedMP4WriterConfiguration(
           width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
         audioTracks: [],
+        firstVideoAccepted: { _ in fail("A recording without video must not publish its URL") },
         failureHandler: { error in fail("Unexpected record failure: \(error)") })
       try service.start()
 
