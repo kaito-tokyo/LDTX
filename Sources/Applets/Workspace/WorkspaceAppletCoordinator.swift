@@ -815,6 +815,26 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     recordingSession.updateMixPreferences()
   }
 
+  public var isClosing: Bool { closeRequestTask != nil }
+
+  public var streamDeckControls: WorkspaceOutputControls {
+    .init(
+      stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil,
+      isClosing: closeRequestTask != nil)
+  }
+
+  public func performStreamDeckAction(_ key: Int) async {
+    let controls = streamDeckControls
+    switch key {
+    case 0 where controls.stopEnabled: await stopOutput()
+    case 1 where controls.startPauseEnabled:
+      await toggleOutput(stateService: stateService, document: workspaceDocument)
+    case 2 where controls.screenshotEnabled:
+      do { _ = try captureScreenshots() } catch { reportError(error) }
+    default: break
+    }
+  }
+
   public func captureScreenshots() throws -> [WorkspaceScreenshot] {
     try recordingSession.captureScreenshots()
   }

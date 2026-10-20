@@ -8,6 +8,31 @@ import LDTXWorkspaceAppletUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var workspaceCoordinators: [UUID: WorkspaceAppletCoordinator] = [:]
+  private weak var streamDeckWorkspace: WorkspaceAppletCoordinator?
+  private lazy var streamDeck = WorkspaceStreamDeck { [weak self] in
+    guard NSApp.modalWindow == nil,
+      let coordinator = self?.streamDeckWorkspace,
+      !coordinator.stateService.isClosed,
+      let window = coordinator.window,
+      window.attachedSheet == nil
+    else { return nil }
+    return coordinator
+  }
+
+  func activateStreamDeckWorkspace(_ coordinator: WorkspaceAppletCoordinator) {
+    guard !coordinator.stateService.isClosed else { return }
+    // Losing focus leaves ownership intact; only another Workspace takes over.
+    streamDeckWorkspace = coordinator
+  }
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    streamDeck.start()
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    streamDeck.stop()
+  }
+
   private var shutdownFailures: [String] = []
   private lazy var termination = WorkspaceApplicationTermination(
     hasPendingShutdown: { [weak self] in
@@ -54,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func workspaceDidShutdown(runtimeID: UUID) {
     guard let coordinator = workspaceCoordinators.removeValue(forKey: runtimeID) else { return }
+    if streamDeckWorkspace === coordinator { streamDeckWorkspace = nil }
     updateRecordingDockBadge()
     guard let failure = coordinator.takeShutdownFailureForPresentation() else { return }
     if termination.isTerminationPending {

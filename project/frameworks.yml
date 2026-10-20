@@ -574,6 +574,9 @@ targets:
           - WorkspaceDocumentConnection.swift
           - WorkspaceDocumentCloseCoordinator.swift
           - WorkspaceAppletCoordinator.swift
+          - WorkspaceStreamDeck.swift
+          - StreamDeckHID.swift
+          - StreamDeckReports.swift
           - WorkspaceAppletDelegate.swift
     dependencies:
       - target: LDTXProtos

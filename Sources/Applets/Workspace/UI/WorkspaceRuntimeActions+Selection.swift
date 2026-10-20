@@ -41,9 +41,12 @@ extension WorkspaceRuntimeActions {
   @MainActor public func toggleOutput(
     stateService: WorkspaceDocument, document: (any WorkspaceDocumentContext)?
   ) async {
-    guard !stateService.isClosed else { return }
+    guard
+      WorkspaceOutputControls(
+        stateService: stateService, hasSavedURL: document?.fileURL != nil
+      ).startPauseEnabled
+    else { return }
     let state = stateService.recordingState
-    guard (state.canStart && document?.fileURL != nil) || state == .recording else { return }
     if state == .recording {
       await pauseOutput()
     } else {
@@ -51,5 +54,26 @@ extension WorkspaceRuntimeActions {
         stateService.outputFailureMessage = error.localizedDescription
       }
     }
+  }
+}
+
+/// Shared toolbar and hardware-button admission. Runtime operations still revalidate.
+public struct WorkspaceOutputControls: Equatable, Sendable {
+  public let stopEnabled: Bool
+  public let startPauseEnabled: Bool
+  public let screenshotEnabled: Bool
+  public let showsPause: Bool
+
+  @MainActor public init(
+    stateService: WorkspaceDocument, hasSavedURL: Bool, isClosing: Bool = false
+  ) {
+    let state = stateService.recordingState
+    let available = !stateService.isClosed && !isClosing
+    stopEnabled = available && state.canStop
+    startPauseEnabled =
+      available
+      && ((state.canStart && hasSavedURL) || state == .recording)
+    screenshotEnabled = available
+    showsPause = state == .recording
   }
 }

@@ -14,6 +14,7 @@ import SwiftUI
 @MainActor
 struct LDTXApp: App {
   @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+  @FocusedValue(\.streamDeckWorkspace) private var focusedStreamDeckWorkspace
 
   init() {
     if let bundleIdentifier = Bundle.main.bundleIdentifier,
@@ -46,6 +47,11 @@ struct LDTXApp: App {
       }
     }
     .environment(\.workspaceAppletDelegate, appDelegate)
+    .onChange(of: focusedStreamDeckWorkspace?.stateService.runtimeID, initial: true) {
+      if let focusedStreamDeckWorkspace {
+        appDelegate.activateStreamDeckWorkspace(focusedStreamDeckWorkspace)
+      }
+    }
     .defaultSize(width: 1062, height: 700)
     .windowToolbarStyle(.unified)
     .commands {
