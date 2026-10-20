@@ -20,6 +20,7 @@ path = [
   "Package.resolved",
   "requirements-dev.lock",
   "Resources/**/*.json",
+  "Resources/LDTX/AppIcon.icon/Assets/*.svg",
   "Resources/Shared/About/Credits.rtf",
   "*.xctestplan",
 ]
