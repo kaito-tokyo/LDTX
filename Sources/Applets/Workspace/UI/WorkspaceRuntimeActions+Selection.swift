@@ -64,13 +64,16 @@ public struct WorkspaceOutputControls: Equatable, Sendable {
   public let screenshotEnabled: Bool
   public let showsPause: Bool
 
-  @MainActor public init(stateService: WorkspaceDocument, hasSavedURL: Bool) {
+  @MainActor public init(
+    stateService: WorkspaceDocument, hasSavedURL: Bool, isClosing: Bool = false
+  ) {
     let state = stateService.recordingState
-    stopEnabled = !stateService.isClosed && state.canStop
+    let available = !stateService.isClosed && !isClosing
+    stopEnabled = available && state.canStop
     startPauseEnabled =
-      !stateService.isClosed
+      available
       && ((state.canStart && hasSavedURL) || state == .recording)
-    screenshotEnabled = !stateService.isClosed
+    screenshotEnabled = available
     showsPause = state == .recording
   }
 }

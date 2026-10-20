@@ -193,7 +193,8 @@ final class StreamDeckHID: @unchecked Sendable {
   }
 
   private func received(_ bytes: UnsafeMutablePointer<UInt8>, count: Int) {
-    let edges = pressState.receive(Array(UnsafeBufferPointer(start: bytes, count: count)))
+    let edges = pressState.receive(
+      Array(UnsafeBufferPointer(start: bytes, count: count)), generation: displayedGeneration)
     guard let displayed, isCurrent(displayedGeneration) else { return }
     for key in edges where displayed.enabled[key] {
       onPress(key, displayed, displayedGeneration)

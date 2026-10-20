@@ -816,7 +816,9 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public var streamDeckControls: WorkspaceOutputControls {
-    .init(stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil)
+    .init(
+      stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil,
+      isClosing: closeRequestTask != nil)
   }
 
   public func performStreamDeckAction(_ key: Int) async {

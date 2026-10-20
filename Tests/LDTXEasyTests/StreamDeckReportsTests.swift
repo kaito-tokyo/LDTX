@@ -94,6 +94,19 @@ import Testing
     }
   }
 
+  @Test func startPauseReleaseCannotChangeTargetOrControlState() {
+    var state = StreamDeckPressState()
+    #expect(state.receive(report([1]), generation: 1).isEmpty)
+    // A repeated held report in a new frame must not rearm the release.
+    #expect(state.receive(report([1]), generation: 2).isEmpty)
+    #expect(state.receive(report(), generation: 2).isEmpty)
+    #expect(state.receive(report([1]), generation: 2).isEmpty)
+    #expect(state.receive(report(), generation: 2) == [1])
+    // Even if the visible state returns to its old value, its generation changed.
+    #expect(state.receive(report([1]), generation: 2).isEmpty)
+    #expect(state.receive(report(), generation: 4).isEmpty)
+  }
+
   @Test(arguments: [0, 2])
   func stopAndScreenshotFireOnKeyDownWithoutDelay(key: Int) {
     var state = StreamDeckPressState()

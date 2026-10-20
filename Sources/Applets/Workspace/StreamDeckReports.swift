@@ -4,7 +4,7 @@
 /// Stream Deck MK.2 input report state.
 struct StreamDeckPressState {
   private var previous = [Bool](repeating: false, count: 15)
-  private var startPauseArmed = false
+  private var startPauseGeneration: UInt64?
 
   private static func decode(_ bytes: [UInt8]) -> [Bool]? {
     guard bytes.count >= 19,
@@ -17,19 +17,19 @@ struct StreamDeckPressState {
   mutating func seed(_ bytes: [UInt8]) {
     guard let pressed = Self.decode(bytes) else { return }
     previous = pressed
-    startPauseArmed = false
+    startPauseGeneration = nil
   }
 
-  mutating func receive(_ bytes: [UInt8]) -> [Int] {
+  mutating func receive(_ bytes: [UInt8], generation: UInt64 = 0) -> [Int] {
     guard let pressed = Self.decode(bytes) else { return [] }
     defer { previous = pressed }
     var edges: [Int] = []
     for key in 0..<3 {
       if key == 1 {
-        if pressed[key] && !previous[key] { startPauseArmed = true }
+        if pressed[key] && !previous[key] { startPauseGeneration = generation }
         if !pressed[key] && previous[key] {
-          if startPauseArmed { edges.append(key) }
-          startPauseArmed = false
+          if startPauseGeneration == generation { edges.append(key) }
+          startPauseGeneration = nil
         }
         continue
       }

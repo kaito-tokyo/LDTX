@@ -22,6 +22,10 @@ extension AppUIComponentTestSuite {
         #expect(saved.startPauseEnabled == (state.canStart || state == .recording))
         #expect(unsaved.startPauseEnabled == (state == .recording))
         #expect(saved.screenshotEnabled)
+        let closing = WorkspaceOutputControls(
+          stateService: document, hasSavedURL: true, isClosing: true)
+        #expect(!document.isClosed)
+        #expect(!closing.stopEnabled && !closing.startPauseEnabled && !closing.screenshotEnabled)
       }
       document.isClosed = true
       let closed = WorkspaceOutputControls(stateService: document, hasSavedURL: true)
