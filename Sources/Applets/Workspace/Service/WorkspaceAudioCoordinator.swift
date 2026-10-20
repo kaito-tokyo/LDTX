@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import Foundation
 import LDTXCapture
 import LDTXProgram
 import LDTXProgramRuntime
@@ -12,7 +13,7 @@ public final class WorkspaceAudioCoordinator {
   public let monitor: ProgramAudioMonitor
   public let peakMeter = ProgramAudioPeakMeter()
 
-  private var restartTask: Task<Void, Never>?
+  private var restartTask: Task<Result<Void, NSError>, Never>?
   private let stopped = OSAllocatedUnfairLock(initialState: true)
 
   public init(captureSessionCoordinator: WorkspaceCaptureSessionCoordinator) {
@@ -28,14 +29,16 @@ public final class WorkspaceAudioCoordinator {
     shouldRemainRunning: @escaping @Sendable () -> Bool,
     failureHandler: @escaping @MainActor (CaptureSessionRuntimeFailure) -> Void,
     errorHandler: @escaping @MainActor (Error) -> Void
-  ) -> Task<Void, Never> {
-    restartTask?.cancel()
+  ) -> Task<Result<Void, NSError>, Never> {
+    let previousRestart = restartTask
     stopped.withLock { $0 = false }
 
     let monitor = monitor
     let peakMeter = peakMeter
-    let task = Task {
+    let task = Task<Result<Void, NSError>, Never> {
       do {
+        _ = await previousRestart?.value
+        try Task.checkCancellation()
         try await withCheckedThrowingContinuation { continuation in
           monitor.restart(
             audioChannels: audioChannels,
@@ -53,7 +56,9 @@ public final class WorkspaceAudioCoordinator {
           peakMeter.reset()
           stopped.withLock { $0 = true }
         }
+        return .success(())
       } catch is CancellationError {
+        return .failure(CancellationError() as NSError)
       } catch {
         await withCheckedContinuation { continuation in
           monitor.stop { continuation.resume() }
@@ -61,6 +66,7 @@ public final class WorkspaceAudioCoordinator {
         peakMeter.reset()
         stopped.withLock { $0 = true }
         errorHandler(error)
+        return .failure(error as NSError)
       }
     }
     restartTask = task
@@ -68,11 +74,14 @@ public final class WorkspaceAudioCoordinator {
   }
 
   /// Stops and resets all audio resources owned by this coordinator.
-  /// Sequential calls are idempotent. WorkspaceContainer serializes calls made
-  /// as part of workspace shutdown.
+  /// Joins the existing restart before stopping the monitor, so that restart
+  /// cannot apply a configuration after this call completes. The owner still
+  /// serializes new resource requests with workspace shutdown.
   public func stopAndReset() async {
-    restartTask?.cancel()
+    let restart = restartTask
+    restart?.cancel()
     restartTask = nil
+    _ = await restart?.value
     await withCheckedContinuation { continuation in
       monitor.stop { continuation.resume() }
     }
@@ -80,7 +89,7 @@ public final class WorkspaceAudioCoordinator {
     stopped.withLock { $0 = true }
   }
 
-  nonisolated func isFullyStopped() -> Bool {
+  public nonisolated func isFullyStopped() -> Bool {
     stopped.withLock { $0 }
   }
 }

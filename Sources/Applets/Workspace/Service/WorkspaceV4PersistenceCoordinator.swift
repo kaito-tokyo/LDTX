@@ -64,9 +64,13 @@ public final class WorkspaceV4PersistenceCoordinator {
   }
 
   public func adoptRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) throws {
-    try workspace.definition.validateRichTextDocuments()
+    try Self.validateRuntimeWorkspace(workspace)
     adoptedRuntimeWorkspace = workspace
     runtimeWorkspaceAdopted?(workspace)
+  }
+
+  public static func validateRuntimeWorkspace(_ workspace: WorkspaceV4Bundle) throws {
+    try workspace.definition.validateRichTextDocuments()
   }
 
   func setOutputActive(_ active: Bool) {

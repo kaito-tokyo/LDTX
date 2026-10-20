@@ -55,4 +55,12 @@ public final class VideoComponentFrameRenderer: @unchecked Sendable {
       }
     }
   }
+
+  public func stopAndDrain(completionHandler: @escaping @Sendable () -> Void) {
+    queue.async { [self] in
+      for renderer in renderers.values { renderer.endSession(1) }
+      renderers.removeAll()
+      completionHandler()
+    }
+  }
 }

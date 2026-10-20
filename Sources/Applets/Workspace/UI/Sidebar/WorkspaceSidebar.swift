@@ -262,10 +262,8 @@ public struct WorkspaceSidebar: View {
       audioDiscoveryError: deviceRegistry.errorMessage)
     if sheet == .device || selectsCamera {
       appletData.setPhysicalDeviceID(draft.physicalDeviceID, for: id)
-      runtimeActions()?.synchronizeCaptureInputs(
-        availableCameraIDs: Set(deviceRegistry.cameras.map(\.id))
-      ) { _ in }
-      runtimeActions()?.synchronizeAudioMonitor()
+      try runtimeActions()?.updateDeviceAssignments(
+        availableCameraIDs: Set(deviceRegistry.cameras.map(\.id)))
     }
   }
 

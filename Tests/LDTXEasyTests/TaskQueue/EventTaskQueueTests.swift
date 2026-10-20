@@ -8,6 +8,88 @@ import Testing
 
 @Suite
 struct EventTaskQueueIntegrationTestSuite {
+  @Test(.timeLimit(.minutes(1)))
+  func stallRemainsAfterRunningCompletionAndRejectsEveryPendingEntry() async {
+    let log = TaskQueueTestLog()
+    let queue = EventTaskQueue(label: "test.stall-completion")
+    let firstDiscard = TaskQueueAsyncSignal()
+    let secondDiscard = TaskQueueAsyncSignal()
+    let notified = TaskQueueAsyncSignal()
+    let stopped = TaskQueueAsyncSignal()
+    #expect(queue.enqueue(task(named: "failing", log: log)))
+    #expect(log.waitForStarts(1))
+    let acceptedFirst = queue.enqueue(
+      onDiscard: { firstDiscard.signal() }, task(named: "first", log: log))
+    let acceptedSecond = queue.enqueue(
+      onDiscard: { secondDiscard.signal() }, task(named: "second", log: log))
+    #expect(acceptedFirst)
+    #expect(acceptedSecond)
+    queue.stall { notified.signal() }
+    log.completeNext()
+    queue.stall { Issue.record("Stall notification must be one-shot") }
+    await notified.wait()
+    await firstDiscard.wait()
+    await secondDiscard.wait()
+    #expect(!queue.enqueue(task(named: "retry", log: log)))
+    queue.stop { stopped.signal() }
+    await stopped.wait()
+    #expect(log.started == ["failing"])
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func stallRejectsPendingWorkAndNotifiesBeforeCleanupCompletes() async {
+    let log = TaskQueueTestLog()
+    let queue = EventTaskQueue(label: "test.stall")
+    let notified = TaskQueueAsyncSignal()
+    let cleanupStarted = TaskQueueAsyncSignal()
+    let cleanupFinished = TaskQueueAsyncSignal()
+    let releaseCleanup = DispatchSemaphore(value: 0)
+    let stopped = TaskQueueAsyncSignal()
+    defer { releaseCleanup.signal() }
+
+    #expect(queue.enqueue(task(named: "running", log: log)))
+    #expect(log.waitForStarts(1))
+    let acceptedPending = queue.enqueue(
+      onDiscard: {
+        cleanupStarted.signal()
+        #expect(!queue.enqueue(self.task(named: "discard-retry", log: log)))
+        #expect(releaseCleanup.wait(timeout: .now() + 5) == .success)
+        cleanupFinished.signal()
+      }, task(named: "pending", log: log))
+    #expect(acceptedPending)
+    queue.stall { notified.signal() }
+    await cleanupStarted.wait()
+    await notified.wait()
+    #expect(!cleanupFinished.isSignaled)
+    #expect(!queue.stopToken.isStopRequested)
+    #expect(!queue.enqueue(task(named: "rejected", log: log)))
+    #expect(log.started == ["running"])
+
+    queue.stop { stopped.signal() }
+    #expect(!stopped.isSignaled)
+    log.completeNext()
+    releaseCleanup.signal()
+    await stopped.wait()
+    #expect(log.started == ["running"])
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func stalledWorkspaceDoesNotBlockAnotherQueue() async {
+    let first = EventTaskQueue(label: "test.workspace.first")
+    let second = EventTaskQueue(label: "test.workspace.second")
+    let firstLog = TaskQueueTestLog()
+    let secondLog = TaskQueueTestLog()
+    let notified = TaskQueueAsyncSignal()
+    #expect(first.enqueue(task(named: "held", log: firstLog)))
+    #expect(firstLog.waitForStarts(1))
+    first.stall { notified.signal() }
+    await notified.wait()
+    #expect(second.enqueue(task(named: "independent", log: secondLog)))
+    #expect(secondLog.waitForStarts(1))
+    secondLog.completeNext()
+    firstLog.completeNext()
+  }
+
   @Test func executesFIFOAndWaitsForBoundCompletion() throws {
     let log = TaskQueueTestLog()
     let queue = EventTaskQueue(label: "test.fifo")

@@ -274,6 +274,11 @@ final class ClockOverlayRuntime: @unchecked Sendable {
     lock.withLock { state.retainedTexture }
   }
 
+  func deactivateAndDrain(completionHandler: @escaping @Sendable () -> Void) {
+    deactivate()
+    rendererQueue.async(execute: completionHandler)
+  }
+
   deinit {
     deactivate()
   }

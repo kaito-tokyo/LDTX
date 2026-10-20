@@ -89,7 +89,7 @@ struct MasterVolumeEditor: View {
     do {
       let volume = try Rational32DecibelEncoding.encode(value).double
       appletData.updateState(for: url) { $0.monitorVolume = volume }
-      runtimeActions()?.synchronizeAudioMonitor()
+      runtimeActions()?.updateAudioMonitorValues()
       return true
     } catch {
       reportError(error)

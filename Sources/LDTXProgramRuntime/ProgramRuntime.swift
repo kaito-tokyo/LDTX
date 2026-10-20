@@ -311,6 +311,11 @@ public final class ProgramRuntime: @unchecked Sendable {
     }
   }
 
+  /// Call after all preview/output consumers have stopped admitting frames.
+  public func drainRendering(completionHandler: @escaping @Sendable () -> Void) {
+    renderQueue.async(execute: completionHandler)
+  }
+
   public func beginOutput() {
     lock.withLock {
       outputConsumerCount += 1

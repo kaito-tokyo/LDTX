@@ -176,6 +176,23 @@ public final class ActiveDualProgramOutputSession {
     landscape.updateProgramPreferences(preferences)
   }
 
+  public func reconfigureAudioAndWait(
+    landscapePreferences: ProgramPreferences, portraitPreferences: ProgramPreferences,
+    audioDeviceIDsByInputKey: [String: String]
+  ) async throws {
+    self.portraitPreferences = portraitPreferences
+    self.portraitAudioDeviceIDsByInputKey = audioDeviceIDsByInputKey
+    if runsLandscape {
+      try await landscape.reconfigureAudioAndWait(
+        programPreferences: landscapePreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey
+      )
+    }
+    if runsPortrait {
+      try await portrait.reconfigureAudioAndWait(
+        programPreferences: portraitPreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey)
+    }
+  }
+
   public func updatePortraitProgramPreferences(_ preferences: ProgramPreferences) {
     portraitPreferences = preferences
     portrait.updateProgramPreferences(preferences)

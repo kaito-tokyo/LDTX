@@ -19,6 +19,50 @@ extension OutputTestSuite {
   @MainActor
   @Suite
   struct ActiveProgramOutputSessionIntegrationTestSuite {
+    @Test func audioReconfigurationWaitsForMixerCompletion() async throws {
+      try await checkAudioReconfiguration(failure: false)
+    }
+
+    @Test func audioReconfigurationPropagatesMixerFailure() async throws {
+      try await checkAudioReconfiguration(failure: true)
+    }
+
+    private func checkAudioReconfiguration(failure: Bool) async throws {
+      let runtime = makeProgramRuntime()
+      runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
+      let mixer = ProgramMainAudioMixerSpy()
+      let session = ActiveProgramOutputSession(
+        currentProgramRuntime: runtime, mediaHub: ProgramOutputMediaHub(), audioMixer: mixer)
+      let started = expectation(description: "session started")
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { _ in started.fulfill() })
+      #expect(await waitUntil { mixer.isStartPending })
+      mixer.completeStart()
+      await fulfillment(of: [started], timeout: 2)
+      var completed = false
+      let reconfiguration = Task {
+        try await session.reconfigureAudioAndWait(
+          programPreferences: .init(), audioDeviceIDsByInputKey: [:])
+        completed = true
+      }
+      #expect(await waitUntil { mixer.isStartPending })
+      #expect(!completed)
+      mixer.completeStart(
+        with: failure ? .failure(NSError(domain: "test-mixer", code: 93)) : .success(()))
+      do {
+        try await reconfiguration.value
+        #expect(!failure)
+        #expect(completed)
+      } catch {
+        #expect(failure)
+        #expect((error as NSError).code == 93)
+        #expect(!completed)
+      }
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+    }
+
     @Test func sessionKeepsInjectedDiagnosticIdentifier() {
       let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
       let session = ActiveProgramOutputSession(
@@ -1082,13 +1126,13 @@ private final class ProgramMainAudioMixerSpy: ProgramMainAudioMixing, @unchecked
     lock.withLock { startCompletion = completionHandler }
   }
 
-  func completeStart() {
+  func completeStart(with result: Result<Void, any Error> = .success(())) {
     let completion = lock.withLock {
       let completion = startCompletion
       startCompletion = nil
       return completion
     }
-    completion?(.success(()))
+    completion?(result)
   }
 
   func addMainAudioMixHandler(

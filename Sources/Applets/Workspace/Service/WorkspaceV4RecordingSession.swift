@@ -58,8 +58,9 @@ public final class WorkspaceV4RecordingSession {
   private var youtubeLandscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
-  @ObservationIgnored private var stoppingTask: Task<Void, Never>?
+  @ObservationIgnored private var stoppingTask: Task<Result<Void, NSError>, Never>?
   private var terminalFailureMessage: String?
+  @ObservationIgnored private var currentStoppingFailure: NSError?
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
   public var state: State {
@@ -86,34 +87,55 @@ public final class WorkspaceV4RecordingSession {
 
   public var isRecording: Bool { state.isOutputActive }
 
-  public func start() async {
-    guard state.canStart else { return }
+  public func start() async { _ = await startWithResult() }
+
+  public func startWithResult() async -> Result<Void, NSError> {
+    guard state.canStart else {
+      return .failure(
+        NSError(
+          domain: "WorkspaceOutput", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Output is already active or transitioning."]))
+    }
     if isFailed {
       clearSessionReferences()
       state = .idle
     }
     guard let selectedProgramInternalID = selectedProgramInternalID else {
       state = .failed("Select a Program before starting recording.")
-      return
+      return .failure(
+        NSError(
+          domain: "WorkspaceOutput", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Select a Program before starting recording."]))
     }
     let output = windowRuntime.workspace.outputSettings
     let recordsLandscape = output.recordingEnabled && output.recordingSettings.recordsLandscape
     let recordsPortrait = output.recordingEnabled && output.recordingSettings.recordsPortrait
     guard recordsLandscape || recordsPortrait || output.youtubeEnabled else {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
-      return
+      return .failure(
+        NSError(
+          domain: "WorkspaceOutput", code: 1,
+          userInfo: [
+            NSLocalizedDescriptionKey: "Enable recording or YouTube streaming in Output settings."
+          ]))
     }
     guard let landscapeRuntime = windowRuntime.landscapeRuntime,
       let portraitRuntime = windowRuntime.portraitRuntime
     else {
       state = .failed("The selected Program runtime is unavailable.")
-      return
+      return .failure(
+        NSError(
+          domain: "WorkspaceOutput", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "The selected Program runtime is unavailable."]))
     }
     guard let landscapeConfiguration = landscapeRuntime.programState.read({ $0 }),
       let portraitConfiguration = portraitRuntime.programState.read({ $0 })
     else {
       state = .failed("The selected Program has not been rendered yet.")
-      return
+      return .failure(
+        NSError(
+          domain: "WorkspaceOutput", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "The selected Program has not been rendered yet."]))
     }
 
     sessionOutputSettings = output
@@ -137,11 +159,11 @@ public final class WorkspaceV4RecordingSession {
           runsPortrait ? portraitConfiguration : nil,
         ].compactMap { $0 }
       )
-      guard state == .starting else { return }
+      guard state == .starting else { return await interruptedStartResult() }
     } catch {
       sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
-      return
+      return .failure(error as NSError)
     }
 
     let youtubeService: YouTubeRTMPSWorkspaceService?
@@ -150,7 +172,7 @@ public final class WorkspaceV4RecordingSession {
     } catch {
       sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
-      return
+      return .failure(error as NSError)
     }
     let service: SessionRecordService?
     do {
@@ -187,7 +209,7 @@ public final class WorkspaceV4RecordingSession {
     } catch {
       sleepInhibitor.stop()
       state = .failed(error.localizedDescription)
-      return
+      return .failure(error as NSError)
     }
 
     let landscapeHub = ProgramOutputMediaHub()
@@ -225,50 +247,67 @@ public final class WorkspaceV4RecordingSession {
       if let youtubeRTMPSService {
         try await youtubeRTMPSService.waitUntilPublishing()
       }
-      guard state == .starting else { return }
+      guard state == .starting else { return await interruptedStartResult() }
       state = .recording
+      return .success(())
     } catch {
       await fail(error)
+      return .failure(error as NSError)
     }
   }
 
-  public func pause() async {
-    guard state == .recording else { return }
-    await finishOutput(pausing: true)
+  private func interruptedStartResult() async -> Result<Void, NSError> {
+    _ = await stoppingTask?.value
+    let message = failureMessage ?? "Output startup did not complete."
+    return .failure(
+      NSError(
+        domain: "WorkspaceOutput", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: message]))
   }
 
-  public func stop() async {
+  public func pause() async { _ = await pauseWithResult() }
+
+  public func pauseWithResult() async -> Result<Void, NSError> {
+    guard state == .recording else { return .success(()) }
+    return await finishOutput(pausing: true)
+  }
+
+  public func stop() async { _ = await stopWithResult() }
+
+  public func stopWithResult() async -> Result<Void, NSError> {
     if state == .paused {
       state = .idle
-      return
+      return .success(())
     }
-    await finishOutput(pausing: false)
-    // A shutdown request that joined Pause must also leave the session idle.
+    let result = await finishOutput(pausing: false)
+    // A stop that joined Pause must also leave the session idle.
     if state == .paused { state = .idle }
+    return result
   }
 
-  private func finishOutput(pausing: Bool) async {
-    if let stoppingTask {
-      await stoppingTask.value
-      return
-    }
-    guard state == .starting || state == .recording || isFailed else { return }
-    await beginFinishingOutput(pausing: pausing, priorFailure: failureMessage).value
+  private func finishOutput(pausing: Bool) async -> Result<Void, NSError> {
+    if let stoppingTask { return await stoppingTask.value }
+    guard state == .starting || state == .recording || isFailed else { return .success(()) }
+    return await beginFinishingOutput(pausing: pausing, priorFailure: failureMessage).value
   }
 
-  private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<Void, Never> {
+  private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<
+    Result<Void, NSError>, Never
+  > {
     // Lock out another request before the task reaches its first suspension.
     terminalFailureMessage = priorFailure
+    currentStoppingFailure = nil
     state = pausing ? .pausing : .stopping
     let task = Task { @MainActor in
-      await finishStopping(pausing: pausing)
+      let result = await finishStopping(pausing: pausing)
       stoppingTask = nil
+      return result
     }
     stoppingTask = task
     return task
   }
 
-  private func finishStopping(pausing: Bool) async {
+  private func finishStopping(pausing: Bool) async -> Result<Void, NSError> {
     windowRuntime.visionArchivePackageURL = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
@@ -282,6 +321,7 @@ public final class WorkspaceV4RecordingSession {
       return error
     }) {
       terminalFailureMessage = error.localizedDescription
+      currentStoppingFailure = error as NSError
     }
     if let recordService {
       await finalize(recordService)
@@ -289,12 +329,16 @@ public final class WorkspaceV4RecordingSession {
     if let youtubeRTMPSService {
       if case .failure(let error) = await youtubeRTMPSService.finish() {
         terminalFailureMessage = error.localizedDescription
+        currentStoppingFailure = error as NSError
       }
     }
     clearSessionReferences()
     sleepInhibitor.stop()
     state = terminalFailureMessage.map(State.failed) ?? (pausing ? .paused : .idle)
     terminalFailureMessage = nil
+    let result: Result<Void, NSError> = currentStoppingFailure.map { .failure($0) } ?? .success(())
+    currentStoppingFailure = nil
+    return result
   }
 
   public func reconfigureProgramOutput() throws {
@@ -312,6 +356,31 @@ public final class WorkspaceV4RecordingSession {
         domain: "WorkspaceProgramSelection", code: 3,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program audio could not be applied."])
       _ = beginFinishingOutput(pausing: false, priorFailure: error.localizedDescription)
+      throw error
+    }
+  }
+
+  public func reconfigureProgramOutputAndWait() async throws {
+    // Native media faults can already be draining the session. A Program
+    // switch must join that cleanup even when there is no live mixer to update.
+    _ = await stoppingTask?.value
+    guard state == .recording, let activeSession, let programID = selectedProgramInternalID else {
+      return
+    }
+    do {
+      try await activeSession.reconfigureAudioAndWait(
+        landscapePreferences: preferences(
+          windowRuntime.preferences.landscapeProgramPreferences[programID] ?? .init()),
+        portraitPreferences: portraitPreferences(for: programID),
+        audioDeviceIDsByInputKey: audioDeviceIDsByInputKey())
+      _ = await stoppingTask?.value
+      if case .failed(let message) = state {
+        throw NSError(
+          domain: "WorkspaceProgramSelection", code: 4,
+          userInfo: [NSLocalizedDescriptionKey: message])
+      }
+    } catch {
+      await fail(error)
       throw error
     }
   }
@@ -490,12 +559,14 @@ public final class WorkspaceV4RecordingSession {
     }
     if case .failed(let error) = result {
       terminalFailureMessage = error.localizedDescription
+      currentStoppingFailure = error as NSError
     }
   }
 
   func fail(_ error: Error) async {
     if state == .pausing || state == .stopping {
       terminalFailureMessage = error.localizedDescription
+      currentStoppingFailure = error as NSError
       return
     }
     guard state == .starting || state == .recording else { return }

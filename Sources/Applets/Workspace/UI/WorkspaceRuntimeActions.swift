@@ -10,12 +10,17 @@ public protocol WorkspaceRuntimeActions: AnyObject {
   @MainActor func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String
+  @discardableResult @MainActor func updateDeviceAssignments(availableCameraIDs: Set<String>) throws
+    -> Task<WorkspaceCommandOutcome, Never>
   @MainActor func synchronizeAudioMonitor()
+  @MainActor func updateAudioMonitorValues()
   @MainActor func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>,
     completionHandler: @escaping @Sendable (Set<String>) -> Void)
   @MainActor func removeProgram(internalID: Int64, undoManager: UndoManager?) throws
-  @MainActor func selectProgram(internalID: Int64) throws
+  @discardableResult @MainActor func selectProgram(internalID: Int64) throws -> Task<
+    WorkspaceCommandOutcome, Never
+  >
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws
   @MainActor func pauseOutput() async

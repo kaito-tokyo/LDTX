@@ -315,7 +315,8 @@ public final class ActiveProgramOutputSession {
   @discardableResult
   public func reconfigureAudio(
     programPreferences: ProgramPreferences,
-    audioDeviceIDsByInputKey: [String: String]
+    audioDeviceIDsByInputKey: [String: String],
+    completionHandler: @escaping @MainActor @Sendable (Result<Void, any Error>) -> Void = { _ in }
   ) -> Bool {
     guard lifecycleState == .running,
       let configuration = currentProgramRuntime.programState.read({ $0 })
@@ -330,10 +331,27 @@ public final class ActiveProgramOutputSession {
         dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
       },
       completionHandler: { [weak self] result in
-        guard case .failure(let error) = result else { return }
-        dispatchToProgramOutputMainActor { self?.handleOutputFailure(error) }
+        dispatchToProgramOutputMainActor {
+          if case .failure(let error) = result { self?.handleOutputFailure(error) }
+          completionHandler(result)
+        }
       })
     return true
+  }
+
+  /// A rejected reconfiguration has no callback; accepted work owns its callback
+  /// until the mixer reaches a terminal result.
+  public func reconfigureAudioAndWait(
+    programPreferences: ProgramPreferences, audioDeviceIDsByInputKey: [String: String]
+  ) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      let accepted = reconfigureAudio(
+        programPreferences: programPreferences, audioDeviceIDsByInputKey: audioDeviceIDsByInputKey,
+        completionHandler: { continuation.resume(with: $0) })
+      if !accepted {
+        continuation.resume(throwing: ActiveProgramOutputSessionError.missingProgramConfiguration)
+      }
+    }
   }
 
   /// Reconnects this fixed output session to another already-configured

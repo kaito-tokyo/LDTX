@@ -152,7 +152,6 @@ struct WorkspaceProgramsInspector: View {
         runtimeActions()?.updateProgramRuntimes()
       }
     }
-    runtimeActions()?.synchronizeAudioMonitor()
   }
   private func nextInternalID() -> Int64 { WorkspaceResourceFactory.nextInternalID() }
 

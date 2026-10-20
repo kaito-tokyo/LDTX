@@ -101,12 +101,18 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   }
   func pauseOutput() async { actions.append("pause") }
   func stopOutput() async { actions.append("stop") }
+  func updateDeviceAssignments(availableCameraIDs: Set<String>) throws -> Task<
+    WorkspaceCommandOutcome, Never
+  > { Task { .succeeded } }
   func synchronizeAudioMonitor() {}
+  func updateAudioMonitorValues() {}
   func synchronizeCaptureInputs(
     availableCameraIDs: Set<String>, completionHandler: @escaping @Sendable (Set<String>) -> Void
   ) { completionHandler([]) }
   func removeProgram(internalID: Int64, undoManager: UndoManager?) throws {}
-  func selectProgram(internalID: Int64) throws {}
+  func selectProgram(internalID: Int64) throws -> Task<WorkspaceCommandOutcome, Never> {
+    Task { .succeeded }
+  }
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
   func captureScreenshots() throws -> [WorkspaceScreenshot] {

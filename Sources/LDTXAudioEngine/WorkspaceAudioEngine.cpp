@@ -766,6 +766,22 @@ void LDTXAudioConfigureBus(LDTXWorkspaceAudioEngine *e, LDTXAudioID id, const LD
 void LDTXAudioRemoveBus(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
   e->sync([=] { e->buses.erase(id); });
 }
+void LDTXAudioUpdateMonitorValues(LDTXWorkspaceAudioEngine *e, const LDTXAudioRoute *routes, uint32_t count,
+                                  float master) {
+  std::vector<LDTXAudioRoute> copy;
+  for (uint32_t i = 0; i < count; ++i)
+    copy.push_back(routes[i]);
+  e->sync([=] {
+    for (auto &route : e->monitorRoutes)
+      for (const auto &value : copy)
+        if (route.input == value.input) {
+          route.gain = value.gain;
+          break;
+        }
+    e->monitorMaster = std::isfinite(master) ? master : 0;
+    e->applyMonitorGains();
+  });
+}
 void LDTXAudioConfigureMonitor(LDTXWorkspaceAudioEngine *e, const char *uid, const LDTXAudioRoute *routes,
                                uint32_t count, float master) {
   std::string name = uid ? uid : "";

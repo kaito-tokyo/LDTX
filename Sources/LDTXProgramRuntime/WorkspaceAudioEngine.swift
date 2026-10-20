@@ -24,6 +24,8 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
   }
   let native: OpaquePointer
   private let lock = NSRecursiveLock()
+  private var observedMonitorDeviceID = ""
+  private var monitorDeviceChangeHandler: (@Sendable () -> Void)?
   private let id = UUID()
   private var inputs: [String: UInt64] = [:]
   private var busOwners: [UUID: Bus] = [:]
@@ -71,14 +73,27 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
           userInfo: ["failures": snapshot])
       }, Unmanaged.passUnretained(errors).toOpaque())
     if hardwareEnabled {
+      observedMonitorDeviceID = defaults.string(forKey: Self.outputDevicePreferenceKey) ?? ""
       observer = NotificationCenter.default.addObserver(
         forName: UserDefaults.didChangeNotification,
         object: nil, queue: nil
       ) { [weak self] _ in
-        // Never reenter native control from its error callback.
-        DispatchQueue.global().async { [weak self] in self?.refreshMonitor() }
+        self?.notifyMonitorDeviceChange()
       }
     }
+  }
+  public func setMonitorDeviceChangeHandler(_ handler: @escaping @Sendable () -> Void) {
+    lock.withLock { monitorDeviceChangeHandler = handler }
+  }
+
+  func notifyMonitorDeviceChange() {
+    let handler = lock.withLock { () -> (@Sendable () -> Void)? in
+      let current = defaults.string(forKey: Self.outputDevicePreferenceKey) ?? ""
+      guard current != observedMonitorDeviceID else { return nil }
+      observedMonitorDeviceID = current
+      return monitorDeviceChangeHandler
+    }
+    handler?()
   }
   func input(uid: String, kind: UInt32 = 0) -> UInt64 {
     lock.withLock {
@@ -174,6 +189,23 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
       monitorMaster = master
       refreshMonitor()
       removeUnusedGeneratedInputs()
+    }
+  }
+
+  func existingInput(uid: String, kind: UInt32 = 0) -> UInt64? {
+    lock.withLock { inputs["\(kind):\(uid)"] }
+  }
+
+  func updateMonitorValues(gains: [UInt64: Float], master: Float) {
+    lock.withLock {
+      for index in monitorRoutes.indices {
+        if let gain = gains[monitorRoutes[index].input] { monitorRoutes[index].gain = gain }
+      }
+      monitorMaster = master
+      let values = monitorRoutes.map(\.value)
+      values.withUnsafeBufferPointer {
+        LDTXAudioUpdateMonitorValues(native, $0.baseAddress, UInt32($0.count), monitorMaster)
+      }
     }
   }
   private func refreshMonitor() {

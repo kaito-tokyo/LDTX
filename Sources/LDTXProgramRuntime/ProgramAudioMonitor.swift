@@ -56,4 +56,27 @@ public final class ProgramAudioMonitor: @unchecked Sendable {
     engine.configureMonitor(routes: [], master: 1)
     completionHandler()
   }
+
+  /// Applies values to the already configured topology. It never creates an
+  /// input, changes monitor membership, or cancels a resource operation.
+  public func updateValues(audioChannels: [ProgramAudioChannel], preferences: ProgramPreferences) {
+    var gains: [UInt64: Float] = [:]
+    for channel in audioChannels {
+      let key = audioChannels.audioChannelKey(for: channel)
+      let input: UInt64?
+      switch channel.component.definition {
+      case .inputAudioDevice:
+        input = mappings[audioChannels.inputAudioDeviceMappingKey(for: channel)]
+          .flatMap { engine.existingInput(uid: $0) }
+      case .testPatternAudio: input = engine.existingInput(uid: key, kind: 1)
+      case .silentAudio: input = engine.existingInput(uid: key, kind: 2)
+      }
+      if let input {
+        gains[input] = Float(preferences.audioChannelGain(for: channel, in: audioChannels))
+      }
+    }
+    engine.updateMonitorValues(
+      gains: gains,
+      master: Float(ProgramPreferences.clampedAudioChannelGain(preferences.masterVolume)))
+  }
 }

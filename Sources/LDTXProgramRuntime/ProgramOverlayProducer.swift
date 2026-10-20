@@ -81,11 +81,15 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
     }
   }
 
-  public func stop() {
+  public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
     queue.async { [state, textures] in
-      state.registry?.deactivateAll()
       textures.retain([])
       state.failedConfiguration = nil
+      if let registry = state.registry {
+        registry.deactivateAll(completionHandler: completionHandler)
+      } else {
+        completionHandler()
+      }
     }
   }
 
