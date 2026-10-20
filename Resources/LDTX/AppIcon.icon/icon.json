@@ -1,0 +1,145 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : {
+        "solid" : "srgb:0.45490,0.78039,0.70980,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "display-p3:0.11444,0.24557,0.26302,1.00000"
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "blend-mode-specializations" : [
+        {
+          "appearance" : "dark",
+          "value" : "normal"
+        }
+      ],
+      "layers" : [
+        {
+          "image-name" : "outline.svg",
+          "name" : "Outline",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              16,
+              -14.58299459163527
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.79512,0.78729,0.71049,1.00000",
+                  "display-p3:0.83492,0.82804,0.76068,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.6858983485193622,
+                    "y" : 0.7540541481069042
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  }
+                }
+              }
+            }
+          ],
+          "image-name" : "highlight.svg",
+          "name" : "Highlight",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              16,
+              -14.58299459163527
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Overlay",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.2
+      }
+    },
+    {
+      "blend-mode-specializations" : [
+        {
+          "appearance" : "dark",
+          "value" : "normal"
+        }
+      ],
+      "blur-material" : null,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.73333,0.65490,0.32157,0.67679"
+              }
+            }
+          ],
+          "image-name" : "moon.svg",
+          "name" : "Moonlight",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              16,
+              -14.58299459163527
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.65882,0.49412,0.25490,1.00000"
+              }
+            }
+          ],
+          "image-name" : "sun.svg",
+          "name" : "Sunlight",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              16,
+              -14.58299459163527
+            ]
+          }
+        }
+      ],
+      "lighting" : "combined",
+      "name" : "Ground",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
