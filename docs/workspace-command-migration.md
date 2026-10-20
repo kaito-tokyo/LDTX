@@ -9,8 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 This implementation increment follows the v0.2.7
 [plan](https://chatgpt.com/space/page_7b9fe4feca208191af6c143e5c10b6de) and
 subsequent confirmed decisions. All six Coordinator resource operations are
-connected. Hardware and interactive application verification remain outside this
-noninteractive increment.
+connected. Subsequent hardware and interactive verification is recorded below.
 
 ## Recorded validation summary
 
@@ -26,7 +25,9 @@ Program content switching, GCNeo video/audio assignment and reassignment,
 recording/finalization, active-output assignment/Close restrictions, save-review
 cancellation and independent Workspace closure. Starting Stop/Close used the
 bounded Coordinator-preparation gate described below; clicks inside the native
-output service's own short startup subphase remain unverified. The initial
+output service's own short startup subphase were not observed through UI. A
+subsequent hostless test now exercises native dual-output startup interrupted by
+Stop, as described in the follow-up below. The initial
 FileProvider/iCloud response stall remains unexplained; its absence under changed
 local conditions does not establish an OS defect or a repaired product bug.
 
@@ -380,3 +381,46 @@ the ordinary build products as well. There is no retained product-code delay or
 new test hook in the repository. Evidence, including the temporary instrumented
 source, build logs and event timestamps, is in
 `/tmp/ldtx-v027-start-state-qa/`. No commit, push or PR was created.
+
+## Follow-up: native startup completion and FileProvider diagnosis
+
+Review of native dual-output startup found a reproducible completion defect:
+when stopped child sessions reject Start synchronously, the second child callback
+and the final readiness check can both invoke the caller's completion. This
+could resume a caller's checked continuation twice. The failure was reproduced
+before changing production code: two of the three enabled-canvas combinations
+returned two completions instead of one. The aggregator now claims completion
+before notifying its caller, including for synchronous failures.
+
+The new regression covers Landscape only, Portrait only and both canvases. A
+second hostless integration test starts both native output pipelines and calls
+Stop before yielding MainActor, while their asynchronous mixer completions are
+pending. It verifies one cancelled startup result and waits for both native
+pipelines to stop. This uses the real output implementation without a shipping
+delay, new injection hook, launched app or physical capture device. It complements
+the existing Coordinator FIFO and Close-admission tests; it does not claim an
+interactive click inside every native startup subphase.
+
+The ActiveProgramOutputSession and WorkspaceRecordingSettings suites passed all
+40 selected tests after the fix. The initial failing regression is recorded in
+`/tmp/ldtx-v027-followup-red.log`; the passing run is in
+`/tmp/ldtx-v027-followup-output.log`. Swift strict formatting and diff checks passed.
+The ordinary unsigned Debug app build also succeeded; its log is
+`/tmp/ldtx-v027-followup-build.log`.
+
+The FileProvider sample was reviewed again. A bounded, read-only Foundation
+`getRelationship` probe against the local fixture completed in approximately
+7 ms. The former iCloud `Untitled 2.ldtxworkspace` candidate no longer exists;
+the same probe returned Cocoa error 260 in approximately 4 ms. These observations
+do not reproduce the earlier stall or establish its cause: the original sample
+does not identify the actual getxattr target, and the missing package is not an
+equivalent reproduction. Evidence is in
+`/tmp/ldtx-v027-fileprovider-probe-results.json`. The same probe against the
+existing parent iCloud Documents directory returned normally in approximately
+5 ms (`/tmp/ldtx-v027-fileprovider-parent-probe.json`). No iCloud settings, user packages,
+autosave safety checks or FileProvider processes were modified. A current
+reproduction and its exact document location/operation would be needed before
+claiming a fix for that incident. The user subsequently confirmed that the
+ordinary app does not reproduce the stall. The incident therefore remains an
+unexplained observation from the isolated test copy, with no confirmed
+ordinary-app defect and no speculative persistence workaround applied.

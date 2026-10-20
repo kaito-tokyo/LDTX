@@ -127,6 +127,64 @@ extension OutputTestSuite {
       await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
     }
 
+    @Test(arguments: [(true, true), (true, false), (false, true)])
+    func stoppedDualSessionRejectsStartExactlyOnce(enabled: (Bool, Bool)) async {
+      let landscape = makeProgramRuntime()
+      landscape.updateProgram(Self.outputConfiguration())
+      let portrait = makeProgramRuntime()
+      portrait.updateProgram(Self.outputConfiguration())
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: landscape, portraitRuntime: portrait,
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(),
+        runsLandscape: enabled.0, runsPortrait: enabled.1)
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+      var completions = 0
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { result in
+          completions += 1
+          guard case .failure = result else {
+            Issue.record("A stopped session must reject startup")
+            return
+          }
+        })
+      #expect(completions == 1)
+      #expect(!session.isRunning)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func dualStopDuringNativeStartupCompletesOnceAndDrainsBothCanvases() async {
+      let landscape = makeProgramRuntime()
+      landscape.updateProgram(Self.outputConfiguration())
+      let portrait = makeProgramRuntime()
+      portrait.updateProgram(Self.outputConfiguration())
+      let session = ActiveDualProgramOutputSession(
+        landscapeRuntime: landscape, portraitRuntime: portrait,
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
+      let started = expectation(description: "interrupted dual start completed")
+      var completions = 0
+      var startError: Error?
+      session.start(
+        programPreferences: .init(), audioDeviceIDsByInputKey: [:],
+        eventHandler: { _ in }, failureHandler: { _ in },
+        completionHandler: { result in
+          completions += 1
+          if case .failure(let error) = result { startError = error }
+          started.fulfill()
+        })
+      // No actor suspension occurs between native Start and Stop: both children
+      // have entered startup, but their asynchronous mixer completion is pending.
+      #expect(completions == 0)
+      await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
+      await fulfillment(of: [started], timeout: 2)
+      #expect(completions == 1)
+      #expect(startError is CancellationError)
+      #expect(!session.landscape.isRunning)
+      #expect(!session.portrait.isRunning)
+      #expect(!session.isRunning)
+    }
+
     @Test func dualStartAcceptsAnEmptyPortraitMix() async {
       let landscapeRuntime = makeProgramRuntime()
       landscapeRuntime.updateProgram(Self.outputConfiguration())
