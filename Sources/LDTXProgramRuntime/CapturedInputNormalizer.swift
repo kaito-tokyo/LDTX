@@ -193,10 +193,15 @@ import Metal
     let width = outputSize.map { Int($0.width) } ?? CVPixelBufferGetWidth(source)
     let height = outputSize.map { Int($0.height) } ?? CVPixelBufferGetHeight(source)
     if outputSize != nil {
-      image = image.transformed(
+      // Resampling a finite capture must extend its edge pixels rather than
+      // interpolate with transparent pixels outside the image. Crop the infinite
+      // clamp back to the requested canvas after scaling.
+      image = image.clampedToExtent().transformed(
         by: CGAffineTransform(
           scaleX: CGFloat(width) / CGFloat(CVPixelBufferGetWidth(source)),
-          y: CGFloat(height) / CGFloat(CVPixelBufferGetHeight(source))))
+          y: CGFloat(height) / CGFloat(CVPixelBufferGetHeight(source)))
+      )
+      .cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
     }
     let output = try buffers.pixelBuffer(
       for: .init(

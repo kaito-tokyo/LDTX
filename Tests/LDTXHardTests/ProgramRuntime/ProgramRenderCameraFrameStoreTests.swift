@@ -43,7 +43,11 @@ import Testing
       input, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
     store.copyAndYield(input)
     let first = try #require(try store.wait(timeout: 1))
-    #expect(abs(Int(firstLuma(first.pixelBuffer)) - 54) <= 2)
+    let retainedPixels = lumaBytes(first.pixelBuffer)
+    for (x, y) in [(0, 0), (7, 0), (0, 11), (7, 11), (4, 6)] {
+      let value = Int(firstLuma(first.pixelBuffer, x: x, y: y))
+      #expect(abs(value - 54) <= 2, "601→709 scaled luma at (\(x), \(y)) = \(value)")
+    }
     #expect(
       CFEqual(
         CVBufferCopyAttachment(input, kCVImageBufferYCbCrMatrixKey, nil),
@@ -53,7 +57,8 @@ import Testing
     for _ in 0..<5 { store.copyAndYield(input) }
     let next = try #require(try store.wait(after: first.serial, timeout: 1))
     #expect(first.serial < next.serial)
-    #expect(abs(Int(firstLuma(first.pixelBuffer)) - 54) <= 2)
+    // Lifetime is an exact byte comparison, independent of the color expectation.
+    #expect(lumaBytes(first.pixelBuffer) == retainedPixels)
     #expect(firstLuma(next.pixelBuffer) <= 1)
   }
 
@@ -106,6 +111,18 @@ import Testing
     #expect(status == kCVReturnSuccess)
     return try #require(result)
   }
+  private func lumaBytes(_ buffer: CVPixelBuffer) -> [UInt8] {
+    CVPixelBufferLockBaseAddress(buffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+    let base = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt8.self)
+    return (0..<CVPixelBufferGetHeightOfPlane(buffer, 0)).flatMap { row in
+      Array(
+        UnsafeBufferPointer(
+          start: base.advanced(by: row * CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)),
+          count: CVPixelBufferGetWidthOfPlane(buffer, 0)))
+    }
+  }
+
   private func firstLuma(_ buffer: CVPixelBuffer, x: Int = 0, y: Int = 0) -> UInt8 {
     CVPixelBufferLockBaseAddress(buffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
