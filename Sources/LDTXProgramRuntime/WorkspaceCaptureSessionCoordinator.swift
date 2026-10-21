@@ -471,12 +471,23 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
     let remainingCaptures = Array(captures.dropFirst())
-    let request = stateLock.withLock { capture.request }
+    let request = stateLock.withLock { () -> WorkspaceCaptureSessionRequest? in
+      guard !isStopping, capturesByCameraID[capture.request.cameraID] === capture else {
+        return nil
+      }
+      pendingStopCount += 1
+      return capture.request
+    }
+    guard let request else {
+      completionHandler(failedCameraIDs.union(captures.map { $0.request.cameraID }))
+      return
+    }
     capture.captureService.stop { [weak self] in
       guard let self else {
         completionHandler(failedCameraIDs.union([request.cameraID]))
         return
       }
+      defer { self.completePendingStop() }
       self.stateLock.withLock {
         self.resetState(for: capture)
       }
@@ -734,9 +745,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         return capture.captureSessionID
       })
     else {
-      capture.captureService.stop {
-        completionHandler(.failure(CancellationError()))
-      }
+      // No start was submitted. Retirement/close already owns this capture's
+      // stop (or restart/reconnect has just stopped it). Queuing another stop
+      // here would add work after the close barrier without owning a capture.
+      completionHandler(.failure(CancellationError()))
       return
     }
     capture.captureService.startCameraCapture(
@@ -854,11 +866,14 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         return nil
       }
       capture.reconnectWorkItem = nil
+      // Keep close pending across both the stop submission and restart decision.
+      pendingStopCount += 1
       return capture.request
     }
     guard let request else { return }
-    capture.captureService.stop { [weak self, weak capture] in
-      guard let self, let capture else { return }
+    capture.captureService.stop { [weak self, capture] in
+      guard let self else { return }
+      defer { self.completePendingStop() }
       let shouldRestart = self.stateLock.withLock { () -> Bool in
         guard !self.isStopping,
           self.capturesByCameraID[request.cameraID] === capture,

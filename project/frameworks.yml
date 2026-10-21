@@ -60,6 +60,7 @@ targets:
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXProgram
+      - target: LDTXProgramRuntime
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
       - target: LDTXYouTube

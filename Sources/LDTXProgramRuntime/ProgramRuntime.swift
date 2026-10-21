@@ -732,7 +732,9 @@ final class ActiveProgramRenderer: @unchecked Sendable {
           case .preparing:
             isPreparingRenderResources = true
           case .unavailable:
-            isPreparingRenderResources = true
+            // A failed input is omitted; it must not hide the other layers.
+            // Only transient preparation keeps the existing preparing display.
+            break
           }
         }
       }

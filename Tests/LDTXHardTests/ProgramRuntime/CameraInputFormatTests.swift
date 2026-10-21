@@ -5,7 +5,7 @@
 import CoreMedia
 import CoreVideo
 @testable import LDTXCapture
-@testable import LDTXProgramRuntime
+@_spi(CaptureConversion) @testable import LDTXProgramRuntime
 import LDTXVideoComposition
 @testable import LDTXVideoRendering
 import Metal

@@ -10,6 +10,7 @@ import ImageIO
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXProgram
+@_spi(CaptureConversion) import LDTXProgramRuntime
 import LDTXVideoComposition
 import LDTXVideoRendering
 import LDTXWorkspaceAppletModel
@@ -124,8 +125,13 @@ struct ProgramRenderCommand {
       )
     }
 
-    try await provider.start()
-    return provider
+    do {
+      try await provider.start()
+      return provider
+    } catch {
+      await provider.stop()
+      throw error
+    }
   }
 
   private func inputCameraMappings() -> [String: String] {
@@ -280,98 +286,37 @@ struct ProgramRenderCommand {
     return data as Data
   }
 
-  static func copyPixelBuffer(_ source: CVPixelBuffer, to destination: CVPixelBuffer) {
-    CVPixelBufferLockBaseAddress(source, .readOnly)
-    CVPixelBufferLockBaseAddress(destination, [])
-    defer {
-      CVPixelBufferUnlockBaseAddress(destination, [])
-      CVPixelBufferUnlockBaseAddress(source, .readOnly)
-    }
-
-    let planeCount = CVPixelBufferGetPlaneCount(source)
-    if planeCount == 0 {
-      guard let sourceBaseAddress = CVPixelBufferGetBaseAddress(source),
-        let destinationBaseAddress = CVPixelBufferGetBaseAddress(destination)
-      else {
-        return
-      }
-      copyRows(
-        sourceBaseAddress: sourceBaseAddress,
-        destinationBaseAddress: destinationBaseAddress,
-        sourceBytesPerRow: CVPixelBufferGetBytesPerRow(source),
-        destinationBytesPerRow: CVPixelBufferGetBytesPerRow(destination),
-        bytesPerRow: min(
-          CVPixelBufferGetBytesPerRow(source), CVPixelBufferGetBytesPerRow(destination)),
-        height: CVPixelBufferGetHeight(source)
-      )
-      return
-    }
-
-    for planeIndex in 0..<planeCount {
-      guard let sourceBaseAddress = CVPixelBufferGetBaseAddressOfPlane(source, planeIndex),
-        let destinationBaseAddress = CVPixelBufferGetBaseAddressOfPlane(destination, planeIndex)
-      else {
-        continue
-      }
-      let sourceBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(source, planeIndex)
-      let destinationBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(destination, planeIndex)
-      copyRows(
-        sourceBaseAddress: sourceBaseAddress,
-        destinationBaseAddress: destinationBaseAddress,
-        sourceBytesPerRow: sourceBytesPerRow,
-        destinationBytesPerRow: destinationBytesPerRow,
-        bytesPerRow: min(sourceBytesPerRow, destinationBytesPerRow),
-        height: CVPixelBufferGetHeightOfPlane(source, planeIndex)
-      )
-    }
-  }
-
-  private static func copyRows(
-    sourceBaseAddress: UnsafeMutableRawPointer,
-    destinationBaseAddress: UnsafeMutableRawPointer,
-    sourceBytesPerRow: Int,
-    destinationBytesPerRow: Int,
-    bytesPerRow: Int,
-    height: Int
-  ) {
-    for y in 0..<height {
-      memcpy(
-        destinationBaseAddress.advanced(by: y * destinationBytesPerRow),
-        sourceBaseAddress.advanced(by: y * sourceBytesPerRow),
-        bytesPerRow
-      )
-    }
-  }
 }
 
-private struct CapturedPixelBuffer {
+struct CapturedPixelBuffer {
   var serial: UInt64
   var pixelBuffer: CVPixelBuffer
 }
 
-/// Owns a copied pixel-buffer ring. All mutable state is protected by
-/// `condition`; capture callbacks never retain their source buffers.
-private final class ProgramRenderCameraFrameStore: @unchecked Sendable {
-  private static let pixelBufferRingCount = 3
-
+/// Serializes conversion and publishes owned, immutable buffers. The pool cannot
+/// reuse a buffer while a consumer or GPU command still retains it.
+final class ProgramRenderCameraFrameStore: @unchecked Sendable {
   private let condition = NSCondition()
+  private let normalizer: CapturedInputNormalizer
+  private let width: Int
+  private let height: Int
   private var capturedPixelBuffer: CapturedPixelBuffer?
+  private var conversionError: (any Error)?
   private var latestSerial: UInt64 = 0
-  private var pixelBuffers: [CVPixelBuffer]
-  private var nextPixelBufferIndex = 0
 
-  init(width: Int, height: Int) throws {
-    pixelBuffers = try Self.makePixelBuffers(width: width, height: height)
+  init(width: Int, height: Int, device: MTLDevice) {
+    self.width = width
+    self.height = height
+    normalizer = CapturedInputNormalizer(device: device)
   }
 
-  func wait(after serial: UInt64? = nil, timeout: TimeInterval) -> CapturedPixelBuffer? {
+  func wait(after serial: UInt64? = nil, timeout: TimeInterval) throws -> CapturedPixelBuffer? {
     let deadline = Date(timeIntervalSinceNow: timeout)
     condition.lock()
     defer { condition.unlock() }
     while capturedPixelBuffer == nil || (serial != nil && capturedPixelBuffer!.serial <= serial!) {
-      guard condition.wait(until: deadline) else {
-        return nil
-      }
+      if let conversionError { throw conversionError }
+      guard condition.wait(until: deadline) else { return nil }
     }
     return capturedPixelBuffer
   }
@@ -379,55 +324,16 @@ private final class ProgramRenderCameraFrameStore: @unchecked Sendable {
   func copyAndYield(_ sourcePixelBuffer: CVPixelBuffer) {
     condition.lock()
     defer { condition.unlock() }
-    guard
-      CVPixelBufferGetPixelFormatType(sourcePixelBuffer)
-        == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-      CVPixelBufferGetWidth(sourcePixelBuffer)
-        == CVPixelBufferGetWidth(pixelBuffers[nextPixelBufferIndex]),
-      CVPixelBufferGetHeight(sourcePixelBuffer)
-        == CVPixelBufferGetHeight(pixelBuffers[nextPixelBufferIndex])
-    else {
-      return
+    do {
+      let owned = try normalizer.normalize(
+        pixelBuffer: sourcePixelBuffer, width: width, height: height)
+      latestSerial &+= 1
+      capturedPixelBuffer = CapturedPixelBuffer(serial: latestSerial, pixelBuffer: owned)
+      conversionError = nil
+    } catch {
+      conversionError = error
     }
-    let pixelBuffer = pixelBuffers[nextPixelBufferIndex]
-    nextPixelBufferIndex = (nextPixelBufferIndex + 1) % pixelBuffers.count
-    ProgramRenderCommand.copyPixelBuffer(sourcePixelBuffer, to: pixelBuffer)
-    latestSerial &+= 1
-    capturedPixelBuffer = CapturedPixelBuffer(serial: latestSerial, pixelBuffer: pixelBuffer)
     condition.broadcast()
-  }
-
-  private static func makePixelBuffers(width: Int, height: Int) throws -> [CVPixelBuffer] {
-    let poolAttributes: [String: Any] = [
-      kCVPixelBufferPoolMinimumBufferCountKey as String: pixelBufferRingCount
-    ]
-    let pixelBufferAttributes: [String: Any] = [
-      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-      kCVPixelBufferWidthKey as String: width,
-      kCVPixelBufferHeightKey as String: height,
-      kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-      kCVPixelBufferMetalCompatibilityKey as String: true,
-    ]
-    var pixelBufferPool: CVPixelBufferPool?
-    let poolStatus = CVPixelBufferPoolCreate(
-      kCFAllocatorDefault,
-      poolAttributes as CFDictionary,
-      pixelBufferAttributes as CFDictionary,
-      &pixelBufferPool
-    )
-    guard poolStatus == kCVReturnSuccess, let pixelBufferPool else {
-      throw ProgramRenderCommandError.pixelBufferCreationFailed(poolStatus)
-    }
-
-    return try (0..<pixelBufferRingCount).map { _ in
-      var pixelBuffer: CVPixelBuffer?
-      let status = CVPixelBufferPoolCreatePixelBuffer(
-        kCFAllocatorDefault, pixelBufferPool, &pixelBuffer)
-      guard status == kCVReturnSuccess, let pixelBuffer else {
-        throw ProgramRenderCommandError.pixelBufferCreationFailed(status)
-      }
-      return pixelBuffer
-    }
   }
 }
 
@@ -441,6 +347,7 @@ private final class ProgramRenderCameraFrameProvider {
   private let height: Int
   private let frameRate: Int
   private let sourceFactory: ProgramRenderMetalSourceFactory
+  private let metalDevice: MTLDevice
   private var mappings: [InputMapping] = []
   private var storesByCameraID: [String: ProgramRenderCameraFrameStore] = [:]
   private var captureServicesByCameraID: [String: CameraCaptureService] = [:]
@@ -450,6 +357,7 @@ private final class ProgramRenderCameraFrameProvider {
     self.width = width
     self.height = height
     self.frameRate = frameRate
+    self.metalDevice = metalDevice
     sourceFactory = try ProgramRenderMetalSourceFactory(metalDevice: metalDevice)
   }
 
@@ -466,7 +374,7 @@ private final class ProgramRenderCameraFrameProvider {
       $0.value.first?.camera
     }
     for camera in uniqueCameras {
-      let store = try ProgramRenderCameraFrameStore(width: width, height: height)
+      let store = ProgramRenderCameraFrameStore(width: width, height: height, device: metalDevice)
       let captureService = CameraCaptureService()
       storesByCameraID[camera.id] = store
       captureServicesByCameraID[camera.id] = captureService
@@ -538,7 +446,7 @@ private final class ProgramRenderCameraFrameProvider {
       throw ProgramRenderCommandError.cameraNotFound(camera.name)
     }
     guard
-      let frame = store.wait(
+      let frame = try store.wait(
         after: consumedSerialByCameraID[camera.id],
         timeout: 5
       )

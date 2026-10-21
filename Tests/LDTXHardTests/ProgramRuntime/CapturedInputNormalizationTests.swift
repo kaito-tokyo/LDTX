@@ -8,9 +8,10 @@ import CoreVideo
 import Foundation
 import LDTXBackgroundSegmentation
 import LDTXCapture
+import LDTXInternalProtocols
 import LDTXProgram
 import LDTXProgramRendering
-@testable import LDTXProgramRuntime
+@_spi(CaptureConversion) @testable import LDTXProgramRuntime
 import Metal
 import Testing
 
@@ -222,6 +223,8 @@ import Testing
     let renderer = ActiveProgramRenderer(captureSessionCoordinator: workspace)
     renderer.beginSession(1)
     defer { renderer.endSession(1) }
+    let waiting = try renderer.render(configuration: configuration, sessionID: 1, frameID: 0)
+    #expect(waiting.isPreparingRenderResources)
     _ = try #require(try good.emitVideo(frameIndex: 1))
     let fixture = try Fixture()
     let invalidBuffer = try fixture.nv12(video: false, values: [81, 90, 240], iosurface: false)
@@ -234,12 +237,14 @@ import Testing
     _ = try #require(try good.emitVideo(frameIndex: 12))
     let second = try renderer.render(configuration: configuration, sessionID: 1, frameID: 2)
     #expect(first.frameID == 1 && second.frameID == 2)
+    #expect(!first.isPreparingRenderResources && !second.isPreparingRenderResources)
     #expect(hash(first.pixelBuffer) != hash(second.pixelBuffer))
     #expect(second.presentationTime == CMTime(value: 12, timescale: 30))
     configuration.composite.steps[0].component = .fillSolidColor(
       FillSolidColorComponent(red: 0, green: 1, blue: 0, alpha: 0.25))
     let third = try renderer.render(configuration: configuration, sessionID: 1, frameID: 3)
     #expect(hash(second.pixelBuffer) != hash(third.pixelBuffer))
+    #expect(!third.isPreparingRenderResources)
     // A new known frame recovers the failed input without a pipeline rebuild.
     _ = try #require(try bad.emitVideo(frameIndex: 15))
     let recovered = try renderer.render(configuration: configuration, sessionID: 1, frameID: 4)
@@ -365,6 +370,37 @@ import Testing
     let rendered = try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
     let expected = try fixture.normalizer.normalize(fixture.frame(source))
     #expect(try fixture.values(rendered.pixelBuffer) == fixture.values(expected.pixelBuffer))
+    renderer.endSession(1)
+    await withCheckedContinuation { continuation in workspace.stopAndReset { continuation.resume() }
+    }
+  }
+
+  @Test func transientBackgroundPreparationStillMarksPreviewPreparing() async throws {
+    let camera = ManualCameraCaptureService()
+    let workspace = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { camera })
+    await withCheckedContinuation { continuation in
+      workspace.synchronizePhysicalInputCaptures(
+        videoCameraIDs: ["camera"], audioDeviceIDs: [], availableCameraIDs: ["camera"],
+        canvasWidth: 16, canvasHeight: 16, frameRate: 30,
+        completionHandler: { _ in continuation.resume() })
+    }
+    _ = try #require(try camera.emitVideo(frameIndex: 1))
+    let step = CompositeProgramStep(
+      id: "camera", component: .inputCameraDevice(InputDeviceComponent()))
+    let composite = CompositeProgramDefinition(steps: [step])
+    let key = composite.inputCameraDeviceMappingKey(for: step)
+    let configuration = ProgramRuntimeConfiguration(
+      composite: composite, audioChannels: [], canvasWidth: 16, canvasHeight: 16,
+      outputWidth: 16, outputHeight: 16, frameRate: 30, timeSeconds: 0,
+      videoPTSMasterCameraID: "camera", cameraIDsByInputKey: [key: "camera"],
+      cameraInputColorOverrides: [:], backgroundRemovalInputKeys: [key])
+    let renderer = ActiveProgramRenderer(
+      captureSessionCoordinator: workspace,
+      backgroundRemovalPreprocessorFactory: { _, _ in PreparingBackgroundRemoval() })
+    renderer.beginSession(1)
+    #expect(
+      try renderer.render(configuration: configuration, sessionID: 1, frameID: 1)
+        .isPreparingRenderResources)
     renderer.endSession(1)
     await withCheckedContinuation { continuation in workspace.stopAndReset { continuation.resume() }
     }
@@ -497,4 +533,10 @@ private final class ManualServicePool: @unchecked Sendable {
   var services: [ManualCameraCaptureService]
   init(_ services: [ManualCameraCaptureService]) { self.services = services }
   func next() -> ManualCameraCaptureService { lock.withLock { services.removeFirst() } }
+}
+
+private final class PreparingBackgroundRemoval: BackgroundRemovalPreprocessing {
+  func process(pixelBuffer: CVPixelBuffer, sequenceNumber: UInt64)
+    -> BackgroundRemovalPreprocessingResult
+  { .preparing }
 }

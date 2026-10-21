@@ -13,7 +13,7 @@ import Metal
 
 /// Serialized by the Program renderer. Converts captured inputs before either
 /// background removal or composition; capture buffers are never retagged in place.
-final class CapturedInputNormalizer {
+@_spi(CaptureConversion) public final class CapturedInputNormalizer {
   enum Failure: Error, LocalizedError {
     case unsupportedFormat(OSType)
     case unsupportedMetadata(String)
@@ -51,7 +51,19 @@ final class CapturedInputNormalizer {
     kCVImageBufferYCbCrMatrixKey: kCVImageBufferYCbCrMatrix_ITU_R_709_2,
   ]
 
-  init(device: MTLDevice) { self.device = device }
+  public init(device: MTLDevice) { self.device = device }
+
+  /// CLI capture must own its pixels independently of the capture callback and
+  /// render at its requested canvas size. Uses the same color/HDR policy as preview.
+  public func normalize(pixelBuffer: CVPixelBuffer, width: Int, height: Int) throws -> CVPixelBuffer
+  {
+    try normalize(
+      CapturedVideoFrame(
+        pixelBuffer: pixelBuffer, sourcePresentationTime: .zero,
+        captureSessionID: UUID(), sequenceNumber: 0),
+      outputSize: CGSize(width: width, height: height)
+    ).pixelBuffer
+  }
 
   private func makeContext() -> CIContext {
     CIContext(
@@ -64,7 +76,8 @@ final class CapturedInputNormalizer {
   }
 
   func normalize(
-    _ frame: CapturedVideoFrame, rangeOverride: CameraInputColorRangeOverride = .unspecified
+    _ frame: CapturedVideoFrame, rangeOverride: CameraInputColorRangeOverride = .unspecified,
+    outputSize: CGSize? = nil
   ) throws -> CapturedVideoFrame {
     let source = frame.pixelBuffer
     let format = CVPixelBufferGetPixelFormatType(source)
@@ -86,7 +99,7 @@ final class CapturedInputNormalizer {
       rangeOverride == .unspecified
       || (rangeOverride == .fullRange && format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
       || (rangeOverride == .videoRange && format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
-    if isNV12, rangeMatches, !hasProfile,
+    if outputSize == nil, isNV12, rangeMatches, !hasProfile,
       canonical.allSatisfy({ CFEqual(tags[$0.key] as CFTypeRef?, $0.value) })
     {
       return frame
@@ -177,9 +190,17 @@ final class CapturedInputNormalizer {
       guard let mapped = toneMap.outputImage else { throw Failure.unavailableFilter }
       image = mapped
     }
+    let width = outputSize.map { Int($0.width) } ?? CVPixelBufferGetWidth(source)
+    let height = outputSize.map { Int($0.height) } ?? CVPixelBufferGetHeight(source)
+    if outputSize != nil {
+      image = image.transformed(
+        by: CGAffineTransform(
+          scaleX: CGFloat(width) / CGFloat(CVPixelBufferGetWidth(source)),
+          y: CGFloat(height) / CGFloat(CVPixelBufferGetHeight(source))))
+    }
     let output = try buffers.pixelBuffer(
       for: .init(
-        width: CVPixelBufferGetWidth(source), height: CVPixelBufferGetHeight(source),
+        width: width, height: height,
         pixelFormat: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))
     // Pool buffers may be reused. Remove stale HDR/profile attachments before
     // assigning the colorimetry of the pixels that Core Image actually produces.

@@ -9,6 +9,7 @@ targets:
     sources:
       - Tests/LDTXHardTests
     dependencies:
+      - target: LDTXUtils
       - target: LDTXRichText
       - target: LDTXVisionTraining
       - target: LDTXCapture

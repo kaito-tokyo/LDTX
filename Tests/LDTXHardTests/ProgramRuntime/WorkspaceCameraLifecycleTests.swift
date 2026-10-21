@@ -131,6 +131,75 @@ import Testing
     await close(workspace)
   }
 
+  @Test func rejectedRestartDoesNotQueueCleanupBeyondCloseBarrier() async throws {
+    let manager = ControlledCameraManager(delayStop: true)
+    let workspace = workspace(manager)
+    synchronize(workspace, ["A"])
+    try await eventually { manager.active }
+    let restarted = Counter()
+    let closed = Counter()
+    workspace.restartAllCaptureSessions { _ in restarted.increment() }
+    try await eventually { manager.stopCount == 1 }
+    workspace.stopAndReset { closed.increment() }
+    manager.completeStop()
+    try await eventually { manager.stopCount == 2 && restarted.value == 1 }
+    #expect(closed.value == 0)
+    manager.completeStop()
+    try await eventually { closed.value == 1 }
+    #expect(workspace.isFullyStopped())
+    #expect(manager.stopCount == 2 && manager.startCount == 1)
+    #expect(!manager.active)
+  }
+
+  @Test func closeDuringMultiCameraRestartDoesNotStopRetiredRemainderAgain() async throws {
+    let a = ControlledCameraManager(delayStop: true)
+    let b = ControlledCameraManager(delayStop: true)
+    let workspace = CameraFactory([a, b]).workspace()
+    synchronize(workspace, ["A"])
+    try await eventually { a.active }
+    synchronize(workspace, ["A", "B"])
+    try await eventually { b.active }
+    let restarted = Counter()
+    let closed = Counter()
+    workspace.restartAllCaptureSessions { _ in restarted.increment() }
+    try await eventually { a.stopCount + b.stopCount == 1 }
+    let first = a.stopCount == 1 ? a : b
+    let other = a.stopCount == 1 ? b : a
+    workspace.stopAndReset { closed.increment() }
+    try await eventually { other.stopCount == 1 }
+    other.completeStop()
+    #expect(closed.value == 0)
+    first.completeStop()
+    try await eventually { first.stopCount == 2 && restarted.value == 1 }
+    #expect(closed.value == 0)
+    first.completeStop()
+    try await eventually { closed.value == 1 }
+    #expect(workspace.isFullyStopped())
+    #expect(first.stopCount == 2 && other.stopCount == 1)
+    #expect(a.startCount == 1 && b.startCount == 1)
+  }
+
+  @Test func closeDuringNormalReconnectDrainsStopWithoutRestart() async throws {
+    let manager = ControlledCameraManager(delayStop: true)
+    let workspace = workspace(manager)
+    synchronize(workspace, ["A"])
+    try await eventually { manager.active }
+    // Exercise the production failure -> reconnect queue, not restartAll.
+    manager.emitCopiedFailure()
+    try await eventually { manager.stopCount == 1 }
+    let closed = Counter()
+    workspace.stopAndReset { closed.increment() }
+    manager.completeStop()
+    try await eventually { manager.stopCount == 2 }
+    #expect(closed.value == 0)
+    manager.completeStop()
+    try await eventually { closed.value == 1 }
+    manager.emitCopiedFailure()
+    #expect(workspace.isFullyStopped())
+    #expect(manager.startCount == 1 && manager.stopCount == 2)
+    #expect(workspace.reconnectAttemptForTesting(cameraID: "A") == nil)
+  }
+
   private func workspace(_ manager: ControlledCameraManager) -> WorkspaceCaptureSessionCoordinator {
     CameraFactory([manager]).workspace()
   }
