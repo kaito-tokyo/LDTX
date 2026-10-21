@@ -196,16 +196,7 @@ public final class WorkspaceV4RecordingSession {
             Task { @MainActor in await self?.fail(error) }
           })
         try recordService.start()
-        windowRuntime.visionArchiveHandler = { [weak recordService] internalID, image, output in
-          guard let recordService else { return }
-          let timelineMilliseconds = recordService.recordingTimelineMilliseconds()
-          let packageDirectory = recordService.packageDirectory
-          self.enqueueVisionArchive(
-            internalID: internalID, image: image, output: output,
-            timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
-        }
-        windowRuntime.visionArchiveTimelineProvider = recordService.recordingTimelineMilliseconds
-        windowRuntime.visionArchivePackageURL = recordService.packageDirectory
+        adoptStartedRecordingService(recordService)
         service = recordService
       } else {
         service = nil
@@ -239,7 +230,6 @@ public final class WorkspaceV4RecordingSession {
       youtubeRTMPSService = youtubeService
     }
     activeSession = outputSession
-    recordService = service
     self.landscapeHub = landscapeHub
     self.portraitHub = portraitHub
 
@@ -593,6 +583,20 @@ public final class WorkspaceV4RecordingSession {
     inputAudioSubscriptions = []
     landscapeHub = nil
     portraitHub = nil
+  }
+
+  /// Registers a started recording service independently of native output startup.
+  func adoptStartedRecordingService(_ service: SessionRecordService) {
+    recordService = service
+    windowRuntime.visionArchiveHandler = { [weak service] internalID, image, output in
+      guard let service else { return }
+      self.enqueueVisionArchive(
+        internalID: internalID, image: image, output: output,
+        timelineMilliseconds: service.recordingTimelineMilliseconds(),
+        packageDirectory: service.packageDirectory)
+    }
+    windowRuntime.visionArchiveTimelineProvider = service.recordingTimelineMilliseconds
+    windowRuntime.visionArchivePackageURL = service.packageDirectory
   }
 
   func enqueueVisionArchive(
