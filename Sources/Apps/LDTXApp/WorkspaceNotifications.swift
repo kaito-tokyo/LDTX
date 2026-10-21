@@ -21,13 +21,15 @@ final class WorkspaceNotifications: NSObject, UNUserNotificationCenterDelegate {
     Task {
       do {
         guard try await authorize() else { return }
-        let directory = FileManager.default.temporaryDirectory
-          .appendingPathComponent("LDTX-Notification-\(UUID())", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let content = try Self.screenshotContent(screenshots, attachmentDirectory: directory)
-        try await center.add(
-          UNNotificationRequest(
-            identifier: "workspace.screenshots.\(UUID())", content: content, trigger: nil))
+        try await Task.detached(priority: .utility) {
+          let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LDTX-Notification-\(UUID())", isDirectory: true)
+          defer { try? FileManager.default.removeItem(at: directory) }
+          let content = try Self.screenshotContent(screenshots, attachmentDirectory: directory)
+          try await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(
+              identifier: "workspace.screenshots.\(UUID())", content: content, trigger: nil))
+        }.value
       } catch {
         logger.error(
           "Screenshot notification failed: \(error.localizedDescription, privacy: .public)")
@@ -35,7 +37,7 @@ final class WorkspaceNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
   }
 
-  static func screenshotContent(
+  nonisolated static func screenshotContent(
     _ screenshots: [WorkspaceScreenshot], attachmentDirectory: URL
   ) throws -> UNMutableNotificationContent {
     let content = UNMutableNotificationContent()

@@ -10,7 +10,7 @@ import Testing
 extension AppUIComponentTestSuite {
   @MainActor @Suite
   struct WorkspaceNotificationDelegateUnitTestSuite {
-    @Test func notificationAttachesLandscapeCopyAndPreservesSavedFiles() throws {
+    @Test func notificationAttachesLandscapeCopyAndPreservesSavedFiles() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -28,21 +28,24 @@ extension AppUIComponentTestSuite {
       try data.write(to: landscape)
       try data.write(to: portrait)
       let capturedAt = Date(timeIntervalSince1970: 1_792_540_800)
-      let content = try WorkspaceNotifications.screenshotContent(
-        [
-          .init(url: portrait, programCanvas: .portrait, capturedAt: capturedAt),
-          .init(url: landscape, programCanvas: .landscape, capturedAt: capturedAt),
-        ], attachmentDirectory: root.appendingPathComponent("Attachment"))
-      #expect(content.title == "Landscape Program screenshot saved")
-      #expect(content.body == capturedAt.formatted(date: .numeric, time: .standard))
-      let attachment = try #require(content.attachments.first)
-      #expect(content.attachments.count == 1)
-      #expect(attachment.identifier == "landscapeProgram")
-      #expect(attachment.url.lastPathComponent == "Landscape.png")
-      #expect(attachment.url != landscape)
-      #expect(try Data(contentsOf: landscape) == data)
-      #expect(try Data(contentsOf: portrait) == data)
-      #expect(content.userInfo["screenshotPaths"] as? [String] == [portrait.path, landscape.path])
+      try await Task.detached {
+        let content = try WorkspaceNotifications.screenshotContent(
+          [
+            .init(url: portrait, programCanvas: .portrait, capturedAt: capturedAt),
+            .init(url: landscape, programCanvas: .landscape, capturedAt: capturedAt),
+          ], attachmentDirectory: root.appendingPathComponent("Attachment"))
+        #expect(content.title == "Landscape Program screenshot saved")
+        #expect(content.body == capturedAt.formatted(date: .numeric, time: .standard))
+        let attachment = try #require(content.attachments.first)
+        #expect(content.attachments.count == 1)
+        #expect(attachment.identifier == "landscapeProgram")
+        #expect(attachment.url.lastPathComponent == "Landscape.png")
+        #expect(attachment.url != landscape)
+        #expect(try Data(contentsOf: landscape) == data)
+        #expect(try Data(contentsOf: portrait) == data)
+        #expect(
+          content.userInfo["screenshotPaths"] as? [String] == [portrait.path, landscape.path])
+      }.value
     }
 
     @Test func notificationCallbacksAreExposedToObjectiveC() {
