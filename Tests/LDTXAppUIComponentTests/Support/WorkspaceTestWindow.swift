@@ -77,9 +77,6 @@ final class WorkspaceTestWindow: NSWindow {
         runtimeWorkspace: { [weak self] in self?.workspaceDocument?.runtimeWorkspace })
     }
   }
-  @discardableResult func captureScreenshots() -> WorkspaceScreenshotResult {
-    WorkspaceScreenshotResult.capture(using: runtimeActions())
-  }
   func toggleOutput() {
     Task {
       await runtimeActions()?.toggleOutput(stateService: stateService, document: workspaceDocument)

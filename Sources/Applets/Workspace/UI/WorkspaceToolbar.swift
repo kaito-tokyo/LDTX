@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import AppKit
-import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
-import QuickLookThumbnailing
 import SwiftUI
 
 public struct WorkspaceToolbar: ToolbarContent {
@@ -27,10 +24,6 @@ public struct WorkspaceToolbar: ToolbarContent {
     self.runInference = runInference
   }
 
-  private var controls: WorkspaceOutputControls {
-    .init(stateService: stateService, hasSavedURL: document?.fileURL != nil)
-  }
-
   public var body: some ToolbarContent {
     ToolbarItem(id: "workspace.toggleSidebar", placement: .navigation) {
       Button("Toggle Sidebar", systemImage: "sidebar.left") {
@@ -38,36 +31,11 @@ public struct WorkspaceToolbar: ToolbarContent {
       }
       .accessibilityIdentifier("workspace.toggleSidebar")
     }
-    ToolbarItem(id: "workspace.stopOutput", placement: .navigation) {
-      Button("Stop Output", systemImage: "stop.fill") {
-        Task { await runtimeActions()?.stopOutput() }
+    ForEach(WorkspaceAction.allCases, id: \.self) { action in
+      ToolbarItem(id: "workspace.\(action.rawValue)", placement: .navigation) {
+        WorkspaceActionButton(
+          action: action, runtimeActions: runtimeActions)
       }
-      .disabled(!controls.stopEnabled)
-      .accessibilityIdentifier("workspace.stopOutput")
-    }
-    ToolbarItem(id: "workspace.startPauseOutput", placement: .navigation) {
-      Button(
-        controls.showsPause ? "Pause Output" : "Start Output",
-        systemImage: controls.showsPause ? "pause.fill" : "play.fill"
-      ) {
-        Task {
-          await runtimeActions()?.toggleOutput(stateService: stateService, document: document)
-        }
-      }
-      .disabled(!controls.startPauseEnabled)
-      .accessibilityIdentifier("workspace.startPauseOutput")
-    }
-    ToolbarItem(id: "workspace.captureScreenshots", placement: .navigation) {
-      WorkspaceScreenshotButton(stateService: stateService, runtimeActions: runtimeActions)
-    }
-    ToolbarItem(id: "workspace.showRecordingInFinder", placement: .navigation) {
-      Button("Show Recording in Finder", systemImage: "folder") {
-        guard let url = runtimeActions()?.latestRecordingBundleURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-      }
-      .help("Show the latest recording bundle in Finder")
-      .disabled(stateService.isClosed || runtimeActions()?.latestRecordingBundleURL == nil)
-      .accessibilityIdentifier("workspace.showRecordingInFinder")
     }
     ToolbarItem(id: "workspace.runInference", placement: .primaryAction) {
       Button("Run Inference", systemImage: "sparkles", action: runInference)
@@ -87,107 +55,19 @@ public struct WorkspaceToolbar: ToolbarContent {
   }
 }
 
-private struct WorkspaceScreenshotButton: View {
-  let stateService: WorkspaceDocument
+private struct WorkspaceActionButton: View {
+  let action: WorkspaceAction
   let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  @State private var result: WorkspaceScreenshotResult?
 
   var body: some View {
-    Button("Capture Screenshot(s)", systemImage: "camera") {
-      result = WorkspaceScreenshotResult.capture(using: runtimeActions())
+    let state = runtimeActions()?.actionState(action) ?? .init(isEnabled: false)
+    Button(
+      action.title(showsPause: state.showsPause),
+      systemImage: action.systemImage(showsPause: state.showsPause)
+    ) {
+      Task { await runtimeActions()?.perform(action) }
     }
-    .disabled(
-      !WorkspaceOutputControls(stateService: stateService, hasSavedURL: false).screenshotEnabled
-    )
-    .accessibilityIdentifier("workspace.captureScreenshots")
-    .popover(item: $result) {
-      ScreenshotResultView(title: $0.title, message: $0.message, screenshots: $0.screenshots)
-    }
-    .onChange(of: stateService.isClosed) { _, closed in if closed { result = nil } }
-  }
-}
-
-struct WorkspaceScreenshotResult: Identifiable {
-  let id = UUID()
-  let title: String
-  let message: String
-  let screenshots: [WorkspaceScreenshot]
-
-  @MainActor static func capture(using actions: (any WorkspaceRuntimeActions)?) -> Self {
-    do {
-      guard let actions else {
-        throw WorkspaceSelectionError(message: "Workspace runtime is unavailable.")
-      }
-      let files = try actions.captureScreenshots().filter { $0.programCanvas != nil }
-      return Self(
-        title: "Screenshots saved",
-        message: files.isEmpty
-          ? "No Program screenshots were available."
-          : files.count == 1
-            ? "Saved 1 Program screenshot." : "Saved \(files.count) Program screenshots.",
-        screenshots: files.filter { $0.programCanvas == .landscape })
-    } catch {
-      return Self(
-        title: "Screenshot could not be captured",
-        message: error.localizedDescription, screenshots: [])
-    }
-  }
-}
-
-private struct ScreenshotResultView: View {
-  let title: String
-  let message: String
-  let screenshots: [WorkspaceScreenshot]
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(title).font(.headline)
-      Text(message)
-      ForEach(screenshots, id: \.url) { screenshot in
-        Button {
-          NSWorkspace.shared.open(screenshot.url)
-        } label: {
-          HStack(spacing: 10) {
-            FileIcon(url: screenshot.url)
-            Text(screenshot.url.lastPathComponent)
-              .lineLimit(1)
-              .truncationMode(.middle)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(screenshot.url.path)
-        .onDrag { NSItemProvider(object: screenshot.url as NSURL) }
-      }
-    }
-    .padding()
-    .frame(width: screenshots.isEmpty ? 280 : 360, alignment: .leading)
-  }
-
-  private struct FileIcon: View {
-    let url: URL
-    @Environment(\.displayScale) private var displayScale
-    @State private var image: NSImage?
-
-    var body: some View {
-      Image(nsImage: image ?? NSWorkspace.shared.icon(forFile: url.path))
-        .resizable()
-        .scaledToFit()
-        .frame(width: 32, height: 32)
-        .task(id: url) {
-          image = nil
-          let request = QLThumbnailGenerator.Request(
-            fileAt: url, size: CGSize(width: 32, height: 32), scale: displayScale,
-            representationTypes: .all)
-          request.iconMode = true
-          guard
-            let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(
-              for: request),
-            !Task.isCancelled
-          else { return }
-          image = representation.nsImage
-        }
-    }
+    .disabled(!state.isEnabled)
+    .accessibilityIdentifier("workspace.\(action.rawValue)")
   }
 }

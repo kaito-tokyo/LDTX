@@ -7,6 +7,7 @@ import LDTXWorkspaceAppletUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private lazy var notifications = WorkspaceNotifications()
   private var workspaceCoordinators: [UUID: WorkspaceAppletCoordinator] = [:]
   private weak var streamDeckWorkspace: WorkspaceAppletCoordinator?
   private lazy var streamDeck = WorkspaceStreamDeck { [weak self] in
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    notifications.install()
     streamDeck.start()
   }
 
@@ -108,6 +110,7 @@ extension AppDelegate: WorkspaceAppletDelegate {
       self?.workspaceDidShutdown(runtimeID: id)
     }
     coordinator.outputStateDidChange = { [weak self] in self?.updateRecordingDockBadge() }
+    coordinator.screenshotsDidSave = { [weak self] in self?.notifications.screenshotsDidSave($0) }
     workspaceCoordinators[id] = coordinator
     return coordinator
   }

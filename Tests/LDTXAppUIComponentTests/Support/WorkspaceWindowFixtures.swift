@@ -69,6 +69,10 @@ func makeWorkspaceTestWindow(
     documentContext
     ?? WorkspaceTestDocumentContext(
       fileURL: url ?? URL(fileURLWithPath: "/tmp/Toolbar-\(UUID()).ldtxworkspace"))
+  if let dispatcher = dispatcher as? ToolbarDispatcher {
+    dispatcher.stateService = state
+    dispatcher.documentContext = context
+  }
   return WorkspaceTestWindow(
     stateService: state, appletData: data, deviceRegistry: DeviceRegistryService(),
     peakMeter: .init(), pairedPreview: preview, runtimeActions: { dispatcher }, document: context)
@@ -83,6 +87,27 @@ private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  weak var stateService: WorkspaceDocument?
+  var documentContext: (any WorkspaceDocumentContext)?
+  func actionState(_ action: WorkspaceAction) -> WorkspaceActionState {
+    guard let stateService else { return .init(isEnabled: false) }
+    return WorkspaceOutputControls(
+      stateService: stateService, hasSavedURL: documentContext?.fileURL != nil
+    ).state(for: action, hasRecording: latestRecordingBundleURL != nil)
+  }
+  func perform(_ action: WorkspaceAction) async -> [WorkspaceScreenshot]? {
+    guard actionState(action).isEnabled else { return nil }
+    switch action {
+    case .stopOutput: await stopOutput()
+    case .startPauseOutput:
+      if let stateService {
+        await toggleOutput(stateService: stateService, document: documentContext)
+      }
+    case .captureScreenshots: return try? captureScreenshots()
+    case .showRecordingInFinder: actions.append("showRecordingInFinder")
+    }
+    return nil
+  }
   var latestRecordingBundleURL: URL?
   var classificationHandler: (() async throws -> String)?
   func classify(

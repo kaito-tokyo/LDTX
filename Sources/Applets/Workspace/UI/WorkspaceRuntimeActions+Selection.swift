@@ -64,6 +64,17 @@ public struct WorkspaceOutputControls: Equatable, Sendable {
   public let screenshotEnabled: Bool
   public let showsPause: Bool
 
+  public func state(for action: WorkspaceAction, hasRecording: Bool) -> WorkspaceActionState {
+    let enabled: Bool
+    switch action {
+    case .stopOutput: enabled = stopEnabled
+    case .startPauseOutput: enabled = startPauseEnabled
+    case .captureScreenshots: enabled = screenshotEnabled
+    case .showRecordingInFinder: enabled = screenshotEnabled && hasRecording
+    }
+    return .init(isEnabled: enabled, showsPause: showsPause)
+  }
+
   @MainActor public init(
     stateService: WorkspaceDocument, hasSavedURL: Bool, isClosing: Bool = false
   ) {

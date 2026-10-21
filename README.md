@@ -37,6 +37,20 @@ Width and height are relative to the Landscape Canvas; layer transforms control
 placement. Text wraps at its authored font sizes and clips to this extent,
 using a transparent background.
 
+## Screenshots
+
+The Workspace toolbar and Stream Deck share Stop Output, Start/Pause Output,
+Capture Screenshot(s), and Show Recording in Finder actions. Sidebar and Inspector
+toggles and Run Inference remain toolbar-only editing controls.
+
+After screenshots are saved, LDTX requests notification permission on first use
+and sends one silent macOS notification per capture, with the Landscape Program
+screenshot attached as its image preview when available and the capture timestamp
+as its body. Click the notification to
+select the saved images in Finder. Denying notifications does not prevent saving;
+notification display follows macOS notification settings and Focus. Both toolbar
+and Stream Deck captures use OS notifications without a result popover.
+
 ## Clock
 
 Clock uses **Font Size** in Landscape Canvas pixels (48 by default for new

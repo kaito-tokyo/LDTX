@@ -79,7 +79,8 @@ public final class ScreenCaptureService: @unchecked Sendable {
             timestamp: timestamp)
           try data.write(to: outputURL, options: .atomic)
           outputURLs.append(outputURL)
-          screenshots.append(.init(url: outputURL, programCanvas: source.programCanvas))
+          screenshots.append(
+            .init(url: outputURL, programCanvas: source.programCanvas, capturedAt: capturedAt))
         }
       }
     } catch {
