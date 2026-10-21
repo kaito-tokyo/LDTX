@@ -9,6 +9,41 @@ import Testing
 
 @Suite("Workspace bundle format")
 struct WorkspaceBundleFormatIntegrationTestSuite {
+  @Test(arguments: ["definition.pb", "preferences.pb", "output_settings.pb"])
+  func rejectsMissingConcretePayloadWithValidEnvelopeID(file: String) throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let package = root.appendingPathComponent("MissingPayload.ldtxworkspace")
+    let workspace = makeWorkspace()
+    try WorkspaceBundleWriterV4().write(workspace, to: package)
+    #expect(try WorkspaceBundleReaderV4(at: package).read() == workspace)
+    let url = package.appendingPathComponent(file)
+    let bytes = try Data(contentsOf: url)
+    let stripped: Data
+    switch file {
+    case "definition.pb":
+      var envelope = try Ldtx_Envelope_WorkspaceDefinitionEnvelope(serializedBytes: bytes)
+      envelope.workspaceDefinition = nil
+      stripped = try envelope.serializedData()
+    case "preferences.pb":
+      var envelope = try Ldtx_Envelope_WorkspacePreferencesEnvelope(serializedBytes: bytes)
+      envelope.workspacePreferences = nil
+      stripped = try envelope.serializedData()
+    default:
+      var envelope = try Ldtx_Envelope_WorkspaceOutputSettingsEnvelope(serializedBytes: bytes)
+      envelope.workspaceOutputSettings = nil
+      stripped = try envelope.serializedData()
+    }
+    try stripped.write(to: url)
+    #expect {
+      try WorkspaceBundleReaderV4(at: package).read()
+    } throws: { error in
+      let error = error as NSError
+      return error.domain == NSCocoaErrorDomain
+        && error.code == CocoaError.fileReadCorruptFile.rawValue
+    }
+  }
+
   private struct Metadata<BundleVersion: Codable>: Codable {
     var packageType = "BNDL"
     var workspaceVersion = 4
