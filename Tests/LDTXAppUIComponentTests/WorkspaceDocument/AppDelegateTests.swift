@@ -3,10 +3,64 @@
 
 import AppKit
 @testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
 import Testing
 
 extension AppUIComponentTestSuite {
+  @MainActor @Suite
+  struct WorkspaceNotificationDelegateUnitTestSuite {
+    @Test func notificationAttachesLandscapeCopyAndPreservesSavedFiles() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let image = try #require(
+        NSBitmapImageRep(
+          bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,
+          samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+          bytesPerRow: 0, bitsPerPixel: 0))
+      for x in 0..<2 {
+        for y in 0..<2 { image.setColor(.red, atX: x, y: y) }
+      }
+      let data = try #require(image.representation(using: .png, properties: [:]))
+      let landscape = root.appendingPathComponent("Landscape.png")
+      let portrait = root.appendingPathComponent("Portrait.png")
+      try data.write(to: landscape)
+      try data.write(to: portrait)
+      let capturedAt = Date(timeIntervalSince1970: 1_792_540_800)
+      try await Task.detached {
+        let content = try WorkspaceNotifications.screenshotContent(
+          [
+            .init(url: portrait, programCanvas: .portrait, capturedAt: capturedAt),
+            .init(url: landscape, programCanvas: .landscape, capturedAt: capturedAt),
+          ], attachmentDirectory: root.appendingPathComponent("Attachment"))
+        #expect(content.title == "Landscape Program screenshot saved")
+        #expect(content.body == capturedAt.formatted(date: .numeric, time: .standard))
+        let attachment = try #require(content.attachments.first)
+        #expect(content.attachments.count == 1)
+        #expect(attachment.identifier == "landscapeProgram")
+        #expect(attachment.url.lastPathComponent == "Landscape.png")
+        #expect(attachment.url != landscape)
+        #expect(try Data(contentsOf: landscape) == data)
+        #expect(try Data(contentsOf: portrait) == data)
+        #expect(
+          content.userInfo["screenshotPaths"] as? [String] == [portrait.path, landscape.path])
+      }.value
+    }
+
+    @Test func notificationCallbacksAreExposedToObjectiveC() {
+      // Optional delegate methods must match the SDK under C++ interoperability.
+      #expect(
+        WorkspaceNotifications.instancesRespond(
+          to: NSSelectorFromString(
+            "userNotificationCenter:willPresentNotification:withCompletionHandler:")))
+      #expect(
+        WorkspaceNotifications.instancesRespond(
+          to: NSSelectorFromString(
+            "userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:")))
+    }
+  }
+
   @MainActor
   @Suite("Workspace application termination", .serialized)
   struct WorkspaceApplicationTerminationUnitTestSuite {

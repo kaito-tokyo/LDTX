@@ -49,6 +49,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   let pairedPreview: ProgramCanvasPairedPreview
   let previewRenderer: ProgramPairPreviewRenderer
   public var outputStateDidChange: (@MainActor () -> Void)?
+  public var screenshotsDidSave: (@MainActor ([WorkspaceScreenshot]) -> Void)?
   private var onShutdown: (@MainActor () -> Void)?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
@@ -817,30 +818,34 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
 
   public var isClosing: Bool { closeRequestTask != nil }
 
-  public var streamDeckControls: WorkspaceOutputControls {
-    .init(
+  public func actionState(_ action: WorkspaceAction) -> WorkspaceActionState {
+    let controls = WorkspaceOutputControls(
       stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil,
       isClosing: closeRequestTask != nil)
+    return controls.state(for: action, hasRecording: latestRecordingBundleURL != nil)
   }
 
-  public func performStreamDeckAction(_ key: Int) async {
-    let controls = streamDeckControls
-    switch key {
-    case 0 where controls.stopEnabled: await stopOutput()
-    case 1 where controls.startPauseEnabled:
+  @discardableResult
+  public func perform(_ action: WorkspaceAction) async -> [WorkspaceScreenshot]? {
+    guard actionState(action).isEnabled else { return nil }
+    switch action {
+    case .stopOutput: await stopOutput()
+    case .startPauseOutput:
       await toggleOutput(stateService: stateService, document: workspaceDocument)
-    case 2 where controls.screenshotEnabled:
-      do { _ = try captureScreenshots() } catch { reportError(error) }
-    case 3 where !isClosing && !stateService.isClosed:
+    case .captureScreenshots:
+      do { return try captureScreenshots() } catch { reportError(error) }
+    case .showRecordingInFinder:
       if let url = latestRecordingBundleURL {
         NSWorkspace.shared.activateFileViewerSelecting([url])
       }
-    default: break
     }
+    return nil
   }
 
   public func captureScreenshots() throws -> [WorkspaceScreenshot] {
-    try recordingSession.captureScreenshots()
+    let screenshots = try recordingSession.captureScreenshots()
+    if !screenshots.isEmpty { screenshotsDidSave?(screenshots) }
+    return screenshots
   }
 
   public func openScreenshotsDirectory() {

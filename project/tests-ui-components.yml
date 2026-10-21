@@ -10,6 +10,7 @@ targets:
       - path: Sources/Apps/LDTXApp
         includes:
           - AppDelegate.swift
+          - WorkspaceNotifications.swift
     dependencies:
       - target: LDTXVariableMacro
       - target: LDTXRichText

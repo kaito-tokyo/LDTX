@@ -421,35 +421,6 @@ extension AppUIComponentTestSuite {
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("Screenshot results preserve output status and remain Window local")
-    func screenshotFailureDoesNotPoisonOutput() async throws {
-      let state = WorkspaceDocument(definition: .init(), preferences: .init())
-      let dispatcher = ToolbarDispatcher()
-      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
-      defer { window.close() }
-      state.isOutputActive = true
-      state.outputFailureMessage = "Existing output failure"
-      dispatcher.failScreenshot = true
-      let failure = window.captureScreenshots()
-      #expect(failure.title == "Screenshot could not be captured")
-      #expect(state.outputFailureMessage == "Existing output failure")
-      dispatcher.failScreenshot = false
-      for count in [1, 2] {
-        dispatcher.screenshotFiles = (0..<count).map {
-          WorkspaceScreenshot(
-            url: URL(fileURLWithPath: "/tmp/screenshot-\($0).png"),
-            programCanvas: $0 == 0 ? .landscape : .portrait)
-        }
-        let result = window.captureScreenshots()
-        #expect(result.title == "Screenshots saved")
-        #expect(result.screenshots.count == 1)
-        #expect(result.screenshots.allSatisfy { $0.programCanvas == .landscape })
-      }
-      #expect(state.outputFailureMessage == "Existing output failure")
-      window.close()
-      #expect(state.isClosed)
-    }
-
     @Test("UCT-1016.9: Screenshot actions remain available outside local recording")
     func screenshotToolbarActionsRemainAvailable() async throws {
       _ = NSApplication.shared
@@ -464,6 +435,7 @@ extension AppUIComponentTestSuite {
         let item = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
         #expect(item.isEnabled)
         try performWorkspaceToolbarAction(item)
+        await drainWorkspaceTestTasks()
         #expect(dispatcher.actions == [expected])
         dispatcher.actions = []
         state.isOutputActive = true
@@ -475,6 +447,7 @@ extension AppUIComponentTestSuite {
         #expect(item.isEnabled)
         #expect(item.label != "Start Output")
         try performWorkspaceToolbarAction(item)
+        await drainWorkspaceTestTasks()
         #expect(dispatcher.actions == [expected])
         dispatcher.actions = []
         state.isOutputActive = false

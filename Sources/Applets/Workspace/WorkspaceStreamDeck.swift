@@ -19,6 +19,9 @@ extension FocusedValues {
 /// One application-owned connection; no per-Workspace HID owners.
 @MainActor
 public final class WorkspaceStreamDeck {
+  private let actions: [WorkspaceAction] = [
+    .stopOutput, .startPauseOutput, .captureScreenshots, .showRecordingInFinder,
+  ]
   private let target: () -> WorkspaceAppletCoordinator?
   private var worker: StreamDeckHID?
   private var timer: Timer?
@@ -54,16 +57,12 @@ public final class WorkspaceStreamDeck {
   private func refresh() {
     var frame = StreamDeckFrame()
     if let coordinator = target(), !coordinator.isClosing {
-      let controls = coordinator.streamDeckControls
       frame.target = coordinator.stateService.runtimeID
       frame.enabled =
         busy
         ? [false, false, false, false]
-        : [
-          controls.stopEnabled, controls.startPauseEnabled, controls.screenshotEnabled,
-          coordinator.latestRecordingBundleURL != nil,
-        ]
-      frame.pause = controls.showsPause
+        : actions.map { coordinator.actionState($0).isEnabled }
+      frame.pause = coordinator.actionState(.startPauseOutput).showsPause
     }
     published = frame
     worker?.update(frame)
@@ -83,7 +82,7 @@ public final class WorkspaceStreamDeck {
       busy = false
       refresh()
     }
-    await coordinator.performStreamDeckAction(key)
+    await coordinator.perform(actions[key])
   }
 }
 

@@ -11,9 +11,11 @@ public struct WorkspaceScreenshot: Sendable {
 
   public let url: URL
   public let programCanvas: ProgramCanvas?
+  public let capturedAt: Date
 
-  public init(url: URL, programCanvas: ProgramCanvas? = nil) {
+  public init(url: URL, programCanvas: ProgramCanvas? = nil, capturedAt: Date = Date()) {
     self.url = url
     self.programCanvas = programCanvas
+    self.capturedAt = capturedAt
   }
 }
