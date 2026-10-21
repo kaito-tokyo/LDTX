@@ -31,7 +31,6 @@ public enum VideoCompositorError: Error, LocalizedError {
   case pixelBufferPoolPrewarmFailed(CVReturn)
   case outputPixelBufferCreationFailed(CVReturn)
   case unsupportedPixelBufferFormat(OSType)
-  case unsupportedInputColorMetadata
   case textureCreationFailed(CVReturn)
   case commandBufferCreationFailed
   case commandEncoderCreationFailed
@@ -53,8 +52,6 @@ public enum VideoCompositorError: Error, LocalizedError {
       "CVPixelBufferPoolCreatePixelBuffer failed with status \(status)."
     case .unsupportedPixelBufferFormat(let pixelFormat):
       "The pixel buffer format is unsupported: \(Self.fourCC(pixelFormat))."
-    case .unsupportedInputColorMetadata:
-      "The captured input color metadata is not supported by the BT.709 canvas."
     case .textureCreationFailed(let status):
       "CVMetalTextureCacheCreateTextureFromImage failed with status \(status)."
     case .commandBufferCreationFailed:
@@ -307,8 +304,8 @@ public final class VideoCompositor: @unchecked Sendable {
     into outputPixelBuffer: CVPixelBuffer,
     reusingOutputTextures: Bool
   ) throws {
-    // Encoding failures submit no GPU work; successful submission waits below.
-    // Both paths keep CV buffers and texture wrappers alive through their last use.
+    // Keep input CV buffers and texture wrappers alive through GPU completion,
+    // including the encoding-error path, which submits no work.
     defer { withExtendedLifetime((components, outputPixelBuffer)) {} }
     guard CVPixelBufferGetWidth(outputPixelBuffer) == configuration.width,
       CVPixelBufferGetHeight(outputPixelBuffer) == configuration.height,
@@ -618,13 +615,10 @@ public final class VideoCompositor: @unchecked Sendable {
         case .cameraInput(let component):
           let source = try makeBoundSource(component.source)
           let inputNv12DeviceVariant = CompositorShaderRegistry.InputNv12DeviceKernelVariant.r0
-          let sourceRange =
-            source.isBGRA
-            ? .full
-            : resolvedInputNv12DeviceSourceRange(
-              component.colorRangeOverride,
-              detectedRange: source.range
-            )
+          let sourceRange = resolvedInputNv12DeviceSourceRange(
+            component.colorRangeOverride,
+            detectedRange: source.range
+          )
           let bounds = component.destinationRect
           var offsetXY = SIMD2<UInt32>(bounds.x, bounds.y)
           let yWidth = Int(bounds.z - bounds.x)
@@ -647,7 +641,7 @@ public final class VideoCompositor: @unchecked Sendable {
             alphaMaskKind: source.alphaMaskKind,
             sourceUV0: sourceUV0,
             sourceUVScale0: sourceUVScale0,
-            sourceRange: sourceRange, isBGRA: source.isBGRA
+            sourceRange: sourceRange
           )
           if yWidth > 0 && yHeight > 0 {
             encoder.setComputePipelineState(inputNv12DevicePipelines.luma)
@@ -850,7 +844,6 @@ public final class VideoCompositor: @unchecked Sendable {
 
   private struct BoundSource {
     var range: SourceRange
-    var isBGRA = false
     var texture0: MTLTexture
     var texture1: MTLTexture
     var alphaTexture: MTLTexture?
@@ -869,17 +862,6 @@ public final class VideoCompositor: @unchecked Sendable {
 
   private func makeBoundSource(_ source: MetalVideoSource) throws -> BoundSource {
     switch source {
-    case .bgraTexture(let pixelBuffer, let metalTexture, let alphaTexture, let alphaMaskKind, _):
-      try validateInputColorMetadata(pixelBuffer, isBGRA: true)
-      guard CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA,
-        let texture = CVMetalTextureGetTexture(metalTexture), texture.pixelFormat == .bgra8Unorm
-      else {
-        throw VideoCompositorError.unsupportedPixelBufferFormat(
-          CVPixelBufferGetPixelFormatType(pixelBuffer))
-      }
-      return BoundSource(
-        range: .full, isBGRA: true, texture0: texture, texture1: texture,
-        alphaTexture: alphaTexture, alphaMaskKind: alphaMaskKind)
     case .nv12Textures(
       let
         pixelBuffer,
@@ -910,7 +892,6 @@ public final class VideoCompositor: @unchecked Sendable {
     alphaTexture: MTLTexture?,
     alphaMaskKind: MetalVideoAlphaMaskKind?
   ) throws -> BoundSource {
-    try validateInputColorMetadata(pixelBuffer, isBGRA: false)
     let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
     let sourceRange: SourceRange
     switch pixelFormat {
@@ -935,26 +916,6 @@ public final class VideoCompositor: @unchecked Sendable {
       alphaTexture: alphaTexture,
       alphaMaskKind: alphaMaskKind
     )
-  }
-
-  // Missing tags retain the existing SDR BT.709 interpretation. Explicitly
-  // different matrices/primaries/transfers require conversion, not reinterpretation.
-  private func validateInputColorMetadata(_ buffer: CVPixelBuffer, isBGRA: Bool) throws {
-    let checks: [(CFString, [CFString])] =
-      [
-        (kCVImageBufferColorPrimariesKey, [kCVImageBufferColorPrimaries_ITU_R_709_2]),
-        (
-          kCVImageBufferTransferFunctionKey,
-          [kCVImageBufferTransferFunction_ITU_R_709_2, kCVImageBufferTransferFunction_sRGB]
-        ),
-      ] + (isBGRA ? [] : [(kCVImageBufferYCbCrMatrixKey, [kCVImageBufferYCbCrMatrix_ITU_R_709_2])])
-    for (key, supported) in checks {
-      if let value = CVBufferCopyAttachment(buffer, key, nil),
-        !supported.contains(where: { CFEqual(value, $0) })
-      {
-        throw VideoCompositorError.unsupportedInputColorMetadata
-      }
-    }
   }
 
   private func makeOutputPixelBuffer() throws -> CVPixelBuffer {

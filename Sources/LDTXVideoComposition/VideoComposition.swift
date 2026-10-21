@@ -28,14 +28,6 @@ public enum VideoFrameContentKind: Hashable, Sendable {
 
 public enum MetalVideoSource {
   #if canImport(Metal)
-    /// Packed camera RGB; composited directly on the GPU into the NV12 canvas.
-    case bgraTexture(
-      pixelBuffer: CVPixelBuffer,
-      metalTexture: CVMetalTexture,
-      alphaTexture: MTLTexture?,
-      alphaMaskKind: MetalVideoAlphaMaskKind?,
-      contentKind: VideoFrameContentKind
-    )
     case nv12Textures(
       pixelBuffer: CVPixelBuffer,
       lumaMetalTexture: CVMetalTexture,
@@ -51,16 +43,14 @@ public enum MetalVideoSource {
   extension MetalVideoSource {
     public var contentKind: VideoFrameContentKind {
       switch self {
-      case .bgraTexture(_, _, _, _, let contentKind),
-        .nv12Textures(_, _, _, _, _, let contentKind):
+      case .nv12Textures(_, _, _, _, _, let contentKind):
         contentKind
       }
     }
 
     public var hasAlphaMask: Bool {
       switch self {
-      case .bgraTexture(_, _, let alphaTexture, _, _),
-        .nv12Textures(_, _, _, let alphaTexture, _, _):
+      case .nv12Textures(_, _, _, let alphaTexture, _, _):
         alphaTexture != nil
       }
     }

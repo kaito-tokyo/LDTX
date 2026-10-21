@@ -94,15 +94,13 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     var sourceUScale0: Int
     var sourceVScale0: Int
     var sourceRange: UInt32
-    var isBGRA: Bool
 
     init(
       variant: InputNv12DeviceKernelVariant,
       alphaMaskKind: MetalVideoAlphaMaskKind?,
       sourceUV0: SIMD2<Float>,
       sourceUVScale0: SIMD2<Float>,
-      sourceRange: InputNv12DeviceSourceRange,
-      isBGRA: Bool = false
+      sourceRange: InputNv12DeviceSourceRange
     ) {
       self.variant = variant
       self.alphaMaskKind = alphaMaskKind
@@ -111,7 +109,6 @@ final class CompositorShaderRegistry: @unchecked Sendable {
       sourceUScale0 = Self.quantize(sourceUVScale0.x)
       sourceVScale0 = Self.quantize(sourceUVScale0.y)
       self.sourceRange = sourceRange.rawValue
-      self.isBGRA = isBGRA
     }
 
     var sourceUV0: SIMD2<Float> {
@@ -172,15 +169,14 @@ final class CompositorShaderRegistry: @unchecked Sendable {
     alphaMaskKind: MetalVideoAlphaMaskKind? = nil,
     sourceUV0: SIMD2<Float>,
     sourceUVScale0: SIMD2<Float>,
-    sourceRange: InputNv12DeviceSourceRange,
-    isBGRA: Bool = false
+    sourceRange: InputNv12DeviceSourceRange
   ) throws -> InputNv12DevicePipelines {
     let key = InputNv12DevicePipelineKey(
       variant: variant,
       alphaMaskKind: alphaMaskKind,
       sourceUV0: sourceUV0,
       sourceUVScale0: sourceUVScale0,
-      sourceRange: sourceRange, isBGRA: isBGRA
+      sourceRange: sourceRange
     )
 
     lock.lock()
@@ -198,7 +194,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         functionName: inputNv12DeviceFunctionName(
           variant: variant,
           alphaMaskKind: alphaMaskKind,
-          planeSuffix: "LumaKernel", isBGRA: isBGRA
+          planeSuffix: "LumaKernel"
         ),
         sourceUV0: key.sourceUV0,
         sourceUVScale0: key.sourceUVScale0,
@@ -208,7 +204,7 @@ final class CompositorShaderRegistry: @unchecked Sendable {
         functionName: inputNv12DeviceFunctionName(
           variant: variant,
           alphaMaskKind: alphaMaskKind,
-          planeSuffix: "ChromaKernel", isBGRA: isBGRA
+          planeSuffix: "ChromaKernel"
         ),
         sourceUV0: key.sourceUV0,
         sourceUVScale0: key.sourceUVScale0,
@@ -244,16 +240,15 @@ final class CompositorShaderRegistry: @unchecked Sendable {
   private func inputNv12DeviceFunctionName(
     variant: InputNv12DeviceKernelVariant,
     alphaMaskKind: MetalVideoAlphaMaskKind?,
-    planeSuffix: String, isBGRA: Bool
+    planeSuffix: String
   ) -> String {
-    let stem = isBGRA ? "inputBgraDevice0" : variant.functionNameStem
-    return switch alphaMaskKind {
+    switch alphaMaskKind {
     case .none:
-      "\(stem)\(planeSuffix)"
+      "\(variant.functionNameStem)\(planeSuffix)"
     case .oneComponent8:
-      "\(stem)Alpha\(planeSuffix)"
+      "\(variant.functionNameStem)Alpha\(planeSuffix)"
     case .rawFloat16:
-      "\(stem)RawMask\(planeSuffix)"
+      "\(variant.functionNameStem)RawMask\(planeSuffix)"
     }
   }
 

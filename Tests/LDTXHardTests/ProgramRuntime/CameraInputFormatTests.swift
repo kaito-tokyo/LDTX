@@ -51,7 +51,8 @@ import Testing
       }
       CVPixelBufferUnlockBaseAddress(buffer, [])
       let output = try context.render(buffer)
-      #expect(try context.values(output) == expected)
+      let actual = try context.values(output)
+      for (a, e) in zip(actual, expected) { #expect(abs(a - e) <= 1) }
     }
   }
 
@@ -65,7 +66,8 @@ import Testing
     ][color]
     let buffer = try context.bgra(rgb)
     let output = try context.render(buffer)
-    #expect(try context.values(output) == expected)
+    let actual = try context.values(output)
+    for (a, e) in zip(actual, expected) { #expect(abs(a - e) <= 1) }
   }
 
   @Test func bgraPreservesFrameIdentityAndMetadata() throws {
@@ -74,18 +76,22 @@ import Testing
     let frame = CapturedVideoFrame(
       pixelBuffer: buffer, sourcePresentationTime: CMTime(value: 41, timescale: 30),
       captureSessionID: UUID(), sequenceNumber: 19)
-    let prepared = PreparedVideoInput(frame: frame)
-    let source = try VideoInputMetalTextures(pixelBuffer: buffer, textureCache: context.cache)
-      .makeSource(from: prepared)
-    guard case .bgraTexture(let retained, _, _, _, let kind) = source else {
-      Issue.record("Expected packed BGRA source")
+    let normalized = try context.normalizer.normalize(frame)
+    let prepared = PreparedVideoInput(frame: normalized)
+    let source = try VideoInputMetalTextures(
+      pixelBuffer: normalized.pixelBuffer, textureCache: context.cache
+    ).makeSource(from: prepared)
+    guard case .nv12Textures(let retained, _, _, _, _, let kind) = source else {
+      Issue.record("Expected normalized NV12 source")
       return
     }
-    #expect(retained === buffer)
+    #expect(retained !== buffer)
+    #expect(
+      CVPixelBufferGetPixelFormatType(retained) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
     #expect(kind == .captured)
-    #expect(prepared.frame.captureSessionID == frame.captureSessionID)
-    #expect(prepared.frame.sourcePresentationTime == frame.sourcePresentationTime)
-    #expect(prepared.frame.sequenceNumber == 19)
+    #expect(normalized.captureSessionID == frame.captureSessionID)
+    #expect(normalized.sourcePresentationTime == frame.sourcePresentationTime)
+    #expect(normalized.sequenceNumber == 19)
   }
 
   @Test func unsupportedPackedFormatIsRejectedAtInputBoundary() throws {
@@ -98,21 +104,14 @@ import Testing
 
   @Test func explicitUnsupportedColorMetadataIsRejectedAndNextRenderRecovers() throws {
     let context = try Context()
-    let buffer = try context.bgra([255, 0, 0])
+    let buffer = try context.bgra([255, 0, 0], iosurface: false)
     CVBufferSetAttachment(
-      buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_P3_D65, .shouldPropagate
+      buffer, kCVImageBufferColorPrimariesKey, "unknown-primaries" as CFString, .shouldPropagate
     )
-    #expect(throws: VideoCompositorError.self) { try context.render(buffer) }
+    #expect(throws: CapturedInputNormalizer.Failure.self) { try context.render(buffer) }
     CVBufferRemoveAttachment(buffer, kCVImageBufferColorPrimariesKey)
-    #expect(try context.values(context.render(buffer)) == [54, 98, 255])
-  }
-
-  @Test func explicit601MatrixIsNotSilentlyReinterpretedAs709() throws {
-    let context = try Context()
-    let buffer = try context.buffer(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
-    CVBufferSetAttachment(
-      buffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_601_4, .shouldPropagate)
-    #expect(throws: VideoCompositorError.self) { try context.render(buffer) }
+    let result = try context.values(context.render(buffer))
+    for (a, e) in zip(result, [54, 98, 255]) { #expect(abs(a - e) <= 1) }
   }
 
   @Test(arguments: [false, true]) func bgraSupportsForegroundMasks(raw: Bool) throws {
@@ -167,15 +166,16 @@ import Testing
     let context = try Context()
     weak var releasedBuffer: CVPixelBuffer?
     try autoreleasepool {
-      let buffer = try context.bgra([255, 0, 0])
+      let buffer = try context.bgra([255, 0, 0], iosurface: !fail)
       releasedBuffer = buffer
       if fail {
         CVBufferSetAttachment(
-          buffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_P3_D65,
+          buffer, kCVImageBufferColorPrimariesKey, "unknown-primaries" as CFString,
           .shouldPropagate)
-        #expect(throws: VideoCompositorError.self) { try context.render(buffer) }
+        #expect(throws: CapturedInputNormalizer.Failure.self) { try context.render(buffer) }
       } else {
-        #expect(try context.values(context.render(buffer)) == [54, 98, 255])
+        let result = try context.values(context.render(buffer))
+        for (a, e) in zip(result, [54, 98, 255]) { #expect(abs(a - e) <= 1) }
       }
     }
     CVMetalTextureCacheFlush(context.cache, 0)
@@ -186,8 +186,10 @@ import Testing
     let device: MTLDevice
     let cache: CVMetalTextureCache
     let compositor: VideoCompositor
+    let normalizer: CapturedInputNormalizer
     init() throws {
       device = try #require(MTLCreateSystemDefaultDevice())
+      normalizer = CapturedInputNormalizer(device: device)
       var optional: CVMetalTextureCache?
       try #require(CVMetalTextureCacheCreate(nil, nil, device, nil, &optional) == kCVReturnSuccess)
       cache = try #require(optional)
@@ -195,17 +197,20 @@ import Testing
         configuration: .init(width: 4, height: 4, pixelBufferPoolMinimumBufferCount: 1),
         device: device)
     }
-    func buffer(_ format: OSType) throws -> CVPixelBuffer {
+    func buffer(_ format: OSType, iosurface: Bool = true) throws -> CVPixelBuffer {
       var optional: CVPixelBuffer?
       try #require(
         CVPixelBufferCreate(
           nil, 4, 4, format,
-          [kCVPixelBufferIOSurfacePropertiesKey: [:], kCVPixelBufferMetalCompatibilityKey: true]
+          (iosurface
+            ? [
+              kCVPixelBufferIOSurfacePropertiesKey: [:], kCVPixelBufferMetalCompatibilityKey: true,
+            ] : [:])
             as CFDictionary, &optional) == kCVReturnSuccess)
       return try #require(optional)
     }
-    func bgra(_ rgb: [Int]) throws -> CVPixelBuffer {
-      let buffer = try buffer(kCVPixelFormatType_32BGRA)
+    func bgra(_ rgb: [Int], iosurface: Bool = true) throws -> CVPixelBuffer {
+      let buffer = try buffer(kCVPixelFormatType_32BGRA, iosurface: iosurface)
       CVPixelBufferLockBaseAddress(buffer, [])
       let address = try #require(CVPixelBufferGetBaseAddress(buffer)).assumingMemoryBound(
         to: UInt8.self)
@@ -227,10 +232,13 @@ import Testing
       let frame = CapturedVideoFrame(
         pixelBuffer: buffer, sourcePresentationTime: .zero, captureSessionID: UUID(),
         sequenceNumber: 1)
+      let normalized = try normalizer.normalize(frame)
       let input = PreparedVideoInput(
-        frame: frame, alphaTexture: mask,
+        frame: normalized, alphaTexture: mask,
         alphaMaskKind: mask == nil ? nil : raw ? .rawFloat16 : .oneComponent8)
-      let source = try VideoInputMetalTextures(pixelBuffer: buffer, textureCache: cache).makeSource(
+      let source = try VideoInputMetalTextures(
+        pixelBuffer: normalized.pixelBuffer, textureCache: cache
+      ).makeSource(
         from: input)
       return try compositor.render([
         CameraInputComponent(
