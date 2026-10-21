@@ -21,20 +21,33 @@ public protocol CameraCaptureStreaming: Sendable {
   func stop(completionHandler: @escaping @Sendable () -> Void)
 }
 
+// Internal seam for deterministic lifecycle tests; each service owns one manager.
+protocol CameraCaptureSessionManaging: Sendable {
+  func availableCameras() -> [CameraCaptureSource]
+  func start(
+    request: CaptureSessionRequest,
+    handler: @escaping CaptureSessionManager.SampleHandler,
+    failureHandler: @escaping CaptureSessionManager.FailureHandler,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void)
+  func stop(completionHandler: @escaping @Sendable () -> Void)
+}
+
+extension CaptureSessionManager: CameraCaptureSessionManaging {}
+
 public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
   public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
   public typealias ConfigurationHandler = @Sendable (String) -> Void
   public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void
 
-  private static let registry = SharedCaptureSessionRegistry.shared
+  private let manager: any CameraCaptureSessionManaging
+  private let operations = CaptureOperationQueue()
 
-  private let stateLock = NSLock()
-  private var subscriptionIDs: [UUID] = []
+  public init() { manager = CaptureSessionManager() }
 
-  public init() {}
+  init(manager: any CameraCaptureSessionManaging) { self.manager = manager }
 
   public func availableCameras() -> [CameraCaptureSource] {
-    CaptureSessionManager().availableCameras()
+    manager.availableCameras()
   }
 
   public func startCameraCapture(
@@ -47,66 +60,29 @@ public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Send
     handler: @escaping SampleHandler,
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
-    guard availableCameras().contains(where: { $0.id == cameraID }) else {
-      completionHandler(.failure(CameraCaptureServiceError.cameraNotFound(cameraID)))
-      return
-    }
-
-    let videoDemand = SharedCaptureSessionVideoDemand(
-      deviceID: cameraID,
-      targetWidth: targetWidth,
-      targetHeight: targetHeight,
-      frameRate: frameRate
-    )
-    let demands = [SharedCaptureSessionSubscriptionDemand(video: videoDemand)]
-    configurationHandler?("Capture subscription prepared as a video-only session.")
-
-    replaceSubscriptions(
-      with: demands,
-      failureHandler: failureHandler,
-      handler: handler,
-      completionHandler: completionHandler
-    )
-  }
-
-  public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
-    let ids = stateLock.withLock { () -> [UUID] in
-      let ids = subscriptionIDs
-      subscriptionIDs = []
-      return ids
-    }
-    Self.registry.unregister(ids: ids, completionHandler: completionHandler)
-  }
-
-  private func replaceSubscriptions(
-    with demands: [SharedCaptureSessionSubscriptionDemand],
-    failureHandler: @escaping FailureHandler = { _ in },
-    handler: @escaping SampleHandler,
-    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
-  ) {
-    let previousIDs = stateLock.withLock { () -> [UUID] in
-      let ids = subscriptionIDs
-      subscriptionIDs = []
-      return ids
-    }
-    Self.registry.replace(
-      ids: previousIDs,
-      with: demands.map { demand in
-        SharedCaptureSessionRegistry.PendingSubscription(
-          demand: demand,
-          failureHandler: failureHandler,
-          handler: handler
-        )
+    operations.enqueue { [self] finished in
+      configurationHandler?("Workspace-owned camera session; prefer 1080p with negotiated cadence.")
+      manager.start(
+        request: CaptureSessionRequest(videoInputs: [
+          CaptureSessionVideoRequest(
+            sourceKey: cameraID, deviceID: cameraID,
+            targetWidth: targetWidth, targetHeight: targetHeight, frameRate: frameRate)
+        ]),
+        handler: { sample in handler(sample.sampleBuffer, sample.kind) },
+        failureHandler: failureHandler
+      ) { result in
+        completionHandler(result.mapError(Self.mapError))
+        finished()
       }
-    ) { [self] result in
-      switch result {
-      case .success(let newIDs):
-        stateLock.withLock {
-          subscriptionIDs = newIDs
-        }
-        completionHandler(.success(()))
-      case .failure(let error):
-        completionHandler(.failure(Self.mapError(error)))
+    }
+  }
+
+  /// Completes after queued starts, physical stop, and sample delivery have drained.
+  public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
+    operations.enqueue { [self] finished in
+      manager.stop {
+        completionHandler()
+        finished()
       }
     }
   }

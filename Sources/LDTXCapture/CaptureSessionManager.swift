@@ -141,8 +141,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   public typealias SampleHandler = @Sendable (CapturedSample) -> Void
   public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void
 
-  private static let preferredVideoPixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-  private static let frameRateTolerance = 0.01
   private static let logger = Logger(
     subsystem: "tokyo.kaito.ldtx",
     category: "CaptureSessionManager"
@@ -164,7 +162,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
   private var notificationObservers: [NSObjectProtocol] = []
   private var activeDeviceIDs: Set<String> = []
-  private var configuredVideoInputs: [ConfiguredVideoInput] = []
 
   public init(allowedVideoDeviceIDs: Set<String>? = nil) {
     self.allowedVideoDeviceIDs = allowedVideoDeviceIDs
@@ -259,39 +256,22 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
     let session = AVCaptureSession()
     session.beginConfiguration()
-    let configuredVideoInputs: [ConfiguredVideoInput]
     do {
-      configuredVideoInputs = try configureVideoInputs(request.videoInputs, in: session)
+      try configureVideoInputs(request.videoInputs, in: session)
+      if session.canSetSessionPreset(.hd1920x1080) {
+        session.sessionPreset = .hd1920x1080
+      }
     } catch {
       session.commitConfiguration()
+      disableSampleBufferDelegates(for: session)
+      clearSampleDeliveryState()
       throw error
     }
     session.commitConfiguration()
     self.session = session
-    self.configuredVideoInputs = configuredVideoInputs
     observeRuntimeFailures(for: session, deviceIDs: Set(request.videoInputs.map(\.deviceID)))
-    do {
-      try CaptureSessionStartupSequence.run(
-        start: {
-          session.startRunning()
-        },
-        reapplyVideoConfiguration: {
-          try self.reapplyVideoFormats(configuredVideoInputs)
-        },
-        enableSampleDelivery: {
-          self.sampleQueue.sync {
-            self.sampleHandler = handler
-          }
-        }
-      )
-    } catch {
-      session.stopRunning()
-      disableSampleBufferDelegates(for: session)
-      removeRuntimeFailureObservers()
-      clearSampleDeliveryState()
-      self.session = nil
-      throw error
-    }
+    session.startRunning()
+    sampleQueue.sync { self.sampleHandler = handler }
     Self.logger.notice(
       "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
     )
@@ -300,8 +280,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private func configureVideoInputs(
     _ requests: [CaptureSessionVideoRequest],
     in session: AVCaptureSession
-  ) throws -> [ConfiguredVideoInput] {
-    var configuredInputs: [ConfiguredVideoInput] = []
+  ) throws {
     for request in requests {
       if let allowedVideoDeviceIDs, !allowedVideoDeviceIDs.contains(request.deviceID) {
         throw CaptureSessionManagerError.videoDeviceNotAllowed(request.deviceID)
@@ -310,12 +289,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       else {
         throw CaptureSessionManagerError.videoDeviceNotFound(request.deviceID)
       }
-      try configureFormat(
-        targetWidth: request.targetWidth,
-        targetHeight: request.targetHeight,
-        frameRate: request.frameRate,
-        for: device
-      )
       let input = try Self.makeDeviceInput(for: device)
       guard session.canAddInput(input) else {
         throw CaptureSessionManagerError.cannotAddInput(request.deviceID)
@@ -324,12 +297,14 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
 
       let output = AVCaptureVideoDataOutput()
       output.alwaysDiscardsLateVideoFrames = true
-      guard output.availableVideoPixelFormatTypes.contains(Self.preferredVideoPixelFormat) else {
-        throw CaptureSessionManagerError.unsupportedVideoPixelFormat(
-          Self.fourCC(Self.preferredVideoPixelFormat))
+      guard
+        let pixelFormat = Self.preferredVideoPixelFormat(
+          from: output.availableVideoPixelFormatTypes)
+      else {
+        throw CaptureSessionManagerError.unsupportedVideoPixelFormat("420v, 420f, BGRA")
       }
       output.videoSettings = [
-        kCVPixelBufferPixelFormatTypeKey as String: Self.preferredVideoPixelFormat
+        kCVPixelBufferPixelFormatTypeKey as String: pixelFormat
       ]
       guard session.canAddOutput(output) else {
         throw CaptureSessionManagerError.cannotAddOutput(request.sourceKey)
@@ -344,22 +319,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         deviceID: request.deviceID,
         kind: .video,
         in: session
-      )
-      configuredInputs.append(ConfiguredVideoInput(request: request, device: device))
-    }
-    return configuredInputs
-  }
-
-  private func reapplyVideoFormats(_ inputs: [ConfiguredVideoInput]) throws {
-    for input in inputs {
-      try configureFormat(
-        targetWidth: input.request.targetWidth,
-        targetHeight: input.request.targetHeight,
-        frameRate: input.request.frameRate,
-        for: input.device
-      )
-      Self.logger.notice(
-        "Reapplied video configuration after capture session start: device=\(input.request.deviceID, privacy: .public), requested=\(input.request.targetWidth, privacy: .public)x\(input.request.targetHeight, privacy: .public)/\(input.request.frameRate, privacy: .public), active=\(Self.activeVideoConfigurationSummary(for: input.device), privacy: .public)"
       )
     }
   }
@@ -431,19 +390,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
             Self.logger.notice(
               "Capture media services were reset; restarting the current session"
             )
-            do {
-              try CaptureSessionResetSequence.run(
-                start: { session.startRunning() },
-                reapplyVideoConfiguration: {
-                  try self.reapplyVideoFormats(self.configuredVideoInputs)
-                }
-              )
-            } catch {
-              Self.logger.error(
-                "Failed to restore video configuration after media services reset: \(error.localizedDescription, privacy: .public)"
-              )
-              self.reportRuntimeFailure(.sessionRuntimeError(code: code))
-            }
+            session.startRunning()
           case .report:
             self.reportRuntimeFailure(.sessionRuntimeError(code: code))
           }
@@ -504,7 +451,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   }
 
   private func clearSampleDeliveryState() {
-    configuredVideoInputs = []
     sampleQueue.sync {
       outputsByID.removeAll(keepingCapacity: true)
       sampleHandler = nil
@@ -587,47 +533,12 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
   }
 
-  private func configureFormat(
-    targetWidth: Int,
-    targetHeight: Int,
-    frameRate: Int,
-    for camera: AVCaptureDevice
-  ) throws {
-    guard targetWidth > 0, targetHeight > 0, frameRate > 0 else { return }
-    let requested = Double(frameRate)
-    let selectedFormat = Self.bestFormat(
-      for: camera,
-      targetWidth: targetWidth,
-      targetHeight: targetHeight,
-      frameRate: requested
-    )
-    let fallbackDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
-    let requestedDuration =
-      selectedFormat
-      .flatMap {
-        Self.nearestFrameRateRange($0, requestedFrameRate: requested).range?.minFrameDuration
-      }
-      ?? fallbackDuration
-
-    try AVCaptureDeviceConfigurationGate.withLock {
-      try camera.lockForConfiguration()
-      defer { camera.unlockForConfiguration() }
-
-      if let selectedFormat {
-        camera.activeFormat = selectedFormat
-      }
-      let nearestActiveFrameRate = Self.nearestFrameRateRange(
-        camera.activeFormat, requestedFrameRate: requested)
-      if let range = nearestActiveFrameRate.range {
-        let duration = Self.preferredFrameDuration(
-          for: nearestActiveFrameRate.frameRate,
-          in: range,
-          fallback: requestedDuration
-        )
-        camera.activeVideoMinFrameDuration = duration
-        camera.activeVideoMaxFrameDuration = duration
-      }
-    }
+  static func preferredVideoPixelFormat(from available: [OSType]) -> OSType? {
+    [
+      kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVPixelFormatType_32BGRA,
+    ]
+    .first(where: { available.contains($0) })
   }
 
   private static func allVideoDevices() -> [AVCaptureDevice] {
@@ -657,87 +568,8 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       width: Int(dimensions.width),
       height: Int(dimensions.height),
       isExternal: device.deviceType == .external,
-      formatSummary: activeVideoConfigurationSummary(for: device),
-      linkedDeviceIDs: device.linkedDevices.map(\.uniqueID)
+      formatSummary: activeVideoConfigurationSummary(for: device)
     )
-  }
-
-  private static func bestFormat(
-    for camera: AVCaptureDevice,
-    targetWidth: Int,
-    targetHeight: Int,
-    frameRate: Double
-  ) -> AVCaptureDevice.Format? {
-    camera.formats
-      .filter {
-        format(
-          $0, matchesWidth: targetWidth, height: targetHeight,
-          pixelFormat: preferredVideoPixelFormat)
-      }
-      .min { lhs, rhs in
-        let lhsDistance = nearestFrameRateRange(lhs, requestedFrameRate: frameRate).distance
-        let rhsDistance = nearestFrameRateRange(rhs, requestedFrameRate: frameRate).distance
-        if abs(lhsDistance - rhsDistance) <= frameRateTolerance {
-          return maxFrameRate(lhs) > maxFrameRate(rhs)
-        }
-        return lhsDistance < rhsDistance
-      }
-  }
-
-  private static func format(
-    _ format: AVCaptureDevice.Format,
-    matchesWidth targetWidth: Int,
-    height targetHeight: Int,
-    pixelFormat targetPixelFormat: OSType
-  ) -> Bool {
-    let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-    return Int(dimensions.width) == targetWidth
-      && Int(dimensions.height) == targetHeight
-      && CMFormatDescriptionGetMediaSubType(format.formatDescription) == targetPixelFormat
-  }
-
-  private static func nearestFrameRateRange(
-    _ format: AVCaptureDevice.Format,
-    requestedFrameRate: Double
-  ) -> (range: AVFrameRateRange?, frameRate: Double, distance: Double) {
-    let candidates = format.videoSupportedFrameRateRanges.map { range in
-      let selectedFrameRate: Double
-      if requestedFrameRate < range.minFrameRate {
-        selectedFrameRate = range.minFrameRate
-      } else if requestedFrameRate > range.maxFrameRate {
-        selectedFrameRate = range.maxFrameRate
-      } else if abs(range.minFrameRate - range.maxFrameRate) <= frameRateTolerance {
-        selectedFrameRate = range.maxFrameRate
-      } else {
-        selectedFrameRate = requestedFrameRate
-      }
-      return (
-        range: range, frameRate: selectedFrameRate,
-        distance: abs(selectedFrameRate - requestedFrameRate)
-      )
-    }
-    return candidates.min { lhs, rhs in
-      if abs(lhs.distance - rhs.distance) <= frameRateTolerance {
-        return lhs.frameRate > rhs.frameRate
-      }
-      return lhs.distance < rhs.distance
-    } ?? (nil, 0, Double.greatestFiniteMagnitude)
-  }
-
-  private static func preferredFrameDuration(
-    for frameRate: Double,
-    in range: AVFrameRateRange,
-    fallback: CMTime
-  ) -> CMTime {
-    if abs(range.minFrameRate - range.maxFrameRate) <= frameRateTolerance {
-      return range.minFrameDuration
-    }
-    let duration = CMTime(value: 1, timescale: CMTimeScale(frameRate.rounded()))
-    return duration.isValid ? duration : fallback
-  }
-
-  private static func maxFrameRate(_ format: AVCaptureDevice.Format) -> Double {
-    format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
   }
 
   private static func makeDeviceInput(for device: AVCaptureDevice) throws -> AVCaptureDeviceInput {
@@ -787,10 +619,6 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     var kind: CameraCaptureSampleKind
   }
 
-  private struct ConfiguredVideoInput {
-    var request: CaptureSessionVideoRequest
-    var device: AVCaptureDevice
-  }
 }
 
 enum CaptureSessionRuntimeFailureAction: Equatable {
@@ -813,27 +641,5 @@ enum CaptureSessionRuntimeFailurePolicy {
       return .restart
     }
     return .report
-  }
-}
-
-enum CaptureSessionResetSequence {
-  static func run(
-    start: () -> Void,
-    reapplyVideoConfiguration: () throws -> Void
-  ) rethrows {
-    start()
-    try reapplyVideoConfiguration()
-  }
-}
-
-enum CaptureSessionStartupSequence {
-  static func run(
-    start: () -> Void,
-    reapplyVideoConfiguration: () throws -> Void,
-    enableSampleDelivery: () -> Void
-  ) rethrows {
-    start()
-    try reapplyVideoConfiguration()
-    enableSampleDelivery()
   }
 }

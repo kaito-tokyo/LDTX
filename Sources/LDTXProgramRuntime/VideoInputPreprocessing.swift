@@ -146,9 +146,26 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
 
   struct VideoInputMetalTextures {
     let lumaMetalTexture: CVMetalTexture
-    let chromaMetalTexture: CVMetalTexture
+    let chromaMetalTexture: CVMetalTexture?
 
     init(pixelBuffer: CVPixelBuffer, textureCache: CVMetalTextureCache) throws {
+      let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+      if format == kCVPixelFormatType_32BGRA {
+        var texture: CVMetalTexture?
+        let status = CVMetalTextureCacheCreateTextureFromImage(
+          kCFAllocatorDefault, textureCache, pixelBuffer, nil, .bgra8Unorm,
+          CVPixelBufferGetWidth(pixelBuffer), CVPixelBufferGetHeight(pixelBuffer), 0, &texture)
+        guard status == kCVReturnSuccess, let texture else {
+          throw VideoCompositorError.textureCreationFailed(status)
+        }
+        lumaMetalTexture = texture
+        chromaMetalTexture = nil
+        return
+      }
+      guard
+        format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+          || format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+      else { throw VideoCompositorError.unsupportedPixelBufferFormat(format) }
       lumaMetalTexture = try Self.makeTexture(
         pixelBuffer,
         textureCache: textureCache,
@@ -164,13 +181,19 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
     }
 
     var lumaTexture: MTLTexture? { CVMetalTextureGetTexture(lumaMetalTexture) }
-    var chromaTexture: MTLTexture? { CVMetalTextureGetTexture(chromaMetalTexture) }
+    var chromaTexture: MTLTexture? { chromaMetalTexture.flatMap(CVMetalTextureGetTexture) }
 
     func makeSource(
       from input: PreparedVideoInput,
       contentKind: VideoFrameContentKind = .captured
     ) -> MetalVideoSource {
-      .nv12Textures(
+      guard let chromaMetalTexture else {
+        return .bgraTexture(
+          pixelBuffer: input.frame.pixelBuffer, metalTexture: lumaMetalTexture,
+          alphaTexture: input.alphaTexture, alphaMaskKind: input.alphaMaskKind,
+          contentKind: contentKind)
+      }
+      return .nv12Textures(
         pixelBuffer: input.frame.pixelBuffer,
         lumaMetalTexture: lumaMetalTexture,
         chromaMetalTexture: chromaMetalTexture,
