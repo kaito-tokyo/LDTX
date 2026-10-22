@@ -750,6 +750,8 @@ public final class SessionRecordService: @unchecked Sendable {
     mainAudioRecordingWindow.activate(at: origin)
   }
 
+  private let finalizationID = UUID()
+
   private func finishSideRecorders(
     _ recorders: [AudioSideStreamRecorder], at index: Int, endingAt: CMTime?
   ) {
@@ -759,9 +761,16 @@ public final class SessionRecordService: @unchecked Sendable {
         at: 0)
       return
     }
+    sessionRecordServiceLogger.notice(
+      "recording finalization id=\(self.finalizationID, privacy: .public) phase=side-audio index=\(index) completed=false"
+    )
     recorders[index].finish(at: endingAt) { [weak self] in
       self?.mediaQueue.async { [weak self] in
-        self?.finishSideRecorders(recorders, at: index + 1, endingAt: endingAt)
+        guard let self else { return }
+        sessionRecordServiceLogger.notice(
+          "recording finalization id=\(self.finalizationID, privacy: .public) phase=side-audio index=\(index) completed=true"
+        )
+        self.finishSideRecorders(recorders, at: index + 1, endingAt: endingAt)
       }
     }
   }
@@ -774,9 +783,16 @@ public final class SessionRecordService: @unchecked Sendable {
       finishPackage()
       return
     }
+    sessionRecordServiceLogger.notice(
+      "recording finalization id=\(self.finalizationID, privacy: .public) phase=canvas index=\(index) completed=false"
+    )
     pipelines[index].finish { [weak self] in
       self?.mediaQueue.async { [weak self] in
-        self?.finishRecordingPipelines(pipelines, at: index + 1)
+        guard let self else { return }
+        sessionRecordServiceLogger.notice(
+          "recording finalization id=\(self.finalizationID, privacy: .public) phase=canvas index=\(index) completed=true"
+        )
+        self.finishRecordingPipelines(pipelines, at: index + 1)
       }
     }
   }
@@ -816,11 +832,17 @@ public final class SessionRecordService: @unchecked Sendable {
               "No video sample was accepted before recording stopped.")))
         return
       }
+      sessionRecordServiceLogger.notice(
+        "recording finalization id=\(self.finalizationID, privacy: .public) phase=package completed=false"
+      )
       try package.finish()
+      sessionRecordServiceLogger.notice(
+        "recording finalization id=\(self.finalizationID, privacy: .public) phase=package completed=true"
+      )
       completeStop(.finalized)
     } catch {
       sessionRecordServiceLogger.error(
-        "Record package finalization failed: \(error.localizedDescription, privacy: .public)"
+        "Record package finalization failed id=\(self.finalizationID, privacy: .public) code=\((error as NSError).code): \(error.localizedDescription, privacy: .private)"
       )
       completeStop(
         .failed(
