@@ -364,6 +364,144 @@ extension OutputTestSuite {
       #expect(try fixture.globalScreenshots().count == 2)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func initiatingFailureWithoutCleanupFailureRetainsTypedError() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      fixture.session.state = .starting
+      let primary = NSError(
+        domain: NSCocoaErrorDomain, code: 640,
+        userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: 28)])
+      let release = fixture.blockArchives()
+      defer { release.signal() }
+      let failure = Task { await fixture.session.fail(primary) }
+      try await fixture.waitForAdmissionToClose()
+      var joined = false
+      let stop = Task {
+        joined = true
+        return await fixture.session.stopWithResult()
+      }
+      while !joined { await Task.yield() }
+      release.signal()
+      await failure.value
+      guard case .failure(let returned) = await stop.value else {
+        Issue.record("The initiating error must be returned even when cleanup succeeds")
+        return
+      }
+      #expect(returned === primary)
+      #expect((returned.userInfo[NSUnderlyingErrorKey] as? NSError)?.code == 28)
+      #expect(fixture.session.outputFailures.secondary.isEmpty)
+      #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func initiatingFailureSurvivesRealArchiveFailure() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      // A conflicting file injects an archive error without exhausting the disk.
+      try Data().write(to: fixture.package.appendingPathComponent("Visions"))
+      fixture.archive("test archive")
+      let primary = NSError(domain: "test.output", code: 94)
+      await fixture.session.fail(primary)
+      #expect(fixture.session.state == .failed(primary.localizedDescription))
+      #expect(fixture.session.outputFailures.primary === primary)
+      #expect(fixture.session.outputFailures.secondary.map(\.phase) == [.visionArchive])
+      #expect(fixture.isFinalized)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func initiatingFailureSurvivesLaterCallbacksAndRealFinalizationFailure() async throws {
+      let fixture = try Fixture(recordingFailureHandler: { _ in })
+      defer { fixture.cleanup() }
+      // A video with no Main Mix deterministically fails real finalization.
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.session.state = .recording
+      let primary = NSError(
+        domain: NSCocoaErrorDomain, code: 640,
+        userInfo: [NSLocalizedDescriptionKey: "Injected disk-full output failure"])
+      let later = NSError(domain: "test.delivery", code: 91)
+      let youtube = NSError(domain: "test.youtube.finish", code: 92)
+      let release = fixture.blockArchives()
+      defer { release.signal() }
+      let failure = Task { await fixture.session.fail(primary) }
+      try await fixture.waitForAdmissionToClose()
+      var joined = false
+      let stop = Task {
+        joined = true
+        return await fixture.session.stopWithResult()
+      }
+      while !joined { await Task.yield() }
+      await fixture.session.fail(later)
+      await fixture.session.finishYouTubeOutput { .failure(youtube) }
+      release.signal()
+      await failure.value
+      let result = await stop.value
+      guard case .failure(let returned) = result else {
+        Issue.record("Joined stop must report the initiating failure")
+        return
+      }
+      #expect(returned === primary)
+      #expect(fixture.session.state == .failed(primary.localizedDescription))
+      #expect(fixture.session.outputFailures.primary === primary)
+      let secondary = fixture.session.outputFailures.secondary
+      #expect(secondary.map(\.phase) == [.output, .youtubeFinalization, .recordingFinalization])
+      #expect(secondary[0].error === later)
+      #expect(secondary[1].error === youtube)
+      #expect(!fixture.isFinalized)
+      // Historical recording errors must not permanently prevent Workspace shutdown.
+      try (await fixture.session.stopWithResult()).get()
+      #expect(fixture.session.outputFailures.primary === primary)
+      // A new start attempt resets history even if its configuration is invalid.
+      _ = await fixture.session.startWithResult()
+      #expect(fixture.session.outputFailures.primary == nil)
+      #expect(fixture.session.outputFailures.secondary.isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func firstCleanupFailureBecomesPrimary(pausing: Bool) async throws {
+      let fixture = try Fixture(recordingFailureHandler: { _ in })
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.session.state = .recording
+      let result =
+        pausing ? await fixture.session.pauseWithResult() : await fixture.session.stopWithResult()
+      guard case .failure(let error) = result else {
+        Issue.record("Missing Main Mix must fail finalization")
+        return
+      }
+      #expect(fixture.session.outputFailures.primary === error)
+      #expect(fixture.session.outputFailures.secondary.isEmpty)
+      #expect(fixture.session.state == .failed(error.localizedDescription))
+      #expect(!fixture.isFinalized)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func youtubeCleanupFailureSurvivesLaterRecordingFailure(pausing: Bool) async throws {
+      let fixture = try Fixture(recordingFailureHandler: { _ in })
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.session.state = .recording
+      let primary = NSError(domain: "test.youtube.finish", code: 93)
+      let release = fixture.blockArchives()
+      defer { release.signal() }
+      let finish = Task {
+        pausing ? await fixture.session.pauseWithResult() : await fixture.session.stopWithResult()
+      }
+      try await fixture.waitForAdmissionToClose()
+      await fixture.session.finishYouTubeOutput { .failure(primary) }
+      release.signal()
+      guard case .failure(let returned) = await finish.value else {
+        Issue.record("Expected YouTube cleanup failure")
+        return
+      }
+      #expect(returned === primary)
+      #expect(fixture.session.state == .failed(primary.localizedDescription))
+      #expect(fixture.session.outputFailures.secondary.map(\.phase) == [.recordingFinalization])
+    }
+
     @MainActor private final class Fixture {
       let root: URL
       let runtime: WorkspaceWindowRuntime
@@ -380,7 +518,12 @@ extension OutputTestSuite {
           atPath: package.appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path)
       }
 
-      init(screenCaptureService: ScreenCaptureService? = nil) throws {
+      init(
+        screenCaptureService: ScreenCaptureService? = nil,
+        recordingFailureHandler: @escaping @MainActor (any Error) -> Void = {
+          Issue.record("Unexpected recording failure: \($0)")
+        }
+      ) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
@@ -400,7 +543,7 @@ extension OutputTestSuite {
           baseDirectory: root, recordID: "archive-lifecycle",
           writerConfiguration: SegmentedMP4WriterConfiguration(
             width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
-          audioTracks: [], failureHandler: { Issue.record("Unexpected recording failure: \($0)") })
+          audioTracks: [], failureHandler: recordingFailureHandler)
         try service.start()
         session.adoptStartedRecordingService(service)
       }

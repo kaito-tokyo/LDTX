@@ -16,6 +16,7 @@ import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceBundleFormat
+import OSLog
 import Observation
 
 /// Projects the authoritative Workspace UI state into preview and output runtimes.
@@ -83,23 +84,37 @@ public final class WorkspaceWindowRuntime {
     componentFrameRenderer?.retainComponents([])
   }
 
-  public func shutdownAndWait() async {
+  private static let shutdownLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "WorkspaceRuntimeDrain")
+
+  public func shutdownAndWait(diagnosticID drainID: UUID = UUID()) async {
+    func phase(_ name: String, completed: Bool) {
+      Self.shutdownLogger.notice(
+        "workspace runtime drain id=\(drainID, privacy: .public) phase=\(name, privacy: .public) completed=\(completed)"
+      )
+    }
+    phase("rendering", completed: false)
     isShutDown = true
     for runtime in [landscapeRuntime, portraitRuntime].compactMap({ $0 }) {
       await withCheckedContinuation { continuation in
         runtime.drainRendering { continuation.resume() }
       }
     }
+    phase("rendering", completed: true)
+    phase("overlays", completed: false)
     for overlay in [landscapeOverlays, portraitOverlays] {
       await withCheckedContinuation { continuation in
         overlay.stop { continuation.resume() }
       }
     }
+    phase("overlays", completed: true)
+    phase("components", completed: false)
     if let componentFrameRenderer {
       await withCheckedContinuation { continuation in
         componentFrameRenderer.stopAndDrain { continuation.resume() }
       }
     }
+    phase("components", completed: true)
   }
 
   private func observeVariableChanges() {

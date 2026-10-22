@@ -19,6 +19,7 @@ import LDTXWorkspaceAppletUI
 import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import MetalKit
+import OSLog
 import Observation
 import SwiftUI
 
@@ -786,29 +787,61 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     _ = await closeWorkspace()
   }
 
+  private static let shutdownLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "WorkspaceClose")
+
   private func drainWorkspaceResources() async throws {
+    let closeID = UUID()
+    func phase(_ name: String, completed: Bool) {
+      Self.shutdownLogger.notice(
+        "workspace close id=\(closeID, privacy: .public) phase=\(name, privacy: .public) completed=\(completed)"
+      )
+    }
     documentObservationTask?.cancel()
     outputObservationTask?.cancel()
     deviceAssignmentsObservationTask?.cancel()
     preferencesObservationTask?.cancel()
+    phase("inference", completed: false)
     await inferenceTask?.value
+    phase("inference", completed: true)
+    phase("preview", completed: false)
     pairedPreview.stop()
     previewRenderer.stop()
     await previewRenderer.drainDrawing()
+    phase("preview", completed: true)
+    phase("vision", completed: false)
     await visionFeature.stop()
+    phase("vision", completed: true)
+    phase("screenshots", completed: false)
     await drainScreenshotCaptures()
+    phase("screenshots", completed: true)
+    phase("output", completed: false)
     let stopResult = await recordingSession.stopWithResult()
-    await windowRuntime.shutdownAndWait()
+    phase("output", completed: true)
+    phase("runtime", completed: false)
+    await windowRuntime.shutdownAndWait(diagnosticID: closeID)
+    phase("runtime", completed: true)
+    phase("capture", completed: false)
     await withCheckedContinuation { continuation in
       windowRuntime.captureSessionCoordinator.stopAndReset { continuation.resume() }
     }
+    phase("capture", completed: true)
+    phase("audio", completed: false)
     await audioCoordinator.stopAndReset()
+    phase("audio", completed: true)
     guard windowRuntime.captureSessionCoordinator.isFullyStopped(),
       audioCoordinator.isFullyStopped()
     else {
+      Self.shutdownLogger.error(
+        "workspace close id=\(closeID, privacy: .public) phase=verification code=2")
       throw NSError(
         domain: "WorkspaceClose", code: 2,
         userInfo: [NSLocalizedDescriptionKey: "Workspace resources have not finished stopping."])
+    }
+    if case .failure(let error) = stopResult {
+      Self.shutdownLogger.error(
+        "workspace close id=\(closeID, privacy: .public) phase=output code=\(error.code)"
+      )
     }
     try stopResult.get()
   }

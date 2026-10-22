@@ -19,6 +19,7 @@ import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXYouTubeRTMPS
+import OSLog
 import Observation
 import Synchronization
 import UniformTypeIdentifiers
@@ -60,8 +61,12 @@ public final class WorkspaceV4RecordingSession {
   private var youtubePortraitSubscription: ProgramOutputMediaHub.Subscription?
   private var inputAudioSubscriptions: [WorkspaceCaptureSessionCoordinator.AudioSubscription] = []
   @ObservationIgnored private var stoppingTask: Task<Result<Void, NSError>, Never>?
-  private var terminalFailureMessage: String?
-  @ObservationIgnored private var currentStoppingFailure: NSError?
+  @ObservationIgnored private(set) var outputFailures = WorkspaceOutputFailures()
+  @ObservationIgnored private var outputAttemptID = UUID()
+  @ObservationIgnored private var hasCompletedOutputCleanup = false
+  private var cleanupPriorFailureMessage: String?
+  private static let logger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "WorkspaceOutputCleanup")
   private let screenCaptureService: ScreenCaptureService
   @ObservationIgnored private var pendingScreenshotCount = 0
   @ObservationIgnored private var pendingPackageScreenshotCount = 0
@@ -104,6 +109,9 @@ public final class WorkspaceV4RecordingSession {
           domain: "WorkspaceOutput", code: 1,
           userInfo: [NSLocalizedDescriptionKey: "Output is already active or transitioning."]))
     }
+    outputFailures = WorkspaceOutputFailures()
+    outputAttemptID = UUID()
+    hasCompletedOutputCleanup = false
     if isFailed {
       clearSessionReferences()
       state = .idle
@@ -170,8 +178,10 @@ public final class WorkspaceV4RecordingSession {
       guard state == .starting else { return await interruptedStartResult() }
     } catch {
       sleepInhibitor.stop()
-      state = .failed(error.localizedDescription)
-      return .failure(error as NSError)
+      recordFailure(error, phase: .output)
+      let primary = outputFailures.primary ?? (error as NSError)
+      state = .failed(primary.localizedDescription)
+      return .failure(primary)
     }
 
     let youtubeService: YouTubeRTMPSWorkspaceService?
@@ -179,8 +189,10 @@ public final class WorkspaceV4RecordingSession {
       youtubeService = output.youtubeEnabled ? try makeYouTubeRTMPSService(for: output) : nil
     } catch {
       sleepInhibitor.stop()
-      state = .failed(error.localizedDescription)
-      return .failure(error as NSError)
+      recordFailure(error, phase: .output)
+      let primary = outputFailures.primary ?? (error as NSError)
+      state = .failed(primary.localizedDescription)
+      return .failure(primary)
     }
     let service: SessionRecordService?
     do {
@@ -210,8 +222,10 @@ public final class WorkspaceV4RecordingSession {
       }
     } catch {
       sleepInhibitor.stop()
-      state = .failed(error.localizedDescription)
-      return .failure(error as NSError)
+      recordFailure(error, phase: .output)
+      let primary = outputFailures.primary ?? (error as NSError)
+      state = .failed(primary.localizedDescription)
+      return .failure(primary)
     }
 
     let landscapeHub = ProgramOutputMediaHub()
@@ -253,12 +267,13 @@ public final class WorkspaceV4RecordingSession {
       return .success(())
     } catch {
       await fail(error)
-      return .failure(error as NSError)
+      return .failure(outputFailures.primary ?? (error as NSError))
     }
   }
 
   private func interruptedStartResult() async -> Result<Void, NSError> {
     _ = await stoppingTask?.value
+    if let error = outputFailures.primary { return .failure(error) }
     let message = failureMessage ?? "Output startup did not complete."
     return .failure(
       NSError(
@@ -289,15 +304,20 @@ public final class WorkspaceV4RecordingSession {
   private func finishOutput(pausing: Bool) async -> Result<Void, NSError> {
     if let stoppingTask { return await stoppingTask.value }
     guard state == .starting || state == .recording || isFailed else { return .success(()) }
-    return await beginFinishingOutput(pausing: pausing, priorFailure: failureMessage).value
+    // A previously reported failure must not make every later Workspace close fail.
+    // The first cleanup already drained these resources and retained its diagnostics.
+    if isFailed, hasCompletedOutputCleanup {
+      return .success(())
+    }
+    return await beginFinishingOutput(pausing: pausing, priorFailure: nil).value
   }
 
-  private func beginFinishingOutput(pausing: Bool, priorFailure: String?) -> Task<
+  private func beginFinishingOutput(pausing: Bool, priorFailure: (any Error)?) -> Task<
     Result<Void, NSError>, Never
   > {
     // Lock out another request before the task reaches its first suspension.
-    terminalFailureMessage = priorFailure
-    currentStoppingFailure = nil
+    cleanupPriorFailureMessage = failureMessage
+    if let priorFailure { recordFailure(priorFailure, phase: .output) }
     state = pausing ? .pausing : .stopping
     let task = Task { @MainActor in
       let result = await finishStopping(pausing: pausing)
@@ -312,8 +332,13 @@ public final class WorkspaceV4RecordingSession {
     windowRuntime.visionArchivePackageURL = nil
     windowRuntime.visionArchiveHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
+    cleanupPhase("active-output", completed: false)
     if let activeSession { await stop(activeSession) }
+    cleanupPhase("active-output", completed: true)
+    cleanupPhase("subscriptions", completed: false)
     await unsubscribeAndDrain()
+    cleanupPhase("subscriptions", completed: true)
+    cleanupPhase("vision-archive", completed: false)
     await withCheckedContinuation { continuation in
       visionArchiveQueue.async { continuation.resume() }
     }
@@ -321,26 +346,28 @@ public final class WorkspaceV4RecordingSession {
       defer { error = nil }
       return error
     }) {
-      terminalFailureMessage = error.localizedDescription
-      currentStoppingFailure = error as NSError
+      recordFailure(error, phase: .visionArchive)
     }
+    cleanupPhase("vision-archive", completed: true)
+    cleanupPhase("package-screenshots", completed: false)
     await drainPackageScreenshots()
+    cleanupPhase("package-screenshots", completed: true)
     if let recordService {
+      cleanupPhase("recording", completed: false)
       await finalize(recordService)
+      cleanupPhase("recording", completed: true)
     }
     if let youtubeRTMPSService {
-      if case .failure(let error) = await youtubeRTMPSService.finish() {
-        terminalFailureMessage = error.localizedDescription
-        currentStoppingFailure = error as NSError
-      }
+      await finishYouTubeOutput { await youtubeRTMPSService.finish() }
     }
     clearSessionReferences()
     sleepInhibitor.stop()
-    state = terminalFailureMessage.map(State.failed) ?? (pausing ? .paused : .idle)
-    terminalFailureMessage = nil
-    let result: Result<Void, NSError> = currentStoppingFailure.map { .failure($0) } ?? .success(())
-    currentStoppingFailure = nil
-    return result
+    hasCompletedOutputCleanup = true
+    state =
+      (outputFailures.primary?.localizedDescription ?? cleanupPriorFailureMessage)
+      .map(State.failed) ?? (pausing ? .paused : .idle)
+    cleanupPriorFailureMessage = nil
+    return outputFailures.primary.map { .failure($0) } ?? .success(())
   }
 
   public func reconfigureProgramOutput() throws {
@@ -357,7 +384,7 @@ public final class WorkspaceV4RecordingSession {
       let error = NSError(
         domain: "WorkspaceProgramSelection", code: 3,
         userInfo: [NSLocalizedDescriptionKey: "The selected Program audio could not be applied."])
-      _ = beginFinishingOutput(pausing: false, priorFailure: error.localizedDescription)
+      _ = beginFinishingOutput(pausing: false, priorFailure: error)
       throw error
     }
   }
@@ -600,20 +627,39 @@ public final class WorkspaceV4RecordingSession {
       }
     }
     if case .failed(let error) = result {
-      terminalFailureMessage = error.localizedDescription
-      currentStoppingFailure = error as NSError
+      recordFailure(error, phase: .recordingFinalization)
     }
   }
 
   func fail(_ error: Error) async {
     if state == .pausing || state == .stopping {
-      terminalFailureMessage = error.localizedDescription
-      currentStoppingFailure = error as NSError
+      recordFailure(error, phase: .output)
       return
     }
     guard state == .starting || state == .recording else { return }
-    state = .failed(error.localizedDescription)
-    await stop()
+    _ = await beginFinishingOutput(pausing: false, priorFailure: error).value
+  }
+
+  // Keep asynchronous publishing completion on the same first-failure path.
+  func finishYouTubeOutput(_ finish: () async -> Result<Void, any Error>) async {
+    cleanupPhase("youtube", completed: false)
+    if case .failure(let error) = await finish() {
+      recordFailure(error, phase: .youtubeFinalization)
+    }
+    cleanupPhase("youtube", completed: true)
+  }
+
+  private func recordFailure(_ error: any Error, phase: WorkspaceOutputFailures.Phase) {
+    outputFailures.record(error, phase: phase)
+    Self.logger.error(
+      "output cleanup failure attempt=\(self.outputAttemptID, privacy: .public) phase=\(phase.rawValue, privacy: .public) domain=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code) secondaryCount=\(self.outputFailures.secondary.count)"
+    )
+  }
+
+  private func cleanupPhase(_ phase: String, completed: Bool) {
+    Self.logger.notice(
+      "output cleanup attempt=\(self.outputAttemptID, privacy: .public) phase=\(phase, privacy: .public) completed=\(completed)"
+    )
   }
 
   private func clearSessionReferences() {
@@ -635,6 +681,7 @@ public final class WorkspaceV4RecordingSession {
 
   /// Registers a started recording service independently of native output startup.
   func adoptStartedRecordingService(_ service: SessionRecordService) {
+    hasCompletedOutputCleanup = false
     recordService = service
     windowRuntime.visionArchiveHandler = { [weak service] internalID, image, output in
       guard let service else { return }

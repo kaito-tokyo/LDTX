@@ -250,7 +250,10 @@ final class SessionRecordingPipeline: @unchecked Sendable {
     pendingVideo.removeAll(keepingCapacity: false)
     pendingAudio.removeAll(keepingCapacity: false)
     mainTrack.markFailed(error)
-    logger.error("Main recording write failed: \(error.localizedDescription, privacy: .public)")
+    let nsError = error as NSError
+    logger.error(
+      "Main recording write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code): \(error.localizedDescription, privacy: .private)"
+    )
     failureHandler(error)
   }
 }
