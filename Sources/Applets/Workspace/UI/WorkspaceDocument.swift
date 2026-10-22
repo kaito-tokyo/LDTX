@@ -108,14 +108,8 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
       else { return }
       if let url {
         guard workspace.visionModels[vision.modelInternalID] != url else { return }
-        let resourceIDs = Set(workspace.definition.audioDevices.map(\.internalID))
-          .union(workspace.definition.videoComponents.compactMap(\.internalID))
-          .union(workspace.definition.visions.compactMap(\.internalID))
-          .union(workspace.definition.programs.map(\.internalID))
-        var id: Int64
-        repeat {
-          id = WorkspaceResourceFactory.nextInternalID()
-        } while workspace.visionModels[id] != nil || resourceIDs.contains(id)
+        let id = WorkspaceResourceFactory.nextInternalID(
+          in: workspace.definition, additionalIDs: Set(workspace.visionModels.keys))
         workspace.visionModels[id] = url
         vision.modelInternalID = id
       } else {

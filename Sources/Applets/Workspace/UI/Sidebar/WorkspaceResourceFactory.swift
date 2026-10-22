@@ -4,6 +4,7 @@
 import AppKit
 import LDTXProtos
 import LDTXRichText
+import LDTXWorkspaceAppletModel
 
 enum WorkspaceResourceFactory {
   static func makeDynamicText(id: Int64, name: String) throws
@@ -196,10 +197,13 @@ enum WorkspaceResourceFactory {
 
   private static var opaqueWhite: Ldtx_Workspace_V4_Color { gradientStartColor }
 
-  static func nextInternalID() -> Int64 {
-    let milliseconds = Int64(max(0, Date().timeIntervalSince1970 * 1_000))
-    return ((milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15)
-      | (Int64.random(in: 0...0x3fff) << 1) | 1
+  @MainActor private static let internalIDGenerator = WorkspaceInternalIDGenerator()
+
+  @MainActor
+  static func nextInternalID(
+    in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, additionalIDs: Set<Int64> = []
+  ) -> Int64 {
+    internalIDGenerator.next(in: definition, additionalIDs: additionalIDs)
   }
 
 }

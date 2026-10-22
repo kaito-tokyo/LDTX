@@ -6,7 +6,7 @@ import Foundation
 import LDTXProgram
 import LDTXProgramRuntime
 import LDTXProtos
-import LDTXWorkspaceAppletModel
+@testable import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
@@ -33,15 +33,77 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     #expect(coordinator.runtimeWorkspace.outputSettings == box.workspace.outputSettings)
   }
 
-  @Test func generatedIDsPreserveTimestampAndSetLowBit() {
-    let generator = WorkspaceInternalIDGenerator()
+  @Test func generatedIDsPreserveTimestampAndSetLowBitWithoutSleeping() {
     let milliseconds: Int64 = 1_800_000_000_000
-    for _ in 0..<100 {
-      let id = generator.next(now: Date(timeIntervalSince1970: Double(milliseconds) / 1_000))
-      #expect(id > 0)
-      #expect(id & 1 == 1)
-      #expect(id >> 15 == milliseconds)
-    }
+    let generator = WorkspaceInternalIDGenerator(
+      clock: { Date(timeIntervalSince1970: Double(milliseconds) / 1_000) },
+      randomSuffix: { 7 }, sleep: { _ in Issue.record("Unexpected collision sleep") })
+    let id = generator.next()
+    #expect(id > 0)
+    #expect(id & 1 == 1)
+    #expect(id >> 15 == milliseconds)
+  }
+
+  @Test func generatedIDsBlockOneMillisecondForEveryCollisionAndReadClockAgain() {
+    var now = Date(timeIntervalSince1970: 1_800_000_000)
+    var sleeps: [TimeInterval] = []
+    var clockReads = 0
+    let generator = WorkspaceInternalIDGenerator(
+      clock: {
+        clockReads += 1
+        return now
+      }, randomSuffix: { 7 },
+      sleep: { duration in
+        sleeps.append(duration)
+        if sleeps.count == 2 { now = now.addingTimeInterval(1) }
+      })
+    let first = generator.next()
+    let second = generator.next()
+    #expect(first != second)
+    #expect(sleeps == [0.001, 0.001])
+    #expect(clockReads == 4)
+    #expect(second >> 15 == 1_800_000_001_000)
+  }
+
+  @Test func generatedIDsCheckEveryWorkspaceResourceAndAdditionalIDs() {
+    let timestamp: Int64 = 1_800_000_000_000 << 15
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.audioDevices = [.with { $0.internalID = timestamp | 1 }]
+    definition.videoComponents = [.with { $0.vfxSource = .with { $0.internalID = timestamp | 3 } }]
+    definition.programs = [.with { $0.internalID = timestamp | 5 }]
+    definition.visions = [.with { $0.ocrVision = .with { $0.internalID = timestamp | 7 } }]
+    var suffix: Int64 = -1
+    var sleeps: [TimeInterval] = []
+    let generator = WorkspaceInternalIDGenerator(
+      clock: { Date(timeIntervalSince1970: 1_800_000_000) },
+      randomSuffix: {
+        suffix += 1
+        return suffix
+      }, sleep: { sleeps.append($0) })
+    let id = generator.next(in: definition, additionalIDs: [timestamp | 9])
+    #expect(id == timestamp | 11)
+    #expect(sleeps == Array(repeating: 0.001, count: 5))
+  }
+
+  @Test func generatedIDsRejectIssuedIDsAfterClockRollback() {
+    let original = Date(timeIntervalSince1970: 1_800_000_000)
+    var now = original
+    var suffix: Int64 = 7
+    var sleeps: [TimeInterval] = []
+    let generator = WorkspaceInternalIDGenerator(
+      clock: { now }, randomSuffix: { suffix },
+      sleep: {
+        sleeps.append($0)
+        suffix = 8
+      })
+    let first = generator.next()
+    now = original.addingTimeInterval(1)
+    let second = generator.next()
+    now = original
+    let third = generator.next()
+    #expect(Set([first, second, third]).count == 3)
+    #expect(third >> 15 == first >> 15)
+    #expect(sleeps == [0.001])
   }
 
   private final class ObservationFlag: @unchecked Sendable {
