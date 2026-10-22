@@ -62,6 +62,11 @@ public final class WorkspaceV4RecordingSession {
   @ObservationIgnored private var stoppingTask: Task<Result<Void, NSError>, Never>?
   private var terminalFailureMessage: String?
   @ObservationIgnored private var currentStoppingFailure: NSError?
+  private let screenCaptureService: ScreenCaptureService
+  @ObservationIgnored private var pendingScreenshotCount = 0
+  @ObservationIgnored private var pendingPackageScreenshotCount = 0
+  @ObservationIgnored private var packageScreenshotDrainWaiters:
+    [CheckedContinuation<Void, Never>] = []
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
   public var state: State {
@@ -76,9 +81,11 @@ public final class WorkspaceV4RecordingSession {
     windowRuntime: WorkspaceWindowRuntime,
     physicalDeviceIDs: @escaping () -> [Int64: WorkspacePhysicalDeviceID] = { [:] },
     localState: @escaping () -> WorkspaceLocalState = { .init() },
+    screenCaptureService: ScreenCaptureService = ScreenCaptureService(),
     visionArchiveQueue: DispatchQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive"),
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
+    self.screenCaptureService = screenCaptureService
     self.windowRuntime = windowRuntime
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
@@ -317,6 +324,7 @@ public final class WorkspaceV4RecordingSession {
       terminalFailureMessage = error.localizedDescription
       currentStoppingFailure = error as NSError
     }
+    await drainPackageScreenshots()
     if let recordService {
       await finalize(recordService)
     }
@@ -388,7 +396,7 @@ public final class WorkspaceV4RecordingSession {
     activeSession.updatePortraitProgramPreferences(portraitPreferences(for: programID))
   }
 
-  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
+  public func captureScreenshots() async throws -> [WorkspaceScreenshot] {
     var sources: [ScreenCaptureSource] = []
     if let frame = windowRuntime.landscapeRuntime?.latestFrame() {
       sources.append(
@@ -407,28 +415,56 @@ public final class WorkspaceV4RecordingSession {
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
     }
-    return try captureScreenshots(
+    return try await captureScreenshots(
       sources: sources, capturedAt: Date(),
       globalDirectory: applicationOutputPreferences.screenshotsDirectory)
   }
 
   func captureScreenshots(
     sources: [ScreenCaptureSource], capturedAt: Date, globalDirectory: URL
-  ) throws -> [WorkspaceScreenshot] {
+  ) async throws -> [WorkspaceScreenshot] {
+    // Bound retained frame copies to one active capture and one waiting capture.
+    guard pendingScreenshotCount < 2 else { throw ScreenCaptureError.captureBusy }
+    pendingScreenshotCount += 1
+    defer { pendingScreenshotCount -= 1 }
+    let snapshots = try sources.map { source in
+      try screenCaptureService.snapshot(
+        pixelBuffer: source.pixelBuffer, name: source.name, programCanvas: source.programCanvas)
+    }
     var directories = [globalDirectory]
-    // Admission and the synchronous capture below share MainActor with pause/stop.
-    // An admitted copy completes before finalization can start; no drain is needed.
+    var copiesToPackage = false
+    // Snapshot and admission share MainActor with pause/stop. Finalization drains
+    // accepted copies; later requests see the transition state and save globally.
     if state == .recording, let recordService,
       recordService.hasAcceptedFirstVideo,
       recordService.recordingTimelineMilliseconds() != nil
     {
       directories.append(recordService.packageDirectory.appendingPathComponent("Screenshots"))
+      copiesToPackage = true
+      pendingPackageScreenshotCount += 1
     }
-    return try ScreenCaptureService().captureSet(
-      sources: sources, capturedAt: capturedAt, outputDirectories: directories
+    defer {
+      if copiesToPackage {
+        pendingPackageScreenshotCount -= 1
+        if pendingPackageScreenshotCount == 0 {
+          let waiters = packageScreenshotDrainWaiters
+          packageScreenshotDrainWaiters.removeAll()
+          for waiter in waiters { waiter.resume() }
+        }
+      }
+    }
+    return try await screenCaptureService.enqueueCapture(
+      sources: snapshots, capturedAt: capturedAt, outputDirectories: directories
     ).screenshots.filter {
       $0.url.deletingLastPathComponent().standardizedFileURL == globalDirectory.standardizedFileURL
     }
+  }
+
+  // The output transition has closed package admission. Only this session's
+  // package copies enter this scope; their normal shared-writer FIFO wait remains.
+  private func drainPackageScreenshots() async {
+    guard pendingPackageScreenshotCount > 0 else { return }
+    await withCheckedContinuation { packageScreenshotDrainWaiters.append($0) }
   }
 
   public var screenshotsDirectory: URL? {

@@ -17,6 +17,11 @@ public final class ScreenCaptureService: @unchecked Sendable {
     let pixelFormat: OSType
   }
 
+  // Workspaces share the global destination and filename collision checks.
+  private static let sharedCaptureQueue = DispatchQueue(
+    label: "tokyo.kaito.ldtx.screenshots", qos: .userInitiated)
+  private let captureQueue: DispatchQueue
+
   private let fileManager: FileManager
   private let currentDate: () -> Date
   private let softwareIdentifier: String
@@ -24,7 +29,11 @@ public final class ScreenCaptureService: @unchecked Sendable {
   private let context: CIContext
   private var pixelBufferPools: [PixelBufferDescriptor: CVPixelBufferPool] = [:]
 
-  public init(fileManager: FileManager = .default, currentDate: @escaping () -> Date = Date.init) {
+  public init(
+    fileManager: FileManager = .default, currentDate: @escaping () -> Date = Date.init,
+    captureQueue: DispatchQueue? = nil
+  ) {
+    self.captureQueue = captureQueue ?? Self.sharedCaptureQueue
     let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
     self.fileManager = fileManager
     self.currentDate = currentDate
@@ -34,6 +43,22 @@ public final class ScreenCaptureService: @unchecked Sendable {
       .workingColorSpace: colorSpace,
       .outputColorSpace: colorSpace,
     ])
+  }
+
+  /// Enqueues synchronously at admission; each complete set finishes before the next starts.
+  @MainActor
+  func enqueueCapture(
+    sources: [ScreenCaptureSource], capturedAt: Date, outputDirectories: [URL]
+  ) async throws -> ScreenCaptureSetResult {
+    try await withCheckedThrowingContinuation { continuation in
+      captureQueue.async {
+        continuation.resume(
+          with: Result {
+            try self.captureSet(
+              sources: sources, capturedAt: capturedAt, outputDirectories: outputDirectories)
+          })
+      }
+    }
   }
 
   public func captureSet(
@@ -108,7 +133,10 @@ public final class ScreenCaptureService: @unchecked Sendable {
   }
 
   @MainActor
-  func snapshot(pixelBuffer: CVPixelBuffer, name: String) throws -> ScreenCaptureSource {
+  func snapshot(
+    pixelBuffer: CVPixelBuffer, name: String,
+    programCanvas: WorkspaceScreenshot.ProgramCanvas? = nil
+  ) throws -> ScreenCaptureSource {
     let descriptor = PixelBufferDescriptor(
       width: CVPixelBufferGetWidth(pixelBuffer),
       height: CVPixelBufferGetHeight(pixelBuffer),
@@ -153,7 +181,7 @@ public final class ScreenCaptureService: @unchecked Sendable {
       }
     }
     CVBufferPropagateAttachments(pixelBuffer, copy)
-    return ScreenCaptureSource(name: name, pixelBuffer: copy)
+    return ScreenCaptureSource(name: name, pixelBuffer: copy, programCanvas: programCanvas)
   }
 
   private func jpegData(
@@ -358,6 +386,7 @@ public struct ScreenCaptureSetResult: Sendable {
 
 public enum ScreenCaptureError: LocalizedError {
   case frameUnavailable
+  case captureBusy
   case pixelBufferCopyFailed(OSStatus)
   case imageCreationFailed
   case imageDestinationCreationFailed
@@ -365,6 +394,8 @@ public enum ScreenCaptureError: LocalizedError {
 
   public var errorDescription: String? {
     switch self {
+    case .captureBusy:
+      "Screenshot saving is busy. Please try again after the current captures finish."
     case .frameUnavailable:
       "The Program has not produced a frame yet."
     case .pixelBufferCopyFailed(let status):

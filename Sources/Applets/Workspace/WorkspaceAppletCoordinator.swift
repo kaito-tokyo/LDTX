@@ -50,6 +50,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   let previewRenderer: ProgramPairPreviewRenderer
   public var outputStateDidChange: (@MainActor () -> Void)?
   public var screenshotsDidSave: (@MainActor ([WorkspaceScreenshot]) -> Void)?
+  @ObservationIgnored private var pendingScreenshotCount = 0
+  @ObservationIgnored private var screenshotDrainWaiters: [CheckedContinuation<Void, Never>] = []
   private var onShutdown: (@MainActor () -> Void)?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
@@ -475,15 +477,15 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     return try result.get()
   }
 
-  private var pendingShutdownFailure: String?
+  private var pendingShutdownFailures: [String] = []
 
   func queueShutdownFailure(_ message: String) {
-    pendingShutdownFailure = message
+    if !pendingShutdownFailures.contains(message) { pendingShutdownFailures.append(message) }
   }
 
   public func takeShutdownFailureForPresentation() -> String? {
-    defer { pendingShutdownFailure = nil }
-    return pendingShutdownFailure
+    defer { pendingShutdownFailures.removeAll() }
+    return pendingShutdownFailures.isEmpty ? nil : pendingShutdownFailures.joined(separator: "\n\n")
   }
 
   func attachWindow(_ window: NSWindow?) {
@@ -725,6 +727,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
 
   @discardableResult
   public func closeWorkspace() async -> WorkspaceCommandOutcome {
+    await closeWorkspace(afterCleanup: {})
+  }
+
+  func closeWorkspace(
+    afterCleanup: @escaping @MainActor () throws -> Void
+  ) async -> WorkspaceCommandOutcome {
     if stateService.isClosed { return .succeeded }
     if let closeRequestTask { return await closeRequestTask.value }
     do { try validateCloseAdmission() } catch {
@@ -736,7 +744,24 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       let result = await transactionalCommands.submit(
         .closeWorkspace,
         validate: { [self] in try validateCloseAdmission() },
-        operation: { [self] in try await drainWorkspaceResources() })
+        operation: { [self] in
+          do {
+            try await drainWorkspaceResources()
+            try afterCleanup()
+          } catch {
+            // A failed close has no owner-release callback. Present its capture
+            // failures with the cleanup cause now, and consume them before retry.
+            guard let captureFailures = takeShutdownFailureForPresentation() else { throw error }
+            let cause = error as NSError
+            var userInfo = cause.userInfo
+            userInfo[NSLocalizedFailureReasonErrorKey] = [
+              cause.localizedFailureReason, captureFailures,
+            ]
+            .compactMap { $0 }.joined(separator: "\n\n")
+            userInfo[NSUnderlyingErrorKey] = cause
+            throw NSError(domain: cause.domain, code: cause.code, userInfo: userInfo)
+          }
+        })
       if case .succeeded = result {
         stateService.isClosed = true
         documentConnection?.disconnect()
@@ -771,6 +796,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     previewRenderer.stop()
     await previewRenderer.drainDrawing()
     await visionFeature.stop()
+    await drainScreenshotCaptures()
     let stopResult = await recordingSession.stopWithResult()
     await windowRuntime.shutdownAndWait()
     await withCheckedContinuation { continuation in
@@ -833,7 +859,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     case .startPauseOutput:
       await toggleOutput(stateService: stateService, document: workspaceDocument)
     case .captureScreenshots:
-      do { return try captureScreenshots() } catch { reportError(error) }
+      do { return try await captureScreenshots() } catch {
+        // A closing capture is retained for application-level presentation.
+        if !isClosing { reportError(error) }
+      }
     case .showRecordingInFinder:
       if let url = latestRecordingBundleURL {
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -842,10 +871,51 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     return nil
   }
 
-  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
-    let screenshots = try recordingSession.captureScreenshots()
+  public func captureScreenshots() async throws -> [WorkspaceScreenshot] {
+    try await captureScreenshots { try await self.recordingSession.captureScreenshots() }
+  }
+
+  func captureScreenshots(
+    using capture: @MainActor () async throws -> [WorkspaceScreenshot]
+  ) async throws -> [WorkspaceScreenshot] {
+    guard !isClosing, !stateService.isClosed else {
+      throw NSError(
+        domain: "WorkspaceScreenshot", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "The Workspace is closing."])
+    }
+    pendingScreenshotCount += 1
+    defer {
+      pendingScreenshotCount -= 1
+      if pendingScreenshotCount == 0 {
+        let waiters = screenshotDrainWaiters
+        screenshotDrainWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+      }
+    }
+    let screenshots: [WorkspaceScreenshot]
+    do {
+      screenshots = try await capture()
+    } catch {
+      if isClosing {
+        let error = error as NSError
+        queueShutdownFailure(
+          [
+            error.localizedDescription, error.localizedFailureReason,
+            error.localizedRecoverySuggestion,
+          ]
+          .compactMap { $0 }.joined(separator: "\n\n"))
+      }
+      throw error
+    }
     if !screenshots.isEmpty { screenshotsDidSave?(screenshots) }
     return screenshots
+  }
+
+  // Close admission is already shut. Wait through result/error propagation and
+  // the success callback, including global captures accepted while output is idle.
+  private func drainScreenshotCaptures() async {
+    guard pendingScreenshotCount > 0 else { return }
+    await withCheckedContinuation { screenshotDrainWaiters.append($0) }
   }
 
   public func openScreenshotsDirectory() {
