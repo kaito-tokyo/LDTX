@@ -103,7 +103,7 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
       if let stateService {
         await toggleOutput(stateService: stateService, document: documentContext)
       }
-    case .captureScreenshots: return try? captureScreenshots()
+    case .captureScreenshots: return try? await captureScreenshots()
     case .showRecordingInFinder: actions.append("showRecordingInFinder")
     }
     return nil
@@ -141,7 +141,7 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   }
   func updateProgramRuntimes() {}
   func updateMixPreferences() {}
-  func captureScreenshots() throws -> [WorkspaceScreenshot] {
+  func captureScreenshots() async throws -> [WorkspaceScreenshot] {
     actions.append("screenshot")
     if failScreenshot { throw CocoaError(.fileWriteUnknown) }
     return screenshotFiles

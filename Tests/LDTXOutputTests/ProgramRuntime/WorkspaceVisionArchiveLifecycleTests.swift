@@ -32,6 +32,74 @@ extension OutputTestSuite {
       }
     }
 
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
+    func queuedScreenshotsDrainBeforeStopAndCancellation(firstVideo: Bool, finishing: Finish)
+      async throws
+    {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      if firstVideo {
+        try fixture.service.acceptFirstVideo(videoSample())
+        fixture.service.appendMainAudioMix(try audioSample())
+      }
+      fixture.session.state = .recording
+      let release = DispatchSemaphore(value: 0)
+      fixture.screenshotQueue.async { _ = release.wait(timeout: .now() + 15) }
+      defer { release.signal() }
+      var started = false
+      var saved = false
+      let capture = Task {
+        started = true
+        try await fixture.screenshot()
+        saved = true
+      }
+      while !started { await Task.yield() }
+      // Reaching here while the background queue is blocked proves MainActor responds.
+      #expect(!saved)
+      var secondStarted = false
+      let second = Task {
+        secondStarted = true
+        try await fixture.screenshot()
+      }
+      while !secondStarted { await Task.yield() }
+      do {
+        try await fixture.screenshot()
+        Issue.record("A third capture must not retain another frame set")
+      } catch ScreenCaptureError.captureBusy {} catch { Issue.record(error) }
+      var stopped = false
+      let stop = Task {
+        let result =
+          finishing == .stop
+          ? await fixture.session.stopWithResult() : await fixture.session.pauseWithResult()
+        try result.get()
+        if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
+        stopped = true
+      }
+      try await fixture.waitForAdmissionToClose()
+      #expect(!saved)
+      #expect(!stopped)
+      #expect(!fixture.isFinalized)
+      // Cancelling the caller must not abandon an already admitted filesystem write.
+      capture.cancel()
+      release.signal()
+      try await capture.value
+      try await second.value
+      try await stop.value
+      #expect(saved)
+      #expect(stopped)
+      #expect(try fixture.globalScreenshots().count == 2)
+      if firstVideo {
+        #expect(fixture.isFinalized)
+        #expect(try fixture.packageScreenshots().count == 2)
+      } else {
+        #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
+      }
+      // Requests after completion remain global and cannot recreate the package.
+      try await fixture.screenshot()
+      #expect(try fixture.globalScreenshots().count == 3)
+      #expect(try fixture.packageScreenshots().count == (firstVideo ? 2 : 0))
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
     func acceptedArchivePrecedesRealPackageFinalization(finishing: Finish) async throws {
       let fixture = try Fixture()
@@ -137,14 +205,14 @@ extension OutputTestSuite {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
       fixture.session.state = recording ? .recording : .starting
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.globalScreenshots().count == 1)
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
       // A standalone screenshot must not reserve the future recording's directory.
       try fixture.service.acceptFirstVideo(videoSample())
       fixture.service.appendMainAudioMix(try audioSample())
       fixture.session.state = .recording
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.packageScreenshots().count == 1)
       try (await fixture.session.stopWithResult()).get()
       #expect(fixture.isFinalized)
@@ -159,7 +227,7 @@ extension OutputTestSuite {
       try fixture.service.acceptFirstVideo(videoSample())
       fixture.service.appendMainAudioMix(try audioSample())
       fixture.session.state = state.state
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.globalScreenshots().count == 1)
       #expect(try fixture.packageScreenshots().isEmpty)
       fixture.session.state = .recording
@@ -173,7 +241,7 @@ extension OutputTestSuite {
       try fixture.service.acceptFirstVideo(videoSample())
       fixture.service.appendMainAudioMix(try audioSample())
       fixture.session.state = .recording
-      try fixture.screenshot()
+      try await fixture.screenshot()
       let accepted = try fixture.packageScreenshots()
       #expect(accepted.count == 1)
       let acceptedData = try Data(contentsOf: #require(accepted.first))
@@ -182,7 +250,9 @@ extension OutputTestSuite {
         guard state == .pausing || state == .stopping else { return }
         // This runs before the finishing task can clear handlers or suspend.
         #expect(fixture.runtime.visionArchiveHandler != nil)
-        do { try fixture.screenshot() } catch { Issue.record(error) }
+        Task {
+          do { try await fixture.screenshot() } catch { Issue.record(error) }
+        }
         capturedAtBoundary = true
       }
       let release = fixture.blockArchives()
@@ -195,13 +265,13 @@ extension OutputTestSuite {
       #expect(capturedAtBoundary)
       #expect(fixture.session.isLocalRecording)
       #expect(!fixture.isFinalized)
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.packageScreenshots() == accepted)
       release.signal()
       try (await completion.value).get()
       if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
       #expect(fixture.isFinalized)
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.globalScreenshots().count == 4)
       #expect(try fixture.packageScreenshots() == accepted)
       #expect(try Data(contentsOf: #require(accepted.first)) == acceptedData)
@@ -216,11 +286,11 @@ extension OutputTestSuite {
       defer { release.signal() }
       let completion = Task { await fixture.session.stopWithResult() }
       try await fixture.waitForAdmissionToClose()
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
       release.signal()
       try (await completion.value).get()
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.globalScreenshots().count == 2)
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
     }
@@ -235,11 +305,11 @@ extension OutputTestSuite {
       var finished = false
       fixture.service.stop { _ in finished = true }
       // Service admission closes synchronously, before the completion callback.
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.packageScreenshots().isEmpty)
       while !finished { await Task.yield() }
       #expect(fixture.isFinalized)
-      try fixture.screenshot()
+      try await fixture.screenshot()
       #expect(try fixture.packageScreenshots().isEmpty)
       #expect(try fixture.globalScreenshots().count == 2)
     }
@@ -249,6 +319,7 @@ extension OutputTestSuite {
       let runtime: WorkspaceWindowRuntime
       let session: WorkspaceV4RecordingSession
       let service: SessionRecordService
+      let screenshotQueue = DispatchQueue(label: "test.screenshot-worker")
       let queue = DispatchQueue(label: "test.workspace-vision-archive-lifecycle")
       var package: URL { service.packageDirectory }
       var hasArchives: Bool {
@@ -270,7 +341,10 @@ extension OutputTestSuite {
           audioCaptureServiceFactory: { preconditionFailure("No microphone expected") })
         runtime = WorkspaceWindowRuntime(
           persistence: persistence, captureSessionCoordinator: capture)
-        session = WorkspaceV4RecordingSession(windowRuntime: runtime, visionArchiveQueue: queue)
+        session = WorkspaceV4RecordingSession(
+          windowRuntime: runtime,
+          screenCaptureService: ScreenCaptureService(captureQueue: screenshotQueue),
+          visionArchiveQueue: queue)
         service = try SessionRecordService(
           baseDirectory: root, recordID: "archive-lifecycle",
           writerConfiguration: SegmentedMP4WriterConfiguration(
@@ -280,7 +354,7 @@ extension OutputTestSuite {
         session.adoptStartedRecordingService(service)
       }
 
-      func screenshot() throws {
+      func screenshot() async throws {
         var buffer: CVPixelBuffer?
         #expect(
           CVPixelBufferCreate(
@@ -293,7 +367,7 @@ extension OutputTestSuite {
           CVPixelBufferGetBaseAddress(pixelBuffer), 0,
           CVPixelBufferGetBytesPerRow(pixelBuffer) * CVPixelBufferGetHeight(pixelBuffer))
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-        let screenshots = try session.captureScreenshots(
+        let screenshots = try await session.captureScreenshots(
           sources: [.init(name: "Landscape", pixelBuffer: pixelBuffer, programCanvas: .landscape)],
           capturedAt: Date(timeIntervalSince1970: 1),
           globalDirectory: root.appendingPathComponent("global"))

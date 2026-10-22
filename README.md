@@ -51,6 +51,15 @@ select the saved images in Finder. Denying notifications does not prevent saving
 notification display follows macOS notification settings and Focus. Both toolbar
 and Stream Deck captures use OS notifications without a result popover.
 
+Screenshot conversion, JPEG encoding, and file writes run on a serialized background
+queue after the current frames and destinations are captured. One active capture
+and one waiting capture are allowed per Workspace; further requests report that
+saving is busy. Completion notifications follow successful writes. A failure in
+either the global save or the recording-package copy rolls back that capture set.
+Package copies require active recording with an accepted video frame. Pause and
+Stop close package-copy admission and wait for accepted saves before finalizing.
+Global screenshots remain available in every output state.
+
 ## Clock
 
 Clock uses **Font Size** in Landscape Canvas pixels (48 by default for new

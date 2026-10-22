@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXWorkspaceAppletController
+import Foundation
+@testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
 import Testing
@@ -9,6 +10,39 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
+    @Test func successIsPublishedOnlyAfterCaptureCompletes() async throws {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      defer { coordinator.screenshotsDidSave = nil }
+      let screenshot = WorkspaceScreenshot(
+        url: URL(fileURLWithPath: "/tmp/test.jpg"),
+        programCanvas: .landscape, capturedAt: Date())
+      var notifications: [[WorkspaceScreenshot]] = []
+      coordinator.screenshotsDidSave = { notifications.append($0) }
+      var resume: CheckedContinuation<Void, Never>?
+      let task = Task {
+        try await coordinator.captureScreenshots {
+          await withCheckedContinuation { resume = $0 }
+          return [screenshot]
+        }
+      }
+      while resume == nil { await Task.yield() }
+      #expect(notifications.isEmpty)
+      resume?.resume()
+      let result = try await task.value
+      #expect(result.map(\.url) == [screenshot.url])
+      #expect(notifications.count == 1)
+      #expect(notifications.first?.map(\.url) == [screenshot.url])
+      do {
+        _ = try await coordinator.captureScreenshots {
+          await Task.yield()
+          throw CocoaError(.fileWriteUnknown)
+        }
+        Issue.record("A failed save must propagate its error")
+      } catch { #expect(notifications.count == 1) }
+      await coordinator.shutdown()
+    }
+
     @Test func failedAndClosedCaptureDoNotPublishSuccess() async {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)

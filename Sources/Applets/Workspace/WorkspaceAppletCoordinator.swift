@@ -833,7 +833,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     case .startPauseOutput:
       await toggleOutput(stateService: stateService, document: workspaceDocument)
     case .captureScreenshots:
-      do { return try captureScreenshots() } catch { reportError(error) }
+      do { return try await captureScreenshots() } catch { reportError(error) }
     case .showRecordingInFinder:
       if let url = latestRecordingBundleURL {
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -842,8 +842,14 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     return nil
   }
 
-  public func captureScreenshots() throws -> [WorkspaceScreenshot] {
-    let screenshots = try recordingSession.captureScreenshots()
+  public func captureScreenshots() async throws -> [WorkspaceScreenshot] {
+    try await captureScreenshots { try await self.recordingSession.captureScreenshots() }
+  }
+
+  func captureScreenshots(
+    using capture: @MainActor () async throws -> [WorkspaceScreenshot]
+  ) async throws -> [WorkspaceScreenshot] {
+    let screenshots = try await capture()
     if !screenshots.isEmpty { screenshotsDidSave?(screenshots) }
     return screenshots
   }
