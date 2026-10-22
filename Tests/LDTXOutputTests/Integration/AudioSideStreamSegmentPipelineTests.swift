@@ -11,6 +11,9 @@ import Foundation
 @testable import LDTXProgramRuntime
 import LDTXRecordBundleFormat
 import LDTXRecording
+@testable import LDTXWorkspaceAppletService
+import LDTXWorkspaceBundleFormat
+import Synchronization
 import Testing
 
 private struct RecordingMetadata: Decodable {
@@ -240,7 +243,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           trackRecorder: sideTrack,
           targetSegmentDurationSeconds: 2,
           timelineNormalizer: normalizer,
-          timelineTrackID: "desk-microphone"
+          timelineTrackID: "desk-microphone", failureHandler: { failures.append($0) }
         )
       }
 
@@ -984,7 +987,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         directory: directory,
         mediaFileName: "InputDevices/Desk%20Microphone.mp4"
       )
-      let pipeline = AudioSideStreamSegmentPipeline()
+      let pipeline = AudioSideStreamSegmentPipeline { Issue.record("Unexpected failure: \($0)") }
       pipeline.start { segment in
         try recorder.write(segment)
       }
@@ -1048,7 +1051,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
 
     @Test func performIsSerializedWithSegmentWrites() async throws {
       let eventLog = AudioSideStreamPipelineEventLog()
-      let pipeline = AudioSideStreamSegmentPipeline()
+      let pipeline = AudioSideStreamSegmentPipeline { Issue.record("Unexpected failure: \($0)") }
       pipeline.start { segment in
         guard case .media(let number) = segment.kind else { return }
         eventLog.append("segment-\(number)")
@@ -1076,6 +1079,300 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       let events = eventLog.snapshot()
       #expect(events == ["segment-1", "rotate", "segment-2"])
     }
+  }
+}
+
+extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
+  @Suite struct AudioSideStreamFailureIntegrationTestSuite {
+    enum FaultTiming: CaseIterable { case beforeFinish, duringFinish, finishResult }
+
+    @Test func trackRefusesWritesAfterTerminalFailure() throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let track = try HLSByteRangeTrackRecorder(directory: root, mediaFileName: "side.m4a")
+      let primary = NSError(domain: NSCocoaErrorDomain, code: 640)
+      track.markFailed(primary)
+      do {
+        try track.write(SegmentedMP4Segment(kind: .initialization, data: Data([1])))
+        Issue.record("A failed track must not accept bytes")
+      } catch {
+        #expect((error as NSError) === primary)
+      }
+      #expect(try Data(contentsOf: root.appendingPathComponent("side.m4a")).isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func faultDropsQueuedWritesAndPrecedesConcurrentFinish(externalFault: Bool) async throws {
+      let primary = NSError(
+        domain: NSCocoaErrorDomain, code: 640,
+        userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: 28)])
+      let events = Mutex<[String]>([])
+      let entered = AsyncStream<Void>.makeStream()
+      let release = DispatchSemaphore(value: 0)
+      defer { release.signal() }
+      let holder = Mutex<AudioSideStreamSegmentPipeline?>(nil)
+      defer { holder.withLock { $0 = nil } }
+      let pipeline = AudioSideStreamSegmentPipeline { error in
+        #expect((error as NSError) === primary)
+        // Reentering the fault gate proves notification is outside its lock.
+        let pipeline = holder.withLock { $0 }
+        #expect(pipeline?.hasFailed == true)
+        pipeline?.fail(NSError(domain: "reentrant", code: 2))
+        events.withLock { $0.append("failure") }
+      }
+      holder.withLock { $0 = pipeline }
+      pipeline.start { segment in
+        guard case .media(let number) = segment.kind else { return }
+        events.withLock { $0.append("write-\(number)") }
+        entered.continuation.yield(())
+        #expect(release.wait(timeout: .now() + 10) == .success)
+        if !externalFault { throw primary }
+      }
+      pipeline.yield(SegmentedMP4Segment(kind: .media(number: 1), data: Data([1])))
+      var entering = entered.stream.makeAsyncIterator()
+      _ = await entering.next()
+      pipeline.yield(SegmentedMP4Segment(kind: .media(number: 2), data: Data([2])))
+      let finished = AsyncStream<Void>.makeStream()
+      for _ in 0..<2 {
+        pipeline.finish {
+          events.withLock { $0.append("finish") }
+          finished.continuation.yield(())
+        }
+      }
+      if externalFault {
+        pipeline.fail(primary)
+        pipeline.fail(NSError(domain: "later", code: 1))
+      }
+      release.signal()
+      var completions = finished.stream.makeAsyncIterator()
+      _ = await completions.next()
+      _ = await completions.next()
+      pipeline.yield(SegmentedMP4Segment(kind: .media(number: 3), data: Data([3])))
+      await withCheckedContinuation { continuation in pipeline.drain { continuation.resume() } }
+      #expect(events.withLock { $0 } == ["write-1", "failure", "finish", "finish"])
+      #expect(pipeline.hasFailed)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func constructionFailureIsTerminalIncludingSilenceFallback(fallback: Bool) async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let track = try HLSByteRangeTrackRecorder(directory: root, mediaFileName: "side.m4a")
+      let primary = NSError(domain: NSCocoaErrorDomain, code: 640)
+      let failures = AsyncStream<NSError>.makeStream()
+      let creations = Mutex(0)
+      let recorder = try AudioSideStreamRecorder(
+        trackRecorder: track, targetSegmentDurationSeconds: 2,
+        failureHandler: { failures.continuation.yield($0 as NSError) },
+        writerFactory: { _, _, _ in
+          creations.withLock { $0 += 1 }
+          throw primary
+        })
+      if fallback {
+        await withCheckedContinuation { continuation in
+          recorder.finish(at: CMTime(seconds: 1, preferredTimescale: 48_000)) {
+            continuation.resume()
+          }
+        }
+      } else {
+        recorder.append(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+      }
+      var errors = failures.stream.makeAsyncIterator()
+      #expect(await errors.next() === primary)
+      recorder.append(try makeSyntheticAudioSample(startFrame: 1_024, frameCount: 1_024))
+      await finishSyntheticSideRecorder(recorder)
+      await finishSyntheticSideRecorder(recorder)
+      #expect(creations.withLock { $0 } == 1)
+      #expect(throws: (any Error).self) { try track.validateForFinalization() }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: FaultTiming.allCases)
+    func asynchronousWriterFaultRetainsCauseAndCoalescesFinishWaiters(timing: FaultTiming)
+      async throws
+    {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let track = try HLSByteRangeTrackRecorder(directory: root, mediaFileName: "side.m4a")
+      let primary = NSError(
+        domain: NSCocoaErrorDomain, code: 640,
+        userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: 28)])
+      let failures = Mutex<[NSError]>([])
+      let callbacks = AsyncStream<Void>.makeStream()
+      let writer = ControlledSideStreamWriter()
+      let recorder = try AudioSideStreamRecorder(
+        trackRecorder: track, targetSegmentDurationSeconds: 2,
+        failureHandler: { error in
+          failures.withLock { $0.append(error as NSError) }
+          callbacks.continuation.yield(())
+        },
+        writerFactory: { _, _, callbacks in
+          writer.install(callbacks)
+          return writer
+        })
+      recorder.append(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+      var appended = writer.appended.stream.makeAsyncIterator()
+      _ = await appended.next()
+      var delivered = callbacks.stream.makeAsyncIterator()
+      if timing == .beforeFinish {
+        writer.fault(primary)
+        writer.fault(NSError(domain: "later", code: 90))
+        _ = await delivered.next()
+      }
+      let stopping = Task {
+        await withTaskGroup(of: Void.self) { group in
+          for _ in 0..<8 {
+            group.addTask { await finishSyntheticSideRecorder(recorder) }
+          }
+        }
+      }
+      var finishing = writer.finishing.stream.makeAsyncIterator()
+      _ = await finishing.next()
+      #expect(writer.finishCount.withLock { $0 } == 1)
+      if timing == .duringFinish {
+        writer.fault(primary)
+        writer.fault(NSError(domain: "later", code: 90))
+        _ = await delivered.next()
+      }
+      if timing == .finishResult {
+        writer.complete(.failure(primary))
+        _ = await delivered.next()
+      }
+      recorder.append(try makeSyntheticAudioSample(startFrame: 1_024, frameCount: 1_024))
+      writer.segment(SegmentedMP4Segment(kind: .initialization, data: Data([9])))
+      if timing != .finishResult {
+        writer.complete(.failure(NSError(domain: "finish", code: 91)))
+      }
+      await stopping.value
+      #expect(failures.withLock { $0.count } == 1)
+      #expect(failures.withLock { $0.first } === primary)
+      #expect(
+        (failures.withLock { $0.first }?.userInfo[NSUnderlyingErrorKey] as? NSError)?.code == 28)
+      #expect(writer.appendCount.withLock { $0 } == 1)
+      #expect(try Data(contentsOf: root.appendingPathComponent("side.m4a")).isEmpty)
+      #expect(throws: (any Error).self) { try track.validateForFinalization() }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func realPCMWriterAsynchronousFailureNotifiesBeforeFinish() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let track = try HLSByteRangeTrackRecorder(directory: root, mediaFileName: "side.m4a")
+      let primary = NSError(domain: NSCocoaErrorDomain, code: 640)
+      let created = AsyncStream<PCMAudioSegmentedMP4Writer>.makeStream()
+      let failures = AsyncStream<NSError>.makeStream()
+      let recorder = try AudioSideStreamRecorder(
+        trackRecorder: track, targetSegmentDurationSeconds: 2,
+        failureHandler: { failures.continuation.yield($0 as NSError) },
+        writerFactory: { format, duration, callbacks in
+          let writer = try PCMAudioSegmentedMP4Writer(
+            formatDescription: format, targetSegmentDurationSeconds: duration,
+            onFailure: callbacks.onFailure, onSegment: callbacks.onSegment)
+          created.continuation.yield(writer)
+          return writer
+        })
+      recorder.append(try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024))
+      var writers = created.stream.makeAsyncIterator()
+      let writer = try #require(await writers.next())
+      writer.cancel(with: primary)
+      var errors = failures.stream.makeAsyncIterator()
+      #expect(await errors.next() === primary)
+      await finishSyntheticSideRecorder(recorder)
+      #expect(throws: (any Error).self) { try track.validateForFinalization() }
+    }
+
+    @MainActor @Test(.timeLimit(.minutes(1)))
+    func audioOnlyFileFailureReachesSessionBeforeMainFailure() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
+      let persistence = WorkspaceV4PersistenceCoordinator(
+        workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
+      let runtime = WorkspaceWindowRuntime(
+        persistence: persistence,
+        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator(
+          captureServiceFactory: { preconditionFailure("No camera") },
+          audioCaptureServiceFactory: { preconditionFailure("No microphone") }))
+      defer { runtime.shutdown() }
+      let session = WorkspaceV4RecordingSession(windowRuntime: runtime)
+      let delivered = AsyncStream<NSError>.makeStream()
+      let service = try SessionRecordService(
+        baseDirectory: root, recordID: "audio-fault",
+        writerConfiguration: SegmentedMP4WriterConfiguration(
+          width: 320, height: 180, frameRate: 30, videoBitRate: 800_000),
+        audioTracks: [
+          SessionRecordAudioTrack(
+            key: "side", deviceID: "fake", trackID: "side", displayName: "Side",
+            fileNameStem: "InputDevices/Side")
+        ],
+        failureHandler: { error in
+          delivered.continuation.yield(error as NSError)
+          Task { await session.fail(error) }
+        })
+      try service.start()
+      session.adoptStartedRecordingService(service)
+      session.state = .recording
+      let videos = try await makeSyntheticVideoSamples(frameCount: 1)
+      try service.acceptFirstVideo(try #require(videos.first))
+      let sample = try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024)
+      service.appendMainAudioMix(sample)
+      let package = service.packageDirectory
+      try FileManager.default.removeItem(
+        at: package.appendingPathComponent("InputDevices/Side.m4a"))
+      for start in stride(from: 0, to: 144_000, by: 1_024) {
+        service.appendInputAudio(
+          try makeSyntheticAudioSample(startFrame: start, frameCount: 1_024), trackID: "side")
+      }
+      var errors = delivered.stream.makeAsyncIterator()
+      let first = try #require(await errors.next())
+      #expect(first.domain == NSCocoaErrorDomain)
+      #expect(first.code == NSFileNoSuchFileError)
+      // This callback arrives without requesting finish or failing the Main Mix.
+      while session.state == .recording { await Task.yield() }
+      _ = await session.stopWithResult()
+      #expect(session.outputFailures.primary === first)
+      let finalization = await withCheckedContinuation { continuation in
+        service.stop { continuation.resume(returning: $0) }
+      }
+      guard case .failed(let finalError) = finalization else {
+        Issue.record("The failed audio track must prevent successful finalization")
+        return
+      }
+      #expect((finalError as NSError) === first)
+      #expect(!hasFinalizedMarker(in: package))
+    }
+  }
+}
+
+private final class ControlledSideStreamWriter: AudioSideStreamWriting, @unchecked Sendable {
+  private let callbacks = Mutex<AudioSideStreamWriterCallbacks?>(nil)
+  private let completion = Mutex<(@Sendable (Result<Void, any Error>) -> Void)?>(nil)
+  let appended = AsyncStream<Void>.makeStream()
+  let finishing = AsyncStream<Void>.makeStream()
+  let appendCount = Mutex(0)
+  let finishCount = Mutex(0)
+  func install(_ value: AudioSideStreamWriterCallbacks) { callbacks.withLock { $0 = value } }
+  func append(_ sampleBuffer: CMSampleBuffer) {
+    appendCount.withLock { $0 += 1 }
+    appended.continuation.yield(())
+  }
+  func finish(
+    at presentationTime: CMTime?,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) {
+    finishCount.withLock { $0 += 1 }
+    completion.withLock { $0 = completionHandler }
+    finishing.continuation.yield(())
+  }
+  func fault(_ error: any Error) { callbacks.withLock { $0 }?.onFailure(error) }
+  func segment(_ segment: SegmentedMP4Segment) { callbacks.withLock { $0 }?.onSegment(segment) }
+  func complete(_ result: Result<Void, any Error>) {
+    let handler = completion.withLock {
+      let handler = $0
+      $0 = nil
+      return handler
+    }
+    handler?(result)
+    handler?(result)  // A duplicate completion must not resume finish waiters twice.
   }
 }
 

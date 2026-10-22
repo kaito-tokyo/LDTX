@@ -99,7 +99,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
         do {
           try AVAssetWriterLifecycleGate.start { try assetWriter.start() }
         } catch {
-          fail(PCMAudioSegmentedMP4WriterError.writerFailed(error.localizedDescription))
+          fail(error)
           return
         }
         assetWriter.startSession(atSourceTime: .zero)
@@ -198,8 +198,8 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       if !pendingAAC.isEmpty {
         guard audioInput.append(pendingAAC.removeFirst()) else {
           fail(
-            PCMAudioSegmentedMP4WriterError.writerFailed(
-              assetWriter.error?.localizedDescription ?? "append AAC failed"))
+            assetWriter.error
+              ?? PCMAudioSegmentedMP4WriterError.writerFailed("append AAC failed"))
           return
         }
         continue
@@ -315,8 +315,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
     guard isFinishing, let finishHandler else { return }
     if assetWriter.status == .failed || assetWriter.status == .cancelled {
       fail(
-        PCMAudioSegmentedMP4WriterError.writerFailed(
-          assetWriter.error?.localizedDescription ?? "writer stopped before pending media drained"))
+        assetWriter.error
+          ?? PCMAudioSegmentedMP4WriterError.writerFailed(
+            "writer stopped before pending media drained"))
       return
     }
     drain()
@@ -360,8 +361,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
           if let storedFailure = self.storedFailure {
             finishHandler(.failure(storedFailure))
           } else if self.assetWriter.status == .failed {
-            let error = PCMAudioSegmentedMP4WriterError.writerFailed(
-              self.assetWriter.error?.localizedDescription ?? "finish failed")
+            let error =
+              self.assetWriter.error
+              ?? PCMAudioSegmentedMP4WriterError.writerFailed("finish failed")
             self.fail(error)
             finishHandler(.failure(error))
           } else {
