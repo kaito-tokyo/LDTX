@@ -10,6 +10,110 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
+    @Test(.timeLimit(.minutes(1)))
+    func failedClosePresentsCaptureAndCleanupErrorsWithoutRetryReplay() async throws {
+      let document = WorkspaceDocument()
+      var releasedError: String?
+      var released = false
+      var coordinator: WorkspaceAppletCoordinator!
+      coordinator = WorkspaceAppletCoordinator(
+        document: document,
+        onShutdown: {
+          released = true
+          releasedError = coordinator.takeShutdownFailureForPresentation()
+        })
+      var resume: CheckedContinuation<Void, Never>?
+      let capture = Task {
+        _ = try? await coordinator.captureScreenshots {
+          await withCheckedContinuation { resume = $0 }
+          throw NSError(
+            domain: "Capture", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Screenshot write failed"])
+        }
+      }
+      while resume == nil { await Task.yield() }
+      let close = Task {
+        await coordinator.closeWorkspace(afterCleanup: {
+          throw NSError(
+            domain: "Cleanup", code: 2,
+            userInfo: [
+              NSLocalizedDescriptionKey: "Cleanup failed",
+              NSLocalizedRecoverySuggestionErrorKey: "Retry cleanup",
+            ])
+        })
+      }
+      while !coordinator.isClosing { await Task.yield() }
+      resume?.resume()
+      await capture.value
+      guard case .failed(let error) = await close.value else {
+        Issue.record("Expected failed close")
+        return
+      }
+      #expect(error.localizedDescription == "Cleanup failed")
+      #expect(error.localizedFailureReason?.contains("Screenshot write failed") == true)
+      #expect(error.localizedRecoverySuggestion == "Retry cleanup")
+      let displayed = try #require(document.operationErrors.last)
+      #expect(displayed.localizedFailureReason?.contains("Screenshot write failed") == true)
+      #expect(!released)
+      #expect(coordinator.takeShutdownFailureForPresentation() == nil)
+      guard case .succeeded = await coordinator.closeWorkspace() else {
+        Issue.record("Retry should close")
+        return
+      }
+      #expect(released)
+      #expect(releasedError == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func streamDeckCapturesBelongToTheirWorkspaceAcrossFocusChanges() async {
+      let first = WorkspaceAppletCoordinator(document: WorkspaceDocument())
+      let second = WorkspaceAppletCoordinator(document: WorkspaceDocument())
+      let firstID = first.stateService.runtimeID
+      let secondID = second.stateService.runtimeID
+      var target = first
+      var resumes: [UUID: CheckedContinuation<Void, Never>] = [:]
+      let deck = WorkspaceStreamDeck(
+        target: { target }, generationValidator: { $0 == 1 },
+        performAction: { coordinator, _ in
+          await withCheckedContinuation { resumes[coordinator.stateService.runtimeID] = $0 }
+        })
+      deck.refresh()
+      let firstFrame = deck.published
+      let firstCapture = Task { await deck.pressed(2, frame: firstFrame, generation: 1) }
+      while resumes[firstID] == nil { await Task.yield() }
+      target = second
+      deck.refresh()
+      #expect(deck.published.enabled[2])
+      let secondFrame = deck.published
+      var started = false
+      let secondCapture = Task {
+        started = true
+        await deck.pressed(2, frame: secondFrame, generation: 1)
+      }
+      while !started { await Task.yield() }
+      #expect(resumes.count == 2)
+      target = first
+      deck.refresh()
+      #expect(!deck.published.enabled[2])
+      target = second
+      deck.refresh()
+      #expect(!deck.published.enabled[2])
+      resumes[firstID]?.resume()
+      await firstCapture.value
+      deck.refresh()
+      #expect(!deck.published.enabled[2])
+      target = first
+      deck.refresh()
+      #expect(deck.published.enabled[2])
+      resumes[secondID]?.resume()
+      await secondCapture.value
+      target = second
+      deck.refresh()
+      #expect(deck.published.enabled[2])
+      await first.shutdown()
+      await second.shutdown()
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func closingCaptureFailuresReachApplicationOwnerOnce(distinctErrors: Bool) async throws {
       let document = WorkspaceDocument()

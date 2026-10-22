@@ -727,6 +727,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
 
   @discardableResult
   public func closeWorkspace() async -> WorkspaceCommandOutcome {
+    await closeWorkspace(afterCleanup: {})
+  }
+
+  func closeWorkspace(
+    afterCleanup: @escaping @MainActor () throws -> Void
+  ) async -> WorkspaceCommandOutcome {
     if stateService.isClosed { return .succeeded }
     if let closeRequestTask { return await closeRequestTask.value }
     do { try validateCloseAdmission() } catch {
@@ -738,7 +744,24 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       let result = await transactionalCommands.submit(
         .closeWorkspace,
         validate: { [self] in try validateCloseAdmission() },
-        operation: { [self] in try await drainWorkspaceResources() })
+        operation: { [self] in
+          do {
+            try await drainWorkspaceResources()
+            try afterCleanup()
+          } catch {
+            // A failed close has no owner-release callback. Present its capture
+            // failures with the cleanup cause now, and consume them before retry.
+            guard let captureFailures = takeShutdownFailureForPresentation() else { throw error }
+            let cause = error as NSError
+            var userInfo = cause.userInfo
+            userInfo[NSLocalizedFailureReasonErrorKey] = [
+              cause.localizedFailureReason, captureFailures,
+            ]
+            .compactMap { $0 }.joined(separator: "\n\n")
+            userInfo[NSUnderlyingErrorKey] = cause
+            throw NSError(domain: cause.domain, code: cause.code, userInfo: userInfo)
+          }
+        })
       if case .succeeded = result {
         stateService.isClosed = true
         documentConnection?.disconnect()

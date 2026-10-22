@@ -26,7 +26,7 @@ public final class WorkspaceStreamDeck {
   private var worker: StreamDeckHID?
   private var timer: Timer?
   private var busy = false
-  private var captureBusy = false
+  private var capturingWorkspaceIDs: Set<UUID> = []
   private(set) var published = StreamDeckFrame()
   private let generationValidator: ((UInt64) -> Bool)?
   private let performAction: (WorkspaceAppletCoordinator, WorkspaceAction) async -> Void
@@ -77,7 +77,9 @@ public final class WorkspaceStreamDeck {
         busy
         ? [false, false, false, false]
         : actions.map {
-          coordinator.actionState($0).isEnabled && ($0 != .captureScreenshots || !captureBusy)
+          coordinator.actionState($0).isEnabled
+            && ($0 != .captureScreenshots
+              || !capturingWorkspaceIDs.contains(coordinator.stateService.runtimeID))
         }
       frame.pause = coordinator.actionState(.startPauseOutput).showsPause
     }
@@ -95,10 +97,19 @@ public final class WorkspaceStreamDeck {
     else { return }
     // A slow save blocks duplicate captures, while Stop/Pause stay dispatchable.
     let action = actions[key]
-    if action == .captureScreenshots { captureBusy = true } else { busy = true }
+    let workspaceID = coordinator.stateService.runtimeID
+    if action == .captureScreenshots {
+      capturingWorkspaceIDs.insert(workspaceID)
+    } else {
+      busy = true
+    }
     refresh()
     defer {
-      if action == .captureScreenshots { captureBusy = false } else { busy = false }
+      if action == .captureScreenshots {
+        capturingWorkspaceIDs.remove(workspaceID)
+      } else {
+        busy = false
+      }
       refresh()
     }
     await performAction(coordinator, action)
