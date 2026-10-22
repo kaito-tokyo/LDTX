@@ -9,7 +9,7 @@ import Testing
 struct WorkspaceResourceFactoryUnitTestSuite {
   @Test func generatedIDsArePositiveAndOdd() {
     for _ in 0..<100 {
-      let id = WorkspaceResourceFactory.nextInternalID()
+      let id = WorkspaceResourceFactory.nextInternalID(in: .init())
       #expect(id > 0)
       #expect(id & 1 == 1)
     }
