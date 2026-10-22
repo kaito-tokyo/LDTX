@@ -240,6 +240,7 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
   func write(_ segment: SegmentedMP4Segment) throws {
     try lock.withLock {
       guard !isFinished else { return }
+      if let storedFailure { throw storedFailure }
 
       let offset = byteOffset
       do {
@@ -470,37 +471,74 @@ private enum MPEGDASHManifestWriter {
   }
 }
 
+protocol AudioSideStreamWriting: Sendable {
+  func append(_ sampleBuffer: CMSampleBuffer)
+  func finish(
+    at presentationTime: CMTime?,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void)
+}
+
+extension PCMAudioSegmentedMP4Writer: AudioSideStreamWriting {}
+
+struct AudioSideStreamWriterCallbacks: Sendable {
+  let onFailure: @Sendable (any Error) -> Void
+  let onSegment: @Sendable (SegmentedMP4Segment) -> Void
+}
+
 final class AudioSideStreamRecorder: @unchecked Sendable {
-  private let lock = NSLock()
+  typealias WriterFactory =
+    @Sendable (
+      CMAudioFormatDescription, Int, AudioSideStreamWriterCallbacks
+    ) throws -> any AudioSideStreamWriting
+
+  // State and finish waiters belong to this queue. Failure callbacks never run
+  // under a recorder lock, and may safely request a Session stop immediately.
+  private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamRecorder")
   private let targetSegmentDurationSeconds: Int
   private let onInitializationSegment: @Sendable (Data) -> Void
   private let segmentPipeline: AudioSideStreamSegmentPipeline
   private let timelineNormalizer: RecordingTimelineNormalizer?
   private let timelineTrackID: String
-  private var trackRecorder: HLSByteRangeTrackRecorder
-  private var writer: PCMAudioSegmentedMP4Writer?
+  private let trackRecorder: HLSByteRangeTrackRecorder
+  private let writerFactory: WriterFactory
+  private var writer: (any AudioSideStreamWriting)?
   private var receivedSample = false
-  private var isFinishing = false
+  private enum State { case accepting, finishingWriter, drainingSegments, finished }
+  private var state = State.accepting
+  private var finishHandlers: [@Sendable () -> Void] = []
 
   init(
     trackRecorder: HLSByteRangeTrackRecorder,
     targetSegmentDurationSeconds: Int,
     timelineNormalizer: RecordingTimelineNormalizer? = nil,
     timelineTrackID: String = "audio",
-    onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in }
+    failureHandler: @escaping @Sendable (any Error) -> Void,
+    onInitializationSegment: @escaping @Sendable (Data) -> Void = { _ in },
+    writerFactory: @escaping WriterFactory = { format, duration, callbacks in
+      try PCMAudioSegmentedMP4Writer(
+        formatDescription: format, targetSegmentDurationSeconds: duration,
+        onFailure: callbacks.onFailure, onSegment: callbacks.onSegment)
+    }
   ) throws {
     self.trackRecorder = trackRecorder
     self.targetSegmentDurationSeconds = targetSegmentDurationSeconds
     self.timelineNormalizer = timelineNormalizer
     self.timelineTrackID = timelineTrackID
     self.onInitializationSegment = onInitializationSegment
-    segmentPipeline = AudioSideStreamSegmentPipeline()
+    self.writerFactory = writerFactory
+    segmentPipeline = AudioSideStreamSegmentPipeline { error in
+      trackRecorder.markFailed(error)
+      failureHandler(error)
+    }
     segmentPipeline.start { [weak self] segment in
-      try self?.write(segment)
+      guard let self else { return }
+      try self.trackRecorder.write(segment)
+      if case .initialization = segment.kind { self.onInitializationSegment(segment.data) }
     }
   }
 
   func append(_ sampleBuffer: CMSampleBuffer) {
+    guard !segmentPipeline.hasFailed else { return }
     guard let timelineNormalizer else {
       appendNormalized(sampleBuffer)
       return
@@ -511,109 +549,89 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
   }
 
   private func appendNormalized(_ sampleBuffer: CMSampleBuffer) {
-    lock.lock()
-    defer { lock.unlock() }
-    guard !isFinishing else { return }
-
-    receivedSample = true
-
-    trackRecorder.notePresentationStart(sampleBuffer.presentationTimeStamp)
-
-    do {
-      if writer == nil {
-        guard let formatDescription = sampleBuffer.formatDescription else {
-          hlsByteRangeRecordingLogger.error(
-            "Audio side stream sample has no format description"
-          )
-          return
-        }
-        writer = try PCMAudioSegmentedMP4Writer(
-          formatDescription: formatDescription,
-          targetSegmentDurationSeconds: targetSegmentDurationSeconds,
-          onSegment: { [weak self] segment in
-            self?.segmentPipeline.yield(segment)
+    let sample = SendableAudioSideStreamSample(value: sampleBuffer)
+    queue.async { [self] in
+      guard state == .accepting, !segmentPipeline.hasFailed else { return }
+      receivedSample = true
+      trackRecorder.notePresentationStart(sample.value.presentationTimeStamp)
+      do {
+        if writer == nil {
+          guard let format = sample.value.formatDescription else {
+            throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
           }
-        )
+          writer = try makeWriter(format: format)
+        }
+        guard !segmentPipeline.hasFailed else { return }
+        writer?.append(sample.value)
+      } catch {
+        segmentPipeline.fail(error)
       }
-      writer?.append(sampleBuffer)
-    } catch {
-      trackRecorder.markFailed(error)
-      let nsError = error as NSError
-      hlsByteRangeRecordingLogger.error(
-        "Audio side stream append failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-      )
-      writer = nil
     }
+  }
+
+  private func makeWriter(format: CMAudioFormatDescription) throws -> any AudioSideStreamWriting {
+    let pipeline = segmentPipeline
+    return try writerFactory(
+      format, targetSegmentDurationSeconds,
+      AudioSideStreamWriterCallbacks(
+        onFailure: { pipeline.fail($0) }, onSegment: { pipeline.yield($0) }))
   }
 
   func finish(
     at presentationTime: CMTime? = nil, completionHandler: @escaping @Sendable () -> Void = {}
   ) {
-    let resources = lock.withLock {
-      () -> (
-        writer: PCMAudioSegmentedMP4Writer?,
-        trackRecorder: HLSByteRangeTrackRecorder
-      )? in
-      guard !isFinishing else { return nil }
-      isFinishing = true
-      if writer == nil, !receivedSample, let presentationTime,
+    queue.async { [self] in
+      if state == .finished {
+        completionHandler()
+        return
+      }
+      finishHandlers.append(completionHandler)
+      guard state == .accepting else { return }
+      state = .finishingWriter
+      if writer == nil, !receivedSample, !segmentPipeline.hasFailed, let presentationTime,
         presentationTime.isNumeric, CMTimeCompare(presentationTime, .zero) > 0
       {
         do {
-          // No device format was ever observed. This is a recording-only
-          // fallback and must not be advertised as the physical input format.
           guard let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)
           else { throw PCMAudioSegmentedMP4WriterError.invalidConfiguration }
-          writer = try PCMAudioSegmentedMP4Writer(
-            formatDescription: format.formatDescription,
-            targetSegmentDurationSeconds: targetSegmentDurationSeconds,
-            onSegment: { [weak self] segment in self?.segmentPipeline.yield(segment) })
+          writer = try makeWriter(format: format.formatDescription)
           trackRecorder.notePresentationStart(.zero)
           hlsByteRangeRecordingLogger.notice(
             "No input samples received; synthesizing recording-only 48 kHz stereo silence")
         } catch {
-          trackRecorder.markFailed(error)
+          segmentPipeline.fail(error)
         }
       }
-      return (writer, trackRecorder)
-    }
-    guard let resources else {
-      completionHandler()
-      return
-    }
-    let finishPipeline: @Sendable () -> Void = { [self] in
-      segmentPipeline.finish {
-        resources.trackRecorder.finish()
-        withExtendedLifetime(resources.writer) {}
-        completionHandler()
+      guard let writer else {
+        finishWriter(.success(()))
+        return
       }
-    }
-    guard let writer = resources.writer else {
-      finishPipeline()
-      return
-    }
-    writer.finish(at: presentationTime) { result in
-      if case .failure(let error) = result {
-        resources.trackRecorder.markFailed(error)
-        let nsError = error as NSError
-        hlsByteRangeRecordingLogger.error(
-          "Audio side stream finish failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-        )
+      writer.finish(at: presentationTime) { [self] result in
+        queue.async { [self] in finishWriter(result) }
       }
-      finishPipeline()
     }
   }
 
-  private func write(_ segment: SegmentedMP4Segment) throws {
-    let trackRecorder = lock.withLock { () -> HLSByteRangeTrackRecorder in
-      return self.trackRecorder
+  private func finishWriter(_ result: Result<Void, any Error>) {
+    guard state == .finishingWriter else { return }
+    if case .failure(let error) = result { segmentPipeline.fail(error) }
+    state = .drainingSegments
+    segmentPipeline.finish { [self] in
+      queue.async { [self] in
+        guard state == .drainingSegments else { return }
+        trackRecorder.finish()
+        writer = nil
+        state = .finished
+        let handlers = finishHandlers
+        finishHandlers.removeAll()
+        for handler in handlers { handler() }
+      }
     }
-    if case .initialization = segment.kind {
-      onInitializationSegment(segment.data)
-    }
-    try trackRecorder.write(segment)
   }
+}
 
+private struct SendableAudioSideStreamSample: @unchecked Sendable {
+  let value: CMSampleBuffer
 }
 
 enum HLSByteRangeRecordingPackageError: Error, LocalizedError {
@@ -637,32 +655,72 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.AudioSideStreamSegmentPipeline")
   private var write: Write?
   private var isFinishing = false
+  private var storedFailure: (any Error)?
+  private var failureReported = false
+  private var isFinished = false
+  private let failureHandler: @Sendable (any Error) -> Void
+
+  init(failureHandler: @escaping @Sendable (any Error) -> Void) {
+    self.failureHandler = failureHandler
+  }
+
+  var hasFailed: Bool { lock.withLock { storedFailure != nil } }
+
+  func fail(_ error: any Error) {
+    lock.withLock {
+      guard storedFailure == nil, !isFinished else { return }
+      storedFailure = error
+      write = nil
+      // Serialize notification with writes and finish barriers. A finish marker
+      // already queued before this fault also reports it before its completion.
+      queue.async { [self] in reportFailure(finishing: false) }
+    }
+  }
+
+  private func reportFailure(finishing: Bool) {
+    let error = lock.withLock { () -> (any Error)? in
+      if finishing {
+        isFinished = true
+        write = nil
+      }
+      guard let storedFailure, !failureReported else { return nil }
+      failureReported = true
+      return storedFailure
+    }
+    guard let error else { return }
+    let nsError = error as NSError
+    hlsByteRangeRecordingLogger.error(
+      "Audio side stream failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code)"
+    )
+    failureHandler(error)
+  }
 
   func start(write: @escaping Write) {
     lock.withLock {
-      guard self.write == nil, !isFinishing else { return }
+      guard self.write == nil, !isFinishing, storedFailure == nil else { return }
       self.write = write
     }
   }
 
   func yield(_ segment: SegmentedMP4Segment) {
     lock.withLock {
-      guard !isFinishing else { return }
+      guard !isFinishing, storedFailure == nil else { return }
       queue.async { [self] in
+        let operation = lock.withLock { storedFailure == nil ? write : nil }
         do {
-          try write?(segment)
+          try operation?(segment)
         } catch {
-          let nsError = error as NSError
-          hlsByteRangeRecordingLogger.error(
-            "Audio side stream segment write failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public)"
-          )
+          fail(error)
         }
       }
     }
   }
 
   func drain(completionHandler: @escaping @Sendable () -> Void) {
-    queue.async(execute: completionHandler)
+    queue.async { [self] in
+      reportFailure(finishing: false)
+      completionHandler()
+    }
   }
 
   func perform(_ operation: @escaping @Sendable () throws -> Void) throws {
@@ -670,18 +728,12 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
   }
 
   func finish(completionHandler: @escaping @Sendable () -> Void = {}) {
-    let shouldFinish = lock.withLock { () -> Bool in
-      guard !isFinishing else { return false }
+    lock.withLock {
       isFinishing = true
-      return true
-    }
-    guard shouldFinish else {
-      queue.async(execute: completionHandler)
-      return
-    }
-    queue.async { [self] in
-      lock.withLock { write = nil }
-      completionHandler()
+      queue.async { [self] in
+        reportFailure(finishing: true)
+        completionHandler()
+      }
     }
   }
 }

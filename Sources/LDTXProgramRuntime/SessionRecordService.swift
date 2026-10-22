@@ -678,7 +678,11 @@ public final class SessionRecordService: @unchecked Sendable {
           trackRecorder: trackRecorder,
           targetSegmentDurationSeconds: writerConfiguration.targetSegmentDurationSeconds,
           timelineNormalizer: timelineNormalizer,
-          timelineTrackID: track.trackID)
+          timelineTrackID: track.trackID,
+          failureHandler: { [failureHandler] error in
+            // Keep the original NSError and underlying cause for #279.
+            Task { @MainActor in failureHandler(error) }
+          })
       }
       self.package = package
       self.timelineNormalizer = timelineNormalizer
@@ -844,10 +848,9 @@ public final class SessionRecordService: @unchecked Sendable {
       sessionRecordServiceLogger.error(
         "Record package finalization failed id=\(self.finalizationID, privacy: .public) code=\((error as NSError).code): \(error.localizedDescription, privacy: .private)"
       )
-      completeStop(
-        .failed(
-          ProgramOutputFlowInterruptionError.recordingFinalizationFailed(
-            error.localizedDescription)))
+      // The owner may observe finalization before its asynchronous failure task.
+      // Keep the same cause at both boundaries, including NSError userInfo.
+      completeStop(.failed(error))
     }
   }
 
