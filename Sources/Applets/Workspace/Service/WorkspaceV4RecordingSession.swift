@@ -407,13 +407,25 @@ public final class WorkspaceV4RecordingSession {
       else { continue }
       sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
     }
-    let globalDirectory = applicationOutputPreferences.screenshotsDirectory
+    return try captureScreenshots(
+      sources: sources, capturedAt: Date(),
+      globalDirectory: applicationOutputPreferences.screenshotsDirectory)
+  }
+
+  func captureScreenshots(
+    sources: [ScreenCaptureSource], capturedAt: Date, globalDirectory: URL
+  ) throws -> [WorkspaceScreenshot] {
     var directories = [globalDirectory]
-    if let recordService {
+    // Admission and the synchronous capture below share MainActor with pause/stop.
+    // An admitted copy completes before finalization can start; no drain is needed.
+    if state == .recording, let recordService,
+      recordService.hasAcceptedFirstVideo,
+      recordService.recordingTimelineMilliseconds() != nil
+    {
       directories.append(recordService.packageDirectory.appendingPathComponent("Screenshots"))
     }
     return try ScreenCaptureService().captureSet(
-      sources: sources, capturedAt: Date(), outputDirectories: directories
+      sources: sources, capturedAt: capturedAt, outputDirectories: directories
     ).screenshots.filter {
       $0.url.deletingLastPathComponent().standardizedFileURL == globalDirectory.standardizedFileURL
     }

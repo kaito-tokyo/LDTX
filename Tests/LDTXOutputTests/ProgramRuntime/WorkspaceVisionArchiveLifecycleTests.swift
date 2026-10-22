@@ -4,6 +4,7 @@
 import AudioToolbox
 import CoreImage
 import CoreMedia
+import CoreVideo
 import Foundation
 import LDTXMP4
 @testable import LDTXProgramRuntime
@@ -17,6 +18,19 @@ extension OutputTestSuite {
   @MainActor
   @Suite struct WorkspaceVisionArchiveLifecycleIntegrationTestSuite {
     enum Finish: CaseIterable { case stop, pause, pauseThenStop }
+    enum InactiveScreenshotState: CaseIterable {
+      case idle, starting, pausing, paused, stopping, failed
+      var state: WorkspaceV4RecordingSession.State {
+        switch self {
+        case .idle: .idle
+        case .starting: .starting
+        case .pausing: .pausing
+        case .paused: .paused
+        case .stopping: .stopping
+        case .failed: .failed("test")
+        }
+      }
+    }
 
     @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
     func acceptedArchivePrecedesRealPackageFinalization(finishing: Finish) async throws {
@@ -118,6 +132,118 @@ extension OutputTestSuite {
       #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.root.path).isEmpty)
     }
 
+    @Test(arguments: [false, true])
+    func screenshotsBeforePackageReadinessRemainStandalone(recording: Bool) async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      fixture.session.state = recording ? .recording : .starting
+      try fixture.screenshot()
+      #expect(try fixture.globalScreenshots().count == 1)
+      #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
+      // A standalone screenshot must not reserve the future recording's directory.
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      try fixture.screenshot()
+      #expect(try fixture.packageScreenshots().count == 1)
+      try (await fixture.session.stopWithResult()).get()
+      #expect(fixture.isFinalized)
+    }
+
+    @Test(arguments: InactiveScreenshotState.allCases)
+    func readyPackageRejectsScreenshotsOutsideRecording(state: InactiveScreenshotState)
+      async throws
+    {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = state.state
+      try fixture.screenshot()
+      #expect(try fixture.globalScreenshots().count == 1)
+      #expect(try fixture.packageScreenshots().isEmpty)
+      fixture.session.state = .recording
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    func screenshotsCloseAdmissionBeforeFinalization(finishing: Finish) async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      try fixture.screenshot()
+      let accepted = try fixture.packageScreenshots()
+      #expect(accepted.count == 1)
+      let acceptedData = try Data(contentsOf: #require(accepted.first))
+      var capturedAtBoundary = false
+      fixture.session.stateDidChange = { state in
+        guard state == .pausing || state == .stopping else { return }
+        // This runs before the finishing task can clear handlers or suspend.
+        #expect(fixture.runtime.visionArchiveHandler != nil)
+        do { try fixture.screenshot() } catch { Issue.record(error) }
+        capturedAtBoundary = true
+      }
+      let release = fixture.blockArchives()
+      defer { release.signal() }
+      let completion = Task {
+        finishing == .stop
+          ? await fixture.session.stopWithResult() : await fixture.session.pauseWithResult()
+      }
+      try await fixture.waitForAdmissionToClose()
+      #expect(capturedAtBoundary)
+      #expect(fixture.session.isLocalRecording)
+      #expect(!fixture.isFinalized)
+      try fixture.screenshot()
+      #expect(try fixture.packageScreenshots() == accepted)
+      release.signal()
+      try (await completion.value).get()
+      if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
+      #expect(fixture.isFinalized)
+      try fixture.screenshot()
+      #expect(try fixture.globalScreenshots().count == 4)
+      #expect(try fixture.packageScreenshots() == accepted)
+      #expect(try Data(contentsOf: #require(accepted.first)) == acceptedData)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func screenshotsDuringCancellationCannotCreateOrRecreatePackage() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      fixture.session.state = .starting
+      let release = fixture.blockArchives()
+      defer { release.signal() }
+      let completion = Task { await fixture.session.stopWithResult() }
+      try await fixture.waitForAdmissionToClose()
+      try fixture.screenshot()
+      #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
+      release.signal()
+      try (await completion.value).get()
+      try fixture.screenshot()
+      #expect(try fixture.globalScreenshots().count == 2)
+      #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
+    }
+
+    @Test
+    func screenshotsRejectServiceAlreadyFinalizing() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      var finished = false
+      fixture.service.stop { _ in finished = true }
+      // Service admission closes synchronously, before the completion callback.
+      try fixture.screenshot()
+      #expect(try fixture.packageScreenshots().isEmpty)
+      while !finished { await Task.yield() }
+      #expect(fixture.isFinalized)
+      try fixture.screenshot()
+      #expect(try fixture.packageScreenshots().isEmpty)
+      #expect(try fixture.globalScreenshots().count == 2)
+    }
+
     @MainActor private final class Fixture {
       let root: URL
       let runtime: WorkspaceWindowRuntime
@@ -154,7 +280,43 @@ extension OutputTestSuite {
         session.adoptStartedRecordingService(service)
       }
 
+      func screenshot() throws {
+        var buffer: CVPixelBuffer?
+        #expect(
+          CVPixelBufferCreate(
+            kCFAllocatorDefault, 8, 8, kCVPixelFormatType_32BGRA,
+            [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &buffer)
+            == kCVReturnSuccess)
+        let pixelBuffer = try #require(buffer)
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        memset(
+          CVPixelBufferGetBaseAddress(pixelBuffer), 0,
+          CVPixelBufferGetBytesPerRow(pixelBuffer) * CVPixelBufferGetHeight(pixelBuffer))
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        let screenshots = try session.captureScreenshots(
+          sources: [.init(name: "Landscape", pixelBuffer: pixelBuffer, programCanvas: .landscape)],
+          capturedAt: Date(timeIntervalSince1970: 1),
+          globalDirectory: root.appendingPathComponent("global"))
+        #expect(screenshots.count == 1)
+        #expect(
+          screenshots.first?.url.deletingLastPathComponent()
+            == root.appendingPathComponent("global"))
+      }
+
+      func globalScreenshots() throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(
+          at: root.appendingPathComponent("global"), includingPropertiesForKeys: nil)
+      }
+
+      func packageScreenshots() throws -> [URL] {
+        let directory = package.appendingPathComponent("Screenshots")
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(
+          at: directory, includingPropertiesForKeys: nil)
+      }
+
       func cleanup() {
+        session.stateDidChange = nil
         runtime.shutdown()
         try? FileManager.default.removeItem(at: root)
       }
