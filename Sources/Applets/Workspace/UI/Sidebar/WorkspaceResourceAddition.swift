@@ -151,7 +151,7 @@ enum WorkspaceResourceAddition {
     {
       throw AdditionError(message: message)
     }
-    let id = WorkspaceResourceFactory.nextInternalID()
+    let id = WorkspaceResourceFactory.nextInternalID(in: stateService.workspaceDefinition)
     let name = proposedName(sheet: sheet, draft: draft, devices: devices)
     var definition = stateService.workspaceDefinition
     let inspectorKind: WorkspaceInspectorKind

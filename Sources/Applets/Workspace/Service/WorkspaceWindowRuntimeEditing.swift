@@ -10,19 +10,6 @@ import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
 import SwiftProtobuf
 
-@MainActor
-public final class WorkspaceInternalIDGenerator {
-  private var randomNumberGenerator = SystemRandomNumberGenerator()
-
-  public init() {}
-
-  public func next(now: Date = Date()) -> Int64 {
-    let milliseconds = Int64(max(0, now.timeIntervalSince1970 * 1_000))
-    let timestamp = (milliseconds & 0x0000_FFFF_FFFF_FFFF) << 15
-    return timestamp | (Int64.random(in: 0...0x3fff, using: &randomNumberGenerator) << 1) | 1
-  }
-}
-
 extension WorkspaceWindowRuntime {
   public func editDefinition(
     _ mutation: (inout Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Void
@@ -32,7 +19,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addAudioInputDevice(displayName: String) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var device = Ldtx_Workspace_V4_AudioInputDevice()
     device.internalID = id
     device.displayName = displayName
@@ -42,7 +29,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addProgram(displayName: String) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = id
     program.displayName = displayName
@@ -52,7 +39,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addVFXSource(displayName: String) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_VfxSourceComponent()
     component.internalID = id
     component.displayName = displayName
@@ -66,7 +53,7 @@ extension WorkspaceWindowRuntime {
   public func addSolidColorFill(displayName: String, color: Ldtx_Workspace_V4_Color)
     throws -> Int64
   {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_FillSolidColorComponent()
     component.internalID = id
     component.displayName = displayName
@@ -82,7 +69,7 @@ extension WorkspaceWindowRuntime {
     displayName: String, startColor: Ldtx_Workspace_V4_Color,
     endColor: Ldtx_Workspace_V4_Color
   ) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_FillLinearGradientComponent()
     component.internalID = id
     component.displayName = displayName
@@ -111,7 +98,7 @@ extension WorkspaceWindowRuntime {
     displayName: String, innerColor: Ldtx_Workspace_V4_Color,
     outerColor: Ldtx_Workspace_V4_Color
   ) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_FillRadialGradientComponent()
     component.internalID = id
     component.displayName = displayName
@@ -140,7 +127,7 @@ extension WorkspaceWindowRuntime {
     displayName: String, startColor: Ldtx_Workspace_V4_Color,
     endColor: Ldtx_Workspace_V4_Color
   ) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_FillConicGradientComponent()
     component.internalID = id
     component.displayName = displayName
@@ -160,7 +147,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addClock(displayName: String) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_ClockComponent()
     component.internalID = id
     component.displayName = displayName
@@ -176,7 +163,7 @@ extension WorkspaceWindowRuntime {
 
   @discardableResult
   public func addTestPattern(displayName: String) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var component = Ldtx_Workspace_V4_TestPatternComponent()
     component.internalID = id
     component.displayName = displayName
@@ -193,7 +180,7 @@ extension WorkspaceWindowRuntime {
       $0.set(num: 5, den: 1)
     }
   ) throws -> Int64 {
-    let id = internalIDGenerator.next()
+    let id = internalIDGenerator.next(in: definition)
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
     trigger.intervalSeconds = intervalSeconds
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()

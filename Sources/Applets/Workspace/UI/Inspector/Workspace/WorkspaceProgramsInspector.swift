@@ -153,7 +153,9 @@ struct WorkspaceProgramsInspector: View {
       }
     }
   }
-  private func nextInternalID() -> Int64 { WorkspaceResourceFactory.nextInternalID() }
+  private func nextInternalID() -> Int64 {
+    WorkspaceResourceFactory.nextInternalID(in: stateService.workspaceDefinition)
+  }
 
   func uniqueProgramDisplayName(_ base: String) -> String {
     let names = WorkspaceResourceAddition.existingNames(stateService.workspaceDefinition)
