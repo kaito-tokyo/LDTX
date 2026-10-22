@@ -33,6 +33,50 @@ extension OutputTestSuite {
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
+    func stopDoesNotWaitForOtherWorkspaceScreenshot(ownCaptureFinished: Bool, finishing: Finish)
+      async throws
+    {
+      let fixture = try Fixture(screenCaptureService: ScreenCaptureService())
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      if ownCaptureFinished { try await fixture.screenshot() }
+      let manager = OtherWorkspaceBlockingFileManager()
+      defer { manager.release.signal() }
+      let other = ScreenCaptureService(fileManager: manager)
+      var buffer: CVPixelBuffer?
+      #expect(
+        CVPixelBufferCreate(kCFAllocatorDefault, 8, 8, kCVPixelFormatType_32BGRA, nil, &buffer)
+          == kCVReturnSuccess)
+      let source = try other.snapshot(pixelBuffer: #require(buffer), name: "OtherWorkspace")
+      let otherCapture = Task {
+        try await other.enqueueCapture(
+          sources: [source], capturedAt: Date(),
+          outputDirectories: [fixture.root.appendingPathComponent("other-global")])
+      }
+      while !manager.started.withLock({ $0 }) { await Task.yield() }
+      var stopped = false
+      let stop = Task {
+        let result =
+          finishing == .stop
+          ? await fixture.session.stopWithResult() : await fixture.session.pauseWithResult()
+        try result.get()
+        if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
+        stopped = true
+      }
+      try await fixture.waitForAdmissionToClose()
+      try await stop.value
+      #expect(stopped)
+      #expect(fixture.isFinalized)
+      #expect(!manager.unblocked.withLock { $0 })
+      manager.release.signal()
+      _ = try await otherCapture.value
+      try await stop.value
+      #expect(fixture.isFinalized)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
     func queuedScreenshotsDrainBeforeStopAndCancellation(firstVideo: Bool, finishing: Finish)
       async throws
     {
@@ -77,7 +121,13 @@ extension OutputTestSuite {
       }
       try await fixture.waitForAdmissionToClose()
       #expect(!saved)
-      #expect(!stopped)
+      if firstVideo {
+        #expect(!stopped)
+      } else {
+        // Global-only captures cannot write this package and need not delay cancellation.
+        try await stop.value
+        #expect(stopped)
+      }
       #expect(!fixture.isFinalized)
       // Cancelling the caller must not abandon an already admitted filesystem write.
       capture.cancel()
@@ -330,7 +380,7 @@ extension OutputTestSuite {
           atPath: package.appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path)
       }
 
-      init() throws {
+      init(screenCaptureService: ScreenCaptureService? = nil) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
@@ -343,7 +393,8 @@ extension OutputTestSuite {
           persistence: persistence, captureSessionCoordinator: capture)
         session = WorkspaceV4RecordingSession(
           windowRuntime: runtime,
-          screenCaptureService: ScreenCaptureService(captureQueue: screenshotQueue),
+          screenCaptureService: screenCaptureService
+            ?? ScreenCaptureService(captureQueue: screenshotQueue),
           visionArchiveQueue: queue)
         service = try SessionRecordService(
           baseDirectory: root, recordID: "archive-lifecycle",
@@ -522,4 +573,26 @@ extension OutputTestSuite {
 
 private final class WorkspaceArchiveObservation: Sendable {
   let written = Mutex(false)
+}
+
+private final class OtherWorkspaceBlockingFileManager: FileManager, @unchecked Sendable {
+  let started = Mutex(false)
+  let unblocked = Mutex(false)
+  let release = DispatchSemaphore(value: 0)
+  override func createDirectory(
+    at url: URL, withIntermediateDirectories createIntermediates: Bool,
+    attributes: [FileAttributeKey: Any]? = nil
+  ) throws {
+    let first = started.withLock { value in
+      let first = !value
+      value = true
+      return first
+    }
+    if first {
+      _ = release.wait(timeout: .now() + 15)
+      unblocked.withLock { $0 = true }
+    }
+    try super.createDirectory(
+      at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
+  }
 }

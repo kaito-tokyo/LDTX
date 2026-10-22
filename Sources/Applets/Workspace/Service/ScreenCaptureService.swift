@@ -61,13 +61,6 @@ public final class ScreenCaptureService: @unchecked Sendable {
     }
   }
 
-  @MainActor
-  func drain() async {
-    await withCheckedContinuation { continuation in
-      captureQueue.async { continuation.resume() }
-    }
-  }
-
   public func captureSet(
     sources: [ScreenCaptureSource],
     capturedAt: Date,

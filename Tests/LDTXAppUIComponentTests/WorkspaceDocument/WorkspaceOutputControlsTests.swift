@@ -11,6 +11,62 @@ extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func closingCaptureFailuresReachApplicationOwnerOnce(distinctErrors: Bool) async throws {
+      let document = WorkspaceDocument()
+      var releasedError: String?
+      var coordinator: WorkspaceAppletCoordinator!
+      coordinator = WorkspaceAppletCoordinator(
+        document: document,
+        onShutdown: {
+          releasedError = coordinator.takeShutdownFailureForPresentation()
+        })
+      // A failure observed before closing belongs to the window, not a later close.
+      do {
+        _ = try await coordinator.captureScreenshots { throw CocoaError(.fileReadUnknown) }
+      } catch { coordinator.reportError(error) }
+      #expect(document.operationErrors.count == 1)
+      #expect(coordinator.takeShutdownFailureForPresentation() == nil)
+      var notifications = 0
+      coordinator.screenshotsDidSave = { _ in notifications += 1 }
+      let messages = [
+        "First screenshot failed",
+        distinctErrors ? "Second screenshot failed" : "First screenshot failed",
+      ]
+      var resumes: [CheckedContinuation<Void, Never>] = []
+      let captures = messages.map { message in
+        Task {
+          do {
+            _ = try await coordinator.captureScreenshots {
+              await withCheckedContinuation { resumes.append($0) }
+              throw NSError(
+                domain: "ScreenshotTest", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: message])
+            }
+          } catch {
+            // Same policy as perform: closing failures go to the application owner.
+            if !coordinator.isClosing { coordinator.reportError(error) }
+          }
+        }
+      }
+      while resumes.count != 2 { await Task.yield() }
+      let close = Task { await coordinator.closeWorkspace() }
+      while !coordinator.isClosing { await Task.yield() }
+      for resume in resumes { resume.resume() }
+      for capture in captures { await capture.value }
+      guard case .succeeded = await close.value else {
+        Issue.record("Cleanup should succeed")
+        return
+      }
+      #expect(releasedError == (distinctErrors ? messages.joined(separator: "\n\n") : messages[0]))
+      #expect(document.operationErrors.isEmpty)
+      #expect(coordinator.takeShutdownFailureForPresentation() == nil)
+      #expect(notifications == 0)
+      let next = WorkspaceAppletCoordinator(document: WorkspaceDocument())
+      await next.shutdown()
+      #expect(next.takeShutdownFailureForPresentation() == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func idleShutdownWaitsForAcceptedCapture(fails: Bool) async throws {
       let document = WorkspaceDocument()
       var released = false

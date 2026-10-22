@@ -477,15 +477,15 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     return try result.get()
   }
 
-  private var pendingShutdownFailure: String?
+  private var pendingShutdownFailures: [String] = []
 
   func queueShutdownFailure(_ message: String) {
-    pendingShutdownFailure = message
+    if !pendingShutdownFailures.contains(message) { pendingShutdownFailures.append(message) }
   }
 
   public func takeShutdownFailureForPresentation() -> String? {
-    defer { pendingShutdownFailure = nil }
-    return pendingShutdownFailure
+    defer { pendingShutdownFailures.removeAll() }
+    return pendingShutdownFailures.isEmpty ? nil : pendingShutdownFailures.joined(separator: "\n\n")
   }
 
   func attachWindow(_ window: NSWindow?) {
@@ -836,7 +836,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     case .startPauseOutput:
       await toggleOutput(stateService: stateService, document: workspaceDocument)
     case .captureScreenshots:
-      do { return try await captureScreenshots() } catch { reportError(error) }
+      do { return try await captureScreenshots() } catch {
+        // A closing capture is retained for application-level presentation.
+        if !isClosing { reportError(error) }
+      }
     case .showRecordingInFinder:
       if let url = latestRecordingBundleURL {
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -866,7 +869,21 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         for waiter in waiters { waiter.resume() }
       }
     }
-    let screenshots = try await capture()
+    let screenshots: [WorkspaceScreenshot]
+    do {
+      screenshots = try await capture()
+    } catch {
+      if isClosing {
+        let error = error as NSError
+        queueShutdownFailure(
+          [
+            error.localizedDescription, error.localizedFailureReason,
+            error.localizedRecoverySuggestion,
+          ]
+          .compactMap { $0 }.joined(separator: "\n\n"))
+      }
+      throw error
+    }
     if !screenshots.isEmpty { screenshotsDidSave?(screenshots) }
     return screenshots
   }

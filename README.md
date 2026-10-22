@@ -57,8 +57,10 @@ and one waiting capture are allowed per Workspace; further requests report that
 saving is busy. Completion notifications follow successful writes. A failure in
 either the global save or the recording-package copy rolls back that capture set.
 Package copies require active recording with an accepted video frame. Pause and
-Stop close package-copy admission and wait for accepted saves before finalizing.
-Global screenshots remain available in every output state.
+Stop close package-copy admission and wait for this session's accepted package
+copies before finalizing. Closing a Workspace waits for all of its accepted
+captures. Save errors that finish during closing are retained for application-level
+error presentation. Global screenshots remain available in every output state.
 
 ## Clock
 
