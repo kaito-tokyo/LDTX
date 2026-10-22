@@ -516,6 +516,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
   private var activeHeight: Int?
   private var reusableCameraIDsByInputKey: [String: String] = [:]
   private var reusableSourcesByInputKey: [String: MetalVideoSource] = [:]
+  private var normalizedColorInputKeys: Set<String> = []
   private var reusableComponentCommands: [MetalVideoComponentCommand] = []
   private var videoPTSSelector = ProgramVideoPTSSelector()
   private var activeVideoPTSMasterCameraID: String?
@@ -614,7 +615,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
           self.reusableSourcesByInputKey[key]
         },
         colorRangeForInputKey: { key in
-          configuration.cameraInputColorOverrides[key] ?? .unspecified
+          self.normalizedColorInputKeys.contains(key)
+            ? .unspecified : configuration.cameraInputColorOverrides[key] ?? .unspecified
         },
         destinationForStep: destinationForStep,
         retainedTextureForStep: { step in overlayTextures[step.name] },
@@ -685,6 +687,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     }
 
     reusableSourcesByInputKey.removeAll(keepingCapacity: true)
+    normalizedColorInputKeys.removeAll(keepingCapacity: true)
     reusableSourcesByInputKey.reserveCapacity(reusableCameraIDsByInputKey.count)
     var framesByInputKey: [String: CapturedVideoFrame] = [:]
     for (key, cameraID) in reusableCameraIDsByInputKey {
@@ -701,7 +704,8 @@ final class ActiveProgramRenderer: @unchecked Sendable {
           cameraID: cameraID,
           captureSessionID: framesByInputKey[inputKey]?.captureSessionID,
           mode: configuration.backgroundRemovalInputKeys.contains(inputKey)
-            ? .backgroundRemoval : .passthrough
+            ? .backgroundRemoval : .passthrough,
+          colorRangeOverride: configuration.cameraInputColorOverrides[inputKey] ?? .unspecified
         )
       }
       if inputPreprocessingPipeline?.synchronize(specifications: specifications) == true {
@@ -711,6 +715,9 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         for (key, frame) in framesByInputKey {
           switch inputPreprocessingPipeline.process(frame, forInputKey: key) {
           case .ready(let input):
+            if input.frame.pixelBuffer !== frame.pixelBuffer {
+              normalizedColorInputKeys.insert(key)
+            }
             if let textures = try? VideoInputMetalTextures(
               pixelBuffer: input.frame.pixelBuffer,
               textureCache: inputTextureCache
@@ -725,7 +732,9 @@ final class ActiveProgramRenderer: @unchecked Sendable {
           case .preparing:
             isPreparingRenderResources = true
           case .unavailable:
-            isPreparingRenderResources = true
+            // A failed input is omitted; it must not hide the other layers.
+            // Only transient preparation keeps the existing preparing display.
+            break
           }
         }
       }

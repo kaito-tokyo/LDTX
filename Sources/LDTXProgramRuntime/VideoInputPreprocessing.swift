@@ -7,6 +7,7 @@ import Foundation
 import LDTXInternalProtocols
 import LDTXVideoComposition
 import LDTXVideoRendering
+import OSLog
 
 #if canImport(Metal)
   import Metal
@@ -21,6 +22,7 @@ struct VideoInputPipelineSpecification: Hashable, Sendable {
   var cameraID: String
   var captureSessionID: UUID?
   var mode: VideoInputPreprocessingMode
+  var colorRangeOverride: CameraInputColorRangeOverride = .unspecified
 }
 
 struct PreparedVideoInput {
@@ -96,6 +98,14 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
     private let backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory?
     private var specificationsByInputKey: [String: VideoInputPipelineSpecification] = [:]
     private var preprocessorsByInputKey: [String: any VideoInputPreprocessing] = [:]
+    private let normalizer: CapturedInputNormalizer
+    private var normalizedFrames:
+      [String: (source: CapturedVideoFrame, result: Result<CapturedVideoFrame, any Error>)] = [:]
+    private var reportedFailures: Set<String> = []
+    private var announcedFailures: Set<String> = []
+    private var lastFailureDiagnostic: [String: TimeInterval] = [:]
+    private static let logger = Logger(
+      subsystem: "tokyo.kaito.ldtx", category: "CapturedInputNormalization")
 
     init(
       device: MTLDevice,
@@ -103,6 +113,7 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
       backgroundRemovalPreprocessorFactory: BackgroundRemovalPreprocessorFactory? = nil
     ) {
       self.device = device
+      self.normalizer = CapturedInputNormalizer(device: device)
       self.textureCache = textureCache
       self.backgroundRemovalPreprocessorFactory = backgroundRemovalPreprocessorFactory
     }
@@ -111,6 +122,10 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
       id = UUID()
       specificationsByInputKey = [:]
       preprocessorsByInputKey = [:]
+      normalizedFrames = [:]
+      reportedFailures = []
+      announcedFailures = []
+      lastFailureDiagnostic = [:]
     }
 
     @discardableResult
@@ -140,7 +155,43 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
       _ frame: CapturedVideoFrame,
       forInputKey inputKey: String
     ) -> VideoInputPreprocessingResult {
-      preprocessorsByInputKey[inputKey]?.process(frame) ?? .unavailable
+      guard let preprocessor = preprocessorsByInputKey[inputKey] else { return .unavailable }
+      let result: Result<CapturedVideoFrame, any Error>
+      if let cached = normalizedFrames[inputKey],
+        cached.source.captureSessionID == frame.captureSessionID,
+        cached.source.sequenceNumber == frame.sequenceNumber,
+        cached.source.pixelBuffer === frame.pixelBuffer
+      {
+        result = cached.result
+      } else {
+        result = Result {
+          try normalizer.normalize(
+            frame,
+            rangeOverride: specificationsByInputKey[inputKey]?.colorRangeOverride ?? .unspecified)
+        }
+        normalizedFrames[inputKey] = (frame, result)
+      }
+      switch result {
+      case .success(let normalized):
+        reportedFailures.remove(inputKey)
+        if announcedFailures.remove(inputKey) != nil {
+          Self.logger.notice(
+            "Captured input conversion recovered input=\(inputKey, privacy: .public)")
+        }
+        return preprocessor.process(normalized)
+      case .failure(let error):
+        let now = ProcessInfo.processInfo.systemUptime
+        if reportedFailures.insert(inputKey).inserted,
+          lastFailureDiagnostic[inputKey].map({ now - $0 >= 10 }) ?? true
+        {
+          lastFailureDiagnostic[inputKey] = now
+          announcedFailures.insert(inputKey)
+          Self.logger.error(
+            "Captured input unavailable input=\(inputKey, privacy: .public) reason=\(error.localizedDescription, privacy: .public)"
+          )
+        }
+        return .unavailable
+      }
     }
   }
 
@@ -149,6 +200,11 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
     let chromaMetalTexture: CVMetalTexture
 
     init(pixelBuffer: CVPixelBuffer, textureCache: CVMetalTextureCache) throws {
+      let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+      guard
+        format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+          || format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+      else { throw VideoCompositorError.unsupportedPixelBufferFormat(format) }
       lumaMetalTexture = try Self.makeTexture(
         pixelBuffer,
         textureCache: textureCache,
@@ -170,7 +226,7 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
       from input: PreparedVideoInput,
       contentKind: VideoFrameContentKind = .captured
     ) -> MetalVideoSource {
-      .nv12Textures(
+      return .nv12Textures(
         pixelBuffer: input.frame.pixelBuffer,
         lumaMetalTexture: lumaMetalTexture,
         chromaMetalTexture: chromaMetalTexture,

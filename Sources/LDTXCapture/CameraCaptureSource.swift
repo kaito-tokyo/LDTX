@@ -15,7 +15,6 @@ public struct CameraCaptureSource: Identifiable, Equatable, Sendable {
   public var height: Int
   public var isExternal: Bool
   public var formatSummary: String
-  public var linkedDeviceIDs: [String]
 
   public init(
     id: String,
@@ -25,8 +24,7 @@ public struct CameraCaptureSource: Identifiable, Equatable, Sendable {
     width: Int,
     height: Int,
     isExternal: Bool,
-    formatSummary: String,
-    linkedDeviceIDs: [String] = []
+    formatSummary: String
   ) {
     self.id = id
     self.name = name
@@ -36,7 +34,6 @@ public struct CameraCaptureSource: Identifiable, Equatable, Sendable {
     self.height = height
     self.isExternal = isExternal
     self.formatSummary = formatSummary
-    self.linkedDeviceIDs = linkedDeviceIDs
   }
 }
 

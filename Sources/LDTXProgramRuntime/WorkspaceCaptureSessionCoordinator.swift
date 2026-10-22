@@ -471,12 +471,23 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
     let remainingCaptures = Array(captures.dropFirst())
-    let request = stateLock.withLock { capture.request }
+    let request = stateLock.withLock { () -> WorkspaceCaptureSessionRequest? in
+      guard !isStopping, capturesByCameraID[capture.request.cameraID] === capture else {
+        return nil
+      }
+      pendingStopCount += 1
+      return capture.request
+    }
+    guard let request else {
+      completionHandler(failedCameraIDs.union(captures.map { $0.request.cameraID }))
+      return
+    }
     capture.captureService.stop { [weak self] in
       guard let self else {
         completionHandler(failedCameraIDs.union([request.cameraID]))
         return
       }
+      defer { self.completePendingStop() }
       self.stateLock.withLock {
         self.resetState(for: capture)
       }
@@ -530,27 +541,22 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
   }
 
   public func stopAndReset(completionHandler: @escaping @Sendable () -> Void = {}) {
-    let captureServices = stateLock.withLock { () -> [any CameraCaptureStreaming] in
+    // Register the entire close barrier atomically: a previously retired camera
+    // may finish stopping while this snapshot is being assembled.
+    let (captureServices, audioServices) = stateLock.withLock {
+      () -> ([any CameraCaptureStreaming], [any ProgramAudioCaptureStreaming]) in
       isStopping = true
       stopCompletionHandlers.append(completionHandler)
       inputDeviceCaptureRequests = []
       let services = capturesByCameraID.values.map(\.captureService)
-      for capture in capturesByCameraID.values {
-        capture.reconnectWorkItem?.cancel()
-      }
+      for capture in capturesByCameraID.values { capture.reconnectWorkItem?.cancel() }
       capturesByCameraID = [:]
-      pendingStopCount += services.count
-      return services
-    }
-    let audioServices = stateLock.withLock { () -> [any ProgramAudioCaptureStreaming] in
-      let captures = Array(audioCapturesByDeviceID.values)
-      for capture in captures where capture.isStarting {
-        capture.mustStopAfterStart = true
-      }
-      let services = captures.map(\.service)
+      let audioCaptures = Array(audioCapturesByDeviceID.values)
+      for capture in audioCaptures where capture.isStarting { capture.mustStopAfterStart = true }
+      let audioServices = audioCaptures.map(\.service)
       audioCapturesByDeviceID = [:]
-      pendingStopCount += services.count + 1
-      return services
+      pendingStopCount += services.count + audioServices.count + 1
+      return (services, audioServices)
     }
     audioEngine.stop { [weak self] in self?.completePendingStop() }
     for captureService in captureServices {
@@ -615,13 +621,17 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       let capture = stateLock.withLock({
         let capture = capturesByCameraID.removeValue(forKey: cameraID)
         capture?.reconnectWorkItem?.cancel()
+        if capture != nil { pendingStopCount += 1 }
         return capture
       })
     else {
       completionHandler()
       return
     }
-    capture.captureService.stop(completionHandler: completionHandler)
+    capture.captureService.stop { [self] in
+      completePendingStop()
+      completionHandler()
+    }
   }
 
   private func synchronizeCaptures(
@@ -661,34 +671,9 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return
     }
 
-    if let capture = stateLock.withLock({ capturesByCameraID[cameraID] }) {
-      guard stateLock.withLock({ capture.request != request }) else {
-        completionHandler(.success(()))
-        return
-      }
-      capture.captureService.stop { [weak self] in
-        guard let self else {
-          completionHandler(.failure(CancellationError()))
-          return
-        }
-        self.stateLock.withLock {
-          capture.reconnectWorkItem?.cancel()
-          capture.reconnectWorkItem = nil
-          capture.reconnectAttempt = 0
-          self.resetState(for: capture)
-          capture.update(request: request)
-        }
-        self.startCapture(request: request, capture: capture) { result in
-          if case .failure = result {
-            self.stateLock.withLock {
-              if self.capturesByCameraID[cameraID] === capture {
-                self.capturesByCameraID.removeValue(forKey: cameraID)
-              }
-            }
-          }
-          completionHandler(result)
-        }
-      }
+    // Capture negotiation is independent of canvas dimensions and output cadence.
+    if stateLock.withLock({ capturesByCameraID[cameraID] != nil }) {
+      completionHandler(.success(()))
       return
     }
 
@@ -754,15 +739,16 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
     completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
   ) {
     guard
-      stateLock.withLock({ () -> Bool in
-        guard !isStopping else { return false }
+      let sessionID = stateLock.withLock({ () -> UUID? in
+        guard !isStopping, capturesByCameraID[request.cameraID] === capture else { return nil }
         pendingStartCount += 1
-        return true
+        return capture.captureSessionID
       })
     else {
-      capture.captureService.stop {
-        completionHandler(.failure(CancellationError()))
-      }
+      // No start was submitted. Retirement/close already owns this capture's
+      // stop (or restart/reconnect has just stopped it). Queuing another stop
+      // here would add work after the close barrier without owning a capture.
+      completionHandler(.failure(CancellationError()))
       return
     }
     capture.captureService.startCameraCapture(
@@ -772,10 +758,13 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       frameRate: request.frameRate,
       failureHandler: { [weak self, weak capture] failure in
         guard let self, let capture else { return }
-        self.handleRuntimeFailure(for: capture, failure: failure)
+        self.stateLock.withLock {
+          guard capture.captureSessionID == sessionID else { return }
+          self.handleRuntimeFailure(for: capture, failure: failure)
+        }
       },
       configurationHandler: nil,
-      handler: { [weak self] sampleBuffer, kind in
+      handler: { [weak self, weak capture] sampleBuffer, kind in
         guard kind == .video else {
           return
         }
@@ -784,7 +773,10 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         }
 
         coordinator.stateLock.withLock {
-          coordinator.append(sampleBuffer, for: request)
+          guard let capture, coordinator.capturesByCameraID[request.cameraID] === capture,
+            capture.captureSessionID == sessionID
+          else { return }
+          coordinator.append(sampleBuffer, for: capture.request)
         }
       },
       completionHandler: { [weak self] result in
@@ -794,7 +786,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         }
         let mustStop = self.stateLock.withLock { () -> Bool in
           self.pendingStartCount -= 1
-          if self.isStopping {
+          if self.isStopping || self.capturesByCameraID[request.cameraID] !== capture {
             self.pendingStopCount += 1
             return true
           }
@@ -815,6 +807,8 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
   private func resetState(for capture: WorkspaceCaptureSessionCapture) {
     capture.latestFrame = nil
     capture.latestFrameSequence = 0
+    capture.acceptedSampleCount = 0
+    capture.firstPresentationTime = nil
     capture.captureSessionID = UUID()
   }
 
@@ -872,11 +866,14 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         return nil
       }
       capture.reconnectWorkItem = nil
+      // Keep close pending across both the stop submission and restart decision.
+      pendingStopCount += 1
       return capture.request
     }
     guard let request else { return }
-    capture.captureService.stop { [weak self, weak capture] in
-      guard let self, let capture else { return }
+    capture.captureService.stop { [weak self, capture] in
+      guard let self else { return }
+      defer { self.completePendingStop() }
       let shouldRestart = self.stateLock.withLock { () -> Bool in
         guard !self.isStopping,
           self.capturesByCameraID[request.cameraID] === capture,
@@ -934,6 +931,15 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       Self.logger.notice(
         "Accepted first captured video sample cameraID=\(request.cameraID, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
       )
+    }
+    if capture.acceptedSampleCount == 1, let previousTime = capture.firstPresentationTime {
+      let interval = CMTimeSubtract(frame.sourcePresentationTime, previousTime).seconds
+      if interval.isFinite, interval > 0 {
+        Self.logger.notice("Initial camera cadence interval=\(interval, privacy: .public)s")
+      }
+    }
+    if capture.acceptedSampleCount == 0 {
+      capture.firstPresentationTime = frame.sourcePresentationTime
     }
     capture.acceptedSampleCount += 1
     setLatestFrame(frame, for: capture)
@@ -1018,6 +1024,7 @@ private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
   var latestFrameSequence: UInt64 = 0
   var receivedSampleCount = 0
   var acceptedSampleCount = 0
+  var firstPresentationTime: CMTime?
   var rejectedSampleCount = 0
   var reconnectAttempt = 0
   var reconnectWorkItem: DispatchWorkItem?
@@ -1030,9 +1037,6 @@ private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
     self.captureService = captureService
   }
 
-  func update(request: WorkspaceCaptureSessionRequest) {
-    self.request = request
-  }
 }
 
 struct WorkspaceCaptureSessionRequest: Hashable, Sendable {

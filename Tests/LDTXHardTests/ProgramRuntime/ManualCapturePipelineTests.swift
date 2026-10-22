@@ -264,6 +264,23 @@ struct ManualCapturePipelineIntegrationTestSuite {
     }
   }
 
+  @Test func closeWaitsForPreviouslyRemovedCameraPhysicalStop() async {
+    let service = DelayedStopCameraService()
+    let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
+    coordinator.synchronizePhysicalInputCaptures(
+      videoCameraIDs: ["camera"], audioDeviceIDs: [], availableCameraIDs: ["camera"],
+      canvasWidth: 320, canvasHeight: 180, frameRate: 30, completionHandler: { _ in })
+    coordinator.synchronizePhysicalInputCaptures(
+      videoCameraIDs: [], audioDeviceIDs: [], availableCameraIDs: [],
+      canvasWidth: 320, canvasHeight: 180, frameRate: 30, completionHandler: { _ in })
+    let stopped = expectation(description: "physical camera drained")
+    coordinator.stopAndReset { stopped.fulfill() }
+    #expect(!coordinator.isFullyStopped())
+    service.completeStops()
+    await fulfillment(of: [stopped], timeout: 1)
+    #expect(coordinator.isFullyStopped())
+  }
+
   @Test func stopWaitsForInFlightStartAndStopsItAfterCompletion() async {
     let service = DelayedStartCaptureService()
     let coordinator = WorkspaceCaptureSessionCoordinator(captureServiceFactory: { service })
@@ -634,5 +651,31 @@ private final class SampleRecorder: @unchecked Sendable {
     lock.withLock {
       samples.append((sampleBuffer, kind))
     }
+  }
+}
+
+private final class DelayedStopCameraService: CameraCaptureStreaming, @unchecked Sendable {
+  private let lock = NSLock()
+  private var stops: [@Sendable () -> Void] = []
+
+  func startCameraCapture(
+    cameraID: String, targetWidth: Int, targetHeight: Int, frameRate: Int,
+    failureHandler: @escaping @Sendable (CaptureSessionRuntimeFailure) -> Void,
+    configurationHandler: (@Sendable (String) -> Void)?,
+    handler: @escaping @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void,
+    completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void
+  ) { completionHandler(.success(())) }
+
+  func stop(completionHandler: @escaping @Sendable () -> Void) {
+    lock.withLock { stops.append(completionHandler) }
+  }
+
+  func completeStops() {
+    let completions = lock.withLock {
+      let result = stops
+      stops = []
+      return result
+    }
+    for completion in completions { completion() }
   }
 }

@@ -304,6 +304,9 @@ public final class VideoCompositor: @unchecked Sendable {
     into outputPixelBuffer: CVPixelBuffer,
     reusingOutputTextures: Bool
   ) throws {
+    // Keep input CV buffers and texture wrappers alive through GPU completion,
+    // including the encoding-error path, which submits no work.
+    defer { withExtendedLifetime((components, outputPixelBuffer)) {} }
     guard CVPixelBufferGetWidth(outputPixelBuffer) == configuration.width,
       CVPixelBufferGetHeight(outputPixelBuffer) == configuration.height,
       CVPixelBufferGetPixelFormatType(outputPixelBuffer)
