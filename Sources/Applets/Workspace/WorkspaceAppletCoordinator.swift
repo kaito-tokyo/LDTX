@@ -50,6 +50,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   let previewRenderer: ProgramPairPreviewRenderer
   public var outputStateDidChange: (@MainActor () -> Void)?
   public var screenshotsDidSave: (@MainActor ([WorkspaceScreenshot]) -> Void)?
+  @ObservationIgnored private var pendingScreenshotCount = 0
+  @ObservationIgnored private var screenshotDrainWaiters: [CheckedContinuation<Void, Never>] = []
   private var onShutdown: (@MainActor () -> Void)?
   let windowRuntime: WorkspaceWindowRuntime
   private let recordingSession: WorkspaceV4RecordingSession
@@ -771,6 +773,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     previewRenderer.stop()
     await previewRenderer.drainDrawing()
     await visionFeature.stop()
+    await drainScreenshotCaptures()
     let stopResult = await recordingSession.stopWithResult()
     await windowRuntime.shutdownAndWait()
     await withCheckedContinuation { continuation in
@@ -849,9 +852,30 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   func captureScreenshots(
     using capture: @MainActor () async throws -> [WorkspaceScreenshot]
   ) async throws -> [WorkspaceScreenshot] {
+    guard !isClosing, !stateService.isClosed else {
+      throw NSError(
+        domain: "WorkspaceScreenshot", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "The Workspace is closing."])
+    }
+    pendingScreenshotCount += 1
+    defer {
+      pendingScreenshotCount -= 1
+      if pendingScreenshotCount == 0 {
+        let waiters = screenshotDrainWaiters
+        screenshotDrainWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+      }
+    }
     let screenshots = try await capture()
     if !screenshots.isEmpty { screenshotsDidSave?(screenshots) }
     return screenshots
+  }
+
+  // Close admission is already shut. Wait through result/error propagation and
+  // the success callback, including global captures accepted while output is idle.
+  private func drainScreenshotCaptures() async {
+    guard pendingScreenshotCount > 0 else { return }
+    await withCheckedContinuation { screenshotDrainWaiters.append($0) }
   }
 
   public func openScreenshotsDirectory() {

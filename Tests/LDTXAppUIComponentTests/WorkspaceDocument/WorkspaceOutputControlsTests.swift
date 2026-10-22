@@ -10,6 +10,116 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func idleShutdownWaitsForAcceptedCapture(fails: Bool) async throws {
+      let document = WorkspaceDocument()
+      var released = false
+      let coordinator = WorkspaceAppletCoordinator(
+        document: document, onShutdown: { released = true })
+      var notifications = 0
+      coordinator.screenshotsDidSave = { _ in notifications += 1 }
+      var resume: CheckedContinuation<Void, Never>?
+      let capture = Task {
+        try await coordinator.captureScreenshots {
+          await withCheckedContinuation { resume = $0 }
+          if fails { throw CocoaError(.fileWriteUnknown) }
+          return [
+            WorkspaceScreenshot(
+              url: URL(fileURLWithPath: "/tmp/accepted.jpg"),
+              programCanvas: .landscape, capturedAt: Date())
+          ]
+        }
+      }
+      while resume == nil { await Task.yield() }
+      var secondResume: CheckedContinuation<Void, Never>?
+      let second = Task {
+        try await coordinator.captureScreenshots {
+          await withCheckedContinuation { secondResume = $0 }
+          return [
+            WorkspaceScreenshot(
+              url: URL(fileURLWithPath: "/tmp/second.jpg"),
+              programCanvas: .portrait, capturedAt: Date())
+          ]
+        }
+      }
+      while secondResume == nil { await Task.yield() }
+      let shutdown = Task { await coordinator.shutdown() }
+      while !coordinator.isClosing && !released { await Task.yield() }
+      // Let unrelated shutdown stages finish; the accepted save remains blocked.
+      try await Task.sleep(for: .seconds(1))
+      #expect(!released)
+      #expect(!document.isClosed)
+      #expect(notifications == 0)
+      var lateCaptureStarted = false
+      do {
+        _ = try await coordinator.captureScreenshots {
+          lateCaptureStarted = true
+          return []
+        }
+        Issue.record("Closing must reject new captures")
+      } catch {}
+      #expect(!lateCaptureStarted)
+      resume?.resume()
+      _ = await capture.result
+      #expect(!released)
+      #expect(notifications == (fails ? 0 : 1))
+      secondResume?.resume()
+      _ = await second.result
+      await shutdown.value
+      #expect(released)
+      #expect(document.isClosed)
+      #expect(notifications == (fails ? 1 : 2))
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [0, 1])
+    func streamDeckOutputControlsRemainAvailableDuringCapture(outputKey: Int) async {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      document.recordingState = .recording
+      var actions: [WorkspaceAction] = []
+      var outputResume: CheckedContinuation<Void, Never>?
+      var resume: CheckedContinuation<Void, Never>?
+      let deck = WorkspaceStreamDeck(
+        target: { coordinator }, generationValidator: { $0 == 1 },
+        performAction: {
+          _, action in
+          actions.append(action)
+          if action == .captureScreenshots {
+            await withCheckedContinuation { resume = $0 }
+          } else {
+            await withCheckedContinuation { outputResume = $0 }
+          }
+        })
+      deck.refresh()
+      let captureFrame = deck.published
+      let capture = Task { await deck.pressed(2, frame: captureFrame, generation: 1) }
+      while resume == nil { await Task.yield() }
+      deck.refresh()
+      let savingFrame = deck.published
+      #expect(savingFrame.enabled[0])
+      #expect(savingFrame.enabled[1])
+      #expect(!savingFrame.enabled[2])
+      await deck.pressed(2, frame: savingFrame, generation: 1)
+      await deck.pressed(outputKey, frame: savingFrame, generation: 2)
+      var wrongTarget = savingFrame
+      wrongTarget.target = UUID()
+      await deck.pressed(outputKey, frame: wrongTarget, generation: 1)
+      #expect(actions == [.captureScreenshots])
+      let output = Task { await deck.pressed(outputKey, frame: savingFrame, generation: 1) }
+      while outputResume == nil { await Task.yield() }
+      #expect(actions == [.captureScreenshots, outputKey == 0 ? .stopOutput : .startPauseOutput])
+      resume?.resume()
+      await capture.value
+      deck.refresh()
+      // A completed capture must not clear the overlapping output command's lock.
+      #expect(deck.published.enabled.allSatisfy { !$0 })
+      outputResume?.resume()
+      await output.value
+      deck.refresh()
+      #expect(deck.published.enabled[2])
+      await coordinator.shutdown()
+    }
+
     @Test func successIsPublishedOnlyAfterCaptureCompletes() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)

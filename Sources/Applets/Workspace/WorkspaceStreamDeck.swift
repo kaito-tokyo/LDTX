@@ -26,10 +26,25 @@ public final class WorkspaceStreamDeck {
   private var worker: StreamDeckHID?
   private var timer: Timer?
   private var busy = false
-  private var published = StreamDeckFrame()
+  private var captureBusy = false
+  private(set) var published = StreamDeckFrame()
+  private let generationValidator: ((UInt64) -> Bool)?
+  private let performAction: (WorkspaceAppletCoordinator, WorkspaceAction) async -> Void
 
   public init(target: @escaping () -> WorkspaceAppletCoordinator?) {
     self.target = target
+    generationValidator = nil
+    performAction = { coordinator, action in _ = await coordinator.perform(action) }
+  }
+
+  init(
+    target: @escaping () -> WorkspaceAppletCoordinator?,
+    generationValidator: @escaping (UInt64) -> Bool,
+    performAction: @escaping (WorkspaceAppletCoordinator, WorkspaceAction) async -> Void
+  ) {
+    self.target = target
+    self.generationValidator = generationValidator
+    self.performAction = performAction
   }
 
   public func start() {
@@ -54,35 +69,39 @@ public final class WorkspaceStreamDeck {
     worker = nil
   }
 
-  private func refresh() {
+  func refresh() {
     var frame = StreamDeckFrame()
     if let coordinator = target(), !coordinator.isClosing {
       frame.target = coordinator.stateService.runtimeID
       frame.enabled =
         busy
         ? [false, false, false, false]
-        : actions.map { coordinator.actionState($0).isEnabled }
+        : actions.map {
+          coordinator.actionState($0).isEnabled && ($0 != .captureScreenshots || !captureBusy)
+        }
       frame.pause = coordinator.actionState(.startPauseOutput).showsPause
     }
     published = frame
     worker?.update(frame)
   }
 
-  private func pressed(_ key: Int, frame: StreamDeckFrame, generation: UInt64) async {
+  func pressed(_ key: Int, frame: StreamDeckFrame, generation: UInt64) async {
     refresh()
-    guard worker?.isCurrent(generation) == true, !busy, frame == published,
+    guard (generationValidator?(generation) ?? worker?.isCurrent(generation)) == true, !busy,
+      frame == published,
       frame.enabled.indices.contains(key),
       frame.enabled[key], let coordinator = target(),
       coordinator.stateService.runtimeID == frame.target
     else { return }
-    // Capture the target before suspension. Repeated edges cannot enqueue commands.
-    busy = true
+    // A slow save blocks duplicate captures, while Stop/Pause stay dispatchable.
+    let action = actions[key]
+    if action == .captureScreenshots { captureBusy = true } else { busy = true }
     refresh()
     defer {
-      busy = false
+      if action == .captureScreenshots { captureBusy = false } else { busy = false }
       refresh()
     }
-    await coordinator.perform(actions[key])
+    await performAction(coordinator, action)
   }
 }
 
