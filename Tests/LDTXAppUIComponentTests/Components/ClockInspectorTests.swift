@@ -1,0 +1,409 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+// SPDX-License-Identifier: Apache-2.0
+
+import AppKit
+import LDTXProtos
+import LDTXProtosMacOSExtra
+@testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
+import SwiftUI
+import Testing
+
+extension AppUIComponentTestSuite {
+  @Suite("Clock Inspector outline editing", .serialized)
+  @MainActor
+  struct ClockInspectorIntegrationTestSuite {
+    init() { _ = UIComponentTestEnvironment.documentController }
+
+    @Test func repeatedEditsHistoryAndPersistence() async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+      }
+      let view = ClockInspector(
+        stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      func edit(_ action: () -> Void) {
+        undo.beginUndoGrouping()
+        action()
+        undo.endUndoGrouping()
+      }
+      let original = document.workspace
+      edit { view.addOutline(undoManager: undo) }
+      let width = view.outlineBinding(at: 0, \.thickness, initial: .init(), undoManager: undo)
+      let color = view.outlineColorBinding(at: 0, undoManager: undo)
+      for numerator in [0, 3, 7] {
+        edit { width.wrappedValue = .with { $0.set(num: Int32(numerator), den: 2) } }
+        #expect(width.wrappedValue.num == numerator)
+      }
+      edit { color.wrappedValue = Color(red: 0.25, green: 0.5, blue: 0.75, opacity: 0.4) }
+      edit { view.addOutline(undoManager: undo) }
+      let edited = document.workspace
+      edit { view.addOutline(undoManager: undo) }
+      #expect(document.workspace == edited)
+      edit { view.removeOutline(at: 0, undoManager: undo) }
+      #expect(document.workspace.definition.videoComponents[0].clock.outlines.count == 1)
+      undo.undo()
+      #expect(document.workspace == edited)
+      #expect(width.wrappedValue.num == 7)
+      #expect(
+        Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color.wrappedValue)
+          == edited.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor)
+      undo.redo()
+      edit { view.removeOutline(at: 0, undoManager: undo) }
+      #expect(document.workspace.definition.videoComponents[0].clock.outlines.isEmpty)
+      edit { view.removeOutline(at: 0, undoManager: undo) }
+      edit { width.wrappedValue = .init() }
+      #expect(document.workspace == original)
+      edit { view.addOutline(undoManager: undo) }
+      edit { width.wrappedValue = .with { $0.set(num: 9, den: 2) } }
+      edit { color.wrappedValue = Color(red: 0.25, green: 0.5, blue: 0.75, opacity: 0.4) }
+      let saved = document.workspace
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try await saveWorkspaceDocument(document, to: url)
+      let loaded = try await loadWorkspaceDocument(at: url)
+      #expect(loaded.workspace.definition == saved.definition)
+      await loaded.shutdown()
+      await document.shutdown()
+    }
+
+    @Test func hostedOutlineControls() async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+      }
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      let inspector = ClockInspector(
+        stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
+      let hosting = NSHostingView(rootView: inspector.frame(width: 480, height: 1000))
+      let window = ClockInspectorTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 1000),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.history = undo
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      window.orderFront(nil)
+      func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
+      func capture(_ name: String) throws {
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        try #require(bitmap.representation(using: .png, properties: [:])).write(
+          to: URL(fileURLWithPath: "/tmp/ldtx-clock-outline-\(name).png"))
+      }
+      func count() -> Int { document.workspace.definition.videoComponents[0].clock.outlines.count }
+      await settleWorkspaceToolbar(window)
+      try capture("empty")
+      undo.beginUndoGrouping()
+      inspector.addOutline(undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      #expect(count() == 1)
+      try capture("one")
+      let field = try #require(
+        views(hosting).compactMap { $0 as? NSTextField }
+          .first { $0.isEditable && $0.stringValue == "1" })
+      for text in ["0", "1.5", "3.5"] {
+        undo.beginUndoGrouping()
+        #expect(window.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        editor.insertText(
+          text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.endUndoGrouping()
+        #expect(window.firstResponder === editor)
+        #expect(
+          document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+            == Double(text))
+      }
+      let editor = try #require(field.currentEditor() as? NSTextView)
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try WorkspaceBundleWriterV4().write(snapshot, to: url)
+      let loaded = try WorkspaceBundleReaderV4(at: url).read()
+      #expect(window.firstResponder === editor)
+      #expect(loaded.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 1.5)
+      #expect(editor.string == "1.5")
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+      #expect(editor.string == "3.5")
+      let well = try #require(views(hosting).compactMap { $0 as? NSColorWell }.last)
+      let color = NSColor(srgbRed: 0.25, green: 0.5, blue: 0.75, alpha: 0.4)
+      undo.beginUndoGrouping()
+      well.color = color
+      #expect(well.sendAction(well.action, to: well.target))
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+          == Ldtx_Workspace_V4_Color(extendedSRGBNSColor: color))
+      let editedColor = document.workspace.definition.videoComponents[0].clock.outlines[0]
+        .extendedSrgbColor
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+          != editedColor)
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+          == editedColor)
+      undo.beginUndoGrouping()
+      inspector.addOutline(undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      #expect(count() == 2)
+      #expect(undo.canUndo)
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      #expect(count() == 1)
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      #expect(count() == 2)
+      try capture("two-edited")
+      document.isOutputActive = true
+      await settleWorkspaceToolbar(window)
+      #expect(
+        views(hosting).compactMap { $0 as? NSTextField }.filter(\.isEditable)
+          .allSatisfy { !$0.isEnabled })
+      #expect(views(hosting).compactMap { $0 as? NSColorWell }.allSatisfy { !$0.isEnabled })
+      try capture("output-disabled")
+      document.isOutputActive = false
+      await settleWorkspaceToolbar(window)
+      #expect(views(hosting).compactMap { $0 as? NSColorWell }.allSatisfy { $0.isEnabled })
+
+    }
+
+    @Test(arguments: [1, 100])
+    func hostedWidthBoundsPreserveSavedValues(initial: Int32) async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+        $0.definition.videoComponents[0].clock.outlines = [
+          .with {
+            $0.thickness.set(num: initial, den: 1)
+          }
+        ]
+      }
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      let hosting = NSHostingView(
+        rootView: ClockInspector(
+          stateService: document, appletData: WorkspaceAppletData(), internalID: 11
+        ).frame(width: 480, height: 1000))
+      let window = ClockInspectorTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 1000),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.history = undo
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
+      func capture(_ name: String) throws {
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        try #require(bitmap.representation(using: .png, properties: [:])).write(
+          to: URL(fileURLWithPath: "/tmp/ldtx-clock-outline-\(name).png"))
+      }
+      if initial == 100 { try capture("legacy-width") }
+      #expect(!undo.canUndo)
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try WorkspaceBundleWriterV4().write(snapshot, to: url)
+      let loaded = try WorkspaceBundleReaderV4(at: url).read()
+      #expect(loaded.definition == document.workspaceDefinition)
+      func fields(_ view: NSView) -> [NSTextField] {
+        (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+      }
+      let field = try #require(
+        fields(hosting).first {
+          $0.isEditable && $0.stringValue == String(initial)
+        })
+      #expect(window.makeFirstResponder(field))
+      let editor = try #require(field.currentEditor() as? NSTextView)
+      func type(_ text: String) {
+        undo.beginUndoGrouping()
+        editor.insertText(
+          text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.endUndoGrouping()
+      }
+      for text in ["3", "3.", "3.5", "0", "64"] {
+        type(text)
+        #expect(
+          document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+            == Double(text))
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == text)
+      }
+      for _ in 0..<5 {
+        undo.undo()
+        await settleWorkspaceToolbar(window)
+      }
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
+      #expect(editor.string == String(initial))
+      for _ in 0..<5 {
+        undo.redo()
+        await settleWorkspaceToolbar(window)
+      }
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 64)
+      let accepted = document.workspace
+      for text in ["65", "100", "-1", "1/0", "2147483648", ""] {
+        type(text)
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == text)
+        #expect(document.workspace == accepted)
+      }
+      if initial == 100 { try capture("invalid-width") }
+      let invalidDraftSnapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      #expect(invalidDraftSnapshot == accepted)
+    }
+
+    @Test(arguments: [1, 2], [0, 1])
+    func membershipChangesResetDraftsAndFocus(secondWidth: Int32, removedIndex: Int) async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+        $0.definition.videoComponents[0].clock.outlines = [1, secondWidth].map { width in
+          .with { $0.thickness.set(num: width, den: 1) }
+        }
+      }
+      let inspector = ClockInspector(
+        stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      let hosting = NSHostingView(rootView: inspector.frame(width: 480, height: 1000))
+      let window = ClockInspectorTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 1000),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.history = undo
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      func fields(_ view: NSView) -> [NSTextField] {
+        (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+      }
+      func widths() -> [Int32] {
+        document.workspace.definition.videoComponents[0].clock.outlines.map { $0.thickness.num }
+      }
+      func displayedWidths() -> [String] {
+        fields(hosting).filter {
+          $0.isEditable && $0.stringValue != "Clock" && $0.stringValue != "48"
+        }.map(\.stringValue)
+      }
+      func invalidDraft() async throws -> (NSTextField, NSTextView) {
+        let field = try #require(
+          fields(hosting).first {
+            $0.isEditable && $0.stringValue == String(widths()[0])
+          })
+        #expect(window.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        // Isolate structural document history from native text-draft history.
+        undo.disableUndoRegistration()
+        editor.insertText(
+          "65", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.enableUndoRegistration()
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == "65")
+        return (field, editor)
+      }
+      func expectReset(_ old: (NSTextField, NSTextView), expected: [Int32]) {
+        #expect(!old.0.isDescendant(of: hosting))
+        #expect(window.firstResponder !== old.1)
+        #expect(widths() == expected)
+        #expect(displayedWidths() == expected.map(String.init))
+      }
+      let original: [Int32] = [1, secondWidth]
+      let remaining: [Int32] = [removedIndex == 0 ? secondWidth : 1]
+      let removedDraft = try await invalidDraft()
+      undo.beginUndoGrouping()
+      inspector.removeOutline(at: removedIndex, undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      expectReset(removedDraft, expected: remaining)
+      let undoDraft = try await invalidDraft()
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      expectReset(undoDraft, expected: original)
+      let redoDraft = try await invalidDraft()
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      expectReset(redoDraft, expected: remaining)
+      let addedDraft = try await invalidDraft()
+      undo.beginUndoGrouping()
+      inspector.addOutline(undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      expectReset(addedDraft, expected: remaining + [1])
+      let undoAddDraft = try await invalidDraft()
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      expectReset(undoAddDraft, expected: remaining)
+      let redoAddDraft = try await invalidDraft()
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      expectReset(redoAddDraft, expected: remaining + [1])
+    }
+
+    @Test func unavailableEditsAreIgnored() {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+      }
+      let view = ClockInspector(
+        stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
+      view.addOutline(undoManager: nil)
+      let width = view.outlineBinding(at: 0, \.thickness, initial: .init(), undoManager: nil)
+      let color = view.outlineColorBinding(at: 0, undoManager: nil)
+      let before = document.workspace
+      document.isOutputActive = true
+      view.addOutline(undoManager: nil)
+      view.removeOutline(at: 0, undoManager: nil)
+      width.wrappedValue = .init()
+      color.wrappedValue = .red
+      #expect(document.workspace == before)
+      document.isOutputActive = false
+      document.isClosed = true
+      view.addOutline(undoManager: nil)
+      view.removeOutline(at: 0, undoManager: nil)
+      width.wrappedValue = .init()
+      color.wrappedValue = .red
+      #expect(document.workspace == before)
+      document.isClosed = false
+      document.editWorkspace(undoManager: nil) { $0.definition.videoComponents.removeAll() }
+      let removed = document.workspace
+      view.addOutline(undoManager: nil)
+      width.wrappedValue = .init()
+      #expect(document.workspace == removed)
+    }
+  }
+}
+
+@MainActor
+private final class ClockInspectorTestWindow: NSWindow {
+  var history: UndoManager?
+  override var undoManager: UndoManager? { history }
+}

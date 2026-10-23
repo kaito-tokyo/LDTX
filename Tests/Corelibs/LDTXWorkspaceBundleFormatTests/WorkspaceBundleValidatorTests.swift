@@ -30,6 +30,22 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         ).isEmpty == valid)
     }
   }
+  @Test func clockOutlineGeometryBoundaries() {
+    for count in 0...3 {
+      for (num, den, valid): (Int32, UInt32, Bool) in [
+        (0, 1, true), (1, 2, true), (Int32.max, 1, true),
+        (-1, 1, false), (1, 0, false),
+      ] {
+        var definition = clockDefinition()
+        definition.videoComponents[0].clock.outlines = Array(
+          repeating: .with { $0.thickness.set(num: num, den: den) }, count: count)
+        #expect(
+          WorkspaceBundleValidatorV4.validationIssues(in: definition, preferences: .init()).isEmpty
+            == (count <= 2 && (count == 0 || valid)))
+      }
+    }
+  }
+
   private func clockDefinition() -> Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
     .with {
       $0.videoComponents = [
