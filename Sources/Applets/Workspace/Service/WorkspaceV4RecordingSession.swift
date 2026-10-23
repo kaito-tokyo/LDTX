@@ -46,10 +46,21 @@ public final class WorkspaceV4RecordingSession {
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
   private var recordService: SessionRecordService?
+  @ObservationIgnored private var recordMediaCore = WorkspaceRecordMediaCore()
+  @ObservationIgnored private var makeReplacementRecording: (() throws -> SessionRecordService)?
+  @ObservationIgnored private var preparingRecordingPackages: Set<URL> = []
+  @ObservationIgnored private var preparingRecordingFailures: [URL: NSError] = [:]
+  @ObservationIgnored private var cutBoundaryWaiter: CheckedContinuation<UUID?, Never>?
+  @ObservationIgnored private var cutDrainWaiters: [CheckedContinuation<Void, Never>] = []
+  public private(set) var isCutPending = false
+  @ObservationIgnored private var cutWasCancelled = false
+  @ObservationIgnored private var cutBarrier: WorkspaceRecordCutBarrier?
+
   public private(set) var latestRecordingBundleURL: URL?
   private var youtubeRTMPSService: YouTubeRTMPSWorkspaceService?
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue: DispatchQueue
+  private let cutBoundaryTimeout: Duration
   @ObservationIgnored private let visionArchiveFailure = VisionArchiveFailure()
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
@@ -86,6 +97,7 @@ public final class WorkspaceV4RecordingSession {
     localState: @escaping () -> WorkspaceLocalState = { .init() },
     screenCaptureService: ScreenCaptureService = ScreenCaptureService(),
     visionArchiveQueue: DispatchQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive"),
+    cutBoundaryTimeout: Duration = .seconds(10),
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.screenCaptureService = screenCaptureService
@@ -93,6 +105,7 @@ public final class WorkspaceV4RecordingSession {
     self.physicalDeviceIDsProvider = physicalDeviceIDs
     self.localStateProvider = localState
     self.visionArchiveQueue = visionArchiveQueue
+    self.cutBoundaryTimeout = cutBoundaryTimeout
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
@@ -195,24 +208,35 @@ public final class WorkspaceV4RecordingSession {
     let service: SessionRecordService?
     do {
       if recordsLandscape || recordsPortrait {
-        let recordService = try SessionRecordService(
-          baseDirectory: baseDirectory,
-          recordID: SessionRecordService.makeRecordID(),
-          writerConfiguration: ProgramOutputEncodingConfiguration.make(
-            configuration: landscapeConfiguration),
-          portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
-            configuration: portraitConfiguration),
-          audioTracks: inputAudioTracks,
-          recordsLandscape: recordsLandscape,
-          recordsPortrait: recordsPortrait,
-          customFields: output.recordingSettings.customFields,
-          firstVideoAccepted: { [weak self] url in
-            self?.latestRecordingBundleURL = url
-          },
-          failureHandler: { [weak self] error in
-            Task { @MainActor in await self?.fail(error) }
-          })
+        let tracks = inputAudioTracks
+        let makeService = { [weak self] in
+          let recordID = SessionRecordService.makeRecordID()
+          let packageURL = baseDirectory.appendingPathComponent(recordID, isDirectory: true)
+            .appendingPathExtension(RecordingPackage.pathExtension)
+          let service = try SessionRecordService(
+            baseDirectory: baseDirectory,
+            recordID: recordID,
+            writerConfiguration: ProgramOutputEncodingConfiguration.make(
+              configuration: landscapeConfiguration),
+            portraitWriterConfiguration: ProgramOutputEncodingConfiguration.make(
+              configuration: portraitConfiguration),
+            audioTracks: tracks,
+            recordsLandscape: recordsLandscape,
+            recordsPortrait: recordsPortrait,
+            customFields: output.recordingSettings.customFields,
+            firstVideoAccepted: { [weak self] url in
+              guard let self, self.recordService?.packageDirectory == url else { return }
+              latestRecordingBundleURL = url
+            },
+            failureHandler: { [weak self] error in
+              self?.recordingServiceDidFail(error, packageURL: packageURL)
+            })
+          self?.preparingRecordingPackages.insert(packageURL)
+          return service
+        }
+        let recordService = try makeService()
         try recordService.start()
+        prepareRecordingMedia(recordService, makeReplacement: makeService)
         adoptStartedRecordingService(recordService)
         service = recordService
       } else {
@@ -279,6 +303,158 @@ public final class WorkspaceV4RecordingSession {
         userInfo: [NSLocalizedDescriptionKey: message]))
   }
 
+  func prepareRecordingMedia(
+    _ service: SessionRecordService,
+    makeReplacement: @escaping () throws -> SessionRecordService
+  ) {
+    makeReplacementRecording = makeReplacement
+    recordMediaCore = WorkspaceRecordMediaCore()
+    recordMediaCore.install(service)
+    recordMediaCore.setCallbacks(
+      commitRequest: { [weak self] id in self?.completeCutBoundary(id) },
+      eventHandler: { _ in },
+      failureHandler: { [weak self] error in Task { @MainActor in await self?.fail(error) } },
+      cutStateChanged: { [weak self] pending in
+        if !pending { self?.completeCutBoundary(nil) }
+      })
+  }
+
+  public var canCutRecording: Bool {
+    // The first-video callback publishes this observable value when readiness changes.
+    _ = latestRecordingBundleURL
+    return state == .recording && !isCutPending && recordService?.hasAcceptedFirstVideo == true
+      && recordService.map { recordMediaCore.hasRequiredAudioFormatDescriptions(for: $0) } == true
+  }
+
+  private func completeCutBoundary(_ id: UUID?) {
+    let waiter = cutBoundaryWaiter
+    cutBoundaryWaiter = nil
+    waiter?.resume(returning: id)
+  }
+
+  /// Keeps the output sessions and streaming subscriptions alive while the shared
+  /// recording media core prepares and commits a replacement package.
+  public func cutWithResult() async -> Result<Void, NSError> {
+    guard canCutRecording, let previous = recordService, let makeReplacementRecording else {
+      return .failure(
+        NSError(
+          domain: "WorkspaceRecordingCut", code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "Recording is not ready to cut."]))
+    }
+    isCutPending = true
+    cutWasCancelled = false
+    // OCR admission shares MainActor with ownership publication. No request
+    // acquired during the media-core/MainActor handoff may archive to either owner.
+    windowRuntime.visionArchivePackageURL = nil
+    defer {
+      if state == .recording, windowRuntime.visionArchivePackageURL == nil {
+        windowRuntime.visionArchivePackageURL = recordService?.packageDirectory
+      }
+      cutBarrier?.cancel()
+      cutBarrier = nil
+      isCutPending = false
+      let waiters = cutDrainWaiters
+      cutDrainWaiters.removeAll()
+      for waiter in waiters { waiter.resume() }
+    }
+    let core = recordMediaCore
+    let timeout = Task { @MainActor [weak self, cutBoundaryTimeout] in
+      do { try await Task.sleep(for: cutBoundaryTimeout) } catch { return }
+      guard !Task.isCancelled else { return }
+      self?.cutBarrier?.cancel()
+      core.enqueueRollbackPendingCut()
+      self?.completeCutBoundary(nil)
+    }
+    defer { timeout.cancel() }
+    let boundaryID: UUID? = await withCheckedContinuation { continuation in
+      cutBoundaryWaiter = continuation
+      let hubs = [
+        landscapeSubscription.map { (landscapeHub!, $0) },
+        portraitSubscription.map { (portraitHub!, $0) },
+      ].compactMap { $0 }
+      let barrier = WorkspaceRecordCutBarrier(arrivalCount: hubs.count) {
+        core.enqueueCutRequest(for: previous)
+      }
+      cutBarrier = barrier
+      for (hub, subscription) in hubs {
+        if !hub.enqueueControl(subscription, operation: barrier.arriveAndWait) {
+          barrier.cancel()
+          completeCutBoundary(nil)
+          break
+        }
+      }
+    }
+    timeout.cancel()
+    guard let boundaryID, state == .recording else {
+      core.enqueueRollbackPendingCut()
+      await core.waitForPendingOperations()
+      if cutWasCancelled { return .success(()) }
+      return .failure(
+        NSError(
+          domain: "WorkspaceRecordingCut", code: 2,
+          userInfo: [NSLocalizedDescriptionKey: "The recording cut could not establish a boundary."]
+        ))
+    }
+    var replacement: SessionRecordService?
+    do {
+      let next = try makeReplacementRecording()
+      replacement = next
+      try next.start()
+      let commit = try await withCheckedThrowingContinuation { continuation in
+        core.enqueueCommit(
+          boundaryID: boundaryID, operationID: outputAttemptID,
+          replacement: next
+        ) { continuation.resume(with: $0) }
+      }
+      guard commit != nil else {
+        throw NSError(
+          domain: "WorkspaceRecordingCut", code: 3,
+          userInfo: [NSLocalizedDescriptionKey: "The recording cut was interrupted."])
+      }
+      adoptStartedRecordingService(next)
+      // Accepted package screenshots retain their old destination. Close admission
+      // until they and the archive queue drain before finalizing the old package.
+      await drainPackageScreenshots()
+      await withCheckedContinuation { continuation in
+        visionArchiveQueue.async { continuation.resume() }
+      }
+      await withCheckedContinuation { continuation in
+        let deferred = core.deferFinalizationUntilInputAudioCallbacksDrain(for: previous) {
+          continuation.resume()
+        }
+        if !deferred { continuation.resume() }
+      }
+      previous.sealInputAudio()
+      let result = await withCheckedContinuation { continuation in
+        previous.finishAfterCut { continuation.resume(returning: $0) }
+      }
+      if case .failed(let error) = result {
+        recordFailure(error, phase: .recordingFinalization)
+        return .failure(error as NSError)
+      }
+      return .success(())
+    } catch {
+      core.enqueueRollbackPendingCut()
+      await core.waitForPendingOperations()
+      if let replacement {
+        _ = await withCheckedContinuation { continuation in
+          replacement.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
+        }
+        preparingRecordingPackages.remove(replacement.packageDirectory)
+        preparingRecordingFailures.removeValue(forKey: replacement.packageDirectory)
+      }
+      return cutWasCancelled ? .success(()) : .failure(error as NSError)
+    }
+  }
+
+  public func cancelPendingCut() {
+    guard isCutPending else { return }
+    cutWasCancelled = true
+    cutBarrier?.cancel()
+    recordMediaCore.enqueueRollbackPendingCut()
+    completeCutBoundary(nil)
+  }
+
   public func pause() async { _ = await pauseWithResult() }
 
   public func pauseWithResult() async -> Result<Void, NSError> {
@@ -327,14 +503,24 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func finishStopping(pausing: Bool) async -> Result<Void, NSError> {
+    cancelPendingCut()
+    if isCutPending {
+      await withCheckedContinuation { cutDrainWaiters.append($0) }
+    }
     windowRuntime.visionArchivePackageURL = nil
     windowRuntime.visionArchiveHandler = nil
+    windowRuntime.visionArchiveTimedHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
     cleanupPhase("active-output", completed: false)
     if let activeSession { await stop(activeSession) }
     cleanupPhase("active-output", completed: true)
     cleanupPhase("subscriptions", completed: false)
     await unsubscribeAndDrain()
+    recordMediaCore.enqueueRollbackPendingCut()
+    if case .failure(let error) = await recordMediaCore.closeAndDrain() {
+      recordFailure(error, phase: .output)
+      recordService?.abandonAfterMediaDrainTimeout()
+    }
     cleanupPhase("subscriptions", completed: true)
     cleanupPhase("vision-archive", completed: false)
     await withCheckedContinuation { continuation in
@@ -460,7 +646,7 @@ public final class WorkspaceV4RecordingSession {
     var copiesToPackage = false
     // Snapshot and admission share MainActor with pause/stop. Finalization drains
     // accepted copies; later requests see the transition state and save globally.
-    if state == .recording, let recordService,
+    if state == .recording, !isCutPending, let recordService,
       recordService.hasAcceptedFirstVideo,
       recordService.recordingTimelineMilliseconds() != nil
     {
@@ -498,25 +684,31 @@ public final class WorkspaceV4RecordingSession {
 
   public var isLocalRecording: Bool { recordService != nil }
 
-  private func installRecordingSubscriptions(
+  @discardableResult
+  func installRecordingSubscriptions(
     service: SessionRecordService,
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub,
     recordsLandscape: Bool,
     recordsPortrait: Bool
-  ) {
+  ) -> [ProgramOutputMediaHub.Subscription] {
+    self.landscapeHub = landscapeHub
+    self.portraitHub = portraitHub
+    let core = recordMediaCore
+    let operationID = outputAttemptID
     if recordsLandscape {
       landscapeSubscription = landscapeHub.subscribe(
-        mainVideo: service.appendMainVideo,
-        mainAudioMix: service.appendMainAudioMix,
+        mainVideo: { core.enqueueVideo($0, operationID: operationID) },
+        mainAudioMix: core.enqueueMainAudio,
         failureHandler: { [weak self] error in Task { @MainActor in await self?.fail(error) } })
     }
     if recordsPortrait {
       portraitSubscription = portraitHub.subscribe(
-        mainVideo: service.appendPortraitVideo,
-        mainAudioMix: service.appendPortraitAudioMix,
+        mainVideo: { core.enqueuePortraitVideo($0, operationID: operationID) },
+        mainAudioMix: core.enqueuePortraitAudio,
         failureHandler: { [weak self] error in Task { @MainActor in await self?.fail(error) } })
     }
+    return [landscapeSubscription, portraitSubscription].compactMap { $0 }
   }
 
   private func installYouTubeRTMPSSubscriptions(
@@ -595,6 +787,7 @@ public final class WorkspaceV4RecordingSession {
     service: SessionRecordService,
     tracks: [SessionRecordAudioTrack]
   ) async throws {
+    let core = recordMediaCore
     for track in tracks {
       guard state == .starting else { return }
       try await withCheckedThrowingContinuation { continuation in
@@ -604,7 +797,8 @@ public final class WorkspaceV4RecordingSession {
             Task { @MainActor in await self?.fail(failure) }
           },
           sampleHandler: { sampleBuffer in
-            service.appendInputAudio(sampleBuffer, trackID: track.trackID)
+            guard let callback = core.beginInputAudioCallback() else { return }
+            core.enqueueInputAudio(sampleBuffer, trackID: track.trackID, callback: callback)
           },
           completionHandler: { result in
             continuation.resume(with: result)
@@ -664,9 +858,13 @@ public final class WorkspaceV4RecordingSession {
     windowRuntime.visionArchivePackageURL = nil
     sessionOutputSettings = nil
     windowRuntime.visionArchiveHandler = nil
+    windowRuntime.visionArchiveTimedHandler = nil
     windowRuntime.visionArchiveTimelineProvider = nil
     activeSession = nil
     recordService = nil
+    makeReplacementRecording = nil
+    preparingRecordingPackages.removeAll()
+    preparingRecordingFailures.removeAll()
     youtubeRTMPSService = nil
     landscapeSubscription = nil
     portraitSubscription = nil
@@ -677,16 +875,44 @@ public final class WorkspaceV4RecordingSession {
     portraitHub = nil
   }
 
+  /// A cancelled replacement or a finalized old package cannot fail the active
+  /// output. Retain early replacement faults until ownership is committed.
+  func recordingServiceDidFail(_ error: any Error, packageURL: URL) {
+    if recordService?.packageDirectory == packageURL {
+      Task { @MainActor in
+        guard self.recordService?.packageDirectory == packageURL else { return }
+        await self.fail(error)
+      }
+    } else if preparingRecordingPackages.contains(packageURL) {
+      if preparingRecordingFailures[packageURL] == nil {
+        preparingRecordingFailures[packageURL] = error as NSError
+      }
+    }
+  }
+
   /// Registers a started recording service independently of native output startup.
   func adoptStartedRecordingService(_ service: SessionRecordService) {
     hasCompletedOutputCleanup = false
     recordService = service
+    preparingRecordingPackages.remove(service.packageDirectory)
+    if let failure = preparingRecordingFailures.removeValue(forKey: service.packageDirectory) {
+      Task { @MainActor in
+        guard self.recordService === service else { return }
+        await self.fail(failure)
+      }
+    }
+    if service.hasAcceptedFirstVideo { latestRecordingBundleURL = service.packageDirectory }
     windowRuntime.visionArchiveHandler = { [weak service] internalID, image, output in
       guard let service else { return }
       self.enqueueVisionArchive(
         internalID: internalID, image: image, output: output,
         timelineMilliseconds: service.recordingTimelineMilliseconds(),
         packageDirectory: service.packageDirectory)
+    }
+    windowRuntime.visionArchiveTimedHandler = { [weak self] id, image, output, timeline, package in
+      self?.enqueueVisionArchive(
+        internalID: id, image: image, output: output,
+        timelineMilliseconds: timeline, packageDirectory: package)
     }
     windowRuntime.visionArchiveTimelineProvider = service.recordingTimelineMilliseconds
     windowRuntime.visionArchivePackageURL = service.packageDirectory

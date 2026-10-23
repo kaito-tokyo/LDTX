@@ -62,6 +62,22 @@ copies before finalizing. Closing a Workspace waits for all of its accepted
 captures. Save errors that finish during closing are retained for application-level
 error presentation. Global screenshots remain available in every output state.
 
+## Cut Recording
+
+Choose **Cut Recording** in the Workspace toolbar during local recording to
+finish the current `.ldtxrecord` package and continue in a replacement package.
+Landscape and Portrait wait for usable video boundaries; mixed and input audio
+are divided at those boundaries. YouTube output continues on its existing
+subscriptions. Cut is disabled until the recording has accepted video and audio,
+and while a cut is pending. A replacement preparation failure keeps the current
+recording active and reports the error. Stop, Pause, and closing cancel a waiting
+cut and drain any already committed package transition.
+
+Manual OCR results captured before a package change still update the Inspector
+and variables, but are not archived into the replacement package. Archived OCR
+timestamps refer to the timeline captured with the analyzed frame. Package archive
+admission pauses while the replacement boundary is being prepared.
+
 ## Manual OCR
 
 Select an OCR Vision and choose **Run** in its **Recognition Result** section.

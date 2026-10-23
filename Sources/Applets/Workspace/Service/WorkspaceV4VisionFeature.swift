@@ -244,11 +244,13 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     do {
       let frame: WorkspaceVisionAnalysisFrame
       let recordingPackageURL: URL?
+      let recordingTimeline: UInt64?
       let output: String
       let variables: [LDTXVariableItem: String]
       if let ocr {
         frame = try await context.frameForVision(ocr)
         recordingPackageURL = context.recordingPackageURL()
+        recordingTimeline = context.recordingTimelineMilliseconds?()
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
         variables = [.text: output]
       } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
@@ -257,6 +259,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         }
         frame = try await frameProvider(classifier)
         recordingPackageURL = context.recordingPackageURL()
+        recordingTimeline = context.recordingTimelineMilliseconds?()
         let result = try await service.classifyResult(image: frame.image)
         output = result.displayText
         variables = [
@@ -271,7 +274,11 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       context.reportResult(id, output)
       context.reportVariables(id, variables)
       if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
-        context.archiveResult?(id, frame.image, output)
+        if let archiveTimedResult = context.archiveTimedResult {
+          archiveTimedResult(id, frame.image, output, recordingTimeline)
+        } else {
+          context.archiveResult?(id, frame.image, output)
+        }
       }
     } catch {
       guard isCurrent() else { return }

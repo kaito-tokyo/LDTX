@@ -758,6 +758,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       reportError(error)
       return .rejected(error as NSError)
     }
+    recordingSession.cancelPendingCut()
     let task = Task { @MainActor [self] in
       if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
       let result = await transactionalCommands.submit(
@@ -864,8 +865,32 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     try stopResult.get()
   }
 
+  private func cutRecording() async {
+    guard recordingSession.canCutRecording,
+      !transactionalCommands.contains(.cutRecording),
+      !transactionalCommands.contains(.stopOutputSession)
+    else { return }
+    _ = await cutRecording { [self] in try await recordingSession.cutWithResult().get() }
+  }
+
+  @discardableResult
+  func cutRecording(using cut: @escaping @MainActor () async throws -> Void) async
+    -> WorkspaceCommandOutcome
+  {
+    if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+    return await transactionalCommands.submit(
+      .cutRecording,
+      validate: { [self] in try validateOutputStop() },
+      operation: { [self] in
+        // Stop/Close may have been admitted while Cut waited behind another command.
+        guard !isClosing, !transactionalCommands.contains(.stopOutputSession) else { return }
+        try await cut()
+      })
+  }
+
   public func pauseOutput() async {
     guard recordingSession.state == .recording else { return }
+    recordingSession.cancelPendingCut()
     if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
     _ = await transactionalCommands.submit(
       .stopOutputSession,
@@ -874,6 +899,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public func stopOutput() async {
+    recordingSession.cancelPendingCut()
     if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
     _ = await transactionalCommands.submit(
       .stopOutputSession,
@@ -896,6 +922,12 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   public var isClosing: Bool { closeRequestTask != nil }
 
   public func actionState(_ action: WorkspaceAction) -> WorkspaceActionState {
+    if action == .cutRecording {
+      return .init(
+        isEnabled: !isClosing && !stateService.isClosed
+          && recordingSession.canCutRecording && !transactionalCommands.contains(.cutRecording)
+          && !transactionalCommands.contains(.stopOutputSession))
+    }
     let controls = WorkspaceOutputControls(
       stateService: stateService, hasSavedURL: workspaceDocument?.fileURL != nil,
       isClosing: closeRequestTask != nil)
@@ -906,6 +938,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   public func perform(_ action: WorkspaceAction) async -> [WorkspaceScreenshot]? {
     guard actionState(action).isEnabled else { return nil }
     switch action {
+    case .cutRecording: await cutRecording()
     case .stopOutput: await stopOutput()
     case .startPauseOutput:
       await toggleOutput(stateService: stateService, document: workspaceDocument)

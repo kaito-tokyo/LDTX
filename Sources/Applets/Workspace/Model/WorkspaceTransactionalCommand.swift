@@ -17,12 +17,13 @@ public enum WorkspaceTransactionalCommand: CaseIterable, Hashable, Sendable {
   case updateDeviceAssignment
   case switchProgram
   case startOutputSession
+  case cutRecording
   case stopOutputSession
   case closeWorkspace
 
   public var isAllowedDuringOutput: Bool {
     switch self {
-    case .switchProgram, .stopOutputSession: true
+    case .switchProgram, .cutRecording, .stopOutputSession: true
     case .reconstructRuntime, .updateDeviceAssignment, .startOutputSession, .closeWorkspace: false
     }
   }
@@ -32,7 +33,7 @@ public enum WorkspaceTransactionalCommand: CaseIterable, Hashable, Sendable {
   public var requiresConsistencyRepair: Bool {
     switch self {
     case .reconstructRuntime, .updateDeviceAssignment, .switchProgram: true
-    case .startOutputSession, .stopOutputSession, .closeWorkspace: false
+    case .startOutputSession, .cutRecording, .stopOutputSession, .closeWorkspace: false
     }
   }
 }
@@ -101,6 +102,9 @@ public struct WorkspaceCommandFailureNotification: Equatable, Sendable {
     case .switchProgram:
       description = "The Program could not be switched."
       suggestion = "Review the error, then select the Program again."
+    case .cutRecording:
+      description = "The recording could not be cut."
+      suggestion = "Check recording status and the error before requesting another cut."
     case .startOutputSession:
       description = "Output could not be started."
       suggestion = "Review the output settings and error, then start output again."

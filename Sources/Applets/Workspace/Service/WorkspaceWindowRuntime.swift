@@ -42,6 +42,7 @@ public final class WorkspaceWindowRuntime {
   @ObservationIgnored private var isShutDown = false
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
+  var visionArchiveTimedHandler: ((Int64, CIImage, String, UInt64?, URL) -> Void)?
   var visionArchivePackageURL: URL?
 
   public init(
@@ -311,6 +312,10 @@ public final class WorkspaceWindowRuntime {
           self?.definition.visions.first(where: { $0.internalID == id })?.vision
       else { return nil }
       return vision
+    }
+    context.archiveTimedResult = { [weak self] id, image, output, timeline in
+      guard let self, let package = visionArchivePackageURL else { return }
+      visionArchiveTimedHandler?(id, image, output, timeline, package)
     }
     context.recordingPackageURL = { [weak self] in self?.visionArchivePackageURL }
     context.videoComponents = definition.videoComponents

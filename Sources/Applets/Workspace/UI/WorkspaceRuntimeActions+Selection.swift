@@ -69,6 +69,7 @@ public struct WorkspaceOutputControls: Equatable, Sendable {
     switch action {
     case .stopOutput: enabled = stopEnabled
     case .startPauseOutput: enabled = startPauseEnabled
+    case .cutRecording: enabled = false
     case .captureScreenshots: enabled = screenshotEnabled
     case .showRecordingInFinder: enabled = screenshotEnabled && hasRecording
     }

@@ -7,6 +7,7 @@ import Foundation
 public enum WorkspaceAction: String, CaseIterable, Sendable {
   case stopOutput
   case startPauseOutput
+  case cutRecording
   case captureScreenshots
   case showRecordingInFinder
 
@@ -14,6 +15,7 @@ public enum WorkspaceAction: String, CaseIterable, Sendable {
     switch self {
     case .stopOutput: "Stop Output"
     case .startPauseOutput: showsPause ? "Pause Output" : "Start Output"
+    case .cutRecording: "Cut Recording"
     case .captureScreenshots: "Capture Screenshot(s)"
     case .showRecordingInFinder: "Show Recording in Finder"
     }
@@ -23,6 +25,7 @@ public enum WorkspaceAction: String, CaseIterable, Sendable {
     switch self {
     case .stopOutput: "stop.fill"
     case .startPauseOutput: showsPause ? "pause.fill" : "play.fill"
+    case .cutRecording: "scissors"
     case .captureScreenshots: "camera"
     case .showRecordingInFinder: "folder"
     }

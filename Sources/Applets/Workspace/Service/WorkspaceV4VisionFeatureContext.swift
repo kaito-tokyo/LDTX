@@ -18,6 +18,7 @@ public struct WorkspaceV4VisionFeatureContext {
   public var isCurrent: () -> Bool = { true }
   public var archiveResult: ((Int64, CIImage, String) -> Void)?
   public var recordingTimelineMilliseconds: (() -> UInt64?)?
+  public var archiveTimedResult: ((Int64, CIImage, String, UInt64?) -> Void)?
   public var recordingPackageURL: () -> URL? = { nil }
   public var sceneDetector: (Int64) -> Ldtx_Workspace_V4_LdtxSceneDetectorVision? = { _ in nil }
   public var modelURL: (Int64) -> URL? = { _ in nil }
