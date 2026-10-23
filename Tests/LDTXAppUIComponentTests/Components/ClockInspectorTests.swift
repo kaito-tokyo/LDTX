@@ -280,6 +280,94 @@ extension AppUIComponentTestSuite {
       #expect(invalidDraftSnapshot == accepted)
     }
 
+    @Test(arguments: [1, 2], [0, 1])
+    func membershipChangesResetDraftsAndFocus(secondWidth: Int32, removedIndex: Int) async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+        $0.definition.videoComponents[0].clock.outlines = [1, secondWidth].map { width in
+          .with { $0.thickness.set(num: width, den: 1) }
+        }
+      }
+      let inspector = ClockInspector(
+        stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      let hosting = NSHostingView(rootView: inspector.frame(width: 480, height: 1000))
+      let window = ClockInspectorTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 1000),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.history = undo
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      func fields(_ view: NSView) -> [NSTextField] {
+        (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+      }
+      func widths() -> [Int32] {
+        document.workspace.definition.videoComponents[0].clock.outlines.map { $0.thickness.num }
+      }
+      func displayedWidths() -> [String] {
+        fields(hosting).filter {
+          $0.isEditable && $0.stringValue != "Clock" && $0.stringValue != "48"
+        }.map(\.stringValue)
+      }
+      func invalidDraft() async throws -> (NSTextField, NSTextView) {
+        let field = try #require(
+          fields(hosting).first {
+            $0.isEditable && $0.stringValue == String(widths()[0])
+          })
+        #expect(window.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        // Isolate structural document history from native text-draft history.
+        undo.disableUndoRegistration()
+        editor.insertText(
+          "65", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.enableUndoRegistration()
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == "65")
+        return (field, editor)
+      }
+      func expectReset(_ old: (NSTextField, NSTextView), expected: [Int32]) {
+        #expect(!old.0.isDescendant(of: hosting))
+        #expect(window.firstResponder !== old.1)
+        #expect(widths() == expected)
+        #expect(displayedWidths() == expected.map(String.init))
+      }
+      let original: [Int32] = [1, secondWidth]
+      let remaining: [Int32] = [removedIndex == 0 ? secondWidth : 1]
+      let removedDraft = try await invalidDraft()
+      undo.beginUndoGrouping()
+      inspector.removeOutline(at: removedIndex, undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      expectReset(removedDraft, expected: remaining)
+      let undoDraft = try await invalidDraft()
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      expectReset(undoDraft, expected: original)
+      let redoDraft = try await invalidDraft()
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      expectReset(redoDraft, expected: remaining)
+      let addedDraft = try await invalidDraft()
+      undo.beginUndoGrouping()
+      inspector.addOutline(undoManager: undo)
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      expectReset(addedDraft, expected: remaining + [1])
+      let undoAddDraft = try await invalidDraft()
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      expectReset(undoAddDraft, expected: remaining)
+      let redoAddDraft = try await invalidDraft()
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      expectReset(redoAddDraft, expected: remaining + [1])
+    }
+
     @Test func unavailableEditsAreIgnored() {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {

@@ -68,6 +68,8 @@ struct ClockInspector: View {
             }
           }
         }
+        // Membership changes discard row-local drafts and focus, including through Undo/Redo.
+        .id(component.outlines.count)
         Button("Add Outline", systemImage: "plus") {
           addOutline(undoManager: undoManager)
         }
