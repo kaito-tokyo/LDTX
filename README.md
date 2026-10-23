@@ -74,6 +74,11 @@ recording active and reports the error. Replacement first-video preparation has
 an independent 10-second deadline. A stalled replacement is left incomplete;
 rollback and later cuts do not wait for its writer to return. An uninterruptible
 native call retains its worker and replacement resources until it returns.
+If boundary rollback is waiting on the active writer, Cut reports its timeout
+without waiting for that writer. Further cuts stay disabled until rollback is
+acknowledged; the current package keeps ownership of queued media. Old-package
+finalization has a shared 30-second deadline for buffered media, accepted
+screenshots and archives, input callbacks, writer sealing, and finalization.
 Stop and Pause cancel a waiting cut and
 drain any already committed package transition. Close still requires output to
 be stopped first; an admitted Close supersedes a Cut waiting in the command queue.

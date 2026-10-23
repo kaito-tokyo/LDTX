@@ -45,7 +45,7 @@ public final class WorkspaceV4RecordingSession {
   private let localStateProvider: () -> WorkspaceLocalState
   private let streamKeyConfigurationsProvider: () throws -> [YouTubeRTMPSStreamKeyConfiguration]
   private var activeSession: ActiveDualProgramOutputSession?
-  private var recordService: SessionRecordService?
+  private var recordService: (any SessionRecordServicing)?
   @ObservationIgnored private var recordMediaCore = WorkspaceRecordMediaCore()
   @ObservationIgnored private var makeReplacementRecording: (() throws -> SessionRecordService)?
   @ObservationIgnored private var preparingRecordingPackages: Set<URL> = []
@@ -53,6 +53,8 @@ public final class WorkspaceV4RecordingSession {
   @ObservationIgnored private var cutBoundaryWaiter: CheckedContinuation<UUID?, Never>?
   @ObservationIgnored private var cutDrainWaiters: [CheckedContinuation<Void, Never>] = []
   public private(set) var isCutPending = false
+  private var isCutRecoveryPending = false
+  @ObservationIgnored private var cutRecoveryID = UUID()
   @ObservationIgnored private var cutWasCancelled = false
   @ObservationIgnored private var cutBarrier: WorkspaceRecordCutBarrier?
 
@@ -308,13 +310,14 @@ public final class WorkspaceV4RecordingSession {
   }
 
   func prepareRecordingMedia(
-    _ service: SessionRecordService,
+    _ service: any SessionRecordServicing,
     makeReplacement: @escaping () throws -> SessionRecordService
   ) {
     makeReplacementRecording = makeReplacement
     let core = WorkspaceRecordMediaCore()
     recordMediaCore = core
     recordingAudioReady = false
+    isCutRecoveryPending = false
     recordMediaCore.install(service)
     recordMediaCore.setCallbacks(
       commitRequest: { [weak self] id in self?.completeCutBoundary(id) },
@@ -333,11 +336,13 @@ public final class WorkspaceV4RecordingSession {
   public var canCutRecording: Bool {
     // The first-video callback publishes this observable value when readiness changes.
     _ = latestRecordingBundleURL
-    return state == .recording && !isCutPending && recordService?.hasAcceptedFirstVideo == true
+    return state == .recording && !isCutPending && !isCutRecoveryPending
+      && recordService?.hasAcceptedFirstVideo == true
       && recordingAudioReady
   }
 
   private func completeCutBoundary(_ id: UUID?) {
+    guard id == nil || !isCutRecoveryPending else { return }
     let waiter = cutBoundaryWaiter
     cutBoundaryWaiter = nil
     waiter?.resume(returning: id)
@@ -373,7 +378,7 @@ public final class WorkspaceV4RecordingSession {
       do { try await Task.sleep(for: cutBoundaryTimeout) } catch { return }
       guard !Task.isCancelled else { return }
       self?.cutBarrier?.cancel()
-      core.enqueueRollbackPendingCut()
+      self?.enqueueCutRollback(core)
       self?.completeCutBoundary(nil)
     }
     defer { timeout.cancel() }
@@ -397,8 +402,7 @@ public final class WorkspaceV4RecordingSession {
     }
     timeout.cancel()
     guard let boundaryID, state == .recording else {
-      core.enqueueRollbackPendingCut()
-      await core.waitForPendingOperations()
+      enqueueCutRollback(core)
       if cutWasCancelled { return .success(()) }
       return .failure(
         NSError(
@@ -423,37 +427,31 @@ public final class WorkspaceV4RecordingSession {
           userInfo: [NSLocalizedDescriptionKey: "The recording cut was interrupted."])
       }
       adoptStartedRecordingService(next)
-      // Accepted package screenshots retain their old destination. Close admission
-      // until they and the archive queue drain before finalizing the old package.
-      await drainPackageScreenshots()
-      await withCheckedContinuation { continuation in
-        visionArchiveQueue.async { continuation.resume() }
-      }
-      await withCheckedContinuation { continuation in
-        let deferred = core.deferFinalizationUntilInputAudioCallbacksDrain(for: previous) {
-          continuation.resume()
+      let result = await finishPreviousRecordingAfterCut(previous) { [self] in
+        // Every pre-finalization fence shares the old-package deadline, including
+        // buffered delivery, accepted screenshots, archives and input callbacks.
+        await drainPackageScreenshots()
+        await withCheckedContinuation { continuation in
+          visionArchiveQueue.async { continuation.resume() }
         }
-        if !deferred { continuation.resume() }
+        await core.waitForPendingOperations()
+        await withCheckedContinuation { continuation in
+          let deferred = core.deferFinalizationUntilInputAudioCallbacksDrain(for: previous) {
+            continuation.resume()
+          }
+          if !deferred { continuation.resume() }
+        }
       }
-      previous.sealInputAudio()
-      let result = await finishPreviousRecordingAfterCut(previous)
       if case .failed(let error) = result {
         recordFailure(error, phase: .recordingFinalization)
         return .failure(error as NSError)
       }
       return .success(())
     } catch {
-      core.enqueueRollbackPendingCut()
-      // The media core already abandoned a stalled preparation. Re-entering
-      // its writer for cancellation could block Stop on the same native call.
-      if !(error is WorkspaceRecordingPreparationAbandoned) {
-        await core.waitForPendingOperations()
-      }
+      enqueueCutRollback(core)
       if let replacement {
         if !(error is WorkspaceRecordingPreparationAbandoned) {
-          _ = await withCheckedContinuation { continuation in
-            replacement.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
-          }
+          _ = await finishPreviousRecordingAfterCut(replacement, cancelling: true)
         }
         preparingRecordingPackages.remove(replacement.packageDirectory)
         preparingRecordingFailures.removeValue(forKey: replacement.packageDirectory)
@@ -462,9 +460,25 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
-  func finishPreviousRecordingAfterCut(_ service: any SessionRecordServicing) async
-    -> SessionRecordFinalizationResult
-  {
+  /// Acknowledgement reopens Cut admission, but never holds the transactional
+  /// command queue behind an active writer. FIFO rollback preserves ownership.
+  private func enqueueCutRollback(_ core: WorkspaceRecordMediaCore) {
+    isCutRecoveryPending = true
+    let id = UUID()
+    cutRecoveryID = id
+    core.enqueueRollbackPendingCut { [weak self, weak core] in
+      guard let self, let core, self.recordMediaCore === core, self.cutRecoveryID == id else {
+        return
+      }
+      self.isCutRecoveryPending = false
+    }
+  }
+
+  func finishPreviousRecordingAfterCut(
+    _ service: any SessionRecordServicing,
+    cancelling: Bool = false,
+    beforeFinalization: (@MainActor () async -> Void)? = nil
+  ) async -> SessionRecordFinalizationResult {
     await withCheckedContinuation { continuation in
       let race = RecordFinalizationRace(continuation: continuation)
       let timeout = Task { @MainActor [cutFinalizationTimeout] in
@@ -474,7 +488,23 @@ public final class WorkspaceV4RecordingSession {
         service.abandonAfterMediaDrainTimeout()
       }
       race.installTimeoutTask(timeout)
-      service.finishAfterCut { race.finish($0) }
+      Task { @MainActor in
+        await beforeFinalization?()
+        guard !race.isFinished else { return }
+        if cancelling {
+          service.cancelBeforeFirstVideo { race.finish($0) }
+          return
+        }
+        // Sealing calls the writer's executor synchronously. Keep it off
+        // MainActor and include it in the same deadline as the callback.
+        DispatchQueue(label: "tokyo.kaito.ldtx.cut-finalization").async {
+          service.sealInputAudio()
+          Task { @MainActor in
+            guard !race.isFinished else { return }
+            service.finishAfterCut { race.finish($0) }
+          }
+        }
+      }
     }
   }
 
@@ -482,7 +512,7 @@ public final class WorkspaceV4RecordingSession {
     guard isCutPending else { return }
     cutWasCancelled = true
     cutBarrier?.cancel()
-    recordMediaCore.enqueueRollbackPendingCut()
+    enqueueCutRollback(recordMediaCore)
     completeCutBoundary(nil)
   }
 
@@ -717,7 +747,7 @@ public final class WorkspaceV4RecordingSession {
 
   @discardableResult
   func installRecordingSubscriptions(
-    service: SessionRecordService,
+    service: any SessionRecordServicing,
     landscapeHub: ProgramOutputMediaHub,
     portraitHub: ProgramOutputMediaHub,
     recordsLandscape: Bool,
@@ -841,7 +871,7 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
-  private func finalize(_ service: SessionRecordService) async {
+  private func finalize(_ service: any SessionRecordServicing) async {
     let result = await withCheckedContinuation { continuation in
       if service.recordingTimelineMilliseconds() == nil {
         service.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
@@ -923,7 +953,7 @@ public final class WorkspaceV4RecordingSession {
   }
 
   /// Registers a started recording service independently of native output startup.
-  func adoptStartedRecordingService(_ service: SessionRecordService) {
+  func adoptStartedRecordingService(_ service: any SessionRecordServicing) {
     hasCompletedOutputCleanup = false
     recordService = service
     recordingAudioReady = recordMediaCore.hasRequiredAudioFormatDescriptions(for: service)

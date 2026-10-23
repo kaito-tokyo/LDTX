@@ -132,10 +132,12 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var activeService: (any SessionRecordServicing)?
   private var boundary: Boundary?
   private var replacementPreparation: ReplacementPreparation?
+  private let preparationLock = NSLock()
+  private var admittedPreparation: ReplacementPreparation?
 
   private final class ReplacementPreparation: @unchecked Sendable {
     let lock = NSLock()
-    var cancelled = false
+    private var finished = false
     var timeout: Task<Void, Never>?
     let replacement: any SessionRecordServicing
     let completion: @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
@@ -147,8 +149,21 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       self.replacement = replacement
       self.completion = completion
     }
-    var isCancelled: Bool { lock.withLock { cancelled } }
-    func cancel() { lock.withLock { cancelled = true } }
+    var isCancelled: Bool { lock.withLock { finished } }
+    func claimCompletion() -> Bool {
+      lock.withLock {
+        guard !finished else { return false }
+        finished = true
+        return true
+      }
+    }
+    func abandon() {
+      guard claimCompletion() else { return }
+      Task { @MainActor in
+        replacement.abandonAfterMediaDrainTimeout()
+        completion(.failure(WorkspaceRecordingPreparationAbandoned()))
+      }
+    }
   }
   private var isCutPending = false
   private var pendingCutAudio: [Sample] = []
@@ -426,24 +441,46 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     preparationTimeout: Duration = .seconds(10),
     completionHandler: @escaping @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
   ) {
+    let preparation = ReplacementPreparation(
+      replacement: replacement, completion: completionHandler)
+    let admitted = preparationLock.withLock {
+      guard admittedPreparation == nil else { return false }
+      admittedPreparation = preparation
+      return true
+    }
+    guard admitted else {
+      Task { @MainActor in completionHandler(.success(nil)) }
+      return
+    }
+    // Start the deadline before entering the recording queue: it may already be
+    // stalled in an active writer or in rollback delivery.
+    let timeout = Task { [self] in
+      do { try await Task.sleep(for: preparationTimeout) } catch { return }
+      preparation.abandon()
+      queue.async { [self] in
+        if self.boundary?.id == boundaryID { rollbackBoundary() }
+        clearAdmittedPreparation(preparation)
+      }
+    }
     queue.async { [self] in
+      guard !preparation.isCancelled else {
+        timeout.cancel()
+        clearAdmittedPreparation(preparation)
+        return
+      }
       guard let boundary, boundary.id == boundaryID,
         boundary.operationID == operationID, activeService === boundary.previous,
         replacementPreparation == nil
       else {
-        Task { @MainActor in completionHandler(.success(nil)) }
+        timeout.cancel()
+        clearAdmittedPreparation(preparation)
+        if preparation.claimCompletion() {
+          Task { @MainActor in completionHandler(.success(nil)) }
+        }
         return
       }
-      let preparation = ReplacementPreparation(
-        replacement: replacement, completion: completionHandler)
       replacementPreparation = preparation
-      preparation.timeout = Task { [self] in
-        do { try await Task.sleep(for: preparationTimeout) } catch { return }
-        queue.async { [self] in
-          guard replacementPreparation === preparation else { return }
-          rollbackBoundary()
-        }
-      }
+      preparation.timeout = timeout
       // Each attempt owns an executor: a stalled previous attempt cannot hold up
       // a later cut. Its closure retains the abandoned writer until it returns.
       DispatchQueue(label: "tokyo.kaito.ldtx.record-replacement").async { [self] in
@@ -451,17 +488,37 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         queue.async { [self] in
           guard replacementPreparation === preparation else { return }
           replacementPreparation = nil
-          preparation.timeout?.cancel()
-          let result = result.map { _ -> CommitResult? in
+          timeout.cancel()
+          clearAdmittedPreparation(preparation)
+          guard preparation.claimCompletion() else {
+            rollbackBoundary()
+            return
+          }
+          switch result {
+          case .failure(let error):
+            Task { @MainActor in completionHandler(.failure(error)) }
+            rollbackBoundary()
+          case .success:
             guard let currentBoundary = self.boundary,
               currentBoundary.id == boundaryID, activeService === boundary.previous
-            else { return nil }
-            return commitPreparedReplacement(currentBoundary, replacement: replacement)
+            else {
+              Task { @MainActor in completionHandler(.success(nil)) }
+              return
+            }
+            commitPreparedReplacement(currentBoundary, replacement: replacement) { result in
+              // Ownership is settled before buffered delivery, which can itself
+              // stall in the old writer. Finalization has its own bounded fence.
+              Task { @MainActor in completionHandler(.success(result)) }
+            }
           }
-          if case .failure = result { rollbackBoundary() }
-          Task { @MainActor in completionHandler(result) }
         }
       }
+    }
+  }
+
+  private func clearAdmittedPreparation(_ preparation: ReplacementPreparation) {
+    preparationLock.withLock {
+      if admittedPreparation === preparation { admittedPreparation = nil }
     }
   }
 
@@ -504,8 +561,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func commitPreparedReplacement(
-    _ boundary: Boundary, replacement: any SessionRecordServicing
-  ) -> CommitResult {
+    _ boundary: Boundary, replacement: any SessionRecordServicing,
+    didCommit: (CommitResult) -> Void
+  ) {
     activeService = replacement
     inputCallbackLock.withLock {
       inputCallbackService = replacement
@@ -513,6 +571,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
     self.boundary = nil
     isCutPending = false
+    didCommit(CommitResult(previous: boundary.previous, current: replacement))
     for sample in boundary.samples {
       switch sample {
       case .mainAudio(let buffer):
@@ -547,7 +606,6 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
             ? boundary.previous : replacement)
       }
     }
-    return CommitResult(previous: boundary.previous, current: replacement)
   }
 
   /// PCM buffers can straddle a video boundary. Split by audio sample index so
@@ -649,7 +707,16 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       && CMTimeCompare(samplePresentationTime, presentationTime) < 0
   }
 
-  func enqueueRollbackPendingCut() { queue.async { [self] in rollbackBoundary() } }
+  func enqueueRollbackPendingCut(
+    completion: @escaping @MainActor @Sendable () -> Void = {}
+  ) {
+    // Cancellation cannot depend on admission to a potentially stalled executor.
+    preparationLock.withLock { admittedPreparation }?.abandon()
+    queue.async { [self] in
+      rollbackBoundary()
+      Task { @MainActor in completion() }
+    }
+  }
 
   func waitForPendingOperations() async {
     await withCheckedContinuation { continuation in
@@ -985,12 +1052,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private func rollbackBoundary() {
     if let preparation = replacementPreparation {
       replacementPreparation = nil
-      preparation.cancel()
+      preparation.abandon()
       preparation.timeout?.cancel()
-      Task { @MainActor in
-        preparation.replacement.abandonAfterMediaDrainTimeout()
-        preparation.completion(.failure(WorkspaceRecordingPreparationAbandoned()))
-      }
+      clearAdmittedPreparation(preparation)
     }
     guard let boundary else {
       if let activeService {
@@ -1145,6 +1209,8 @@ final class RecordFinalizationRace: @unchecked Sendable {
   init(continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>) {
     self.continuation = continuation
   }
+
+  var isFinished: Bool { lock.withLock { continuation == nil } }
 
   func installTimeoutTask(_ task: Task<Void, Never>) {
     let shouldCancel = lock.withLock {
