@@ -18,7 +18,7 @@ path = [
   "compile_flags.txt",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",
-  "requirements-dev.lock",
+  "Tools/MediaPipeLandscapeCoreML/requirements.lock",
   "Resources/**/*.json",
   "Resources/LDTX/AppIcon.icon/Assets/*.svg",
   "Resources/Shared/About/Credits.rtf",

@@ -4,6 +4,7 @@
 
 """Exercise bot proposals and stale locks without network access or repo mutation."""
 
+import ast
 import importlib.util
 import json
 import re
@@ -28,9 +29,9 @@ class DependencyUpdateTests(unittest.TestCase):
         shared, app, _ = dependencies.manifests(ROOT)
         self.protobuf = shared['swift-protobuf'][1]
         self.appauth = next(version for _, url, version in app if dependencies.identity(url) == 'appauth-ios')
-        self.coreml = dependencies.python_pins(ROOT / 'requirements-dev.txt')['coremltools']
+        self.coreml = dependencies.python_pins(ROOT / 'Tools/MediaPipeLandscapeCoreML/requirements.txt')['coremltools']
         for relative in ('Package.swift', 'Package.resolved', 'project.yml',
-                         str(dependencies.XCODE_LOCK), 'requirements-dev.txt', 'requirements-dev.lock'):
+                         str(dependencies.XCODE_LOCK), 'Tools/MediaPipeLandscapeCoreML/requirements.txt', 'Tools/MediaPipeLandscapeCoreML/requirements.lock'):
             destination = self.root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, destination)
@@ -100,48 +101,70 @@ class DependencyUpdateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'revisions disagree'):
             dependencies.check(self.root)
 
-    def test_python_bot_proposal_requires_regeneration(self):
-        self.replace('requirements-dev.txt', f'coremltools=={self.coreml}', f'coremltools=={self.newer(self.coreml)}')
-        with self.assertRaisesRegex(ValueError, 'regenerate requirements-dev.lock'):
+    def test_python_pin_change_requires_regeneration(self):
+        self.replace('Tools/MediaPipeLandscapeCoreML/requirements.txt', f'coremltools=={self.coreml}', f'coremltools=={self.newer(self.coreml)}')
+        with self.assertRaisesRegex(ValueError, 'regenerate Tools/MediaPipeLandscapeCoreML/requirements.lock'):
             dependencies.check(self.root)
 
     def test_removed_direct_python_requirement_requires_regeneration(self):
-        version = dependencies.python_pins(self.root / 'requirements-dev.txt')['onnx2torch']
-        self.replace('requirements-dev.txt', f'onnx2torch=={version}\n', '')
+        version = dependencies.python_pins(self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.txt')['onnx2torch']
+        self.replace('Tools/MediaPipeLandscapeCoreML/requirements.txt', f'onnx2torch=={version}\n', '')
         with self.assertRaisesRegex(ValueError, 'Direct Python requirements changed'):
             dependencies.check(self.root)
 
     def test_removed_direct_requirement_may_remain_transitive(self):
-        version = dependencies.python_pins(self.root / 'requirements-dev.txt')['onnx']
-        self.replace('requirements-dev.txt', f'onnx=={version}\n', '')
-        path = self.root / 'requirements-dev.lock'
+        version = dependencies.python_pins(self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.txt')['onnx']
+        self.replace('Tools/MediaPipeLandscapeCoreML/requirements.txt', f'onnx=={version}\n', '')
+        path = self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock'
         text = path.read_text()
         block = re.search(r'^onnx==.*?(?=^\S|\Z)', text, re.MULTILINE | re.DOTALL)
         self.assertIsNotNone(block)
         annotated = block[0]
-        self.assertIn('    #   -r requirements-dev.txt\n', annotated)
+        self.assertIn('    #   -r requirements.txt\n', annotated)
         path.write_text(text.replace(annotated, annotated.replace(
-            '    #   -r requirements-dev.txt\n', ''
+            '    #   -r requirements.txt\n', ''
         )))
         # onnx remains required by onnx2torch, with its hashes and version intact.
         dependencies.check(self.root)
         self.assertIn('onnx', dependencies.python_pins(path, hashed=True))
 
     def test_uv_direct_annotations_support_both_formats(self):
-        direct = dependencies.python_direct_requirements(self.root / 'requirements-dev.lock')
+        direct = dependencies.python_direct_requirements(self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock')
         self.assertIn('onnx2torch', direct)  # single-line annotation
         self.assertIn('onnx', direct)  # multiline annotation
         self.assertNotIn('numpy', direct)  # legitimate transitive dependency
 
     def test_python_version_metadata_matches_lock_target(self):
-        lines = (ROOT / '.python-version').read_text().splitlines()
+        lines = (ROOT / 'Tools/MediaPipeLandscapeCoreML/.python-version').read_text().splitlines()
         version = next(line.strip() for line in lines if line.strip() and not line.startswith('#'))
         self.assertRegex(version, r'^3\.13\.\d+$')
         target = '.'.join(version.split('.')[:2])
-        self.assertIn(f'--python-version {target} ', (self.root / 'requirements-dev.lock').read_text())
+        self.assertIn(f'--python-version {target} ', (self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock').read_text())
+
+    def test_model_output_path_is_independent_of_working_directory(self):
+        script = ROOT / 'Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py'
+        tree = ast.parse(script.read_text(), filename=str(script))
+        assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == 'OUTPUT_PATH'
+                                  for target in node.targets))
+        # Evaluate only the path expression, without importing conversion packages
+        # or running downloads, conversion, or writes to the generated resource.
+        expression = compile(ast.Expression(assignment.value), str(script), 'eval')
+        for directory in (ROOT, script.parent, self.root):
+            result = subprocess.run(
+                ['python3', '-B', '-c',
+                 "from pathlib import Path; "
+                 f"print(eval({ast.unparse(assignment.value)!r}, "
+                 f"{{'Path': Path, '__file__': {str(script)!r}}}))"],
+                cwd=directory, check=True, capture_output=True, text=True,
+            )
+            expected = ROOT / 'Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage'
+            self.assertEqual(Path(result.stdout.strip()), expected)
+            self.assertTrue(expected.is_dir())
+        self.assertEqual(eval(expression, {'Path': Path, '__file__': str(script)}), expected)
 
     def test_unhashed_transitive_requirement_fails(self):
-        with (self.root / 'requirements-dev.lock').open('a') as file:
+        with (self.root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock').open('a') as file:
             file.write('\nnew-transitive==1.0\n')
         with self.assertRaisesRegex(ValueError, 'SHA256 hashes'):
             dependencies.check(self.root)
@@ -157,7 +180,7 @@ class DependencyUpdateTests(unittest.TestCase):
             dependencies.check(self.root)
 
     def test_python_name_normalization(self):
-        self.replace('requirements-dev.txt', 'huggingface_hub', 'huggingface.hub')
+        self.replace('Tools/MediaPipeLandscapeCoreML/requirements.txt', 'huggingface_hub', 'huggingface.hub')
         dependencies.check(self.root)
 
 

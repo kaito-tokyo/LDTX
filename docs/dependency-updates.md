@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 # Dependency updates
 
 Dependabot proposes weekly updates for GitHub Actions, the root Swift package,
-AppAuth in the Xcode package lock, and Python model tooling. No dependency
+and AppAuth in the Xcode package lock. No dependency
 versions are changed just by enabling this configuration. Review every proposal
 and complete the synchronization and validation steps below before merging.
 
@@ -66,33 +66,31 @@ checking generated Protobuf compatibility and the documented generator version.
 
 ## Python model tooling
 
-The `pip` ecosystem recognizes `requirements-dev.txt`. Dependabot groups its
-source pin proposals into `model-tooling`; accepting them remains a coordinated
-model-compatibility decision. The custom uv-generated `requirements-dev.lock`
-is not a pip-compile `.in`/`.txt` pair and is not maintained by Dependabot.
-Do not hand-edit its transitive versions or hashes.
+Model generation is maintained manually under `Tools/MediaPipeLandscapeCoreML/`.
+This deliberately supersedes the Python model-tooling Dependabot coverage added
+by PR #389; there is no `pip` update scope. Swift, AppAuth and GitHub Actions
+coverage remains enabled. This does not change repository security-alert settings.
+The unmerged model-tooling proposal PR #390 is superseded by this policy; it is
+not closed or modified by this reorganization.
 
-`.python-version` declares a pyenv-recognized Python 3.13 patch version so
-Dependabot selects a 3.13 interpreter rather than its default newest minor.
-Dependabot normalizes this metadata to the minor series and uses its supported
-3.13 patch; the lock regeneration target remains `--python-version 3.13`.
+`requirements.txt` contains exact source pins, `requirements.lock` retains the
+uv-generated transitive versions and SHA256 hashes, and `.python-version` records
+Python 3.13.13 for this tool only. Other Python utilities use the standard library
+and do not require this environment. Do not hand-edit transitive versions or hashes.
 
-After reviewing proposed source pins, regenerate on Python 3.13 using the
-existing build-guide command:
+For a deliberately reviewed model or dependency update, follow the conversion and
+lock-regeneration commands in [the build guide](build.md), then run from the
+repository root:
 
 ```sh
-uv pip compile --generate-hashes --python-version 3.13 \
-  requirements-dev.txt --output-file requirements-dev.lock
 python3 Tools/dependencies.py check
-uv venv --python 3.13
-uv pip sync --require-hashes requirements-dev.lock
-uv run --no-sync python Tools/MediaPipeSelfieSegmenter.py
+python3 -B -m unittest discover -s Tests/DependencyToolTests
 ```
 
 Review the full transitive lock diff and regenerated model, then validate model
 loading/inference with the app's relevant HardTests and a representative model
 compatibility check. A green pin check or ordinary Swift CI does not establish
-model compatibility. Source-only bot proposals intentionally fail the pin check
+model compatibility. Source-only dependency changes intentionally fail the pin check
 until the lock is regenerated. Transitive-only Python updates remain manual,
 using the same coordinated validation. Do not upgrade the entire environment
 merely to refresh a single dependency.

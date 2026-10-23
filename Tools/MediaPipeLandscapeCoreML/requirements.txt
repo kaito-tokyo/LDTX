@@ -2,11 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Source requirements for requirements-dev.lock. Regenerate the hash-locked
-# transitive closure with the command documented in docs/build.md.
+# Source requirements for requirements.lock. Regenerate the hash-locked
+# transitive closure with the command documented in ../../docs/build.md.
 # Model conversion and inference require a strictly matched dependency set.
-# Keep exact pins and review Dependabot proposals as a coordinated model-tooling
-# update. Regenerate requirements-dev.lock and explicitly validate model
+# Keep exact pins and review manual changes as a coordinated model-tooling
+# update. Regenerate requirements.lock and explicitly validate model
 # compatibility before accepting any source or transitive dependency changes.
 
 coremltools==9.0

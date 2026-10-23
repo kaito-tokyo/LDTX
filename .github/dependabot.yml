@@ -25,13 +25,3 @@ updates:
       interval: weekly
     allow:
       - dependency-name: github.com/openid/appauth-ios
-
-  # Proposals require coordinated model validation and manual lock regeneration.
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      model-tooling:
-        patterns:
-          - "*"
