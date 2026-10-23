@@ -57,7 +57,7 @@ struct WorkspaceVisionVariableIntegrationTestSuite {
       if automatic {
         scheduler.tick()
       } else {
-        feature.submit(visionInternalID: 11, context: context)
+        feature.runOCR(visionInternalID: 11)
       }
     }
     #expect(store[key] == (output == "failure" ? "" : output))

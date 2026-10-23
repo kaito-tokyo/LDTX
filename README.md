@@ -62,6 +62,16 @@ copies before finalizing. Closing a Workspace waits for all of its accepted
 captures. Save errors that finish during closing are retained for application-level
 error presentation. Global screenshots remain available in every output state.
 
+## Manual OCR
+
+Select an OCR Vision and choose **Run** in its **Recognition Result** section.
+Run uses the last successfully saved configuration and remains available during
+local recording while configuration editing is locked. Repeated requests for the
+same OCR are ignored while it is running. Results and errors appear in the
+Inspector; successful results also update Dynamic Text variables and use the
+existing recording-package archive when the same recording is still active.
+Save new OCR Visions before running them.
+
 ## Clock
 
 Clock uses **Font Size** in Landscape Canvas pixels (48 by default for new

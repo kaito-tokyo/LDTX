@@ -166,7 +166,9 @@ public struct WorkspaceInspectorContainer: View {
         let vision = $stateService.ocrVision(internalID: internalID, undoManager: undoManager)
       {
         OcrVisionInspector(
-          stateService: stateService, vision: vision)
+          stateService: stateService, vision: vision,
+          canRun: { runtimeActions()?.canRunOCR(visionInternalID: internalID) ?? false },
+          run: { runtimeActions()?.runOCR(visionInternalID: internalID) })
       } else {
         emptyInspector
       }

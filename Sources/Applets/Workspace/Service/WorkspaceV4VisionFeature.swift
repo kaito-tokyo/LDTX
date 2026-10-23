@@ -22,7 +22,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     (URL, Bool) async throws -> VisionImageClassifierService
   @ObservationIgnored private var context: WorkspaceV4VisionFeatureContext?
   @ObservationIgnored private var visions: [Ldtx_Workspace_V4_VisionWrapper] = []
-  @ObservationIgnored private var manualTasks: [Int64: Task<Void, Never>] = [:]
+  private var manualTasks: [Int64: Task<Void, Never>] = [:]
   @ObservationIgnored private var models: [ModelKey: VisionImageClassifierService] = [:]
   @ObservationIgnored private var modelKeys: Set<ModelKey> = []
   @ObservationIgnored private var preparations: [ModelKey: Task<Void, Never>] = [:]
@@ -200,6 +200,23 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         }
       }
     }
+  }
+
+  public func canRunOCR(visionInternalID: Int64) -> Bool {
+    !stopped && manualTasks[visionInternalID] == nil
+      && visions.contains { wrapper in
+        guard case .ocrVision(let vision)? = wrapper.vision else { return false }
+        return vision.internalID == visionInternalID
+      }
+  }
+
+  public func runOCR(
+    visionInternalID: Int64, isCurrent: @escaping () -> Bool = { true }
+  ) {
+    guard canRunOCR(visionInternalID: visionInternalID), var context else { return }
+    let runtimeIsCurrent = context.isCurrent
+    context.isCurrent = { runtimeIsCurrent() && isCurrent() }
+    submit(visionInternalID: visionInternalID, context: context)
   }
 
   public func submit(visionInternalID: Int64, context: WorkspaceV4VisionFeatureContext) {
