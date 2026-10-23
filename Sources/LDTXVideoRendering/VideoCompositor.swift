@@ -836,7 +836,7 @@ public final class VideoCompositor: @unchecked Sendable {
     if commandBuffer.status == .error {
       let nsError = commandBuffer.error as NSError?
       Self.logger.error(
-        "Command buffer failed status=\(commandBuffer.status.rawValue, privacy: .public) errorDomain=\(nsError?.domain ?? "nil", privacy: .public) errorCode=\(nsError?.code ?? 0, privacy: .public)"
+        "Command buffer failed status=\(commandBuffer.status.rawValue, privacy: .public) errorDomain=\(nsError?.domain ?? "nil", privacy: .private) errorCode=\(nsError?.code ?? 0, privacy: .public)"
       )
       throw VideoCompositorError.renderFailed
     }

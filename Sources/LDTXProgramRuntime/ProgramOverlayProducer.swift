@@ -71,7 +71,8 @@ public final class ProgramOverlayProducer: @unchecked Sendable {
           state.failedConfiguration = key
           state.retryAfter = ProcessInfo.processInfo.systemUptime + 1
           Logger(subsystem: "tokyo.kaito.ldtx", category: "overlay-producer").error(
-            "Overlay preparation failed: \(error.localizedDescription, privacy: .public)")
+            "Overlay preparation failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
+          )
           return
         }
       }

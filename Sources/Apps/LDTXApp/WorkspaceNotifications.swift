@@ -32,7 +32,8 @@ final class WorkspaceNotifications: NSObject, UNUserNotificationCenterDelegate {
         }.value
       } catch {
         logger.error(
-          "Screenshot notification failed: \(error.localizedDescription, privacy: .public)")
+          "Screenshot notification failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
+        )
       }
     }
   }

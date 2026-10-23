@@ -176,7 +176,7 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
         reportedFailures.remove(inputKey)
         if announcedFailures.remove(inputKey) != nil {
           Self.logger.notice(
-            "Captured input conversion recovered input=\(inputKey, privacy: .public)")
+            "Captured input conversion recovered input=\(inputKey, privacy: .private(mask: .hash))")
         }
         return preprocessor.process(normalized)
       case .failure(let error):
@@ -187,7 +187,7 @@ final class PassthroughVideoInputPreprocessor: VideoInputPreprocessing {
           lastFailureDiagnostic[inputKey] = now
           announcedFailures.insert(inputKey)
           Self.logger.error(
-            "Captured input unavailable input=\(inputKey, privacy: .public) reason=\(error.localizedDescription, privacy: .public)"
+            "Captured input unavailable input=\(inputKey, privacy: .private(mask: .hash)) reason=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
           )
         }
         return .unavailable

@@ -273,7 +273,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     session.startRunning()
     sampleQueue.sync { self.sampleHandler = handler }
     Self.logger.notice(
-      "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .public), isRunning=\(session.isRunning, privacy: .public)"
+      "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .private(mask: .hash)), isRunning=\(session.isRunning, privacy: .public)"
     )
   }
 
@@ -354,7 +354,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       let outputs = sampleQueue.sync { Array(self.outputsByID.values) }
       let videoOutputCount = outputs.count
       Self.logger.notice(
-        "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), devices=\(outputs.map(\.deviceID).sorted().joined(separator: ","), privacy: .public), wasRunning=\(session.isRunning, privacy: .public)"
+        "Stopping capture session: videoOutputs=\(videoOutputCount, privacy: .public), devices=\(outputs.map(\.deviceID).sorted().joined(separator: ","), privacy: .private(mask: .hash)), wasRunning=\(session.isRunning, privacy: .public)"
       )
       disableSampleBufferDelegates(for: session)
     }

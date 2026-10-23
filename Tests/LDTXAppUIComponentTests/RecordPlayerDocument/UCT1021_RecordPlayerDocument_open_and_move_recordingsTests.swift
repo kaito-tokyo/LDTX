@@ -36,6 +36,31 @@ extension AppUIComponentTestSuite {
       #expect(document.markers.map(\.note) == ["Pending"])
     }
 
+    @Test("Playback keeps private error details available to the user")
+    func privatePlaybackFailureDetails() async throws {
+      let originalURL = try makeRecordingTestPackage()
+      let url = originalURL.deletingLastPathComponent()
+        .appendingPathComponent("ISSUE220_PRIVATE_RECORDING_患者名-\(UUID().uuidString).ldtxrecord")
+      try FileManager.default.moveItem(at: originalURL, to: url)
+      defer { try? FileManager.default.removeItem(at: url) }
+      let document = try await openRecordingTestDocument(url)
+      let detail = "ISSUE220_PRIVATE_ERROR_OCR_患者名 \(url.path)"
+      let failure = NSError(
+        domain: "ISSUE220_PRIVATE_DOMAIN", code: 220,
+        userInfo: [NSLocalizedDescriptionKey: detail])
+      document.assetLoader = { _, _ in throw failure }
+      let model = document.model
+      model.start()
+      defer { model.stop() }
+      for _ in 0..<100 where model.isLoading {
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(!model.isLoading)
+      #expect(model.alert?.message == detail)
+      #expect(model.alert?.closeAfterDismissal == true)
+      #expect(model.player == nil)
+    }
+
     @Test("Missing recording metadata is rejected by the reader")
     func invalidPackage() async throws {
       let url = try makeRecordingTestPackage()

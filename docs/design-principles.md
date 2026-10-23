@@ -300,3 +300,19 @@ persistence fields, rendering, and tests. Reserve Mute and Muted for audio.
 Hidden video layers are excluded from Program composition, including VFX Sources.
 Do not replace hidden layers with dummy images. Visibility does not stop capture
 or change the configured PTS master.
+
+## Public logs contain diagnostics, not user content
+
+- Public log interpolation is limited to counts, dimensions, timing, numeric
+  status/error codes, fixed implementation phases/enums, and transient UUIDs
+  created by the runtime for diagnostic correlation.
+- Omit workspace/recording paths, file names, authored step names and OCR text
+  when the event alone is sufficient. Treat error descriptions and arbitrary
+  error domains as private: they can contain user content, paths or server text.
+  Retain numeric error codes and the operation/phase publicly. Error propagation
+  and user-visible error details remain intact.
+- Device/source identifiers requiring correlation use private hash masking;
+  persistent document identifiers are not public diagnostic correlation IDs.
+- Validate with distinctive fixture names and error text. Source inspection and
+  focused tests do not establish shipped-build log visibility or retention;
+  report actual unified-log collection separately, using normal privacy settings.

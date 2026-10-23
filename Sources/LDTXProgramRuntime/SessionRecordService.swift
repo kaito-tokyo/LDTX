@@ -689,7 +689,7 @@ public final class SessionRecordService: @unchecked Sendable {
       self.recordingPipeline = recordingPipeline
       self.portraitRecordingPipeline = portraitRecordingPipeline
       sideRecordersByTrackID = sideRecorders
-      logPackagePaths()
+      logPackageCreation()
     } catch {
       resourcePreparationFailed = true
       if let error = error as? SessionRecordServiceError { throw error }
@@ -861,7 +861,7 @@ public final class SessionRecordService: @unchecked Sendable {
       }
     } catch {
       sessionRecordServiceLogger.error(
-        "Cancelled record package cleanup failed: \(error.localizedDescription, privacy: .public)"
+        "Cancelled record package cleanup failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
       )
     }
   }
@@ -881,9 +881,9 @@ public final class SessionRecordService: @unchecked Sendable {
 
   private var isWriting: Bool { stateLock.withLock { state == .writing } }
 
-  private func logPackagePaths() {
+  private func logPackageCreation() {
     sessionRecordServiceLogger.notice(
-      "Record package created directory=\(self.packageDirectory.path, privacy: .public) audioTrackCount=\(self.audioTracks.count, privacy: .public)"
+      "Record package created id=\(self.finalizationID, privacy: .public) audioTrackCount=\(self.audioTracks.count, privacy: .public)"
     )
   }
 }

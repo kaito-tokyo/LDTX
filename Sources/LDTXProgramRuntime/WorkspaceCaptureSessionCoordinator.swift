@@ -822,8 +822,24 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       return true
     }
     guard didInvalidate else { return }
+    let phase: String
+    let code: Int
+    switch failure {
+    case .audioFormatChanged:
+      phase = "audio-format-changed"
+      code = 0
+    case .deviceDisconnected:
+      phase = "device-disconnected"
+      code = 0
+    case .sessionRuntimeError(let value):
+      phase = "session-runtime-error"
+      code = value
+    case .sessionInterrupted(let value):
+      phase = "session-interrupted"
+      code = value
+    }
     Self.logger.error(
-      "Invalidated captured video after runtime failure cameraID=\(capture.request.cameraID, privacy: .public) failure=\(String(describing: failure), privacy: .public)"
+      "Invalidated captured video after runtime failure cameraID=\(capture.request.cameraID, privacy: .private(mask: .hash)) phase=\(phase, privacy: .public) code=\(code, privacy: .public)"
     )
   }
 
@@ -888,11 +904,11 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         switch result {
         case .success:
           Self.logger.notice(
-            "Restarted capture after runtime failure cameraID=\(request.cameraID, privacy: .public)"
+            "Restarted capture after runtime failure cameraID=\(request.cameraID, privacy: .private(mask: .hash))"
           )
         case .failure(let error):
           Self.logger.error(
-            "Capture restart failed cameraID=\(request.cameraID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            "Capture restart failed cameraID=\(request.cameraID, privacy: .private(mask: .hash)) error=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
           )
           self.scheduleReconnect(for: capture)
         }
@@ -915,7 +931,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
         let hasIOSurface = imageBuffer.flatMap(CVPixelBufferGetIOSurface) != nil
         let presentationTime = sampleBuffer.presentationTimeStamp
         Self.logger.error(
-          "Rejected captured video sample cameraID=\(request.cameraID, privacy: .public) receivedSampleCount=\(capture.receivedSampleCount, privacy: .public) rejectedSampleCount=\(capture.rejectedSampleCount, privacy: .public) actualWidth=\(width, privacy: .public) actualHeight=\(height, privacy: .public) requestedWidth=\(request.width, privacy: .public) requestedHeight=\(request.height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public) hasIOSurface=\(hasIOSurface, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) ptsFlags=\(presentationTime.flags.rawValue, privacy: .public)"
+          "Rejected captured video sample cameraID=\(request.cameraID, privacy: .private(mask: .hash)) receivedSampleCount=\(capture.receivedSampleCount, privacy: .public) rejectedSampleCount=\(capture.rejectedSampleCount, privacy: .public) actualWidth=\(width, privacy: .public) actualHeight=\(height, privacy: .public) requestedWidth=\(request.width, privacy: .public) requestedHeight=\(request.height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public) hasIOSurface=\(hasIOSurface, privacy: .public) ptsValue=\(presentationTime.value, privacy: .public) ptsTimescale=\(presentationTime.timescale, privacy: .public) ptsFlags=\(presentationTime.flags.rawValue, privacy: .public)"
         )
       }
       return
@@ -929,7 +945,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
       let height = imageBuffer.map(CVPixelBufferGetHeight) ?? 0
       let pixelFormat = imageBuffer.map(CVPixelBufferGetPixelFormatType) ?? 0
       Self.logger.notice(
-        "Accepted first captured video sample cameraID=\(request.cameraID, privacy: .public) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
+        "Accepted first captured video sample cameraID=\(request.cameraID, privacy: .private(mask: .hash)) width=\(width, privacy: .public) height=\(height, privacy: .public) pixelFormat=\(pixelFormat, privacy: .public)"
       )
     }
     if capture.acceptedSampleCount == 1, let previousTime = capture.firstPresentationTime {

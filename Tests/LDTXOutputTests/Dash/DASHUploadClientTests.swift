@@ -34,6 +34,31 @@ extension OutputTestSuite {
       #expect(response.statusCode == 200)
     }
 
+    @Test func transportFailurePreservesPrivateErrorDetails() async throws {
+      let detail = "ISSUE220_PRIVATE_UPLOAD_ERROR /Users/ISSUE220_PRIVATE_PATH/recording"
+      let failure = NSError(
+        domain: "ISSUE220_PRIVATE_UPLOAD_DOMAIN", code: 220,
+        userInfo: [NSLocalizedDescriptionKey: detail])
+      let session = DASHUploadMockHTTPSession { _ in throw failure }
+      let client = DASHUploadClient(
+        endpoint: DASHIngestEndpoint(
+          baseURL: URL(string: "https://example.invalid/dash?file=")!),
+        session: session,
+        retryPolicy: DASHRetryPolicy(maxAttempts: 1))
+      do {
+        _ = try await put(
+          client,
+          DASHUploadObject(
+            name: DASHObjectName(rawValue: "ISSUE220_PRIVATE_OBJECT.mpd"),
+            data: Data("<MPD/>".utf8), contentType: "application/dash+xml"))
+        Issue.record("Expected transport failure")
+      } catch {
+        #expect((error as NSError).domain == failure.domain)
+        #expect((error as NSError).code == 220)
+        #expect(error.localizedDescription == detail)
+      }
+    }
+
     @Test func conflictMapsToMissingManifestOrInitialization() async throws {
       let session = DASHUploadMockHTTPSession { request in
         (

@@ -762,7 +762,7 @@ final class ActiveProgramRenderer: @unchecked Sendable {
         let mappedKeys = configuration.cameraIDsByInputKey.keys.sorted().joined(separator: ",")
         let cameraIDs = configuration.cameraIDsByInputKey.values.sorted().joined(separator: ",")
         programRuntimeLogger.notice(
-          "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .public) masterFrameAvailable=\(masterFrame != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .public) cameraIDs=\(cameraIDs, privacy: .public)"
+          "Program frame has no master PTS masterCameraID=\(masterKey, privacy: .private(mask: .hash)) masterFrameAvailable=\(masterFrame != nil, privacy: .public) mappedKeys=\(mappedKeys, privacy: .private(mask: .hash)) cameraIDs=\(cameraIDs, privacy: .private(mask: .hash))"
         )
       }
     case .advanced, .stalled:
@@ -783,7 +783,7 @@ private func logProgramRuntimeRenderFailed(
 ) {
   let nsError = error as NSError
   programRuntimeLogger.error(
-    "Active program render failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
+    "Active program render failed errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
   )
 }
 
@@ -792,7 +792,7 @@ private func logProgramRuntimeRendererFailed(
 ) {
   let nsError = error as NSError
   programRuntimeLogger.error(
-    "Active program renderer failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
+    "Active program renderer failed errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
   )
 }
 
