@@ -111,6 +111,7 @@ jobs:
             -scheme LDTXApp \
             -derivedDataPath .derivedData \
             -resolvePackageDependencies
+          git diff --exit-code -- LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

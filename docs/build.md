@@ -6,6 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 
 # Build Guide
 
+See [dependency updates](dependency-updates.md) for Dependabot coverage, manifest
+and lock synchronization, and validation of update proposals.
+
 **Set up Protobuf tools when needed:**
 
 ```sh
