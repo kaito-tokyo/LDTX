@@ -7,9 +7,10 @@ Feature: LDTXYouTube handle live api responses
 
   @LUB-1017.1 @Unit
   Scenario: Build a live API request
-    Given a configured API client and a requested live operation
-    When the request is constructed with a fake transport
-    Then the request contains the operation's required method and parameters
+    Given a fake API transport and a request to list upcoming broadcasts
+    When the client performs the operation
+    Then the request uses GET with broadcastStatus set to upcoming and broadcastType set to event
+    And the request does not include a mine filter
 
   @LUB-1017.2 @Unit
   Scenario: Surface unsuccessful API responses

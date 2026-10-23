@@ -12,8 +12,9 @@ Feature: LDTXBackgroundSegmentation gate inference results
     Then the result reports preparing instead of a completed alpha mask
 
   @LUB-1010.2 @Integration
-  Scenario: Reject stale inference publication
-    Given an inference request from a superseded generation
-    When that request finishes
-    Then its result is not published as the current mask
+  Scenario: Reuse the mask until a significant image change
+    Given a completed mask and a stable input frame
+    When the input is evaluated again
+    Then the existing mask is reused without another inference
+    But a sufficiently large spatially supported image change requests a new inference
 

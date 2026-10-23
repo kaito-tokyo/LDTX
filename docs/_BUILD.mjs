@@ -30,8 +30,8 @@ function escapeHTML(value) {
     .replaceAll(">", "&gt;");
 }
 
-function buildScenarios(outputDirectory) {
-  const sourceDirectory = path.join(docsDirectory, "scenarios");
+function buildFeatures(collection, outputDirectory) {
+  const sourceDirectory = path.join(docsDirectory, collection);
   mkdirSync(outputDirectory, { recursive: true });
   cpSync(
     path.join(docsDirectory, "_lib/gherkin-scenario.js"),
@@ -48,7 +48,7 @@ function buildScenarios(outputDirectory) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${identifier} · LDTX scenarios</title>
+  <title>${identifier} · LDTX ${collection}</title>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
     body { max-width: 52rem; margin: 3rem auto; padding: 0 1.5rem; line-height: 1.6; }
@@ -123,7 +123,9 @@ switch (command) {
         { recursive: true },
       );
     }
-    buildScenarios(path.join(distributionDirectory, "scenarios"));
+    for (const collection of ["scenarios", "behaviors"]) {
+      buildFeatures(collection, path.join(distributionDirectory, collection));
+    }
     break;
   }
   default:

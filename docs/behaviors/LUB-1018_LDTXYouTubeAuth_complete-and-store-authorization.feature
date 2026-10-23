@@ -6,10 +6,10 @@
 Feature: LDTXYouTubeAuth complete and store authorization
 
   @LUB-1018.1 @Unit
-  Scenario: Validate OAuth configuration
-    Given an OAuth client configuration
-    When the configuration is validated
-    Then invalid configuration is rejected before authorization begins
+  Scenario: Reject a web application OAuth client
+    Given Google OAuth client JSON with a web payload instead of an installed payload
+    When the client configuration is decoded
+    Then decoding fails with an unsupported client type error
 
   @LUB-1018.2 @Integration
   Scenario: Handle the loopback callback

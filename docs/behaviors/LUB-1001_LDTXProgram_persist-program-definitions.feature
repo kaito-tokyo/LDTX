@@ -6,14 +6,19 @@
 Feature: LDTXProgram persist program definitions
 
   @LUB-1001.1 @Unit
-  Scenario: Round trip component definitions
-    Given a Program containing configured video components
-    When the Program is serialized and decoded
-    Then component identities, settings, and canvas assignments are preserved
+  Scenario: Round trip ordered Program content
+    Given a composite Program with ordered video steps and audio channels
+    When the definition is encoded and decoded
+    Then step order, component settings, and audio channels are preserved
 
   @LUB-1001.2 @Unit
-  Scenario: Preserve independent canvas preferences
-    Given different Landscape and Portrait layer preferences
-    When one canvas preference is changed
-    Then the other canvas retains its settings
+  Scenario: Keep layer visibility local to its Program
+    Given Programs A and B sharing a camera layer
+    When the layer is hidden in Program A
+    Then the layer remains visible in Program B
 
+  @LUB-1001.3 @Unit
+  Scenario: Mute without discarding the configured gain
+    Given an audio channel with gain 0.5
+    When the channel is muted and then unmuted
+    Then muting produces zero output gain and unmuting restores gain 0.5

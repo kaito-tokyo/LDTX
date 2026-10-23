@@ -7,13 +7,14 @@ Feature: LDTXProgramRendering translate visible program layers
 
   @LUB-1020.1 @Integration
   Scenario: Respect saved layer order
-    Given a Program with multiple visible layers
+    Given visible layers listed from top to bottom as A, B, and C
     When its composition is prepared
-    Then drawing order matches the saved layer order
+    Then drawing commands are emitted in order C, B, A so A appears on top
 
   @LUB-1020.2 @Integration
-  Scenario: Exclude hidden layers
-    Given a Program containing a hidden video layer
-    When its composition is prepared
-    Then the hidden layer contributes no drawing command or dummy replacement
+  Scenario: Leave an unprepared overlay transparent
+    Given a Clock layer without a completed retained texture
+    When its drawing commands are prepared
+    Then the Clock emits no placeholder pixels
+    And a completed retained texture is used when it becomes available
 

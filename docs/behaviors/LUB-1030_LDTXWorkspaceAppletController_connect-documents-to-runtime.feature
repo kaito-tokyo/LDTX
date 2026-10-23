@@ -11,9 +11,3 @@ Feature: LDTXWorkspaceAppletController connect documents to runtime
     When the document content view is reconstructed
     Then the same coordinator remains connected
 
-  @LUB-1030.2 @Integration
-  Scenario: Await cleanup before unregistering
-    Given a Workspace coordinator with accepted background work
-    When the Workspace closes
-    Then registration is released only after asynchronous cleanup completes
-

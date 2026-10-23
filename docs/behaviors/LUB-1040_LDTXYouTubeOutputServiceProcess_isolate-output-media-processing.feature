@@ -13,7 +13,7 @@ Feature: LDTXYouTubeOutputServiceProcess isolate output media processing
 
   @LUB-1040.2 @Integration
   Scenario: Reject retired session media
-    Given a media processor with an active session
-    When media for an earlier session is submitted
-    Then the earlier session cannot modify the active output
+    Given an output service bootstrapped with session A
+    When a media batch carrying session B's context is submitted
+    Then the service returns an error before appending that batch to the media processor
 

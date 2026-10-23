@@ -6,26 +6,26 @@
 Feature: LDTXProgramRuntime coordinate live media and output
 
   @LUB-1026.1 @Integration
-  Scenario: Deliver current input frames
-    Given a runtime with a controllable video source
-    When a new source frame is accepted
-    Then consumers can retrieve the current frame without receiving invalidated frames
+  Scenario: Invalidate failed capture frames
+    Given a camera with a previously accepted frame
+    When capture reports a runtime failure
+    Then the failed camera's frame becomes unavailable until a new frame is accepted
 
-  @LUB-1026.2 @Integration
-  Scenario: Use a session settings snapshot
-    Given a runtime with saved output settings
-    When output starts and editable settings subsequently change
-    Then the active session retains its captured settings
+  @LUB-1026.2 @Unit
+  Scenario: Maintain cadence without source timestamps
+    Given a 30 fps video timeline with frame 10 timestamped at zero
+    When the next accepted frame is frame 14 without a source timestamp
+    Then its timestamp is 4 divided by 30 seconds
+    And switching pipelines does not reuse the previous pipeline's frame numbering
 
   @LUB-1026.3 @Integration
-  Scenario: Finish accepted work before stopping
-    Given an output session with accepted media and screenshot package copies
+  Scenario: Stop only after media delivery finishes
+    Given an output session with accepted media and an in-flight delivery callback
     When stop is requested
-    Then admission closes and accepted work finishes before the recording is finalized
+    Then new media is rejected and stop completes after accepted delivery and finalization
 
   @LUB-1026.4 @Integration
   Scenario: Produce overlays independently
     Given a runtime with Clock or Dynamic Text overlays
     When overlay content changes while no Program frame is requested
-    Then overlay generation can publish a new texture without invoking composition
-
+    Then overlay generation publishes a new texture without invoking composition

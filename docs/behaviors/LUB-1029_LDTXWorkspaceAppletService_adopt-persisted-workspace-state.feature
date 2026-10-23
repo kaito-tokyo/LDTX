@@ -7,9 +7,10 @@ Feature: LDTXWorkspaceAppletService adopt persisted workspace state
 
   @LUB-1029.1 @Integration
   Scenario: Adopt only successfully persisted definitions
-    Given editable content that differs from the runtime definition
-    When saving succeeds or fails
-    Then only a successful save replaces the runtime definition
+    Given runtime definition A and editable definition B
+    When a save of B fails
+    Then the runtime continues using A and editable content remains B
+    And a subsequent successful save adopts B
 
   @LUB-1029.2 @Unit
   Scenario: Schedule Vision without catch-up queues
@@ -23,9 +24,24 @@ Feature: LDTXWorkspaceAppletService adopt persisted workspace state
     When cleanup completes
     Then the actionable failure remains available for presentation
 
-  @LUB-1029.4 @Integration
-  Scenario: Reject resource path escapes
-    Given a resource destination with unsafe path components
-    When the resource path is resolved
-    Then the destination cannot escape the intended resource directory
+  @LUB-1029.4 @Unit
+  Scenario: Encode resource names as single path components
+    Given resource names containing dots, slashes, percent signs, or null characters
+    When each name is encoded for a resource path
+    Then those characters are escaped within a single path component
+    And distinct names do not collide through escaping
+
+  @LUB-1029.5 @Unit
+  Scenario: Preserve canvas visibility in the runtime graph
+    Given a saved Program whose camera layer is hidden on one canvas
+    When its runtime graph is built
+    Then that canvas marks the camera layer hidden for rendering
+    And visibility on the other canvas is unchanged
+
+  @LUB-1029.6 @Integration
+  Scenario: Capture output settings at session start
+    Given saved output settings A
+    When output starts and editable output settings become B
+    Then the active session continues using A
+    And the next session uses B only after B has been successfully saved
 

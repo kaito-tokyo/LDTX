@@ -12,8 +12,9 @@ Feature: LDTXDeviceRegistry represent device availability
     Then the logical identity remains the device UID
 
   @LUB-1009.2 @Integration
-  Scenario: Report disconnected assignments
-    Given a saved device assignment absent from discovery
-    When available devices are refreshed
-    Then the assignment remains identifiable as unavailable
+  Scenario: Expose discovery failure
+    Given audio input discovery fails
+    When the registry refreshes
+    Then the audio input list is empty and the discovery error is available
+    And the registry records that a refresh was attempted
 

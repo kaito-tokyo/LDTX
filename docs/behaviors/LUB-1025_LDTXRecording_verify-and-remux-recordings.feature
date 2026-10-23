@@ -7,7 +7,7 @@ Feature: LDTXRecording verify and remux recordings
 
   @LUB-1025.1 @Integration
   Scenario: Verify package media
-    Given a recording package with referenced audio and video tracks
+    Given a recording package with a missing or invalid referenced media track
     When the package is verified
     Then missing or invalid media is reported
 
