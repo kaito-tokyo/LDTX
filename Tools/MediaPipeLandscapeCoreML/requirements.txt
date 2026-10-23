@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Model-generation dependencies; see ../../docs/build.md for setup.
+# Keep exact source pins and validate model compatibility when changing them.
+
+coremltools==9.0
+huggingface_hub==0.34.4
+onnx==1.22.0
+onnx2torch==1.5.15
+torch==2.13.0

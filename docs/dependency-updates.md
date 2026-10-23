@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 # Dependency updates
 
 Dependabot proposes weekly updates for GitHub Actions, the root Swift package,
-AppAuth in the Xcode package lock, and Python model tooling. No dependency
+and AppAuth in the Xcode package lock. No dependency
 versions are changed just by enabling this configuration. Review every proposal
 and complete the synchronization and validation steps below before merging.
 
@@ -31,32 +31,30 @@ Xcode resolves packages; generating and resolving first would restore the old pi
 Confirm the first hosted Dependabot run after this configuration reaches main:
 upstream implementation support alone does not prove a hosted run succeeded.
 
-On the proposal branch, run from the repository root:
+On the proposal branch, manually copy shared exact versions from `Package.swift`
+into the corresponding `project.yml` declarations. For an AppAuth lock proposal,
+copy its proposed version from the Xcode `Package.resolved` into `project.yml`
+before generating or resolving the project. For a manual AppAuth update, edit
+its `exactVersion` directly in `project.yml`.
+
+Then run from the repository root:
 
 ```sh
-python3 Tools/dependencies.py sync
 swift package resolve
 xcodegen generate
 xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
   -derivedDataPath .derivedData -resolvePackageDependencies
-python3 Tools/dependencies.py check
-python3 -B -m unittest discover -s Tests/DependencyToolTests
 ```
 
-`sync` copies shared versions from `Package.swift` and the proposed AppAuth
-version from the Xcode lock into `project.yml`. It preserves unrelated YAML.
-It does not fabricate lock revisions or origin hashes: SwiftPM and Xcode must
-regenerate their own locks. Review both lock diffs and commit them together with
-the manifest changes. For a manual AppAuth update, edit its `exactVersion` in
-`project.yml`, generate and resolve Xcode, then run `check` (do not run `sync`
-against the old AppAuth lock). New app packages require an explicit coverage
-policy in the checker and bot configuration.
+Review both resolver-produced lock diffs together with the manifest changes.
+Check that shared packages have matching versions and commit revisions in both
+locks and that each declaration matches its resolved version. Commit the
+manifests and locks together. New app packages require a deliberate Dependabot
+coverage policy. There is no custom synchronization script or dedicated CI check
+for cross-manifest pin consistency or Python requirement syntax; reviewers must
+verify these manually.
 
-Check CI rejects mismatched declarations, missing direct lock entries, different
-shared commit revisions, and Python source/lock drift (including removed direct
-requirements identified by uv annotations). It runs offline with the
-Python standard library. It verifies pin consistency, not upstream resolution or
-model compatibility. Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
+Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
 `pr` test plan on dependency pull requests. After Xcode package resolution, CI
 rejects changes to the tracked Xcode lock, including a regenerated `originHash`;
 commit the resolver-produced lock before retrying CI. Run the relevant local
@@ -66,36 +64,26 @@ checking generated Protobuf compatibility and the documented generator version.
 
 ## Python model tooling
 
-The `pip` ecosystem recognizes `requirements-dev.txt`. Dependabot groups its
-source pin proposals into `model-tooling`; accepting them remains a coordinated
-model-compatibility decision. The custom uv-generated `requirements-dev.lock`
-is not a pip-compile `.in`/`.txt` pair and is not maintained by Dependabot.
-Do not hand-edit its transitive versions or hashes.
+Model generation is maintained manually under `Tools/MediaPipeLandscapeCoreML/`.
+This deliberately supersedes the Python model-tooling Dependabot coverage added
+by PR #389; there is no `pip` update scope. Swift, AppAuth and GitHub Actions
+coverage remains enabled. This does not change repository security-alert settings.
+The unmerged model-tooling proposal PR #390 is superseded by this policy; it is
+not closed or modified by this reorganization.
 
-`.python-version` declares a pyenv-recognized Python 3.13 patch version so
-Dependabot selects a 3.13 interpreter rather than its default newest minor.
-Dependabot normalizes this metadata to the minor series and uses its supported
-3.13 patch; the lock regeneration target remains `--python-version 3.13`.
+`requirements.txt` contains exact source pins, and `.python-version` records
+Python 3.13.13 for this tool only. Other Python utilities use the standard library
+and do not require this environment. There is no model-tooling dependency lock;
+transitive dependencies are resolved during installation and are not hash-verified
+or pinned as a complete environment. The application build consumes the committed
+model resource and does not install these conversion dependencies.
 
-After reviewing proposed source pins, regenerate on Python 3.13 using the
-existing build-guide command:
-
-```sh
-uv pip compile --generate-hashes --python-version 3.13 \
-  requirements-dev.txt --output-file requirements-dev.lock
-python3 Tools/dependencies.py check
-uv venv --python 3.13
-uv pip sync --require-hashes requirements-dev.lock
-uv run --no-sync python Tools/MediaPipeSelfieSegmenter.py
-```
-
-Review the full transitive lock diff and regenerated model, then validate model
-loading/inference with the app's relevant HardTests and a representative model
-compatibility check. A green pin check or ordinary Swift CI does not establish
-model compatibility. Source-only bot proposals intentionally fail the pin check
-until the lock is regenerated. Transitive-only Python updates remain manual,
-using the same coordinated validation. Do not upgrade the entire environment
-merely to refresh a single dependency.
+For a deliberately reviewed model or dependency update, follow the conversion
+commands in [the build guide](build.md). Review changed source pins and the
+regenerated model, then validate model loading/inference with the app's relevant
+HardTests and a representative model compatibility check. Ordinary Swift CI does
+not establish model compatibility. Do not upgrade the entire environment merely
+to refresh a single dependency.
 
 ## Other update paths and security coverage
 

@@ -94,7 +94,7 @@ the commands below.
 | `Sources/Corelibs/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
 | `Sources/Corelibs/LDTXProtos/youtube_output.pb.swift`      | `Protos/youtube_output.proto`                     |
 | `Sources/Corelibs/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
-| `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeSelfieSegmenter.py`              |
+| `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
 All schemas under `Protos` use Edition 2024. Generate them with a compiler and
@@ -163,25 +163,25 @@ protoc \
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
 The converter uses the fixed Hugging Face revision in
-[`Tools/MediaPipeSelfieSegmenter.py`](../Tools/MediaPipeSelfieSegmenter.py).
+[`Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`](../Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py).
 Change that revision deliberately and review the regenerated model together
-with the dependency pins in [`requirements-dev.txt`](../requirements-dev.txt).
-Install the reviewed transitive dependency set from the hash-locked file:
+with the dependency pins in [`Tools/MediaPipeLandscapeCoreML/requirements.txt`](../Tools/MediaPipeLandscapeCoreML/requirements.txt).
+The generated resource stays at `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage`
+for the app build. The converter resolves that path relative to its own file,
+independently of the current working directory. From the repository root, enter
+the tooling directory and install the pinned source requirements:
 
 ```sh
-uv venv --python 3.13
-uv pip sync --require-hashes requirements-dev.lock
+cd Tools/MediaPipeLandscapeCoreML
+uv venv --python 3.13.13
+uv pip install -r requirements.txt
 ```
 
-After deliberately changing a source dependency, regenerate the lock with:
+Run the converter from that same tooling directory:
 
 ```sh
-uv pip compile --generate-hashes --python-version 3.13 \
-  requirements-dev.txt --output-file requirements-dev.lock
-```
-
-```sh
-uv run --no-sync python Tools/MediaPipeSelfieSegmenter.py
+uv run --no-sync python MediaPipeSelfieSegmenter.py
+cd ../..
 ```
 
 **If the Xcode project must be updated:**

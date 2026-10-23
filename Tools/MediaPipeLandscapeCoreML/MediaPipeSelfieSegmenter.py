@@ -23,7 +23,7 @@ MODEL_REPOSITORY = "onnx-community/mediapipe_selfie_segmentation_landscape"
 MODEL_REVISION = "2497d5bec26c626c7b3c4edc6e1fefc21b64f6c3"
 MODEL_FILENAME = "onnx/model.onnx"
 OUTPUT_PATH = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
     / "Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage"
 )
 
