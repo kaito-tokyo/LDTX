@@ -98,7 +98,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     case inputAudio(CMSampleBuffer, trackID: String)
   }
 
-  private struct Boundary {
+  private struct Boundary: @unchecked Sendable {
     let id: UUID
     let operationID: UUID
     let previous: any SessionRecordServicing
@@ -131,6 +131,25 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var audioFormatReadinessChanged: @MainActor @Sendable () -> Void = {}
   private var activeService: (any SessionRecordServicing)?
   private var boundary: Boundary?
+  private var replacementPreparation: ReplacementPreparation?
+
+  private final class ReplacementPreparation: @unchecked Sendable {
+    let lock = NSLock()
+    var cancelled = false
+    var timeout: Task<Void, Never>?
+    let replacement: any SessionRecordServicing
+    let completion: @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
+
+    init(
+      replacement: any SessionRecordServicing,
+      completion: @escaping @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
+    ) {
+      self.replacement = replacement
+      self.completion = completion
+    }
+    var isCancelled: Bool { lock.withLock { cancelled } }
+    func cancel() { lock.withLock { cancelled = true } }
+  }
   private var isCutPending = false
   private var pendingCutAudio: [Sample] = []
   private var pendingCutAudioByteCount = 0
@@ -398,67 +417,95 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
+  /// First-video preparation may block in a writer. It must never occupy the
+  /// recording queue, which owns rollback and continues buffering both canvases.
   func enqueueCommit(
     boundaryID: UUID,
     operationID: UUID,
     replacement: any SessionRecordServicing,
+    preparationTimeout: Duration = .seconds(10),
     completionHandler: @escaping @MainActor @Sendable (Result<CommitResult?, Error>) -> Void
   ) {
     queue.async { [self] in
-      let result = Result {
-        try commitOnMediaQueue(
-          boundaryID: boundaryID, operationID: operationID, replacement: replacement)
+      guard let boundary, boundary.id == boundaryID,
+        boundary.operationID == operationID, activeService === boundary.previous,
+        replacementPreparation == nil
+      else {
+        Task { @MainActor in completionHandler(.success(nil)) }
+        return
       }
-      Task { @MainActor in completionHandler(result) }
+      let preparation = ReplacementPreparation(
+        replacement: replacement, completion: completionHandler)
+      replacementPreparation = preparation
+      preparation.timeout = Task { [self] in
+        do { try await Task.sleep(for: preparationTimeout) } catch { return }
+        queue.async { [self] in
+          guard replacementPreparation === preparation else { return }
+          rollbackBoundary()
+        }
+      }
+      // Each attempt owns an executor: a stalled previous attempt cannot hold up
+      // a later cut. Its closure retains the abandoned writer until it returns.
+      DispatchQueue(label: "tokyo.kaito.ldtx.record-replacement").async { [self] in
+        let result = Result { try Self.prepareReplacement(boundary, preparation: preparation) }
+        queue.async { [self] in
+          guard replacementPreparation === preparation else { return }
+          replacementPreparation = nil
+          preparation.timeout?.cancel()
+          let result = result.map { _ -> CommitResult? in
+            guard let currentBoundary = self.boundary,
+              currentBoundary.id == boundaryID, activeService === boundary.previous
+            else { return nil }
+            return commitPreparedReplacement(currentBoundary, replacement: replacement)
+          }
+          if case .failure = result { rollbackBoundary() }
+          Task { @MainActor in completionHandler(result) }
+        }
+      }
     }
   }
 
-  private func commitOnMediaQueue(
-    boundaryID: UUID,
-    operationID: UUID,
-    replacement: any SessionRecordServicing
-  ) throws -> CommitResult? {
-    guard let boundary, boundary.id == boundaryID else { return nil }
-    guard boundary.operationID == operationID, activeService === boundary.previous else {
-      rollbackBoundary()
-      return nil
+  private static func prepareReplacement(
+    _ boundary: Boundary, preparation: ReplacementPreparation
+  ) throws {
+    let replacement = preparation.replacement
+    var firstVideos: [(CMSampleBuffer, () throws -> Void)] = []
+    if boundary.previous.recordsLandscapeOutput {
+      guard let video = boundary.landscapeFirstVideo,
+        let audioFormat = boundary.mainAudioFormatDescription
+      else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
+      firstVideos.append(
+        (
+          video,
+          {
+            try replacement.acceptFirstVideo(video, mainAudioFormatDescription: audioFormat)
+          }
+        ))
     }
-    do {
-      var firstVideos: [(CMSampleBuffer, () throws -> Void)] = []
-      if boundary.previous.recordsLandscapeOutput {
-        guard let video = boundary.landscapeFirstVideo,
-          let audioFormat = boundary.mainAudioFormatDescription
-        else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
-        firstVideos.append(
-          (
-            video,
-            {
-              try replacement.acceptFirstVideo(video, mainAudioFormatDescription: audioFormat)
-            }
-          ))
-      }
-      if boundary.previous.recordsPortraitOutput {
-        guard let video = boundary.portraitFirstVideo,
-          let audioFormat = boundary.portraitAudioFormatDescription
-        else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
-        firstVideos.append(
-          (
-            video,
-            {
-              try replacement.acceptFirstPortraitVideo(
-                video, mainAudioFormatDescription: audioFormat)
-            }
-          ))
-      }
-      for (_, accept) in firstVideos.sorted(by: {
-        CMTimeCompare($0.0.presentationTimeStamp, $1.0.presentationTimeStamp) < 0
-      }) {
-        try accept()
-      }
-    } catch {
-      rollbackBoundary()
-      throw error
+    if boundary.previous.recordsPortraitOutput {
+      guard let video = boundary.portraitFirstVideo,
+        let audioFormat = boundary.portraitAudioFormatDescription
+      else { throw WorkspaceRecordMediaCoreError.firstVideoMissing }
+      firstVideos.append(
+        (
+          video,
+          {
+            try replacement.acceptFirstPortraitVideo(
+              video, mainAudioFormatDescription: audioFormat)
+          }
+        ))
     }
+    for (_, accept) in firstVideos.sorted(by: {
+      CMTimeCompare($0.0.presentationTimeStamp, $1.0.presentationTimeStamp) < 0
+    }) {
+      guard !preparation.isCancelled else { return }
+      try accept()
+    }
+  }
+
+  private func commitPreparedReplacement(
+    _ boundary: Boundary, replacement: any SessionRecordServicing
+  ) -> CommitResult {
     activeService = replacement
     inputCallbackLock.withLock {
       inputCallbackService = replacement
@@ -936,6 +983,15 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   }
 
   private func rollbackBoundary() {
+    if let preparation = replacementPreparation {
+      replacementPreparation = nil
+      preparation.cancel()
+      preparation.timeout?.cancel()
+      Task { @MainActor in
+        preparation.replacement.abandonAfterMediaDrainTimeout()
+        preparation.completion(.failure(WorkspaceRecordingPreparationAbandoned()))
+      }
+    }
     guard let boundary else {
       if let activeService {
         for sample in pendingCutAudio { deliver(sample, to: activeService) }
@@ -1109,5 +1165,12 @@ final class RecordFinalizationRace: @unchecked Sendable {
     }
     timeoutTask?.cancel()
     continuation?.resume(returning: result)
+  }
+}
+
+/// Preparation may still be executing. Cleanup must not wait on or delete its writer.
+struct WorkspaceRecordingPreparationAbandoned: LocalizedError {
+  var errorDescription: String? {
+    "Recording cut preparation was interrupted or exceeded its deadline."
   }
 }

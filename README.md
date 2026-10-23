@@ -70,7 +70,11 @@ Landscape and Portrait wait for usable video boundaries; mixed and input audio
 are divided at those boundaries. YouTube output continues on its existing
 subscriptions. Cut is disabled until the recording has accepted video and audio,
 and while a cut is pending. A replacement preparation failure keeps the current
-recording active and reports the error. Stop and Pause cancel a waiting cut and
+recording active and reports the error. Replacement first-video preparation has
+an independent 10-second deadline. A stalled replacement is left incomplete;
+rollback and later cuts do not wait for its writer to return. An uninterruptible
+native call retains its worker and replacement resources until it returns.
+Stop and Pause cancel a waiting cut and
 drain any already committed package transition. Close still requires output to
 be stopped first; an admitted Close supersedes a Cut waiting in the command queue.
 

@@ -444,10 +444,16 @@ public final class WorkspaceV4RecordingSession {
       return .success(())
     } catch {
       core.enqueueRollbackPendingCut()
-      await core.waitForPendingOperations()
+      // The media core already abandoned a stalled preparation. Re-entering
+      // its writer for cancellation could block Stop on the same native call.
+      if !(error is WorkspaceRecordingPreparationAbandoned) {
+        await core.waitForPendingOperations()
+      }
       if let replacement {
-        _ = await withCheckedContinuation { continuation in
-          replacement.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
+        if !(error is WorkspaceRecordingPreparationAbandoned) {
+          _ = await withCheckedContinuation { continuation in
+            replacement.cancelBeforeFirstVideo { continuation.resume(returning: $0) }
+          }
         }
         preparingRecordingPackages.remove(replacement.packageDirectory)
         preparingRecordingFailures.removeValue(forKey: replacement.packageDirectory)

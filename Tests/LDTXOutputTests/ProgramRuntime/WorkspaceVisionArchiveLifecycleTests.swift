@@ -445,6 +445,77 @@ extension OutputTestSuite {
       _ = await core.closeAndDrain()
     }
 
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func blockedReplacementPreparationRollsBackWithoutWaiting(
+      portrait: Bool, cancel: Bool
+    ) async throws {
+      let core = WorkspaceRecordMediaCore()
+      let previous = BoundaryRecorder()
+      let replacement = BoundaryRecorder()
+      replacement.blockPortrait = portrait
+      replacement.preparationGate = DispatchSemaphore(value: 0)
+      defer { replacement.preparationGate?.signal() }
+      var boundary: UUID?
+      core.setCallbacks(
+        commitRequest: { boundary = $0 }, eventHandler: { _ in },
+        failureHandler: { Issue.record("Unexpected delivery error: \($0)") },
+        cutStateChanged: { _ in })
+      core.install(previous)
+      let operation = UUID()
+      core.enqueueMainAudio(try audioSample())
+      core.enqueuePortraitAudio(try audioSample())
+      core.enqueueCutRequest(for: previous)
+      core.enqueueVideo(try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      while boundary == nil { await Task.yield() }
+      let commit = Task { @MainActor in
+        await withCheckedContinuation { continuation in
+          core.enqueueCommit(
+            boundaryID: boundary!, operationID: operation, replacement: replacement,
+            preparationTimeout: .milliseconds(100)
+          ) { continuation.resume(returning: $0) }
+        }
+      }
+      while !replacement.preparationEntered.withLock({ $0 }) { await Task.yield() }
+      if cancel { core.enqueueRollbackPendingCut() }
+      let result = await commit.value
+      if case .failure(let error) = result {
+        #expect(error is WorkspaceRecordingPreparationAbandoned)
+      } else {
+        Issue.record("Blocked preparation must not commit")
+      }
+      #expect(replacement.abandonCount.withLock { $0 } == 1)
+      // Neither completion nor continued delivery requires releasing the writer.
+      core.enqueueVideo(try retime(videoSample(), frame: 4, timescale: 10), operationID: operation)
+      await core.waitForPendingOperations()
+      #expect(previous.events.withLock { $0 }.contains("landscapeVideo:3"))
+      #expect(previous.events.withLock { $0 }.contains("portraitVideo:3"))
+      #expect(previous.events.withLock { $0 }.contains("landscapeVideo:4"))
+      // A later attempt and Stop's media drain also remain independent of the
+      // quarantined writer. Publish a healthy replacement before releasing it.
+      boundary = nil
+      let healthy = BoundaryRecorder()
+      core.enqueueCutRequest(for: previous)
+      core.enqueueVideo(try retime(videoSample(), frame: 5, timescale: 10), operationID: operation)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 5, timescale: 10), operationID: operation)
+      while boundary == nil { await Task.yield() }
+      let retry = await withCheckedContinuation { continuation in
+        core.enqueueCommit(
+          boundaryID: boundary!, operationID: operation, replacement: healthy
+        ) { continuation.resume(returning: $0) }
+      }
+      #expect(try retry.get()?.current === healthy)
+      core.enqueueVideo(try retime(videoSample(), frame: 6, timescale: 10), operationID: operation)
+      await core.waitForPendingOperations()
+      #expect(healthy.events.withLock { $0 }.contains("landscapeVideo:6"))
+      try (await core.closeAndDrain()).get()
+      replacement.preparationGate?.signal()
+      while !replacement.preparationExited.withLock({ $0 }) { await Task.yield() }
+      #expect(!replacement.events.withLock { $0 }.contains("landscapeVideo:6"))
+    }
+
     private final class BoundaryRecorder: SessionRecordServicing, @unchecked Sendable {
       let packageDirectory = URL(fileURLWithPath: "/tmp/boundary-fixture.ldtxrecord")
       let hasAcceptedFirstVideo = true
@@ -452,6 +523,16 @@ extension OutputTestSuite {
       let recordsPortraitOutput = true
       var failFirstVideo = false
       var stallsFinalization = false
+      var preparationGate: DispatchSemaphore?
+      var blockPortrait = false
+      let preparationEntered = Mutex(false)
+      let preparationExited = Mutex(false)
+      func waitForPreparation(portrait: Bool) {
+        guard portrait == blockPortrait, let preparationGate else { return }
+        preparationEntered.withLock { $0 = true }
+        preparationGate.wait()
+        preparationExited.withLock { $0 = true }
+      }
       let abandonCount = Mutex(0)
       @MainActor var pendingFinalization:
         (@MainActor @Sendable (SessionRecordFinalizationResult) -> Void)?
@@ -471,13 +552,17 @@ extension OutputTestSuite {
         _ sample: CMSampleBuffer,
         mainAudioFormatDescription: CMAudioFormatDescription?
       ) throws {
+        waitForPreparation(portrait: false)
         if failFirstVideo { throw NSError(domain: "first-video-fixture", code: 19) }
         appendMainVideo(sample)
       }
       func acceptFirstPortraitVideo(
         _ sample: CMSampleBuffer,
         mainAudioFormatDescription: CMAudioFormatDescription?
-      ) throws { appendPortraitVideo(sample) }
+      ) throws {
+        waitForPreparation(portrait: true)
+        appendPortraitVideo(sample)
+      }
       func appendMainVideo(_ sample: CMSampleBuffer) { add("landscapeVideo", sample) }
       func appendPortraitVideo(_ sample: CMSampleBuffer) { add("portraitVideo", sample) }
       func appendMainAudioMix(_ sample: CMSampleBuffer) { add("landscapeAudio", sample) }
