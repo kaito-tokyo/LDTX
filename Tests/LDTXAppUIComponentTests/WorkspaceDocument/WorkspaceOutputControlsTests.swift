@@ -10,6 +10,46 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func stopOrCloseSupersedesCutWaitingBehindAnotherCommand(closing: Bool) async {
+      let document = WorkspaceDocument()
+      let coordinator = WorkspaceAppletCoordinator(document: document)
+      var release: CheckedContinuation<Void, Never>?
+      var cutExecuted = false
+      let preceding = Task {
+        await coordinator.transactionalCommands.submit(.switchProgram) {
+          await withCheckedContinuation { release = $0 }
+        }
+      }
+      while release == nil { await Task.yield() }
+      let cut = Task {
+        await coordinator.cutRecording { cutExecuted = true }
+      }
+      while !coordinator.transactionalCommands.contains(.cutRecording) { await Task.yield() }
+      let finish = Task {
+        if closing {
+          _ = await coordinator.closeWorkspace()
+        } else {
+          await coordinator.stopOutput()
+        }
+      }
+      while closing
+        ? !coordinator.isClosing
+        : !coordinator.transactionalCommands.contains(.stopOutputSession)
+      { await Task.yield() }
+      release?.resume()
+      _ = await preceding.value
+      guard case .succeeded = await cut.value else {
+        Issue.record("Superseded Cut must not stall the following Stop/Close")
+        return
+      }
+      await finish.value
+      #expect(!cutExecuted)
+      #expect(!coordinator.transactionalCommands.isStalled)
+      if !closing { await coordinator.shutdown() }
+      #expect(document.isClosed)
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func failedClosePresentsCaptureAndCleanupErrorsWithoutRetryReplay() async throws {
       let document = WorkspaceDocument()

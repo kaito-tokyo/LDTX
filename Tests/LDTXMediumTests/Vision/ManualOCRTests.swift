@@ -14,6 +14,41 @@ struct ManualOCRIntegrationTestSuite {
     case success, failure, deleted, deletedFromEditor, closed, stopped, changedPackage, paused
   }
 
+  @Test(arguments: [false, true])
+  func suspendedFrameRequestRetainsOriginalArchiveOwnership(packageChanges: Bool) async {
+    let vision = Ldtx_Workspace_V4_OcrVision.with { $0.internalID = 11 }
+    let wrapper = Ldtx_Workspace_V4_VisionWrapper.with { $0.ocrVision = vision }
+    var package = URL(fileURLWithPath: "/tmp/original.ldtxrecord")
+    var timeline: UInt64 = 123
+    var release: CheckedContinuation<Void, Never>?
+    var results: [String] = []
+    var archives: [UInt64?] = []
+    let feature = WorkspaceV4VisionFeature(
+      scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
+      recognizeText: { _, _ in "captured result" })
+    var context = WorkspaceV4VisionFeatureContext(
+      vision: { $0 == 11 ? vision : nil },
+      frameForVision: { _ in
+        await withCheckedContinuation { release = $0 }
+        return .init(image: CIImage(color: .white))
+      },
+      reportResult: { _, result in results.append(result) },
+      reportFailure: { _, error in Issue.record("Unexpected OCR error: \(error)") })
+    context.recordingPackageURL = { package }
+    context.recordingTimelineMilliseconds = { timeline }
+    context.archiveTimedResult = { _, _, _, captured in archives.append(captured) }
+    feature.synchronize(visions: [wrapper], context: context)
+    feature.runOCR(visionInternalID: 11)
+    while release == nil { await Task.yield() }
+    timeline = 0
+    if packageChanges { package = URL(fileURLWithPath: "/tmp/replacement.ldtxrecord") }
+    release?.resume()
+    while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
+    #expect(results == ["captured result"])
+    #expect(archives == (packageChanges ? [] : [123]))
+    await feature.stop()
+  }
+
   @Test func unavailableFrameCanBeRetried() async {
     let vision = Ldtx_Workspace_V4_OcrVision.with { $0.internalID = 11 }
     var unavailable = true
@@ -94,6 +129,8 @@ struct ManualOCRIntegrationTestSuite {
     var results: [String] = []
     var failures = 0
     var archives = 0
+    var timeline: UInt64 = 123
+    var archivedTimelines: [UInt64?] = []
     let feature = WorkspaceV4VisionFeature(
       scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
       recognizeText: { _, _ in
@@ -110,6 +147,11 @@ struct ManualOCRIntegrationTestSuite {
       archiveResult: { _, _, _ in archives += 1 })
     context.isCurrent = { current }
     context.recordingPackageURL = { package }
+    context.recordingTimelineMilliseconds = { timeline }
+    context.archiveTimedResult = { _, _, _, captured in
+      archives += 1
+      archivedTimelines.append(captured)
+    }
     feature.synchronize(visions: [wrapper], context: context)
     #expect(feature.canRunOCR(visionInternalID: 11))
     #expect(!feature.canRunOCR(visionInternalID: 99))
@@ -119,6 +161,7 @@ struct ManualOCRIntegrationTestSuite {
     feature.runOCR(visionInternalID: 11)
     while release == nil { await Task.yield() }
     #expect(calls == 1)
+    timeline = 987
     switch completion {
     case .deleted: vision = nil
     case .deletedFromEditor: targetExists = false
@@ -151,6 +194,7 @@ struct ManualOCRIntegrationTestSuite {
     #expect(results == (publishes ? ["manual result"] : []))
     #expect(failures == (completion == .failure ? 1 : 0))
     #expect(archives == (recording && completion == .success ? 1 : 0))
+    #expect(archivedTimelines.allSatisfy { $0 == 123 })
     #expect(!feature.canRunOCR(visionInternalID: 11))
     feature.runOCR(visionInternalID: 11)
     #expect(calls == 1)

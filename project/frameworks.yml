@@ -614,6 +614,23 @@ targets:
   LDTXFontRasterizer:
     type: framework
     platform: macOS
+    # The verifier needs root links that Xcode 27.1 omits from its own inputs.
+    # Stage its module map after those links to express the missing dependencies.
+    preBuildScripts:
+      - name: Stage public module map after framework links
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/$(FULL_PRODUCT_NAME)/Versions/Current"
+          - "$(BUILT_PRODUCTS_DIR)/$(FULL_PRODUCT_NAME)/Headers"
+          - "$(BUILT_PRODUCTS_DIR)/$(FULL_PRODUCT_NAME)/Modules"
+          - "$(SRCROOT)/Sources/LDTXFontRasterizer/include/module.modulemap"
+        outputFiles:
+          - "$(DERIVED_FILE_DIR)/LDTXFontRasterizer.modulemap"
+        script: |
+          set -eu
+          for link in "$SCRIPT_INPUT_FILE_0" "$SCRIPT_INPUT_FILE_1" "$SCRIPT_INPUT_FILE_2"; do
+            test -L "$link"
+          done
+          /bin/cp "$SCRIPT_INPUT_FILE_3" "$SCRIPT_OUTPUT_FILE_0"
     sources:
       - path: Sources/LDTXFontRasterizer
         excludes:
@@ -629,5 +646,5 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXFontRasterizer/include $(SRCROOT)/Vendors/stb"
-        MODULEMAP_FILE: Sources/LDTXFontRasterizer/include/module.modulemap
+        MODULEMAP_FILE: "$(DERIVED_FILE_DIR)/LDTXFontRasterizer.modulemap"
         OTHER_CFLAGS: "$(inherited) -Wno-comma"

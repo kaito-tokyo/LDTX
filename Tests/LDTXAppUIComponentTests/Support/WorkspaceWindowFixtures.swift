@@ -101,6 +101,7 @@ final class ToolbarDispatcher: WorkspaceRuntimeActions {
   func perform(_ action: WorkspaceAction) async -> [WorkspaceScreenshot]? {
     guard actionState(action).isEnabled else { return nil }
     switch action {
+    case .cutRecording: actions.append("cutRecording")
     case .stopOutput: await stopOutput()
     case .startPauseOutput:
       if let stateService {
