@@ -20,7 +20,7 @@ struct ClockInspector: View {
       VideoComponentDeleteButton(stateService: stateService, componentID: internalID)
     }
     .formStyle(.grouped)
-    .disabled(isRecording)
+    .disabled(isRecording || stateService.isClosed)
   }
 
   @ViewBuilder
@@ -48,7 +48,33 @@ struct ClockInspector: View {
         ColorPicker(
           "Foreground Color",
           selection: colorBinding(\.foregroundExtendedSrgbColor), supportsOpacity: true)
-        LabeledContent("Text Outlines", value: "\(component.outlines.count)")
+      }
+      Section("Text Outlines") {
+        ForEach(component.outlines.indices, id: \.self) { index in
+          VStack(alignment: .leading) {
+            Text("Outline \(index + 1)").font(.headline)
+            ColorPicker(
+              "Color", selection: outlineColorBinding(at: index, undoManager: undoManager),
+              supportsOpacity: true)
+            numericField(
+              "Width (pixels)",
+              value: outlineBinding(
+                at: index, \.thickness, initial: component.outlines[index].thickness,
+                undoManager: undoManager))
+            HStack {
+              Spacer()
+              Button("Remove Outline", role: .destructive) {
+                removeOutline(at: index, undoManager: undoManager)
+              }
+            }
+          }
+        }
+        Button("Add Outline", systemImage: "plus") {
+          addOutline(undoManager: undoManager)
+        }
+        .disabled(component.outlines.count >= 2)
+        Text("Up to two outlines, ordered from back to front. Width must be nonnegative.")
+          .font(.caption).foregroundStyle(.secondary)
       }
     } else {
       Section("Clock") {
@@ -57,6 +83,63 @@ struct ClockInspector: View {
       }
     }
 
+  }
+
+  func outlineBinding<Value>(
+    at index: Int, _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockTextOutline, Value>,
+    initial: Value, undoManager: UndoManager?
+  ) -> Binding<Value> {
+    Binding(
+      get: {
+        guard let component, component.outlines.indices.contains(index) else { return initial }
+        return component.outlines[index][keyPath: keyPath]
+      },
+      set: { next in
+        editOutlines(undoManager: undoManager) { outlines in
+          guard outlines.indices.contains(index) else { return }
+          outlines[index][keyPath: keyPath] = next
+        }
+      })
+  }
+
+  func outlineColorBinding(at index: Int, undoManager: UndoManager?) -> Binding<Color> {
+    let binding = outlineBinding(
+      at: index, \.extendedSrgbColor, initial: .init(), undoManager: undoManager)
+    return Binding(
+      get: { binding.wrappedValue.extendedSRGBSwiftUIColor ?? .clear },
+      set: { next in
+        guard let color = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
+        binding.wrappedValue = color
+      })
+  }
+
+  func addOutline(undoManager: UndoManager?) {
+    editOutlines(undoManager: undoManager) { outlines in
+      guard outlines.count < 2 else { return }
+      outlines.append(
+        .with {
+          $0.thickness = .with { $0.set(num: 1, den: 1) }
+          $0.extendedSrgbColor = .with { $0.alpha = 1 }
+        })
+    }
+  }
+
+  func removeOutline(at index: Int, undoManager: UndoManager?) {
+    editOutlines(undoManager: undoManager) { outlines in
+      guard outlines.indices.contains(index) else { return }
+      outlines.remove(at: index)
+    }
+  }
+
+  private func editOutlines(
+    undoManager: UndoManager?,
+    _ mutation: (inout [Ldtx_Workspace_V4_ClockTextOutline]) -> Void
+  ) {
+    updateVideoComponent(undoManager: undoManager) { wrapper in
+      guard case .clock(var value) = wrapper.videoComponent else { return }
+      mutation(&value.outlines)
+      wrapper.videoComponent = .clock(value)
+    }
   }
 
   private var component: Ldtx_Workspace_V4_ClockComponent? {
@@ -142,10 +225,18 @@ struct ClockInspector: View {
   {
     LabeledContent(title) {
       TextField(title, value: value, format: RationalFormatStyle())
+        .labelsHidden()
         .multilineTextAlignment(.trailing).frame(width: 90).disabled(isRecording)
     }
   }
   private func updateVideoComponent(
+    _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
+  ) {
+    updateVideoComponent(undoManager: undoManager, mutation)
+  }
+
+  private func updateVideoComponent(
+    undoManager: UndoManager?,
     _ mutation: (inout Ldtx_Workspace_V4_VideoComponentWrapper) -> Void
   ) {
     guard !stateService.isOutputActive, !stateService.isClosed else { return }
