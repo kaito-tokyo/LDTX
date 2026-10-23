@@ -76,7 +76,7 @@ def sync(root):
     print('Synchronized project.yml. Resolve SwiftPM and Xcode locks, then run check.')
 
 
-def python_pins(path, hashed=False):
+def python_pins(path):
     result = {}
     text = path.read_text().replace('\\\n', ' ')
     for line in text.splitlines():
@@ -90,32 +90,12 @@ def python_pins(path, hashed=False):
         name = re.sub(r'[-_.]+', '-', name).lower()
         if name in result:
             raise ValueError(f'{path}: duplicate requirement {name}')
-        hashes = suffix.split()
-        if hashed and (not hashes or any(
-            not re.fullmatch(r'--hash=sha256:[0-9a-f]{64}', value) for value in hashes
-        )):
-            raise ValueError(f'{path}: {name} must have SHA256 hashes')
-        if not hashed and hashes:
+        if suffix.strip():
             raise ValueError(f'{path}: unsupported requirement suffix')
         result[name] = version
     if not result:
         raise ValueError(f'{path}: no requirements found')
     return result
-
-
-def python_direct_requirements(path):
-    """Read uv's single-line and multiline direct-requirement annotations."""
-    direct = set()
-    current = None
-    for line in path.read_text().splitlines():
-        match = REQUIREMENT.match(line)
-        if match:
-            current = re.sub(r'[-_.]+', '-', match[1]).lower()
-        if re.fullmatch(r'\s*#\s+(?:via\s+)?-r requirements\.txt\s*', line):
-            if current is None:
-                raise ValueError(f'{path}: direct annotation without a requirement')
-            direct.add(current)
-    return direct
 
 
 def check(root):
@@ -139,15 +119,8 @@ def check(root):
     for key in shared:
         if locks[0][key]['state'] != locks[1][key]['state']:
             raise ValueError(f'{key}: SwiftPM and Xcode lock revisions disagree')
-    source = python_pins(root / 'Tools/MediaPipeLandscapeCoreML/requirements.txt')
-    locked = python_pins(root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock', hashed=True)
-    for name, version in source.items():
-        if locked.get(name) != version:
-            raise ValueError(f'{name}: regenerate Tools/MediaPipeLandscapeCoreML/requirements.lock with uv pip compile')
-    direct = python_direct_requirements(root / 'Tools/MediaPipeLandscapeCoreML/requirements.lock')
-    if direct != set(source):
-        raise ValueError('Direct Python requirements changed; regenerate Tools/MediaPipeLandscapeCoreML/requirements.lock')
-    print('Swift manifests/locks and Python source pins/hash lock agree.')
+    python_pins(root / 'Tools/MediaPipeLandscapeCoreML/requirements.txt')
+    print('Swift manifests/locks agree and Python source requirements use exact pins.')
 
 
 def main():

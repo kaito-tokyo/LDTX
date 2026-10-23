@@ -53,8 +53,7 @@ against the old AppAuth lock). New app packages require an explicit coverage
 policy in the checker and bot configuration.
 
 Check CI rejects mismatched declarations, missing direct lock entries, different
-shared commit revisions, and Python source/lock drift (including removed direct
-requirements identified by uv annotations). It runs offline with the
+shared commit revisions, and Python source requirements without exact pins. It runs offline with the
 Python standard library. It verifies pin consistency, not upstream resolution or
 model compatibility. Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
 `pr` test plan on dependency pull requests. After Xcode package resolution, CI
@@ -73,27 +72,26 @@ coverage remains enabled. This does not change repository security-alert setting
 The unmerged model-tooling proposal PR #390 is superseded by this policy; it is
 not closed or modified by this reorganization.
 
-`requirements.txt` contains exact source pins, `requirements.lock` retains the
-uv-generated transitive versions and SHA256 hashes, and `.python-version` records
+`requirements.txt` contains exact source pins, and `.python-version` records
 Python 3.13.13 for this tool only. Other Python utilities use the standard library
-and do not require this environment. Do not hand-edit transitive versions or hashes.
+and do not require this environment. There is no model-tooling dependency lock;
+transitive dependencies are resolved during installation and are not hash-verified
+or pinned as a complete environment. The application build consumes the committed
+model resource and does not install these conversion dependencies.
 
-For a deliberately reviewed model or dependency update, follow the conversion and
-lock-regeneration commands in [the build guide](build.md), then run from the
-repository root:
+For a deliberately reviewed model or dependency update, follow the conversion
+commands in [the build guide](build.md), then run from the repository root:
 
 ```sh
 python3 Tools/dependencies.py check
 python3 -B -m unittest discover -s Tests/DependencyToolTests
 ```
 
-Review the full transitive lock diff and regenerated model, then validate model
+Review changed source pins and the regenerated model, then validate model
 loading/inference with the app's relevant HardTests and a representative model
 compatibility check. A green pin check or ordinary Swift CI does not establish
-model compatibility. Source-only dependency changes intentionally fail the pin check
-until the lock is regenerated. Transitive-only Python updates remain manual,
-using the same coordinated validation. Do not upgrade the entire environment
-merely to refresh a single dependency.
+model compatibility. Do not upgrade the entire environment merely to refresh a
+single dependency.
 
 ## Other update paths and security coverage
 

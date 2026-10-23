@@ -169,21 +169,15 @@ with the dependency pins in [`Tools/MediaPipeLandscapeCoreML/requirements.txt`](
 The generated resource stays at `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage`
 for the app build. The converter resolves that path relative to its own file,
 independently of the current working directory. From the repository root, enter
-the tooling directory and install the reviewed hash-locked dependency set:
+the tooling directory and install the pinned source requirements:
 
 ```sh
 cd Tools/MediaPipeLandscapeCoreML
 uv venv --python 3.13.13
-uv pip sync --require-hashes requirements.lock
+uv pip install -r requirements.txt
 ```
 
-Run the following commands from that same tooling directory. After deliberately
-changing a source dependency, regenerate the lock with:
-
-```sh
-uv pip compile --generate-hashes --python-version 3.13 \
-  requirements.txt --output-file requirements.lock
-```
+Run the converter from that same tooling directory:
 
 ```sh
 uv run --no-sync python MediaPipeSelfieSegmenter.py
