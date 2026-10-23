@@ -61,10 +61,6 @@ extension ProgramRevisioned {
   }
 }
 
-public enum ProgramPreviewError: Error {
-  case pixelBufferCreationFailed
-}
-
 public struct ProgramRuntimeConfiguration: Sendable {
   public var outputProfile: ProgramOutputProfile
   public var composite: CompositeProgramDefinition
