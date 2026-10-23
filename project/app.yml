@@ -72,14 +72,10 @@ targets:
       configs:
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: >-
-            $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
-            LDTXAppUIPreviewFixtures.swift
-            WorkspaceSidebarPreviewFixtures.swift
+            $(inherited) WorkspaceSidebarPreviewFixtures.swift
         Distribution:
           EXCLUDED_SOURCE_FILE_NAMES: >-
-            $(inherited) LDTXAppUIPreviewVisionRuntimePresenter.swift
-            LDTXAppUIPreviewFixtures.swift
-            WorkspaceSidebarPreviewFixtures.swift
+            $(inherited) WorkspaceSidebarPreviewFixtures.swift
   LDTXSettingsApplet:
     type: framework
     platform: macOS
