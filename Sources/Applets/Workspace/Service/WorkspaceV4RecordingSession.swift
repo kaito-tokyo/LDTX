@@ -6,7 +6,6 @@ import AVFAudio
 import AVFoundation
 import CoreImage
 import Foundation
-import ImageIO
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
@@ -22,7 +21,6 @@ import LDTXYouTubeRTMPS
 import OSLog
 import Observation
 import Synchronization
-import UniformTypeIdentifiers
 
 private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
   case microphoneAccessDenied
@@ -713,28 +711,9 @@ public final class WorkspaceV4RecordingSession {
     internalID: Int64, image: CIImage, output: String, timelineMilliseconds: UInt64?,
     packageDirectory: URL
   ) throws {
-    let directory = packageDirectory.appendingPathComponent("Visions", isDirectory: true)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let stem = "vision-\(internalID)-\(UInt64(Date().timeIntervalSince1970 * 1_000))"
-    let imageURL = directory.appendingPathComponent("\(stem).jpg")
-    let metadataURL = directory.appendingPathComponent("\(stem).json")
-    let context = CIContext(options: [.cacheIntermediates: false])
-    guard let cgImage = context.createCGImage(image, from: image.extent),
-      let destination = CGImageDestinationCreateWithURL(
-        imageURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
-    else {
-      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
-    }
-    CGImageDestinationAddImage(destination, cgImage, nil)
-    guard CGImageDestinationFinalize(destination) else {
-      throw CocoaError(.fileWriteUnknown, userInfo: [NSURLErrorKey: imageURL])
-    }
-    var metadata: [String: String] = ["visionID": String(internalID), "output": output]
-    if let timelineMilliseconds {
-      metadata["recordingTimelineMilliseconds"] = String(timelineMilliseconds)
-    }
-    let data = try JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys])
-    try data.write(to: metadataURL, options: .atomic)
+    try VisionResultArchiver().archive(
+      internalID: internalID, image: image, output: output,
+      timelineMilliseconds: timelineMilliseconds, packageDirectory: packageDirectory)
   }
 
   private var isFailed: Bool {
