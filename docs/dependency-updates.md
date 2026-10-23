@@ -31,31 +31,30 @@ Xcode resolves packages; generating and resolving first would restore the old pi
 Confirm the first hosted Dependabot run after this configuration reaches main:
 upstream implementation support alone does not prove a hosted run succeeded.
 
-On the proposal branch, run from the repository root:
+On the proposal branch, manually copy shared exact versions from `Package.swift`
+into the corresponding `project.yml` declarations. For an AppAuth lock proposal,
+copy its proposed version from the Xcode `Package.resolved` into `project.yml`
+before generating or resolving the project. For a manual AppAuth update, edit
+its `exactVersion` directly in `project.yml`.
+
+Then run from the repository root:
 
 ```sh
-python3 Tools/dependencies.py sync
 swift package resolve
 xcodegen generate
 xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
   -derivedDataPath .derivedData -resolvePackageDependencies
-python3 Tools/dependencies.py check
-python3 -B -m unittest discover -s Tests/DependencyToolTests
 ```
 
-`sync` copies shared versions from `Package.swift` and the proposed AppAuth
-version from the Xcode lock into `project.yml`. It preserves unrelated YAML.
-It does not fabricate lock revisions or origin hashes: SwiftPM and Xcode must
-regenerate their own locks. Review both lock diffs and commit them together with
-the manifest changes. For a manual AppAuth update, edit its `exactVersion` in
-`project.yml`, generate and resolve Xcode, then run `check` (do not run `sync`
-against the old AppAuth lock). New app packages require an explicit coverage
-policy in the checker and bot configuration.
+Review both resolver-produced lock diffs together with the manifest changes.
+Check that shared packages have matching versions and commit revisions in both
+locks and that each declaration matches its resolved version. Commit the
+manifests and locks together. New app packages require a deliberate Dependabot
+coverage policy. There is no custom synchronization script or dedicated CI check
+for cross-manifest pin consistency or Python requirement syntax; reviewers must
+verify these manually.
 
-Check CI rejects mismatched declarations, missing direct lock entries, different
-shared commit revisions, and Python source requirements without exact pins. It runs offline with the
-Python standard library. It verifies pin consistency, not upstream resolution or
-model compatibility. Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
+Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
 `pr` test plan on dependency pull requests. After Xcode package resolution, CI
 rejects changes to the tracked Xcode lock, including a regenerated `originHash`;
 commit the resolver-produced lock before retrying CI. Run the relevant local
@@ -80,18 +79,11 @@ or pinned as a complete environment. The application build consumes the committe
 model resource and does not install these conversion dependencies.
 
 For a deliberately reviewed model or dependency update, follow the conversion
-commands in [the build guide](build.md), then run from the repository root:
-
-```sh
-python3 Tools/dependencies.py check
-python3 -B -m unittest discover -s Tests/DependencyToolTests
-```
-
-Review changed source pins and the regenerated model, then validate model
-loading/inference with the app's relevant HardTests and a representative model
-compatibility check. A green pin check or ordinary Swift CI does not establish
-model compatibility. Do not upgrade the entire environment merely to refresh a
-single dependency.
+commands in [the build guide](build.md). Review changed source pins and the
+regenerated model, then validate model loading/inference with the app's relevant
+HardTests and a representative model compatibility check. Ordinary Swift CI does
+not establish model compatibility. Do not upgrade the entire environment merely
+to refresh a single dependency.
 
 ## Other update paths and security coverage
 

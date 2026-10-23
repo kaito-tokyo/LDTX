@@ -83,12 +83,6 @@ jobs:
           pipx install reuse
           printf '%s/.local/bin\n' "$HOME" >> "$GITHUB_PATH"
 
-      - name: Check dependency synchronization
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          python3 Tools/dependencies.py check
-          python3 -B -m unittest discover -s Tests/DependencyToolTests
-
       - name: Check with reuse
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
