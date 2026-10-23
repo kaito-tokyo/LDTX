@@ -30,6 +30,136 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         ).isEmpty == valid)
     }
   }
+  private func clockDefinition() -> Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
+    .with {
+      $0.videoComponents = [
+        .with {
+          $0.clock.internalID = 1
+          $0.clock.displayName = "Clock"
+          $0.clock.fontSize.set(num: 48, den: 1)
+          $0.clock.outlines = [.init(), .init()]
+        }
+      ]
+    }
+  }
+
+  private var clockColorTargets:
+    [(String, WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Color>)]
+  {
+    [
+      ("foreground_extended_srgb_color", \.foregroundExtendedSrgbColor),
+      ("outlines[0].extended_srgb_color", \.outlines[0].extendedSrgbColor),
+      ("outlines[1].extended_srgb_color", \.outlines[1].extendedSrgbColor),
+    ]
+  }
+
+  @Test(arguments: [Float.nan, .infinity, -.infinity])
+  func clockRejectsNonfiniteColorChannels(_ value: Float) throws {
+    let channels: [(String, WritableKeyPath<Ldtx_Workspace_V4_Color, Float>)] = [
+      ("red", \.red), ("green", \.green), ("blue", \.blue), ("alpha", \.alpha),
+    ]
+    for (target, colorKey) in clockColorTargets {
+      for (channel, channelKey) in channels {
+        var definition = clockDefinition()
+        definition.videoComponents[0].clock[keyPath: colorKey][keyPath: channelKey] = value
+        let bytes = try definition.serializedData()
+        let issues = WorkspaceBundleValidatorV4.validationIssues(
+          in: definition, preferences: .init())
+        #expect(issues.count == 1)
+        #expect(issues.first?.error == .invalidColor)
+        #expect(issues.first?.entityID == 1)
+        #expect(
+          issues.first?.path == "definition.video_components[0].clock." + target + "." + channel)
+        #expect(throws: WorkspaceV4ValidationError.self) {
+          try WorkspaceBundleValidatorV4.validate(definition)
+        }
+        #expect(try definition.serializedData() == bytes)
+      }
+    }
+  }
+
+  @Test(arguments: [Float(-0.01), 1.01])
+  func clockRejectsOutOfRangeAlpha(_ alpha: Float) {
+    for (target, key) in clockColorTargets {
+      var definition = clockDefinition()
+      definition.videoComponents[0].clock[keyPath: key].alpha = alpha
+      let issues = WorkspaceBundleValidatorV4.validationIssues(in: definition, preferences: .init())
+      #expect(issues.count == 1)
+      #expect(issues.first?.error == .invalidColor)
+      #expect(issues.first?.entityID == 1)
+      #expect(issues.first?.path == "definition.video_components[0].clock." + target + ".alpha")
+    }
+  }
+
+  @Test(arguments: [Float(0), 0.5, 1])
+  func clockAcceptsExtendedRGBAndAlphaBoundaries(_ alpha: Float) throws {
+    var definition = clockDefinition()
+    for (_, key) in clockColorTargets {
+      definition.videoComponents[0].clock[keyPath: key] = .with {
+        $0.red = -0.25
+        $0.green = 1.5
+        $0.blue = .greatestFiniteMagnitude
+        $0.alpha = alpha
+      }
+    }
+    let bytes = try definition.serializedData()
+    try WorkspaceBundleValidatorV4.validate(definition)
+    #expect(try definition.serializedData() == bytes)
+  }
+
+  @Test func clockAcceptsAbsentAndOrdinaryColorsWithoutChangingPresence() throws {
+    var definition = clockDefinition()
+    let clock = definition.videoComponents[0].clock
+    #expect(!clock.hasForegroundExtendedSrgbColor)
+    #expect(clock.foregroundExtendedSrgbColor == .init())
+    #expect(clock.outlines.allSatisfy { !$0.hasExtendedSrgbColor })
+    let bytes = try definition.serializedData()
+    try WorkspaceBundleValidatorV4.validate(definition)
+    #expect(try definition.serializedData() == bytes)
+    for (_, key) in clockColorTargets {
+      definition.videoComponents[0].clock[keyPath: key] = .with {
+        $0.red = 0
+        $0.green = 0.5
+        $0.blue = 1
+        $0.alpha = 1
+      }
+    }
+    try WorkspaceBundleValidatorV4.validate(definition)
+  }
+
+  @Test func clockCollectsEveryColorIssueAlongsideGeometryIssues() {
+    var definition = clockDefinition()
+    definition.videoComponents[0].clock.foregroundExtendedSrgbColor.red = .nan
+    definition.videoComponents[0].clock.fontSize.set(num: 0, den: 1)
+    definition.videoComponents[0].clock.outlines.append(.init())
+    definition.videoComponents[0].clock.outlines[0].thickness.set(num: 1, den: 0)
+    definition.videoComponents[0].clock.outlines[1].thickness.set(num: -1, den: 1)
+    for index in 0..<3 {
+      definition.videoComponents[0].clock.outlines[index].extendedSrgbColor.alpha = 2
+    }
+    let issues = WorkspaceBundleValidatorV4.validationIssues(in: definition, preferences: .init())
+    #expect(
+      issues.map(\.path)
+        == [
+          "foreground_extended_srgb_color.red", "font_size", "outlines",
+          "outlines[0].extended_srgb_color.alpha", "outlines[0].thickness.den",
+          "outlines[1].extended_srgb_color.alpha", "outlines[1].thickness",
+          "outlines[2].extended_srgb_color.alpha",
+        ].map { "definition.video_components[0].clock." + $0 })
+    #expect(
+      issues.map(\.error) == [
+        .invalidColor, .invalidClockGeometry, .invalidClockGeometry,
+        .invalidColor, .invalidRational, .invalidColor, .invalidClockGeometry, .invalidColor,
+      ])
+    #expect(issues.allSatisfy { $0.entityID == 1 })
+  }
+
+  @Test func clockAcceptsLargeNonnegativeOutlineThickness() throws {
+    var definition = clockDefinition()
+    definition.videoComponents[0].clock.outlines[1].thickness.set(num: .max, den: 1)
+    try WorkspaceBundleValidatorV4.validate(definition)
+  }
+
   @Test func rejectsGeneratedOverlaysAsOCRInputs() {
     var bundle = WorkspaceV4Bundle(
       definition: .with {
