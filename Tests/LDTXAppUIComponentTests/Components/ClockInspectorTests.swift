@@ -5,6 +5,7 @@ import AppKit
 import LDTXProtos
 import LDTXProtosMacOSExtra
 @testable import LDTXWorkspaceAppletUI
+import LDTXWorkspaceBundleFormat
 import SwiftUI
 import Testing
 
@@ -112,13 +113,32 @@ extension AppUIComponentTestSuite {
         let editor = try #require(field.currentEditor() as? NSTextView)
         editor.insertText(
           text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
-        editor.insertNewline(nil)
         undo.endUndoGrouping()
-        await settleWorkspaceToolbar(window)
+        #expect(window.firstResponder === editor)
         #expect(
           document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
             == Double(text))
       }
+      let editor = try #require(field.currentEditor() as? NSTextView)
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try WorkspaceBundleWriterV4().write(snapshot, to: url)
+      let loaded = try WorkspaceBundleReaderV4(at: url).read()
+      #expect(window.firstResponder === editor)
+      #expect(loaded.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+      undo.undo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 1.5)
+      #expect(editor.string == "1.5")
+      undo.redo()
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+      #expect(editor.string == "3.5")
       let well = try #require(views(hosting).compactMap { $0 as? NSColorWell }.last)
       let color = NSColor(srgbRed: 0.25, green: 0.5, blue: 0.75, alpha: 0.4)
       undo.beginUndoGrouping()
@@ -165,6 +185,99 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(views(hosting).compactMap { $0 as? NSColorWell }.allSatisfy { $0.isEnabled })
 
+    }
+
+    @Test(arguments: [1, 100])
+    func hostedWidthBoundsPreserveSavedValues(initial: Int32) async throws {
+      let document = WorkspaceDocument(definition: .init(), preferences: .init())
+      document.editWorkspace(undoManager: nil) {
+        $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
+        $0.definition.videoComponents[0].clock.outlines = [
+          .with {
+            $0.thickness.set(num: initial, den: 1)
+          }
+        ]
+      }
+      let undo = UndoManager()
+      undo.groupsByEvent = false
+      let hosting = NSHostingView(
+        rootView: ClockInspector(
+          stateService: document, appletData: WorkspaceAppletData(), internalID: 11
+        ).frame(width: 480, height: 1000))
+      let window = ClockInspectorTestWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 1000),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.history = undo
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
+      func capture(_ name: String) throws {
+        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        try #require(bitmap.representation(using: .png, properties: [:])).write(
+          to: URL(fileURLWithPath: "/tmp/ldtx-clock-outline-\(name).png"))
+      }
+      if initial == 100 { try capture("legacy-width") }
+      #expect(!undo.canUndo)
+      let snapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("ldtxworkspace")
+      defer { try? FileManager.default.removeItem(at: url) }
+      try WorkspaceBundleWriterV4().write(snapshot, to: url)
+      let loaded = try WorkspaceBundleReaderV4(at: url).read()
+      #expect(loaded.definition == document.workspaceDefinition)
+      func fields(_ view: NSView) -> [NSTextField] {
+        (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+      }
+      let field = try #require(
+        fields(hosting).first {
+          $0.isEditable && $0.stringValue == String(initial)
+        })
+      #expect(window.makeFirstResponder(field))
+      let editor = try #require(field.currentEditor() as? NSTextView)
+      func type(_ text: String) {
+        undo.beginUndoGrouping()
+        editor.insertText(
+          text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.endUndoGrouping()
+      }
+      for text in ["3", "3.", "3.5", "0", "64"] {
+        type(text)
+        #expect(
+          document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+            == Double(text))
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == text)
+      }
+      for _ in 0..<5 {
+        undo.undo()
+        await settleWorkspaceToolbar(window)
+      }
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
+      #expect(editor.string == String(initial))
+      for _ in 0..<5 {
+        undo.redo()
+        await settleWorkspaceToolbar(window)
+      }
+      #expect(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 64)
+      let accepted = document.workspace
+      for text in ["65", "100", "-1", "1/0", "2147483648", ""] {
+        type(text)
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == text)
+        #expect(document.workspace == accepted)
+      }
+      if initial == 100 { try capture("invalid-width") }
+      let invalidDraftSnapshot = try await document.snapshot(
+        contentType: WorkspaceDocument.writableContentTypes[0])
+      #expect(invalidDraftSnapshot == accepted)
     }
 
     @Test func unavailableEditsAreIgnored() {

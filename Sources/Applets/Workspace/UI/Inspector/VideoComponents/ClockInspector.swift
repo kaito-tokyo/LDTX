@@ -56,8 +56,7 @@ struct ClockInspector: View {
             ColorPicker(
               "Color", selection: outlineColorBinding(at: index, undoManager: undoManager),
               supportsOpacity: true)
-            numericField(
-              "Width (pixels)",
+            ClockOutlineWidthField(
               value: outlineBinding(
                 at: index, \.thickness, initial: component.outlines[index].thickness,
                 undoManager: undoManager))
@@ -73,8 +72,10 @@ struct ClockInspector: View {
           addOutline(undoManager: undoManager)
         }
         .disabled(component.outlines.count >= 2)
-        Text("Up to two outlines, ordered from back to front. Width must be nonnegative.")
-          .font(.caption).foregroundStyle(.secondary)
+        Text(
+          "Up to two outlines, ordered from back to front. New widths must be from 0 to 64 pixels."
+        )
+        .font(.caption).foregroundStyle(.secondary)
       }
     } else {
       Section("Clock") {
@@ -250,4 +251,51 @@ struct ClockInspector: View {
     }
   }
 
+}
+
+/// The renderer caps outlines at 64 pixels. Preserve older saved values until edited.
+private struct ClockOutlineWidthField: View {
+  @Binding var value: Ldtx_Workspace_V4_Rational32
+  @State private var draft = ""
+  @State private var hasInvalidDraft = false
+  @FocusState private var isFocused: Bool
+
+  var body: some View {
+    LabeledContent("Width (pixels)") {
+      TextField(
+        "Width (pixels)",
+        text: Binding(
+          get: { draft },
+          set: { text in
+            draft = text
+            guard let parsed = try? RationalParseStrategy().parse(text),
+              (0...64).contains(parsed.double)
+            else {
+              hasInvalidDraft = true
+              return
+            }
+            hasInvalidDraft = false
+            value = parsed
+          })
+      )
+      .labelsHidden()
+      .multilineTextAlignment(.trailing)
+      .frame(width: 90)
+      .focused($isFocused)
+    }
+    .onChange(of: value, initial: true) { _, next in
+      guard !isFocused || !hasInvalidDraft else { return }
+      // Preserve valid typing such as "3." while following external Undo/Redo.
+      if !isFocused || (try? RationalParseStrategy().parse(draft)) != next {
+        draft = RationalFormatStyle().format(next)
+      }
+    }
+    if hasInvalidDraft {
+      Text("Enter a width from 0 to 64 pixels. The last accepted width is unchanged.")
+        .font(.caption).foregroundStyle(.secondary)
+    } else if value.double > 64 {
+      Text("This saved width renders at 64 pixels. Enter 0–64 to change it.")
+        .font(.caption).foregroundStyle(.secondary)
+    }
+  }
 }
