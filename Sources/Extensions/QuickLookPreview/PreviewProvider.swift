@@ -15,7 +15,7 @@ final class PreviewProvider: QLPreviewProvider, QLPreviewingController {
     do {
       let package = try RecordingPackage(contentsOf: request.fileURL)
       quickLookPreviewLogger.notice(
-        "Providing \(package.mainMediaPath, privacy: .public) for \(request.fileURL.lastPathComponent, privacy: .public)."
+        "Providing recording media preview"
       )
       handler(QLPreviewReply(fileURL: package.mainMediaURL), nil)
     } catch {

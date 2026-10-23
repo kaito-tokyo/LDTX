@@ -233,17 +233,17 @@ extension ProgramRuntimeConfiguration {
     var configuration = self
     configuration.composite.audioChannels = audioChannels
     var seenNames = Set<String>()
-    var discardedNames: [String] = []
+    var discardedCount = 0
     configuration.composite.steps = composite.steps.filter { step in
       guard seenNames.insert(step.name).inserted else {
-        discardedNames.append(step.name)
+        discardedCount += 1
         return false
       }
       return true
     }
-    if !discardedNames.isEmpty {
+    if discardedCount > 0 {
       programPreviewLogger.warning(
-        "Discarded duplicate Program Steps during runtime update discardedStepNames=\(discardedNames.joined(separator: ","), privacy: .public) discardedCount=\(discardedNames.count, privacy: .public)"
+        "Discarded duplicate Program Steps during runtime update discardedCount=\(discardedCount, privacy: .public)"
       )
     }
     return configuration
@@ -621,7 +621,7 @@ private func logProgramPreviewRenderFailed(
 ) {
   let nsError = error as NSError
   programPreviewLogger.error(
-    "Program preview render failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
+    "Program preview render failed errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code, privacy: .public) canvasWidth=\(configuration.canvasWidth, privacy: .public) canvasHeight=\(configuration.canvasHeight, privacy: .public) outputWidth=\(configuration.outputWidth, privacy: .public) outputHeight=\(configuration.outputHeight, privacy: .public) frameRate=\(configuration.frameRate, privacy: .public) timeSeconds=\(configuration.timeSeconds, privacy: .public) cameraInputCount=\(configuration.cameraIDsByInputKey.count, privacy: .public) backgroundRemovalInputCount=\(configuration.backgroundRemovalInputKeys.count, privacy: .public) stepCount=\(configuration.composite.steps.count, privacy: .public)"
   )
 }
 

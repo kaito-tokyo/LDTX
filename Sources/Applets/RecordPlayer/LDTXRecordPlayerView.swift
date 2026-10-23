@@ -372,7 +372,7 @@ public struct LDTXRecordPlayerView: View {
 
   private func presentMarkerFileError(title: String, error: any Error) {
     recordingPreviewLogger.error(
-      "Marker file operation failed: \(error.localizedDescription, privacy: .public)"
+      "Marker file operation failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
     )
     model.alert = LDTXRecordPlayerAlert(
       title: title,
@@ -447,7 +447,7 @@ final class LDTXRecordPlayerModel {
       return
     }
     recordingPreviewLogger.info(
-      "Loading recording preview for \(recordingURL.lastPathComponent, privacy: .public)"
+      "Loading recording preview"
     )
     if await loadScenarioFixtureIfNeeded() { return }
 
@@ -479,7 +479,7 @@ final class LDTXRecordPlayerModel {
       guard !Task.isCancelled else { return }
       isLoading = false
       recordingPreviewLogger.error(
-        "Recording preview load failed: \(error.localizedDescription, privacy: .public)"
+        "Recording preview load failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
       )
       alert = LDTXRecordPlayerAlert(
         title: "Recording Could Not Be Opened",
@@ -490,7 +490,8 @@ final class LDTXRecordPlayerModel {
   }
 
   private func closeAfterInternalError(_ message: String) {
-    recordingPreviewLogger.error("\(message, privacy: .public)")
+    recordingPreviewLogger.error(
+      "Recording preview internal failure: \(message, privacy: .private)")
     shouldClose = true
   }
 

@@ -690,7 +690,7 @@ final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
     guard let error else { return }
     let nsError = error as NSError
     hlsByteRangeRecordingLogger.error(
-      "Audio side stream failed errorDomain=\(nsError.domain, privacy: .public) errorCode=\(nsError.code)"
+      "Audio side stream failed errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code)"
     )
     failureHandler(error)
   }

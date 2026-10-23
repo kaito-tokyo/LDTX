@@ -308,3 +308,23 @@ reuse --no-multiprocessing lint
 swift format lint --recursive .
 git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
 ```
+
+## Public-log privacy regression
+
+After building the focused `LDTXHardTests` and `LDTXOutputTests` suites, run:
+
+```sh
+Tools/Regression/public-log-privacy.sh
+```
+
+An optional argument selects the absolute Debug products directory. Run outside
+an agent sandbox, following `AGENTS.md`. The probe calls production duplicate-step
+normalization and a mock-only DASH transport failure with distinctive private
+names, an error domain, a path and OCR-like text. It checks ordinary unified-log
+collection for both expected events, the public count/error code, and absence of
+the fixtures. It does not contact the network or use capture devices or recordings.
+
+Xcode's test runner can collect private values, so its logs are not a substitute
+for this ordinary-process check. This focused probe does not establish privacy
+for every app flow, shipped builds, or log retention. Recording creation, playback,
+Quick Look and Workspace close still need separate runtime coverage when safe.

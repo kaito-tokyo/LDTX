@@ -173,17 +173,18 @@ struct ProgramRuntimePreferencesUnitTestSuite {
     let runtime = ProgramRuntime(
       captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
     )
-    var configuration = runtimeConfiguration(componentName: "Camera", destinationX: 120)
+    let privateName = "ISSUE220_PRIVATE_STEP_患者名_OCR"
+    var configuration = runtimeConfiguration(componentName: privateName, destinationX: 120)
     configuration.composite.steps.append(
       CompositeProgramStep(
-        id: "Camera",
+        id: privateName,
         component: .inputCameraDevice(InputDeviceComponent(destinationX: 240))
       )
     )
 
     runtime.updateProgram(configuration)
 
-    #expect(runtime.programDestinationState.destination(forStepNamed: "Camera")?.x == 120)
+    #expect(runtime.programDestinationState.destination(forStepNamed: privateName)?.x == 120)
     #expect(runtime.programState.read { $0?.composite.steps.count } == 1)
   }
 

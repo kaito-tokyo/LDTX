@@ -124,12 +124,12 @@ public struct DASHUploadClient: Sendable {
       switch result {
       case .failure(let error):
         dashUploadLogger.error(
-          "DASH PUT transport failure object=\(object.name.rawValue, privacy: .public) bytes=\(object.data.count, privacy: .public) attempt=\(attempt, privacy: .public) elapsed=\(String(describing: elapsed), privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+          "DASH PUT transport failure object=\(object.name.rawValue, privacy: .private(mask: .hash)) bytes=\(object.data.count, privacy: .public) attempt=\(attempt, privacy: .public) elapsed=\(String(describing: elapsed), privacy: .public) error=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
         )
         completionHandler(.failure(error))
       case .success(let response):
         dashUploadLogger.notice(
-          "DASH PUT response object=\(object.name.rawValue, privacy: .public) bytes=\(object.data.count, privacy: .public) attempt=\(attempt, privacy: .public) status=\(response.statusCode, privacy: .public) elapsed=\(String(describing: elapsed), privacy: .public)"
+          "DASH PUT response object=\(object.name.rawValue, privacy: .private(mask: .hash)) bytes=\(object.data.count, privacy: .public) attempt=\(attempt, privacy: .public) status=\(response.statusCode, privacy: .public) elapsed=\(String(describing: elapsed), privacy: .public)"
         )
         if (200..<300).contains(response.statusCode) {
           completionHandler(.success(response))

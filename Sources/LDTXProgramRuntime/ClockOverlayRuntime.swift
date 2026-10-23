@@ -370,7 +370,7 @@ final class ClockOverlayRuntime: @unchecked Sendable {
         // periodic pulse, so schedule a delayed retry for transient failures.
         // Size limits cannot recover until the configuration changes.
         clockOverlayRuntimeLogger.error(
-          "Clock overlay render failed: \(error.localizedDescription, privacy: .public)"
+          "Clock overlay render failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
         )
         lock.withLock {
           if state.isActive, state.renderGeneration == generation {
