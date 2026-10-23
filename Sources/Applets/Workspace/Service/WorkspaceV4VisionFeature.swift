@@ -248,18 +248,18 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       let output: String
       let variables: [LDTXVariableItem: String]
       if let ocr {
-        frame = try await context.frameForVision(ocr)
         recordingPackageURL = context.recordingPackageURL()
         recordingTimeline = context.recordingTimelineMilliseconds?()
+        frame = try await context.frameForVision(ocr)
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
         variables = [.text: output]
       } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
         guard let service = models[ModelKey(id: classifier.modelInternalID, url: url)] else {
           return
         }
-        frame = try await frameProvider(classifier)
         recordingPackageURL = context.recordingPackageURL()
         recordingTimeline = context.recordingTimelineMilliseconds?()
+        frame = try await frameProvider(classifier)
         let result = try await service.classifyResult(image: frame.image)
         output = result.displayText
         variables = [

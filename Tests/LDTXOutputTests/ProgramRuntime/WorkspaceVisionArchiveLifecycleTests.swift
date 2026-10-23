@@ -13,6 +13,7 @@ import LDTXProtos
 import LDTXRecordBundleFormat
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceBundleFormat
+import Observation
 import Synchronization
 import Testing
 
@@ -258,6 +259,57 @@ extension OutputTestSuite {
             .appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path))
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func lateAudioPublishesCutReadinessToObservation() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      let hub = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) { fixture.service }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service,
+        landscapeHub: hub, portraitHub: ProgramOutputMediaHub(),
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      hub.publishMainVideo(try videoSample())
+      while !fixture.service.hasAcceptedFirstVideo { await Task.yield() }
+      #expect(!fixture.session.canCutRecording)
+      let changed = Mutex(false)
+      withObservationTracking {
+        _ = fixture.session.canCutRecording
+      } onChange: {
+        changed.withLock { $0 = true }
+      }
+      hub.publishMainAudioMix(try audioSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+      #expect(changed.withLock { $0 })
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func cutFinalizationDeadlineHandlesStallsAndLateCallbacks(stalls: Bool) async throws {
+      let fixture = try Fixture(cutFinalizationTimeout: .milliseconds(20))
+      defer { fixture.cleanup() }
+      let service = BoundaryRecorder()
+      service.stallsFinalization = stalls
+      let result = await fixture.session.finishPreviousRecordingAfterCut(service)
+      if stalls {
+        guard case .failed(let error) = result else {
+          Issue.record("Stalled finalization must report a deadline failure")
+          return
+        }
+        #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+        #expect(service.abandonCount.withLock { $0 } == 1)
+        service.pendingFinalization?(.finalized)
+      } else {
+        guard case .finalized = result else {
+          Issue.record("Expected finalization")
+          return
+        }
+        #expect(service.abandonCount.withLock { $0 } == 0)
+      }
+      try (await fixture.session.stopWithResult()).get()
+    }
+
     private func mediaTiming(_ url: URL) async throws -> (
       start: CMTime, videoDuration: CMTime, audioDuration: CMTime
     ) {
@@ -399,6 +451,10 @@ extension OutputTestSuite {
       let recordsLandscapeOutput = true
       let recordsPortraitOutput = true
       var failFirstVideo = false
+      var stallsFinalization = false
+      let abandonCount = Mutex(0)
+      @MainActor var pendingFinalization:
+        (@MainActor @Sendable (SessionRecordFinalizationResult) -> Void)?
       let events = Mutex<[String]>([])
       func add(_ kind: String, _ sample: CMSampleBuffer) {
         let frame = CMTimeConvertScale(
@@ -433,11 +489,20 @@ extension OutputTestSuite {
       ) { completionHandler(.finalized) }
       @MainActor func finishAfterCut(
         completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
-      ) { completionHandler(.finalized) }
+      ) {
+        if stallsFinalization {
+          pendingFinalization = completionHandler
+        } else {
+          completionHandler(.finalized)
+        }
+      }
       @MainActor func stopPreservingIncompletePackage(
         completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
       ) { completionHandler(.preservedIncomplete) }
-      @MainActor func abandonAfterMediaDrainTimeout() {}
+      @MainActor func abandonAfterMediaDrainTimeout() {
+        abandonCount.withLock { $0 += 1 }
+        pendingFinalization?(.preservedIncomplete)
+      }
       @MainActor func cancelBeforeFirstVideo(
         completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
       ) { completionHandler(.finalized) }
@@ -987,6 +1052,7 @@ extension OutputTestSuite {
       init(
         recordsPortrait: Bool = false,
         cutBoundaryTimeout: Duration = .seconds(10),
+        cutFinalizationTimeout: Duration = .seconds(30),
         screenCaptureService: ScreenCaptureService? = nil,
         recordingFailureHandler: @escaping @MainActor (any Error) -> Void = {
           Issue.record("Unexpected recording failure: \($0)")
@@ -1006,7 +1072,8 @@ extension OutputTestSuite {
           windowRuntime: runtime,
           screenCaptureService: screenCaptureService
             ?? ScreenCaptureService(captureQueue: screenshotQueue),
-          visionArchiveQueue: queue, cutBoundaryTimeout: cutBoundaryTimeout)
+          visionArchiveQueue: queue, cutBoundaryTimeout: cutBoundaryTimeout,
+          cutFinalizationTimeout: cutFinalizationTimeout)
         service = try SessionRecordService(
           baseDirectory: root, recordID: "archive-lifecycle",
           writerConfiguration: SegmentedMP4WriterConfiguration(

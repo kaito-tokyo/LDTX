@@ -70,12 +70,13 @@ Landscape and Portrait wait for usable video boundaries; mixed and input audio
 are divided at those boundaries. YouTube output continues on its existing
 subscriptions. Cut is disabled until the recording has accepted video and audio,
 and while a cut is pending. A replacement preparation failure keeps the current
-recording active and reports the error. Stop, Pause, and closing cancel a waiting
-cut and drain any already committed package transition.
+recording active and reports the error. Stop and Pause cancel a waiting cut and
+drain any already committed package transition. Close still requires output to
+be stopped first; an admitted Close supersedes a Cut waiting in the command queue.
 
 Manual OCR results captured before a package change still update the Inspector
 and variables, but are not archived into the replacement package. Archived OCR
-timestamps refer to the timeline captured with the analyzed frame. Package archive
+timestamps refer to the timeline captured when requesting the analyzed frame. Package archive
 admission pauses while the replacement boundary is being prepared.
 
 ## Manual OCR

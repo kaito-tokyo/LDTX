@@ -46,37 +46,6 @@ private final class WorkspaceRecordMediaCoreSlot: @unchecked Sendable {
   }
 }
 
-private final class RecordFinalizationRace: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>?
-  private var timeoutTask: Task<Void, Never>?
-
-  init(continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>) {
-    self.continuation = continuation
-  }
-
-  func installTimeoutTask(_ task: Task<Void, Never>) {
-    let shouldCancel = lock.withLock {
-      guard continuation != nil else { return true }
-      timeoutTask = task
-      return false
-    }
-    if shouldCancel { task.cancel() }
-  }
-
-  func finish(_ result: SessionRecordFinalizationResult) {
-    let (continuation, timeoutTask) = lock.withLock {
-      let continuation = self.continuation
-      self.continuation = nil
-      let timeoutTask = self.timeoutTask
-      self.timeoutTask = nil
-      return (continuation, timeoutTask)
-    }
-    timeoutTask?.cancel()
-    continuation?.resume(returning: result)
-  }
-}
-
 @MainActor
 @Observable
 final class WorkspaceEventCoordinator {

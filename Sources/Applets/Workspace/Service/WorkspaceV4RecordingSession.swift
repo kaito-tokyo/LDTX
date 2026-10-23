@@ -61,6 +61,8 @@ public final class WorkspaceV4RecordingSession {
   private(set) var sessionOutputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4?
   private let visionArchiveQueue: DispatchQueue
   private let cutBoundaryTimeout: Duration
+  private let cutFinalizationTimeout: Duration
+  private var recordingAudioReady = false
   @ObservationIgnored private let visionArchiveFailure = VisionArchiveFailure()
   private var landscapeSubscription: ProgramOutputMediaHub.Subscription?
   private var portraitSubscription: ProgramOutputMediaHub.Subscription?
@@ -98,6 +100,7 @@ public final class WorkspaceV4RecordingSession {
     screenCaptureService: ScreenCaptureService = ScreenCaptureService(),
     visionArchiveQueue: DispatchQueue = DispatchQueue(label: "tokyo.kaito.ldtx.v4-vision-archive"),
     cutBoundaryTimeout: Duration = .seconds(10),
+    cutFinalizationTimeout: Duration = .seconds(30),
     streamKeyConfigurations: @escaping () throws -> [YouTubeRTMPSStreamKeyConfiguration] = { [] }
   ) {
     self.screenCaptureService = screenCaptureService
@@ -106,6 +109,7 @@ public final class WorkspaceV4RecordingSession {
     self.localStateProvider = localState
     self.visionArchiveQueue = visionArchiveQueue
     self.cutBoundaryTimeout = cutBoundaryTimeout
+    self.cutFinalizationTimeout = cutFinalizationTimeout
     self.streamKeyConfigurationsProvider = streamKeyConfigurations
   }
 
@@ -308,7 +312,9 @@ public final class WorkspaceV4RecordingSession {
     makeReplacement: @escaping () throws -> SessionRecordService
   ) {
     makeReplacementRecording = makeReplacement
-    recordMediaCore = WorkspaceRecordMediaCore()
+    let core = WorkspaceRecordMediaCore()
+    recordMediaCore = core
+    recordingAudioReady = false
     recordMediaCore.install(service)
     recordMediaCore.setCallbacks(
       commitRequest: { [weak self] id in self?.completeCutBoundary(id) },
@@ -316,6 +322,11 @@ public final class WorkspaceV4RecordingSession {
       failureHandler: { [weak self] error in Task { @MainActor in await self?.fail(error) } },
       cutStateChanged: { [weak self] pending in
         if !pending { self?.completeCutBoundary(nil) }
+      },
+      audioFormatReadinessChanged: { [weak self, weak core] in
+        guard let self, let core, self.recordMediaCore === core, let service = self.recordService
+        else { return }
+        self.recordingAudioReady = core.hasRequiredAudioFormatDescriptions(for: service)
       })
   }
 
@@ -323,7 +334,7 @@ public final class WorkspaceV4RecordingSession {
     // The first-video callback publishes this observable value when readiness changes.
     _ = latestRecordingBundleURL
     return state == .recording && !isCutPending && recordService?.hasAcceptedFirstVideo == true
-      && recordService.map { recordMediaCore.hasRequiredAudioFormatDescriptions(for: $0) } == true
+      && recordingAudioReady
   }
 
   private func completeCutBoundary(_ id: UUID?) {
@@ -425,9 +436,7 @@ public final class WorkspaceV4RecordingSession {
         if !deferred { continuation.resume() }
       }
       previous.sealInputAudio()
-      let result = await withCheckedContinuation { continuation in
-        previous.finishAfterCut { continuation.resume(returning: $0) }
-      }
+      let result = await finishPreviousRecordingAfterCut(previous)
       if case .failed(let error) = result {
         recordFailure(error, phase: .recordingFinalization)
         return .failure(error as NSError)
@@ -444,6 +453,22 @@ public final class WorkspaceV4RecordingSession {
         preparingRecordingFailures.removeValue(forKey: replacement.packageDirectory)
       }
       return cutWasCancelled ? .success(()) : .failure(error as NSError)
+    }
+  }
+
+  func finishPreviousRecordingAfterCut(_ service: any SessionRecordServicing) async
+    -> SessionRecordFinalizationResult
+  {
+    await withCheckedContinuation { continuation in
+      let race = RecordFinalizationRace(continuation: continuation)
+      let timeout = Task { @MainActor [cutFinalizationTimeout] in
+        do { try await Task.sleep(for: cutFinalizationTimeout) } catch { return }
+        guard !Task.isCancelled else { return }
+        race.finish(.failed(ProgramOutputMediaChannelError.drainTimedOut))
+        service.abandonAfterMediaDrainTimeout()
+      }
+      race.installTimeoutTask(timeout)
+      service.finishAfterCut { race.finish($0) }
     }
   }
 
@@ -862,6 +887,7 @@ public final class WorkspaceV4RecordingSession {
     windowRuntime.visionArchiveTimelineProvider = nil
     activeSession = nil
     recordService = nil
+    recordingAudioReady = false
     makeReplacementRecording = nil
     preparingRecordingPackages.removeAll()
     preparingRecordingFailures.removeAll()
@@ -894,6 +920,7 @@ public final class WorkspaceV4RecordingSession {
   func adoptStartedRecordingService(_ service: SessionRecordService) {
     hasCompletedOutputCleanup = false
     recordService = service
+    recordingAudioReady = recordMediaCore.hasRequiredAudioFormatDescriptions(for: service)
     preparingRecordingPackages.remove(service.packageDirectory)
     if let failure = preparingRecordingFailures.removeValue(forKey: service.packageDirectory) {
       Task { @MainActor in

@@ -128,6 +128,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var eventHandler: @MainActor @Sendable (String) -> Void = { _ in }
   private var failureHandler: @MainActor @Sendable (Error) -> Void = { _ in }
   private var cutStateChanged: @MainActor @Sendable (Bool) -> Void = { _ in }
+  private var audioFormatReadinessChanged: @MainActor @Sendable () -> Void = {}
   private var activeService: (any SessionRecordServicing)?
   private var boundary: Boundary?
   private var isCutPending = false
@@ -166,13 +167,15 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     commitRequest: @escaping @MainActor @Sendable (UUID) -> Void,
     eventHandler: @escaping @MainActor @Sendable (String) -> Void,
     failureHandler: @escaping @MainActor @Sendable (Error) -> Void,
-    cutStateChanged: @escaping @MainActor @Sendable (Bool) -> Void
+    cutStateChanged: @escaping @MainActor @Sendable (Bool) -> Void,
+    audioFormatReadinessChanged: @escaping @MainActor @Sendable () -> Void = {}
   ) {
     queue.sync {
       self.commitRequest = commitRequest
       self.eventHandler = eventHandler
       self.failureHandler = failureHandler
       self.cutStateChanged = cutStateChanged
+      self.audioFormatReadinessChanged = audioFormatReadinessChanged
     }
   }
 
@@ -692,7 +695,14 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private func receiveMainAudio(_ sampleBuffer: CMSampleBuffer) {
     if let formatDescription = sampleBuffer.formatDescription {
       latestMainAudioFormatDescription = formatDescription
-      mainAudioFormatLock.withLock { hasMainAudioFormat = true }
+      let changed = mainAudioFormatLock.withLock {
+        let changed = !hasMainAudioFormat
+        hasMainAudioFormat = true
+        return changed
+      }
+      if changed {
+        Task { @MainActor [audioFormatReadinessChanged] in audioFormatReadinessChanged() }
+      }
     }
     if boundary != nil {
       appendToBoundary(.mainAudio(sampleBuffer))
@@ -707,7 +717,14 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private func receivePortraitAudio(_ sampleBuffer: CMSampleBuffer) {
     if let formatDescription = sampleBuffer.formatDescription {
       latestPortraitAudioFormatDescription = formatDescription
-      portraitAudioFormatLock.withLock { hasPortraitAudioFormat = true }
+      let changed = portraitAudioFormatLock.withLock {
+        let changed = !hasPortraitAudioFormat
+        hasPortraitAudioFormat = true
+        return changed
+      }
+      if changed {
+        Task { @MainActor [audioFormatReadinessChanged] in audioFormatReadinessChanged() }
+      }
     }
     if boundary != nil {
       appendToBoundary(.portraitAudio(sampleBuffer))
@@ -1062,4 +1079,35 @@ final class WorkspaceRecordCutBarrier: @unchecked Sendable {
 
 private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
+}
+
+final class RecordFinalizationRace: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>?
+  private var timeoutTask: Task<Void, Never>?
+
+  init(continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>) {
+    self.continuation = continuation
+  }
+
+  func installTimeoutTask(_ task: Task<Void, Never>) {
+    let shouldCancel = lock.withLock {
+      guard continuation != nil else { return true }
+      timeoutTask = task
+      return false
+    }
+    if shouldCancel { task.cancel() }
+  }
+
+  func finish(_ result: SessionRecordFinalizationResult) {
+    let (continuation, timeoutTask) = lock.withLock {
+      let continuation = self.continuation
+      self.continuation = nil
+      let timeoutTask = self.timeoutTask
+      self.timeoutTask = nil
+      return (continuation, timeoutTask)
+    }
+    timeoutTask?.cancel()
+    continuation?.resume(returning: result)
+  }
 }
