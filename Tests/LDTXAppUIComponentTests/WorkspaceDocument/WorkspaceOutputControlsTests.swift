@@ -114,8 +114,10 @@ extension AppUIComponentTestSuite {
       await second.shutdown()
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
-    func closingCaptureFailuresReachApplicationOwnerOnce(distinctErrors: Bool) async throws {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func closingCaptureFailuresReachApplicationOwnerOnce(
+      distinctErrors: Bool, reverseCompletion: Bool
+    ) async throws {
       let document = WorkspaceDocument()
       var releasedError: String?
       var coordinator: WorkspaceAppletCoordinator!
@@ -137,8 +139,9 @@ extension AppUIComponentTestSuite {
         distinctErrors ? "Second screenshot failed" : "First screenshot failed",
       ]
       var resumes: [CheckedContinuation<Void, Never>] = []
-      let captures = messages.map { message in
-        Task {
+      var captures: [Task<Void, Never>] = []
+      for message in messages {
+        let capture = Task {
           do {
             _ = try await coordinator.captureScreenshots {
               await withCheckedContinuation { resumes.append($0) }
@@ -151,17 +154,24 @@ extension AppUIComponentTestSuite {
             if !coordinator.isClosing { coordinator.reportError(error) }
           }
         }
+        captures.append(capture)
+        // Establish admission order independently of task scheduling.
+        while resumes.count != captures.count { await Task.yield() }
       }
-      while resumes.count != 2 { await Task.yield() }
       let close = Task { await coordinator.closeWorkspace() }
       while !coordinator.isClosing { await Task.yield() }
-      for resume in resumes { resume.resume() }
-      for capture in captures { await capture.value }
+      let completionOrder = reverseCompletion ? [1, 0] : [0, 1]
+      for index in completionOrder {
+        resumes[index].resume()
+        await captures[index].value
+      }
       guard case .succeeded = await close.value else {
         Issue.record("Cleanup should succeed")
         return
       }
-      #expect(releasedError == (distinctErrors ? messages.joined(separator: "\n\n") : messages[0]))
+      // Failures are presented in arrival order, with duplicate messages removed.
+      let expectedMessages = distinctErrors ? completionOrder.map { messages[$0] } : [messages[0]]
+      #expect(releasedError == expectedMessages.joined(separator: "\n\n"))
       #expect(document.operationErrors.isEmpty)
       #expect(coordinator.takeShutdownFailureForPresentation() == nil)
       #expect(notifications == 0)
