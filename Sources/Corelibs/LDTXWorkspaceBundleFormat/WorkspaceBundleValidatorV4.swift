@@ -367,11 +367,15 @@ extension WorkspaceBundleValidatorV4 {
           error: .invalidDynamicTextGeometry)
 
       case .clock(let clock):
+        color(
+          clock.foregroundExtendedSrgbColor, path: path + ".foreground_extended_srgb_color", id: id)
         if rational(clock.fontSize, path: path + ".font_size", id: id), clock.fontSize.num <= 0 {
           add(path + ".font_size", .invalidClockGeometry, id: id)
         }
         if clock.outlines.count > 2 { add(path + ".outlines", .invalidClockGeometry, id: id) }
         for (i, outline) in clock.outlines.enumerated() {
+          color(
+            outline.extendedSrgbColor, path: path + ".outlines[\(i)].extended_srgb_color", id: id)
           let p = path + ".outlines[\(i)].thickness"
           if rational(outline.thickness, path: p, id: id), outline.thickness.num < 0 {
             add(p, .invalidClockGeometry, id: id)
