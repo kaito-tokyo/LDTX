@@ -8,6 +8,7 @@ import CoreVideo
 import Foundation
 import LDTXMP4
 @testable import LDTXProgramRuntime
+import LDTXProtos
 import LDTXRecordBundleFormat
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceBundleFormat
@@ -30,6 +31,45 @@ extension OutputTestSuite {
         case .failed: .failed("test")
         }
       }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    func manualOCRUsesRecordingArchive(finishing: Finish) async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      var vision = Ldtx_Workspace_V4_OcrVision()
+      vision.internalID = 41
+      var displayed: String?
+      var context = fixture.runtime.visionFeatureContext
+      context.vision = { $0 == 41 ? vision : nil }
+      context.frameForVision = { _ in
+        .init(image: CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 16, height: 16)))
+      }
+      context.reportResult = { _, text in displayed = text }
+      context.reportVariables = { _, _ in }
+      context.reportFailure = { _, error in Issue.record("Unexpected OCR failure: \(error)") }
+      let feature = WorkspaceV4VisionFeature(
+        scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
+        recognizeText: { _, _ in "manual recording result" })
+      var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+      wrapper.ocrVision = vision
+      feature.synchronize(visions: [wrapper], context: context)
+      feature.runOCR(visionInternalID: 41)
+      while !feature.canRunOCR(visionInternalID: 41) { await Task.yield() }
+      #expect(displayed == "manual recording result")
+      let result =
+        finishing == .stop
+        ? await fixture.session.stopWithResult() : await fixture.session.pauseWithResult()
+      try result.get()
+      if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
+      let metadata = try fixture.archiveMetadata()
+      #expect(metadata["visionID"] == "41")
+      #expect(metadata["output"] == "manual recording result")
+      #expect(metadata["recordingTimelineMilliseconds"] != nil)
+      await feature.stop()
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)

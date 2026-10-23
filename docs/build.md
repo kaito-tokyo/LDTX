@@ -83,6 +83,27 @@ XCUI automation belongs only in `LDTXAppUITests`. Unit-test bundles run without
 a host application, except XpcTests, which may use an application host to
 exercise its embedded XPC service.
 
+### Real OCR on hosted runners
+
+GitHub Actions excludes `WorkspaceClockOCRIntegrationTestSuite` and
+`ManualOCRRecognitionIntegrationTestSuite` from its shared macOS test invocation
+for both pull requests and pushes to `main`.
+The hosted arm64 VM can fail Vision text recognition with E5RT error 11 and
+`No available backends on platform [universal] for compute units ane`.
+These exclusions are not successful recognition tests. Keep the real recognition
+suite in HardTests and run it locally on a supported Mac; it remains included in
+local test plans and Xcode Cloud's HardTests selection. The deterministic manual
+OCR control, error/retry, UI, variable publication, and recording persistence
+tests remain enabled in GitHub Actions.
+
+Run the manual OCR recognition test locally without the CI exclusions:
+
+```sh
+xcodebuild -project LDTX.xcodeproj -scheme LDTXHardTests \
+  -destination platform=macOS -derivedDataPath .derivedData \
+  -only-testing:LDTXHardTests/ManualOCRRecognitionIntegrationTestSuite test
+```
+
 ## Generated Files
 
 Prefer changing the source of truth, then regenerate the generated output with

@@ -106,6 +106,24 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
   }
 
+  public func canRunOCR(visionInternalID: Int64) -> Bool {
+    closeRequestTask == nil && !stateService.isClosed
+      && windowRuntime.persistenceCoordinator.hasPersistedWorkspace
+      && stateService.workspaceDefinition.visions.contains {
+        guard case .ocrVision(let vision)? = $0.vision else { return false }
+        return vision.internalID == visionInternalID
+      }
+      && visionFeature.canRunOCR(visionInternalID: visionInternalID)
+  }
+
+  public func runOCR(visionInternalID: Int64) {
+    guard canRunOCR(visionInternalID: visionInternalID) else { return }
+    visionFeature.runOCR(visionInternalID: visionInternalID) { [weak stateService] in
+      stateService?.workspaceDefinition.visions.contains { $0.internalID == visionInternalID }
+        ?? false
+    }
+  }
+
   public func runInference() {
     guard closeRequestTask == nil, !stateService.isClosed, inferenceTask == nil else { return }
     inferenceTask = Task { [self] in
@@ -999,6 +1017,11 @@ extension WorkspaceAppletCoordinator {
       ids.contains($0.key)
     }
     var context = windowRuntime.visionFeatureContext
+    let isCurrent = context.isCurrent
+    context.isCurrent = { [weak self] in
+      guard let self else { return false }
+      return closeRequestTask == nil && !stateService.isClosed && isCurrent()
+    }
     // The UI's starting status includes preparation. Vision must still prepare
     // models before the actual output service enters its starting state.
     context.isOutputActive = { [weak self] in self?.recordingSession.state.isOutputActive ?? false }

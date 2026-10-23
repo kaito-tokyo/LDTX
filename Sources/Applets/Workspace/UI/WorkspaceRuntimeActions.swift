@@ -7,6 +7,8 @@ import LDTXProtos
 import LDTXWorkspaceAppletModel
 
 public protocol WorkspaceRuntimeActions: AnyObject {
+  @MainActor func canRunOCR(visionInternalID: Int64) -> Bool
+  @MainActor func runOCR(visionInternalID: Int64)
   @MainActor func actionState(_ action: WorkspaceAction) -> WorkspaceActionState
   /// Revalidates admission and handles errors. Returns files only for a successful capture.
   @discardableResult @MainActor func perform(_ action: WorkspaceAction) async

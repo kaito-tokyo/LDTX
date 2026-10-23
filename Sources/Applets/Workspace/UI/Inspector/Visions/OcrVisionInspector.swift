@@ -13,8 +13,23 @@ struct OcrVisionInspector: View {
   @Bindable var stateService: WorkspaceDocument
   @Binding var vision: Ldtx_Workspace_V4_OcrVision
 
+  var canRun: () -> Bool = { false }
+  var run: () -> Void = {}
+
   var body: some View {
     Form {
+      Section("Recognition Result") {
+        Button("Run", systemImage: "text.viewfinder", action: run)
+          .disabled(stateService.isClosed || !canRun())
+          .accessibilityIdentifier("workspace.runOCR")
+        if let failure = stateService.visionFailureMessages[vision.internalID] {
+          Text(failure).foregroundStyle(.red)
+        } else if let result = stateService.visionResults[vision.internalID] {
+          Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
+        } else {
+          Text("Waiting for recognition.").foregroundStyle(.secondary)
+        }
+      }
       Section("OCR Vision") {
         TextField("Name", text: $vision.displayName)
         VisionInputVideoComponentDropdown(
@@ -55,15 +70,6 @@ struct OcrVisionInspector: View {
           }?.renderingSize ?? (1920, 1080), roi: $vision.regionOfInterest)
       }
       .disabled(stateService.isOutputActive)
-      Section("Recognition Result") {
-        if let failure = stateService.visionFailureMessages[vision.internalID] {
-          Text(failure).foregroundStyle(.red)
-        } else if let result = stateService.visionResults[vision.internalID] {
-          Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
-        } else {
-          Text("Waiting for recognition.").foregroundStyle(.secondary)
-        }
-      }
     }
     .formStyle(.grouped)
   }
