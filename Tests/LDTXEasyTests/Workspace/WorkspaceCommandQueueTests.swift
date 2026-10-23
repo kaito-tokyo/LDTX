@@ -103,7 +103,9 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
       reportCount += 1
       notificationBatches.append(notifications)
       #expect(repaired.count == 3)
-      #expect(observedQueue?.isStalled == true)
+      // Only the admitted batch is reported synchronously at the Stall boundary.
+      // A later unadmitted request can finish rejection after explicit Resume.
+      if reportCount == 1 { #expect(observedQueue?.isStalled == true) }
       #expect(observedQueue?.isRecovering == false)
       #expect(observedQueue?.retryNumber == 1)
     }
@@ -170,6 +172,66 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
     #expect(notificationBatches[0].count == 3)
     #expect(notificationBatches[1].map(\.command) == [.startOutputSession])
     await newAdmission.value
+    #expect(!queue.isStalled)
+    #expect(queue.retryNumber == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func lateRejectionReportsWithoutRestallingAnExplicitlyResumedQueue() async throws {
+    let rejectionEntered = TaskQueueAsyncSignal()
+    let finishRejection = TaskQueueAsyncSignal()
+    var reportCount = 0
+    var notificationBatches: [[WorkspaceCommandFailureNotification]] = []
+    var ranRejectedOperation = false
+    var ranNewOperation = false
+    weak var observedQueue: WorkspaceCommandQueue?
+    let queue = WorkspaceCommandQueue(label: "test.late-rejection") { notifications, _ in
+      reportCount += 1
+      notificationBatches.append(notifications)
+      #expect(observedQueue?.isRecovering == false)
+      #expect(observedQueue?.retryNumber == 1)
+      if reportCount == 1 {
+        #expect(observedQueue?.isStalled == true)
+      } else {
+        #expect(observedQueue?.isStalled == false)
+      }
+    }
+    observedQueue = queue
+    guard case .failed = await queue.submit(.switchProgram, operation: { throw cause }) else {
+      Issue.record("The admitted command must fail before explicit Resume")
+      return
+    }
+    let rejected = Task {
+      await queue.submit(
+        .startOutputSession,
+        reconcile: {
+          rejectionEntered.signal()
+          await finishRejection.wait()
+        }, operation: { ranRejectedOperation = true })
+    }
+    await rejectionEntered.wait()
+    #expect(reportCount == 1)
+    await queue.resumeForNewRequests()
+    #expect(!queue.isStalled)
+    guard
+      case .succeeded = await queue.submit(
+        .switchProgram, operation: { ranNewOperation = true })
+    else {
+      Issue.record("Explicit Resume must admit new work while old rejection finishes")
+      finishRejection.signal()
+      _ = await rejected.value
+      return
+    }
+    finishRejection.signal()
+    guard case .rejected = await rejected.value else {
+      Issue.record("Explicit Resume must never execute an already rejected request")
+      return
+    }
+    #expect(!ranRejectedOperation)
+    #expect(ranNewOperation)
+    #expect(reportCount == 2)
+    #expect(
+      notificationBatches.map { $0.map(\.command) } == [[.switchProgram], [.startOutputSession]])
     #expect(!queue.isStalled)
     #expect(queue.retryNumber == 1)
   }
