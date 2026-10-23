@@ -53,11 +53,14 @@ against the old AppAuth lock). New app packages require an explicit coverage
 policy in the checker and bot configuration.
 
 Check CI rejects mismatched declarations, missing direct lock entries, different
-shared commit revisions, and Python source/lock drift. It runs offline with the
+shared commit revisions, and Python source/lock drift (including removed direct
+requirements identified by uv annotations). It runs offline with the
 Python standard library. It verifies pin consistency, not upstream resolution or
 model compatibility. Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
-`pr` test plan on dependency pull requests. Run the relevant local commands from
-[the build guide](build.md) as well; AppAuth changes require the app-side Xcode
+`pr` test plan on dependency pull requests. After Xcode package resolution, CI
+rejects changes to the tracked Xcode lock, including a regenerated `originHash`;
+commit the resolver-produced lock before retrying CI. Run the relevant local
+commands from [the build guide](build.md) as well; AppAuth changes require the app-side Xcode
 build/tests, not only root SwiftPM tests. SwiftProtobuf changes also require
 checking generated Protobuf compatibility and the documented generator version.
 
@@ -68,6 +71,11 @@ source pin proposals into `model-tooling`; accepting them remains a coordinated
 model-compatibility decision. The custom uv-generated `requirements-dev.lock`
 is not a pip-compile `.in`/`.txt` pair and is not maintained by Dependabot.
 Do not hand-edit its transitive versions or hashes.
+
+`.python-version` declares a pyenv-recognized Python 3.13 patch version so
+Dependabot selects a 3.13 interpreter rather than its default newest minor.
+Dependabot normalizes this metadata to the minor series and uses its supported
+3.13 patch; the lock regeneration target remains `--python-version 3.13`.
 
 After reviewing proposed source pins, regenerate on Python 3.13 using the
 existing build-guide command:

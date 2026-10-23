@@ -6,8 +6,11 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 import shutil
+import shlex
+import subprocess
 import tempfile
 import unittest
 
@@ -74,6 +77,24 @@ class DependencyUpdateTests(unittest.TestCase):
         self.assertIn(f'exactVersion: {self.newer(self.appauth)}', (self.root / 'project.yml').read_text())
         dependencies.check(self.root)
 
+    def test_ci_rejects_xcode_origin_hash_drift(self):
+        workflow = (ROOT / '.github/workflows/swift.yml').read_text()
+        gate = next(line.strip() for line in workflow.splitlines()
+                    if line.strip().startswith('git diff --exit-code -- '))
+        command = shlex.split(gate)
+        self.assertIn(str(dependencies.XCODE_LOCK), command)
+        self.assertLess(workflow.index('-resolvePackageDependencies'), workflow.index(gate))
+        subprocess.run(['git', 'init', '--quiet'], cwd=self.root, check=True)
+        subprocess.run(['git', 'add', str(dependencies.XCODE_LOCK)], cwd=self.root, check=True)
+        self.assertEqual(subprocess.run(command, cwd=self.root, capture_output=True).returncode, 0)
+        path = self.root / dependencies.XCODE_LOCK
+        data = json.loads(path.read_text())
+        data['originHash'] = '0' * 64
+        path.write_text(json.dumps(data, indent=2) + '\n')
+        drift = subprocess.run(command, cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(drift.returncode, 1)
+        self.assertIn('originHash', drift.stdout)
+
     def test_shared_lock_revision_drift_fails(self):
         self.change_lock(dependencies.XCODE_LOCK, 'swift-protobuf', 'revision', 'a' * 40)
         with self.assertRaisesRegex(ValueError, 'revisions disagree'):
@@ -83,6 +104,41 @@ class DependencyUpdateTests(unittest.TestCase):
         self.replace('requirements-dev.txt', f'coremltools=={self.coreml}', f'coremltools=={self.newer(self.coreml)}')
         with self.assertRaisesRegex(ValueError, 'regenerate requirements-dev.lock'):
             dependencies.check(self.root)
+
+    def test_removed_direct_python_requirement_requires_regeneration(self):
+        version = dependencies.python_pins(self.root / 'requirements-dev.txt')['onnx2torch']
+        self.replace('requirements-dev.txt', f'onnx2torch=={version}\n', '')
+        with self.assertRaisesRegex(ValueError, 'Direct Python requirements changed'):
+            dependencies.check(self.root)
+
+    def test_removed_direct_requirement_may_remain_transitive(self):
+        version = dependencies.python_pins(self.root / 'requirements-dev.txt')['onnx']
+        self.replace('requirements-dev.txt', f'onnx=={version}\n', '')
+        path = self.root / 'requirements-dev.lock'
+        text = path.read_text()
+        block = re.search(r'^onnx==.*?(?=^\S|\Z)', text, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(block)
+        annotated = block[0]
+        self.assertIn('    #   -r requirements-dev.txt\n', annotated)
+        path.write_text(text.replace(annotated, annotated.replace(
+            '    #   -r requirements-dev.txt\n', ''
+        )))
+        # onnx remains required by onnx2torch, with its hashes and version intact.
+        dependencies.check(self.root)
+        self.assertIn('onnx', dependencies.python_pins(path, hashed=True))
+
+    def test_uv_direct_annotations_support_both_formats(self):
+        direct = dependencies.python_direct_requirements(self.root / 'requirements-dev.lock')
+        self.assertIn('onnx2torch', direct)  # single-line annotation
+        self.assertIn('onnx', direct)  # multiline annotation
+        self.assertNotIn('numpy', direct)  # legitimate transitive dependency
+
+    def test_python_version_metadata_matches_lock_target(self):
+        lines = (ROOT / '.python-version').read_text().splitlines()
+        version = next(line.strip() for line in lines if line.strip() and not line.startswith('#'))
+        self.assertRegex(version, r'^3\.13\.\d+$')
+        target = '.'.join(version.split('.')[:2])
+        self.assertIn(f'--python-version {target} ', (self.root / 'requirements-dev.lock').read_text())
 
     def test_unhashed_transitive_requirement_fails(self):
         with (self.root / 'requirements-dev.lock').open('a') as file:

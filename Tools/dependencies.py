@@ -103,6 +103,21 @@ def python_pins(path, hashed=False):
     return result
 
 
+def python_direct_requirements(path):
+    """Read uv's single-line and multiline direct-requirement annotations."""
+    direct = set()
+    current = None
+    for line in path.read_text().splitlines():
+        match = REQUIREMENT.match(line)
+        if match:
+            current = re.sub(r'[-_.]+', '-', match[1]).lower()
+        if re.fullmatch(r'\s*#\s+(?:via\s+)?-r requirements-dev\.txt\s*', line):
+            if current is None:
+                raise ValueError(f'{path}: direct annotation without a requirement')
+            direct.add(current)
+    return direct
+
+
 def check(root):
     shared, app, _ = manifests(root)
     app_pins = {identity(url): (url, version) for _, url, version in app}
@@ -129,6 +144,9 @@ def check(root):
     for name, version in source.items():
         if locked.get(name) != version:
             raise ValueError(f'{name}: regenerate requirements-dev.lock with uv pip compile')
+    direct = python_direct_requirements(root / 'requirements-dev.lock')
+    if direct != set(source):
+        raise ValueError('Direct Python requirements changed; regenerate requirements-dev.lock')
     print('Swift manifests/locks and Python source pins/hash lock agree.')
 
 
