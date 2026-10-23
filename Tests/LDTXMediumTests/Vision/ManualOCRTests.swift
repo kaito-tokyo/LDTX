@@ -43,6 +43,45 @@ struct ManualOCRIntegrationTestSuite {
     await feature.stop()
   }
 
+  @Test func recognitionBackendFailureIsReportedAndCanBeRetried() async {
+    let vision = Ldtx_Workspace_V4_OcrVision.with { $0.internalID = 11 }
+    let backendFailure = NSError(
+      domain: "ManualOCRTestBackend", code: 11,
+      userInfo: [NSLocalizedDescriptionKey: "No available recognition backend."])
+    var failing = true
+    var results: [String] = []
+    var failures: [NSError] = []
+    var archives = 0
+    let feature = WorkspaceV4VisionFeature(
+      scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
+      recognizeText: { _, _ in
+        if failing { throw backendFailure }
+        return "recovered recognition"
+      })
+    var context = WorkspaceV4VisionFeatureContext(
+      vision: { $0 == 11 ? vision : nil },
+      frameForVision: { _ in .init(image: CIImage(color: .white)) },
+      reportResult: { _, text in results.append(text) },
+      reportFailure: { _, error in failures.append(error as NSError) },
+      archiveResult: { _, _, _ in archives += 1 })
+    context.recordingPackageURL = { URL(fileURLWithPath: "/tmp/backend-failure.ldtxrecord") }
+    feature.synchronize(visions: [.with { $0.ocrVision = vision }], context: context)
+    feature.runOCR(visionInternalID: 11)
+    while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
+    #expect(failures.count == 1)
+    #expect(failures.first === backendFailure)
+    #expect(results.isEmpty)
+    #expect(feature.resultsByVisionInternalID[11] == nil)
+    #expect(archives == 0)
+    failing = false
+    feature.runOCR(visionInternalID: 11)
+    while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
+    #expect(results == ["recovered recognition"])
+    #expect(archives == 1)
+    #expect(failures.count == 1)
+    await feature.stop()
+  }
+
   @Test(arguments: [false, true], Completion.allCases)
   func manualAdmissionAndCompletion(recording: Bool, completion: Completion) async {
     var vision: Ldtx_Workspace_V4_OcrVision? = .with { $0.internalID = 11 }

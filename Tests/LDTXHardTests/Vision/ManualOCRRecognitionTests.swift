@@ -30,17 +30,18 @@ struct ManualOCRRecognitionIntegrationTestSuite {
       $0.recognitionLanguages = ["en-US"]
     }
     let feature = WorkspaceV4VisionFeature()
-    var result: String?
+    var completion: Result<String, any Error>?
     let context = WorkspaceV4VisionFeatureContext(
       vision: { $0 == 11 ? vision : nil }, frameForVision: { _ in .init(image: image) },
-      reportResult: { _, text in result = text },
-      reportFailure: { _, error in Issue.record("OCR failed: \(error)") })
+      reportResult: { _, text in completion = .success(text) },
+      reportFailure: { _, error in completion = .failure(error) })
     feature.synchronize(visions: [.with { $0.ocrVision = vision }], context: context)
     for _ in 0..<2 {
-      result = nil
+      completion = nil
       feature.runOCR(visionInternalID: 11)
       while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
-      #expect(result?.contains("Manual OCR Example") == true)
+      let result = try #require(completion).get()
+      #expect(result.contains("Manual OCR Example"), "Actual OCR output: \(result)")
     }
     await feature.stop()
   }
