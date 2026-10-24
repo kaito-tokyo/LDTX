@@ -20,7 +20,8 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1017: preserve-preview-and-divider-state", .serialized)
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {
-    @Test func hostingAndToolbarReleaseTheirController() async {
+    @Test("LUB-1049: Hosting and toolbar release their controller")
+    func hostingAndToolbarReleaseTheirController() async {
       weak var released: WorkspaceDocument?
       autoreleasepool {
         let window = makeWorkspaceTestWindow()
@@ -34,7 +35,8 @@ extension AppUIComponentTestSuite {
       }
       #expect(released == nil)
     }
-    @Test func unrepresentedDocumentReleasesItsResourceRegistration() {
+    @Test("LUB-1049: Unrepresented document releases its resource registration")
+    func unrepresentedDocumentReleasesItsResourceRegistration() {
       var released: [UUID] = []
       var document: WorkspaceDocument? = WorkspaceDocument {
         released.append($0)
@@ -46,7 +48,8 @@ extension AppUIComponentTestSuite {
       #expect(released == [id])
     }
 
-    @Test func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
+    @Test("LUB-1049: Injected resources stay registered until shutdown and release once")
+    func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
       let document = WorkspaceDocument()
@@ -76,7 +79,8 @@ extension AppUIComponentTestSuite {
       #expect(released == [document.runtimeID])
     }
 
-    @Test func coordinatorKeepsDocumentAliveThroughCleanup() async {
+    @Test("LUB-1049: Coordinator keeps document alive through cleanup")
+    func coordinatorKeepsDocumentAliveThroughCleanup() async {
       var documentReleased = false
       var runtimeReleased = false
       var document: WorkspaceDocument? = WorkspaceDocument { _ in documentReleased = true }
@@ -104,7 +108,7 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
-    @Test("SwiftUI preview keeps its Metal surface through layout and tab changes")
+    @Test("LUB-1058: SwiftUI preview keeps its Metal surface through layout and tab changes")
     func previewIdentityAndCanvasSelection() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
@@ -153,7 +157,7 @@ extension AppUIComponentTestSuite {
       #expect(metal.delegate == nil && metal.isPaused)
     }
 
-    @Test("SwiftUI editors scroll when the lower pane shrinks")
+    @Test("LUB-1049: SwiftUI editors scroll when the lower pane shrinks")
     func editorsScrollWhenLowerPaneShrinks() async throws {
       let window = makeWorkspaceTestWindow()
       defer { window.close() }
@@ -179,7 +183,7 @@ extension AppUIComponentTestSuite {
       #expect(scroll.contentView.bounds.origin.y > 0)
     }
 
-    @Test("Preview height follows late snapshot adoption and persists by external ID")
+    @Test("LUB-1058: Preview height follows late snapshot adoption and persists by external ID")
     func previewHeightFollowsLateSnapshotAdoption() async throws {
       let transientID = UUID().uuidString.lowercased()
       let savedID = UUID().uuidString.lowercased()
@@ -215,7 +219,7 @@ extension AppUIComponentTestSuite {
       #expect(layout.previewHeight == 340)
     }
 
-    @Test("Legacy AppKit divider height migrates once and never overrides a new value")
+    @Test("LUB-1058: Legacy AppKit divider height migrates once and never overrides a new value")
     func migratesLegacyPreviewHeight() {
       let id = UUID().uuidString.lowercased()
       let legacyKey = "NSSplitView Subview Frames WorkspaceContentPane.\(id)"
@@ -244,7 +248,7 @@ extension AppUIComponentTestSuite {
       #expect(invalid.previewHeight == 280)
     }
 
-    @Test("UCT-1017.7: A new Workspace preserves its initial content size")
+    @Test("LUB-1049: UCT-1017.7: A new Workspace preserves its initial content size")
     func newWorkspacePreservesInitialContentSize() async throws {
       _ = NSApplication.shared
       let frameKey = "NSWindow Frame WorkspaceV4.AppKit.v1"
@@ -268,7 +272,7 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
       document.close()
     }
-    @Test("UCT-1017.8: Output status preserves failure information")
+    @Test("LUB-1049: UCT-1017.8: Output status preserves failure information")
     func storesOutputStatusForWorkspaceUI() {
       let stateService = WorkspaceDocument(definition: .init(), preferences: .init())
 

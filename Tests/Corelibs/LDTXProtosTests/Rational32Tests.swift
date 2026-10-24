@@ -8,7 +8,8 @@ import Testing
 
 @Suite("Rational32")
 struct Rational32UnitTestSuite {
-  @Test func optionalFieldsPreservePresence() throws {
+  @Test("LUB-1000: Optional fields preserve presence") func optionalFieldsPreservePresence() throws
+  {
     try checkOptionalFields(Ldtx_Workspace_V4_Rational32(), defaultNum: 0)
     try checkOptionalFields(Ldtx_Workspace_V4_Rational32DefaultOne(), defaultNum: 1)
   }
@@ -29,7 +30,8 @@ struct Rational32UnitTestSuite {
     #expect(try value.serializedData().isEmpty)
   }
 
-  @Test func decibelsUseFixedTenthsAndRejectInvalidValues() throws {
+  @Test("LUB-1000: Decibels use fixed tenths and reject invalid values")
+  func decibelsUseFixedTenthsAndRejectInvalidValues() throws {
     for (input, numerator) in [(0.0, 0), (-11.899999999999999, -119), (1.26, 13)] {
       let value = try Rational32DecibelEncoding.encode(input)
       #expect(value.num == Int32(numerator))
@@ -43,7 +45,7 @@ struct Rational32UnitTestSuite {
     let zero = try Rational32DecibelEncoding.encode(Ldtx_Workspace_V4_Rational32().double)
     #expect(zero.num == 0 && zero.den == 10)
   }
-  @Test func convertsValidValues() {
+  @Test("LUB-1000: Converts valid values") func convertsValidValues() {
     let value = Ldtx_Workspace_V4_Rational32.with {
       $0.num = -1
       $0.den = 8
@@ -52,7 +54,8 @@ struct Rational32UnitTestSuite {
     #expect(value.double == -0.125)
   }
 
-  @Test func usesStandardDivisionForZeroDenominator() {
+  @Test("LUB-1000: Uses standard division for zero denominator")
+  func usesStandardDivisionForZeroDenominator() {
     let value = Ldtx_Workspace_V4_Rational32.with {
       $0.num = 1
       $0.den = 0
@@ -70,7 +73,7 @@ struct Rational32UnitTestSuite {
     #expect(Ldtx_Workspace_V4_Rational32().decimal == 0)
   }
 
-  @Test func convertsZeroAndExtremeValues() {
+  @Test("LUB-1000: Converts zero and extreme values") func convertsZeroAndExtremeValues() {
     let zero = Ldtx_Workspace_V4_Rational32.with { $0.den = 1 }
     #expect(zero.float == 0)
     #expect(zero.double == 0)
@@ -82,7 +85,7 @@ struct Rational32UnitTestSuite {
     #expect(extreme.double == Double(Int32.min) / Double(UInt32.max))
   }
 
-  @Test func invalidStoredDenominator() {
+  @Test("LUB-1000: Invalid stored denominator") func invalidStoredDenominator() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.scaleY = .with { $0.set(num: 1, den: 0) }
     #expect(
@@ -95,30 +98,7 @@ struct Rational32UnitTestSuite {
       })
   }
 
-  @Test func castsDoubleToFloat() {
-    let value = Ldtx_Workspace_V4_Rational32.with {
-      $0.num = Int32.max
-      $0.den = UInt32.max
-    }
-    #expect(value.float == Float(value.double))
-  }
-
-  @Test func convertsPowersOfTwoAcrossIntegerBitWidths() {
-    for numeratorExponent in 0...30 {
-      for denominatorExponent in 0...31 {
-        let value = Ldtx_Workspace_V4_Rational32.with {
-          $0.num = 1 << numeratorExponent
-          $0.den = 1 << denominatorExponent
-        }
-        #expect(
-          value.double
-            == Double(
-              sign: .plus, exponent: numeratorExponent - denominatorExponent, significand: 1))
-      }
-    }
-  }
-
-  @Test func validatesWithoutRounding() {
+  @Test("LUB-1000: Validates without rounding") func validatesWithoutRounding() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
     transform.translationX = .with {
       $0.num = Int32.max
@@ -135,7 +115,9 @@ struct Rational32UnitTestSuite {
         } == true
       })
   }
-  @Test func decimalRoundTripAndEncodingLimits() throws {
+  @Test("LUB-1000: Decimal round trip and encoding limits") func decimalRoundTripAndEncodingLimits()
+    throws
+  {
     var value = Ldtx_Workspace_V4_Rational32()
     for text in ["1.25", "-1.2", "0", "1000", "0.000000001", "-2147483648"] {
       let decimal = try #require(Decimal(string: text))

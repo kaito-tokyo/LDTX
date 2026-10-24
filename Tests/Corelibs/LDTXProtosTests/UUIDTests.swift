@@ -7,7 +7,7 @@ import Testing
 
 @Suite
 struct UUIDUnitTestSuite {
-  @Test func usesRFC9562ByteOrder() throws {
+  @Test("LUB-1000: Uses rfc9562 byte order") func usesRFC9562ByteOrder() throws {
     let uuid = try #require(UUID(uuidString: "01912345-6789-7abc-8def-0123456789ab"))
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     definition.externalIDAsUUID = uuid
@@ -30,7 +30,7 @@ struct UUIDUnitTestSuite {
       ).externalIDAsUUID == uuid)
   }
 
-  @Test(arguments: [0, 15, 17])
+  @Test("LUB-1000: Rejects invalid lengths", arguments: [0, 15, 17])
   func rejectsInvalidLengths(count: Int) {
     var definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     definition.externalID = Data(repeating: 0, count: count)
@@ -39,7 +39,8 @@ struct UUIDUnitTestSuite {
     preferences.externalID = definition.externalID
     #expect(preferences.externalIDAsUUID == nil)
   }
-  @Test func unsetExternalIDsReadAsNilUUID() throws {
+  @Test("LUB-1000: Unset external IDs read as nil UUID") func unsetExternalIDsReadAsNilUUID() throws
+  {
     let zero = Data(repeating: 0, count: 16)
     let definition = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     let preferences = Ldtx_Envelope_WorkspacePreferencesEnvelope()

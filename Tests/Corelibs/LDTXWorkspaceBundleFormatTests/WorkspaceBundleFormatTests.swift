@@ -9,7 +9,9 @@ import Testing
 
 @Suite("Workspace bundle format")
 struct WorkspaceBundleFormatIntegrationTestSuite {
-  @Test(arguments: ["definition.pb", "preferences.pb", "output_settings.pb"])
+  @Test(
+    "LUB-1002: Rejects missing concrete payload with valid envelope ID",
+    arguments: ["definition.pb", "preferences.pb", "output_settings.pb"])
   func rejectsMissingConcretePayloadWithValidEnvelopeID(file: String) throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -62,7 +64,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     return try encoder.encode(metadata)
   }
 
-  @Test("Writer initialization creates XML Info.plist metadata")
+  @Test("LUB-1002: Writer initialization creates XML Info.plist metadata")
   func writerInitializationCreatesXMLInfoPlist() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -76,7 +78,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try WorkspaceBundleValidatorV4(at: packageURL).validate() == "4.0")
   }
 
-  @Test("generates a UUID version 7 identifier")
+  @Test("LUB-1002: generates a UUID version 7 identifier")
   func generatesUUIDv7WhenWritingDefinition() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -91,7 +93,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(identifier.uuidString.lowercased().split(separator: "-")[2].first == "7")
   }
 
-  @Test("writes protobuf documents and format metadata")
+  @Test("LUB-1002: writes Protobuf documents and format metadata")
   func writesProtobufOnlyPackage() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -127,7 +129,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       ))
   }
 
-  @Test("Reader gates decoded documents on Workspace integrity diagnostics")
+  @Test("LUB-1002: Reader gates decoded documents on Workspace integrity diagnostics")
   func readerValidatesWorkspaceIntegrity() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -155,7 +157,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("refuses to open a package in an unsupported format")
+  @Test("LUB-1002: refuses to open a package in an unsupported format")
   func rejectsUnsupportedFormat() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -168,7 +170,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(readerFactoryFailed(at: packageURL))
   }
 
-  @Test("factory selects Reader from logical Workspace version")
+  @Test("LUB-1002: factory selects Reader from logical Workspace version")
   func factorySelectsReaderFromWorkspaceVersion() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -181,7 +183,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(readerFactoryFailed(at: packageURL))
   }
 
-  @Test("rejects V4 metadata with an incorrect bundle package type")
+  @Test("LUB-1002: rejects V4 metadata with an incorrect bundle package type")
   func rejectsIncorrectBundlePackageType() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -200,7 +202,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("Reader ignores the bundle version value", arguments: ["4.0", "4.1", "99.0"])
+  @Test("LUB-1002: Reader ignores the bundle version value", arguments: ["4.0", "4.1", "99.0"])
   func readerIgnoresBundleVersion(bundleVersion: String) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -212,7 +214,8 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
-  @Test("Reader ignores missing and non-string bundle versions", arguments: [false, true])
+  @Test(
+    "LUB-1002: Reader ignores missing and non-string bundle versions", arguments: [false, true])
   func readerIgnoresUnusableBundleVersion(includeValue: Bool) throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -226,7 +229,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try WorkspaceBundleReaderV4(at: packageURL).read() == workspace)
   }
 
-  @Test("requires a declared format version")
+  @Test("LUB-1002: requires a declared format version")
   func requiresFormatVersion() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -238,7 +241,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(readerFactoryFailed(at: packageURL))
   }
 
-  @Test("rejects a protobuf package containing a legacy preferences mirror")
+  @Test("LUB-1002: rejects a Protobuf package containing a legacy preferences mirror")
   func rejectsMixedPackage() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -258,7 +261,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("recognizes a malformed protobuf-only package as a V4 candidate")
+  @Test("LUB-1002: recognizes a malformed Protobuf-only package as a V4 candidate")
   func recognizesMalformedV4Candidate() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -279,7 +282,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     }
   }
 
-  @Test("reader factory reports a missing package metadata file")
+  @Test("LUB-1002: reader factory reports a missing package metadata file")
   func readerFactoryRejectsMissingPackage() throws {
     let rootURL = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -287,7 +290,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(readerFactoryFailed(at: missingURL))
   }
 
-  @Test("package writer persists the independent output settings envelope")
+  @Test("LUB-1002: package writer persists the independent output settings envelope")
   func outputSettingsRoundTrip() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -301,6 +304,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   }
 
   @Test(
+    "LUB-1002: Package writer rejects invalid envelope IDs",
     arguments: [0, 1, 2],
     [
       "00000000-0000-4000-8000-000000000001",
@@ -324,6 +328,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   }
 
   @Test(
+    "LUB-1002: Low level writer rejects invalid IDs",
     arguments: [0, 1, 2],
     [
       "00000000-0000-4000-8000-000000000001",
@@ -348,7 +353,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   }
 
   @Test(
-    "Saving uses assigned model IDs and clearing retains model resources",
+    "LUB-1002: Saving uses assigned model IDs and clearing retains model resources",
     arguments: ["Original.mlmodel", ".Original.mlmodel"])
   func savesExternalModelReference(name: String) throws {
     let root = try makeTemporaryDirectory()
@@ -391,7 +396,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
   }
 
   @Test(
-    "Model packages copy their native directory tree through save and reload",
+    "LUB-1002: Model packages copy their native directory tree through save and reload",
     arguments: ["Classifier.mlpackage", ".Classifier.mlpackage"])
   func nativeModelPackageRoundTrip(name: String) throws {
     let root = try makeTemporaryDirectory()
@@ -420,7 +425,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
           "VisionModels/9/\(name)/Data/model.bin")) == Data([1, 2, 3]))
   }
 
-  @Test("The first supported basename is selected and existing models stay immutable")
+  @Test("LUB-1002: The first supported basename is selected and existing models stay immutable")
   func selectsFirstModelWithinID() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -455,7 +460,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(try Data(contentsOf: first) == Data([2]))
   }
 
-  @Test("Invalid or missing model references fail before changing the destination")
+  @Test("LUB-1002: Invalid or missing model references fail before changing the destination")
   func invalidModelReferencesDoNotWrite() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -480,7 +485,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
   }
 
-  @Test("Model resources reject unsupported types, incomplete packages and symlinks")
+  @Test("LUB-1002: Model resources reject unsupported types, incomplete packages and symlinks")
   func rejectsUnsafeModelSources() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -503,7 +508,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(throws: (any Error).self) { try WorkspaceBundleValidatorV4.validate(workspace) }
   }
 
-  @Test("Model resources reject symlink destination directories")
+  @Test("LUB-1002: Model resources reject symlink destination directories")
   func rejectsUnsafeModelDestinations() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

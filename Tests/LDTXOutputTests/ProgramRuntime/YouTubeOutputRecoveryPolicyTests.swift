@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputRecoveryPolicyUnitTestSuite {
-    @Test func fixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
+    @Test("LUB-1062: Fixed four second delay advances revision and stops after three retries")
+    func fixedFourSecondDelayAdvancesRevisionAndStopsAfterThreeRetries() throws {
       var policy = YouTubeOutputRecoveryPolicy()
 
       let firstRetry = policy.nextRetry()
@@ -29,7 +30,8 @@ extension OutputTestSuite {
       #expect(policy.revision == 3)
     }
 
-    @Test func stableConnectionClearsAttemptWithoutReusingRevision() throws {
+    @Test("LUB-1062: Stable connection clears attempt without reusing revision")
+    func stableConnectionClearsAttemptWithoutReusingRevision() throws {
       var policy = YouTubeOutputRecoveryPolicy()
       _ = policy.nextRetry()
       _ = policy.nextRetry()
@@ -43,7 +45,8 @@ extension OutputTestSuite {
           == YouTubeOutputRecoveryPolicy.Retry(attempt: 1, revision: 3, delay: 4))
     }
 
-    @Test func checkpointUpdateRejectsOldRevisionAndMismatchedFingerprint() throws {
+    @Test("LUB-1062: Checkpoint update rejects old revision and mismatched fingerprint")
+    func checkpointUpdateRejectsOldRevisionAndMismatchedFingerprint() throws {
       let sessionID = UUID()
       let expected = YouTubeOutputContext(sessionID: sessionID, revision: 4)
       let stale = YouTubeOutputResetRequest(
@@ -70,7 +73,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func checkpointUpdateAcceptsCurrentRevisionCommit() throws {
+    @Test("LUB-1062: Checkpoint update accepts current revision commit")
+    func checkpointUpdateAcceptsCurrentRevisionCommit() throws {
       let context = YouTubeOutputContext(sessionID: UUID(), revision: 5)
       let request = YouTubeOutputResetRequest(
         context: context,
@@ -91,7 +95,8 @@ extension OutputTestSuite {
             availabilityStartTime: Date(timeIntervalSince1970: 123)))
     }
 
-    @Test func onlyUnrecoverableXPCFailuresRequireGlobalStop() {
+    @Test("LUB-1062: Only unrecoverable XPC failures require global stop")
+    func onlyUnrecoverableXPCFailuresRequireGlobalStop() {
       #expect(OutputServiceProcessError.configurationMismatch.requiresGlobalStop)
       #expect(OutputServiceProcessError.resetLimitReached("failed").requiresGlobalStop)
       #expect(!OutputServiceProcessError.unavailable.requiresGlobalStop)
@@ -99,7 +104,8 @@ extension OutputTestSuite {
       #expect(!OutputServiceProcessError.restartRequested("retryable").requiresGlobalStop)
     }
 
-    @Test func resumeGateDropsMediaBeforeFirstKeyFrame() throws {
+    @Test("LUB-1062: Resume gate drops media before first key frame")
+    func resumeGateDropsMediaBeforeFirstKeyFrame() throws {
       var gate = YouTubeOutputResumeGate()
       let batch = YouTubeOutputMediaBatch(
         context: YouTubeOutputContext(sessionID: UUID(), revision: 1),
@@ -120,7 +126,8 @@ extension OutputTestSuite {
       #expect(gate.filter(batch) != nil)
     }
 
-    @Test func resumeGateWaitsForKeyFrameAgainAfterReset() {
+    @Test("LUB-1062: Resume gate waits for key frame again after reset")
+    func resumeGateWaitsForKeyFrameAgainAfterReset() {
       var gate = YouTubeOutputResumeGate()
       let nonKeyFrameBatch = YouTubeOutputMediaBatch(
         context: YouTubeOutputContext(sessionID: UUID(), revision: 1),

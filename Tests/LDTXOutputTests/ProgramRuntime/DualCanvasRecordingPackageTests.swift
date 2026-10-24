@@ -23,7 +23,9 @@ extension OutputTestSuite {
       }
     }
 
-    @Test(arguments: [(true, false), (false, true), (true, true)])
+    @Test(
+      "LUB-1060: Version three creates only enabled canvas files",
+      arguments: [(true, false), (false, true), (true, true)])
     func versionThreeCreatesOnlyEnabledCanvasFiles(_ enabled: (Bool, Bool)) throws {
       let directory = URL(
         fileURLWithPath: "/private/tmp/LDTXDualRecording-\(UUID().uuidString).ldtxrecord",

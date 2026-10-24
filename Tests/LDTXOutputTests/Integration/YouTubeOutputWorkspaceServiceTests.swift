@@ -13,7 +13,8 @@ extension OutputTestSuite {
   @Suite
   struct YouTubeOutputWorkspaceServiceIntegrationTestSuite {
     @MainActor
-    @Test func resetRebuildsPairFromWorkspaceCheckpoint() async throws {
+    @Test("LUB-1062: Reset rebuilds pair from workspace checkpoint")
+    func resetRebuildsPairFromWorkspaceCheckpoint() async throws {
       let secondBootstrap = expectation(description: "replacement pair bootstrapped")
       let harness = WorkspaceServiceProcessHarness { index, _ in
         if index == 1 { secondBootstrap.fulfill() }
@@ -46,7 +47,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func bootstrapFailureStopsImmediatelyAfterThreeReplacementAttempts() async {
+    @Test("LUB-1062: Bootstrap failure stops immediately after three replacement attempts")
+    func bootstrapFailureStopsImmediatelyAfterThreeReplacementAttempts() async {
       let failed = expectation(description: "retry limit reported")
       let startFailed = expectation(description: "start failed")
       let harness = WorkspaceServiceProcessHarness(bootstrapSucceeds: false)
@@ -69,7 +71,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func stopWhileWaitingForRetryPreventsReplacementPair() async throws {
+    @Test("LUB-1062: Stop while waiting for retry prevents replacement pair")
+    func stopWhileWaitingForRetryPreventsReplacementPair() async throws {
       let retryScheduled = expectation(description: "retry scheduled")
       let harness = WorkspaceServiceProcessHarness()
       let service = makeService(
@@ -91,7 +94,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func retiredBatcherFailureDoesNotAbortReplacementPair() async throws {
+    @Test("LUB-1062: Retired batcher failure does not abort replacement pair")
+    func retiredBatcherFailureDoesNotAbortReplacementPair() async throws {
       let replacementReady = expectation(description: "replacement pair ready")
       let staleFailureReported = expectation(description: "stale batcher failure reported")
       staleFailureReported.isInverted = true
@@ -115,7 +119,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func replacementDeliveryRestoresRecoveryBudget() async throws {
+    @Test("LUB-1062: Replacement delivery restores recovery budget")
+    func replacementDeliveryRestoresRecoveryBudget() async throws {
       let secondReplacement = expectation(description: "second replacement bootstrapped")
       let harness = WorkspaceServiceProcessHarness { index, _ in
         if index == 2 { secondReplacement.fulfill() }
@@ -148,7 +153,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func checkpointFromDifferentRevisionDoesNotCompletePriming() async throws {
+    @Test("LUB-1062: Checkpoint from different revision does not complete priming")
+    func checkpointFromDifferentRevisionDoesNotCompletePriming() async throws {
       let harness = WorkspaceServiceProcessHarness()
       let boundary = YouTubeOutputServiceProcessClient()
       let service = makeService(harness: harness, boundary: boundary)
@@ -187,7 +193,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func stopDuringPrimingCancelsStartExactlyOnce() async throws {
+    @Test("LUB-1062: Stop during priming cancels start exactly once")
+    func stopDuringPrimingCancelsStartExactlyOnce() async throws {
       let harness = WorkspaceServiceProcessHarness()
       let service = makeService(harness: harness)
       let startCompleted = expectation(description: "priming start cancelled")
@@ -218,7 +225,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func stopReportsFinishFailureAfterReleasingServiceProcess() async throws {
+    @Test("LUB-1062: Stop reports finish failure after releasing service process")
+    func stopReportsFinishFailureAfterReleasingServiceProcess() async throws {
       let harness = WorkspaceServiceProcessHarness(finishError: "final upload failed")
       let service = makeService(harness: harness)
       try await startAndDeliverFirstMedia(service, harness: harness)
@@ -237,7 +245,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func configurationMismatchAbortsWithoutRetrying() async throws {
+    @Test("LUB-1062: Configuration mismatch aborts without retrying")
+    func configurationMismatchAbortsWithoutRetrying() async throws {
       let failed = expectation(description: "configuration mismatch reported")
       let harness = WorkspaceServiceProcessHarness()
       let service = makeService(
@@ -262,7 +271,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func deliveryWatchdogArmsOnlyAfterFirstMediaCheckpoint() async throws {
+    @Test("LUB-1062: Delivery watchdog arms only after first media checkpoint")
+    func deliveryWatchdogArmsOnlyAfterFirstMediaCheckpoint() async throws {
       let failed = expectation(description: "delivery stall reported")
       let harness = WorkspaceServiceProcessHarness()
       let service = makeService(
@@ -301,7 +311,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func deliveryWatchdogContinuesAcrossServiceProcessReplacement() async throws {
+    @Test("LUB-1062: Delivery watchdog continues across service process replacement")
+    func deliveryWatchdogContinuesAcrossServiceProcessReplacement() async throws {
       let replacementReady = expectation(description: "replacement pair ready")
       let failed = expectation(description: "delivery stall reported")
       let harness = WorkspaceServiceProcessHarness { index, _ in
@@ -324,7 +335,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func recreatedWorkspaceServiceRestoresEstablishedDeliveryLatch() async throws {
+    @Test("LUB-1062: Recreated workspace service restores established delivery latch")
+    func recreatedWorkspaceServiceRestoresEstablishedDeliveryLatch() async throws {
       let continuityStore = YouTubeOutputWorkspaceStateStore()
       let firstHarness = WorkspaceServiceProcessHarness()
       let firstService = makeService(
@@ -360,7 +372,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func newOutputSessionResetsOnlyEstablishedDeliveryLatch() {
+    @Test("LUB-1062: New output session resets only established delivery latch")
+    func newOutputSessionResetsOnlyEstablishedDeliveryLatch() {
       let continuityStore = YouTubeOutputWorkspaceStateStore()
       let fingerprint = DASHStreamOutputConfigurationFingerprint(
         writerConfiguration: ProgramOutputEncodingConfiguration.make(

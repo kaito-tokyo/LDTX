@@ -10,7 +10,9 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1008: SwiftUI visibility", .serialized) @MainActor
   struct UCT1008VideoLayersEditorIntegrationTestSuite {
-    @Test func hideEditsRemainLiveDuringOutput() throws {
+    @Test("LUB-1048: Hide edits remain live during output") func hideEditsRemainLiveDuringOutput()
+      throws
+    {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       fixture.state.isOutputActive = true

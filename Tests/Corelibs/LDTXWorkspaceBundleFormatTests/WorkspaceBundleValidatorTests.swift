@@ -9,7 +9,8 @@ import Testing
 
 @Suite("Workspace V4 integrity validation")
 struct WorkspaceBundleValidatorV4UnitTestSuite {
-  @Test func clockRequiresAPositiveFontSizeWithoutUnitIntervalRestriction() {
+  @Test("LUB-1002: Clock requires a positive font size without unit interval restriction")
+  func clockRequiresAPositiveFontSizeWithoutUnitIntervalRestriction() {
     for (num, den, valid): (Int32, UInt32, Bool) in [
       (48, 1, true), (97, 2, true),
       (0, 1, false), (-1, 1, false), (48, 0, false),
@@ -30,7 +31,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         ).isEmpty == valid)
     }
   }
-  @Test func clockOutlineGeometryBoundaries() {
+  @Test("LUB-1002: Clock outline geometry boundaries") func clockOutlineGeometryBoundaries() {
     for count in 0...3 {
       for (num, den, valid): (Int32, UInt32, Bool) in [
         (0, 1, true), (1, 2, true), (Int32.max, 1, true),
@@ -69,7 +70,9 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     ]
   }
 
-  @Test(arguments: [Float.nan, .infinity, -.infinity])
+  @Test(
+    "LUB-1002: Clock rejects nonfinite color channels",
+    arguments: [Float.nan, .infinity, -.infinity])
   func clockRejectsNonfiniteColorChannels(_ value: Float) throws {
     let channels: [(String, WritableKeyPath<Ldtx_Workspace_V4_Color, Float>)] = [
       ("red", \.red), ("green", \.green), ("blue", \.blue), ("alpha", \.alpha),
@@ -94,7 +97,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test(arguments: [Float(-0.01), 1.01])
+  @Test("LUB-1002: Clock rejects out of range alpha", arguments: [Float(-0.01), 1.01])
   func clockRejectsOutOfRangeAlpha(_ alpha: Float) {
     for (target, key) in clockColorTargets {
       var definition = clockDefinition()
@@ -107,7 +110,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test(arguments: [Float(0), 0.5, 1])
+  @Test("LUB-1002: Clock accepts extended RGB and alpha boundaries", arguments: [Float(0), 0.5, 1])
   func clockAcceptsExtendedRGBAndAlphaBoundaries(_ alpha: Float) throws {
     var definition = clockDefinition()
     for (_, key) in clockColorTargets {
@@ -123,7 +126,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     #expect(try definition.serializedData() == bytes)
   }
 
-  @Test func clockAcceptsAbsentAndOrdinaryColorsWithoutChangingPresence() throws {
+  @Test("LUB-1002: Clock accepts absent and ordinary colors without changing presence")
+  func clockAcceptsAbsentAndOrdinaryColorsWithoutChangingPresence() throws {
     var definition = clockDefinition()
     let clock = definition.videoComponents[0].clock
     #expect(!clock.hasForegroundExtendedSrgbColor)
@@ -143,7 +147,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     try WorkspaceBundleValidatorV4.validate(definition)
   }
 
-  @Test func clockCollectsEveryColorIssueAlongsideGeometryIssues() {
+  @Test("LUB-1002: Clock collects every color issue alongside geometry issues")
+  func clockCollectsEveryColorIssueAlongsideGeometryIssues() {
     var definition = clockDefinition()
     definition.videoComponents[0].clock.foregroundExtendedSrgbColor.red = .nan
     definition.videoComponents[0].clock.fontSize.set(num: 0, den: 1)
@@ -170,13 +175,15 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     #expect(issues.allSatisfy { $0.entityID == 1 })
   }
 
-  @Test func clockAcceptsLargeNonnegativeOutlineThickness() throws {
+  @Test("LUB-1002: Clock accepts large nonnegative outline thickness")
+  func clockAcceptsLargeNonnegativeOutlineThickness() throws {
     var definition = clockDefinition()
     definition.videoComponents[0].clock.outlines[1].thickness.set(num: .max, den: 1)
     try WorkspaceBundleValidatorV4.validate(definition)
   }
 
-  @Test func rejectsGeneratedOverlaysAsOCRInputs() {
+  @Test("LUB-1002: Rejects generated overlays as OCR inputs")
+  func rejectsGeneratedOverlaysAsOCRInputs() {
     var bundle = WorkspaceV4Bundle(
       definition: .with {
         $0.visions = [
@@ -192,6 +199,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       .with { $0.dynamicText.internalID = 1 },
       .with { $0.clock.internalID = 1 },
       .with { $0.solidColorFill.internalID = 1 },
+      .with { $0.testPattern.internalID = 1 },
     ]
     for component in unsupported {
       bundle.definition.videoComponents = [component]
@@ -214,7 +222,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test func validatesOpaqueRichTextPresenceWithoutInterpretingContents() throws {
+  @Test("LUB-1002: Validates opaque rich text presence without interpreting contents")
+  func validatesOpaqueRichTextPresenceWithoutInterpretingContents() throws {
     var bundle = WorkspaceV4Bundle(
       definition: .with {
         $0.videoComponents = [
@@ -245,7 +254,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test func dynamicTextRoundTripsAndValidatesGeometry() throws {
+  @Test("LUB-1002: Dynamic text round trips and validates geometry")
+  func dynamicTextRoundTripsAndValidatesGeometry() throws {
     let wrapper = Ldtx_Workspace_V4_VideoComponentWrapper.with {
       $0.dynamicText = .with {
         $0.internalID = 7
@@ -277,7 +287,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test func channelGainsUseTheSupportedDecibelRange() throws {
+  @Test("LUB-1002: Channel gains use the supported decibel range")
+  func channelGainsUseTheSupportedDecibelRange() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.displayName = "Test"
       $0.audioDevices = [
@@ -307,7 +318,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test func roiDefaultsUseInputPixelsWithoutMutatingStoredPresence() throws {
+  @Test("LUB-1002: ROI defaults use input pixels without mutating stored presence")
+  func roiDefaultsUseInputPixelsWithoutMutatingStoredPresence() throws {
     var roi = Ldtx_Workspace_V4_VisionRegionOfInterest()
     let full = try roi.resolved(inputSize: (1920, 1080))
     #expect(full.x.num == 0 && full.x.den == 1920)
@@ -329,7 +341,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test func bundleValidationUsesReferencedInputSizeForAbsentRoiFields() throws {
+  @Test("LUB-1002: Bundle validation uses referenced input size for absent ROI fields")
+  func bundleValidationUsesReferencedInputSizeForAbsentRoiFields() throws {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.videoComponents = [
         .with {
@@ -360,7 +373,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     #expect(!roi.width.hasDen && !roi.height.hasDen)
   }
 
-  @Test func reportsMissingLayerAtEachReferencingMap() {
+  @Test("LUB-1002: Reports missing layer at each referencing map")
+  func reportsMissingLayerAtEachReferencingMap() {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.programs = [
         .with {
@@ -389,7 +403,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       ])
   }
 
-  @Test func rejectsUnsupportedAndZeroSizedSceneDetectorInputs() {
+  @Test("LUB-1002: Rejects unsupported and zero sized scene detector inputs")
+  func rejectsUnsupportedAndZeroSizedSceneDetectorInputs() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.visions = [
       .with {
@@ -434,7 +449,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test func rejectsMasterVolumeOutsideSupportedRange() {
+  @Test("LUB-1002: Rejects master volume outside supported range")
+  func rejectsMasterVolumeOutsideSupportedRange() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [
       .with {
@@ -452,7 +468,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         })
     }
   }
-  @Test("round trips independent canvas preferences through Protobuf")
+  @Test("LUB-1002: round trips independent canvas preferences through Protobuf")
   func canvasPreferencesRoundTrip() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     var landscape = Ldtx_Workspace_V4_ProgramPreferences()
@@ -496,7 +512,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     #expect(decoded.portraitProgramPreferences[1] == portrait)
   }
 
-  @Test("rejects a Workspace gain referencing a missing audio input")
+  @Test("LUB-1002: rejects a Workspace gain referencing a missing audio input")
   func rejectsDanglingAudioGain() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.audioChannelGainsDecibels[99] = .with {
@@ -515,7 +531,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("rejects a Program that references a missing video layer")
+  @Test("LUB-1002: rejects a Program that references a missing video layer")
   func rejectsMissingVideoLayer() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -539,7 +555,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("allows an unassigned VFX Source")
+  @Test("LUB-1002: allows an unassigned VFX Source")
   func allowsUnassignedVFXSource() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [
@@ -553,7 +569,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     try WorkspaceBundleValidatorV4.validate(definition)
   }
 
-  @Test("PTS master must reference a VFX Source")
+  @Test("LUB-1002: PTS master must reference a VFX Source")
   func rejectsNonVFXTimingMaster() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [
@@ -576,32 +592,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("OCR rejects a generated Video Component")
-  func rejectsGeneratedComponentForOCR() {
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    definition.videoComponents = [
-      .with {
-        $0.testPattern = .with {
-          $0.internalID = 1
-          $0.displayName = "Pattern"
-        }
-      }
-    ]
-    definition.visions = [
-      .with {
-        $0.ocrVision = .with {
-          $0.internalID = 2
-          $0.displayName = "OCR"
-          $0.videoComponentInternalID = 1
-        }
-      }
-    ]
-    #expect(throws: WorkspaceV4ValidationError.self) {
-      try WorkspaceBundleValidatorV4.validate(definition)
-    }
-  }
-
-  @Test("rejects entity IDs reused across resource kinds")
+  @Test("LUB-1002: rejects entity IDs reused across resource kinds")
   func rejectsCrossKindDuplicateInternalID() {
     var input = Ldtx_Workspace_V4_VideoComponentWrapper()
     input.vfxSource = .with { $0.internalID = 1 }
@@ -622,7 +613,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("rejects an OCR Vision without a video component")
+  @Test("LUB-1002: rejects an OCR Vision without a video component")
   func rejectsVisionWithMissingVideoInput() {
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = 2
@@ -643,7 +634,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("rejects dangling program preferences in both maps")
+  @Test("LUB-1002: rejects dangling program preferences in both maps")
   func rejectsDanglingProgramPreferences() {
     for target in [
       \Ldtx_Workspace_V4_WorkspacePreferencesV4.landscapeProgramPreferences,
@@ -668,7 +659,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test("rejects an unsupported output profile")
+  @Test("LUB-1002: rejects an unsupported output profile")
   func rejectsUnsupportedOutputProfile() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.canvasConfiguration.landscapeProfileID = "custom-4k"
@@ -684,7 +675,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("signed fixed-width IDs and reference keys round trip without loss")
+  @Test("LUB-1002: signed fixed-width IDs and reference keys round trip without loss")
   func signedIDsRoundTrip() throws {
     for id in [Int64.min, -1, 0, 1, Int64.max] {
       let program = Ldtx_Workspace_V4_ProgramDefinition.with { $0.internalID = id }
@@ -703,7 +694,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test("negative and zero entity IDs cannot be persisted", arguments: [Int64.min, -1, 0])
+  @Test(
+    "LUB-1002: negative and zero entity IDs cannot be persisted", arguments: [Int64.min, -1, 0])
   func rejectsNonpositiveID(_ id: Int64) {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.programs = [.with { $0.internalID = id }]
@@ -718,7 +710,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("negative references cannot be persisted")
+  @Test("LUB-1002: negative references cannot be persisted")
   func rejectsNegativeReference() {
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.programs = [
@@ -744,24 +736,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("rejects an internal ID with the sign bit set")
-  func rejectsInternalIDWithSignBit() {
-    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
-    var program = Ldtx_Workspace_V4_ProgramDefinition()
-    program.internalID = Int64.min
-    definition.programs = [program]
-
-    #expect(
-      performing: {
-        try WorkspaceBundleValidatorV4.validate(definition)
-      },
-      throws: {
-        ($0 as? WorkspaceV4ValidationError)?.diagnostics.contains { $0.error == .invalidInternalID }
-          == true
-      })
-  }
-
-  @Test("rejects duplicate video layers in one Program")
+  @Test("LUB-1002: rejects duplicate video layers in one Program")
   func rejectsDuplicateVideoLayers() {
     var video = Ldtx_Workspace_V4_VfxSourceComponent()
     video.internalID = 1
@@ -790,7 +765,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         } == true
       })
   }
-  @Test("collects definition and preferences issues in both canvases")
+  @Test("LUB-1002: collects definition and preferences issues in both canvases")
   func collectsAllSaveIssues() {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.audioDevices = [
@@ -842,7 +817,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     #expect(issues[4].path.contains("Portrait"))
   }
 
-  @Test("retained preferences reference existing components rather than membership")
+  @Test("LUB-1002: retained preferences reference existing components rather than membership")
   func allowsDetachedLayerPreferences() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [
@@ -886,7 +861,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       })
   }
 
-  @Test("transform range validation preserves boundary and identity values")
+  @Test("LUB-1002: transform range validation preserves boundary and identity values")
   func validatesTransformRanges() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [
@@ -975,7 +950,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     }
   }
 
-  @Test("extended sRGB allows RGB outside the unit interval but constrains alpha")
+  @Test("LUB-1002: extended sRGB allowsRGB outside the unit interval but constrains alpha")
   func validatesExtendedSRGBComponents() throws {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
       $0.videoComponents = [

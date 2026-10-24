@@ -12,7 +12,8 @@ extension AppUIComponentTestSuite {
   struct UCT1006VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func writesRepresentableFieldsAndRetainsIncompleteDrafts() throws {
+    @Test("LUB-1048: Writes representable fields and retains incomplete drafts")
+    func writesRepresentableFieldsAndRetainsIncompleteDrafts() throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       row.edit("960", at: 0)
@@ -38,7 +39,9 @@ extension AppUIComponentTestSuite {
       #expect(before.videoLayerTransforms[1]?.scaleY.double == 2)
     }
 
-    @Test(arguments: ["-", "１２", "inf", "1e100", "7/9", "0.12345678901", "2147483648"])
+    @Test(
+      "LUB-1048: Invalid scales remain local",
+      arguments: ["-", "１２", "inf", "1e100", "7/9", "0.12345678901", "2147483648"])
     func invalidScalesRemainLocal(text: String) throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
@@ -52,7 +55,7 @@ extension AppUIComponentTestSuite {
       #expect(row.strings[2] == text)
     }
 
-    @Test(arguments: ["100.125", "1/3"])
+    @Test("LUB-1048: Positions require integer pixels", arguments: ["100.125", "1/3"])
     func positionsRequireIntegerPixels(text: String) throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
@@ -61,7 +64,8 @@ extension AppUIComponentTestSuite {
       #expect(row.transform.translationX.double == 0)
     }
 
-    @Test func staleCallbacksDoNotEditRemovedLayers() throws {
+    @Test("LUB-1048: Stale callbacks do not edit removed layers")
+    func staleCallbacksDoNotEditRemovedLayers() throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       fixture.update(ids: [2, 3])
@@ -77,7 +81,8 @@ extension AppUIComponentTestSuite {
       #expect(fixture.state.workspacePreferences == readded)
     }
 
-    @Test func callbacksDoNotRetainEditorOrRows() {
+    @Test("LUB-1048: Callbacks do not retain editor or rows")
+    func callbacksDoNotRetainEditorOrRows() {
       weak var editor: VideoLayersEditorState?
       weak var row: VideoLayersTableRowState?
       var retained: VideoLayersTableRowState?
@@ -93,7 +98,9 @@ extension AppUIComponentTestSuite {
       retained?.onSetHidden(true, nil)
     }
 
-    @Test func hostedFieldsWriteWithoutReturn() async throws {
+    @Test("LUB-1048: Hosted fields write without return") func hostedFieldsWriteWithoutReturn()
+      async throws
+    {
       let fixture = VideoLayersTestFixture(ids: [1])
       let root = VideoLayersEditor(editor: fixture.editor)
       let window = hostWorkspaceView(List { root })

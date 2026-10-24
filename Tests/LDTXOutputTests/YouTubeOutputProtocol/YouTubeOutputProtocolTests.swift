@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputProtocolUnitTestSuite {
-    @Test func derivesCodecStringFromSPSConstraintFlags() {
+    @Test("LUB-1015: Derives codec string from SPS constraint flags")
+    func derivesCodecStringFromSPSConstraintFlags() {
       let format = YouTubeOutputH264Format(
         parameterSets: [Data([0x67, 0x64, 0x0C, 0x2A]), Data([0x68, 0xEE])],
         nalUnitHeaderLength: 4,
@@ -24,7 +25,7 @@ extension OutputTestSuite {
         ).codecString == nil)
     }
 
-    @Test func bootstrapRoundTrips() throws {
+    @Test("LUB-1015: Bootstrap round trips") func bootstrapRoundTrips() throws {
       let context = YouTubeOutputContext(sessionID: UUID(), revision: 3)
       let bootstrap = YouTubeOutputBootstrap(
         context: context,
@@ -55,7 +56,7 @@ extension OutputTestSuite {
       #expect(decoded.protocolVersion == LDTXYouTubeOutputServiceProcessInterfaces.protocolVersion)
     }
 
-    @Test func checkpointReplyRoundTrips() throws {
+    @Test("LUB-1015: Checkpoint reply round trips") func checkpointReplyRoundTrips() throws {
       let context = YouTubeOutputContext(sessionID: UUID(), revision: 2)
       let reply = YouTubeOutputReply(
         context: context,
@@ -73,7 +74,7 @@ extension OutputTestSuite {
       #expect(decoded == reply)
     }
 
-    @Test func resetRequestRoundTrips() throws {
+    @Test("LUB-1015: Reset request round trips") func resetRequestRoundTrips() throws {
       let request = YouTubeOutputResetRequest(
         context: YouTubeOutputContext(sessionID: UUID(), revision: 7),
         reason: "DASH pipeline state is no longer recoverable.",
@@ -90,7 +91,8 @@ extension OutputTestSuite {
       #expect(decoded == request)
     }
 
-    @Test func h264AndPCMMediaBatchRoundTripsAsProtobuf() throws {
+    @Test("LUB-1015: H264 and PCM media batch round trips as Protobuf")
+    func h264AndPCMMediaBatchRoundTripsAsProtobuf() throws {
       let time = YouTubeOutputMediaTime(value: 90_000, timescale: 90_000)
       let batch = YouTubeOutputMediaBatch(
         context: YouTubeOutputContext(sessionID: UUID(), revision: 5),
@@ -132,7 +134,8 @@ extension OutputTestSuite {
       #expect(decoded == batch)
     }
 
-    @Test func sequenceGateRejectsDuplicateSkippedAndStaleRevisionWithoutAdvancing() throws {
+    @Test("LUB-1015: Sequence gate rejects duplicate skipped and stale revision without advancing")
+    func sequenceGateRejectsDuplicateSkippedAndStaleRevisionWithoutAdvancing() throws {
       let context = YouTubeOutputContext(sessionID: UUID(), revision: 5)
       var gate = YouTubeOutputSequenceGate(context: context)
 

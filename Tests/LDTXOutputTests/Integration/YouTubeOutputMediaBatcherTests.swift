@@ -12,7 +12,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputMediaBatcherIntegrationTestSuite {
-    @Test func finishWaitsForAcceptedMediaAcknowledgement() async throws {
+    @Test("LUB-1067: Finish waits for accepted media acknowledgement")
+    func finishWaitsForAcceptedMediaAcknowledgement() async throws {
       let uploadStarted = DispatchSemaphore(value: 0)
       let finishCompleted = DispatchSemaphore(value: 0)
       let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
@@ -36,7 +37,8 @@ extension OutputTestSuite {
       #expect(didFinish.value)
     }
 
-    @Test func mediaRejectedAfterCancelDoesNotReportOverflow() async throws {
+    @Test("LUB-1067: Media rejected after cancel does not report overflow")
+    func mediaRejectedAfterCancelDoesNotReportOverflow() async throws {
       let cancelCompleted = DispatchSemaphore(value: 0)
       let failureReported = DispatchSemaphore(value: 0)
       let batcher = YouTubeOutputMediaBatcher(
@@ -53,7 +55,8 @@ extension OutputTestSuite {
       #expect(!didReportFailure)
     }
 
-    @Test func overflowDrainsMediaAdmittedBeforeFailure() async throws {
+    @Test("LUB-1067: Overflow drains media admitted before failure")
+    func overflowDrainsMediaAdmittedBeforeFailure() async throws {
       let uploadStarted = DispatchSemaphore(value: 0)
       let failureReported = DispatchSemaphore(value: 0)
       let probe = YouTubeMediaUploadProbe { uploadStarted.signal() }
@@ -83,7 +86,8 @@ extension OutputTestSuite {
       #expect(await waits(for: finishCompleted, timeout: 1))
     }
 
-    @Test func finishPreservesOverflowUntilAdmittedMediaDrains() async throws {
+    @Test("LUB-1067: Finish preserves overflow until admitted media drains")
+    func finishPreservesOverflowUntilAdmittedMediaDrains() async throws {
       let uploadStarted = DispatchSemaphore(value: 0)
       let failureReported = DispatchSemaphore(value: 0)
       let finishCompleted = DispatchSemaphore(value: 0)

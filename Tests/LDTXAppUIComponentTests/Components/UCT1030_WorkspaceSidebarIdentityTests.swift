@@ -9,7 +9,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1030: Sidebar row identity", .serialized)
   @MainActor
   struct UCT1030WorkspaceSidebarIdentityUnitTestSuite {
-    @Test("Invalid and duplicate IDs get distinct negative, unselectable row IDs")
+    @Test("LUB-1048: Invalid and duplicate IDs get distinct negative, unselectable row IDs")
     func invalidRows() {
       let ids: [Int64?] = [11, nil, 0, -1, 7, 7, 21]
       let rows = WorkspaceSidebar.rows(ids) { $0 }
@@ -19,7 +19,7 @@ extension AppUIComponentTestSuite {
       #expect(rows.map(\.value) == ids)
     }
 
-    @Test("Valid row IDs survive reordering")
+    @Test("LUB-1048: Valid row IDs survive reordering")
     func reorderedRows() {
       let ids: [Int64?] = [11, nil, 21]
       let before = WorkspaceSidebar.rows(ids) { $0 }
@@ -28,7 +28,7 @@ extension AppUIComponentTestSuite {
       #expect(after.filter(\.isSelectable).map(\.id) == [21, 11])
     }
 
-    @Test("Temporary UI identities never modify Proto IDs or their presence")
+    @Test("LUB-1048: Temporary UI identities never modify Proto IDs or their presence")
     func preservesProtoValues() {
       let visions: [Ldtx_Workspace_V4_VisionWrapper] = [
         .init(), .with { $0.ocrVision = .init() },

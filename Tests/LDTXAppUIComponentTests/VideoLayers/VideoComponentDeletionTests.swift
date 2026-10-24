@@ -10,7 +10,8 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct VideoComponentDeletionIntegrationTestSuite {
-    @Test func deletionClearsReferencesAcrossProgramsAndPreservesOtherContent() throws {
+    @Test("LUB-1048: Deletion clears references across programs and preserves other content")
+    func deletionClearsReferencesAcrossProgramsAndPreservesOtherContent() throws {
       let state = WorkspaceDocument()
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [100, 200].map { id in
@@ -95,7 +96,8 @@ extension AppUIComponentTestSuite {
       #expect(state.editingWorkspace == original)
     }
 
-    @Test func activeOutputClosedAndMissingTargetsDoNotChangeContent() {
+    @Test("LUB-1048: Active output closed and missing targets do not change content")
+    func activeOutputClosedAndMissingTargetsDoNotChangeContent() {
       let state = WorkspaceDocument()
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
@@ -115,7 +117,8 @@ extension AppUIComponentTestSuite {
       #expect(state.editingWorkspace == original)
     }
 
-    @Test func visionInputsMustBeReassignedBeforeDeletion() {
+    @Test("LUB-1048: Vision inputs must be reassigned before deletion")
+    func visionInputsMustBeReassignedBeforeDeletion() {
       for sceneDetector in [false, true] {
         let state = WorkspaceDocument()
         state.editWorkspace(undoManager: nil) { workspace in

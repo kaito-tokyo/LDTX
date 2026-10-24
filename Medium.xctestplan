@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "D4672189-5E36-4AB7-9C23-000000000002",
+      "name" : "Default",
+      "options" : {}
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false
+  },
+  "testTargets" : [
+    {
+      "selectedTags" : {
+        "tags" : [
+          "medium"
+        ],
+        "mode" : "or",
+        "includeXCTests" : false
+      },
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "3A5C18D641D7231266B7AD41",
+        "name" : "LDTXModuleTests"
+      }
+    }
+  ],
+  "version" : 1
+}

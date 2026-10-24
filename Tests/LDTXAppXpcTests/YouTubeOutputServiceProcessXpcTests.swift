@@ -6,7 +6,7 @@ import LDTXWorkspaceAppletService
 import XCTest
 
 final class YouTubeOutputServiceProcessXpcTests: XCTestCase {
-  func testEmbeddedServiceBootstrapsAndFinishesOverXPC() throws {
+  func testLUB1040_EmbeddedServiceBootstrapsAndFinishesOverXPC() throws {
     let completed = expectation(description: "embedded XPC service completed")
     let expectedDate = Date(timeIntervalSince1970: 1_700_000_000.123)
 

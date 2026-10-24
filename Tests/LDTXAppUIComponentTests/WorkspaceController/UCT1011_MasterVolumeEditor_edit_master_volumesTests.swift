@@ -14,7 +14,8 @@ extension AppUIComponentTestSuite {
   struct UCT1011MasterVolumeEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func writesOnChangeAndPreservesInvalidDrafts() async throws {
+    @Test("LUB-1048: Writes on change and preserves invalid drafts")
+    func writesOnChangeAndPreservesInvalidDrafts() async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [.with { $0.internalID = 100 }]
@@ -50,7 +51,8 @@ extension AppUIComponentTestSuite {
       #expect(state.selectedAudioMix == .landscape)
     }
 
-    @Test func injectedProgramSelectionAndModelChangesReachFields() async throws {
+    @Test("LUB-1048: Injected program selection and model changes reach fields")
+    func injectedProgramSelectionAndModelChangesReachFields() async throws {
       let suite = "SwiftUIMaster-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
@@ -98,7 +100,8 @@ extension AppUIComponentTestSuite {
       #expect(try firstField().stringValue == "-3")
     }
 
-    @Test func monitorVolumeStaysLocalAndRejectsNonFiniteValues() throws {
+    @Test("LUB-1048: Monitor volume stays local and rejects non finite values")
+    func monitorVolumeStaysLocalAndRejectsNonFiniteValues() throws {
       let suite = "MonitorVolume-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }

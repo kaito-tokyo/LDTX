@@ -322,5 +322,8 @@ schemes:
         - path: LDTXTests.xctestplan
         - path: pr.xctestplan
         - path: push-main.xctestplan
+        - path: Easy.xctestplan
+        - path: Medium.xctestplan
+        - path: Hard.xctestplan
     archive:
       config: Distribution

@@ -16,3 +16,10 @@ Feature: LDTXWorkspaceAppletStore preserve preferences
     Given application settings in isolated storage
     When settings are saved and the store is recreated
     Then the saved settings are restored
+
+  @LUB-1028.3 @Unit
+  Scenario: Publish one revision per logical preference change
+    Given a preferences store observed by runtime consumers
+    When a setter or whole-value replacement changes its value
+    Then the revision advances once for that logical change
+    And equal updates or repeated removals do not advance the revision

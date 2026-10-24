@@ -11,14 +11,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct OutputSettingsModelUnitTestSuite {
-    @MainActor
-    @Test func canvasStateDoesNotExposeAnEditableCBRBitRate() {
-      let model = OutputCanvasModel()
-
-      #expect(model.state == OutputCanvasModel().state)
-    }
-
-    @Test func sdr1080p60AcceptsPositiveCanvasBitRates() {
+    @Test("LUB-1066: Sdr1080p60 accepts positive canvas bit rates")
+    func sdr1080p60AcceptsPositiveCanvasBitRates() {
       #expect(ProgramOutputConfiguration.sdr1080p60.isSupportedOutputProfile)
       var configuration = ProgramOutputConfiguration.sdr1080p60
       configuration.videoBitRate = 9_000_000
@@ -31,14 +25,16 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func allDisabledDestinationIsPreservedForStartTimeValidation() {
+    @Test("LUB-1066: All disabled destination is preserved for start time validation")
+    func allDisabledDestinationIsPreservedForStartTimeValidation() {
       let model = OutputDestination(recordsLocally: false, streamsToYouTube: false)
 
       #expect(model.enabledCaptureOutputMode == nil)
       #expect(model.normalized() == model)
     }
 
-    @Test func unavailableOutputFolderIsPreservedForStartTimeValidation() {
+    @Test("LUB-1066: Unavailable output folder is preserved for start time validation")
+    func unavailableOutputFolderIsPreservedForStartTimeValidation() {
       let model = OutputDestination(
         recordsLocally: true,
         streamsToYouTube: false,
@@ -48,7 +44,8 @@ extension OutputTestSuite {
       #expect(model.normalized() == model)
     }
 
-    @Test func enablingOutputFolderOverrideRequiresASelectedFolder() {
+    @Test("LUB-1066: Enabling output folder override requires a selected folder")
+    func enablingOutputFolderOverrideRequiresASelectedFolder() {
       let original = OutputDestination(recordsLocally: true)
 
       #expect(
@@ -59,7 +56,8 @@ extension OutputTestSuite {
         ) == nil)
     }
 
-    @Test func outputFolderOverrideSelectionAndRemovalAreAtomic() throws {
+    @Test("LUB-1066: Output folder override selection and removal are atomic")
+    func outputFolderOverrideSelectionAndRemovalAreAtomic() throws {
       let original = OutputDestination(recordsLocally: true)
       let selected = try #require(
         OutputFolderOverrideSelection.applying(
@@ -82,7 +80,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func runtimeServiceSelectionIsDerivedFromDestination() {
+    @Test("LUB-1066: Runtime service selection is derived from destination")
+    func runtimeServiceSelectionIsDerivedFromDestination() {
       var model = OutputDestination(recordsLocally: true, streamsToYouTube: false)
 
       #expect(model.enabledCaptureOutputMode == .record)

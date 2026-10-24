@@ -23,3 +23,10 @@ Feature: LDTXAudioEngine deliver and stop audio
     When audio processing continues
     Then monitoring continues without waiting for the stalled output consumer
 
+  @LUB-1007.4 @Unit
+  Scenario: Mix routed audio with bounded storage and timing
+    Given routed PCM input with configured channel gains and sample timing
+    When the engine converts, stores, and mixes the samples
+    Then channels accumulate their configured gains and report their resulting peaks
+    And timed reads preserve frame alignment while bounded storage drops expired samples
+

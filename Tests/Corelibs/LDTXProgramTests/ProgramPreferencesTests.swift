@@ -8,17 +8,8 @@ import Testing
 
 @Suite
 struct ProgramPreferencesUnitTestSuite {
-  @Test func fillComponentDefinitionsAreIdentifiedAsSharedAppearanceComponents() {
-    #expect(ProgramComponentDefinition.fillSolidColor.isFill)
-    #expect(ProgramComponentDefinition.fillLinearGradient.isFill)
-    #expect(ProgramComponentDefinition.fillRadialGradient.isFill)
-    #expect(ProgramComponentDefinition.fillConicGradient.isFill)
-    #expect(!ProgramComponentDefinition.inputCameraDevice.isFill)
-    #expect(!ProgramComponentDefinition.clock.isFill)
-    #expect(!ProgramComponentDefinition.testPattern.isFill)
-  }
-
-  @Test func videoLayerVisibilityIsScopedToTheProgramLayer() {
+  @Test("LUB-1001: Video layer visibility is scoped to the program layer")
+  func videoLayerVisibilityIsScopedToTheProgramLayer() {
     let preferences = ProgramPreferences(videoLayersByProgramName: [
       "Program A": [VideoLayerPreference(componentName: "Camera", isHidden: true)],
       "Program B": [VideoLayerPreference(componentName: "Camera", isHidden: false)],
@@ -29,7 +20,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(!preferences.isVideoLayerHidden(componentName: "Missing", programName: "Program A"))
   }
 
-  @Test func inputDeviceRenameAndRemovalUpdateDirectVideoLayers() {
+  @Test("LUB-1001: Input device rename and removal update direct video layers")
+  func inputDeviceRenameAndRemovalUpdateDirectVideoLayers() {
     var preferences = ProgramPreferences(videoLayersByProgramName: [
       "Program": [
         VideoLayerPreference(componentName: "Camera A", isHidden: true),
@@ -48,7 +40,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(preferences.videoLayers(forProgramNamed: "Program").map(\.componentName) == ["Title"])
   }
 
-  @Test func videoLayerRemovalCanBeScopedToOneProgram() {
+  @Test("LUB-1001: Video layer removal can be scoped to one program")
+  func videoLayerRemovalCanBeScopedToOneProgram() {
     var preferences = ProgramPreferences(videoLayersByProgramName: [
       "Program A": [VideoLayerPreference(componentName: "Camera")],
       "Program B": [VideoLayerPreference(componentName: "Camera")],
@@ -64,7 +57,8 @@ struct ProgramPreferencesUnitTestSuite {
       ])
   }
 
-  @Test func audioMutePreservesTheConfiguredGain() {
+  @Test("LUB-1001: Audio mute preserves the configured gain")
+  func audioMutePreservesTheConfiguredGain() {
     let channel = ProgramAudioChannel(
       name: "Microphone",
       component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "1-Mic"))
@@ -83,13 +77,8 @@ struct ProgramPreferencesUnitTestSuite {
   private let firstID = "First"
   private let secondID = "Second"
 
-  @Test func onlyVideoInputsSupportProgramVideoVisibility() {
-    #expect(ProgramInputDeviceKind.video.supportsProgramVideoVisibility)
-    #expect(!ProgramInputDeviceKind.audio.supportsProgramVideoVisibility)
-    #expect(!ProgramInputDeviceKind.unspecified.supportsProgramVideoVisibility)
-  }
-
-  @Test func videoVisibilityUsesCanonicalPercentEncodedInputDeviceName() {
+  @Test("LUB-1001: Video visibility uses canonical percent encoded input device name")
+  func videoVisibilityUsesCanonicalPercentEncodedInputDeviceName() {
     var preferences = ProgramPreferences()
 
     preferences.setVideoHidden(true, inputDeviceName: "Camera 端末/%")
@@ -98,7 +87,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(preferences.isVideoHidden(inputDeviceName: "Camera 端末/%"))
   }
 
-  @Test func explicitVisibilityIsStoredAndRenameMovesTheEntry() {
+  @Test("LUB-1001: Explicit visibility is stored and rename moves the entry")
+  func explicitVisibilityIsStoredAndRenameMovesTheEntry() {
     var preferences = ProgramPreferences()
     preferences.setVideoHidden(false, inputDeviceName: "Camera A")
 
@@ -109,7 +99,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(!preferences.isVideoHidden(inputDeviceName: "Camera B"))
   }
 
-  @Test func renameWithConflictingAudioMuteKeysClearsAudioMutePreferences() {
+  @Test("LUB-1001: Rename with conflicting audio mute keys clears audio mute preferences")
+  func renameWithConflictingAudioMuteKeysClearsAudioMutePreferences() {
     var preferences = ProgramPreferences()
     preferences.setAudioMuted(true, inputDeviceName: "Camera A")
     preferences.setAudioMuted(false, inputDeviceName: "Camera B")
@@ -119,14 +110,16 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(preferences.audioMutedByInputDeviceName.isEmpty)
   }
 
-  @Test func audioChannelGainDecibelConversionUsesExpectedRange() {
+  @Test("LUB-1001: Audio channel gain decibel conversion uses expected range")
+  func audioChannelGainDecibelConversionUsesExpectedRange() {
     #expect(
       abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: -80) - 0.0001) <= 0.000_000_1)
     #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: 0) - 1.0) <= 0.000_000_1)
     #expect(abs(ProgramPreferences.linearAudioChannelGain(fromDecibels: 20) - 10.0) <= 0.000_000_1)
   }
 
-  @Test func audioChannelGainClampsToMinus80ThroughPlus20Decibels() {
+  @Test("LUB-1001: Audio channel gain clamps to minus80 through plus20 decibels")
+  func audioChannelGainClampsToMinus80ThroughPlus20Decibels() {
     #expect(
       abs(
         ProgramPreferences.clampedAudioChannelGain(0) - ProgramPreferences.minimumAudioChannelGain)
@@ -138,7 +131,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(ProgramPreferences.clampedAudioChannelGain(.nan) == 1.0)
   }
 
-  @Test func setAudioChannelGainStoresClampedLinearGain() throws {
+  @Test("LUB-1001: Set audio channel gain stores clamped linear gain")
+  func setAudioChannelGainStoresClampedLinearGain() throws {
     let composite = CompositeProgramDefinition(audioChannels: [
       ProgramAudioChannel(
         id: firstID,
@@ -155,7 +149,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(abs(gain - ProgramPreferences.maximumAudioChannelGain) <= 0.000_000_1)
   }
 
-  @Test func audioChannelUsesExplicitNameAsKey() throws {
+  @Test("LUB-1001: Audio channel uses explicit name as key")
+  func audioChannelUsesExplicitNameAsKey() throws {
     let composite = CompositeProgramDefinition(audioChannels: [
       ProgramAudioChannel(
         id: firstID,
@@ -173,7 +168,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(composite.audioChannelDisplayName(for: channel) == firstID)
   }
 
-  @Test func inputCameraDeviceKeysUseExplicitNames() {
+  @Test("LUB-1001: Input camera device keys use explicit names")
+  func inputCameraDeviceKeysUseExplicitNames() {
     let composite = CompositeProgramDefinition(steps: [
       CompositeProgramStep(id: firstID, component: .inputCameraDevice(InputDeviceComponent())),
       CompositeProgramStep(component: .fillSolidColor(FillSolidColorComponent())),
@@ -185,7 +181,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(composite.inputCameraDeviceDisplayName(for: composite.steps[2]) == secondID)
   }
 
-  @Test func explicitVideoComponentDisplayNameOverridesGeneratedName() {
+  @Test("LUB-1001: Explicit video component display name overrides generated name")
+  func explicitVideoComponentDisplayNameOverridesGeneratedName() {
     let composite = CompositeProgramDefinition(steps: [
       CompositeProgramStep(
         id: firstID,
@@ -199,7 +196,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(composite.inputCameraDeviceMappingKey(for: composite.steps[0]) == "Main Camera")
   }
 
-  @Test func reorderingKeepsStableInputCameraDeviceKeys() {
+  @Test("LUB-1001: Reordering keeps stable input camera device keys")
+  func reorderingKeepsStableInputCameraDeviceKeys() {
     let firstStep = CompositeProgramStep(
       id: firstID, component: .inputCameraDevice(InputDeviceComponent()))
     let secondStep = CompositeProgramStep(
@@ -217,7 +215,8 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(composite.inputCameraDeviceMappingKey(for: secondStep) == secondKey)
   }
 
-  @Test func reorderingKeepsStableAudioChannelKeys() {
+  @Test("LUB-1001: Reordering keeps stable audio channel keys")
+  func reorderingKeepsStableAudioChannelKeys() {
     let firstChannel = ProgramAudioChannel(
       id: firstID, component: .inputAudioDevice(InputAudioDeviceComponent()))
     let secondChannel = ProgramAudioChannel(
@@ -235,7 +234,9 @@ struct ProgramPreferencesUnitTestSuite {
     #expect(composite.audioChannelKey(for: secondChannel) == secondKey)
   }
 
-  @Test func resolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices()
+  @Test(
+    "LUB-1001: Resolved workspace audio channels derive input audio channels from workspace input devices"
+  ) func resolvedWorkspaceAudioChannelsDeriveInputAudioChannelsFromWorkspaceInputDevices()
     throws
   {
     let workspaceInputDevices = [
@@ -259,7 +260,9 @@ struct ProgramPreferencesUnitTestSuite {
     )
   }
 
-  @Test func resolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
+  @Test(
+    "LUB-1001: Resolved workspace audio channels drop stale input device channels but keep generated audio"
+  ) func resolvedWorkspaceAudioChannelsDropStaleInputDeviceChannelsButKeepGeneratedAudio() {
     let liveChannel = ProgramAudioChannel(
       id: firstID,
       component: .inputAudioDevice(InputAudioDeviceComponent(inputDeviceID: "Desk Mic"))

@@ -11,7 +11,8 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1028Rational32TextFieldUnitTestSuite {
     @Test(
-      "Partial and final validation accept digits and empty drafts, rejecting invalid pasted text")
+      "LUB-1048: Partial and final validation accept digits and empty drafts, rejecting invalid pasted text"
+    )
     func validateEditingText() {
       let formatter = Rational32TextField.DigitsFormatter()
       for text in ["", "0", "1920", "0001"] {
@@ -26,7 +27,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("SwiftUI editing updates drafts and submits the current value")
+    @Test("LUB-1048: SwiftUI editing updates drafts and submits the current value")
     func bindDraftAndSubmit() async throws {
       var draft = "0"
       var submitted: [String] = []

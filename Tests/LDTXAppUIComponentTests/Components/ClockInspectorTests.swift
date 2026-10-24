@@ -15,7 +15,8 @@ extension AppUIComponentTestSuite {
   struct ClockInspectorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func repeatedEditsHistoryAndPersistence() async throws {
+    @Test("LUB-1048: Repeated edits history and persistence")
+    func repeatedEditsHistoryAndPersistence() async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
@@ -70,7 +71,7 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
-    @Test func hostedOutlineControls() async throws {
+    @Test("LUB-1048: Hosted outline controls") func hostedOutlineControls() async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
@@ -187,7 +188,7 @@ extension AppUIComponentTestSuite {
 
     }
 
-    @Test(arguments: [1, 100])
+    @Test("LUB-1048: Hosted width bounds preserve saved values", arguments: [1, 100])
     func hostedWidthBoundsPreserveSavedValues(initial: Int32) async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
@@ -280,7 +281,7 @@ extension AppUIComponentTestSuite {
       #expect(invalidDraftSnapshot == accepted)
     }
 
-    @Test(arguments: [1, 2], [0, 1])
+    @Test("LUB-1048: Membership changes reset drafts and focus", arguments: [1, 2], [0, 1])
     func membershipChangesResetDraftsAndFocus(secondWidth: Int32, removedIndex: Int) async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
@@ -368,7 +369,7 @@ extension AppUIComponentTestSuite {
       expectReset(redoAddDraft, expected: remaining + [1])
     }
 
-    @Test func unavailableEditsAreIgnored() {
+    @Test("LUB-1048: Unavailable edits are ignored") func unavailableEditsAreIgnored() {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]

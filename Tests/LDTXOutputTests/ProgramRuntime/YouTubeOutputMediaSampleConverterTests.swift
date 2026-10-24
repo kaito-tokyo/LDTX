@@ -15,14 +15,16 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputMediaSampleConverterIntegrationTestSuite {
-    @Test func keepsRawAACAudioSpecificConfigMagicCookie() {
+    @Test("LUB-1067: Keeps raw AAC audio specific config magic cookie")
+    func keepsRawAACAudioSpecificConfigMagicCookie() {
       let cookie = Data([0x11, 0x90])
 
       #expect(
         YouTubeOutputMediaSampleConverter.audioSpecificConfig(fromMagicCookie: cookie) == cookie)
     }
 
-    @Test func extractsAACAudioSpecificConfigFromESDSMagicCookie() {
+    @Test("LUB-1067: Extracts AAC audio specific config from ESDS magic cookie")
+    func extractsAACAudioSpecificConfigFromESDSMagicCookie() {
       let cookie = Data([
         0x03, 0x80, 0x80, 0x80, 0x22, 0x00, 0x00, 0x00, 0x04, 0x80, 0x80, 0x80, 0x14,
         0x40, 0x14, 0x00, 0x18, 0x00, 0x00, 0x01, 0xf4, 0x00, 0x00, 0x01, 0xf4, 0x00,
@@ -34,14 +36,15 @@ extension OutputTestSuite {
           == Data([0x11, 0x90]))
     }
 
-    @Test func rejectsMalformedESDSMagicCookie() {
+    @Test("LUB-1067: Rejects malformed ESDS magic cookie") func rejectsMalformedESDSMagicCookie() {
       let cookie = Data([0x03, 0x80, 0x80, 0x80, 0x01, 0x05, 0x82, 0x01])
 
       #expect(
         YouTubeOutputMediaSampleConverter.audioSpecificConfig(fromMagicCookie: cookie) == nil)
     }
 
-    @Test func convertsHighResolutionTimeWithoutIntermediateOverflow() throws {
+    @Test("LUB-1067: Converts high resolution time without intermediate overflow")
+    func convertsHighResolutionTimeWithoutIntermediateOverflow() throws {
       let time = YouTubeOutputMediaTime(
         value: 9_223_372_036_000_000, timescale: 1_000_000_000)
 
@@ -50,7 +53,8 @@ extension OutputTestSuite {
       #expect(converted.milliseconds == 9_223_372_036)
     }
 
-    @Test func convertsEncodedH264SampleToFormatAndAccessUnit() async throws {
+    @Test("LUB-1067: Converts encoded H264 sample to format and access unit")
+    func convertsEncodedH264SampleToFormatAndAccessUnit() async throws {
       let output = EncodedSampleOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
@@ -88,7 +92,8 @@ extension OutputTestSuite {
       #expect(rtmpsSample.isKeyFrame)
     }
 
-    @Test func convertsEncodedAACFormatAndPackets() throws {
+    @Test("LUB-1067: Converts encoded AAC format and packets")
+    func convertsEncodedAACFormatAndPackets() throws {
       let pcm = try makePCMSample(
         data: Data(repeating: 0, count: 8 * 2_048), frameCount: 2_048, startFrame: 0)
       let encoder = try AACAudioEncoder(
@@ -119,7 +124,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func convertsInterleavedFloat32PCMWithTimestampAndFrameDuration() throws {
+    @Test("LUB-1067: Converts interleaved float32 PCM with timestamp and frame duration")
+    func convertsInterleavedFloat32PCMWithTimestampAndFrameDuration() throws {
       let values: [Float32] = [0.25, -0.25, 0.5, -0.5]
       let bytes = values.withUnsafeBytes { Data($0) }
       let sample = try makePCMSample(data: bytes, frameCount: 2, startFrame: 480)
@@ -135,7 +141,7 @@ extension OutputTestSuite {
       #expect(pcm.data == bytes)
     }
 
-    @Test func rejectsNonInterleavedPCM() throws {
+    @Test("LUB-1067: Rejects non interleaved PCM") func rejectsNonInterleavedPCM() throws {
       var stream = AudioStreamBasicDescription(
         mSampleRate: 48_000,
         mFormatID: kAudioFormatLinearPCM,

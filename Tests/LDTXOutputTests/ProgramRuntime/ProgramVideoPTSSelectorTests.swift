@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramVideoPTSSelectorUnitTestSuite {
-    @Test func configuredMasterCanEstablishAndAdvanceProgramPTS() {
+    @Test("LUB-1059: Configured master can establish and advance program PTS")
+    func configuredMasterCanEstablishAndAdvanceProgramPTS() {
       var selector = ProgramVideoPTSSelector()
       let firstMasterPTS = CMTime(value: 100, timescale: 60)
       let secondMasterPTS = CMTime(value: 101, timescale: 60)
@@ -34,7 +35,8 @@ extension OutputTestSuite {
       )
     }
 
-    @Test func missingRepeatedAndBackwardMasterPTSDoNotAdvance() {
+    @Test("LUB-1059: Missing repeated and backward master PTS do not advance")
+    func missingRepeatedAndBackwardMasterPTSDoNotAdvance() {
       var selector = ProgramVideoPTSSelector()
       let lastPTS = CMTime(value: 100, timescale: 60)
       #expect(
@@ -57,7 +59,7 @@ extension OutputTestSuite {
           == .advanced(resumedPTS))
     }
 
-    @Test func masterSourceChangeRequiresReset() {
+    @Test("LUB-1059: Master source change requires reset") func masterSourceChangeRequiresReset() {
       var selector = ProgramVideoPTSSelector()
       let firstPTS = CMTime(value: 10, timescale: 60)
       #expect(
@@ -77,7 +79,8 @@ extension OutputTestSuite {
           == .advanced(secondPTS))
     }
 
-    @Test func captureSessionChangeStartsANewPTSEpoch() {
+    @Test("LUB-1059: Capture session change starts a new PTS epoch")
+    func captureSessionChangeStartsANewPTSEpoch() {
       var selector = ProgramVideoPTSSelector()
       let firstSessionID = UUID()
       let secondSessionID = UUID()

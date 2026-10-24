@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputMediaBacklogUnitTestSuite {
-    @Test func acceptedVideoAndAudioArePreservedInFIFOOrder() throws {
+    @Test("LUB-1067: Accepted video and audio are preserved in FIFO order")
+    func acceptedVideoAndAudioArePreservedInFIFOOrder() throws {
       var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 3, maximumAudioCount: 3)
       let format = YouTubeOutputH264Format(
         parameterSets: [Data([1]), Data([2])], nalUnitHeaderLength: 4, width: 320, height: 180)
@@ -28,7 +29,8 @@ extension OutputTestSuite {
       #expect(backlog.isEmpty)
     }
 
-    @Test func videoOverflowFailsWithoutDiscardingAcceptedSamples() throws {
+    @Test("LUB-1067: Video overflow fails without discarding accepted samples")
+    func videoOverflowFailsWithoutDiscardingAcceptedSamples() throws {
       var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 2, maximumAudioCount: 2)
       try backlog.appendVideo(video(1, isKeyFrame: true), format: nil)
       try backlog.appendVideo(video(2, isKeyFrame: false), format: nil)
@@ -39,7 +41,8 @@ extension OutputTestSuite {
       #expect(backlog.video.map(\.presentationTime.value) == [1, 2])
     }
 
-    @Test func audioOverflowFailsWithoutDiscardingAcceptedSamples() throws {
+    @Test("LUB-1067: Audio overflow fails without discarding accepted samples")
+    func audioOverflowFailsWithoutDiscardingAcceptedSamples() throws {
       var backlog = YouTubeOutputMediaBacklog(maximumVideoCount: 2, maximumAudioCount: 2)
       try backlog.appendAudio(audio(1))
       try backlog.appendAudio(audio(2))

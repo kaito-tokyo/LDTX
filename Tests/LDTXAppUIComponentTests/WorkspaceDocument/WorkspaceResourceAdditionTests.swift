@@ -11,7 +11,8 @@ extension AppUIComponentTestSuite {
   @Suite
   @MainActor
   struct WorkspaceResourceAdditionUnitTestSuite {
-    @Test func programNamesAreReservedAcrossAllResourceTypes() {
+    @Test("LUB-1050: Program names are reserved across all resource types")
+    func programNamesAreReservedAcrossAllResourceTypes() {
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.audioDevices = [WorkspaceResourceFactory.makeAudioInput(id: 1, name: "Program")]
       definition.videoComponents = [
@@ -38,7 +39,8 @@ extension AppUIComponentTestSuite {
       #expect(inspector.uniqueProgramDisplayName("Other") == "Other")
     }
 
-    @Test func vfxRequiresAnAvailableCameraWithPositiveDimensions() {
+    @Test("LUB-1050: Vfx requires an available camera with positive dimensions")
+    func vfxRequiresAnAvailableCameraWithPositiveDimensions() {
       let store = WorkspaceDocument()
       var draft = WorkspaceAddDraft()
       draft.name = "Camera"
@@ -62,7 +64,7 @@ extension AppUIComponentTestSuite {
           sheet: .videoComponent, draft: draft, devices: [camera], stateService: store) == nil)
     }
 
-    @Test(arguments: WorkspaceAddVisionKind.allCases)
+    @Test("LUB-1050: Vision rejects generated inputs", arguments: WorkspaceAddVisionKind.allCases)
     func visionRejectsGeneratedInputs(kind: WorkspaceAddVisionKind) {
       let store = WorkspaceDocument()
       store.editWorkspace(undoManager: nil) { workspace in
@@ -81,7 +83,8 @@ extension AppUIComponentTestSuite {
       #expect(store.workspaceDefinition.visions.isEmpty)
     }
 
-    @Test func cameraCannotBeAddedAsAudioDevice() {
+    @Test("LUB-1050: Camera cannot be added as audio device")
+    func cameraCannotBeAddedAsAudioDevice() {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let camera = WorkspaceAddDeviceOption(
         id: .avCaptureDevice(uniqueID: "camera"), name: "Camera")
@@ -94,7 +97,8 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.audioDevices.isEmpty)
     }
 
-    @Test func audioDiscoveryFailureRejectsAddition() {
+    @Test("LUB-1050: Audio discovery failure rejects addition")
+    func audioDiscoveryFailureRejectsAddition() {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "audio"), name: "Audio")
       var draft = WorkspaceAddDraft()
@@ -107,7 +111,8 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.audioDevices.isEmpty)
     }
 
-    @Test func outputStateLocksDefinitionChangesDuringTransitions() {
+    @Test("LUB-1050: Output state locks definition changes during transitions")
+    func outputStateLocksDefinitionChangesDuringTransitions() {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       var draft = WorkspaceAddDraft()
       draft.componentKind = .solidColor
@@ -128,7 +133,8 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
+    @Test("LUB-1050: Device name falls back and explicit name is trimmed")
+    func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let camera = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
       var draft = WorkspaceAddDraft()
@@ -146,7 +152,8 @@ extension AppUIComponentTestSuite {
       #expect(state.inspectorSelector?.kind == .audioInputDevice)
     }
 
-    @Test func rejectedAddsLeaveDefinitionAndSelectionUnchanged() throws {
+    @Test("LUB-1050: Rejected adds leave definition and selection unchanged")
+    func rejectedAddsLeaveDefinitionAndSelectionUnchanged() throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       var draft = WorkspaceAddDraft()
       draft.componentKind = .solidColor
@@ -179,7 +186,8 @@ extension AppUIComponentTestSuite {
       #expect(state.inspectorSelector == selection)
     }
 
-    @Test func duplicateNamesAreRejectedAcrossResourceKinds() throws {
+    @Test("LUB-1050: Duplicate names are rejected across resource kinds")
+    func duplicateNamesAreRejectedAcrossResourceKinds() throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
@@ -202,7 +210,9 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.visions.isEmpty)
     }
 
-    @Test(arguments: WorkspaceAddComponentKind.allCases.filter { $0 != .dynamicText })
+    @Test(
+      "LUB-1050: Component uses defaults without placing program layers",
+      arguments: WorkspaceAddComponentKind.allCases.filter { $0 != .dynamicText })
     func componentUsesDefaultsWithoutPlacingProgramLayers(kind: WorkspaceAddComponentKind) throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -261,7 +271,8 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.programs == [program])
     }
 
-    @Test func visionReferencesChosenInputAndUsesFiveSecondTrigger() throws {
+    @Test("LUB-1050: Vision references chosen input and uses five second trigger")
+    func visionReferencesChosenInputAndUsesFiveSecondTrigger() throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
@@ -283,7 +294,8 @@ extension AppUIComponentTestSuite {
           })
       #expect(state.inspectorSelector == .init(kind: .ocrVision, internalID: id))
     }
-    @Test @MainActor func resourceDraftsAndSidebarStartUnselected() {
+    @Test("LUB-1050: Resource drafts and sidebar start unselected") @MainActor
+    func resourceDraftsAndSidebarStartUnselected() {
       let draft = WorkspaceAddDraft()
       #expect(draft.physicalDeviceID == nil)
       #expect(draft.videoComponentID == nil)

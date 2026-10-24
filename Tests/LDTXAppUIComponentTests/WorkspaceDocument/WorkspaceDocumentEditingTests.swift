@@ -15,7 +15,8 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace synchronous document editing", .serialized)
   @MainActor
   struct WorkspaceDocumentEditingUnitTestSuite {
-    @Test func applyIsImmediateAndSnapshotPreservesLaterEdits() async throws {
+    @Test("LUB-1047: Apply is immediate and snapshot preserves later edits")
+    func applyIsImmediateAndSnapshotPreservesLaterEdits() async throws {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -51,7 +52,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspaceSnapshot == incoming)
     }
 
-    @Test func unchangedPersistedConfirmationDoesNotNotifyOrReplacePendingEdits() {
+    @Test("LUB-1047: Unchanged persisted confirmation does not notify or replace pending edits")
+    func unchangedPersistedConfirmationDoesNotNotifyOrReplacePendingEdits() {
       let document = WorkspaceDocument()
       let saved = document.workspace
       document.confirmPersistedWorkspace(saved)
@@ -74,7 +76,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == pending)
     }
 
-    @Test func firstEditUsesTheSuppliedManagerWithoutConnectionSetup() {
+    @Test("LUB-1031: First edit uses the supplied manager without connection setup")
+    func firstEditUsesTheSuppliedManagerWithoutConnectionSetup() {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -89,7 +92,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace.definition.displayName == "First input")
     }
 
-    @Test func reverseRegistrationUsesTheManagerExecutingUndo() {
+    @Test("LUB-1031: Reverse registration uses the manager executing undo")
+    func reverseRegistrationUsesTheManagerExecutingUndo() {
       let document = WorkspaceDocument()
       let originalManager = UndoManager()
       originalManager.groupsByEvent = false
@@ -112,7 +116,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == original)
     }
 
-    @Test func noOpPreservesRedoAndNewEditInvalidatesIt() {
+    @Test("LUB-1031: No op preserves redo and new edit invalidates it")
+    func noOpPreservesRedoAndNewEditInvalidatesIt() {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -134,7 +139,8 @@ extension AppUIComponentTestSuite {
       #expect(!undo.canRedo)
     }
 
-    @Test func throwingEditDoesNotChangeContentOrHistory() {
+    @Test("LUB-1031: Throwing edit does not change content or history")
+    func throwingEditDoesNotChangeContentOrHistory() {
       enum Failure: Error { case invalid }
       let document = WorkspaceDocument()
       let undo = UndoManager()
@@ -152,7 +158,8 @@ extension AppUIComponentTestSuite {
       #expect(!undo.canUndo)
     }
 
-    @Test func documentDoesNotOpenOrCloseUndoGroups() {
+    @Test("LUB-1031: Document does not open or close undo groups")
+    func documentDoesNotOpenOrCloseUndoGroups() {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -172,7 +179,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == edited)
     }
 
-    @Test func managerIsNotRetainedByTheDocumentOrItsUndoHandler() {
+    @Test("LUB-1031: Manager is not retained by the document or its undo handler")
+    func managerIsNotRetainedByTheDocumentOrItsUndoHandler() {
       let document = WorkspaceDocument()
       weak var releasedManager: UndoManager?
       do {
@@ -187,7 +195,8 @@ extension AppUIComponentTestSuite {
       #expect(releasedManager == nil)
     }
 
-    @Test func deletionIsOneUndoForDefinitionAndBothCanvasPreferences() {
+    @Test("LUB-1031: Deletion is one undo for definition and both canvas preferences")
+    func deletionIsOneUndoForDefinitionAndBothCanvasPreferences() {
       let document = WorkspaceDocument(
         definition: .with {
           $0.videoComponents = [.with { $0.vfxSource.internalID = 7 }]
@@ -216,7 +225,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == deleted)
     }
 
-    @Test func oneEditRestoresAllContentWithoutRestoringUIState() {
+    @Test("LUB-1031: One edit restores all content without restoring UI state")
+    func oneEditRestoresAllContentWithoutRestoringUIState() {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -244,7 +254,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == edited)
     }
 
-    @Test func readingDoesNotCreateUndoAndSnapshotDoesNotPublishContent() async throws {
+    @Test("LUB-1047: Reading does not create undo and snapshot does not publish content")
+    func readingDoesNotCreateUndoAndSnapshotDoesNotPublishContent() async throws {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -268,7 +279,8 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == loaded)
     }
 
-    @Test func modelChoiceRegistersOneUndoForIdentifierAndAsset() {
+    @Test("LUB-1031: Model choice registers one undo for identifier and asset")
+    func modelChoiceRegistersOneUndoForIdentifierAndAsset() {
       let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
         $0.visions = [.with { $0.ldtxSceneDetectorVision.internalID = 1 }]
       }
@@ -298,7 +310,8 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace snapshot writing without a represented editor", .serialized)
   @MainActor
   struct WorkspaceDocumentWritingIntegrationTestSuite {
-    @Test func stagingWritePreservesCanonicalOutputInputs() async throws {
+    @Test("LUB-1047: Staging write preserves canonical output inputs")
+    func stagingWritePreservesCanonicalOutputInputs() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let canonicalURL = root.appendingPathComponent("Canonical.ldtxworkspace")
@@ -330,7 +343,9 @@ extension AppUIComponentTestSuite {
       #expect(!document.isOutputActive)
     }
 
-    @Test(arguments: [false, true], [false, true])
+    @Test(
+      "LUB-1047: Writer retains later edits and does not publish persistence",
+      arguments: [false, true], [false, true])
     func writerRetainsLaterEditsAndDoesNotPublishPersistence(
       fail: Bool, hasCanonicalRead: Bool
     ) async throws {

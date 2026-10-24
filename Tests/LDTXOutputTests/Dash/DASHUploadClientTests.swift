@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHUploadClientUnitTestSuite {
-    @Test func uploadsManifestWithPutAndDashContentType() async throws {
+    @Test("LUB-1014: Uploads manifest with put and DASH content type")
+    func uploadsManifestWithPutAndDashContentType() async throws {
       let session = DASHUploadMockHTTPSession { request in
         #expect(request.httpMethod == "PUT")
         #expect(
@@ -34,7 +35,8 @@ extension OutputTestSuite {
       #expect(response.statusCode == 200)
     }
 
-    @Test func transportFailurePreservesPrivateErrorDetails() async throws {
+    @Test("LUB-1014: Transport failure preserves private error details")
+    func transportFailurePreservesPrivateErrorDetails() async throws {
       let detail = "ISSUE220_PRIVATE_UPLOAD_ERROR /Users/ISSUE220_PRIVATE_PATH/recording"
       let failure = NSError(
         domain: "ISSUE220_PRIVATE_UPLOAD_DOMAIN", code: 220,
@@ -59,7 +61,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func conflictMapsToMissingManifestOrInitialization() async throws {
+    @Test("LUB-1014: Conflict maps to missing manifest or initialization")
+    func conflictMapsToMissingManifestOrInitialization() async throws {
       let session = DASHUploadMockHTTPSession { request in
         (
           Data("conflict".utf8),
@@ -89,7 +92,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func rejectedUploadDescriptionIncludesObjectAndBody() async throws {
+    @Test("LUB-1014: Rejected upload description includes object and body")
+    func rejectedUploadDescriptionIncludesObjectAndBody() async throws {
       let session = DASHUploadMockHTTPSession { request in
         (
           Data("bad mpd".utf8),

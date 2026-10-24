@@ -12,7 +12,9 @@ extension AppUIComponentTestSuite {
   struct UCT1029IntegerFieldUnitTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Int32 and UInt32 permit intermediate text but reject invalid characters and overflow")
+    @Test(
+      "LUB-1048: Int32 and UInt32 permit intermediate text but reject invalid characters and overflow"
+    )
     func validateRanges() {
       let signed = IntegerField<Int32>.IntegerFormatter()
       let unsigned = IntegerField<UInt32>.IntegerFormatter()
@@ -39,7 +41,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Formatter round-trips full Int32 and UInt32 values without loss")
+    @Test("LUB-1048: Formatter round-trips full Int32 and UInt32 values without loss")
     func typedObjects() {
       let signed = IntegerField<Int32>.IntegerFormatter()
       let unsigned = IntegerField<UInt32>.IntegerFormatter()
@@ -57,7 +59,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Hosted IntegerField commits through TextField and invokes SwiftUI onSubmit")
+    @Test("LUB-1048: Hosted IntegerField commits through TextField and invokes SwiftUI onSubmit")
     func nativeSubmit() async throws {
       var value: Int32 = 42
       var submitted: [Int32] = []

@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeRTMPSStreamKeyConfigurationUnitTestSuite {
-    @Test func roundTripsAllEndpointsWithTheSharedKey() throws {
+    @Test("LUB-1016: Round trips all endpoints with the shared key")
+    func roundTripsAllEndpointsWithTheSharedKey() throws {
       let configuration = YouTubeRTMPSStreamKeyConfiguration(
         name: "Example", streamURL: "rtmps://primary.example/live2",
         backupServerURL: "rtmps://backup.example/live2", streamKey: "test-key")
@@ -23,17 +24,19 @@ extension OutputTestSuite {
       #expect(String(reflecting: restored) == "YouTubeRTMPSStreamKeyConfiguration(<redacted>)")
     }
 
-    @Test func acceptsPrimaryWithoutBackup() throws {
+    @Test("LUB-1016: Accepts primary without backup") func acceptsPrimaryWithoutBackup() throws {
       let configuration = YouTubeRTMPSStreamKeyConfiguration(
         name: "Example", streamURL: "rtmps://primary.example/live2", streamKey: "test-key")
       #expect(try configuration.backupDestination() == nil)
     }
 
-    @Test(arguments: [
-      "rtmp://backup.example/live2", "https://backup.example/live2",
-      "rtmps://backup.example:1935/live2", "rtmps://backup.example/",
-      "rtmps://user:password@backup.example/live2", "rtmps://backup.example/live2?key=secret",
-    ])
+    @Test(
+      "LUB-1016: Rejects invalid backup even when primary is valid",
+      arguments: [
+        "rtmp://backup.example/live2", "https://backup.example/live2",
+        "rtmps://backup.example:1935/live2", "rtmps://backup.example/",
+        "rtmps://user:password@backup.example/live2", "rtmps://backup.example/live2?key=secret",
+      ])
     func rejectsInvalidBackupEvenWhenPrimaryIsValid(backup: String) {
       let configuration = YouTubeRTMPSStreamKeyConfiguration(
         name: "Example", streamURL: "rtmps://primary.example/live2",
@@ -41,7 +44,7 @@ extension OutputTestSuite {
       #expect(throws: YouTubeRTMPSError.invalidDestination) { try configuration.destination() }
     }
 
-    @Test func rejectsEmptyNameOrKey() {
+    @Test("LUB-1016: Rejects empty name or key") func rejectsEmptyNameOrKey() {
       for (name, key) in [("", "key"), ("Example", "  ")] {
         let configuration = YouTubeRTMPSStreamKeyConfiguration(
           name: name, streamURL: "rtmps://primary.example/live2", streamKey: key)
@@ -49,7 +52,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func rejectsSameKeyForBothOutputs() throws {
+    @Test("LUB-1016: Rejects same key for both outputs") func rejectsSameKeyForBothOutputs() throws
+    {
       let configuration = YouTubeRTMPSStreamKeyConfiguration(
         name: "Example", streamURL: "rtmps://primary.example/live2", streamKey: "test-key")
       #expect(throws: YouTubeRTMPSError.invalidDestination) {

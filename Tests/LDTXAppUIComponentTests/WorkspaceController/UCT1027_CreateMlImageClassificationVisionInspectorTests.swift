@@ -16,7 +16,8 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1027: Create ML Image Classifier UI", .serialized)
   @MainActor
   struct UCT1027LdtxSceneDetectorVisionIntegrationTestSuite {
-    @Test func modelInformationUsesPersistedCopy() {
+    @Test("LUB-1048: Model information uses persisted copy")
+    func modelInformationUsesPersistedCopy() {
       let source = URL(fileURLWithPath: "/missing/source.mlpackage")
       let embedded = URL(fileURLWithPath: "/workspace/VisionModels/3/source.mlpackage")
       var inspector = LdtxSceneDetectorVisionInspector(
@@ -27,7 +28,8 @@ extension AppUIComponentTestSuite {
       #expect(inspector.modelInformationURL == source)
     }
 
-    @Test func classifierAdditionRejectsZeroSizedInput() throws {
+    @Test("LUB-1048: Classifier addition rejects zero sized input")
+    func classifierAdditionRejectsZeroSizedInput() throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       store.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
@@ -54,7 +56,8 @@ extension AppUIComponentTestSuite {
       #expect(store.workspaceDefinition.visions.count == 1)
     }
 
-    @Test func revertValidationFollowsOutputState() {
+    @Test("LUB-1048: Revert validation follows output state")
+    func revertValidationFollowsOutputState() {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       let window = makeWorkspaceTestWindow(stateService: store, dispatcher: ToolbarDispatcher())
       defer { window.close() }
@@ -77,7 +80,7 @@ extension AppUIComponentTestSuite {
 
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Toolbar inference precedes Inspector and publishes the selected Vision result")
+    @Test("LUB-1048: Toolbar inference precedes Inspector and publishes the selected Vision result")
     func toolbarInference() async throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       store.editWorkspace(undoManager: nil) { workspace in
@@ -127,7 +130,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "Inference discards obsolete results and failures",
+      "LUB-1048: Inference discards obsolete results and failures",
       arguments: ["model", "input", "roi", "failure"])
     func discardObsoleteInference(change: String) async throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -184,7 +187,7 @@ extension AppUIComponentTestSuite {
       #expect(store.visionFailureMessages[2] == nil)
     }
 
-    @Test("ROI editing preserves absent fields for image-size defaults")
+    @Test("LUB-1048: ROI editing preserves absent fields for image-size defaults")
     func roiNumeratorDefaults() throws {
       var rational = Ldtx_Workspace_V4_Rational32()
       let binding = Binding(get: { rational }, set: { rational = $0 })
@@ -202,7 +205,7 @@ extension AppUIComponentTestSuite {
       #expect(!rational.hasNum && rational.den == 1080)
     }
 
-    @Test("Classifier Inspector receives the resolved input size")
+    @Test("LUB-1048: Classifier Inspector receives the resolved input size")
     func fractionDefaultsAndValidation() throws {
       let source = WorkspaceResourceFactory.makeVFXSource(id: 7, name: "Camera")
       var configuredSource = source
@@ -227,7 +230,7 @@ extension AppUIComponentTestSuite {
 
     }
 
-    @Test("Nested ROI bindings update the Store directly")
+    @Test("LUB-1048: Nested ROI bindings update the Store directly")
     func immediateROIBindings() throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       store.editWorkspace(undoManager: nil) { workspace in
@@ -246,7 +249,7 @@ extension AppUIComponentTestSuite {
           == 0.75)
     }
 
-    @Test("Classifier added through the sheet flow saves and reopens with its settings")
+    @Test("LUB-1048: Classifier added through the sheet flow saves and reopens with its settings")
     func addAndSaveClassifier() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -290,7 +293,8 @@ extension AppUIComponentTestSuite {
       #expect(binding.wrappedValue.triggers.first?.intervalTrigger.intervalSeconds.double == 5)
     }
 
-    @Test("Invalid classifier ROI is rejected; bindings do not overwrite a different Vision")
+    @Test(
+      "LUB-1048: Invalid classifier ROI is rejected; bindings do not overwrite a different Vision")
     func rejectInvalidRegionAndRemovedBinding() throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       store.editWorkspace(undoManager: nil) { workspace in

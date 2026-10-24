@@ -7,7 +7,8 @@ import Testing
 
 @Suite
 struct EditionCompatibilityUnitTestSuite {
-  @Test func clockFontSizeUsesNewTagAndPreservesReservedFieldsAsUnknown() throws {
+  @Test("LUB-1000: Clock font size uses new tag and preserves reserved fields as unknown")
+  func clockFontSizeUsesNewTagAndPreservesReservedFieldsAsUnknown() throws {
     // Former width/height fields are no longer interpreted as Clock geometry.
     let legacy = Data([
       0x1a, 0x04, 0x08, 0x02, 0x10, 0x0c,
@@ -22,7 +23,8 @@ struct EditionCompatibilityUnitTestSuite {
     #expect(restored.unknownFields.data == legacy)
     #expect(try clock.serializedData().contains(0x62))  // field 12, length-delimited
   }
-  @Test func preservesExplicitFalseForRecordingEnabled() throws {
+  @Test("LUB-1000: Preserves explicit false for recording enabled")
+  func preservesExplicitFalseForRecordingEnabled() throws {
     var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
     #expect(!output.hasRecordingEnabled)
     #expect(try output.serializedData().isEmpty)
@@ -36,7 +38,8 @@ struct EditionCompatibilityUnitTestSuite {
     #expect(try output.serializedData().isEmpty)
   }
 
-  @Test func preservesExplicitZeroAndClearForClockOffset() throws {
+  @Test("LUB-1000: Preserves explicit zero and clear for clock offset")
+  func preservesExplicitZeroAndClearForClockOffset() throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     #expect(!clock.hasUtcOffsetMinutes)
     clock.utcOffsetMinutes = 0
@@ -49,7 +52,8 @@ struct EditionCompatibilityUnitTestSuite {
     #expect(try clock.serializedData().isEmpty)
   }
 
-  @Test func preservesExplicitZeroInYouTubeReplies() throws {
+  @Test("LUB-1000: Preserves explicit zero in you tube replies")
+  func preservesExplicitZeroInYouTubeReplies() throws {
     var reply = Ldtx_YoutubeOutput_V1_Reply()
     reply.sequence = 0
     let bytes = Data([0x10, 0x00])

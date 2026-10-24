@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct LocalOutputServiceIntegrationTestSuite {
-    @Test func writableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {
+    @Test("LUB-1066: Writable base directory probe leaves directory unchanged")
+    func writableBaseDirectoryProbeLeavesDirectoryUnchanged() throws {
       let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
         "LDTXLocalOutputServiceIntegrationTestSuite-\(UUID().uuidString)", isDirectory: true)
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -21,7 +22,8 @@ extension OutputTestSuite {
       #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == [])
     }
 
-    @Test func missingBaseDirectoryReportsUnavailable() {
+    @Test("LUB-1066: Missing base directory reports unavailable")
+    func missingBaseDirectoryReportsUnavailable() {
       let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
         "LDTXMissingLocalOutputServiceIntegrationTestSuite-\(UUID().uuidString)", isDirectory: true)
       let service = DefaultLocalOutputService(fileManager: .default)

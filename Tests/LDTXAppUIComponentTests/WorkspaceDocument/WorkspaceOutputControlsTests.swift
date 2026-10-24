@@ -10,7 +10,9 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1046: Failed close presents capture and cleanup errors without retry replay",
+      .timeLimit(.minutes(1)))
     func failedClosePresentsCaptureAndCleanupErrorsWithoutRetryReplay() async throws {
       let document = WorkspaceDocument()
       var releasedError: String?
@@ -64,7 +66,9 @@ extension AppUIComponentTestSuite {
       #expect(releasedError == nil)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1046: Stream deck captures belong to their workspace across focus changes",
+      .timeLimit(.minutes(1)))
     func streamDeckCapturesBelongToTheirWorkspaceAcrossFocusChanges() async {
       let first = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       let second = WorkspaceAppletCoordinator(document: WorkspaceDocument())
@@ -114,7 +118,9 @@ extension AppUIComponentTestSuite {
       await second.shutdown()
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    @Test(
+      "LUB-1046: Closing capture failures reach application owner once", .timeLimit(.minutes(1)),
+      arguments: [false, true], [false, true])
     func closingCaptureFailuresReachApplicationOwnerOnce(
       distinctErrors: Bool, reverseCompletion: Bool
     ) async throws {
@@ -180,7 +186,9 @@ extension AppUIComponentTestSuite {
       #expect(next.takeShutdownFailureForPresentation() == nil)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    @Test(
+      "LUB-1046: Idle shutdown waits for accepted capture", .timeLimit(.minutes(1)),
+      arguments: [false, true])
     func idleShutdownWaitsForAcceptedCapture(fails: Bool) async throws {
       let document = WorkspaceDocument()
       var released = false
@@ -241,7 +249,9 @@ extension AppUIComponentTestSuite {
       #expect(notifications == (fails ? 1 : 2))
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [0, 1])
+    @Test(
+      "LUB-1046: Stream deck output controls remain available during capture",
+      .timeLimit(.minutes(1)), arguments: [0, 1])
     func streamDeckOutputControlsRemainAvailableDuringCapture(outputKey: Int) async {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
@@ -290,7 +300,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func successIsPublishedOnlyAfterCaptureCompletes() async throws {
+    @Test("LUB-1046: Success is published only after capture completes")
+    func successIsPublishedOnlyAfterCaptureCompletes() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       defer { coordinator.screenshotsDidSave = nil }
@@ -323,7 +334,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func failedAndClosedCaptureDoNotPublishSuccess() async {
+    @Test("LUB-1046: Failed and closed capture do not publish success")
+    func failedAndClosedCaptureDoNotPublishSuccess() async {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       var notifications = 0
@@ -348,7 +360,8 @@ extension AppUIComponentTestSuite {
 
   @Suite @MainActor
   struct WorkspaceOutputControlsUnitTestSuite {
-    @Test func savedUnsavedTransitionAndClosedAdmission() {
+    @Test("LUB-1046: Saved unsaved transition and closed admission")
+    func savedUnsavedTransitionAndClosedAdmission() {
       let document = WorkspaceDocument()
       let states: [WorkspaceRecordingState] = [
         .idle, .starting, .recording, .pausing, .paused, .stopping, .failed("failure"),

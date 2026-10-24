@@ -22,7 +22,8 @@ extension AppUIComponentTestSuite {
 
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func displaysLiveValuesAndRecreatedInventory() async throws {
+    @Test("LUB-1071: Displays live values and recreated inventory")
+    func displaysLiveValuesAndRecreatedInventory() async throws {
       let runtime = Runtime()
       let state = WorkspaceDocument(
         definition: .init(), preferences: .init(),

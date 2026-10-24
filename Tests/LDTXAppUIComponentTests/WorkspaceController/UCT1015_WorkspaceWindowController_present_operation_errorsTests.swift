@@ -13,7 +13,8 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
   struct UCT1015WorkspaceAppletCoordinatorIntegrationTestSuite {
-    @Test func inactiveOutputDoesNotReopenStalledAssignments() async {
+    @Test("LUB-1051: Inactive output does not reopen stalled assignments")
+    func inactiveOutputDoesNotReopenStalledAssignments() async {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       await Task.yield()
@@ -31,7 +32,9 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1051: Inactive output resynchronizes assignments without interrupting accepted work",
+      .timeLimit(.minutes(1)))
     func inactiveOutputResynchronizesAssignmentsWithoutInterruptingAcceptedWork() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
@@ -69,7 +72,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func closeRejectsStartingAndActiveOutputWithoutStall() async throws {
+    @Test("LUB-1051: Close rejects starting and active output without stall")
+    func closeRejectsStartingAndActiveOutputWithoutStall() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       await Task.yield()
@@ -93,7 +97,8 @@ extension AppUIComponentTestSuite {
       #expect(document.isClosed)
     }
 
-    @Test func closeWaitsForAcceptedWorkWithoutBlockingAnotherWorkspace() async throws {
+    @Test("LUB-1051: Close waits for accepted work without blocking another workspace")
+    func closeWaitsForAcceptedWorkWithoutBlockingAnotherWorkspace() async throws {
       let first = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       let second = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       await Task.yield()
@@ -132,7 +137,8 @@ extension AppUIComponentTestSuite {
       #expect(first.stateService.isClosed)
     }
 
-    @Test func discardedCloseDoesNotCloseOrAutomaticallyReturn() async throws {
+    @Test("LUB-1051: Discarded close does not close or automatically return")
+    func discardedCloseDoesNotCloseOrAutomaticallyReturn() async throws {
       let coordinator = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       await Task.yield()
       await coordinator.transactionalCommands.waitForCurrentRequests()
@@ -170,7 +176,8 @@ extension AppUIComponentTestSuite {
       #expect(coordinator.transactionalCommands.retryNumber == 1)
     }
 
-    @Test func stopDuringStartWaitsFIFOWithoutInterruptingTheTransition() async throws {
+    @Test("LUB-1051: Stop during start waits FIFO without interrupting the transition")
+    func stopDuringStartWaitsFIFOWithoutInterruptingTheTransition() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       await Task.yield()
@@ -215,7 +222,9 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func unavailableAssignmentCompletesWithoutStallAndActiveOutputRejectsBeforeEnqueue()
+    @Test(
+      "LUB-1051: Unavailable assignment completes without stall and active output rejects before enqueue"
+    ) func unavailableAssignmentCompletesWithoutStallAndActiveOutputRejectsBeforeEnqueue()
       async throws
     {
       let suite = "assignment-result-\(UUID())"
@@ -247,7 +256,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func explicitSavedReconstructionResumesOnlyForNewUserRequest() async throws {
+    @Test("LUB-1051: Explicit saved reconstruction resumes only for new user request")
+    func explicitSavedReconstructionResumesOnlyForNewUserRequest() async throws {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -267,7 +277,9 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test(arguments: [false, true])
+    @Test(
+      "LUB-1051: Explicit save callback runs only after successful native save",
+      arguments: [false, true])
     func explicitSaveCallbackRunsOnlyAfterSuccessfulNativeSave(success: Bool) async {
       let document = SaveResultDocument(success: success)
       var applied = false
@@ -277,7 +289,8 @@ extension AppUIComponentTestSuite {
       document.close()
     }
 
-    @Test func explicitProgramReapplyUsesNewItemAndStallSequence() async throws {
+    @Test("LUB-1051: Explicit program reapply uses new item and stall sequence")
+    func explicitProgramReapplyUsesNewItemAndStallSequence() async throws {
       let document = WorkspaceDocument(
         definition: .with { $0.programs = [.with { $0.internalID = 1 }] }, preferences: .init())
       let coordinator = WorkspaceAppletCoordinator(document: document)
@@ -299,7 +312,8 @@ extension AppUIComponentTestSuite {
       #expect(!coordinator.transactionalCommands.isStalled)
       await coordinator.shutdown()
     }
-    @Test func captureCompletionFollowsFailureStatusPublication() async throws {
+    @Test("LUB-1051: Capture completion follows failure status publication")
+    func captureCompletionFollowsFailureStatusPublication() async throws {
       let suite = "capture-completion-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
@@ -335,7 +349,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func commandQueuePublishesRetryGuidanceWithoutEditingDocument() async {
+    @Test("LUB-1051: Command queue publishes retry guidance without editing document")
+    func commandQueuePublishesRetryGuidanceWithoutEditingDocument() async {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       let baseline = document.editingWorkspace
@@ -354,7 +369,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func failedSelectionPreservesDocumentAndAllowsExplicitReapplication() async throws {
+    @Test("LUB-1051: Failed selection preserves document and allows explicit reapplication")
+    func failedSelectionPreservesDocumentAndAllowsExplicitReapplication() async throws {
       let document = WorkspaceDocument(
         definition: .with { $0.programs = [.with { $0.internalID = 1 }] }, preferences: .init())
       let coordinator = WorkspaceAppletCoordinator(document: document)
@@ -385,7 +401,8 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test func alertAcknowledgesQueuedErrorsInOrder() async throws {
+    @Test("LUB-1051: Alert acknowledges queued errors in order")
+    func alertAcknowledgesQueuedErrorsInOrder() async throws {
       let state = WorkspaceDocument()
       let window = makeWorkspaceTestWindow(stateService: state)
       defer { window.close() }
@@ -418,7 +435,9 @@ extension AppUIComponentTestSuite {
       #expect(state.operationErrors.isEmpty)
     }
 
-    @Test func queuesErrorsAndPreservesDetails() async throws {
+    @Test("LUB-1051: Queues errors and preserves details") func queuesErrorsAndPreservesDetails()
+      async throws
+    {
       let document = WorkspaceDocument()
       let coordinator = WorkspaceAppletCoordinator(document: document)
       let error = NSError(
@@ -445,7 +464,8 @@ extension AppUIComponentTestSuite {
       #expect(state.operationErrors.first == nil)
     }
 
-    @Test func runtimeFailuresAreScopedAndCanRecurAfterRecovery() async {
+    @Test("LUB-1051: Runtime failures are scoped and can recur after recovery")
+    func runtimeFailuresAreScopedAndCanRecurAfterRecovery() async {
       let firstDocument = WorkspaceDocument()
       let secondDocument = WorkspaceDocument()
       let first = WorkspaceAppletCoordinator(document: firstDocument)

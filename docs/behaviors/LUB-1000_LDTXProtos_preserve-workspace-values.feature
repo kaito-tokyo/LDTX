@@ -23,3 +23,10 @@ Feature: LDTXProtos preserve workspace values
     When the decimal is assigned
     Then the previous rational value is preserved
 
+  @LUB-1000.4 @Unit
+  Scenario: Preserve UUID byte order and absence
+    Given a UUID stored in a protobuf envelope
+    When its bytes are encoded or decoded
+    Then valid UUIDs use RFC 9562 byte order
+    And absent or invalid-length values do not become a different valid UUID
+

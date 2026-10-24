@@ -17,6 +17,8 @@ Feature: LDTXWorkspaceAppletService adopt persisted workspace state
     Given Vision occurrences whose execution lane is busy or overdue
     When their scheduled time arrives
     Then those occurrences are skipped instead of accumulating catch-up work
+    And initial phases are distributed within fixed-budget frames without overlapping reservations
+    And long or fractional periods retain their timing across frame boundaries
 
   @LUB-1029.3 @Integration
   Scenario: Preserve output failures through cleanup

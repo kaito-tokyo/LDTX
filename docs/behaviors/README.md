@@ -19,6 +19,8 @@ tests. Features describe expectations, not test results.
 - Tag Scenarios consecutively from `@LUB-1000.1`, without gaps or leading zeros.
 - Add one scope tag per Scenario: `@Unit`, `@Integration`, `@UIComponent`, `@UI`,
   or `@XPC`.
+- Explicitly name every Swift Testing test with its LUB ID and readable case name
+  in `@Test("LUB-1000: Preserve rational representations")`; retain existing UCT IDs.
 - Describe one observable contract per Scenario using Given, When, and Then.
   Cover meaningful outcomes and failures, not private implementation steps or
   individual assertions. Group equivalent inputs as test data.

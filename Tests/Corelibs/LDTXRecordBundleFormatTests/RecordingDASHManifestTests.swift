@@ -7,7 +7,8 @@ import LDTXRecordBundleFormat
 import Testing
 
 @Suite struct RecordingDASHManifestIntegrationTestSuite {
-  @Test func periodOffsetAndMissingRepresentation() throws {
+  @Test("LUB-1003: Period offset and missing representation")
+  func periodOffsetAndMissingRepresentation() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     try """
@@ -23,11 +24,13 @@ import Testing
     #expect(timeline.audioPresentationStart(for: "video track.mp4") == nil)
   }
 
-  @Test(arguments: [
-    (Int64(9_007_199_254_740_993), Int64(9_007_199_254_740_992), Int64(1), Int64(1_000_000_000)),
-    (Int64.max, Int64.min, Int64.max, Int64(2_000_000_000)),
-    (Int64.min, Int64.max, Int64.max, Int64(-2_000_000_000)),
-  ])
+  @Test(
+    "LUB-1003: Preserves large timestamp differences",
+    arguments: [
+      (Int64(9_007_199_254_740_993), Int64(9_007_199_254_740_992), Int64(1), Int64(1_000_000_000)),
+      (Int64.max, Int64.min, Int64.max, Int64(2_000_000_000)),
+      (Int64.min, Int64.max, Int64.max, Int64(-2_000_000_000)),
+    ])
   func preservesLargeTimestampDifferences(
     firstTime: Int64, offset: Int64, timescale: Int64, expectedNanoseconds: Int64
   ) throws {
@@ -44,7 +47,7 @@ import Testing
     #expect(timeline.presentationStart(for: "video.mp4") == expectedNanoseconds)
   }
 
-  @Test func rejectsMalformedXML() throws {
+  @Test("LUB-1003: Rejects malformed xml") func rejectsMalformedXML() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     try "<MPD><Period>".write(to: url, atomically: true, encoding: .utf8)

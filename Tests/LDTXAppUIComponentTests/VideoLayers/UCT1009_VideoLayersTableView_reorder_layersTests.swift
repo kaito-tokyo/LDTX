@@ -10,7 +10,8 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1009: SwiftUI layer reordering", .serialized) @MainActor
   struct UCT1009VideoLayersTableViewIntegrationTestSuite {
-    @Test func standardMovesSupportBothDirectionsAndMultipleRows() throws {
+    @Test("LUB-1048: Standard moves support both directions and multiple rows")
+    func standardMovesSupportBothDirectionsAndMultipleRows() throws {
       let fixture = VideoLayersTestFixture()
       let editor = fixture.editor
       editor.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
@@ -31,7 +32,8 @@ extension AppUIComponentTestSuite {
           == [3, 1, 2])
     }
 
-    @Test func reorderingRetainsDraftsAndCannotChangeMembership() throws {
+    @Test("LUB-1048: Reordering retains drafts and cannot change membership")
+    func reorderingRetainsDraftsAndCannotChangeMembership() throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)

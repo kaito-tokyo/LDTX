@@ -11,7 +11,7 @@ extension AppUIComponentTestSuite {
   struct UCT1023ItemNameDialogUnitTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("UCT-1023.1: Whitespace is removed from a valid candidate")
+    @Test("LUB-1048: UCT-1023.1: Whitespace is removed from a valid candidate")
     func normalizesValidCandidate() {
       let dialog = makeDialog("  Camera  \n")
       #expect(dialog.candidate == "Camera")
@@ -19,14 +19,14 @@ extension AppUIComponentTestSuite {
       _ = dialog.body
     }
 
-    @Test("UCT-1023.2: An empty candidate cannot be submitted")
+    @Test("LUB-1048: UCT-1023.2: An empty candidate cannot be submitted")
     func rejectsEmptyCandidate() {
       let dialog = makeDialog(" \n  ")
       #expect(dialog.candidate.isEmpty)
       #expect(!dialog.canSubmit)
     }
 
-    @Test("UCT-1023.3: An existing name cannot be submitted")
+    @Test("LUB-1048: UCT-1023.3: An existing name cannot be submitted")
     func rejectsDuplicateCandidate() {
       let dialog = makeDialog(" Taken \n")
       #expect(dialog.candidate == "Taken")

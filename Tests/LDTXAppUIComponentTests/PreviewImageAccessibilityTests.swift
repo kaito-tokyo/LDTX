@@ -7,7 +7,9 @@ import Testing
 
 extension AppUIComponentTestSuite {
   @Suite struct PreviewImageAccessibilityUnitTestSuite {
-    @Test @MainActor func identityAndSelectionActions() throws {
+    @Test("LUB-1058: Identity and selection actions") @MainActor func identityAndSelectionActions()
+      throws
+    {
       let host = NSView()
       var landscape = 0
       var portrait = 0

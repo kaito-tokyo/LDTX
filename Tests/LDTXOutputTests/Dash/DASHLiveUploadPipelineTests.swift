@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHLiveUploadPipelineUnitTestSuite {
-    @Test func uploadsManifestFromInitializationThenMediaSegment() async throws {
+    @Test("LUB-1014: Uploads manifest from initialization then media segment")
+    func uploadsManifestFromInitializationThenMediaSegment() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -66,7 +67,9 @@ extension OutputTestSuite {
           .contains("codecs=\"avc1.640c2a,mp4a.40.2\"") == true)
     }
 
-    @Test func rejectsMediaBeforeInitialization() async throws {
+    @Test("LUB-1014: Rejects media before initialization") func rejectsMediaBeforeInitialization()
+      async throws
+    {
       let client = DASHUploadClient(
         endpoint: DASHIngestEndpoint(
           baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&file=")!),
@@ -95,7 +98,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func failedMediaUploadIsNotAdvertisedInTheManifest() async throws {
+    @Test("LUB-1014: Failed media upload is not advertised in the manifest")
+    func failedMediaUploadIsNotAdvertisedInTheManifest() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -132,7 +136,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func refreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
+    @Test("LUB-1014: Refreshes manifest and retries media once after conflict")
+    func refreshesManifestAndRetriesMediaOnceAfterConflict() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -197,7 +202,8 @@ extension OutputTestSuite {
       #expect(refreshedManifest.contains("AAEC"))
     }
 
-    @Test func retractsRecoveryManifestWhenRetriedMediaFails() async throws {
+    @Test("LUB-1014: Retracts recovery manifest when retried media fails")
+    func retractsRecoveryManifestWhenRetriedMediaFails() async throws {
       let recorder = DASHUploadRequestRecorder()
       let mediaURL = "https://upload.youtube.com/dash_upload?cid=abc&file=media000000002.mp4"
       let session = DASHLiveUploadMockHTTPSession { request in
@@ -260,7 +266,8 @@ extension OutputTestSuite {
       #expect(!retractedManifest.contains(#"<S t="100000" d="1000"/>"#))
     }
 
-    @Test func publishesActualTimelineBeforeEveryMediaSegment() async throws {
+    @Test("LUB-1014: Publishes actual timeline before every media segment")
+    func publishesActualTimelineBeforeEveryMediaSegment() async throws {
       let recorder = DASHUploadRequestRecorder()
       let manifestStates = DASHManifestStateRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
@@ -327,7 +334,8 @@ extension OutputTestSuite {
       #expect(states.last?.availabilityStartTime == Date(timeIntervalSince1970: 1_704_067_200))
     }
 
-    @Test func conflictRecoveryKeepsPeriodicallyAdvancedManifestTimeline() async throws {
+    @Test("LUB-1014: Conflict recovery keeps periodically advanced manifest timeline")
+    func conflictRecoveryKeepsPeriodicallyAdvancedManifestTimeline() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -386,7 +394,8 @@ extension OutputTestSuite {
       #expect(recoveryManifest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
     }
 
-    @Test func initialManifestFailureIsReportedWhenFirstMediaArrives() async throws {
+    @Test("LUB-1014: Initial manifest failure is reported when first media arrives")
+    func initialManifestFailureIsReportedWhenFirstMediaArrives() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -452,8 +461,9 @@ extension OutputTestSuite {
       #expect(requests[1].url?.absoluteString.hasSuffix("file=source.mpd") == true)
     }
 
-    @Test func evictsTimelineByActualPresentationWindowWithoutMovingAvailabilityStart() async throws
-    {
+    @Test(
+      "LUB-1014: Evicts timeline by actual presentation window without moving availability start")
+    func evictsTimelineByActualPresentationWindowWithoutMovingAvailabilityStart() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)
@@ -499,7 +509,8 @@ extension OutputTestSuite {
       #expect(latest.contains(#"availabilityStartTime="2024-01-01T00:00:00Z""#))
     }
 
-    @Test func rejectsMissingTimingAndNoncontiguousSegmentNumbers() async throws {
+    @Test("LUB-1014: Rejects missing timing and noncontiguous segment numbers")
+    func rejectsMissingTimingAndNoncontiguousSegmentNumbers() async throws {
       let session = DASHLiveUploadMockHTTPSession { request in
         return (
           Data(),
@@ -540,7 +551,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func rejectsBackwardsTimingBeforeUploadingMedia() async throws {
+    @Test("LUB-1014: Rejects backwards timing before uploading media")
+    func rejectsBackwardsTimingBeforeUploadingMedia() async throws {
       let recorder = DASHUploadRequestRecorder()
       let session = DASHLiveUploadMockHTTPSession { request in
         await recorder.append(request)

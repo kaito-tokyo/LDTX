@@ -27,7 +27,9 @@ extension OutputTestSuite {
       return root
     }
 
-    @Test(arguments: VisionResultArchiver.Operation.allCases)
+    @Test(
+      "LUB-1070: Operation failure rolls back and preserves cause",
+      arguments: VisionResultArchiver.Operation.allCases)
     func operationFailureRollsBackAndPreservesCause(operation: VisionResultArchiver.Operation)
       throws
     {
@@ -58,7 +60,7 @@ extension OutputTestSuite {
       }
     }
 
-    @Test(arguments: ["jpg", "json"])
+    @Test("LUB-1070: Collision preserves existing output", arguments: ["jpg", "json"])
     func collisionPreservesExistingOutput(ext: String) throws {
       let root = try temporaryDirectory()
       defer { try? FileManager.default.removeItem(at: root) }
@@ -77,7 +79,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func partialMetadataWriteIsRemoved() throws {
+    @Test("LUB-1070: Partial metadata write is removed") func partialMetadataWriteIsRemoved() throws
+    {
       let root = try temporaryDirectory()
       defer { try? FileManager.default.removeItem(at: root) }
       let cause = NSError(domain: NSPOSIXErrorDomain, code: 28)
@@ -99,7 +102,8 @@ extension OutputTestSuite {
         ).isEmpty)
     }
 
-    @Test func cleanupFailureDoesNotReplaceWriteFailure() throws {
+    @Test("LUB-1070: Cleanup failure does not replace write failure")
+    func cleanupFailureDoesNotReplaceWriteFailure() throws {
       let root = try temporaryDirectory()
       defer { try? FileManager.default.removeItem(at: root) }
       let manager = ArchiveCleanupFailingFileManager()
@@ -121,7 +125,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func successWritesReadablePairAndNoStagingFiles() throws {
+    @Test("LUB-1070: Success writes readable pair and no staging files")
+    func successWritesReadablePairAndNoStagingFiles() throws {
       let root = try temporaryDirectory()
       defer { try? FileManager.default.removeItem(at: root) }
       try archive(VisionResultArchiver(currentDate: { date }), at: root)

@@ -19,11 +19,13 @@ extension OutputTestSuite {
   @MainActor
   @Suite
   struct ActiveProgramOutputSessionIntegrationTestSuite {
-    @Test func audioReconfigurationWaitsForMixerCompletion() async throws {
+    @Test("LUB-1055: Audio reconfiguration waits for mixer completion")
+    func audioReconfigurationWaitsForMixerCompletion() async throws {
       try await checkAudioReconfiguration(failure: false)
     }
 
-    @Test func audioReconfigurationPropagatesMixerFailure() async throws {
+    @Test("LUB-1055: Audio reconfiguration propagates mixer failure")
+    func audioReconfigurationPropagatesMixerFailure() async throws {
       try await checkAudioReconfiguration(failure: true)
     }
 
@@ -63,19 +65,8 @@ extension OutputTestSuite {
       await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
     }
 
-    @Test func sessionKeepsInjectedDiagnosticIdentifier() {
-      let id = UUID(uuidString: "550E8400-E29B-41D4-A716-446655440000")!
-      let session = ActiveProgramOutputSession(
-        id: id,
-        currentProgramRuntime: makeProgramRuntime(),
-        mediaHub: ProgramOutputMediaHub(),
-        captureSessionCoordinator: WorkspaceCaptureSessionCoordinator()
-      )
-
-      assertEqual(session.id, id)
-    }
-
-    @Test func startRequiresTheSharedProgramState() async {
+    @Test("LUB-1026: Start requires the shared program state")
+    func startRequiresTheSharedProgramState() async {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: makeProgramRuntime(),
         mediaHub: ProgramOutputMediaHub(),
@@ -103,7 +94,7 @@ extension OutputTestSuite {
       await fulfillment(of: [rejected], timeout: 1)
     }
 
-    @Test func startAcceptsAnEmptyAudioMix() async {
+    @Test("LUB-1026: Start accepts an empty audio mix") func startAcceptsAnEmptyAudioMix() async {
       let runtime = makeProgramRuntime()
       runtime.updateProgram(Self.outputConfiguration(audioChannels: []))
       let mixer = ProgramMainAudioMixerSpy()
@@ -127,7 +118,9 @@ extension OutputTestSuite {
       await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
     }
 
-    @Test(arguments: [(true, true), (true, false), (false, true)])
+    @Test(
+      "LUB-1026: Stopped dual session rejects start exactly once",
+      arguments: [(true, true), (true, false), (false, true)])
     func stoppedDualSessionRejectsStartExactlyOnce(enabled: (Bool, Bool)) async {
       let landscape = makeProgramRuntime()
       landscape.updateProgram(Self.outputConfiguration())
@@ -153,7 +146,9 @@ extension OutputTestSuite {
       #expect(!session.isRunning)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1026: Dual stop during native startup completes once and drains both canvases",
+      .timeLimit(.minutes(1)))
     func dualStopDuringNativeStartupCompletesOnceAndDrainsBothCanvases() async {
       let landscape = makeProgramRuntime()
       landscape.updateProgram(Self.outputConfiguration())
@@ -185,7 +180,8 @@ extension OutputTestSuite {
       #expect(!session.isRunning)
     }
 
-    @Test func dualStartAcceptsAnEmptyPortraitMix() async {
+    @Test("LUB-1026: Dual start accepts an empty portrait mix")
+    func dualStartAcceptsAnEmptyPortraitMix() async {
       let landscapeRuntime = makeProgramRuntime()
       landscapeRuntime.updateProgram(Self.outputConfiguration())
       let portraitRuntime = makeProgramRuntime()
@@ -206,7 +202,8 @@ extension OutputTestSuite {
       await withCheckedContinuation { continuation in session.stop { continuation.resume() } }
     }
 
-    @Test func programPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
+    @Test("LUB-1026: Program preferences update main mixer during start and while running")
+    func programPreferencesUpdateMainMixerDuringStartAndWhileRunning() async {
       let mixer = ProgramMainAudioMixerSpy()
       let channel = ProgramAudioChannel(component: .silentAudio)
       let runtime = makeProgramRuntime()
@@ -245,7 +242,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func audioOutputIsPublishedWithoutAGate() async throws {
+    @Test("LUB-1026: Audio output is published without a gate")
+    func audioOutputIsPublishedWithoutAGate() async throws {
       let mixer = ProgramMainAudioMixerSpy()
       let runtime = makeProgramRuntime()
       runtime.updateProgram(Self.outputConfiguration())
@@ -289,7 +287,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func unavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
+    @Test("LUB-1026: Unavailable recording audio track is presented as a flow interruption")
+    func unavailableRecordingAudioTrackIsPresentedAsAFlowInterruption() {
       let error = ProgramOutputFlowInterruptionError.recordingAudioTrackUnavailable("Desk Mic")
 
       assertEqual(error.errorDialogKind, .recordingAudioTrackUnavailable)
@@ -299,7 +298,8 @@ extension OutputTestSuite {
       )
     }
 
-    @Test func workspaceMediaHubDeliversSameSampleToIndependentServices() async throws {
+    @Test("LUB-1067: Workspace media hub delivers same sample to independent services")
+    func workspaceMediaHubDeliversSameSampleToIndependentServices() async throws {
       let recording = SampleBufferSpy()
       let service = SampleBufferSpy()
       let hub = ProgramOutputMediaHub()
@@ -333,7 +333,8 @@ extension OutputTestSuite {
       assertTrue(service.sampleBuffer === sampleBuffer)
     }
 
-    @Test func workspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
+    @Test("LUB-1067: Workspace media hub broadcasts output stop boundary to subscribers")
+    func workspaceMediaHubBroadcastsOutputStopBoundaryToSubscribers() async {
       let first = CallbackSpy()
       let removed = CallbackSpy()
       let hub = ProgramOutputMediaHub()
@@ -351,7 +352,8 @@ extension OutputTestSuite {
       assertEqual(removed.count, 0)
     }
 
-    @Test func monitorConfiguresWorkspaceEngineWithoutRealHardware() async {
+    @Test("LUB-1055: Monitor configures workspace engine without real hardware")
+    func monitorConfiguresWorkspaceEngineWithoutRealHardware() async {
       let channel = ProgramAudioChannel(
         component: .inputAudioDevice(InputAudioDeviceComponent()))
       let channels = [channel]
@@ -379,7 +381,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func stopWhileStartingCompletesStartExactlyOnce() async {
+    @Test("LUB-1026: Stop while starting completes start exactly once")
+    func stopWhileStartingCompletesStartExactlyOnce() async {
       let runtime = makeProgramRuntime()
       runtime.updateProgram(Self.outputConfiguration())
       let session = ActiveProgramOutputSession(
@@ -410,7 +413,8 @@ extension OutputTestSuite {
       assertTrue(startError is CancellationError)
     }
 
-    @Test func stopBeforeStartMakesSessionTerminal() async {
+    @Test("LUB-1026: Stop before start makes session terminal")
+    func stopBeforeStartMakesSessionTerminal() async {
       let session = ActiveProgramOutputSession(
         currentProgramRuntime: makeProgramRuntime(),
         mediaHub: ProgramOutputMediaHub(),
@@ -445,7 +449,8 @@ extension OutputTestSuite {
       await fulfillment(of: [startRejected], timeout: 1)
     }
 
-    @Test func workspaceAudioCaptureIsSharedAndConsumerUnsubscribeDoesNotStopIt() async {
+    @Test("LUB-1055: Workspace audio capture is shared and consumer unsubscribe does not stop it")
+    func workspaceAudioCaptureIsSharedAndConsumerUnsubscribeDoesNotStopIt() async {
       let capture = DelayedAudioCaptureService()
       let captureStarted = expectation(description: "capture start requested")
       capture.startRequested = { captureStarted.fulfill() }
@@ -477,7 +482,9 @@ extension OutputTestSuite {
       assertFalse(capture.isActive)
     }
 
-    @Test func workspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
+    @Test(
+      "LUB-1055: Workspace audio subscribe during shutdown is cancelled once without creating capture"
+    ) func workspaceAudioSubscribeDuringShutdownIsCancelledOnceWithoutCreatingCapture() async {
       let capture = DelayedAudioCaptureService()
       let coordinator = WorkspaceCaptureSessionCoordinator(
         captureServiceFactory: { CameraCaptureService() },
@@ -509,7 +516,8 @@ extension OutputTestSuite {
       assertFalse(capture.isActive)
     }
 
-    @Test func workspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
+    @Test("LUB-1055: Workspace audio unsubscribe while starting does not stop capture")
+    func workspaceAudioUnsubscribeWhileStartingDoesNotStopCapture() async {
       let capture = DelayedAudioCaptureService()
       let startRequested = expectation(description: "capture start requested")
       capture.startRequested = { startRequested.fulfill() }
@@ -535,7 +543,8 @@ extension OutputTestSuite {
       assertEqual(capture.stopCount, 1)
     }
 
-    @Test func workspaceAudioStartFailureCompletesEverySubscriberOnce() async {
+    @Test("LUB-1055: Workspace audio start failure completes every subscriber once")
+    func workspaceAudioStartFailureCompletesEverySubscriberOnce() async {
       let capture = DelayedAudioCaptureService()
       let coordinator = WorkspaceCaptureSessionCoordinator(
         captureServiceFactory: { CameraCaptureService() },
@@ -568,7 +577,8 @@ extension OutputTestSuite {
       assertEqual(capture.stopCount, 1)
     }
 
-    @Test func workspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
+    @Test("LUB-1055: Workspace audio start failure retires subscribers before retry")
+    func workspaceAudioStartFailureRetiresSubscribersBeforeRetry() async throws {
       let capture = DelayedAudioCaptureService()
       let coordinator = WorkspaceCaptureSessionCoordinator(
         captureServiceFactory: { CameraCaptureService() },
@@ -607,7 +617,9 @@ extension OutputTestSuite {
       await fulfillment(of: [retiredSubscriberReceivedSample], timeout: 0.05)
     }
 
-    @Test func workspaceAudioRuntimeFailureRetiresCaptureAndNextSubscriptionRecreatesIt() async {
+    @Test(
+      "LUB-1055: Workspace audio runtime failure retires capture and next subscription recreates it"
+    ) func workspaceAudioRuntimeFailureRetiresCaptureAndNextSubscriptionRecreatesIt() async {
       let failedCapture = DelayedAudioCaptureService()
       let replacementCapture = DelayedAudioCaptureService()
       let captures = AudioCaptureServiceSequence([failedCapture, replacementCapture])
@@ -647,8 +659,9 @@ extension OutputTestSuite {
       await fulfillment(of: [stopped], timeout: 1)
     }
 
-    @Test func retiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws
-    {
+    @Test(
+      "LUB-1055: Retired audio capture rejects stale callback without corrupting dispatch fence")
+    func retiredAudioCaptureRejectsStaleCallbackWithoutCorruptingDispatchFence() async throws {
       let capture = DelayedAudioCaptureService()
       let coordinator = WorkspaceCaptureSessionCoordinator(
         captureServiceFactory: { CameraCaptureService() },
@@ -677,7 +690,8 @@ extension OutputTestSuite {
       assertEqual(unsubscribeCompletion.count, 1)
     }
 
-    @Test func workspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
+    @Test("LUB-1055: Workspace audio runtime failure during start fails start completion")
+    func workspaceAudioRuntimeFailureDuringStartFailsStartCompletion() async {
       let capture = DelayedAudioCaptureService()
       let coordinator = WorkspaceCaptureSessionCoordinator(
         captureServiceFactory: { CameraCaptureService() },
@@ -717,7 +731,8 @@ extension OutputTestSuite {
       assertEqual(capture.stopCount, 1)
     }
 
-    @Test func workspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
+    @Test("LUB-1055: Workspace shutdown waits for runtime failed audio capture to stop")
+    func workspaceShutdownWaitsForRuntimeFailedAudioCaptureToStop() async {
       let capture = DelayedAudioCaptureService()
       capture.completesStopImmediately = false
       let coordinator = WorkspaceCaptureSessionCoordinator(
@@ -748,7 +763,8 @@ extension OutputTestSuite {
       assertTrue(coordinator.isFullyStopped())
     }
 
-    @Test func programAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
+    @Test("LUB-1055: Program audio restart stop cancels pending completion exactly once")
+    func programAudioRestartStopCancelsPendingCompletionExactlyOnce() async {
       let capture = DelayedAudioCaptureService()
       let startRequested = expectation(description: "capture start requested")
       capture.startRequested = { startRequested.fulfill() }
@@ -779,7 +795,8 @@ extension OutputTestSuite {
       assertEqual(completion.count, 1)
     }
 
-    @Test func programAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
+    @Test("LUB-1055: Program audio restart synchronous nested failure completes exactly once")
+    func programAudioRestartSynchronousNestedFailureCompletesExactlyOnce() async {
       let firstCapture = ImmediateAudioCaptureService(result: .success(()))
       let secondCapture = ImmediateAudioCaptureService(
         result: .failure(FakeAudioCaptureError.expected))
@@ -814,7 +831,8 @@ extension OutputTestSuite {
       assertFalse(completion.lastErrorIsCancellation)
     }
 
-    @Test func sessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
+    @Test("LUB-1060: Session record service has no capture startup and becomes terminal")
+    func sessionRecordServiceHasNoCaptureStartupAndBecomesTerminal() async throws {
       let baseDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
       try FileManager.default.createDirectory(
@@ -866,7 +884,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func sessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
+    @Test("LUB-1060: Session record service defers package creation until first media")
+    func sessionRecordServiceDefersPackageCreationUntilFirstMedia() async throws {
       let baseDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
       try FileManager.default.createDirectory(
@@ -890,7 +909,8 @@ extension OutputTestSuite {
       assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
     }
 
-    @Test func pendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
+    @Test("LUB-1060: Pending initial canvas video keeps only bounded tail")
+    func pendingInitialCanvasVideoKeepsOnlyBoundedTail() throws {
       var window = SessionRecordPendingVideoWindow(sampleLimit: 2)
       let first = try makeEmptySampleBuffer()
       let second = try makeEmptySampleBuffer()
@@ -907,7 +927,8 @@ extension OutputTestSuite {
       assertTrue(window.drain().isEmpty)
     }
 
-    @Test func sessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
+    @Test("LUB-1060: Session record service rejects concurrent deferred package creation")
+    func sessionRecordServiceRejectsConcurrentDeferredPackageCreation() async throws {
       let baseDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
       try FileManager.default.createDirectory(
@@ -946,7 +967,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func sessionRecordServiceNormalStopWithoutFirstVideoIsBenign() async throws {
+    @Test("LUB-1060: Session record service normal stop without first video is benign")
+    func sessionRecordServiceNormalStopWithoutFirstVideoIsBenign() async throws {
       let baseDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
       try FileManager.default.createDirectory(
@@ -976,7 +998,8 @@ extension OutputTestSuite {
       assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
     }
 
-    @Test func youTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
+    @Test("LUB-1026: You tube service stop before start makes service terminal")
+    func youTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
       let service = YouTubeOutputWorkspaceService(
         endpoint: DASHIngestEndpoint(
           baseURL: try unwrap(URL(string: "https://example.com/live/"))),

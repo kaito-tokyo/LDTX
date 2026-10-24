@@ -14,7 +14,9 @@ extension AppUIComponentTestSuite {
   struct UCT1031FillInspectorIdentityIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Fill inspectors edit the component with the requested internal ID", arguments: 0..<4)
+    @Test(
+      "LUB-1048: Fill inspectors edit the component with the requested internal ID",
+      arguments: 0..<4)
     func editsByInternalID(_ kind: Int) async throws {
       let storeAppletData = WorkspaceAppletData()
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -172,7 +174,8 @@ extension AppUIComponentTestSuite {
       return document
     }
 
-    @Test("Retained fill bindings follow Undo, Redo and subsequent edits", arguments: 0..<4)
+    @Test(
+      "LUB-1048: Retained fill bindings follow Undo, Redo and subsequent edits", arguments: 0..<4)
     func followsHistory(kind: Int) throws {
       let document = document(kind: kind)
       let undo = UndoManager()
@@ -236,7 +239,8 @@ extension AppUIComponentTestSuite {
       #expect(!undo.canRedo)
     }
 
-    @Test("Retained bindings reject output edits and deleted components", arguments: 0..<4)
+    @Test(
+      "LUB-1048: Retained bindings reject output edits and deleted components", arguments: 0..<4)
     func rejectsUnavailableEdits(kind: Int) {
       let document = document(kind: kind)
       let undo = UndoManager()

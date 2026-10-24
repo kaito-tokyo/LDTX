@@ -23,7 +23,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
   struct UCT1016WorkspaceAppletCoordinatorIntegrationTestSuite {
-    @Test("Stream-key candidate loss clears only the editing choice")
+    @Test("LUB-1066: Stream-key candidate loss clears only the editing choice")
     func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
       let suite = "StreamKeyDraft.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -59,7 +59,7 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
-    @Test("UCT-1016.1: Operations fail safely when a runtime is unavailable")
+    @Test("LUB-1049: UCT-1016.1: Operations fail safely when a runtime is unavailable")
     func programInspectorRejectsSelectionWithoutRuntime() {
       let service = WorkspaceDocument(definition: .init(), preferences: .init())
       let inspector = WorkspaceProgramsInspector(
@@ -68,7 +68,7 @@ extension AppUIComponentTestSuite {
 
     }
 
-    @Test("UCT-1016.2: Program choices are laid out vertically")
+    @Test("LUB-1049: UCT-1016.2: Program choices are laid out vertically")
     func swiftUIProgramRadiosLayOutVertically() {
       _ = NSApplication.shared
       var first = Ldtx_Workspace_V4_ProgramDefinition()
@@ -87,7 +87,7 @@ extension AppUIComponentTestSuite {
       #expect(pair.fittingSize.width < single.fittingSize.width * 2)
     }
 
-    @Test("UCT-1016.3: An empty Program selector remains visible")
+    @Test("LUB-1049: UCT-1016.3: An empty Program selector remains visible")
     func emptyProgramSelectorHasVisibleContent() {
       _ = NSApplication.shared
       let empty = NSHostingView(
@@ -98,7 +98,8 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs")
+      "LUB-1049: UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs"
+    )
     func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
       _ = NSApplication.shared
       let suite = "ProgramPicker." + UUID().uuidString
@@ -156,7 +157,7 @@ extension AppUIComponentTestSuite {
       #expect(data.state(for: url).selectedProgramInternalID == 22)
     }
 
-    @Test("UCT-1016.5: Sidebar selection starts empty and remains Window local")
+    @Test("LUB-1049: UCT-1016.5: Sidebar selection starts empty and remains Window local")
     func sidebarSelectionStartsEmptyAndStaysWindowLocal() throws {
       _ = NSApplication.shared
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -173,7 +174,7 @@ extension AppUIComponentTestSuite {
       #expect(other.inspectorSelector == nil)
     }
 
-    @Test("UCT-1016.6: Physical assignments change only on explicit valid selection")
+    @Test("LUB-1049: UCT-1016.6: Physical assignments change only on explicit valid selection")
     func physicalAssignmentsAreDisplayOnlyUntilAnExplicitValidCommit() throws {
       let suite = "WorkspaceSelectionTests." + UUID().uuidString
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -212,7 +213,7 @@ extension AppUIComponentTestSuite {
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
-    @Test("SwiftUI toolbar pane toggles stay Window local")
+    @Test("LUB-1049: SwiftUI toolbar pane toggles stay Window local")
     func toolbarActionsStayWithinTheirWindow() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
@@ -240,7 +241,9 @@ extension AppUIComponentTestSuite {
       #expect(first.contentPane.pairedPreview === preview)
     }
 
-    @Test("Collapsing a side pane preserves its draft and task results", arguments: [true, false])
+    @Test(
+      "LUB-1049: Collapsing a side pane preserves its draft and task results",
+      arguments: [true, false])
     func collapsingSidePaneRetainsSubtree(isSidebar: Bool) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let probe = InspectorDraftProbe()
@@ -276,7 +279,7 @@ extension AppUIComponentTestSuite {
       var taskRuns = 0
     }
 
-    @Test("Collapsing the sidebar preserves its List scroll position")
+    @Test("LUB-1049: Collapsing the sidebar preserves its List scroll position")
     func collapsingSidebarRetainsScrollPosition() async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let host = NSHostingController(
@@ -322,7 +325,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Hidden side panes lower the SwiftUI minimum width")
+    @Test("LUB-1049: Hidden side panes lower the SwiftUI minimum width")
     func minimumWidthFollowsVisiblePanes() async {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let host = NSHostingView(
@@ -340,7 +343,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("An unsaved Workspace disables output without disabling editing")
+    @Test("LUB-1066: An unsaved Workspace disables output without disabling editing")
     func unsavedOutputIsUnavailable() async throws {
       let document = WorkspaceDocument()
       let dispatcher = ToolbarDispatcher()
@@ -363,7 +366,7 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
+    @Test("LUB-1066: UCT-1016.8: Output buttons reflect state and invoke their own runtime")
     func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
       _ = NSApplication.shared
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -421,7 +424,7 @@ extension AppUIComponentTestSuite {
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("UCT-1016.9: Screenshot actions remain available outside local recording")
+    @Test("LUB-1046: UCT-1016.9: Screenshot actions remain available outside local recording")
     func screenshotToolbarActionsRemainAvailable() async throws {
       _ = NSApplication.shared
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -455,7 +458,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("UCT-1016.10: Program selection updates only the owning Window runtimes")
+    @Test("LUB-1052: UCT-1016.10: Program selection updates only the owning Window runtimes")
     func programSelectionUpdatesOwnedRuntimesAndStaysWindowLocal() async throws {
       let suite = "ProgramSelection.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -560,7 +563,9 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.11: Shared device assignments update open Windows and stop after shutdown")
+    @Test(
+      "LUB-1049: UCT-1016.11: Shared device assignments update open Windows and stop after shutdown"
+    )
     func sharedAssignmentsUpdateBothWindowsAndStopObservingAfterShutdown() async throws {
       let suite = "WorkspaceDocumentAssignments.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -650,7 +655,7 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.12: Dock badges follow AppDelegate's registered coordinators")
+    @Test("LUB-1049: UCT-1016.12: Dock badges follow AppDelegate's registered coordinators")
     func dockBadgeFollowsRegisteredControllers() async {
       let dockTile = NSApplication.shared.dockTile
       let originalBadge = dockTile.badgeLabel
@@ -687,7 +692,8 @@ extension AppUIComponentTestSuite {
       #expect(dockTile.badgeLabel == nil)
     }
 
-    @Test("UCT-1016.13: Sidebar additions affect their own Document and persist only on Save")
+    @Test(
+      "LUB-1050: UCT-1016.13: Sidebar additions affect their own Document and persist only on Save")
     func sidebarAdditionsStayInTheirDocumentAndPersistOnlyOnSave() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(
         "AddSheets-\(UUID())")
@@ -735,7 +741,7 @@ extension AppUIComponentTestSuite {
       )
     }
 
-    @Test("UCT-1016.14: Sidebar Preview uses its provided state")
+    @Test("LUB-1049: UCT-1016.14: Sidebar Preview uses its provided state")
     func workspaceSidebarUsesPreviewState() {
       let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
       let sidebar = WorkspaceSidebar(
@@ -747,7 +753,7 @@ extension AppUIComponentTestSuite {
       _ = sidebar.body
     }
     @Test(
-      "UCT-1016.15: Sidebar additions require a live Document",
+      "LUB-1050: UCT-1016.15: Sidebar additions require a live Document",
       arguments: [WorkspaceAddSheet.device, .videoComponent, .vision])
     func workspaceSidebarRejectsAdditionWithoutLiveDocument(sheet: WorkspaceAddSheet) {
       let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()

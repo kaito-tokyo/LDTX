@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputVideoFrameHoldUnitTestSuite {
-    @Test func sharedTimelinePreservesAudioVideoOffsetAcrossTimescales() throws {
+    @Test("LUB-1015: Shared timeline preserves audio video offset across timescales")
+    func sharedTimelinePreservesAudioVideoOffsetAcrossTimescales() throws {
       var timeline = YouTubeOutputMediaTimeline(
         outputOffset: YouTubeOutputMediaTime(value: 1, timescale: 1))
       let origin = YouTubeOutputMediaTime(value: 60_000, timescale: 600)
@@ -32,7 +33,8 @@ extension OutputTestSuite {
       #expect(CMTimeCompare(inputOffset, outputOffset) == 0)
     }
 
-    @Test func sharedTimelineRejectsPresentationTimesBeforeItsOrigin() {
+    @Test("LUB-1015: Shared timeline rejects presentation times before its origin")
+    func sharedTimelineRejectsPresentationTimesBeforeItsOrigin() {
       var timeline = YouTubeOutputMediaTimeline()
 
       #expect(!timeline.startsAtOrAfterOrigin(YouTubeOutputMediaTime(value: 100, timescale: 1)))
@@ -44,7 +46,8 @@ extension OutputTestSuite {
       #expect(timeline.startsAtOrAfterOrigin(YouTubeOutputMediaTime(value: 101, timescale: 1)))
     }
 
-    @Test func sharedTimelineUsesTheSameTranslationForDecodeTime() throws {
+    @Test("LUB-1015: Shared timeline uses the same translation for decode time")
+    func sharedTimelineUsesTheSameTranslationForDecodeTime() throws {
       var timeline = YouTubeOutputMediaTimeline(
         outputOffset: YouTubeOutputMediaTime(value: 1, timescale: 1))
       let established = timeline.establishOrigin(
@@ -56,7 +59,8 @@ extension OutputTestSuite {
       #expect(decodeTime == YouTubeOutputMediaTime(value: 29, timescale: 30))
     }
 
-    @Test func extendsPreviousFrameUntilNextPresentationTime() throws {
+    @Test("LUB-1015: Extends previous frame until next presentation time")
+    func extendsPreviousFrameUntilNextPresentationTime() throws {
       var hold = YouTubeOutputVideoFrameHold()
 
       #expect(hold.append(frame(at: 0)) == nil)
@@ -74,7 +78,8 @@ extension OutputTestSuite {
       #expect(final.duration == YouTubeOutputMediaTime(value: 1, timescale: 30))
     }
 
-    @Test func singleFrameUsesDefaultCadenceAtFinish() throws {
+    @Test("LUB-1015: Single frame uses default cadence at finish")
+    func singleFrameUsesDefaultCadenceAtFinish() throws {
       var hold = YouTubeOutputVideoFrameHold()
       #expect(hold.append(frame(at: 42)) == nil)
 

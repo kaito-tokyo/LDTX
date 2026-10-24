@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHLocalFilePipelineIntegrationTestSuite {
-    @Test func writesManifestAndMediaSegmentsToDirectory() async throws {
+    @Test("LUB-1014: Writes manifest and media segments to directory")
+    func writesManifestAndMediaSegmentsToDirectory() async throws {
       let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
           "LDTXDashIntegrationTestSuite-DASH-\(UUID().uuidString)", isDirectory: true)
@@ -58,7 +59,9 @@ extension OutputTestSuite {
       #expect(!manifest.contains("AAEC"))
     }
 
-    @Test func rejectsMediaBeforeInitialization() async throws {
+    @Test("LUB-1014: Rejects media before initialization") func rejectsMediaBeforeInitialization()
+      async throws
+    {
       let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
           "LDTXDashIntegrationTestSuite-DASH-\(UUID().uuidString)", isDirectory: true)
@@ -80,7 +83,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func retriesMediaAfterManifestWriteFailure() async throws {
+    @Test("LUB-1014: Retries media after manifest write failure")
+    func retriesMediaAfterManifestWriteFailure() async throws {
       let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
           "LDTXDashIntegrationTestSuite-DASH-\(UUID().uuidString)", isDirectory: true)

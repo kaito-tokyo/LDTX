@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct AudioFramePTSClockUnitTestSuite {
-    @Test func rejectsInvalidConfigurationAndFrameCounts() throws {
+    @Test("LUB-1012: Rejects invalid configuration and frame counts")
+    func rejectsInvalidConfigurationAndFrameCounts() throws {
       #expect(throws: AudioChannelTimelineError.self) { try AudioFramePTSClock(sampleRate: 0) }
 
       let clock = try AudioFramePTSClock(sampleRate: 48_000)
@@ -21,7 +22,9 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func startsAtAnchorPresentationTime() throws {
+    @Test("LUB-1012: Starts at anchor presentation time") func startsAtAnchorPresentationTime()
+      throws
+    {
       let clock = try AudioFramePTSClock(sampleRate: 10)
 
       let presentationTime = try clock.nextPresentationTime(
@@ -32,7 +35,8 @@ extension OutputTestSuite {
       #expect(presentationTime == CMTime(value: 25, timescale: 10))
     }
 
-    @Test func advancesByReceivedFrameCountIgnoringLaterAnchors() throws {
+    @Test("LUB-1012: Advances by received frame count ignoring later anchors")
+    func advancesByReceivedFrameCountIgnoringLaterAnchors() throws {
       let clock = try AudioFramePTSClock(sampleRate: 10)
 
       let first = try clock.nextPresentationTime(
@@ -53,7 +57,7 @@ extension OutputTestSuite {
       #expect(third == CMTime(value: 30, timescale: 10))
     }
 
-    @Test func invalidFirstAnchorThrows() throws {
+    @Test("LUB-1012: Invalid first anchor throws") func invalidFirstAnchorThrows() throws {
       let clock = try AudioFramePTSClock(sampleRate: 10)
 
       #expect(throws: AudioChannelTimelineError.self) {
@@ -61,7 +65,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func invalidLaterAnchorIsIgnoredAfterTimelineStarts() throws {
+    @Test("LUB-1012: Invalid later anchor is ignored after timeline starts")
+    func invalidLaterAnchorIsIgnoredAfterTimelineStarts() throws {
       let clock = try AudioFramePTSClock(sampleRate: 10)
 
       _ = try clock.nextPresentationTime(
@@ -76,7 +81,8 @@ extension OutputTestSuite {
       #expect(presentationTime == CMTime(value: 28, timescale: 10))
     }
 
-    @Test func longIrregularSequenceHasNoCumulativeDrift() throws {
+    @Test("LUB-1012: Long irregular sequence has no cumulative drift")
+    func longIrregularSequenceHasNoCumulativeDrift() throws {
       let sampleRate = 48_000
       let anchor = CMTime(
         value: 52_655 * CMTimeValue(sampleRate), timescale: CMTimeScale(sampleRate))

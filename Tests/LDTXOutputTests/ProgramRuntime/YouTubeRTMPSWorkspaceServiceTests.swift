@@ -14,7 +14,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeRTMPSWorkspaceServiceIntegrationTestSuite {
-    @Test func startsForOnlyTheConfiguredLandscapeCanvas() async throws {
+    @Test("LUB-1016: Starts for only the configured landscape canvas")
+    func startsForOnlyTheConfiguredLandscapeCanvas() async throws {
       let publisher = FakeDualRTMPSPublisher()
       let destination = try YouTubeRTMPSDestination(
         ingestionURL: try #require(URL(string: "rtmps://a.rtmp.youtube.com/live2")),
@@ -40,7 +41,8 @@ extension OutputTestSuite {
       #expect(!snapshot.audioCanvases.contains(.portrait))
     }
 
-    @Test func startsAfterBothCanvasFormatsAndDeliversBufferedMediaInOrder() async throws {
+    @Test("LUB-1016: Starts after both canvas formats and delivers buffered media in order")
+    func startsAfterBothCanvasFormatsAndDeliversBufferedMediaInOrder() async throws {
       let publisher = FakeDualRTMPSPublisher()
       let service = YouTubeRTMPSWorkspaceService(
         destinations: try destinations(),
@@ -68,7 +70,8 @@ extension OutputTestSuite {
       #expect(!snapshot.portraitAudioSpecificConfig.isEmpty)
     }
 
-    @Test func publishingWaitFailsWhenServiceFinishesBeforeFormatsArrive() async throws {
+    @Test("LUB-1016: Publishing wait fails when service finishes before formats arrive")
+    func publishingWaitFailsWhenServiceFinishesBeforeFormatsArrive() async throws {
       let service = YouTubeRTMPSWorkspaceService(
         destinations: try destinations(),
         publisher: FakeDualRTMPSPublisher(),
@@ -85,7 +88,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func failsAndStopsWhenPendingMediaLimitIsExceeded() async throws {
+    @Test("LUB-1016: Fails and stops when pending media limit is exceeded")
+    func failsAndStopsWhenPendingMediaLimitIsExceeded() async throws {
       let publisher = FakeDualRTMPSPublisher()
       let failure = DispatchSemaphore(value: 0)
       let service = YouTubeRTMPSWorkspaceService(

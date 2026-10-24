@@ -29,7 +29,9 @@ import Testing
     }
   }
 
-  @Test func projectsUsingImageOriginAndSize() throws {
+  @Test("LUB-1004: Projects using image origin and size") func projectsUsingImageOriginAndSize()
+    throws
+  {
     let value = region()
     let before = try value.serializedData()
     #expect(
@@ -38,14 +40,15 @@ import Testing
     #expect(try value.serializedData() == before)
   }
 
-  @Test func defaultsProjectToTheEntireImage() {
+  @Test("LUB-1004: Defaults project to the entire image") func defaultsProjectToTheEntireImage() {
     let extent = CGRect(x: 10, y: -20, width: 800, height: 400)
     let value = Ldtx_Workspace_V4_VisionRegionOfInterest()
     #expect(value.rect(in: extent) == extent)
     #expect(!value.hasWidth && !value.hasHeight)
   }
 
-  @Test func projectionUsesFixedDefaultsForUnsetComponents() {
+  @Test("LUB-1004: Projection uses fixed defaults for unset components")
+  func projectionUsesFixedDefaultsForUnsetComponents() {
     var value = region()
     value.clearX()
     value.width.clearNum()

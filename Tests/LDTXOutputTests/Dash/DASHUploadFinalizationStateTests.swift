@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHUploadFinalizationStateUnitTestSuite {
-    @Test func finalizationRetainsUploadFailureAfterAllUploadsComplete() throws {
+    @Test("LUB-1014: Finalization retains upload failure after all uploads complete")
+    func finalizationRetainsUploadFailureAfterAllUploadsComplete() throws {
       var state = DASHUploadFinalizationState()
       state.beginUpload()
       state.beginUpload()
@@ -28,7 +29,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func finalizationRetainsProcessingFailureWithoutAnUpload() {
+    @Test("LUB-1014: Finalization retains processing failure without an upload")
+    func finalizationRetainsProcessingFailureWithoutAnUpload() {
       var state = DASHUploadFinalizationState()
       state.recordFailure(TestError.uploadFailed)
 

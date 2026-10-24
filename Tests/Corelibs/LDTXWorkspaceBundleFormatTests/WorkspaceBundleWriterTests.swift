@@ -8,7 +8,8 @@ import Testing
 
 @Suite
 struct WorkspaceBundleWriterIntegrationTestSuite {
-  @Test func importsClockWithoutFontSizeAndPreservesReservedGeometry() throws {
+  @Test("LUB-1002: Imports clock without font size and preserves reserved geometry")
+  func importsClockWithoutFontSizeAndPreservesReservedGeometry() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     let workspace = WorkspaceV4Bundle(
@@ -49,7 +50,8 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     }
   }
 
-  @Test func preservesResourcesAndEnvelopeIdentifiers() throws {
+  @Test("LUB-1002: Preserves resources and envelope identifiers")
+  func preservesResourcesAndEnvelopeIdentifiers() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -87,7 +89,8 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
       try Data(contentsOf: original.appendingPathComponent("Resources/image.bin")) == resource)
   }
 
-  @Test func partialSaveLeavesOtherFilesUntouchedAndRetriesAfterFailure() throws {
+  @Test("LUB-1002: Partial save leaves other files untouched and retries after failure")
+  func partialSaveLeavesOtherFilesUntouchedAndRetriesAfterFailure() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: url) }
     var workspace = WorkspaceV4Bundle(

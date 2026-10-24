@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHIngestEndpointUnitTestSuite {
-    @Test func appendsObjectNameToFileQueryParameter() throws {
+    @Test("LUB-1014: Appends object name to file query parameter")
+    func appendsObjectNameToFileQueryParameter() throws {
       let endpoint = DASHIngestEndpoint(
         baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=")!)
 
@@ -20,7 +21,9 @@ extension OutputTestSuite {
           == "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=source.mpd")
     }
 
-    @Test func appendsObjectNameToPathEndpoint() throws {
+    @Test("LUB-1014: Appends object name to path endpoint") func appendsObjectNameToPathEndpoint()
+      throws
+    {
       let endpoint = DASHIngestEndpoint(
         baseURL: URL(string: "https://upload.youtube.com/dash/stream/")!)
 
@@ -29,7 +32,8 @@ extension OutputTestSuite {
       #expect(url.absoluteString == "https://upload.youtube.com/dash/stream/media000000042.mp4")
     }
 
-    @Test func buildsMPDReferenceFromFileQueryEndpoint() {
+    @Test("LUB-1014: Builds MPD reference from file query endpoint")
+    func buildsMPDReferenceFromFileQueryEndpoint() {
       let endpoint = DASHIngestEndpoint(
         baseURL: URL(string: "https://upload.youtube.com/dash_upload?cid=abc&copy=0&file=")!)
 
@@ -38,7 +42,7 @@ extension OutputTestSuite {
       #expect(reference == "/dash_upload?cid=abc&copy=0&file=media$Number%09d$.mp4")
     }
 
-    @Test func rejectsUnsafeObjectNames() {
+    @Test("LUB-1014: Rejects unsafe object names") func rejectsUnsafeObjectNames() {
       #expect(throws: DASHObjectNameError.self) { try DASHObjectName(validating: "../source.mpd") }
       #expect(throws: DASHObjectNameError.self) { try DASHObjectName(validating: "source/mpd") }
       #expect(throws: DASHObjectNameError.self) { try DASHObjectName.mediaSegment(number: -1) }

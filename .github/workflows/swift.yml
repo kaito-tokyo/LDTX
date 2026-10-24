@@ -141,8 +141,8 @@ jobs:
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
             -testPlan "$LDTX_TEST_PLAN" \
-            -skip-testing:LDTXHardTests/WorkspaceClockOCRIntegrationTestSuite \
-            -skip-testing:LDTXHardTests/ManualOCRRecognitionIntegrationTestSuite \
+            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
+            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
