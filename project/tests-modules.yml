@@ -52,7 +52,6 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXModuleTests
 
 schemes:

@@ -40,7 +40,6 @@ targets:
         PRODUCT_NAME: LDTXYouTubeOutputServiceProcess
         SKIP_INSTALL: "YES"
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: "YES"
   LDTXHelper:
     type: tool
@@ -61,7 +60,6 @@ targets:
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         SKIP_INSTALL: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_INCLUDE_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)/LDTXUtils.framework/Modules"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"

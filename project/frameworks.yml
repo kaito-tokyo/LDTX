@@ -49,8 +49,6 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
-        MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS: "gnu11 c++20"
   LDTXUtils:
     type: framework
     platform: macOS
@@ -88,8 +86,6 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
-        MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS: "gnu11 c++20"
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
   LDTXAudioEngine:
     type: framework
@@ -118,8 +114,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SWIFT_OBJC_INTEROP_MODE: objcxx
-        CLANG_CXX_LANGUAGE_STANDARD: c++20
-        MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS: "gnu11 c++20"
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
         MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
