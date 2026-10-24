@@ -15,7 +15,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUITests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         TEST_TARGET_NAME: LDTXApp
 
 schemes:

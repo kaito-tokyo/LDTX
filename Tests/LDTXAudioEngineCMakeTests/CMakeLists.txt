@@ -4,12 +4,14 @@
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 enable_testing()
 
 add_executable(ldtx-audio-engine-cmake-tests
   ../../Sources/LDTXAudioEngine/AudioMixEngine.cpp
   ../../Sources/LDTXAudioEngine/WorkspaceAudioEngine.cpp
   AudioEngineTests.cpp
+  AudioMixEngineTests.cpp
 )
 target_include_directories(ldtx-audio-engine-cmake-tests PRIVATE
   ../../Vendors/doctest

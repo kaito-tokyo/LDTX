@@ -51,7 +51,7 @@ extension AppUIComponentTestSuite {
 
     @Test("LUB-1037: Notification callbacks are exposed to objective c")
     func notificationCallbacksAreExposedToObjectiveC() {
-      // Optional delegate methods must match the SDK under C++ interoperability.
+      // Optional delegate methods must match the SDK to be exposed to Objective-C.
       #expect(
         WorkspaceNotifications.instancesRespond(
           to: NSSelectorFromString(
