@@ -12,7 +12,7 @@ extension AppUIComponentTestSuite {
   struct UCT1018PaneSplitViewControllerIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("UCT-1018.1: Sidebar expansion restores its previous width")
+    @Test("LUB-1049: UCT-1018.1: Sidebar expansion restores its previous width")
     func sidebarToggleRestoresExpandedWidth() {
       _ = NSApplication.shared
       let split = PaneSplitViewController(
@@ -35,7 +35,7 @@ extension AppUIComponentTestSuite {
       #expect(!split.splitViewItems[0].canCollapseFromWindowResize)
     }
 
-    @Test("UCT-1018.2: Pane widths are persisted as numeric values")
+    @Test("LUB-1049: UCT-1018.2: Pane widths are persisted as numeric values")
     func paneWidthsArchiveAsNumbers() throws {
       _ = NSApplication.shared
       let split = PaneSplitViewController(
@@ -54,7 +54,7 @@ extension AppUIComponentTestSuite {
       #expect(decoder.decodeDouble(forKey: "LDTX.AppKit.v1.inspectorWidth") > 0)
     }
 
-    @Test("UCT-1018.3: Inspector toggling changes visibility")
+    @Test("LUB-1049: UCT-1018.3: Inspector toggling changes visibility")
     func inspectorToggleChangesComponentState() {
       _ = NSApplication.shared
       let split = PaneSplitViewController(

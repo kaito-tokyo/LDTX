@@ -12,7 +12,8 @@ extension AppUIComponentTestSuite {
   struct UCT1007VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func namesVisibilityAndDraftsFollowCurrentDefinitions() throws {
+    @Test("LUB-1048: Names visibility and drafts follow current definitions")
+    func namesVisibilityAndDraftsFollowCurrentDefinitions() throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)
@@ -35,7 +36,8 @@ extension AppUIComponentTestSuite {
       #expect(!row.supportsPlacement)
     }
 
-    @Test func programChangeDiscardsDraftAndInvalidatesOldCallbacks() throws {
+    @Test("LUB-1048: Program change discards draft and invalidates old callbacks")
+    func programChangeDiscardsDraftAndInvalidatesOldCallbacks() throws {
       let fixture = VideoLayersTestFixture()
       let old = try #require(fixture.editor.rows[1])
       old.edit("-", at: 0)
@@ -55,7 +57,9 @@ extension AppUIComponentTestSuite {
       #expect(fixture.state.workspacePreferences == before)
     }
 
-    @Test func canvasEditorsRemainIndependent() throws {
+    @Test("LUB-1048: Canvas editors remain independent") func canvasEditorsRemainIndependent()
+      throws
+    {
       let fixture = VideoLayersTestFixture()
       let portrait = VideoLayersEditorState(
         stateService: fixture.state, appletData: fixture.data, target: .portrait)
@@ -69,7 +73,8 @@ extension AppUIComponentTestSuite {
       #expect(fixture.editor.rows.keys.sorted() == [1, 2, 3])
     }
 
-    @Test func onlyPositionableComponentsExposePlacement() throws {
+    @Test("LUB-1048: Only positionable components expose placement")
+    func onlyPositionableComponentsExposePlacement() throws {
       let fixture = VideoLayersTestFixture(ids: [1, 2, 3, 4])
       try fixture.state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [

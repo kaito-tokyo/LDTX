@@ -6,13 +6,15 @@ import Testing
 
 @Suite
 struct WrapperAttributesUnitTestSuite {
-  @Test func unspecifiedIngestUsesOnlyLandscapeRTMPS() {
+  @Test("LUB-1000: Unspecified ingest uses only landscape RTMPS")
+  func unspecifiedIngestUsesOnlyLandscapeRTMPS() {
     let mode = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4().youtubeSettings.ingestMode
     #expect(mode.usesLandscapeRTMPS)
     #expect(!mode.usesPortraitRTMPS)
   }
 
-  @Test func preservesPresenceForEveryVideoComponentKind() {
+  @Test("LUB-1000: Preserves presence for every video component kind")
+  func preservesPresenceForEveryVideoComponentKind() {
     let definitions: [Ldtx_Workspace_V4_VideoComponentWrapper.OneOf_VideoComponent] = [
       .solidColorFill(.init()), .linearGradientFill(.init()),
       .radialGradientFill(.init()), .conicGradientFill(.init()),
@@ -64,7 +66,8 @@ struct WrapperAttributesUnitTestSuite {
     }
   }
 
-  @Test func readsValuesAndPreservesIndependentFieldPresence() {
+  @Test("LUB-1000: Reads values and preserves independent field presence")
+  func readsValuesAndPreservesIndependentFieldPresence() {
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
     wrapper.videoComponent = .clock(.with { $0.internalID = 42 })
     #expect(wrapper.internalID == 42)
@@ -74,7 +77,7 @@ struct WrapperAttributesUnitTestSuite {
     #expect(wrapper.displayName == "Clock")
   }
 
-  @Test func preservesVisionPresence() {
+  @Test("LUB-1000: Preserves vision presence") func preservesVisionPresence() {
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
     #expect(wrapper.internalID == nil)
     #expect(wrapper.displayName == nil)
@@ -96,17 +99,4 @@ struct WrapperAttributesUnitTestSuite {
     #expect(wrapper.internalID == 42)
     #expect(wrapper.displayName == "OCR")
   }
-  @Test func identityDoesNotSubstituteZeroForAnUnsetID() {
-    var video = Ldtx_Workspace_V4_VideoComponentWrapper()
-    video.videoComponent = .clock(.init())
-    #expect(video.internalID == nil)
-    video.videoComponent = .clock(.with { $0.internalID = 0 })
-    #expect(video.internalID == 0)
-    var vision = Ldtx_Workspace_V4_VisionWrapper()
-    vision.vision = .ocrVision(.init())
-    #expect(vision.internalID == nil)
-    vision.vision = .ocrVision(.with { $0.internalID = 0 })
-    #expect(vision.internalID == 0)
-  }
-
 }

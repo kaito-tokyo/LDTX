@@ -1,0 +1,277 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import Foundation
+@testable import LDTXSettingsApplet
+import LDTXYouTube
+import LDTXYouTubeAuth
+import Testing
+
+@Suite(.tags(.medium))
+@MainActor
+struct YouTubeAuthStateIntegrationTestSuite {
+  @Test("LUB-1069: Settings instances restore independent state from shared provider")
+  func settingsInstancesRestoreIndependentStateFromSharedProvider() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+    provider.channelID = "test-channel"
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
+
+    first.restoreAuthorization()
+    second.restoreAuthorization()
+    try await waitUntil {
+      first.authorizationStatus == "Authorized, channel test-cha..."
+        && second.authorizationStatus == "Authorized, channel test-cha..."
+    }
+
+    #expect(first !== second)
+    #expect(first.oauthStatus == second.oauthStatus)
+    #expect(first.authorizationStatus == second.authorizationStatus)
+  }
+
+  @Test("LUB-1069: Importing o auth client updates only the settings instance")
+  func importingOAuthClientUpdatesOnlyTheSettingsInstance() async throws {
+    let provider = TestAuthorizationProvider()
+    let first = SettingsAccountModel(authorizationService: provider)
+    let second = SettingsAccountModel(authorizationService: provider)
+    let configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(first.loadOAuthClient(from: url))
+    #expect(provider.configuration == configuration)
+    #expect(second.oauthStatus == "No OAuth client")
+  }
+
+  @Test("LUB-1069: Authorization restore failure preserves loaded o auth client status")
+  func authorizationRestoreFailurePreservesLoadedOAuthClientStatus() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = GoogleOAuthClientConfiguration(
+      clientID: "client-id",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Stored authorization is unavailable"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Stored authorization is unavailable")
+    }
+
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+    #expect(model.canAuthorize)
+  }
+
+  @Test("LUB-1069: Older authorization restore cannot overwrite imported o auth client state")
+  func olderAuthorizationRestoreCannotOverwriteImportedOAuthClientState() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-a")
+    provider.suspendedClientID = "client-a"
+    provider.restoreAuthorizationError = NSError(
+      domain: "AuthorizationRestoreTest", code: 2,
+      userInfo: [NSLocalizedDescriptionKey: "Client B restore failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try Data("oauth".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    model.restoreAuthorization()
+    try await waitUntil { provider.hasPendingRestore(for: "client-a") }
+    #expect(model.loadOAuthClient(from: url))
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Client B restore failed")
+    }
+
+    provider.completePendingRestore(
+      for: "client-a", with: .success(.authorized(accessToken: "stale-token")))
+    try await Task.sleep(for: .milliseconds(30))
+
+    #expect(model.authorizationStatus == "Authorization restore failed: Client B restore failed")
+    #expect(model.oauthStatus == "OAuth client loaded: loaded")
+  }
+
+  @Test(
+    "LUB-1069: Modes do not restore or persist you tube authorization",
+    arguments: [(true, false), (false, true)])
+  func testModesDoNotRestoreOrPersistYouTubeAuthorization(
+    isUnitTesting: Bool,
+    isUITesting: Bool
+  ) async throws {
+    let provider = SettingsAuthorizationServiceFactory.make(
+      isUnitTesting: isUnitTesting, isUITesting: isUITesting)
+    let configuration = GoogleOAuthClientConfiguration(
+      clientID: "test-client",
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+
+    #expect(try provider.restorePersistedOAuthClient() == nil)
+    let restoredAuthorization = try await provider.restoreStoredAuthorization(
+      configuration: configuration)
+    if case .notAuthorized = restoredAuthorization {
+    } else {
+      Issue.record("Test mode unexpectedly restored a persisted authorization")
+    }
+    #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try provider.loadOAuthClient(data: Data())
+    }
+    await #expect(throws: SettingsAuthorizationServiceError.unavailableInTestMode) {
+      try await provider.authorize(configuration: configuration)
+    }
+  }
+
+  @Test("LUB-1069: Restored authorization displays verified channel ID")
+  func restoredAuthorizationDisplaysVerifiedChannelID() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelID = "UC1234567890123"
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus == "Authorized, channel UC123456..."
+    }
+
+    #expect(model.authorizationStatus == "Authorized, channel UC123456...")
+  }
+
+  @Test("LUB-1069: Restored authorization reports missing channel")
+  func restoredAuthorizationReportsMissingChannel() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil { model.authorizationStatus == "Authorized, no channel" }
+
+    #expect(model.authorizationStatus == "Authorized, no channel")
+  }
+
+  @Test("LUB-1069: Restored authorization reports channel lookup failure")
+  func restoredAuthorizationReportsChannelLookupFailure() async throws {
+    let provider = TestAuthorizationProvider()
+    provider.configuration = try makeConfiguration(clientID: "client-id")
+    provider.channelLookupError = NSError(
+      domain: "ChannelLookupTest", code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Channel lookup failed"])
+    let model = SettingsAccountModel(authorizationService: provider)
+
+    model.restoreAuthorization()
+    try await waitUntil {
+      model.authorizationStatus.contains("Channel lookup failed")
+    }
+
+    #expect(
+      model.authorizationStatus == "Authorized, channel unavailable: Channel lookup failed")
+  }
+
+  private func makeConfiguration(clientID: String) throws -> GoogleOAuthClientConfiguration {
+    GoogleOAuthClientConfiguration(
+      clientID: clientID,
+      clientSecret: nil,
+      authURI: try #require(URL(string: "https://example.com/auth")),
+      tokenURI: try #require(URL(string: "https://example.com/token")),
+      redirectURIs: []
+    )
+  }
+
+  private func waitUntil(
+    timeout: Duration = .seconds(2),
+    condition: @escaping @MainActor () -> Bool
+  ) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+      guard ContinuousClock.now < deadline else {
+        Issue.record("Timed out waiting for condition")
+        return
+      }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+  }
+
+  private final class TestAuthorizationProvider: SettingsAuthorizationProviding {
+    var configuration: GoogleOAuthClientConfiguration?
+    var restoreAuthorizationError: (any Error)?
+    var channelID: String?
+    var channelLookupError: (any Error)?
+    var suspendedClientID: String?
+    private var pendingRestores:
+      [String: CheckedContinuation<
+        YouTubeAuthorizationService.AuthorizationRestoreResult, any Error
+      >] = [:]
+
+    func hasPendingRestore(for clientID: String) -> Bool {
+      pendingRestores[clientID] != nil
+    }
+
+    func completePendingRestore(
+      for clientID: String,
+      with result: Result<YouTubeAuthorizationService.AuthorizationRestoreResult, any Error>
+    ) {
+      pendingRestores.removeValue(forKey: clientID)?.resume(with: result)
+    }
+
+    func restorePersistedOAuthClient() throws -> GoogleOAuthClientConfiguration? {
+      configuration
+    }
+
+    func restoreStoredAuthorization(
+      configuration: GoogleOAuthClientConfiguration
+    ) async throws -> YouTubeAuthorizationService.AuthorizationRestoreResult {
+      if configuration.clientID == suspendedClientID {
+        return try await withCheckedThrowingContinuation { continuation in
+          pendingRestores[configuration.clientID] = continuation
+        }
+      }
+      if let restoreAuthorizationError { throw restoreAuthorizationError }
+      return .authorized(accessToken: "access-token")
+    }
+
+    func authenticatedChannelID(accessToken: String) async throws -> String? {
+      if let channelLookupError { throw channelLookupError }
+      return channelID
+    }
+
+    func loadOAuthClient(data: Data) throws -> GoogleOAuthClientConfiguration {
+      let configuration = GoogleOAuthClientConfiguration(
+        clientID: "client-id",
+        clientSecret: nil,
+        authURI: URL(string: "https://example.com/auth")!,
+        tokenURI: URL(string: "https://example.com/token")!,
+        redirectURIs: []
+      )
+      self.configuration = configuration
+      return configuration
+    }
+
+    func authorize(configuration: GoogleOAuthClientConfiguration) async throws -> String {
+      "access-token"
+    }
+    func cancelAuthorization() {}
+  }
+}

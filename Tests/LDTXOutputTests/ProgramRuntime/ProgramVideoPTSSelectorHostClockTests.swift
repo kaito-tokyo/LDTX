@@ -8,7 +8,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramVideoPTSSelectorHostClockIntegrationTestSuite {
-    @Test func noConfiguredMasterUsesTheHostClock() {
+    @Test("LUB-1059: No configured master uses the host clock")
+    func noConfiguredMasterUsesTheHostClock() {
       var selector = ProgramVideoPTSSelector()
 
       guard

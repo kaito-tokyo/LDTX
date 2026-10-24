@@ -8,20 +8,26 @@ import LDTXProtosMacOSExtra
 import SwiftUI
 import Testing
 
+enum FillKind: String, CaseIterable, Sendable, Codable {
+  case solid, linearGradient, radialGradient, conicGradient
+}
+
 extension AppUIComponentTestSuite {
   @Suite("UCT-1031: Fill Inspector identity", .serialized)
   @MainActor
   struct UCT1031FillInspectorIdentityIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Fill inspectors edit the component with the requested internal ID", arguments: 0..<4)
-    func editsByInternalID(_ kind: Int) async throws {
+    @Test(
+      "LUB-1048: Fill inspectors edit the component with the requested internal ID",
+      arguments: FillKind.allCases)
+    fileprivate func editsByInternalID(_ kind: FillKind) async throws {
       let storeAppletData = WorkspaceAppletData()
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       let component: Ldtx_Workspace_V4_VideoComponentWrapper
       let root: AnyView
       switch kind {
-      case 0:
+      case .solid:
         component = WorkspaceResourceFactory.makeSolidColor(id: 11, name: "Source")
         store.editWorkspace(undoManager: nil) { workspace in
           workspace.definition.videoComponents = [component]
@@ -29,7 +35,7 @@ extension AppUIComponentTestSuite {
         root = AnyView(
           SolidColorFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
-      case 1:
+      case .linearGradient:
         component = WorkspaceResourceFactory.makeLinearGradient(id: 11, name: "Source")
         store.editWorkspace(undoManager: nil) { workspace in
           workspace.definition.videoComponents = [component]
@@ -37,7 +43,7 @@ extension AppUIComponentTestSuite {
         root = AnyView(
           LinearGradientFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
-      case 2:
+      case .radialGradient:
         component = WorkspaceResourceFactory.makeRadialGradient(id: 11, name: "Source")
         store.editWorkspace(undoManager: nil) { workspace in
           workspace.definition.videoComponents = [component]
@@ -45,7 +51,7 @@ extension AppUIComponentTestSuite {
         root = AnyView(
           RadialGradientFillVideoComponentInspector(
             stateService: store, appletData: storeAppletData, videoComponentID: 11))
-      default:
+      case .conicGradient:
         component = WorkspaceResourceFactory.makeConicGradient(id: 11, name: "Source")
         store.editWorkspace(undoManager: nil) { workspace in
           workspace.definition.videoComponents = [component]
@@ -94,17 +100,19 @@ extension AppUIComponentTestSuite {
       let geometry: [Binding<Ldtx_Workspace_V4_Rational32>]
     }
 
-    private func controls(kind: Int, document: WorkspaceDocument, undo: UndoManager) -> Controls {
+    private func controls(kind: FillKind, document: WorkspaceDocument, undo: UndoManager)
+      -> Controls
+    {
       let data = WorkspaceAppletData()
       switch kind {
-      case 0:
+      case .solid:
         let view = SolidColorFillVideoComponentInspector(
           stateService: document, appletData: data, videoComponentID: 11)
         return Controls(
           name: view.componentBinding(\.displayName, initial: "", undoManager: undo),
           colors: [view.colorBinding(\.extendedSrgbColor, initial: .clear, undoManager: undo)],
           geometry: [])
-      case 1:
+      case .linearGradient:
         let view = LinearGradientFillVideoComponentInspector(
           stateService: document, appletData: data, videoComponentID: 11)
         return Controls(
@@ -119,7 +127,7 @@ extension AppUIComponentTestSuite {
             view.componentBinding(\.endX, initial: .init(), undoManager: undo),
             view.componentBinding(\.endY, initial: .init(), undoManager: undo),
           ])
-      case 2:
+      case .radialGradient:
         let view = RadialGradientFillVideoComponentInspector(
           stateService: document, appletData: data, videoComponentID: 11)
         return Controls(
@@ -134,7 +142,7 @@ extension AppUIComponentTestSuite {
             view.componentBinding(\.innerRadius, initial: .init(), undoManager: undo),
             view.componentBinding(\.outerRadius, initial: .init(), undoManager: undo),
           ])
-      default:
+      case .conicGradient:
         let view = ConicGradientFillVideoComponentInspector(
           stateService: document, appletData: data, videoComponentID: 11)
         return Controls(
@@ -151,16 +159,16 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    private func document(kind: Int) -> WorkspaceDocument {
+    private func document(kind: FillKind) -> WorkspaceDocument {
       let source: Ldtx_Workspace_V4_VideoComponentWrapper
       switch kind {
-      case 0:
+      case .solid:
         source = WorkspaceResourceFactory.makeSolidColor(id: 11, name: "Source")
-      case 1:
+      case .linearGradient:
         source = WorkspaceResourceFactory.makeLinearGradient(id: 11, name: "Source")
-      case 2:
+      case .radialGradient:
         source = WorkspaceResourceFactory.makeRadialGradient(id: 11, name: "Source")
-      default:
+      case .conicGradient:
         source = WorkspaceResourceFactory.makeConicGradient(id: 11, name: "Source")
       }
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -172,8 +180,10 @@ extension AppUIComponentTestSuite {
       return document
     }
 
-    @Test("Retained fill bindings follow Undo, Redo and subsequent edits", arguments: 0..<4)
-    func followsHistory(kind: Int) throws {
+    @Test(
+      "LUB-1048: Retained fill bindings follow Undo, Redo and subsequent edits",
+      arguments: FillKind.allCases)
+    fileprivate func followsHistory(kind: FillKind) throws {
       let document = document(kind: kind)
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -236,8 +246,10 @@ extension AppUIComponentTestSuite {
       #expect(!undo.canRedo)
     }
 
-    @Test("Retained bindings reject output edits and deleted components", arguments: 0..<4)
-    func rejectsUnavailableEdits(kind: Int) {
+    @Test(
+      "LUB-1048: Retained bindings reject output edits and deleted components",
+      arguments: FillKind.allCases)
+    fileprivate func rejectsUnavailableEdits(kind: FillKind) {
       let document = document(kind: kind)
       let undo = UndoManager()
       undo.groupsByEvent = false

@@ -12,7 +12,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHStreamContinuityUnitTestSuite {
-    @Test func youTubeOutputFingerprintIsStableAcrossAudioTrackOrdering() {
+    @Test("LUB-1062: You tube output fingerprint is stable across audio track ordering")
+    func youTubeOutputFingerprintIsStableAcrossAudioTrackOrdering() {
       let writerConfiguration = SegmentedMP4WriterConfiguration(
         width: 1_920,
         height: 1_080,
@@ -32,7 +33,8 @@ extension OutputTestSuite {
       #expect(first.outputServiceValue.hasPrefix("v2:sdr-1080p60:"))
     }
 
-    @Test func continuityReusesMatchingEndpointAndOutputFingerprint() {
+    @Test("LUB-1062: Continuity reuses matching endpoint and output fingerprint")
+    func continuityReusesMatchingEndpointAndOutputFingerprint() {
       let writerConfiguration = SegmentedMP4WriterConfiguration(
         width: 1_920,
         height: 1_080,
@@ -64,7 +66,8 @@ extension OutputTestSuite {
           outputConfigurationFingerprint: fingerprint))
     }
 
-    @Test func continuityTracksLatestInitAndNextMediaSegmentNumber() {
+    @Test("LUB-1062: Continuity tracks latest init and next media segment number")
+    func continuityTracksLatestInitAndNextMediaSegmentNumber() {
       let writerConfiguration = SegmentedMP4WriterConfiguration(
         width: 1_280,
         height: 720,
@@ -91,7 +94,8 @@ extension OutputTestSuite {
       #expect(state.nextMediaSegmentNumber == 8)
     }
 
-    @Test func checkpointUpdatesContinuityWhenFingerprintMatches() {
+    @Test("LUB-1062: Checkpoint updates continuity when fingerprint matches")
+    func checkpointUpdatesContinuityWhenFingerprintMatches() {
       let fingerprint = makeFingerprint()
       var state = makeContinuityState(fingerprint: fingerprint)
       let availabilityStartTime = Date(timeIntervalSince1970: 1_900_000_000)
@@ -109,7 +113,8 @@ extension OutputTestSuite {
       #expect(state.availabilityStartTime == availabilityStartTime)
     }
 
-    @Test func checkpointDoesNotMutateContinuityWhenFingerprintDiffers() {
+    @Test("LUB-1062: Checkpoint does not mutate continuity when fingerprint differs")
+    func checkpointDoesNotMutateContinuityWhenFingerprintDiffers() {
       let fingerprint = makeFingerprint()
       var state = makeContinuityState(fingerprint: fingerprint)
       let original = state
@@ -126,7 +131,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func continuityStoreKeepsEndpointsIndependent() throws {
+    @Test("LUB-1062: Continuity store keeps endpoints independent")
+    func continuityStoreKeepsEndpointsIndependent() throws {
       let fingerprint = DASHStreamOutputConfigurationFingerprint(
         writerConfiguration: SegmentedMP4WriterConfiguration(
           width: 1_280,
@@ -165,7 +171,8 @@ extension OutputTestSuite {
     }
 
     @MainActor
-    @Test func workspaceStateStoreKeepsServiceProcessCheckpointOnlyInMemory() {
+    @Test("LUB-1062: Workspace state store keeps service process checkpoint only in memory")
+    func workspaceStateStoreKeepsServiceProcessCheckpointOnlyInMemory() {
       let endpoint = "https://upload.youtube.com/dash_upload?cid=checkpoint&file="
       let fingerprint = makeFingerprint()
       let expected = DASHStreamContinuityState(

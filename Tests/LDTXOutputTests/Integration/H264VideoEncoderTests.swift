@@ -12,7 +12,8 @@ import Testing
 extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
   @Suite
   struct H264VideoEncoderIntegrationTestSuite {
-    @Test func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
+    @Test("LUB-1061: Asset writer lifecycle gate holds starts until finish completes")
+    func testAssetWriterLifecycleGateHoldsStartsUntilFinishCompletes() {
       let finishEntered = DispatchSemaphore(value: 0)
       let releaseFinish = DispatchSemaphore(value: 0)
       let finishCompleted = DispatchSemaphore(value: 0)
@@ -41,7 +42,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(startEntered.wait(timeout: .now() + 1), .success)
     }
 
-    @Test func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
+    @Test("LUB-1061: Muxed segment timing ignores empty track at zero")
+    func testMuxedSegmentTimingIgnoresEmptyTrackAtZero() throws {
       let timing = try unwrap(
         MuxedPassthroughSegmentedMP4Writer.segmentTiming(
           trackTimings: [
@@ -55,7 +57,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(timing.durationSeconds, 0.002)
     }
 
-    @Test func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
+    @Test("LUB-1061: Muxed segment timing rejects tracks without effective media")
+    func testMuxedSegmentTimingRejectsTracksWithoutEffectiveMedia() {
       assertNil(
         MuxedPassthroughSegmentedMP4Writer.segmentTiming(
           trackTimings: [
@@ -66,7 +69,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           ]))
     }
 
-    @Test func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
+    @Test("LUB-1061: Muxed writer omits only explicitly empty track reports")
+    func testMuxedWriterOmitsOnlyExplicitlyEmptyTrackReports() {
       assertTrue(
         MuxedPassthroughSegmentedMP4Writer.containsOnlyEmptyTracks([
           MuxedPassthroughTrackTiming(
@@ -85,7 +89,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         ]))
     }
 
-    @Test func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
+    @Test("LUB-1061: Passthrough pending sample limit allows its boundaries")
+    func testPassthroughPendingSampleLimitAllowsItsBoundaries() {
       assertFalse(
         H264PassthroughPendingSampleLimit.isExceeded(
           count: 10_000,
@@ -93,7 +98,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           latestPresentationTime: CMTime(seconds: 30, preferredTimescale: 600)))
     }
 
-    @Test func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
+    @Test("LUB-1061: Passthrough pending sample limit rejects excess count and duration")
+    func testPassthroughPendingSampleLimitRejectsExcessCountAndDuration() {
       assertTrue(
         H264PassthroughPendingSampleLimit.isExceeded(
           count: 10_001,
@@ -106,7 +112,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           latestPresentationTime: CMTime(seconds: 30.001, preferredTimescale: 1_000)))
     }
 
-    @Test func testHigh42CodecValidationAllowsConstraintFlags() {
+    @Test("LUB-1061: High42 codec validation allows constraint flags")
+    func testHigh42CodecValidationAllowsConstraintFlags() {
       assertTrue(H264VideoEncoder.isHigh42CodecString("avc1.64002a"))
       assertTrue(H264VideoEncoder.isHigh42CodecString("avc1.640c2a"))
       assertFalse(H264VideoEncoder.isHigh42CodecString("avc1.4d002a"))
@@ -114,7 +121,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertFalse(H264VideoEncoder.isHigh42CodecString("avc1.invalid"))
     }
 
-    @Test func testEncoderAcceptsCanonicalFullRangeNV12Input() async throws {
+    @Test("LUB-1061: Encoder accepts canonical full range NV12 input")
+    func testEncoderAcceptsCanonicalFullRangeNV12Input() async throws {
       let output = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
@@ -134,7 +142,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(try output.sampleBuffers().count, 1)
     }
 
-    @Test func testH264ConfigurationValidatesHigh42Envelope() throws {
+    @Test("LUB-1061: H264 configuration validates high42 envelope")
+    func testH264ConfigurationValidatesHigh42Envelope() throws {
       assertNoThrow(
         try H264VideoEncoderConfiguration(
           width: 1_920, height: 1_080, frameRate: 60, bitRate: 6_000_000
@@ -153,7 +162,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
+    @Test("LUB-1061: AAC encoder represents priming and remainder as trim metadata")
+    func testAACEncoderRepresentsPrimingAndRemainderAsTrimMetadata() throws {
       let inputStartFrame = 48_000
       let inputFrameCount = 48_000
       let first = try makeAudioSample(startFrame: inputStartFrame, frameCount: 1_024)
@@ -192,7 +202,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         inputFrameCount)
     }
 
-    @Test func testAACEncoderPublishesAudioSpecificConfig() throws {
+    @Test("LUB-1061: AAC encoder publishes audio specific config")
+    func testAACEncoderPublishesAudioSpecificConfig() throws {
       let input = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(input.formatDescription))
@@ -206,7 +217,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(cookieSize, 0)
     }
 
-    @Test func testAACEncoderAcceptsContinuousPresentationTimes() throws {
+    @Test("LUB-1061: AAC encoder accepts continuous presentation times")
+    func testAACEncoderAcceptsContinuousPresentationTimes() throws {
       let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(first.formatDescription))
@@ -215,7 +227,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertNoThrow(try encoder.encode(makeAudioSample(startFrame: 49_024, frameCount: 1_024)))
     }
 
-    @Test func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
+    @Test("LUB-1061: AAC encoder accepts small presentation time rounding difference")
+    func testAACEncoderAcceptsSmallPresentationTimeRoundingDifference() throws {
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(first.formatDescription))
@@ -224,7 +237,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertNoThrow(try encoder.encode(makeAudioSample(startFrame: 1_025, frameCount: 1_024)))
     }
 
-    @Test func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
+    @Test("LUB-1061: AAC encoder rejects accumulated presentation time drift")
+    func testAACEncoderRejectsAccumulatedPresentationTimeDrift() throws {
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(first.formatDescription))
@@ -235,7 +249,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertThrowsError(try encoder.encode(makeAudioSample(startFrame: 3_075, frameCount: 1_024)))
     }
 
-    @Test func testAACEncoderRejectsPresentationTimeGap() throws {
+    @Test("LUB-1061: AAC encoder rejects presentation time gap")
+    func testAACEncoderRejectsPresentationTimeGap() throws {
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(first.formatDescription))
@@ -248,7 +263,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testAACEncoderRejectsPresentationTimeOverlap() throws {
+    @Test("LUB-1061: AAC encoder rejects presentation time overlap")
+    func testAACEncoderRejectsPresentationTimeOverlap() throws {
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let encoder = try AACAudioEncoder(
         inputFormatDescription: try unwrap(first.formatDescription))
@@ -261,7 +277,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
+    @Test("LUB-1061: Passthrough writer persists invalid sample failure")
+    func testPassthroughWriterPersistsInvalidSampleFailure() async throws {
       let failureReported = expectation(description: "failure reported")
       let writer = try H264PassthroughSegmentedMP4Writer(
         targetSegmentDurationSeconds: 2,
@@ -286,7 +303,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testPassthroughWriterFirstAppendFailsSynchronouslyWithoutFailureCallback() throws {
+    @Test("LUB-1061: Passthrough writer first append fails synchronously without failure callback")
+    func testPassthroughWriterFirstAppendFailsSynchronouslyWithoutFailureCallback() throws {
       let failureReported = expectation(description: "failure callback not reported before commit")
       failureReported.isInverted = true
       let writer = try H264PassthroughSegmentedMP4Writer(
@@ -306,7 +324,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       wait(for: [failureReported], timeout: 0.05)
     }
 
-    @Test func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
+    @Test("LUB-1061: PCM writer without samples or positive end does not fabricate recording")
+    func testPCMWriterWithoutSamplesOrPositiveEndDoesNotFabricateRecording() async throws {
       let sample = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       for end in [CMTime?.none, .some(.zero), .some(CMTime(value: -1, timescale: 1))] {
         let output = H264SegmentOutput()
@@ -322,7 +341,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testPCMWriterPersistsInjectedAppendFailure() async throws {
+    @Test("LUB-1061: PCM writer persists injected append failure")
+    func testPCMWriterPersistsInjectedAppendFailure() async throws {
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let failureReported = expectation(description: "failure reported")
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -341,7 +361,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testPCMWriterPersistsSourceClockDrift() async throws {
+    @Test("LUB-1061: PCM writer persists source clock drift")
+    func testPCMWriterPersistsSourceClockDrift() async throws {
       try await checkPCMWriterSourceClockDrift(drift: 100)
       try await checkPCMWriterSourceClockDrift(drift: -100)
     }
@@ -397,7 +418,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(elapsed.seconds, expected.seconds, accuracy: 1.0 / 48_000)
     }
 
-    @Test func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
+    @Test("LUB-1061: Recording clock discards emitted history without changing future mapping")
+    func testRecordingClockDiscardsEmittedHistoryWithoutChangingFutureMapping() throws {
       let clock = RecordingPCMClock(sampleRate: 48_000)
       for batch in 0..<100 {
         for index in 0..<32 {
@@ -415,7 +437,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertThrowsError(try clock.sourceTime(for: CMTime(value: 1, timescale: 1)))
     }
 
-    @Test func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
+    @Test("LUB-1061: PCM writer preserves duration across sample rate changes")
+    func testPCMWriterPreservesDurationAcrossSampleRateChanges() async throws {
       for (middleRate, middleChannels) in [
         (48_000, 2), (44_100, 2), (96_000, 2), (48_000, 1), (44_100, 1),
       ] {
@@ -492,7 +515,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testPCMWriterPreservesMissingInputInterval() async throws {
+    @Test("LUB-1061: PCM writer preserves missing input interval")
+    func testPCMWriterPreservesMissingInputInterval() async throws {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 0, frameCount: 1_024)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -562,7 +586,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       }
     }
 
-    @Test func testMonoRecordingWithoutInputFinalizes() async throws {
+    @Test("LUB-1061: Mono recording without input finalizes")
+    func testMonoRecordingWithoutInputFinalizes() async throws {
       let output = H264SegmentOutput()
       let sample = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -575,7 +600,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(output.values.count, 1)
     }
 
-    @Test func testMonoRecordingRoundsSubsampleStartToSampleClockAndDecodes() async throws {
+    @Test("LUB-1061: Mono recording rounds subsample start to sample clock and decodes")
+    func testMonoRecordingRoundsSubsampleStartToSampleClockAndDecodes() async throws {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 0, frameCount: 512, channelCount: 1)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -684,7 +710,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(decodedFrames, 20_000)
     }
 
-    @Test func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
+    @Test("LUB-1061: PCM writer preserves small presentation start offset")
+    func testPCMWriterPreservesSmallPresentationStartOffset() async throws {
       let output = H264SegmentOutput()
       let first = try makeAudioSample(startFrame: 48_000, frameCount: 1_024)
       let writer = try PCMAudioSegmentedMP4Writer(
@@ -711,7 +738,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(firstMedia.earliestPresentationTimeSeconds ?? -1, 0.956, accuracy: 0.002)
     }
 
-    @Test func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
+    @Test("LUB-1061: Manual passthrough writer produces playable audio video fragments")
+    func testManualPassthroughWriterProducesPlayableAudioVideoFragments() async throws {
       let encoded = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
@@ -809,7 +837,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertGreaterThan(decodedFrameCount, 0)
     }
 
-    @Test func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {
+    @Test("LUB-1061: Passthrough segment writer produces video only fragments")
+    func testPassthroughSegmentWriterProducesVideoOnlyFragments() async throws {
       let output = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
@@ -849,7 +878,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         })
     }
 
-    @Test
+    @Test("LUB-1061: Heavy video toolbox preserves large PTS in sdr1080p60 CBR contract")
     func testHeavyVideoToolboxPreservesLargePTSInSDR1080p60CBRContract() async throws {
       let output = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
@@ -900,7 +929,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(measuredBitRate, 6_000_000, accuracy: 1_500_000)
     }
 
-    @Test func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
+    @Test("LUB-1061: Encoder produces AVCC without frame reordering and can force key frame")
+    func testEncoderProducesAVCCWithoutFrameReorderingAndCanForceKeyFrame() async throws {
       let output = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(
@@ -941,7 +971,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       assertEqual(try H264VideoEncoder.codecString(from: sampleBuffers[0]), "avc1.64002a")
     }
 
-    @Test func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
+    @Test("LUB-1061: Encoder keeps key frame interval within two seconds")
+    func testEncoderKeepsKeyFrameIntervalWithinTwoSeconds() async throws {
       let output = H264EncoderOutput()
       let encoder = try H264VideoEncoder(
         configuration: H264VideoEncoderConfiguration(

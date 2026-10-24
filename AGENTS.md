@@ -96,25 +96,27 @@ belong to their corresponding module. Keep the test target structure
 straightforward. Easy, Medium, and Hard classify tests by their dependencies.
 The framework lists below are project conventions, not a general measure of
 hardware dependence or test difficulty. Computational cost, sandbox permissions,
-and CI availability do not determine the tier. Decide where each target runs
-in CI separately from its classification.
+and CI availability do not determine the tier. Easy, Medium, and Hard share the
+hostless `LDTXModuleTests` target. Apply `.easy`, `.medium`, or `.hard` tags to
+their suites and select execution through test plans; do not create separate
+targets for these tiers. Decide CI execution separately from classification.
 
-- **EasyTests target:** Pure logic tests without platform-framework execution
+- **Easy tag:** Pure logic tests without platform-framework execution
   dependencies.
-- **MediumTests target:** Tests that depend on macOS APIs, including
+- **Medium tag:** Tests that depend on macOS APIs, including
   **CoreGraphics**, **CoreText**, **CoreAudio**, **AudioToolbox**, **CoreMedia**, **CoreVideo**,
   **CoreImage**, and **AppKit** rich-text data APIs (without constructing views),
   plus non-View **SwiftUI** value APIs, unless they exercise a
-  framework listed under HardTests.
-- **HardTests target:** Tests that exercise **Vision**, **VideoToolbox**,
+  framework listed under Hard.
+- **Hard tag:** Tests that exercise **Vision**, **VideoToolbox**,
   **CoreML**, **CreateMLComponents**, **Metal**, or **AVFoundation**. Medium and Hard
   tests may have the same Unit or Integration scope; their framework dependencies distinguish them.
-  Run this hostless unit-test target directly in Xcode Cloud; do not add XCUI
-  automation.
+  Run the shared hostless target with the Hard test plan in Xcode Cloud; do not
+  add XCUI automation.
 
 For tests outside OutputTests, classify the APIs exercised by the test and its SUT,
 not merely import statements or unrelated transitive dependencies. A test
-that exercises both Medium and Hard frameworks belongs in HardTests. For an
+that exercises both Medium and Hard frameworks receives the Hard tag. For an
 unlisted framework, make an explicit project decision and update these lists
 rather than inferring its tier from hardware use or CI behavior.
 
@@ -153,8 +155,8 @@ rather than inferring its tier from hardware use or CI behavior.
   include `System`.
   XpcTests may launch a host application to exercise its embedded XPC service.
 
-Use suite names to express Unit or Integration scope within EasyTests,
-MediumTests, and HardTests targets. Do not use `SystemTestSuite` merely as a
+Use suite names to express Unit or Integration scope within `LDTXModuleTests`.
+Do not use `SystemTestSuite` merely as a
 synonym for `@Suite(.serialized)`; a SystemTests target is an isolation boundary
 for a specific SUT. Keep Xcode application-lifecycle and interprocess
 integration tests focused on startup and minimal service communication.

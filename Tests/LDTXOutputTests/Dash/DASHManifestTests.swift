@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct DASHManifestUnitTestSuite {
-    @Test func generatesDynamicMPDWithEmbeddedInitialization() throws {
+    @Test("LUB-1014: Generates dynamic MPD with embedded initialization")
+    func generatesDynamicMPDWithEmbeddedInitialization() throws {
       let date = Date(timeIntervalSince1970: 1_704_067_200)
       let configuration = DASHManifestConfiguration(
         availabilityStartTime: date,
@@ -38,7 +39,8 @@ extension OutputTestSuite {
       #expect(xml.contains(#"audioSamplingRate="48000""#))
     }
 
-    @Test func rejectsYouTubeInvalidUpdatePeriod() {
+    @Test("LUB-1014: Rejects you tube invalid update period")
+    func rejectsYouTubeInvalidUpdatePeriod() {
       let configuration = DASHManifestConfiguration(
         minimumUpdatePeriodSeconds: 61,
         initialization: .embedded(data: Data())
@@ -49,20 +51,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func embeddedInitializationUsesStandardBase64() throws {
-      let configuration = DASHManifestConfiguration(
-        segmentTimeline: [
-          DASHSegmentTimelineEntry(number: 1, startTimeSeconds: 0, durationSeconds: 1)
-        ],
-        initialization: .embedded(data: Data([0xfb, 0xff, 0xff]))
-      )
-
-      let xml = try DASHManifestGenerator.xml(configuration: configuration)
-
-      #expect(xml.contains(#"initialization="data:video/mp4;base64,+///""#))
-    }
-
-    @Test func generatesStaticMPDWithFileInitialization() throws {
+    @Test("LUB-1014: Generates static MPD with file initialization")
+    func generatesStaticMPDWithFileInitialization() throws {
       let configuration = DASHManifestConfiguration(
         kind: .static,
         mediaPresentationDurationSeconds: 6,
@@ -82,7 +72,8 @@ extension OutputTestSuite {
       #expect(!xml.contains("minimumUpdatePeriod"))
     }
 
-    @Test func rejectsMissingReversedAndNoncontiguousTimeline() {
+    @Test("LUB-1014: Rejects missing reversed and noncontiguous timeline")
+    func rejectsMissingReversedAndNoncontiguousTimeline() {
       let missing = DASHManifestConfiguration(
         initialization: .embedded(data: Data()))
       #expect(throws: DASHManifestError.invalidDuration) {

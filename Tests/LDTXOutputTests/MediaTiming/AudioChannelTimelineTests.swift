@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct AudioChannelTimelineUnitTestSuite {
-    @Test func frameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
+    @Test("LUB-1012: Frame index conversion covers timescales rounding and negative PTS")
+    func frameIndexConversionCoversTimescalesRoundingAndNegativePTS() throws {
       let scenarios: [(time: CMTime, sampleRate: Int, expectedFrame: Int64)] = [
         (CMTime(value: 1, timescale: 1), 48_000, 48_000),
         (CMTime(value: 600, timescale: 600), 48_000, 48_000),
@@ -42,7 +43,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func rejectsInvalidConfigurationAndUndersizedInput() throws {
+    @Test("LUB-1012: Rejects invalid configuration and undersized input")
+    func rejectsInvalidConfigurationAndUndersizedInput() throws {
       #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline(sampleRate: 0) }
       #expect(throws: AudioChannelTimelineError.self) { try AudioChannelTimeline(channelCount: 0) }
       #expect(throws: AudioChannelTimelineError.self) {
@@ -55,7 +57,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func readReturnsInsertedSamplesAtPresentationTime() throws {
+    @Test("LUB-1012: Read returns inserted samples at presentation time")
+    func readReturnsInsertedSamplesAtPresentationTime() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
       try timeline.insert(
@@ -81,7 +84,7 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func readFillsGapsWithSilence() throws {
+    @Test("LUB-1012: Read fills gaps with silence") func readFillsGapsWithSilence() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
       try timeline.insert(
@@ -108,7 +111,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func completeRangeDistinguishesMissingFramesFromValidSilence() throws {
+    @Test("LUB-1012: Complete range distinguishes missing frames from valid silence")
+    func completeRangeDistinguishesMissingFramesFromValidSilence() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
       try timeline.insert(
@@ -132,7 +136,8 @@ extension OutputTestSuite {
         ))
     }
 
-    @Test func readReturnsPartialRangeFromInsertedSamples() throws {
+    @Test("LUB-1012: Read returns partial range from inserted samples")
+    func readReturnsPartialRangeFromInsertedSamples() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
       try timeline.insert(
@@ -158,7 +163,7 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func overlapUsesLaterSamples() throws {
+    @Test("LUB-1012: Overlap uses later samples") func overlapUsesLaterSamples() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 8)
 
       try timeline.insert(
@@ -192,7 +197,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func oldSamplesAreDroppedAfterOverflow() throws {
+    @Test("LUB-1012: Old samples are dropped after overflow")
+    func oldSamplesAreDroppedAfterOverflow() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
       try timeline.insert(
@@ -234,7 +240,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func incrementalOverflowKeepsFramesStillInsideWindow() throws {
+    @Test("LUB-1012: Incremental overflow keeps frames still inside window")
+    func incrementalOverflowKeepsFramesStillInsideWindow() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
       try timeline.insert(
@@ -270,7 +277,8 @@ extension OutputTestSuite {
         ])
     }
 
-    @Test func partialInsertKeepsOnlyRangeThatFitsCurrentWindow() throws {
+    @Test("LUB-1012: Partial insert keeps only range that fits current window")
+    func partialInsertKeepsOnlyRangeThatFitsCurrentWindow() throws {
       let timeline = try AudioChannelTimeline(sampleRate: 10, channelCount: 2, capacityFrames: 4)
 
       try timeline.insert(

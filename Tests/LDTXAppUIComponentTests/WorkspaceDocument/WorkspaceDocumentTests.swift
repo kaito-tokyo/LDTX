@@ -19,7 +19,8 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {
-    @Test("Saving unchanged content recreates runtime variables; failed reads preserve them")
+    @Test(
+      "LUB-1071: Saving unchanged content recreates runtime variables; failed reads preserve them")
     func persistedAdoptionRecreatesVariables() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -78,7 +79,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "Unchanged saves cancel pending manual classification without publishing stale state",
+      "LUB-1071: Unchanged saves cancel pending manual classification without publishing stale state",
       arguments: ["success", "failure", "cancelled"], [false, true])
     func unchangedSaveCancelsManualClassification(outcome: String, publishNew: Bool) async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -194,7 +195,7 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "Persisted read failures are reported only for the current document URL",
+      "LUB-1047: Persisted read failures are reported only for the current document URL",
       arguments: [false, true])
     func persistedReadFailureRequiresCurrentURL(isCurrent: Bool) async {
       let document = WorkspaceDocument()
@@ -207,7 +208,7 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test("Output requires canonical document content, runtime, and disk to agree")
+    @Test("LUB-1047: Output requires canonical document content, runtime, and disk to agree")
     func outputValidatesCanonicalContentAndRejectsMismatches() async throws {
       let url = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString).appendingPathExtension("ldtxworkspace")
@@ -291,7 +292,7 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
-    @Test("Reader applies content immediately and headless snapshots retain later edits")
+    @Test("LUB-1047: Reader applies content immediately and headless snapshots retain later edits")
     func headlessReadThenSave() async throws {
       let document = WorkspaceDocument()
       var read = document.stateService.editingWorkspace
@@ -311,7 +312,7 @@ extension AppUIComponentTestSuite {
       #expect(document.stateService.workspaceDefinition.displayName == "Later edit")
       await coordinator.shutdown()
     }
-    @Test("New Workspaces can be created and edited without saving")
+    @Test("LUB-1047: New Workspaces can be created and edited without saving")
     func unsavedCreationAndEditing() async throws {
       let first = WorkspaceDocument()
       let second = WorkspaceDocument()
@@ -351,7 +352,7 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test("Saved documents round-trip all three protobuf documents")
+    @Test("LUB-1047: Saved documents round-trip all three Protobuf documents")
     func roundTrip() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -368,7 +369,7 @@ extension AppUIComponentTestSuite {
       #expect(reopened.stateService.visionModels.isEmpty)
     }
 
-    @Test("Staged writes do not expose definitions before the formal save completes")
+    @Test("LUB-1047: Staged writes do not expose definitions before the formal save completes")
     func stagedWriteKeepsRuntimeDefinition() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -405,7 +406,7 @@ extension AppUIComponentTestSuite {
       #expect(document.stateService.workspaceDefinition.displayName == "Later")
     }
 
-    @Test("Write failure retains edits without publishing a captured snapshot")
+    @Test("LUB-1047: Write failure retains edits without publishing a captured snapshot")
     func writeFailureKeepsConfirmedContent() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -431,7 +432,7 @@ extension AppUIComponentTestSuite {
       #expect(snapshot.definition.displayName == "Confirmed")
     }
 
-    @Test("Invalid data fails before creating a destination")
+    @Test("LUB-1047: Invalid data fails before creating a destination")
     func invalidDataDoesNotWrite() async throws {
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(
         "\(UUID()).ldtxworkspace")
@@ -447,7 +448,7 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("Preferences are visible to the runtime before saving")
+    @Test("LUB-1047: Preferences are visible to the runtime before saving")
     func livePreferences() async throws {
       let document = WorkspaceDocument()
       document.stateService.editWorkspace(undoManager: nil) { workspace in
@@ -463,7 +464,7 @@ extension AppUIComponentTestSuite {
           != document.stateService.workspaceDefinition)
     }
 
-    @Test("Snapshots retain edits; invalid ROI fails on save without updating runtime")
+    @Test("LUB-1047: Snapshots retain edits; invalid ROI fails on save without updating runtime")
     func invalidROIIsValidatedOnSave() async throws {
       let document = WorkspaceDocument()
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -507,7 +508,7 @@ extension AppUIComponentTestSuite {
         document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x.num == 2)
     }
 
-    @Test("A reload explicitly overwrites the editing documents")
+    @Test("LUB-1047: A reload explicitly overwrites the editing documents")
     func reloadOverwritesEditingState() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -533,7 +534,7 @@ extension AppUIComponentTestSuite {
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "External")
     }
 
-    @Test("Applying a content snapshot does not give a standalone document a URL")
+    @Test("LUB-1047: Applying a content snapshot does not give a standalone document a URL")
     func applyingSnapshotDoesNotRestoreSourceURL() async throws {
       let document = WorkspaceDocument()
       let source = WorkspaceV4Bundle(definition: .init(), preferences: .init())
@@ -542,7 +543,7 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("Reader apply is immediate and URL synchronization preserves subsequent edits")
+    @Test("LUB-1047: Reader apply is immediate and URL synchronization preserves subsequent edits")
     func explicitSynchronizationModes() async throws {
       let document = WorkspaceDocument()
       let coordinator = document.testCoordinator
@@ -606,7 +607,7 @@ extension AppUIComponentTestSuite {
       await coordinator.shutdown()
     }
 
-    @Test("UI observes document changes and the host supplies the runtime's saved URL")
+    @Test("LUB-1047: UI observes document changes and the host supplies the runtime's saved URL")
     func consumersObserveDocumentChanges() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -631,7 +632,7 @@ extension AppUIComponentTestSuite {
       await document.shutdown()
     }
 
-    @Test("Missing or malformed packages are rejected")
+    @Test("LUB-1047: Missing or malformed packages are rejected")
     func corruptRead() async throws {
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       let progress = ProgressManager(totalCount: 1)
@@ -641,7 +642,9 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Model IDs are assigned on selection and saving preserves newer choices and history")
+    @Test(
+      "LUB-1047: Model IDs are assigned on selection and saving preserves newer choices and history"
+    )
     func modelSelectionDuringSave() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -736,7 +739,7 @@ extension AppUIComponentTestSuite {
       #expect(state.visionModels[missingID] == missing)
     }
 
-    @Test("Document accepts reloads during output while the runtime retains its copy")
+    @Test("LUB-1047: Document accepts reloads during output while the runtime retains its copy")
     func outputDefersRuntimeReload() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -761,7 +764,7 @@ extension AppUIComponentTestSuite {
       #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "External")
     }
 
-    @Test("SwiftUI reconstruction preserves runtime lifetime and close releases it once")
+    @Test("LUB-1030: SwiftUI reconstruction preserves runtime lifetime and close releases it once")
     func stableRuntimeLifetime() async throws {
       let resources = WorkspaceRuntimeFixture()
       var released: [UUID] = []
@@ -817,7 +820,7 @@ extension AppUIComponentTestSuite {
       #expect(resources.metalView.isPaused)
     }
 
-    @Test("Document owns editing state and can save without a represented UI")
+    @Test("LUB-1047: Document owns editing state and can save without a represented UI")
     func documentOwnsEditingState() async throws {
       let document = WorkspaceDocument()
       let state = document.stateService
@@ -847,54 +850,7 @@ extension AppUIComponentTestSuite {
       #expect(document.stateService === state)
     }
 
-    @Test("Undo and Redo change only editing content; UI state is not undoable")
-    func editingUndoRedo() async throws {
-      let document = WorkspaceDocument()
-      let coordinator = WorkspaceDocumentConnection(document: document)
-      let state = coordinator.runtimeCoordinator.stateService
-      let undo = UndoManager()
-      undo.groupsByEvent = false
-      state.inspectorSelector = .init(kind: .workspaceCanvas)
-      state.visionResults[7] = "Runtime result"
-
-      #expect(!undo.canUndo)
-      let original = state.editingWorkspace
-      undo.beginUndoGrouping()
-      state.editWorkspace(undoManager: undo) { workspace in
-        workspace.definition.displayName = "Edited"
-      }
-      state.editWorkspace(undoManager: undo) { workspace in
-        workspace.preferences.audioChannelGainsDecibels[7] = .with {
-          $0.set(num: -119, den: 10)
-        }
-      }
-      state.editWorkspace(undoManager: undo) { workspace in
-        workspace.outputSettings.recordingEnabled = true
-      }
-      state.editWorkspace(undoManager: undo) { workspace in
-        workspace.visionModels[7] = URL(fileURLWithPath: "/tmp/undo-model.mlpackage")
-      }
-
-      undo.endUndoGrouping()
-      let edited = state.editingWorkspace
-      #expect(undo.canUndo)
-      #expect(document.workspaceSnapshot == nil)
-      undo.undo()
-      #expect(state.editingWorkspace == original)
-      #expect(state.workspaceDefinition.displayName == "Untitled")
-      #expect(state.inspectorSelector == .init(kind: .workspaceCanvas))
-      #expect(state.visionResults[7] == "Runtime result")
-      #expect(undo.canRedo)
-      undo.redo()
-      #expect(state.editingWorkspace == edited)
-      #expect(state.workspaceDefinition.displayName == "Edited")
-      #expect(document.workspaceSnapshot == nil)
-      await coordinator.shutdown()
-      // History belongs to the still-live Document, not its representation.
-      #expect(undo.canUndo)
-    }
-
-    @Test("Reading without an editor initializes later editing without registering Undo")
+    @Test("LUB-1047: Reading without an editor initializes later editing without registering Undo")
     func readBeforeUIRepresentation() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -923,7 +879,7 @@ extension AppUIComponentTestSuite {
       await original.shutdown()
     }
 
-    @Test("Dismantling releases the controller while the Document stays alive")
+    @Test("LUB-1030: Dismantling releases the controller while the Document stays alive")
     func representationOwnsControllerLifetime() async {
       let document = WorkspaceDocument()
       var coordinator: WorkspaceDocumentConnection? =

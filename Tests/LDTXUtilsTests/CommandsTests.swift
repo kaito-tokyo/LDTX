@@ -28,7 +28,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("parses the Workspace command tree")
+  @Test("LUB-1039: parses the Workspace command tree")
   func parsesWorkspaceCommands() throws {
     #expect(
       try LdtxCLI.parseAsRoot(["workspace", "create", "new.ldtxworkspace"])
@@ -45,7 +45,7 @@ struct CommandsSystemTestSuite {
     #expect(throws: Error.self) { try LdtxCLI.parseAsRoot(["workspace", "validate"]) }
   }
 
-  @Test("creates a default Workspace package")
+  @Test("LUB-1039: creates a default Workspace package")
   func createsDefaultWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Default.ldtxworkspace")
@@ -60,7 +60,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("creates a named Workspace package")
+  @Test("LUB-1039: creates a named Workspace package")
   func createsNamedWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Workspace.ldtxworkspace")
@@ -72,7 +72,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("imports definition and preferences JSON")
+  @Test("LUB-1039: imports definition and preferences JSON")
   func importsJSON() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Imported.ldtxworkspace")
@@ -100,7 +100,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("rejects preferences JSON without definition JSON")
+  @Test("LUB-1039: rejects preferences JSON without definition JSON")
   func rejectsPreferencesWithoutDefinition() async throws {
     var command = try WorkspaceCommand.Create.parse([
       "workspace.ldtxworkspace", "--preferences-json", "preferences.json",
@@ -108,7 +108,7 @@ struct CommandsSystemTestSuite {
     #expect(await asyncThrows { try await command.run() })
   }
 
-  @Test("does not overwrite an existing package")
+  @Test("LUB-1039: does not overwrite an existing package")
   func rejectsExistingPackage() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
@@ -121,7 +121,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("rejects the removed replace option")
+  @Test("LUB-1039: rejects the removed replace option")
   func rejectsReplaceOption() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Existing.ldtxworkspace")
@@ -137,7 +137,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("removes a partially created package when import fails")
+  @Test("LUB-1039: removes a partially created package when import fails")
   func removesFailedImport() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Broken.ldtxworkspace")
@@ -151,7 +151,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("dumps all Programs and filters by name")
+  @Test("LUB-1039: dumps all Programs and filters by name")
   func dumpsWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Programs.ldtxworkspace")
@@ -177,7 +177,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("dump rejects an unknown Program")
+  @Test("LUB-1039: dump rejects an unknown Program")
   func rejectsUnknownProgram() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Programs.ldtxworkspace")
@@ -187,7 +187,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("validates a Workspace and preserves its files")
+  @Test("LUB-1039: validates a Workspace and preserves its files")
   func validatesWorkspace() async throws {
     try await withTemporaryDirectory { root in
       let packageURL = root.appendingPathComponent("Valid.ldtxworkspace")
@@ -202,7 +202,7 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test("validate rejects malformed, legacy, invalid, and missing packages")
+  @Test("LUB-1039: validate rejects malformed, legacy, invalid, and missing packages")
   func rejectsInvalidPackages() async throws {
     try await withTemporaryDirectory { root in
       let missing = root.appendingPathComponent("Missing.ldtxworkspace")
@@ -260,7 +260,8 @@ struct CommandsSystemTestSuite {
     }
   }
 
-  @Test func rejectsInvalidRichTextOnCreateAndValidate() async throws {
+  @Test("LUB-1039: Rejects invalid rich text on create and validate")
+  func rejectsInvalidRichTextOnCreateAndValidate() async throws {
     try await withTemporaryDirectory { root in
       var workspace = makeWorkspace(displayName: "Invalid RTFD")
       workspace.definition.videoComponents = [

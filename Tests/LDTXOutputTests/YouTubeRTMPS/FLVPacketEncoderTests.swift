@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct FLVPacketEncoderUnitTestSuite {
-    @Test func metadataDescribesTheMediaWithoutDestinationData() {
+    @Test("LUB-1016: Metadata describes the media without destination data")
+    func metadataDescribesTheMediaWithoutDestinationData() {
       let packet = FLVPacketEncoder.metadata(
         videoFormat: YouTubeRTMPSVideoFormat(
           sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
@@ -35,7 +36,8 @@ extension OutputTestSuite {
       #expect(packet.payload.range(of: Data("secret".utf8)) == nil)
     }
 
-    @Test func avcSequenceHeaderContainsParameterSets() throws {
+    @Test("LUB-1016: Avc sequence header contains parameter sets")
+    func avcSequenceHeaderContainsParameterSets() throws {
       let packet = try FLVPacketEncoder.avcSequenceHeader(
         YouTubeRTMPSVideoFormat(
           sequenceParameterSet: Data([0x67, 0x64, 0, 0x2A]),
@@ -46,7 +48,8 @@ extension OutputTestSuite {
       #expect(packet.payload.suffix(4) == Data([0x68, 0xEE, 0x3C, 0x80]))
     }
 
-    @Test func avcSequenceHeaderAcceptsSlicedParameterSets() throws {
+    @Test("LUB-1016: Avc sequence header accepts sliced parameter sets")
+    func avcSequenceHeaderAcceptsSlicedParameterSets() throws {
       let storage = Data([0xFF, 0x67, 0x64, 0, 0x2A])
       let sps = storage[1...]
       let format = YouTubeRTMPSVideoFormat(
@@ -55,7 +58,8 @@ extension OutputTestSuite {
       #expect(packet.payload.contains(0x67))
     }
 
-    @Test func videoUsesDTSAndSignedCompositionTime() throws {
+    @Test("LUB-1016: Video uses DTS and signed composition time")
+    func videoUsesDTSAndSignedCompositionTime() throws {
       let packet = try FLVPacketEncoder.video(
         YouTubeRTMPSVideoSample(
           avccData: Data([0, 0, 0, 1, 0x65]),
@@ -66,7 +70,8 @@ extension OutputTestSuite {
       #expect(packet.payload.prefix(5) == Data([0x17, 1, 0, 0, 33]))
     }
 
-    @Test func aacPacketsUseSequenceAndRawPacketTypes() throws {
+    @Test("LUB-1016: AAC packets use sequence and raw packet types")
+    func aacPacketsUseSequenceAndRawPacketTypes() throws {
       let header = try FLVPacketEncoder.aacSequenceHeader(
         YouTubeRTMPSAudioFormat(audioSpecificConfig: Data([0x11, 0x90])))
       let sample = try FLVPacketEncoder.audio(
@@ -78,14 +83,14 @@ extension OutputTestSuite {
       #expect(sample.timestamp == 24)
     }
 
-    @Test func rejectsEmptyAACConfiguration() {
+    @Test("LUB-1016: Rejects empty AAC configuration") func rejectsEmptyAACConfiguration() {
       #expect(throws: YouTubeRTMPSError.self) {
         try FLVPacketEncoder.aacSequenceHeader(
           YouTubeRTMPSAudioFormat(audioSpecificConfig: Data()))
       }
     }
 
-    @Test func rejectsEmptyAACSample() {
+    @Test("LUB-1016: Rejects empty AAC sample") func rejectsEmptyAACSample() {
       #expect(throws: YouTubeRTMPSError.self) {
         try FLVPacketEncoder.audio(
           YouTubeRTMPSAudioSample(
@@ -93,7 +98,7 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func rejectsOutOfRangeTimestamps() {
+    @Test("LUB-1016: Rejects out of range timestamps") func rejectsOutOfRangeTimestamps() {
       #expect(throws: YouTubeRTMPSError.invalidTimestamp) {
         try FLVPacketEncoder.video(
           YouTubeRTMPSVideoSample(
@@ -104,7 +109,9 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func timestampsWrapAtUInt32Boundary() throws {
+    @Test("LUB-1016: Timestamps wrap at u int32 boundary") func timestampsWrapAtUInt32Boundary()
+      throws
+    {
       let packet = try FLVPacketEncoder.audio(
         YouTubeRTMPSAudioSample(
           rawAACData: Data([1]),
@@ -112,7 +119,8 @@ extension OutputTestSuite {
       #expect(packet.timestamp == 0)
     }
 
-    @Test func rejectsOverflowingCompositionTime() {
+    @Test("LUB-1016: Rejects overflowing composition time") func rejectsOverflowingCompositionTime()
+    {
       #expect(throws: YouTubeRTMPSError.invalidTimestamp) {
         try FLVPacketEncoder.video(
           YouTubeRTMPSVideoSample(

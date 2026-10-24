@@ -13,7 +13,8 @@ extension AppUIComponentTestSuite {
   struct ManualOCRInspectorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test func runRemainsEnabledDuringRecordingAndDisplaysResults() async throws {
+    @Test("LUB-1045: Run remains enabled during recording and displays results")
+    func runRemainsEnabledDuringRecordingAndDisplaysResults() async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let vision = Ldtx_Workspace_V4_OcrVision.with { $0.internalID = 11 }
       var runs = 0

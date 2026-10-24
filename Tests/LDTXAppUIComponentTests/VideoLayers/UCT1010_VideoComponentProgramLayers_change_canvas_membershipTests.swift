@@ -13,7 +13,8 @@ extension AppUIComponentTestSuite {
   @MainActor
   struct UCT1010VideoComponentProgramLayersIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
-    @Test func dynamicTextCanBePlacedInBothProgramCanvases() throws {
+    @Test("LUB-1048: Dynamic text can be placed in both program canvases")
+    func dynamicTextCanBePlacedInBothProgramCanvases() throws {
       let data = WorkspaceAppletData()
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
@@ -37,7 +38,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Active output allows reordering but rejects membership and count changes")
+    @Test("LUB-1048: Active output allows reordering but rejects membership and count changes")
     func activeOutputPreservesLayerMembership() throws {
       let serviceAppletData = WorkspaceAppletData()
       let service = WorkspaceDocument(
@@ -72,7 +73,8 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "UCT-1010.1: Component inspector membership uses latest program and preserves preferences")
+      "LUB-1048: UCT-1010.1: Component inspector membership uses latest program and preserves preferences"
+    )
     func componentInspectorMembershipUsesLatestProgramAndPreservesPreferences() throws {
       let serviceAppletData = WorkspaceAppletData()
       let service = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -164,7 +166,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("UCT-1010.2: Canvas membership and ordering remain local during output")
+    @Test("LUB-1048: UCT-1010.2: Canvas membership and ordering remain local during output")
     func videoLayersEditorEditsBothCanvases() throws {
       _ = NSApplication.shared
       let state = WorkspaceDocument(definition: .init(), preferences: .init())

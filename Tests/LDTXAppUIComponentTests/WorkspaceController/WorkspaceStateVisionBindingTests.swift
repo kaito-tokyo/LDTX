@@ -11,7 +11,8 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace Vision Binding")
   @MainActor
   struct WorkspaceStateVisionBindingUnitTestSuite {
-    @Test func bindingFollowsIDAndDoesNotRestoreRemovedVision() throws {
+    @Test("LUB-1048: Binding follows ID and does not restore removed vision")
+    func bindingFollowsIDAndDoesNotRestoreRemovedVision() throws {
       let store = WorkspaceDocument(definition: .init(), preferences: .init())
       store.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [

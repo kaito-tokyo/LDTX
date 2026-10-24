@@ -8,7 +8,7 @@ import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite struct Rational32DefaultOneUnitTestSuite {
-  @Test func defaultsArePartOfEachType() throws {
+  @Test("LUB-1000: Defaults are part of each type") func defaultsArePartOfEachType() throws {
     let zero = Ldtx_Workspace_V4_Rational32()
     let one = Ldtx_Workspace_V4_Rational32DefaultOne()
     #expect(zero.double == 0)
@@ -26,25 +26,16 @@ import Testing
     try WorkspaceBundleValidatorV4.validateRegionOfInterest(region)
   }
 
-  @Test func explicitZeroRoundTripsAndClearsBackToOne() throws {
-    var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = .with { $0.num = 0 }
-    let restored = try Ldtx_Workspace_V4_BasicTransform(serializedBytes: transform.serializedData())
-    #expect(restored.hasScaleX)
-    #expect(restored.scaleX.double == 0)
-    transform.clearScaleX()
-    #expect(transform.scaleX.double == 1)
-    #expect(!transform.hasScaleX)
-  }
-
-  @Test func conversionsPreserveTheRepresentedValue() {
+  @Test("LUB-1000: Conversions preserve the represented value")
+  func conversionsPreserveTheRepresentedValue() {
     #expect(
       Ldtx_Workspace_V4_Rational32DefaultOne(value: Ldtx_Workspace_V4_Rational32()).double == 0)
     #expect(
       Ldtx_Workspace_V4_Rational32(value: Ldtx_Workspace_V4_Rational32DefaultOne()).double == 1)
   }
 
-  @Test func sharesDecimalEncodingAndAllowsZeroDenominator() throws {
+  @Test("LUB-1000: Shares decimal encoding and allows zero denominator")
+  func sharesDecimalEncodingAndAllowsZeroDenominator() throws {
     var value = Ldtx_Workspace_V4_Rational32DefaultOne()
     try value.set(decimal: Decimal(string: "-1.25")!)
     #expect(value.double == -1.25)

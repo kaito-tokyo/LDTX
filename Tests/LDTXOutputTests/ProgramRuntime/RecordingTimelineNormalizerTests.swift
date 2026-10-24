@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct RecordingTimelineNormalizerUnitTestSuite {
-    @Test func finishUsesLatestSharedMediaEndRatherThanDisconnectedTrack() throws {
+    @Test("LUB-1059: Finish uses latest shared media end rather than disconnected track")
+    func finishUsesLatestSharedMediaEndRatherThanDisconnectedTrack() throws {
       let normalizer = RecordingTimelineNormalizer(origin: CMTime(value: 100, timescale: 1))
       _ = normalizer.normalized(try sample(pts: 101))
       _ = normalizer.normalized(try sample(pts: 105))
@@ -20,7 +21,8 @@ extension OutputTestSuite {
       #expect(normalizer.finish() == CMTime(value: 5_001, timescale: 1_000))
     }
 
-    @Test func appliesOneCommonOriginAndKeepsRelativeStarts() throws {
+    @Test("LUB-1059: Applies one common origin and keeps relative starts")
+    func appliesOneCommonOriginAndKeepsRelativeStarts() throws {
       let normalizer = RecordingTimelineNormalizer(
         origin: CMTime(seconds: 100, preferredTimescale: 1_000)
       )
@@ -35,7 +37,7 @@ extension OutputTestSuite {
       #expect(output.pts(for: "side") == 1.0)
     }
 
-    @Test func doesNotWaitForOtherTracks() throws {
+    @Test("LUB-1059: Does not wait for other tracks") func doesNotWaitForOtherTracks() throws {
       let normalizer = RecordingTimelineNormalizer(
         origin: CMTime(seconds: 42, preferredTimescale: 1_000)
       )
@@ -44,7 +46,8 @@ extension OutputTestSuite {
       #expect(output.pts(for: "main") == 0)
     }
 
-    @Test func unactivatedTimelineDropsSamplesAndFirstActivationDefinesZero() throws {
+    @Test("LUB-1059: Unactivated timeline drops samples and first activation defines zero")
+    func unactivatedTimelineDropsSamplesAndFirstActivationDefinesZero() throws {
       let normalizer = RecordingTimelineNormalizer()
       let output = NormalizedSampleCollector()
 
@@ -66,7 +69,8 @@ extension OutputTestSuite {
       #expect(output.pts(for: "finished") == nil)
     }
 
-    @Test func recordInputWindowBuffersUntilOutputStartAndStopsAtOutputBoundary() throws {
+    @Test("LUB-1059: Record input window buffers until output start and stops at output boundary")
+    func recordInputWindowBuffersUntilOutputStartAndStopsAtOutputBoundary() throws {
       let window = SessionRecordInputWindow()
       let start = CMTime(seconds: 100, preferredTimescale: 48_000)
       let output = NormalizedSampleCollector()
@@ -88,7 +92,8 @@ extension OutputTestSuite {
       #expect(output.pts(for: "sealed") == nil)
     }
 
-    @Test func recordInputWindowDropsLateSamplesBeforeTheActivatedOrigin() throws {
+    @Test("LUB-1059: Record input window drops late samples before the activated origin")
+    func recordInputWindowDropsLateSamplesBeforeTheActivatedOrigin() throws {
       let window = SessionRecordInputWindow()
       let output = NormalizedSampleCollector()
 
@@ -100,7 +105,8 @@ extension OutputTestSuite {
       #expect(output.pts(for: "accepted") == 100.1)
     }
 
-    @Test func recordInputWindowKeepsOneSixtySecondWindowAcrossTracks() throws {
+    @Test("LUB-1059: Record input window keeps one sixty second window across tracks")
+    func recordInputWindowKeepsOneSixtySecondWindowAcrossTracks() throws {
       let window = SessionRecordInputWindow()
       let output = NormalizedSampleCollector()
 
@@ -114,7 +120,9 @@ extension OutputTestSuite {
       #expect(output.pts(for: "latest-track-a") == 61)
     }
 
-    @Test func recordInputWindowDoesNotMoveSixtySecondWindowBackwardForLateSamples() throws {
+    @Test(
+      "LUB-1059: Record input window does not move sixty second window backward for late samples")
+    func recordInputWindowDoesNotMoveSixtySecondWindowBackwardForLateSamples() throws {
       let window = SessionRecordInputWindow()
       let output = NormalizedSampleCollector()
 
@@ -128,7 +136,9 @@ extension OutputTestSuite {
       #expect(output.pts(for: "boundary") == 40)
     }
 
-    @Test func pendingAudioWindowUsesOnePTSWindowAndPreservesCrossTrackArrivalOrder() throws {
+    @Test(
+      "LUB-1059: Pending audio window uses one PTS window and preserves cross track arrival order")
+    func pendingAudioWindowUsesOnePTSWindowAndPreservesCrossTrackArrivalOrder() throws {
       let window = SessionRecordPendingAudioWindow()
       window.append(.input(try sample(pts: 0), trackID: "old"))
       window.append(.main(try sample(pts: 30)))

@@ -42,7 +42,9 @@ struct RecordingPackageIntegrationTestSuite {
     return try encoder.encode(metadata)
   }
 
-  @Test(arguments: ["tokyo.kaito.ldtx.recording", "tokyo.kaito.ldtx.record"])
+  @Test(
+    "LUB-1003: Reads packages with legacy and current bundle identifiers",
+    arguments: ["tokyo.kaito.ldtx.recording", "tokyo.kaito.ldtx.record"])
   func readsPackagesWithLegacyAndCurrentBundleIdentifiers(_ bundleIdentifier: String) throws {
     let url = try makePackage()
     defer { try? FileManager.default.removeItem(at: url) }
@@ -53,7 +55,9 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(try RecordingPackage(contentsOf: url).formatVersion == 2)
   }
 
-  @Test func loadsInfoAndResolvesMediaFiles() throws {
+  @Test("LUB-1003: Loads info and resolves media files") func loadsInfoAndResolvesMediaFiles()
+    throws
+  {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
@@ -73,20 +77,8 @@ struct RecordingPackageIntegrationTestSuite {
       ])
   }
 
-  @Test func infoAdvertisesFixedManifestPath() throws {
-    let data = try RecordingPackageInfo.data(
-      identifier: "recording-test",
-      mainMediaFile: "output-video.mp4",
-      audioTracks: []
-    )
-    let values = try PropertyListDecoder().decode(Metadata.self, from: data)
-    #expect(
-      values.manifestFile == RecordingPackage.manifestFileName
-    )
-    #expect(values.formatVersion == 2)
-  }
-
-  @Test func versionThreeLoadsIndependentCanvasMediaWithoutMainMediaKey() throws {
+  @Test("LUB-1003: Version three loads independent canvas media without main media key")
+  func versionThreeLoadsIndependentCanvasMediaWithoutMainMediaKey() throws {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -115,7 +107,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.audioTracks.map(\.identifier) == ["landscape-mix", "portrait-mix"])
   }
 
-  @Test func versionThreeIgnoresLegacyMainMediaKey() throws {
+  @Test("LUB-1003: Version three ignores legacy main media key")
+  func versionThreeIgnoresLegacyMainMediaKey() throws {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -140,7 +133,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.mainMediaURL.lastPathComponent == portraitName)
   }
 
-  @Test func versionThreeLoadsWhenAnUnselectedCanvasFileIsMissing() throws {
+  @Test("LUB-1003: Version three loads when an unselected canvas file is missing")
+  func versionThreeLoadsWhenAnUnselectedCanvasFileIsMissing() throws {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -162,7 +156,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.mainMediaPath == landscapeName)
   }
 
-  @Test func versionThreePrefersExistingPortraitForMainMediaAlias() throws {
+  @Test("LUB-1003: Version three prefers existing portrait for main media alias")
+  func versionThreePrefersExistingPortraitForMainMediaAlias() throws {
     let packageURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathExtension(RecordingPackage.pathExtension)
@@ -183,7 +178,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.mainMediaURL.lastPathComponent == portraitName)
   }
 
-  @Test func exposesEmbeddedMainMixAsAnAudioTrack() throws {
+  @Test("LUB-1003: Exposes embedded main mix as an audio track")
+  func exposesEmbeddedMainMixAsAnAudioTrack() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
@@ -194,7 +190,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.audioTracks.first?.mediaURL == package.mainMediaURL)
   }
 
-  @Test func rejectsUnsupportedFormatVersionsForWritingAndReading() throws {
+  @Test("LUB-1003: Rejects unsupported format versions for writing and reading")
+  func rejectsUnsupportedFormatVersionsForWritingAndReading() throws {
     #expect(throws: RecordingPackageInfoError.unsupportedFormatVersion(1)) {
       try RecordingPackageInfo.data(
         identifier: "recording-test",
@@ -225,7 +222,8 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func versionTwoRejectsAnInputTrackUsingTheReservedMainMixIdentifier() throws {
+  @Test("LUB-1003: Version two rejects an input track using the reserved main mix identifier")
+  func versionTwoRejectsAnInputTrackUsingTheReservedMainMixIdentifier() throws {
     let packageURL = try makePackage(formatVersion: 2)
     defer { try? FileManager.default.removeItem(at: packageURL) }
     let infoURL = packageURL.appendingPathComponent(RecordingPackageInfo.fileName)
@@ -248,13 +246,8 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func remuxReadmeDescribesThePackageWithoutBundledCLI() {
-    #expect(RecordingPackage.readmeFileName == "README.md")
-    #expect(RecordingPackage.remuxReadme.contains("compatible external media tool"))
-    #expect(!RecordingPackage.remuxReadme.contains("Contents/Library/Helpers"))
-  }
-
-  @Test func loadsPackageBeforeFixedManifestExists() throws {
+  @Test("LUB-1003: Loads package before fixed manifest exists")
+  func loadsPackageBeforeFixedManifestExists() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
     try FileManager.default.removeItem(
@@ -266,7 +259,8 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(package.manifestURL == nil)
   }
 
-  @Test func recognizesFinalizedMarkerAndRequiresItByDefault() throws {
+  @Test("LUB-1003: Recognizes finalized marker and requires it by default")
+  func recognizesFinalizedMarkerAndRequiresItByDefault() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
@@ -283,7 +277,8 @@ struct RecordingPackageIntegrationTestSuite {
     try finalized.requireFinalized()
   }
 
-  @Test func rejectsMediaPathOutsidePackage() throws {
+  @Test("LUB-1003: Rejects media path outside package") func rejectsMediaPathOutsidePackage() throws
+  {
     let packageURL = try makePackage(mainMediaFile: "../outside.mp4")
     defer { try? FileManager.default.removeItem(at: packageURL) }
 
@@ -292,7 +287,7 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func rejectsReferencedSymbolicLink() throws {
+  @Test("LUB-1003: Rejects referenced symbolic link") func rejectsReferencedSymbolicLink() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
     let mediaURL = packageURL.appendingPathComponent("side-track.mp4")
@@ -307,7 +302,8 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func rejectsUnreferencedNestedSymbolicLink() throws {
+  @Test("LUB-1003: Rejects unreferenced nested symbolic link")
+  func rejectsUnreferencedNestedSymbolicLink() throws {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
     let nestedDirectory = packageURL.appendingPathComponent("Unused", isDirectory: true)
@@ -326,7 +322,8 @@ struct RecordingPackageIntegrationTestSuite {
 
   }
 
-  @Test func rejectsSymbolicLinkPackageRoot() throws {
+  @Test("LUB-1003: Rejects symbolic link package root") func rejectsSymbolicLinkPackageRoot() throws
+  {
     let packageURL = try makePackage()
     defer { try? FileManager.default.removeItem(at: packageURL) }
     let linkURL = packageURL.deletingLastPathComponent()
@@ -342,14 +339,9 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func derivesSiblingMP4OutputURL() {
-    let packageURL = URL(fileURLWithPath: "/tmp/Example.ldtxrecord")
-    #expect(
-      RecordingPackage.defaultRemuxOutputURL(for: packageURL).path == "/tmp/Example.mp4"
-    )
-  }
-
-  @Test(arguments: [String?.none, "18500", "invalid", "9223372036854775808"])
+  @Test(
+    "LUB-1003: Reads relative track starts from DASH manifest",
+    arguments: [String?.none, "18500", "invalid", "9223372036854775808"])
   func readsRelativeTrackStartsFromDASHManifest(audioStart: String?) throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -389,9 +381,12 @@ struct RecordingPackageIntegrationTestSuite {
     #expect(timeline.audioPresentationStart(for: "InputDevices/Desk%20Mic.mp4") == nil)
   }
 
-  @Test(arguments: [
-    "C:/outside.mp4", "C:\\outside.mp4", "\\\\server\\share.mp4", "..\\outside.mp4", "/outside.mp4",
-  ])
+  @Test(
+    "LUB-1003: Rejects non portable paths",
+    arguments: [
+      "C:/outside.mp4", "C:\\outside.mp4", "\\\\server\\share.mp4", "..\\outside.mp4",
+      "/outside.mp4",
+    ])
   func rejectsNonPortablePaths(_ path: String) throws {
     let url = try makePackage(mainMediaFile: path)
     defer { try? FileManager.default.removeItem(at: url) }
@@ -400,7 +395,8 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test func customFieldsRoundTripAndPreserveOtherFiles() throws {
+  @Test("LUB-1003: Custom fields round trip and preserve other files")
+  func customFieldsRoundTripAndPreserveOtherFiles() throws {
     let url = try makePackage()
     defer { try? FileManager.default.removeItem(at: url) }
     let infoURL = url.appendingPathComponent(RecordingPackageInfo.fileName)

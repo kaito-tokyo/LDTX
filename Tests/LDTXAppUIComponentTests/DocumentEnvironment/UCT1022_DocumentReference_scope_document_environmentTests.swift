@@ -45,7 +45,7 @@ extension AppUIComponentTestSuite {
       return window
     }
 
-    @Test("UCT-1022.1: Nested views follow their own document URL")
+    @Test("LUB-1030: UCT-1022.1: Nested views follow their own document URL")
     func nestedViewsReadCurrentURLAndDocumentsRemainSeparate() async throws {
       let first = NSDocument()
       let second = NSDocument()
@@ -71,7 +71,7 @@ extension AppUIComponentTestSuite {
       #expect(secondProbe.readURL() == second.fileURL)
     }
 
-    @Test("UCT-1022.2: Hosted views do not retain the Document")
+    @Test("LUB-1030: UCT-1022.2: Hosted views do not retain the Document")
     func hostedViewsDoNotOwnDocument() async throws {
       var document: NSDocument? = NSDocument()
       weak var weakDocument = document
@@ -84,7 +84,7 @@ extension AppUIComponentTestSuite {
       #expect(window.contentViewController != nil)
     }
 
-    @Test("UCT-1022.3: A missing Explicit Document is safe")
+    @Test("LUB-1030: UCT-1022.3: A missing Explicit Document is safe")
     func missingEnvironmentIsSafe() async throws {
       let probe = Probe()
       let window = try await host(nil, probe: probe)

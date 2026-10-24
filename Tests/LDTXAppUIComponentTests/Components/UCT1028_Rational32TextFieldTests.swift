@@ -10,23 +10,39 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1028: Rational32TextField", .serialized)
   @MainActor
   struct UCT1028Rational32TextFieldUnitTestSuite {
-    @Test(
-      "Partial and final validation accept digits and empty drafts, rejecting invalid pasted text")
-    func validateEditingText() {
-      let formatter = Rational32TextField.DigitsFormatter()
-      for text in ["", "0", "1920", "0001"] {
-        #expect(formatter.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-        var object: AnyObject?
-        #expect(formatter.getObjectValue(&object, for: text, errorDescription: nil))
-        #expect(object as? String == text)
-      }
-      for text in ["-1", "+1", "1.5", "1/2", "１２", "12px", "1 2", "12\n"] {
-        #expect(!formatter.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-        #expect(!formatter.getObjectValue(nil, for: text, errorDescription: nil))
-      }
+    struct DigitInput: Sendable, Codable {
+      let input: String
+      let accepted: Bool
     }
 
-    @Test("SwiftUI editing updates drafts and submits the current value")
+    @Test(
+      "LUB-1048: Digit input determines draft and final acceptance",
+      arguments: [
+        DigitInput(input: "", accepted: true),
+        DigitInput(input: "0", accepted: true),
+        DigitInput(input: "1920", accepted: true),
+        DigitInput(input: "0001", accepted: true),
+        DigitInput(input: "-1", accepted: false),
+        DigitInput(input: "+1", accepted: false),
+        DigitInput(input: "1.5", accepted: false),
+        DigitInput(input: "1/2", accepted: false),
+        DigitInput(input: "１２", accepted: false),
+        DigitInput(input: "12px", accepted: false),
+        DigitInput(input: "1 2", accepted: false),
+        DigitInput(input: "12\n", accepted: false),
+      ])
+    func digitInput(_ data: DigitInput) {
+      let formatter = Rational32TextField.DigitsFormatter()
+      #expect(
+        formatter.isPartialStringValid(data.input, newEditingString: nil, errorDescription: nil)
+          == data.accepted)
+      var object: AnyObject?
+      #expect(
+        formatter.getObjectValue(&object, for: data.input, errorDescription: nil) == data.accepted)
+      if data.accepted { #expect(object as? String == data.input) }
+    }
+
+    @Test("LUB-1048: SwiftUI editing updates drafts and submits the current value")
     func bindDraftAndSubmit() async throws {
       var draft = "0"
       var submitted: [String] = []

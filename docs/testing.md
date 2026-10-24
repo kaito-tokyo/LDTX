@@ -194,9 +194,10 @@ Shared setup and probes live in the test target's `Support` directory.
 `LDTXAppUITests` runs separately and uses the normal application delegate for
 launch and main-menu smoke tests.
 The embedded XPC service process-boundary test remains in the isolated
-`LDTXAppXpcTests` scheme. Dedicated `LDTXEasyTests`,
-`LDTXMediumTests`, and `LDTXHardTests` schemes are also available for
-tier-specific runs. The macOS-only, hostless `LDTXOutputTests` target and scheme
+`LDTXAppXpcTests` scheme. The `LDTXModuleTests` scheme selects the `Easy`,
+`Medium`, or `Hard` tagged test plan within its shared hostless target;
+`Easy` is the default plan.
+The macOS-only, hostless `LDTXOutputTests` target and scheme
 collect output configuration, media delivery, recording/streaming session, and
 output protocol tests across those framework tiers. All app test plans include
 this target; XPC process isolation stays in `LDTXAppXpcTests`. The same

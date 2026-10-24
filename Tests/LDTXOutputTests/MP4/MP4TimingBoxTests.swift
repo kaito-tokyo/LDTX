@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct MP4TimingBoxUnitTestSuite {
-    @Test func fragmentRescalesInheritedDurationsWithoutChangingPayload() throws {
+    @Test("LUB-1013: Fragment rescales inherited durations without changing payload")
+    func fragmentRescalesInheritedDurationsWithoutChangingPayload() throws {
       func box(_ type: String, _ payload: Data) throws -> Data {
         try MP4TimingBox(type: MP4TimingBox.fourCC(type), payload: payload).encoded()
       }
@@ -52,7 +53,8 @@ extension OutputTestSuite {
       #expect(try absent.fragment(input) == input)
     }
 
-    @Test func initializationUsesSampleBasedAudioAndCommonMovieClocks() throws {
+    @Test("LUB-1013: Initialization uses sample based audio and common movie clocks")
+    func initializationUsesSampleBasedAudioAndCommonMovieClocks() throws {
       func box(_ type: String, _ payload: Data) throws -> Data {
         try MP4TimingBox(type: MP4TimingBox.fourCC(type), payload: payload).encoded()
       }
@@ -115,7 +117,8 @@ extension OutputTestSuite {
       #expect(try MP4TimingBox.read(entry.payload, at: 12, bytes: 4) == 896)
     }
 
-    @Test func roundTripPreservesUnknownPayloads() throws {
+    @Test("LUB-1013: Round trip preserves unknown payloads")
+    func roundTripPreservesUnknownPayloads() throws {
       let boxes = [
         MP4TimingBox(type: MP4TimingBox.fourCC("free"), payload: Data([0, 1, 255])),
         MP4TimingBox(type: MP4TimingBox.fourCC("mdat"), payload: Data(repeating: 42, count: 100)),
@@ -125,13 +128,13 @@ extension OutputTestSuite {
       #expect(try MP4TimingBox.parse(Data(encoded.dropFirst(11))) == [boxes[1]])
     }
 
-    @Test func extendedAndRemainingSizes() throws {
+    @Test("LUB-1013: Extended and remaining sizes") func extendedAndRemainingSizes() throws {
       let extended = Data([0, 0, 0, 1, 102, 114, 101, 101, 0, 0, 0, 0, 0, 0, 0, 17, 42])
       let remaining = Data([0, 0, 0, 0, 102, 114, 101, 101, 42])
       #expect(try MP4TimingBox.parse(extended) == MP4TimingBox.parse(remaining))
     }
 
-    @Test func rejectsMalformedSizes() {
+    @Test("LUB-1013: Rejects malformed sizes") func rejectsMalformedSizes() {
       for bytes: [UInt8] in [
         [0], [0, 0, 0, 4, 102, 114, 101, 101],
         [0, 0, 0, 9, 102, 114, 101, 101],
@@ -142,7 +145,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func integerBoundsAndNonzeroDataIndices() throws {
+    @Test("LUB-1013: Integer bounds and nonzero data indices")
+    func integerBoundsAndNonzeroDataIndices() throws {
       var data = Data([9, 0, 0, 0, 0, 9]).dropFirst().dropLast()
       try MP4TimingBox.write(0x1234_5678, to: &data, at: 0, bytes: 4)
       #expect(try MP4TimingBox.read(data, at: 0, bytes: 4) == 0x1234_5678)

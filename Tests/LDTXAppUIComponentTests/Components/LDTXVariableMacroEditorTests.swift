@@ -26,7 +26,8 @@ extension AppUIComponentTestSuite {
       return editor
     }
 
-    @Test func controllerContainsOnlyTextEditorWithNativeVariableMenu() throws {
+    @Test("LUB-1032: Controller contains only text editor with native variable menu")
+    func controllerContainsOnlyTextEditorWithNativeVariableMenu() throws {
       let controller = LDTXVariableMacroEditorController()
       controller.loadViewIfNeeded()
       let window = NSWindow(contentViewController: controller)
@@ -61,7 +62,8 @@ extension AppUIComponentTestSuite {
       #expect(!disabledMenu.items.contains { $0.title == "Insert Variable" })
     }
 
-    @Test func repeatedEditingKeepsAtomicChipsAndModelInSync() throws {
+    @Test("LUB-1032: Repeated editing keeps atomic chips and model in sync")
+    func repeatedEditingKeepsAtomicChipsAndModelInSync() throws {
       let editor = editor(document: richDocument([]))
       for _ in 0..<10 {
         editor.update(
@@ -90,7 +92,8 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test func clipboardPreservesReferencesInternallyAndKeepsExternalTokensLiteral() throws {
+    @Test("LUB-1032: Clipboard preserves references internally and keeps external tokens literal")
+    func clipboardPreservesReferencesInternallyAndKeepsExternalTokensLiteral() throws {
       let original = richDocument([
         .text("前  "), .variable(first), .text("\n後"),
       ])
@@ -110,7 +113,8 @@ extension AppUIComponentTestSuite {
       #expect(try richExpressions(editor.document) == [.text("日本語 {{visions/11/text}}  🙂")])
     }
 
-    @Test func formattingPublishesAndPresentationChangesDoNotRewriteTheDocument() throws {
+    @Test("LUB-1032: Formatting publishes and presentation changes do not rewrite the document")
+    func formattingPublishesAndPresentationChangesDoNotRewriteTheDocument() throws {
       var reference = first
       reference.body = "arbitrary body\nvalue"
       let original = richDocument([.text("Text"), .variable(reference)])
@@ -138,7 +142,8 @@ extension AppUIComponentTestSuite {
       #expect(replacement.body == reference.body)
     }
 
-    @Test func invalidPasteKeepsContentAndReportsError() throws {
+    @Test("LUB-1032: Invalid paste keeps content and reports error")
+    func invalidPasteKeepsContentAndReportsError() throws {
       let original = richDocument([.text("Keep me")])
       let editor = editor(document: original)
       var failure: Error?
@@ -158,7 +163,8 @@ extension AppUIComponentTestSuite {
       #expect(try editor.document == original)
     }
 
-    @Test func exportFailureKeepsDraftAndDoesNotPublishLossyData() {
+    @Test("LUB-1032: Export failure keeps draft and does not publish lossy data")
+    func exportFailureKeepsDraftAndDoesNotPublishLossyData() {
       let original = richDocument([.text("Keep me")])
       let editor = editor(document: original)
       var changes = 0
@@ -172,7 +178,9 @@ extension AppUIComponentTestSuite {
       #expect(failure != nil)
     }
 
-    @Test func markedTextBlocksVariableInsertionAndExternalEchoDoesNotReplaceAttachments() throws {
+    @Test(
+      "LUB-1032: Marked text blocks variable insertion and external echo does not replace attachments"
+    ) func markedTextBlocksVariableInsertionAndExternalEchoDoesNotReplaceAttachments() throws {
       let document = richDocument([.variable(first)])
       let editor = editor(document: document)
       let attachment =
@@ -195,7 +203,8 @@ extension AppUIComponentTestSuite {
       #expect(try richExpressions(editor.document).last == .variable(second))
     }
 
-    @Test func externalDocumentDuringCompositionWinsWithoutPublishingStaleDraft() throws {
+    @Test("LUB-1032: External document during composition wins without publishing stale draft")
+    func externalDocumentDuringCompositionWinsWithoutPublishingStaleDraft() throws {
       let editor = editor(document: richDocument([.text("original")]))
       var changes = 0
       editor.onDocumentChange = { _ in changes += 1 }
@@ -211,7 +220,8 @@ extension AppUIComponentTestSuite {
       #expect(changes == 0)
     }
 
-    @Test func hostedChipsSurviveUndoRedoAndRenderAfterRepeatedUpdates() async throws {
+    @Test("LUB-1032: Hosted chips survive undo redo and render after repeated updates")
+    func hostedChipsSurviveUndoRedoAndRenderAfterRepeatedUpdates() async throws {
       let document = WorkspaceDocument()
       let state = document.stateService
       let original = richDocument([

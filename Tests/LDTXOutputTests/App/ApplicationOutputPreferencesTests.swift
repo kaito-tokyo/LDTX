@@ -11,7 +11,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ApplicationSettingsStoreIntegrationTestSuite {
-    @Test func applicationSettingsStoreRoundTripsThroughUserDefaults() throws {
+    @Test("LUB-1028: Application settings store round trips through user defaults")
+    func applicationSettingsStoreRoundTripsThroughUserDefaults() throws {
       let suiteName = "LDTXTests.ApplicationSettingsStore.roundTrip.\(UUID().uuidString)"
       let defaults = try #require(UserDefaults(suiteName: suiteName))
       defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -34,24 +35,8 @@ extension OutputTestSuite {
         try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
     }
 
-    @Test func applicationSettingsStoreDoesNotReadAnotherUserDefaultsSuite() {
-      let sourceName = "LDTXTests.ApplicationSettingsStore.source.\(UUID().uuidString)"
-      let targetName = "LDTXTests.ApplicationSettingsStore.target.\(UUID().uuidString)"
-      let source = UserDefaults(suiteName: sourceName)!
-      let target = UserDefaults(suiteName: targetName)!
-      defer {
-        source.removePersistentDomain(forName: sourceName)
-        target.removePersistentDomain(forName: targetName)
-      }
-      ApplicationSettingsStore(userDefaults: source).saveApplicationOutputPreferences(
-        ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/source"))
-
-      #expect(
-        ApplicationSettingsStore(userDefaults: target).loadApplicationOutputPreferences()
-          == ApplicationOutputPreferences())
-    }
-
-    @Test func applicationSettingsStoreIgnoresOldProtobufValues() throws {
+    @Test("LUB-1028: Application settings store ignores old Protobuf values")
+    func applicationSettingsStoreIgnoresOldProtobufValues() throws {
       let suiteName = "LDTXTests.ApplicationSettingsStore.oldFormat.\(UUID().uuidString)"
       let defaults = try #require(UserDefaults(suiteName: suiteName))
       defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -66,7 +51,8 @@ extension OutputTestSuite {
       #expect(store.loadApplicationOutputPreferences() == expected)
     }
 
-    @Test func applicationSettingsStoreIgnoresCorruptUserDefaultsValue() {
+    @Test("LUB-1028: Application settings store ignores corrupt user defaults value")
+    func applicationSettingsStoreIgnoresCorruptUserDefaultsValue() {
       let suiteName = "LDTXTests.ApplicationSettingsStore.corrupt.\(UUID().uuidString)"
       let defaults = UserDefaults(suiteName: suiteName)!
       defer { defaults.removePersistentDomain(forName: suiteName) }

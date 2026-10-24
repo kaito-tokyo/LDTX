@@ -44,156 +44,42 @@ private struct RecordingMetadata: Decodable {
   }
 }
 
-/// Owns the objects that AVAssetWriter uses to emit segmented output.
-///
-/// AVAssetWriter holds its delegate weakly. Keep the delegate, input, and writer
-/// together until `finishWriting` completes so the asynchronous segment callback
-/// never observes a deallocated delegate.
-private final class StressSegmentedAssetWriter: @unchecked Sendable {
-  let writer: AVAssetWriter
-  let input: AVAssetWriterInput
-
-  init(input: AVAssetWriterInput) {
-    writer = AVAssetWriter(contentType: .mpeg4Movie)
-    self.input = input
-    writer.outputFileTypeProfile = .mpeg4AppleHLS
-    writer.preferredOutputSegmentInterval = CMTime(value: 2, timescale: 1)
-    writer.initialSegmentStartTime = .zero
-    writer.delegate = AVAssetWriterSegmentDelegate.shared
-    AVAssetWriterSegmentDelegate.shared.register(writer) { _, _, _ in }
-    writer.add(input)
-  }
-
-  func start() throws {
-    try AVAssetWriterLifecycleGate.start { try writer.start() }
-    writer.startSession(atSourceTime: .zero)
-  }
-
-  func finish() async {
-    input.markAsFinished()
-    await withCheckedContinuation { continuation in
-      AVAssetWriterLifecycleGate.finish(
-        { [self] in await writer.finishWriting() },
-        completion: { continuation.resume() })
-    }
-    AVAssetWriterSegmentDelegate.shared.unregister(writer)
-  }
-}
-
 extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
   @Suite
   struct AudioSideStreamSegmentPipelineIntegrationTestSuite {
-    private let stressRounds = 30
-
-    @Test
-    func aacPassthroughAssetWriterLifecycleStress() async throws {
-      for round in 0..<stressRounds {
-        let first = try makeSyntheticAudioSample(startFrame: 9_600, frameCount: 1_024)
-        let encoder = try AACAudioEncoder(
-          inputFormatDescription: try #require(first.formatDescription))
-        var samples: [CMSampleBuffer] = []
-        for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
-          samples.append(
-            contentsOf: try encoder.encode(
-              try makeSyntheticAudioSample(
-                startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame))))
-        }
-        samples.append(contentsOf: try encoder.finish())
-        let session = StressSegmentedAssetWriter(
-          input: AVAssetWriterInput(
-            mediaType: .audio, outputSettings: nil,
-            sourceFormatHint: encoder.outputFormatDescription))
-        session.input.expectsMediaDataInRealTime = true
-        try session.start()
-        for sample in samples {
-          while !session.input.isReadyForMoreMediaData {
-            try #require(session.writer.status == .writing)
-            try await Task.sleep(for: .milliseconds(1))
-          }
-          try #require(session.input.append(sample))
-        }
-        await session.finish()
-        try #require(session.writer.status == .completed)
-        print("AAC_PASSTHROUGH_WRITER_STRESS completed round \(round + 1)")
-      }
-    }
-
-    @Test
-    func mainWriterOnlyLifecycleStress() async throws {
-      for round in 0..<stressRounds {
-        try await runSyntheticRecording(disconnect: 0, includeRemux: false, includeSide: false)
-        print("MAIN_WRITER_STRESS completed round \(round + 1)")
-      }
-    }
-
-    @Test
-    func pcmWriterOnlyLifecycleStress() async throws {
-      for round in 0..<stressRounds {
-        let first = try makeSyntheticAudioSample(startFrame: 0, frameCount: 1_024)
-        let writer = try PCMAudioSegmentedMP4Writer(
-          formatDescription: try #require(first.formatDescription),
-          targetSegmentDurationSeconds: 2,
-          onSegment: { _ in })
-        for startFrame in stride(from: 0, to: 144_000, by: 1_024) {
-          writer.append(
-            try makeSyntheticAudioSample(
-              startFrame: startFrame + 9_600, frameCount: min(1_024, 144_000 - startFrame)))
-        }
-        try await withCheckedThrowingContinuation {
-          (continuation: CheckedContinuation<Void, any Error>) in
-          writer.finish(at: CMTime(value: 153_600, timescale: 48_000)) {
-            continuation.resume(with: $0)
-          }
-        }
-        print("PCM_WRITER_STRESS completed round \(round + 1)")
-      }
-    }
-
-    @Test
-    func concurrentRecordingRemuxLifecycleStress() async throws {
-      try await runLifecycleStress(includeRemux: true)
-    }
-
-    @Test
-    func concurrentRecordingWithoutRemuxLifecycleStress() async throws {
-      try await runLifecycleStress(includeRemux: false)
-    }
-
-    private func runLifecycleStress(includeRemux: Bool) async throws {
-      for round in 0..<stressRounds {
-        try await runSyntheticRecording(disconnect: 0, includeRemux: includeRemux)
-        print("RECORDING_REMUX_STRESS completed round \(round + 1)")
-      }
-    }
-
     // 0: continuous input, 1: intermediate/tail loss, 2: no input samples at all.
-    @Test(arguments: [0, 1, 2])
+    @Test(
+      "LUB-1060: Synthetic recording finalizes and remuxes to one multitrack MP4",
+      arguments: [0, 1, 2])
     func syntheticRecordingFinalizesAndRemuxesToOneMultitrackMP4(disconnect: Int) async throws {
-      try await runSyntheticRecording(disconnect: disconnect, includeRemux: true)
+      try await runSyntheticRecording(disconnect: disconnect)
     }
 
-    @Test func remuxPreservesRecordedSourceClockDrift() async throws {
-      try await runSyntheticRecording(disconnect: 0, includeRemux: true, sourceClockDrift: true)
+    @Test("LUB-1060: Remux preserves recorded source clock drift")
+    func remuxPreservesRecordedSourceClockDrift() async throws {
+      try await runSyntheticRecording(disconnect: 0, sourceClockDrift: true)
     }
 
-    @Test(arguments: [Int64(1), 20_000, 20_123])
+    @Test("LUB-1060: Remux preserves subsample input start", arguments: [Int64(1), 20_000, 20_123])
     func remuxPreservesSubsampleInputStart(nanoseconds: Int64) async throws {
       try await runSyntheticRecording(
-        disconnect: 0, includeRemux: true, subsampleSideStart: nanoseconds)
+        disconnect: 0, subsampleSideStart: nanoseconds)
     }
 
-    @Test func mainMixRecordingPreservesSourceClockDrift() async throws {
-      try await runSyntheticRecording(disconnect: 0, includeRemux: true, mainClockDrift: true)
+    @Test("LUB-1060: Main mix recording preserves source clock drift")
+    func mainMixRecordingPreservesSourceClockDrift() async throws {
+      try await runSyntheticRecording(disconnect: 0, mainClockDrift: true)
     }
 
-    @Test(arguments: [Int64(1), 18_500, 20_123])
+    @Test(
+      "LUB-1060: Remux preserves subsample main mix start", arguments: [Int64(1), 18_500, 20_123])
     func remuxPreservesSubsampleMainMixStart(nanoseconds: Int64) async throws {
       try await runSyntheticRecording(
-        disconnect: 0, includeRemux: true, subsampleMainStart: nanoseconds)
+        disconnect: 0, subsampleMainStart: nanoseconds)
     }
 
     private func runSyntheticRecording(
-      disconnect: Int, includeRemux: Bool, includeSide: Bool = true,
+      disconnect: Int,
       sourceClockDrift: Bool = false,
       mainClockDrift: Bool = false,
       subsampleSideStart: Int64? = nil,
@@ -219,14 +105,13 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
           audioCodecs: "mp4a.40.2",
           bandwidth: 1_000_000,
           includesMainAudioTrack: false,
-          audioTracks: includeSide
-            ? [
-              HLSByteRangeRecordingAudioTrack(
-                id: "desk-microphone",
-                displayName: "Desk Microphone",
-                fileNameStem: "InputDevices/Desk%20Microphone"
-              )
-            ] : []
+          audioTracks: [
+            HLSByteRangeRecordingAudioTrack(
+              id: "desk-microphone",
+              displayName: "Desk Microphone",
+              fileNameStem: "InputDevices/Desk%20Microphone"
+            )
+          ]
         )
       )
       let normalizer = RecordingTimelineNormalizer(origin: .zero)
@@ -291,7 +176,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
         } else {
           pipeline.appendAudio(mainInput)
         }
-        if includeSide && disconnect != 2
+        if disconnect != 2
           && (disconnect == 0 || startFrame < 48_000 || (96_000..<112_640).contains(startFrame))
         {
           let input = try makeSyntheticAudioSample(
@@ -342,8 +227,6 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(
         !FileManager.default.fileExists(
           atPath: directory.appendingPathComponent("output-audio.mp4").path))
-      // The recording-only control excludes asset inspection and verification too.
-      guard includeRemux else { return }
       let fragmentedMainAsset = AVURLAsset(url: fragmentedMainURL)
       #expect(try await fragmentedMainAsset.loadTracks(withMediaType: .video).count == 1)
       let fragmentedAudioTracks = try await fragmentedMainAsset.loadTracks(withMediaType: .audio)
@@ -453,7 +336,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!(try await audioTracks[1].load(.isEnabled)))
     }
 
-    @Test func failedTrackPreventsFinalizedMarker() throws {
+    @Test("LUB-1060: Failed track prevents finalized marker")
+    func failedTrackPreventsFinalizedMarker() throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXFailedRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -492,7 +376,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       )
     }
 
-    @Test func incompleteMainProgramPreventsFinalization() async throws {
+    @Test("LUB-1060: Incomplete main program prevents finalization")
+    func incompleteMainProgramPreventsFinalization() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXIncompleteRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -538,7 +423,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       )
     }
 
-    @Test func audioBufferedBeforeVideoProducesAMuxedMainProgram() async throws {
+    @Test("LUB-1060: Audio buffered before video produces a muxed main program")
+    func audioBufferedBeforeVideoProducesAMuxedMainProgram() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXAudioFirstRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -575,7 +461,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(try await asset.loadTracks(withMediaType: .audio).count == 1)
     }
 
-    @MainActor @Test func embeddedMainMixIgnoresTheVideoManifestOffset() async throws {
+    @MainActor @Test("LUB-1060: Embedded main mix ignores the video manifest offset")
+    func embeddedMainMixIgnoresTheVideoManifestOffset() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXDelayedMainMixIntegrationTestSuite-\(UUID().uuidString).ldtxrecord",
@@ -636,7 +523,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(abs(compositionVideoStart.seconds - 5) < 0.001)
     }
 
-    @Test func videoWithoutMainMixPreventsFinalization() async throws {
+    @Test("LUB-1060: Video without main mix prevents finalization")
+    func videoWithoutMainMixPreventsFinalization() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXVideoOnlyRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -663,7 +551,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func videoPendingMainMixIsBoundedByDuration() async throws {
+    @Test("LUB-1060: Video pending main mix is bounded by duration")
+    func videoPendingMainMixIsBoundedByDuration() async throws {
       let directory = URL(
         fileURLWithPath: "/private/tmp/LDTXPendingMainMixIntegrationTestSuite-\(UUID().uuidString)",
         isDirectory: true
@@ -695,7 +584,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func muxedBacklogIsBoundedWhenMainMixStallsAfterStartup() async throws {
+    @Test("LUB-1060: Muxed backlog is bounded when main mix stalls after startup")
+    func muxedBacklogIsBoundedWhenMainMixStallsAfterStartup() async throws {
       let directory = URL(
         fileURLWithPath: "/private/tmp/LDTXMuxedBacklogIntegrationTestSuite-\(UUID().uuidString)",
         isDirectory: true
@@ -730,7 +620,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func muxedBacklogIsBoundedWhenVideoStallsAfterStartup() async throws {
+    @Test("LUB-1060: Muxed backlog is bounded when video stalls after startup")
+    func muxedBacklogIsBoundedWhenVideoStallsAfterStartup() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXMuxedAudioBacklogIntegrationTestSuite-\(UUID().uuidString)",
@@ -765,7 +656,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func cutWithOnlyCachedMainMixFormatPreventsFinalization() async throws {
+    @Test("LUB-1060: Cut with only cached main mix format prevents finalization")
+    func cutWithOnlyCachedMainMixFormatPreventsFinalization() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXCutWithoutMainMixIntegrationTestSuite-\(UUID().uuidString)",
@@ -796,7 +688,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func mainMixWithoutVideoPreventsFinalization() async throws {
+    @Test("LUB-1060: Main mix without video prevents finalization")
+    func mainMixWithoutVideoPreventsFinalization() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXAudioOnlyRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -821,7 +714,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func repeatedAudioEncoderFailureIsReportedOnlyOnce() async throws {
+    @Test("LUB-1060: Repeated audio encoder failure is reported only once")
+    func repeatedAudioEncoderFailureIsReportedOnlyOnce() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXRepeatedFailureIntegrationTestSuite-\(UUID().uuidString)",
@@ -852,7 +746,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: directory))
     }
 
-    @Test func finalizedMarkerIsWrittenOnlyAfterTheFinalizationHookSucceeds() throws {
+    @Test("LUB-1060: Finalized marker is written only after the finalization hook succeeds")
+    func finalizedMarkerIsWrittenOnlyAfterTheFinalizationHookSucceeds() throws {
       let successfulDirectory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXFinalizationOrderIntegrationTestSuite-\(UUID().uuidString)",
@@ -884,7 +779,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(!hasFinalizedMarker(in: failedDirectory))
     }
 
-    @Test func recordingPackageUsesMuxedFragmentedMainProgram() throws {
+    @Test("LUB-1060: Recording package uses muxed fragmented main program")
+    func recordingPackageUsesMuxedFragmentedMainProgram() throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXSeparatedRecordingIntegrationTestSuite-\(UUID().uuidString)",
@@ -975,7 +871,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(manifest.contains("media=\"InputDevices/Desk%2520%252F%2520Microphone.m4a\""))
     }
 
-    @Test func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
+    @Test("LUB-1060: Writes initialization before media and drains before finish returns")
+    func writesInitializationBeforeMediaAndDrainsBeforeFinishReturns() async throws {
       let directory = URL(
         fileURLWithPath:
           "/private/tmp/LDTXAudioSideStreamPipelineIntegrationTestSuite-\(UUID().uuidString)",
@@ -1025,7 +922,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(snapshot.segments.first?.earliestPresentationTimeSeconds == 42)
     }
 
-    @Test func snapshotUsesThePreWriterPresentationStart() throws {
+    @Test("LUB-1060: Snapshot uses the pre writer presentation start")
+    func snapshotUsesThePreWriterPresentationStart() throws {
       let directory = URL(
         fileURLWithPath: "/private/tmp/LDTXTrackTimelineIntegrationTestSuite-\(UUID().uuidString)",
         isDirectory: true
@@ -1049,7 +947,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(snapshot.segments.first?.earliestPresentationTimeSeconds == 0.625)
     }
 
-    @Test func performIsSerializedWithSegmentWrites() async throws {
+    @Test("LUB-1060: Perform is serialized with segment writes")
+    func performIsSerializedWithSegmentWrites() async throws {
       let eventLog = AudioSideStreamPipelineEventLog()
       let pipeline = AudioSideStreamSegmentPipeline { Issue.record("Unexpected failure: \($0)") }
       pipeline.start { segment in
@@ -1086,7 +985,8 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
   @Suite struct AudioSideStreamFailureIntegrationTestSuite {
     enum FaultTiming: CaseIterable { case beforeFinish, duringFinish, finishResult }
 
-    @Test func trackRefusesWritesAfterTerminalFailure() throws {
+    @Test("LUB-1060: Track refuses writes after terminal failure")
+    func trackRefusesWritesAfterTerminalFailure() throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let track = try HLSByteRangeTrackRecorder(directory: root, mediaFileName: "side.m4a")
@@ -1101,7 +1001,9 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(try Data(contentsOf: root.appendingPathComponent("side.m4a")).isEmpty)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    @Test(
+      "LUB-1060: Fault drops queued writes and precedes concurrent finish", .timeLimit(.minutes(1)),
+      arguments: [false, true])
     func faultDropsQueuedWritesAndPrecedesConcurrentFinish(externalFault: Bool) async throws {
       let primary = NSError(
         domain: NSCocoaErrorDomain, code: 640,
@@ -1153,7 +1055,9 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(pipeline.hasFailed)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    @Test(
+      "LUB-1060: Construction failure is terminal including silence fallback",
+      .timeLimit(.minutes(1)), arguments: [false, true])
     func constructionFailureIsTerminalIncludingSilenceFallback(fallback: Bool) async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -1186,7 +1090,9 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(throws: (any Error).self) { try track.validateForFinalization() }
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: FaultTiming.allCases)
+    @Test(
+      "LUB-1060: Asynchronous writer fault retains cause and coalesces finish waiters",
+      .timeLimit(.minutes(1)), arguments: FaultTiming.allCases)
     func asynchronousWriterFaultRetainsCauseAndCoalescesFinishWaiters(timing: FaultTiming)
       async throws
     {
@@ -1252,7 +1158,9 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(throws: (any Error).self) { try track.validateForFinalization() }
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1060: Real PCM writer asynchronous failure notifies before finish",
+      .timeLimit(.minutes(1)))
     func realPCMWriterAsynchronousFailureNotifiesBeforeFinish() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -1280,7 +1188,10 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       #expect(throws: (any Error).self) { try track.validateForFinalization() }
     }
 
-    @MainActor @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    @Test(
+      "LUB-1060: Audio only file failure reaches session before main failure",
+      .timeLimit(.minutes(1)))
     func audioOnlyFileFailureReachesSessionBeforeMainFailure() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }

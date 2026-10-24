@@ -9,13 +9,15 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct RTMPEncodingUnitTestSuite {
-    @Test func amfCommandEncodingIsDeterministic() {
+    @Test("LUB-1016: Amf command encoding is deterministic")
+    func amfCommandEncodingIsDeterministic() {
       let data = AMF0Encoder.encode([.string("publish"), .number(0), .null])
       #expect(data.prefix(10) == Data([2, 0, 7]) + Data("publish".utf8))
       #expect(data.last == 5)
     }
 
-    @Test func chunkEncoderSplitsPayloadAndUsesContinuationHeader() throws {
+    @Test("LUB-1016: Chunk encoder splits payload and uses continuation header")
+    func chunkEncoderSplitsPayloadAndUsesContinuationHeader() throws {
       let data = try RTMPChunkEncoder(chunkSize: 4).encode(
         chunkStreamID: 6, messageTypeID: 9, messageStreamID: 1,
         timestamp: 10, payload: Data(0..<10))
@@ -24,7 +26,8 @@ extension OutputTestSuite {
       #expect(data[21] == 0xC6)
     }
 
-    @Test func chunkEncoderWritesExtendedTimestampOnEveryChunk() throws {
+    @Test("LUB-1016: Chunk encoder writes extended timestamp on every chunk")
+    func chunkEncoderWritesExtendedTimestampOnEveryChunk() throws {
       let data = try RTMPChunkEncoder(chunkSize: 2).encode(
         chunkStreamID: 4, messageTypeID: 8, messageStreamID: 1,
         timestamp: 0x0102_0304, payload: Data([1, 2, 3]))
@@ -34,7 +37,8 @@ extension OutputTestSuite {
       #expect(data[19...22] == Data([1, 2, 3, 4]))
     }
 
-    @Test func inboundDecoderReassemblesFragmentedAndCompressedChunks() throws {
+    @Test("LUB-1016: Inbound decoder reassembles fragmented and compressed chunks")
+    func inboundDecoderReassemblesFragmentedAndCompressedChunks() throws {
       let firstPayload = Data(repeating: 0x41, count: 130)
       let first = try RTMPChunkEncoder(chunkSize: 128).encode(
         chunkStreamID: 3, messageTypeID: 20, messageStreamID: 1,
@@ -55,7 +59,8 @@ extension OutputTestSuite {
       #expect(messages[1].payload == pingPayload)
     }
 
-    @Test func inboundDecoderRejectsCompressedHeadersWithoutState() {
+    @Test("LUB-1016: Inbound decoder rejects compressed headers without state")
+    func inboundDecoderRejectsCompressedHeadersWithoutState() {
       var formatOne = Data([0x43])
       formatOne.appendUInt24(0)
       formatOne.appendUInt24(1)
@@ -72,7 +77,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func chunkEncoderRejectsOversizedMessages() {
+    @Test("LUB-1016: Chunk encoder rejects oversized messages")
+    func chunkEncoderRejectsOversizedMessages() {
       #expect(throws: YouTubeRTMPSError.self) {
         try RTMPChunkEncoder().encode(
           chunkStreamID: 3, messageTypeID: 20, messageStreamID: 0,
@@ -80,7 +86,9 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func destinationRequiresSecureShape() throws {
+    @Test("LUB-1016: Destination requires secure shape") func destinationRequiresSecureShape()
+      throws
+    {
       _ = try YouTubeRTMPSDestination(
         ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),
         streamName: "secret")
@@ -101,7 +109,8 @@ extension OutputTestSuite {
       }
     }
 
-    @Test func destinationDescriptionsRedactStreamNames() throws {
+    @Test("LUB-1016: Destination descriptions redact stream names")
+    func destinationDescriptionsRedactStreamNames() throws {
       let destination = try YouTubeRTMPSDestination(
         ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),
         streamName: "secret")
@@ -109,7 +118,8 @@ extension OutputTestSuite {
       #expect(String(reflecting: destination).contains("secret") == false)
     }
 
-    @Test func dualDestinationsRequireDifferentStreamNames() throws {
+    @Test("LUB-1016: Dual destinations require different stream names")
+    func dualDestinationsRequireDifferentStreamNames() throws {
       let primary = try YouTubeRTMPSDestination(
         ingestionURL: #require(URL(string: "rtmps://a.rtmps.youtube.com/live2")),
         streamName: "secret")

@@ -10,7 +10,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramOutputSharedH264ServiceIntegrationTestSuite {
-    @Test func storesPayloadsInWorkspaceOwnedMemoryUntilAcknowledged() async throws {
+    @Test("LUB-1067: Stores payloads in workspace owned memory until acknowledged")
+    func storesPayloadsInWorkspaceOwnedMemoryUntilAcknowledged() async throws {
       let service = try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 64)
       let first = try await service.store([Data([1, 2, 3]), Data([4, 5])])
 
@@ -36,7 +37,8 @@ extension OutputTestSuite {
       second.release()
     }
 
-    @Test func rejectsBatchLargerThanOneSharedSlot() async throws {
+    @Test("LUB-1067: Rejects batch larger than one shared slot")
+    func rejectsBatchLargerThanOneSharedSlot() async throws {
       let service = try ProgramOutputSharedH264Service(slotCount: 1, slotSize: 4)
       await #expect(throws: ProgramOutputSharedH264MemoryError.packetBatchTooLarge(5)) {
         try await service.store([Data(repeating: 0, count: 5)])

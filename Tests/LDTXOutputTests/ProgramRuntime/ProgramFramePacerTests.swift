@@ -8,7 +8,7 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramFramePacerUnitTestSuite {
-    @Test
+    @Test("LUB-1059: Rendering time is subtracted from frame interval")
     func renderingTimeIsSubtractedFromFrameInterval() {
       var pacer = ProgramFramePacer()
 
@@ -23,7 +23,7 @@ extension OutputTestSuite {
       )
     }
 
-    @Test
+    @Test("LUB-1059: Missed deadline skips ahead without catch up burst")
     func missedDeadlineSkipsAheadWithoutCatchUpBurst() {
       var pacer = ProgramFramePacer()
 
@@ -38,7 +38,7 @@ extension OutputTestSuite {
       )
     }
 
-    @Test
+    @Test("LUB-1059: Exact deadline renders immediately")
     func exactDeadlineRendersImmediately() {
       var pacer = ProgramFramePacer()
 
@@ -48,7 +48,7 @@ extension OutputTestSuite {
       )
     }
 
-    @Test
+    @Test("LUB-1059: Frame rate change resets schedule")
     func frameRateChangeResetsSchedule() {
       var pacer = ProgramFramePacer()
 

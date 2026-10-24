@@ -10,28 +10,36 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite("UCT-1009: SwiftUI layer reordering", .serialized) @MainActor
   struct UCT1009VideoLayersTableViewIntegrationTestSuite {
-    @Test func standardMovesSupportBothDirectionsAndMultipleRows() throws {
-      let fixture = VideoLayersTestFixture()
-      let editor = fixture.editor
-      editor.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
-      #expect(editor.layerIDs == [3, 1, 2])
-      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
-      #expect(editor.layerIDs == [1, 2, 3])
-      editor.move(fromOffsets: IndexSet([0, 1]), toOffset: 3)
-      #expect(editor.layerIDs == [3, 1, 2])
-      editor.move(fromOffsets: IndexSet(integer: 99), toOffset: 0)
-      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 99)
-      #expect(editor.layerIDs == [3, 1, 2])
-      fixture.state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.programs = []
-      }
-      editor.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)
-      #expect(
-        fixture.state.workspacePreferences.landscapeProgramPreferences[100]?.videoLayerInternalIds
-          == [3, 1, 2])
+    struct LayerMove: Sendable, Codable {
+      let source: [Int]
+      let destination: Int
+      let programPresent: Bool
+      let expected: [Int64]
     }
 
-    @Test func reorderingRetainsDraftsAndCannotChangeMembership() throws {
+    @Test(
+      "LUB-1048: Layer move changes only valid ordering",
+      arguments: [
+        LayerMove(source: [2], destination: 0, programPresent: true, expected: [3, 1, 2]),
+        LayerMove(source: [0], destination: 3, programPresent: true, expected: [2, 3, 1]),
+        LayerMove(source: [0, 1], destination: 3, programPresent: true, expected: [3, 1, 2]),
+        LayerMove(source: [99], destination: 0, programPresent: true, expected: [1, 2, 3]),
+        LayerMove(source: [0], destination: 99, programPresent: true, expected: [1, 2, 3]),
+        LayerMove(source: [0], destination: 3, programPresent: false, expected: [1, 2, 3]),
+      ])
+    func layerMove(_ data: LayerMove) {
+      let fixture = VideoLayersTestFixture()
+      if !data.programPresent {
+        fixture.state.editWorkspace(undoManager: nil) { $0.definition.programs = [] }
+      }
+      fixture.editor.move(fromOffsets: IndexSet(data.source), toOffset: data.destination)
+      #expect(
+        fixture.state.workspacePreferences.landscapeProgramPreferences[100]?.videoLayerInternalIds
+          == data.expected)
+    }
+
+    @Test("LUB-1048: Reordering retains drafts and cannot change membership")
+    func reorderingRetainsDraftsAndCannotChangeMembership() throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)

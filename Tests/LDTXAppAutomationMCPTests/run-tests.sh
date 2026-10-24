@@ -7,6 +7,8 @@ set -eu
 helper=${LDTX_HELPER_EXECUTABLE:?LDTX_HELPER_EXECUTABLE is required}
 test -x "$helper"
 
+printf '%s\n' 'LUB-1041: Helper exposes only app automation MCP operations'
+
 output=$(mktemp "${TMPDIR:-/tmp}/ldtx-mcp-test.XXXXXX")
 trap 'rm -f "$output"' EXIT
 

@@ -8,6 +8,9 @@ fileGroups:
   - Protos
   - pr.xctestplan
   - push-main.xctestplan
+  - Easy.xctestplan
+  - Medium.xctestplan
+  - Hard.xctestplan
 
 configs:
   Debug: debug
@@ -61,13 +64,9 @@ include:
     relativePaths: false
   - path: project/tests-corelibs.yml
     relativePaths: false
-  - path: project/tests-easy.yml
-    relativePaths: false
-  - path: project/tests-medium.yml
+  - path: project/tests-modules.yml
     relativePaths: false
   - path: project/tests-output.yml
-    relativePaths: false
-  - path: project/tests-hard.yml
     relativePaths: false
   - path: project/tests-ui-components.yml
     relativePaths: false

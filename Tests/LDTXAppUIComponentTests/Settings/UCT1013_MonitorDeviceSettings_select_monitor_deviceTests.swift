@@ -14,7 +14,7 @@ extension AppUIComponentTestSuite {
   struct UCT1013MonitorDeviceSettingsIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("UCT-1013.1: Disappearing candidates do not change assignment")
+    @Test("LUB-1035: UCT-1013.1: Disappearing candidates do not change assignment")
     func preservesAssignmentAndClearsUnavailableDraft() throws {
       let suite = "MonitorSettings-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -31,7 +31,7 @@ extension AppUIComponentTestSuite {
       #expect(defaults.string(forKey: WorkspaceAudioEngine.outputDevicePreferenceKey) == "saved")
     }
 
-    @Test("UCT-1013.2: Selection immediately persists globally")
+    @Test("LUB-1035: UCT-1013.2: Selection immediately persists globally")
     func appliesGlobalAssignmentWithoutEditingWorkspace() async throws {
       let suite = "MonitorSettings-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -72,7 +72,8 @@ extension AppUIComponentTestSuite {
       #expect(!document.hasTestModelChanges)
     }
 
-    @Test("UCT-1013.3: Discovery failures preserve assignment and report once until recovery")
+    @Test(
+      "LUB-1035: UCT-1013.3: Discovery failures preserve assignment and report once until recovery")
     func reportsFailureAndRecovery() throws {
       let suite = "MonitorSettings-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))

@@ -12,7 +12,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1019: SwiftUI recording lifetime", .serialized)
   @MainActor
   struct UCT1019RecordPlayerDocumentIntegrationTestSuite {
-    @Test("Document release stops playback even when the model is retained")
+    @Test("LUB-1056: Document release stops playback even when the model is retained")
     func releaseStopsPlayback() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -28,7 +28,7 @@ extension AppUIComponentTestSuite {
       #expect(model.player == nil)
     }
 
-    @Test("UI reconstruction reuses the Document-owned playback model")
+    @Test("LUB-1056: UI reconstruction reuses the Document-owned playback model")
     func rebuildingRootPreservesPlayback() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -63,7 +63,7 @@ extension AppUIComponentTestSuite {
       #expect(loadCount == 1)
     }
 
-    @Test("Retained UI does not retain a released Document")
+    @Test("LUB-1056: Retained UI does not retain a released Document")
     func retainedUIDoesNotRetainDocument() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }

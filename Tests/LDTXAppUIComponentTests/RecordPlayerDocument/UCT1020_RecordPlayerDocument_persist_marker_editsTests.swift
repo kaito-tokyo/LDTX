@@ -13,7 +13,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1020: URL Document marker persistence", .serialized)
   @MainActor
   struct UCT1020RecordPlayerDocumentIntegrationTestSuite {
-    @Test("Saving markers rejects an active recording without changing its files")
+    @Test("LUB-1056: Saving markers rejects an active recording without changing its files")
     func rejectsActiveRecordingSave() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -28,7 +28,7 @@ extension AppUIComponentTestSuite {
       #expect(document.markers.map(\.note) == ["Pending"])
     }
 
-    @Test("Deleting a marker resolves the filename adopted during an earlier save")
+    @Test("LUB-1056: Deleting a marker resolves the filename adopted during an earlier save")
     func deletesReconciledDiskFilename() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -54,7 +54,8 @@ extension AppUIComponentTestSuite {
         try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Unrelated"])
     }
 
-    @Test("Successful deletion is acknowledged and does not delete an external recreation")
+    @Test(
+      "LUB-1056: Successful deletion is acknowledged and does not delete an external recreation")
     func committedDeletionDoesNotRepeat() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -92,7 +93,7 @@ extension AppUIComponentTestSuite {
       try await write(repeated, previous: next)
       #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
     }
-    @Test("The writer saves only markers and preserves media and unrelated files")
+    @Test("LUB-1056: The writer saves only markers and preserves media and unrelated files")
     func markerOnlyWrite() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -117,7 +118,7 @@ extension AppUIComponentTestSuite {
       #expect(try RecordingMarkerStore(recordingDirectoryURL: url).markers().isEmpty)
     }
 
-    @Test("Marker edits register Undo and Redo")
+    @Test("LUB-1056: Marker edits register Undo and Redo")
     func markerUndoRedo() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -137,7 +138,7 @@ extension AppUIComponentTestSuite {
       undo.removeAllActions()
     }
 
-    @Test("Save failure and unsupported destinations preserve editing state")
+    @Test("LUB-1056: Save failure and unsupported destinations preserve editing state")
     func failedWritePreservesMarkers() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -154,7 +155,7 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == url)
     }
 
-    @Test("Safe saving writes markers to the framework's staging copy")
+    @Test("LUB-1056: Safe saving writes markers to the framework's staging copy")
     func writesStagingCopy() async throws {
       let url = try makeRecordingTestPackage()
       let staging = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)
@@ -174,7 +175,7 @@ extension AppUIComponentTestSuite {
         FileManager.default.fileExists(atPath: staging.appendingPathComponent("main.mp4").path))
     }
 
-    @Test("Canonical collisions preserve the original filename")
+    @Test("LUB-1056: Canonical collisions preserve the original filename")
     func canonicalCollision() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -190,7 +191,7 @@ extension AppUIComponentTestSuite {
         try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8) == "New\n")
     }
 
-    @Test("Reload discards all pending marker edits and deletion tokens")
+    @Test("LUB-1056: Reload discards all pending marker edits and deletion tokens")
     func reloadDiscardsPendingEdits() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -212,7 +213,7 @@ extension AppUIComponentTestSuite {
       #expect(try store.markers().map(\.note) == ["Saved note", "Saved marker", "External"])
     }
 
-    @Test("Failed deletion save preserves pending removal and can be undone")
+    @Test("LUB-1056: Failed deletion save preserves pending removal and can be undone")
     func failedDeletion() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -238,7 +239,7 @@ extension AppUIComponentTestSuite {
       undo.removeAllActions()
     }
 
-    @Test("Deletion participates in edit Undo and Redo before and after saving")
+    @Test("LUB-1056: Deletion participates in edit Undo and Redo before and after saving")
     func deletionUndoRedoAndPersistence() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -274,7 +275,7 @@ extension AppUIComponentTestSuite {
         try RecordingMarkerStore(recordingDirectoryURL: url).markers().map(\.note) == ["Updated"])
     }
 
-    @Test("Saving a deletion preserves unrelated external markers")
+    @Test("LUB-1056: Saving a deletion preserves unrelated external markers")
     func deletionPreservesExternalMarker() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }

@@ -23,7 +23,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
   struct UCT1016WorkspaceAppletCoordinatorIntegrationTestSuite {
-    @Test("Stream-key candidate loss clears only the editing choice")
+    @Test("LUB-1066: Stream-key candidate loss clears only the editing choice")
     func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
       let suite = "StreamKeyDraft.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -59,7 +59,7 @@ extension AppUIComponentTestSuite {
     }
     init() { _ = Self.controller }
 
-    @Test("UCT-1016.1: Operations fail safely when a runtime is unavailable")
+    @Test("LUB-1049: UCT-1016.1: Operations fail safely when a runtime is unavailable")
     func programInspectorRejectsSelectionWithoutRuntime() {
       let service = WorkspaceDocument(definition: .init(), preferences: .init())
       let inspector = WorkspaceProgramsInspector(
@@ -68,7 +68,7 @@ extension AppUIComponentTestSuite {
 
     }
 
-    @Test("UCT-1016.2: Program choices are laid out vertically")
+    @Test("LUB-1049: UCT-1016.2: Program choices are laid out vertically")
     func swiftUIProgramRadiosLayOutVertically() {
       _ = NSApplication.shared
       var first = Ldtx_Workspace_V4_ProgramDefinition()
@@ -87,7 +87,7 @@ extension AppUIComponentTestSuite {
       #expect(pair.fittingSize.width < single.fittingSize.width * 2)
     }
 
-    @Test("UCT-1016.3: An empty Program selector remains visible")
+    @Test("LUB-1049: UCT-1016.3: An empty Program selector remains visible")
     func emptyProgramSelectorHasVisibleContent() {
       _ = NSApplication.shared
       let empty = NSHostingView(
@@ -98,7 +98,8 @@ extension AppUIComponentTestSuite {
     }
 
     @Test(
-      "UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs")
+      "LUB-1049: UCT-1016.4: Program selection resolves current definitions without rewriting restored IDs"
+    )
     func programPickerSelectionResolvesDefinitionWithoutRewritingSavedIDs() throws {
       _ = NSApplication.shared
       let suite = "ProgramPicker." + UUID().uuidString
@@ -156,7 +157,7 @@ extension AppUIComponentTestSuite {
       #expect(data.state(for: url).selectedProgramInternalID == 22)
     }
 
-    @Test("UCT-1016.5: Sidebar selection starts empty and remains Window local")
+    @Test("LUB-1049: UCT-1016.5: Sidebar selection starts empty and remains Window local")
     func sidebarSelectionStartsEmptyAndStaysWindowLocal() throws {
       _ = NSApplication.shared
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -173,7 +174,7 @@ extension AppUIComponentTestSuite {
       #expect(other.inspectorSelector == nil)
     }
 
-    @Test("UCT-1016.6: Physical assignments change only on explicit valid selection")
+    @Test("LUB-1049: UCT-1016.6: Physical assignments change only on explicit valid selection")
     func physicalAssignmentsAreDisplayOnlyUntilAnExplicitValidCommit() throws {
       let suite = "WorkspaceSelectionTests." + UUID().uuidString
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -212,7 +213,7 @@ extension AppUIComponentTestSuite {
       #expect(throws: WorkspaceSelectionError.self) { try field.applySelection(nil) }
     }
 
-    @Test("SwiftUI toolbar pane toggles stay Window local")
+    @Test("LUB-1049: SwiftUI toolbar pane toggles stay Window local")
     func toolbarActionsStayWithinTheirWindow() async throws {
       let first = makeWorkspaceTestWindow()
       let second = makeWorkspaceTestWindow()
@@ -240,7 +241,9 @@ extension AppUIComponentTestSuite {
       #expect(first.contentPane.pairedPreview === preview)
     }
 
-    @Test("Collapsing a side pane preserves its draft and task results", arguments: [true, false])
+    @Test(
+      "LUB-1049: Collapsing a side pane preserves its draft and task results",
+      arguments: [true, false])
     func collapsingSidePaneRetainsSubtree(isSidebar: Bool) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let probe = InspectorDraftProbe()
@@ -276,7 +279,7 @@ extension AppUIComponentTestSuite {
       var taskRuns = 0
     }
 
-    @Test("Collapsing the sidebar preserves its List scroll position")
+    @Test("LUB-1049: Collapsing the sidebar preserves its List scroll position")
     func collapsingSidebarRetainsScrollPosition() async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let host = NSHostingController(
@@ -322,7 +325,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Hidden side panes lower the SwiftUI minimum width")
+    @Test("LUB-1049: Hidden side panes lower the SwiftUI minimum width")
     func minimumWidthFollowsVisiblePanes() async {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let host = NSHostingView(
@@ -340,7 +343,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("An unsaved Workspace disables output without disabling editing")
+    @Test("LUB-1066: An unsaved Workspace disables output without disabling editing")
     func unsavedOutputIsUnavailable() async throws {
       let document = WorkspaceDocument()
       let dispatcher = ToolbarDispatcher()
@@ -363,99 +366,125 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("UCT-1016.8: Output buttons reflect state and invoke their own runtime")
-    func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
-      _ = NSApplication.shared
+    struct OutputControls: Sendable, Codable {
+      let state: RecordingStateInput
+      let stopEnabled: Bool
+      let toggleEnabled: Bool
+      let title: String
+    }
+
+    @Test(
+      "LUB-1066: UCT-1016.8: Output state determines toolbar availability",
+      arguments: [
+        OutputControls(
+          state: .idle, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
+        OutputControls(
+          state: .starting, stopEnabled: true, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .recording, stopEnabled: true, toggleEnabled: true, title: "Pause Output"),
+        OutputControls(
+          state: .pausing, stopEnabled: false, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .paused, stopEnabled: true, toggleEnabled: true, title: "Start Output"),
+        OutputControls(
+          state: .stopping, stopEnabled: false, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .failed, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
+      ])
+    func outputControlAvailability(_ data: OutputControls) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.recordingState = data.state.value
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: ToolbarDispatcher())
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let items = try #require(window.toolbar).items
+      let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
+      let toggle = try #require(
+        items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
+      #expect(window.validateToolbarItem(stop) == data.stopEnabled)
+      #expect(window.validateToolbarItem(toggle) == data.toggleEnabled)
+      #expect(toggle.menuFormRepresentation?.title == data.title)
+    }
+
+    struct OutputAction: Sendable, Codable {
+      let state: RecordingStateInput
+      let item: String
+      let expected: [String]
+    }
+
+    @Test(
+      "LUB-1066: UCT-1016.8: Toolbar actions reach only their owning runtime",
+      arguments: [
+        OutputAction(state: .idle, item: "workspace.startPauseOutput", expected: ["start"]),
+        OutputAction(state: .recording, item: "workspace.startPauseOutput", expected: ["pause"]),
+        OutputAction(state: .paused, item: "workspace.stopOutput", expected: ["stop"]),
+        OutputAction(state: .pausing, item: "workspace.startPauseOutput", expected: []),
+      ])
+    func outputAction(_ data: OutputAction) async throws {
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.recordingState = data.state.value
       let dispatcher = ToolbarDispatcher()
-      let otherDispatcher = ToolbarDispatcher()
+      let other = ToolbarDispatcher()
       let first = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
-      let second = makeWorkspaceTestWindow(dispatcher: otherDispatcher)
+      let second = makeWorkspaceTestWindow(dispatcher: other)
       defer {
         first.close()
         second.close()
       }
       await settleWorkspaceToolbar(first)
-      let items = try #require(first.toolbar).items
-      let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
-      let toggle = try #require(
-        items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
-      for (value, stopEnabled, toggleEnabled, label) in [
-        (WorkspaceRecordingState.idle, false, true, "Start Output"),
-        (.starting, true, false, "Start Output"),
-        (.recording, true, true, "Pause Output"),
-        (.pausing, false, false, "Start Output"),
-        (.paused, true, true, "Start Output"),
-        (.stopping, false, false, "Start Output"),
-        (.failed("Failure"), false, true, "Start Output"),
-      ] {
-        state.recordingState = value
-        await settleWorkspaceToolbar(first)
-        #expect(first.validateToolbarItem(stop) == stopEnabled)
-        #expect(first.validateToolbarItem(toggle) == toggleEnabled)
-        #expect(toggle.menuFormRepresentation?.title == label)
+      let item = try #require(
+        first.toolbar?.items.first { $0.itemIdentifier.rawValue == data.item })
+      try performWorkspaceToolbarAction(item)
+      await drainWorkspaceTestTasks()
+      #expect(dispatcher.actions == data.expected)
+      #expect(other.actions.isEmpty)
+    }
 
-      }
-      state.recordingState = .idle
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start"])
-      state.recordingState = .recording
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause"])
-      state.recordingState = .paused
-      try performWorkspaceToolbarAction(stop)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause", "stop"])
-      state.recordingState = .pausing
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause", "stop"])
-      #expect(otherDispatcher.actions.isEmpty)
-      state.recordingState = .idle
+    @Test("LUB-1066: UCT-1016.8: Toolbar start failure remains observable")
+    func toolbarStartFailureIsObservable() async throws {
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      let dispatcher = ToolbarDispatcher()
       dispatcher.failStart = true
-      await settleWorkspaceToolbar(first)
-      try performWorkspaceToolbarAction(toggle)
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let item = try #require(
+        window.toolbar?.items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
+      try performWorkspaceToolbarAction(item)
       await drainWorkspaceTestTasks()
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("UCT-1016.9: Screenshot actions remain available outside local recording")
-    func screenshotToolbarActionsRemainAvailable() async throws {
-      _ = NSApplication.shared
+    struct ScreenshotState: Sendable, Codable {
+      let outputActive: Bool
+      let localRecording: Bool
+    }
+
+    @Test(
+      "LUB-1046: UCT-1016.9: Screenshot action is independent of output mode",
+      arguments: [
+        ScreenshotState(outputActive: false, localRecording: false),
+        ScreenshotState(outputActive: true, localRecording: false),
+        ScreenshotState(outputActive: true, localRecording: true),
+      ])
+    func screenshotToolbarAction(_ data: ScreenshotState) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.isOutputActive = data.outputActive
+      state.isLocalRecording = data.localRecording
       let dispatcher = ToolbarDispatcher()
       let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
-      for (id, expected) in [
-        ("workspace.captureScreenshots", "screenshot")
-      ] {
-        let item = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
-        #expect(item.isEnabled)
-        try performWorkspaceToolbarAction(item)
-        await drainWorkspaceTestTasks()
-        #expect(dispatcher.actions == [expected])
-        dispatcher.actions = []
-        state.isOutputActive = true
-        state.isLocalRecording = false
-        #expect(item.isEnabled)
-        state.isLocalRecording = true
-        await settleWorkspaceToolbar(window)
-        #expect(item.isEnabled)
-        #expect(item.isEnabled)
-        #expect(item.label != "Start Output")
-        try performWorkspaceToolbarAction(item)
-        await drainWorkspaceTestTasks()
-        #expect(dispatcher.actions == [expected])
-        dispatcher.actions = []
-        state.isOutputActive = false
-        state.isLocalRecording = false
-      }
+      let item = try #require(
+        window.toolbar?.items.first { $0.itemIdentifier.rawValue == "workspace.captureScreenshots" }
+      )
+      #expect(item.isEnabled)
+      try performWorkspaceToolbarAction(item)
+      await drainWorkspaceTestTasks()
+      #expect(dispatcher.actions == ["screenshot"])
     }
 
-    @Test("UCT-1016.10: Program selection updates only the owning Window runtimes")
+    @Test("LUB-1052: UCT-1016.10: Program selection updates only the owning Window runtimes")
     func programSelectionUpdatesOwnedRuntimesAndStaysWindowLocal() async throws {
       let suite = "ProgramSelection.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -560,7 +589,9 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.11: Shared device assignments update open Windows and stop after shutdown")
+    @Test(
+      "LUB-1049: UCT-1016.11: Shared device assignments update open Windows and stop after shutdown"
+    )
     func sharedAssignmentsUpdateBothWindowsAndStopObservingAfterShutdown() async throws {
       let suite = "WorkspaceDocumentAssignments.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -650,7 +681,7 @@ extension AppUIComponentTestSuite {
       await secondWindow.shutdown()
     }
 
-    @Test("UCT-1016.12: Dock badges follow AppDelegate's registered coordinators")
+    @Test("LUB-1049: UCT-1016.12: Dock badges follow AppDelegate's registered coordinators")
     func dockBadgeFollowsRegisteredControllers() async {
       let dockTile = NSApplication.shared.dockTile
       let originalBadge = dockTile.badgeLabel
@@ -687,7 +718,8 @@ extension AppUIComponentTestSuite {
       #expect(dockTile.badgeLabel == nil)
     }
 
-    @Test("UCT-1016.13: Sidebar additions affect their own Document and persist only on Save")
+    @Test(
+      "LUB-1050: UCT-1016.13: Sidebar additions affect their own Document and persist only on Save")
     func sidebarAdditionsStayInTheirDocumentAndPersistOnlyOnSave() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(
         "AddSheets-\(UUID())")
@@ -735,7 +767,7 @@ extension AppUIComponentTestSuite {
       )
     }
 
-    @Test("UCT-1016.14: Sidebar Preview uses its provided state")
+    @Test("LUB-1049: UCT-1016.14: Sidebar Preview uses its provided state")
     func workspaceSidebarUsesPreviewState() {
       let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
       let sidebar = WorkspaceSidebar(
@@ -747,7 +779,7 @@ extension AppUIComponentTestSuite {
       _ = sidebar.body
     }
     @Test(
-      "UCT-1016.15: Sidebar additions require a live Document",
+      "LUB-1050: UCT-1016.15: Sidebar additions require a live Document",
       arguments: [WorkspaceAddSheet.device, .videoComponent, .vision])
     func workspaceSidebarRejectsAdditionWithoutLiveDocument(sheet: WorkspaceAddSheet) {
       let stateService = WorkspaceSidebarPreviewFixtures.makeUIState()

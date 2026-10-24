@@ -32,7 +32,8 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
     return .init(definition: definition, preferences: .init())
   }
 
-  @Test("Independent violations are collected without deriving errors from invalid fractions")
+  @Test(
+    "LUB-1002: Independent violations are collected without deriving errors from invalid fractions")
   func allFieldsAndNoCorrection() {
     let workspace = invalidWorkspace()
     let issues = WorkspaceBundleValidatorV4.validationIssues(in: workspace)
@@ -45,7 +46,7 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
     #expect(workspace.definition.visions[0].ocrVision.regionOfInterest.x.den == 0)
   }
 
-  @Test("Defaults remain valid but explicitly zero denominators fail")
+  @Test("LUB-1002: Defaults remain valid but explicitly zero denominators fail")
   func defaultsAndZero() throws {
     try WorkspaceBundleValidatorV4.validateRegionOfInterest(.init())
     let region = Ldtx_Workspace_V4_VisionRegionOfInterest.with {
@@ -63,7 +64,7 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
     }
   }
 
-  @Test("Write rejects all violations before creating or changing the destination")
+  @Test("LUB-1002: Write rejects all violations before creating or changing the destination")
   func writeGate() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -82,7 +83,7 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
     #expect(try Data(contentsOf: root.appendingPathComponent("definition.pb")) == before)
   }
 
-  @Test("Read rejects corrupt content with the same full diagnostic array as Write")
+  @Test("LUB-1002: Read rejects corrupt content with the same full diagnostic array as Write")
   func readGate() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -101,7 +102,8 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
       })
   }
 
-  @Test("Model reference and file violations are collected alongside definition violations")
+  @Test(
+    "LUB-1002: Model reference and file violations are collected alongside definition violations")
   func modelDiagnostics() {
     var workspace = invalidWorkspace()
     workspace.visionModels = [-1: URL(fileURLWithPath: "/nonexistent/Invalid.txt")]
@@ -125,7 +127,7 @@ struct WorkspaceV4DiagnosticsIntegrationTestSuite {
       })
   }
 
-  @Test("Every duplicate resource and invalid envelope is identified")
+  @Test("LUB-1002: Every duplicate resource and invalid envelope is identified")
   func duplicateLocationsAndEnvelopes() {
     var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
     workspace.definition.programs = (0..<2).map { _ in

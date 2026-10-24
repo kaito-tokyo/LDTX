@@ -13,7 +13,8 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1012: SwiftUI channel gains", .serialized) @MainActor
   struct UCT1012AudioMixEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
-    @Test func gainEditsDoNotRequireProgramOrCanvasSelection() throws {
+    @Test("LUB-1048: Gain edits do not require program or canvas selection")
+    func gainEditsDoNotRequireProgramOrCanvasSelection() throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.audioDevices = [
@@ -32,7 +33,8 @@ extension AppUIComponentTestSuite {
       #expect(state.workspacePreferences == saved)
       #expect(state.selectedAudioMix == .portrait)
     }
-    @Test func hostedMixerUpdatesWhenDevicesChange() async throws {
+    @Test("LUB-1048: Hosted mixer updates when devices change")
+    func hostedMixerUpdatesWhenDevicesChange() async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let editor = AudioMixEditor(
         stateService: state, appletData: WorkspaceAppletData(),

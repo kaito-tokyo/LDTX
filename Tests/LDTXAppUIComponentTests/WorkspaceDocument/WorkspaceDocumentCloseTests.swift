@@ -12,7 +12,7 @@ extension AppUIComponentTestSuite {
   @Suite("Workspace asynchronous close", .serialized)
   @MainActor
   struct WorkspaceDocumentCloseIntegrationTestSuite {
-    @Test(arguments: [true, false])
+    @Test("LUB-1051: Native review precedes resource drain and close", arguments: [true, false])
     func nativeReviewPrecedesResourceDrainAndClose(allowed: Bool) async throws {
       let document = CloseReviewDocument(allowed: allowed)
       let window = NSWindow(
@@ -44,7 +44,8 @@ extension AppUIComponentTestSuite {
       document.close()
     }
 
-    @Test func pendingActivityDefersAndCoalescesCloseWithoutBlockingMainActor() async throws {
+    @Test("LUB-1051: Pending activity defers and coalesces close without blocking main actor")
+    func pendingActivityDefersAndCoalescesCloseWithoutBlockingMainActor() async throws {
       let document = NSDocument()
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
@@ -89,7 +90,8 @@ extension AppUIComponentTestSuite {
       #expect(button.action == #selector(CloseTarget.close(_:)))
     }
 
-    @Test func detachAndReattachRejectsAnEarlierQueuedClose() async throws {
+    @Test("LUB-1051: Detach and reattach rejects an earlier queued close")
+    func detachAndReattachRejectsAnEarlierQueuedClose() async throws {
       let document = NSDocument()
       let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
@@ -134,7 +136,8 @@ extension AppUIComponentTestSuite {
       #expect(button.action == #selector(CloseTarget.close(_:)))
     }
 
-    @Test func repeatedSaveWhileWritingThenCloseKeepsLatestContent() async throws {
+    @Test("LUB-1051: Repeated save while writing then close keeps latest content")
+    func repeatedSaveWhileWritingThenCloseKeepsLatestContent() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: root) }
@@ -205,7 +208,7 @@ extension AppUIComponentTestSuite {
       #expect(try WorkspaceBundleReaderV4(at: root).read() == latest)
     }
 
-    @Test(arguments: [1, 3])
+    @Test("LUB-1051: Delayed save then close persists latest captured content", arguments: [1, 3])
     func delayedSaveThenClosePersistsLatestCapturedContent(saveCount: Int) async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("ldtxworkspace")
@@ -275,7 +278,8 @@ extension AppUIComponentTestSuite {
       #expect(await didClose.next() != nil)
     }
 
-    @Test func failedDelayedSavePreservesDiskAndUnsavedContent() async throws {
+    @Test("LUB-1051: Failed delayed save preserves disk and unsaved content")
+    func failedDelayedSavePreservesDiskAndUnsavedContent() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         .appendingPathExtension("ldtxworkspace")
       defer { try? FileManager.default.removeItem(at: root) }

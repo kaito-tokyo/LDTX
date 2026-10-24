@@ -33,7 +33,9 @@ extension OutputTestSuite {
       }
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    @Test(
+      "LUB-1045: Manual OCR uses recording archive", .timeLimit(.minutes(1)),
+      arguments: Finish.allCases)
     func manualOCRUsesRecordingArchive(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -72,7 +74,9 @@ extension OutputTestSuite {
       await feature.stop()
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
+    @Test(
+      "LUB-1046: Stop does not wait for other workspace screenshot", .timeLimit(.minutes(1)),
+      arguments: [false, true], Finish.allCases)
     func stopDoesNotWaitForOtherWorkspaceScreenshot(ownCaptureFinished: Bool, finishing: Finish)
       async throws
     {
@@ -116,7 +120,9 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
+    @Test(
+      "LUB-1046: Queued screenshots drain before stop and cancellation", .timeLimit(.minutes(1)),
+      arguments: [false, true], Finish.allCases)
     func queuedScreenshotsDrainBeforeStopAndCancellation(firstVideo: Bool, finishing: Finish)
       async throws
     {
@@ -190,7 +196,9 @@ extension OutputTestSuite {
       #expect(try fixture.packageScreenshots().count == (firstVideo ? 2 : 0))
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    @Test(
+      "LUB-1070: Accepted archive precedes real package finalization", .timeLimit(.minutes(1)),
+      arguments: Finish.allCases)
     func acceptedArchivePrecedesRealPackageFinalization(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -256,7 +264,9 @@ extension OutputTestSuite {
       #expect(try fixture.archiveMetadata() == metadata)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: Cancellation before first video drains then deletes real package",
+      .timeLimit(.minutes(1)))
     func cancellationBeforeFirstVideoDrainsThenDeletesRealPackage() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -290,7 +300,8 @@ extension OutputTestSuite {
       #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.root.path).isEmpty)
     }
 
-    @Test(arguments: [false, true])
+    @Test(
+      "LUB-1046: Screenshots before package readiness remain standalone", arguments: [false, true])
     func screenshotsBeforePackageReadinessRemainStandalone(recording: Bool) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -308,7 +319,9 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(arguments: InactiveScreenshotState.allCases)
+    @Test(
+      "LUB-1046: Ready package rejects screenshots outside recording",
+      arguments: InactiveScreenshotState.allCases)
     func readyPackageRejectsScreenshotsOutsideRecording(state: InactiveScreenshotState)
       async throws
     {
@@ -324,7 +337,9 @@ extension OutputTestSuite {
       try (await fixture.session.stopWithResult()).get()
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    @Test(
+      "LUB-1046: Screenshots close admission before finalization", .timeLimit(.minutes(1)),
+      arguments: Finish.allCases)
     func screenshotsCloseAdmissionBeforeFinalization(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -367,7 +382,9 @@ extension OutputTestSuite {
       #expect(try Data(contentsOf: #require(accepted.first)) == acceptedData)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1046: Screenshots during cancellation cannot create or recreate package",
+      .timeLimit(.minutes(1)))
     func screenshotsDuringCancellationCannotCreateOrRecreatePackage() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -385,7 +402,7 @@ extension OutputTestSuite {
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
     }
 
-    @Test
+    @Test("LUB-1046: Screenshots reject service already finalizing")
     func screenshotsRejectServiceAlreadyFinalizing() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -404,7 +421,9 @@ extension OutputTestSuite {
       #expect(try fixture.globalScreenshots().count == 2)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: Initiating failure without cleanup failure retains typed error",
+      .timeLimit(.minutes(1)))
     func initiatingFailureWithoutCleanupFailureRetainsTypedError() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -434,7 +453,7 @@ extension OutputTestSuite {
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test("LUB-1070: Initiating failure survives real archive failure", .timeLimit(.minutes(1)))
     func initiatingFailureSurvivesRealArchiveFailure() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -452,7 +471,9 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: Initiating failure survives later callbacks and real finalization failure",
+      .timeLimit(.minutes(1)))
     func initiatingFailureSurvivesLaterCallbacksAndRealFinalizationFailure() async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }
@@ -500,7 +521,9 @@ extension OutputTestSuite {
       #expect(fixture.session.outputFailures.secondary.isEmpty)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    @Test(
+      "LUB-1070: First cleanup failure becomes primary", .timeLimit(.minutes(1)),
+      arguments: [false, true])
     func firstCleanupFailureBecomesPrimary(pausing: Bool) async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }
@@ -518,7 +541,9 @@ extension OutputTestSuite {
       #expect(!fixture.isFinalized)
     }
 
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    @Test(
+      "LUB-1070: Youtube cleanup failure survives later recording failure", .timeLimit(.minutes(1)),
+      arguments: [false, true])
     func youtubeCleanupFailureSurvivesLaterRecordingFailure(pausing: Bool) async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }

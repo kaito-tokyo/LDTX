@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class AppLaunchUITests: XCTestCase {
-  func testNewWorkspaceShowsPreview() {
+  func testLUB1037_NewWorkspaceShowsPreview() {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
@@ -27,7 +27,7 @@ final class AppLaunchUITests: XCTestCase {
     XCTAssertEqual(previews.count, 2)
   }
 
-  func testVisionProgrammerOpensFromEveryScene() async throws {
+  func testLUB1037_VisionProgrammerOpensFromEveryScene() async throws {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",
@@ -101,7 +101,7 @@ final class AppLaunchUITests: XCTestCase {
       "Vision Programmer should open from \(scene)")
   }
 
-  func testRecordingOpensThroughDocumentGroup() throws {
+  func testLUB1037_RecordingOpensThroughDocumentGroup() throws {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       .appendingPathExtension("ldtxrecord")
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
@@ -184,7 +184,7 @@ final class AppLaunchUITests: XCTestCase {
     XCTFail(message, file: file, line: line)
   }
 
-  func testApplicationLaunchesWithFileActions() {
+  func testLUB1037_ApplicationLaunchesWithFileActions() {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ApplePersistenceIgnoreState", "YES", "-tokyo.kaito.ldtx.LDTX.isUITesting", "YES",

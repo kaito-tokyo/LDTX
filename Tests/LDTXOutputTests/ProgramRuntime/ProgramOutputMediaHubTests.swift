@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramOutputMediaHubIntegrationTestSuite {
-    @Test func videoAndAudioShareOneFIFOChannel() async throws {
+    @Test("LUB-1067: Video and audio share one FIFO channel")
+    func videoAndAudioShareOneFIFOChannel() async throws {
       let received = LockedValues<String>()
       let hub = ProgramOutputMediaHub()
       let subscription = hub.subscribe(
@@ -25,7 +26,8 @@ extension OutputTestSuite {
       #expect(received.values == ["video", "audio", "video"])
     }
 
-    @Test func slowSubscriberDoesNotBlockPublisherOrAnotherSubscriber() async throws {
+    @Test("LUB-1067: Slow subscriber does not block publisher or another subscriber")
+    func slowSubscriberDoesNotBlockPublisherOrAnotherSubscriber() async throws {
       let slowStarted = DispatchSemaphore(value: 0)
       let releaseSlow = DispatchSemaphore(value: 0)
       let fastReceived = DispatchSemaphore(value: 0)
@@ -49,7 +51,8 @@ extension OutputTestSuite {
       assertDrainSucceeded(await hub.unsubscribeAndDrain(fast))
     }
 
-    @Test func overflowClosesOnlyTheAffectedSubscriberAndDrainsAcceptedEvent() async throws {
+    @Test("LUB-1067: Overflow closes only the affected subscriber and drains accepted event")
+    func overflowClosesOnlyTheAffectedSubscriberAndDrainsAcceptedEvent() async throws {
       let firstStarted = DispatchSemaphore(value: 0)
       let releaseFirst = DispatchSemaphore(value: 0)
       let firstCompleted = DispatchSemaphore(value: 0)
@@ -92,7 +95,8 @@ extension OutputTestSuite {
       assertDrainSucceeded(await hub.unsubscribeAndDrain(other))
     }
 
-    @Test func drainTimeoutDoesNotWaitForeverForAStalledConsumer() async throws {
+    @Test("LUB-1067: Drain timeout does not wait forever for a stalled consumer")
+    func drainTimeoutDoesNotWaitForeverForAStalledConsumer() async throws {
       let started = DispatchSemaphore(value: 0)
       let release = DispatchSemaphore(value: 0)
       let hub = ProgramOutputMediaHub()
@@ -117,7 +121,8 @@ extension OutputTestSuite {
       release.signal()
     }
 
-    @Test func concurrentDrainsJoinTheSameAcceptedMediaDrain() async throws {
+    @Test("LUB-1067: Concurrent drains join the same accepted media drain")
+    func concurrentDrainsJoinTheSameAcceptedMediaDrain() async throws {
       let started = DispatchSemaphore(value: 0)
       let release = DispatchSemaphore(value: 0)
       let firstCompleted = LockedMediaHubFlag()
@@ -153,7 +158,8 @@ extension OutputTestSuite {
       assertDrainSucceeded(await second.value)
     }
 
-    @Test func pendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
+    @Test("LUB-1067: Pending duration tracks the current head during continuous backlog")
+    func pendingDurationTracksTheCurrentHeadDuringContinuousBacklog() async throws {
       let firstStarted = DispatchSemaphore(value: 0)
       let secondStarted = DispatchSemaphore(value: 0)
       let releaseFirst = DispatchSemaphore(value: 0)

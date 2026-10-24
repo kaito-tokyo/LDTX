@@ -1,0 +1,84 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa
+//
+// SPDX-License-Identifier: Apache-2.0
+
+import LDTXProgram
+@testable import LDTXWorkspaceAppletStore
+import Testing
+
+@Suite(.tags(.easy))
+@MainActor
+struct ProgramPreferencesStoreUnitTestSuite {
+  @Test("LUB-1028: No op does not advance revision") func noOpDoesNotAdvanceRevision() {
+    var store = ProgramPreferencesStore()
+    store.setVideoHidden(false, inputDeviceName: "Camera")
+    let revision = store.revision
+
+    store.setVideoHidden(false, inputDeviceName: "Camera")
+
+    #expect(store.revision == revision)
+  }
+
+  @Test("LUB-1028: Logical change advances revision once") func logicalChangeAdvancesRevisionOnce()
+  {
+    var store = ProgramPreferencesStore()
+
+    store.setVideoHidden(true, inputDeviceName: "Camera")
+
+    #expect(store.revision == 1)
+    #expect(store.isVideoHidden(inputDeviceName: "Camera"))
+  }
+
+  @Test("LUB-1028: Replacement is no op when equal") func replacementIsNoOpWhenEqual() {
+    var store = ProgramPreferencesStore()
+    let preferences = ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
+    store.replace(with: preferences)
+    let revision = store.revision
+
+    store.replace(with: preferences)
+
+    #expect(store.revision == revision)
+  }
+
+  @Test("LUB-1028: Whole value replacement advances revision once")
+  func wholeValueReplacementAdvancesRevisionOnce() {
+    var store = ProgramPreferencesStore()
+
+    store.replace(
+      with: ProgramPreferences(
+        audioChannelGainsByName: ["Commentary": 0.5],
+        videoHiddenByInputDeviceName: ["Camera": true]
+      ))
+
+    #expect(store.revision == 1)
+    #expect(store.value.audioChannelGainsByName == ["Commentary": 0.5])
+    #expect(store.isVideoHidden(inputDeviceName: "Camera"))
+  }
+
+  @Test("LUB-1028: Input device rename is one logical transaction")
+  func inputDeviceRenameIsOneLogicalTransaction() {
+    var store = ProgramPreferencesStore(
+      value: ProgramPreferences(videoHiddenByInputDeviceName: ["Camera%20A": true])
+    )
+
+    store.renameInputDevice(from: "Camera A", to: "Camera B")
+
+    #expect(store.revision == 1)
+    #expect(!store.isVideoHidden(inputDeviceName: "Camera A"))
+    #expect(store.isVideoHidden(inputDeviceName: "Camera B"))
+  }
+
+  @Test("LUB-1028: Input device removal is one logical transaction and no op when repeated")
+  func inputDeviceRemovalIsOneLogicalTransactionAndNoOpWhenRepeated() {
+    var store = ProgramPreferencesStore(
+      value: ProgramPreferences(videoHiddenByInputDeviceName: ["Camera": true])
+    )
+
+    store.removeInputDevice(named: "Camera")
+    #expect(store.revision == 1)
+    #expect(!store.isVideoHidden(inputDeviceName: "Camera"))
+
+    store.removeInputDevice(named: "Camera")
+    #expect(store.revision == 1)
+  }
+}

@@ -9,7 +9,7 @@ import Testing
 
 @Suite
 struct ExtendedSRGBColorUnitTestSuite {
-  @Test(arguments: [0, 1, 2, 3])
+  @Test("LUB-1004: Uses defaults for missing components", arguments: [0, 1, 2, 3])
   func usesDefaultsForMissingComponents(component: Int) throws {
     var color = Ldtx_Workspace_V4_Color.with {
       $0.red = 0
@@ -31,7 +31,7 @@ struct ExtendedSRGBColorUnitTestSuite {
     #expect(color.extendedSRGBSwiftUIColor != nil)
   }
 
-  @Test func usesDefaultsForOpaqueBlack() throws {
+  @Test("LUB-1004: Uses defaults for opaque black") func usesDefaultsForOpaqueBlack() throws {
     let color = Ldtx_Workspace_V4_Color.with { $0.alpha = 1 }
     let converted = try #require(color.extendedSRGBNSColor)
     #expect(
@@ -40,7 +40,8 @@ struct ExtendedSRGBColorUnitTestSuite {
     #expect(!color.hasRed && !color.hasGreen && !color.hasBlue)
   }
 
-  @Test func preservesExplicitZeroAndExtendedComponents() throws {
+  @Test("LUB-1004: Preserves explicit zero and extended components")
+  func preservesExplicitZeroAndExtendedComponents() throws {
     let source = Ldtx_Workspace_V4_Color.with {
       $0.red = -0.25
       $0.green = 1.5
@@ -57,7 +58,7 @@ struct ExtendedSRGBColorUnitTestSuite {
     #expect(restored.alpha == 0)
   }
 
-  @Test func convertsOtherColorSpaces() throws {
+  @Test("LUB-1004: Converts other color spaces") func convertsOtherColorSpaces() throws {
     let source = NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 0.8)
     let value = try #require(Ldtx_Workspace_V4_Color(extendedSRGBNSColor: source))
     #expect(abs(value.red - 0.2) < 0.00001)
@@ -65,7 +66,8 @@ struct ExtendedSRGBColorUnitTestSuite {
     #expect(abs(value.blue - 0.6) < 0.00001)
     #expect(abs(value.alpha - 0.8) < 0.00001)
   }
-  @Test func swiftUIBridgeUsesExtendedSRGB() throws {
+  @Test("LUB-1004: Swift UI bridge uses extended srgb") func swiftUIBridgeUsesExtendedSRGB() throws
+  {
     let source = Ldtx_Workspace_V4_Color.with {
       $0.red = -0.25
       $0.green = 1.5

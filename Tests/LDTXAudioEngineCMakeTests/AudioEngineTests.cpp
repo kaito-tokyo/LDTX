@@ -11,7 +11,7 @@
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
-TEST_CASE("monitor value exchange preserves logical routes sharing an input") {
+TEST_CASE("LUB-1007: Monitor value exchange preserves logical routes sharing an input") {
   std::vector<LDTXAudioRoute> routes{{7, 1, true}, {7, 1, true}, {9, 1, true}};
   CHECK(updateMonitorRouteGains(routes, {{7, 0.25f, false}, {7, 0.75f, false}, {9, 0.5f, false}}));
   CHECK(routes[0].gain == 0.25f);
@@ -25,7 +25,7 @@ TEST_CASE("monitor value exchange preserves logical routes sharing an input") {
   CHECK(routes[1].gain == 0.75f);
 }
 
-TEST_CASE("disconnected monitor routes do not acquire an output device") {
+TEST_CASE("LUB-1007: Disconnected monitor routes do not acquire an output device") {
   auto *engine = LDTXAudioCreate(true);
   REQUIRE(engine);
   std::vector<int32_t> statuses;
@@ -53,7 +53,7 @@ TEST_CASE("disconnected monitor routes do not acquire an output device") {
   LDTXAudioDestroy(engine);
 }
 
-TEST_CASE("system default monitor output") {
+TEST_CASE("LUB-1007: Resolve system default monitor output only when hardware testing is enabled") {
   // Opt in on a Mac with an output device; the ordinary CI run stays hardware-free.
   if (!std::getenv("LDTX_TEST_MONITOR_HARDWARE"))
     return;
@@ -82,7 +82,7 @@ TEST_CASE("system default monitor output") {
   CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames == 0);
   LDTXAudioDestroy(engine);
 }
-TEST_CASE("stop retry") {
+TEST_CASE("LUB-1007: Bound stop retries and report the final failure") {
   for (unsigned failures = 0; failures <= 4; ++failures) {
     unsigned attempts = 0, waits = 0;
     auto status = retryStop([&] { return ++attempts <= failures ? -50 : 0; }, [&] { ++waits; });
@@ -112,7 +112,7 @@ struct Samples {
     CHECK(!CMBlockBufferCopyDataBytes(b, 0, bytes, s.pcm.back().data()));
   }
 };
-TEST_CASE("storage") {
+TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
   PCMStorage ring(4, 1, 1); // Three slots.
   BufferList buffer(1, 4);
   auto *b = buffer.get();
@@ -152,7 +152,7 @@ TEST_CASE("storage") {
   CHECK(!full.write(b, t));
   CHECK(full.dropped == 4);
 }
-TEST_CASE("concurrent storage") {
+TEST_CASE("LUB-1007: Preserve complete PCM frames during concurrent writes and reads") {
   PCMStorage ring(16, 1, 64);
   std::atomic<bool> done{false};
   std::thread writer([&] {
@@ -201,7 +201,7 @@ TEST_CASE("concurrent storage") {
   monitor.join();
   raw.join();
 }
-TEST_CASE("timing") {
+TEST_CASE("LUB-1007: Map valid device timestamps to sample-aligned host time") {
   TimestampMapper mapper;
   uint64_t ns;
   AudioTimeStamp t{};
@@ -224,7 +224,7 @@ TEST_CASE("timing") {
   timeline.insert(samples.data(), 1024, 48000 + 240000);
   CHECK(!timeline.read(out.data(), 1024, 48000));
 }
-TEST_CASE("conversion") {
+TEST_CASE("LUB-1007: Normalize source audio into 48000 Hz PCM") {
   for (double rate : {44100., 48000.}) {
     Normalizer converter(rate, 1);
     std::vector<float> input(1024, 0.25);
@@ -239,7 +239,7 @@ TEST_CASE("conversion") {
     CHECK(std::abs(double(total) - 10240 * 48000 / rate) < 128);
   }
 }
-TEST_CASE("engine") {
+TEST_CASE("LUB-1007: Mix logical routes with independent gains and publish timed samples") {
   auto e = LDTXAudioCreate(false);
   CHECK(e);
   auto a = LDTXAudioAddInput(e, "A", 3, 48000, 1), b = LDTXAudioAddInput(e, "B", 3, 48000, 1);
@@ -298,7 +298,7 @@ TEST_CASE("engine") {
     CHECK(v == 0);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("subscription boundary") {
+TEST_CASE("LUB-1007: Start audio delivery at the accepted video boundary") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   Samples output;
@@ -326,7 +326,7 @@ TEST_CASE("subscription boundary") {
   CHECK(LDTXAudioGetStatistics(e, input).generation == before + 1);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("retained raw") {
+TEST_CASE("LUB-1007: Keep retained raw audio samples valid after input callbacks return") {
   auto e = LDTXAudioCreate(false);
   auto input = LDTXAudioAddInput(e, "retained", 3, 48000, 1);
   CMSampleBufferRef retained = nullptr;
@@ -356,7 +356,7 @@ TEST_CASE("retained raw") {
   CHECK(first == 0);
   CFRelease(retained);
 }
-TEST_CASE("unsubscribe fence") {
+TEST_CASE("LUB-1007: Wait for in-flight delivery before unsubscribe completes") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   struct State {
@@ -390,7 +390,7 @@ TEST_CASE("unsubscribe fence") {
   CHECK(state.calls.load() == 1);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("backlog fairness") {
+TEST_CASE("LUB-1007: Keep audio consumers independent under backlog") {
   auto e = LDTXAudioCreate(false);
   auto a = LDTXAudioAddInput(e, "backlogged", 3, 48000, 1);
   auto b = LDTXAudioAddInput(e, "healthy", 3, 48000, 1);
@@ -420,7 +420,7 @@ TEST_CASE("backlog fairness") {
   CHECK(rawA.pcm.size() == 64);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("input fault isolation") {
+TEST_CASE("LUB-1007: Keep unaffected inputs running when one input fails") {
   auto e = LDTXAudioCreate(false);
   auto bad = LDTXAudioAddInput(e, "fault", 3, 48000, 1), good = LDTXAudioAddInput(e, "good", 3, 48000, 1);
   auto bus = LDTXAudioCreateBus(e);
@@ -457,7 +457,7 @@ TEST_CASE("input fault isolation") {
   CHECK(CMTimeCompare(raw.pts[0], CMTimeMake(start + 300000000, 1000000000)) == 0);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("stop fence") {
+TEST_CASE("LUB-1007: Drain accepted audio work before stop completes") {
   auto e = LDTXAudioCreate(false);
   auto bus = LDTXAudioCreateBus(e);
   struct State {
@@ -491,7 +491,7 @@ TEST_CASE("stop fence") {
   CHECK(state.calls.load() == 1);
   LDTXAudioDestroy(e);
 }
-TEST_CASE("reentrant reconstruction") {
+TEST_CASE("LUB-1007: Allow safe engine reconstruction from completion callbacks") {
   auto e = LDTXAudioCreate(false);
   auto input = LDTXAudioAddInput(e, "reentrant", 3, 48000, 1);
   auto bus = LDTXAudioCreateBus(e);
@@ -527,7 +527,7 @@ TEST_CASE("reentrant reconstruction") {
   CHECK(state.stale == 1); // Acceptance reopened after reconstruction completed.
   LDTXAudioDestroy(e);
 }
-TEST_CASE("monitor while output stalled") {
+TEST_CASE("LUB-1007: Continue monitoring while an output subscriber stalls") {
   HALInput input("monitor-test", 3, 48000, 1, false);
   MonitorReader monitor(input);
   BufferList source(1, 512), destination(1, 128);

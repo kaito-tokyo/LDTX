@@ -13,7 +13,9 @@ import Testing
 extension OutputTestSuite {
   @MainActor
   @Suite struct WorkspaceRecordingSettingsIntegrationTestSuite {
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: Program reconfiguration joins existing native failure drain",
+      .timeLimit(.minutes(1)))
     func programReconfigurationJoinsExistingNativeFailureDrain() async throws {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(
@@ -43,7 +45,9 @@ extension OutputTestSuite {
       #expect(returned)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: Stop result distinguishes new failure with the same message from retained failure",
+      .timeLimit(.minutes(1)))
     func stopResultDistinguishesNewFailureWithTheSameMessageFromRetainedFailure() async throws {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(
@@ -78,7 +82,7 @@ extension OutputTestSuite {
       #expect(session.state == .failed("Same message"))
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test("LUB-1070: Stop joins existing pause through archive drain", .timeLimit(.minutes(1)))
     func stopJoinsExistingPauseThroughArchiveDrain() async throws {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(
@@ -104,7 +108,9 @@ extension OutputTestSuite {
       #expect(session.state == .idle)
     }
 
-    @Test(.timeLimit(.minutes(1)))
+    @Test(
+      "LUB-1070: One workspace archive drain does not block another workspace stop",
+      .timeLimit(.minutes(1)))
     func oneWorkspaceArchiveDrainDoesNotBlockAnotherWorkspaceStop() async throws {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let firstPersistence = WorkspaceV4PersistenceCoordinator(
@@ -141,7 +147,8 @@ extension OutputTestSuite {
       #expect(first.state == .idle)
     }
 
-    @Test func archiveWriteFailureIsReportedWhenStopping() async throws {
+    @Test("LUB-1070: Archive write failure is reported when stopping")
+    func archiveWriteFailureIsReportedWhenStopping() async throws {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
@@ -173,7 +180,9 @@ extension OutputTestSuite {
       #expect(session.state == .failed(message))
     }
 
-    @Test func stopWaitsForQueuedVisionArchives() async {
+    @Test("LUB-1070: Stop waits for queued vision archives") func stopWaitsForQueuedVisionArchives()
+      async
+    {
       var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
@@ -197,7 +206,8 @@ extension OutputTestSuite {
       #expect(session.state == .idle)
     }
 
-    @Test func startupKeepsCapturedSettingsUntilCleanupAndNextStart() async {
+    @Test("LUB-1029: Startup keeps captured settings until cleanup and next start")
+    func startupKeepsCapturedSettingsUntilCleanupAndNextStart() async {
       var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       definition.displayName = "Test"
       var program = Ldtx_Workspace_V4_ProgramDefinition()

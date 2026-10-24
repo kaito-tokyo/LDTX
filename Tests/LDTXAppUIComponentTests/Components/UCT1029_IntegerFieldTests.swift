@@ -12,34 +12,88 @@ extension AppUIComponentTestSuite {
   struct UCT1029IntegerFieldUnitTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("Int32 and UInt32 permit intermediate text but reject invalid characters and overflow")
-    func validateRanges() {
-      let signed = IntegerField<Int32>.IntegerFormatter()
-      let unsigned = IntegerField<UInt32>.IntegerFormatter()
-      for text in ["", "0", "2147483647", "0001"] {
-        #expect(signed.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-        #expect(unsigned.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-      }
-      for text in ["-", "-2147483648", "-1"] {
-        #expect(signed.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-        #expect(!unsigned.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-      }
-      #expect(!signed.getObjectValue(nil, for: "", errorDescription: nil))
-      #expect(!signed.getObjectValue(nil, for: "-", errorDescription: nil))
-      #expect(
-        unsigned.isPartialStringValid("4294967295", newEditingString: nil, errorDescription: nil))
-      for text in ["2147483648", "-2147483649"] {
-        #expect(!signed.isPartialStringValid(text, newEditingString: nil, errorDescription: nil))
-      }
-      #expect(
-        !unsigned.isPartialStringValid("4294967296", newEditingString: nil, errorDescription: nil))
-      for text in ["1.5", "1/2", "+1", "１２", "1 2", "12px", "1\n"] {
-        #expect(!signed.getObjectValue(nil, for: text, errorDescription: nil))
-        #expect(!unsigned.getObjectValue(nil, for: text, errorDescription: nil))
-      }
+    struct IntegerInput: Sendable, Codable {
+      let input: String
+      let signedDraft: Bool
+      let unsignedDraft: Bool
+      let signedValue: Bool
+      let unsignedValue: Bool
     }
 
-    @Test("Formatter round-trips full Int32 and UInt32 values without loss")
+    @Test(
+      "LUB-1048: Integer input determines signed and unsigned draft and value acceptance",
+      arguments: [
+        IntegerInput(
+          input: "", signedDraft: true, unsignedDraft: true, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "0", signedDraft: true, unsignedDraft: true, signedValue: true, unsignedValue: true
+        ),
+        IntegerInput(
+          input: "0001", signedDraft: true, unsignedDraft: true, signedValue: true,
+          unsignedValue: true),
+        IntegerInput(
+          input: "-", signedDraft: true, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "-1", signedDraft: true, unsignedDraft: false, signedValue: true,
+          unsignedValue: false),
+        IntegerInput(
+          input: "2147483647", signedDraft: true, unsignedDraft: true, signedValue: true,
+          unsignedValue: true),
+        IntegerInput(
+          input: "2147483648", signedDraft: false, unsignedDraft: true, signedValue: false,
+          unsignedValue: true),
+        IntegerInput(
+          input: "-2147483648", signedDraft: true, unsignedDraft: false, signedValue: true,
+          unsignedValue: false),
+        IntegerInput(
+          input: "-2147483649", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "4294967295", signedDraft: false, unsignedDraft: true, signedValue: false,
+          unsignedValue: true),
+        IntegerInput(
+          input: "4294967296", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "1.5", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "1/2", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "+1", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "１２", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "1 2", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "12px", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+        IntegerInput(
+          input: "1\n", signedDraft: false, unsignedDraft: false, signedValue: false,
+          unsignedValue: false),
+      ])
+    func integerInput(_ data: IntegerInput) {
+      let signed = IntegerField<Int32>.IntegerFormatter()
+      let unsigned = IntegerField<UInt32>.IntegerFormatter()
+      #expect(
+        signed.isPartialStringValid(data.input, newEditingString: nil, errorDescription: nil)
+          == data.signedDraft)
+      #expect(
+        unsigned.isPartialStringValid(data.input, newEditingString: nil, errorDescription: nil)
+          == data.unsignedDraft)
+      #expect(
+        signed.getObjectValue(nil, for: data.input, errorDescription: nil) == data.signedValue)
+      #expect(
+        unsigned.getObjectValue(nil, for: data.input, errorDescription: nil) == data.unsignedValue)
+    }
+
+    @Test("LUB-1048: Formatter round-trips full Int32 and UInt32 values without loss")
     func typedObjects() {
       let signed = IntegerField<Int32>.IntegerFormatter()
       let unsigned = IntegerField<UInt32>.IntegerFormatter()
@@ -57,7 +111,7 @@ extension AppUIComponentTestSuite {
       }
     }
 
-    @Test("Hosted IntegerField commits through TextField and invokes SwiftUI onSubmit")
+    @Test("LUB-1048: Hosted IntegerField commits through TextField and invokes SwiftUI onSubmit")
     func nativeSubmit() async throws {
       var value: Int32 = 42
       var submitted: [Int32] = []

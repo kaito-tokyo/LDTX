@@ -10,7 +10,8 @@ import Testing
 extension AppUIComponentTestSuite {
   @MainActor @Suite
   struct WorkspaceNotificationDelegateUnitTestSuite {
-    @Test func notificationAttachesLandscapeCopyAndPreservesSavedFiles() async throws {
+    @Test("LUB-1037: Notification attaches landscape copy and preserves saved files")
+    func notificationAttachesLandscapeCopyAndPreservesSavedFiles() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       defer { try? FileManager.default.removeItem(at: root) }
@@ -48,7 +49,8 @@ extension AppUIComponentTestSuite {
       }.value
     }
 
-    @Test func notificationCallbacksAreExposedToObjectiveC() {
+    @Test("LUB-1037: Notification callbacks are exposed to objective c")
+    func notificationCallbacksAreExposedToObjectiveC() {
       // Optional delegate methods must match the SDK under C++ interoperability.
       #expect(
         WorkspaceNotifications.instancesRespond(
@@ -64,7 +66,8 @@ extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace application termination", .serialized)
   struct WorkspaceApplicationTerminationUnitTestSuite {
-    @Test func closeFailureBetweenQuitRequestAndShutdownTaskCancelsQuit() async {
+    @Test("LUB-1033: Close failure between quit request and shutdown task cancels quit")
+    func closeFailureBetweenQuitRequestAndShutdownTaskCancelsQuit() async {
       var failures: [String] = []
       var replies: [Bool] = []
       var presented: [String] = []
@@ -90,7 +93,8 @@ extension AppUIComponentTestSuite {
       #expect(!termination.isTerminationPending)
     }
 
-    @Test func idleApplicationTerminatesImmediately() {
+    @Test("LUB-1033: Idle application terminates immediately")
+    func idleApplicationTerminatesImmediately() {
       let delegate = WorkspaceApplicationTermination(
         hasPendingShutdown: { false },
         shutdown: {
@@ -102,7 +106,9 @@ extension AppUIComponentTestSuite {
       #expect(delegate.applicationShouldTerminate(.shared) == .terminateNow)
     }
 
-    @Test func repeatedQuitWaitsForOneShutdown() async {
+    @Test("LUB-1033: Repeated quit waits for one shutdown") func repeatedQuitWaitsForOneShutdown()
+      async
+    {
       var continuation: CheckedContinuation<Void, Never>?
       var calls = 0
       var replies: [Bool] = []
@@ -124,7 +130,8 @@ extension AppUIComponentTestSuite {
       #expect(replies == [true])
     }
 
-    @Test func failureIsPresentedBeforeCancellingQuitAndCanRetry() async {
+    @Test("LUB-1033: Failure is presented before cancelling quit and can retry")
+    func failureIsPresentedBeforeCancellingQuitAndCanRetry() async {
       var attempts = 0
       var events: [String] = []
       let delegate = WorkspaceApplicationTermination(
@@ -152,7 +159,8 @@ extension AppUIComponentTestSuite {
   @MainActor
   @Suite("Workspace termination lifecycle", .serialized)
   struct WorkspaceTerminationIntegrationTestSuite {
-    @Test func shutdownFailuresBelongToTheirCoordinator() async {
+    @Test("LUB-1033: Shutdown failures belong to their coordinator")
+    func shutdownFailuresBelongToTheirCoordinator() async {
       let first = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       let second = WorkspaceAppletCoordinator(document: WorkspaceDocument())
       await first.shutdown()
@@ -164,7 +172,8 @@ extension AppUIComponentTestSuite {
       #expect(second.takeShutdownFailureForPresentation() == "Second recording failed")
     }
 
-    @Test func concurrentShutdownReleasesResourcesOnceAfterCleanup() async {
+    @Test("LUB-1033: Concurrent shutdown releases resources once after cleanup")
+    func concurrentShutdownReleasesResourcesOnceAfterCleanup() async {
       let document = WorkspaceDocument()
       let resources = WorkspaceRuntimeFixture()
       var releases = 0
@@ -212,7 +221,8 @@ extension AppUIComponentTestSuite {
       return activity
     }
 
-    @Test func waitsForEveryDocumentAndCoalescesRepeatedQuit() async {
+    @Test("LUB-1033: Waits for every document and coalesces repeated quit")
+    func waitsForEveryDocumentAndCoalescesRepeatedQuit() async {
       let first = NSDocument()
       let second = NSDocument()
       let firstActivity = await hold(first)
@@ -248,7 +258,8 @@ extension AppUIComponentTestSuite {
       finished.continuation.finish()
     }
 
-    @Test func includesDocumentsOpenedWhileWaiting() async {
+    @Test("LUB-1033: Includes documents opened while waiting")
+    func includesDocumentsOpenedWhileWaiting() async {
       let first = NSDocument()
       let second = NSDocument()
       let firstActivity = await hold(first)
@@ -279,7 +290,8 @@ extension AppUIComponentTestSuite {
       finished.continuation.finish()
     }
 
-    @Test func rechecksDocumentsAtRunLoopHandoff() async {
+    @Test("LUB-1033: Rechecks documents at run loop handoff")
+    func rechecksDocumentsAtRunLoopHandoff() async {
       @MainActor final class Inventory {
         var documents: [NSDocument]
         let addedDocument: NSDocument

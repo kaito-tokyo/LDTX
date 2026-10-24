@@ -11,26 +11,23 @@ extension AppUIComponentTestSuite {
   struct UCT1023ItemNameDialogUnitTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("UCT-1023.1: Whitespace is removed from a valid candidate")
-    func normalizesValidCandidate() {
-      let dialog = makeDialog("  Camera  \n")
-      #expect(dialog.candidate == "Camera")
-      #expect(dialog.canSubmit)
-      _ = dialog.body
+    struct NameInput: Sendable, Codable {
+      let input: String
+      let candidate: String
+      let canSubmit: Bool
     }
 
-    @Test("UCT-1023.2: An empty candidate cannot be submitted")
-    func rejectsEmptyCandidate() {
-      let dialog = makeDialog(" \n  ")
-      #expect(dialog.candidate.isEmpty)
-      #expect(!dialog.canSubmit)
-    }
-
-    @Test("UCT-1023.3: An existing name cannot be submitted")
-    func rejectsDuplicateCandidate() {
-      let dialog = makeDialog(" Taken \n")
-      #expect(dialog.candidate == "Taken")
-      #expect(!dialog.canSubmit)
+    @Test(
+      "LUB-1048: UCT-1023.1–3: Name input determines the normalized candidate and submission",
+      arguments: [
+        NameInput(input: "  Camera  \n", candidate: "Camera", canSubmit: true),
+        NameInput(input: " \n  ", candidate: "", canSubmit: false),
+        NameInput(input: " Taken \n", candidate: "Taken", canSubmit: false),
+      ])
+    func validatesCandidate(_ data: NameInput) {
+      let dialog = makeDialog(data.input)
+      #expect(dialog.candidate == data.candidate)
+      #expect(dialog.canSubmit == data.canSubmit)
     }
 
     private func makeDialog(_ name: String) -> ItemNameDialog {

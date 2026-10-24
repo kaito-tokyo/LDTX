@@ -11,7 +11,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct ProgramOutputVideoTimelineUnitTestSuite {
-    @Test func heldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
+    @Test("LUB-1059: Held frame owns a copy independent from renderer buffer reuse")
+    func heldFrameOwnsACopyIndependentFromRendererBufferReuse() throws {
       let source = try makeNV12PixelBuffer()
       fillFirstLumaByte(of: source, with: 17)
       let heldFrame = ProgramOutputHeldVideoFrame()
@@ -24,7 +25,8 @@ extension OutputTestSuite {
       #expect(firstLumaByte(of: copy) == 17)
     }
 
-    @Test func missingSourcePTSAdvancesAtNominalFrameRate() {
+    @Test("LUB-1059: Missing source PTS advances at nominal frame rate")
+    func missingSourcePTSAdvancesAtNominalFrameRate() {
       var timeline = ProgramOutputVideoTimeline(frameRate: 30)
       let pipelineID = UUID()
 
@@ -42,7 +44,8 @@ extension OutputTestSuite {
       #expect(second == CMTime(value: 1, timescale: 30))
     }
 
-    @Test func missingSourcePTSPreservesSkippedFrameCadence() {
+    @Test("LUB-1059: Missing source PTS preserves skipped frame cadence")
+    func missingSourcePTSPreservesSkippedFrameCadence() {
       var timeline = ProgramOutputVideoTimeline(frameRate: 30)
       let pipelineID = UUID()
 
@@ -61,7 +64,8 @@ extension OutputTestSuite {
       #expect(coalesced == CMTime(value: 4, timescale: 30))
     }
 
-    @Test func newPipelineDoesNotUsePreviousFrameIDSequence() {
+    @Test("LUB-1059: New pipeline does not use previous frame ID sequence")
+    func newPipelineDoesNotUsePreviousFrameIDSequence() {
       var timeline = ProgramOutputVideoTimeline(frameRate: 30)
 
       _ = timeline.presentationTime(
@@ -79,7 +83,8 @@ extension OutputTestSuite {
       #expect(switched == CMTime(value: 1, timescale: 30))
     }
 
-    @Test func newPipelineIsRebasedWithoutContinuingCapturePTS() {
+    @Test("LUB-1059: New pipeline is rebased without continuing capture PTS")
+    func newPipelineIsRebasedWithoutContinuingCapturePTS() {
       var timeline = ProgramOutputVideoTimeline(frameRate: 30)
       let firstPipelineID = UUID()
       let secondPipelineID = UUID()
@@ -102,7 +107,8 @@ extension OutputTestSuite {
       #expect(restarted == CMTime(value: 302, timescale: 30))
     }
 
-    @Test func repeatedSourcePTSUsesFrameHoldCadence() {
+    @Test("LUB-1059: Repeated source PTS uses frame hold cadence")
+    func repeatedSourcePTSUsesFrameHoldCadence() {
       var timeline = ProgramOutputVideoTimeline(frameRate: 60)
       let pipelineID = UUID()
       let sourcePTS = CMTime(value: 42, timescale: 60)

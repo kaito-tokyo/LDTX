@@ -14,7 +14,7 @@ extension AppUIComponentTestSuite {
   @Suite("UCT-1021: URL Document reading", .serialized)
   @MainActor
   struct UCT1021RecordPlayerDocumentIntegrationTestSuite {
-    @Test("Malformed optional markers allow viewing but block writing")
+    @Test("LUB-1056: Malformed optional markers allow viewing but block writing")
     func malformedMarkers() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -36,7 +36,7 @@ extension AppUIComponentTestSuite {
       #expect(document.markers.map(\.note) == ["Pending"])
     }
 
-    @Test("Playback keeps private error details available to the user")
+    @Test("LUB-1056: Playback keeps private error details available to the user")
     func privatePlaybackFailureDetails() async throws {
       let originalURL = try makeRecordingTestPackage()
       let url = originalURL.deletingLastPathComponent()
@@ -61,7 +61,7 @@ extension AppUIComponentTestSuite {
       #expect(model.player == nil)
     }
 
-    @Test("Missing recording metadata is rejected by the reader")
+    @Test("LUB-1056: Missing recording metadata is rejected by the reader")
     func invalidPackage() async throws {
       let url = try makeRecordingTestPackage()
       defer { try? FileManager.default.removeItem(at: url) }
@@ -70,7 +70,7 @@ extension AppUIComponentTestSuite {
       await #expect(throws: (any Error).self) { try await readRecordingTestSnapshot(url) }
     }
 
-    @Test("Both existing recording type identifiers remain supported")
+    @Test("LUB-1056: Both existing recording type identifiers remain supported")
     func recordingTypes() {
       #expect(
         RecordPlayerDocument.readableContentTypes.contains(
@@ -80,7 +80,7 @@ extension AppUIComponentTestSuite {
           UTType(importedAs: RecordingPackageInfo.legacyTypeIdentifier, conformingTo: .package)))
     }
 
-    @Test("Reader snapshot updates the URL used by playback after a recording moves")
+    @Test("LUB-1056: Reader snapshot updates the URL used by playback after a recording moves")
     func movedRecording() async throws {
       let url = try makeRecordingTestPackage()
       let moved = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString)

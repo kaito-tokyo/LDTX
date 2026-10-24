@@ -15,7 +15,7 @@ extension AppUIComponentTestSuite {
   struct UCT1024WorkspaceProgramsInspectorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("UCT-1024.1: Rename validates all resource names and preserves rejected edits")
+    @Test("LUB-1050: UCT-1024.1: Rename validates all resource names and preserves rejected edits")
     func renameValidatesResourceNames() throws {
       let service = WorkspaceDocument(definition: .init(), preferences: .init())
       service.editWorkspace(undoManager: nil) { workspace in
@@ -65,7 +65,7 @@ extension AppUIComponentTestSuite {
       #expect(service.workspaceDefinition.programs[0].displayName == "Renamed")
     }
 
-    @Test("UCT-1024.2: Delete removes only the requested Program and its preferences")
+    @Test("LUB-1050: UCT-1024.2: Delete removes only the requested Program and its preferences")
     func deleteUsesExistingRuntimeAndPreservesOtherPrograms() async throws {
       _ = NSApplication.shared
       let document = WorkspaceDocument()

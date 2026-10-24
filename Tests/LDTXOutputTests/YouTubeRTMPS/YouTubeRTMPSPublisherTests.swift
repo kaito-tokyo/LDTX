@@ -9,7 +9,8 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeRTMPSPublisherIntegrationTestSuite {
-    @Test func describesDetectedMediaFormatWithoutDestination() {
+    @Test("LUB-1016: Describes detected media format without destination")
+    func describesDetectedMediaFormatWithoutDestination() {
       let event = YouTubeRTMPSPublisherEvent.formatDetected(
         "AVC 1920x1080 fps=60.0 naluLength=4 spsBytes=4 ppsBytes=2; "
           + "AAC sampleRate=48000.0 channels=2 asc=1190")
@@ -20,7 +21,8 @@ extension OutputTestSuite {
           + "AAC sampleRate=48000.0 channels=2 asc=1190")
     }
 
-    @Test func performsHandshakeAndPublishWithoutExposingDestination() async throws {
+    @Test("LUB-1016: Performs handshake and publish without exposing destination")
+    func performsHandshakeAndPublishWithoutExposingDestination() async throws {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(transport: transport)
       try await publisher.connect(
@@ -37,7 +39,9 @@ extension OutputTestSuite {
       await publisher.finish()
     }
 
-    @Test func sendsCodecHeadersBeforeMedia() async throws {
+    @Test("LUB-1016: Sends codec headers before media") func sendsCodecHeadersBeforeMedia()
+      async throws
+    {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(transport: transport)
       try await publisher.connect(
@@ -56,7 +60,8 @@ extension OutputTestSuite {
       await publisher.finish()
     }
 
-    @Test func normalizesMediaTimestampsAtTheFirstKeyFrame() async throws {
+    @Test("LUB-1016: Normalizes media timestamps at the first key frame")
+    func normalizesMediaTimestampsAtTheFirstKeyFrame() async throws {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(transport: transport)
       try await publisher.connect(
@@ -73,7 +78,8 @@ extension OutputTestSuite {
       await publisher.finish()
     }
 
-    @Test func reconnectsAtNextKeyFrameWithoutBufferingMedia() async throws {
+    @Test("LUB-1016: Reconnects at next key frame without buffering media")
+    func reconnectsAtNextKeyFrameWithoutBufferingMedia() async throws {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(
         transport: transport, reconnectDelays: [.zero])
@@ -92,7 +98,8 @@ extension OutputTestSuite {
       await publisher.finish()
     }
 
-    @Test func mediaEncodingFailureDoesNotReconnect() async throws {
+    @Test("LUB-1016: Media encoding failure does not reconnect")
+    func mediaEncodingFailureDoesNotReconnect() async throws {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(transport: transport, reconnectDelays: [.zero])
       try await publisher.connect(
@@ -109,7 +116,8 @@ extension OutputTestSuite {
       await publisher.finish()
     }
 
-    @Test func connectionEstablishmentHasADeadline() async throws {
+    @Test("LUB-1016: Connection establishment has a deadline")
+    func connectionEstablishmentHasADeadline() async throws {
       let publisher = YouTubeRTMPSPublisher(
         transport: StalledRTMPTransport(), establishmentTimeout: .milliseconds(10))
       await #expect(throws: YouTubeRTMPSError.self) {
@@ -119,7 +127,9 @@ extension OutputTestSuite {
       #expect(await publisher.state == .stopped)
     }
 
-    @Test func finishCancelsASleepingReconnect() async throws {
+    @Test("LUB-1016: Finish cancels a sleeping reconnect") func finishCancelsASleepingReconnect()
+      async throws
+    {
       let transport = MockRTMPTransport()
       let publisher = YouTubeRTMPSPublisher(
         transport: transport, reconnectDelays: [.milliseconds(100)])
@@ -139,7 +149,8 @@ extension OutputTestSuite {
       #expect(await transport.connectCount == 1)
     }
 
-    @Test func commandErrorFailsConnectionImmediately() async throws {
+    @Test("LUB-1016: Command error fails connection immediately")
+    func commandErrorFailsConnectionImmediately() async throws {
       let transport = MockRTMPTransport(connectCommandName: "_error")
       let publisher = YouTubeRTMPSPublisher(
         transport: transport, establishmentTimeout: .seconds(1))

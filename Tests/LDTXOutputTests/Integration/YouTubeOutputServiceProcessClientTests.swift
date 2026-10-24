@@ -11,7 +11,8 @@ extension OutputTestSuite {
   @Suite
   struct YouTubeOutputServiceProcessClientIntegrationTestSuite {
     @MainActor
-    @Test func boundaryReattachesCallbacksAndOwnsSinkFinalization() async throws {
+    @Test("LUB-1062: Boundary reattaches callbacks and owns sink finalization")
+    func boundaryReattachesCallbacksAndOwnsSinkFinalization() async throws {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
@@ -43,7 +44,8 @@ extension OutputTestSuite {
       assertNil(boundary.connection)
     }
 
-    @Test func interruptionSignalsWorkspaceWithoutInvalidatingConnection() async throws {
+    @Test("LUB-1062: Interruption signals workspace without invalidating connection")
+    func interruptionSignalsWorkspaceWithoutInvalidatingConnection() async throws {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let restartRequested = expectation(description: "workspace restart requested")
@@ -69,7 +71,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func workspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() async throws {
+    @Test("LUB-1062: Workspace restart handler takes over instead of reconnecting in place")
+    func workspaceRestartHandlerTakesOverInsteadOfReconnectingInPlace() async throws {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let checkpointCommitted = expectation(description: "checkpoint committed")
@@ -124,7 +127,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func mediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() async throws {
+    @Test("LUB-1062: Media reservation is committed before upload and success is distinct")
+    func mediaReservationIsCommittedBeforeUploadAndSuccessIsDistinct() async throws {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let reserved = expectation(description: "reservation checkpoint")
@@ -161,7 +165,9 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func serviceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision()
+    @Test(
+      "LUB-1062: Service reset commits checkpoint then signals workspace and ignores stale revision"
+    ) func serviceResetCommitsCheckpointThenSignalsWorkspaceAndIgnoresStaleRevision()
       async throws
     {
       let harness = YouTubeOutputConnectionHarness()
@@ -206,7 +212,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func configurationMismatchIsReportedWithoutRequestingRestart() async throws {
+    @Test("LUB-1062: Configuration mismatch is reported without requesting restart")
+    func configurationMismatchIsReportedWithoutRequestingRestart() async throws {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let failed = expectation(description: "configuration mismatch")
@@ -231,7 +238,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func bootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() async {
+    @Test("LUB-1062: Bootstrap configuration mismatch is reported without requesting restart")
+    func bootstrapConfigurationMismatchIsReportedWithoutRequestingRestart() async {
       let harness = YouTubeOutputConnectionHarness(bootstrapFingerprint: "different-fingerprint")
       let failed = expectation(description: "configuration mismatch")
       let sink = makeSink(
@@ -249,7 +257,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func mediaConfigurationMismatchIsReportedWithoutRequestingRestart() async {
+    @Test("LUB-1062: Media configuration mismatch is reported without requesting restart")
+    func mediaConfigurationMismatchIsReportedWithoutRequestingRestart() async {
       let harness = YouTubeOutputConnectionHarness(mediaFingerprint: "different-fingerprint")
       let ready = expectation(description: "ready")
       let failed = expectation(description: "configuration mismatch")
@@ -277,7 +286,8 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func interruptionKeepsInFlightStorageUntilConnectionIsInvalidated() async throws {
+    @Test("LUB-1062: Interruption keeps in flight storage until connection is invalidated")
+    func interruptionKeepsInFlightStorageUntilConnectionIsInvalidated() async throws {
       let harness = YouTubeOutputConnectionHarness(holdsMediaReplies: true)
       let firstReady = expectation(description: "first ready")
       let restartRequested = expectation(description: "workspace restart requested")
@@ -311,7 +321,8 @@ extension OutputTestSuite {
       assertEqual(completionCount.withLock { $0 }, 1)
     }
 
-    @Test func bootstrapFailureSignalsWorkspaceOnce() async {
+    @Test("LUB-1062: Bootstrap failure signals workspace once")
+    func bootstrapFailureSignalsWorkspaceOnce() async {
       let harness = YouTubeOutputConnectionHarness(bootstrapSucceeds: false)
       let restartRequested = expectation(description: "workspace restart requested")
       let sink = makeSink(
@@ -324,7 +335,9 @@ extension OutputTestSuite {
       sink.abort {}
     }
 
-    @Test func resetAfterFinishDoesNotReconnect() async throws {
+    @Test("LUB-1062: Reset after finish does not reconnect") func resetAfterFinishDoesNotReconnect()
+      async throws
+    {
       let harness = YouTubeOutputConnectionHarness()
       let ready = expectation(description: "ready")
       let sink = makeSink(harness: harness, readyHandler: ready.fulfill)
@@ -343,7 +356,8 @@ extension OutputTestSuite {
       assertEqual(harness.connectionCount, 1)
     }
 
-    @Test func finishPublishesFinalCheckpoint() async {
+    @Test("LUB-1062: Finish publishes final checkpoint") func finishPublishesFinalCheckpoint() async
+    {
       let harness = YouTubeOutputConnectionHarness(finishNextMediaSegmentNumber: 88)
       let ready = expectation(description: "ready")
       let checkpoint = expectation(description: "final checkpoint")
@@ -363,7 +377,8 @@ extension OutputTestSuite {
       await waitAsync(for: [checkpoint, finished], timeout: 1)
     }
 
-    @Test func finishAcceptsFinalMediaReservationForActiveContext() async throws {
+    @Test("LUB-1062: Finish accepts final media reservation for active context")
+    func finishAcceptsFinalMediaReservationForActiveContext() async throws {
       let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
       let ready = expectation(description: "ready")
       let reserved = expectation(description: "final reservation checkpoint")
@@ -419,7 +434,7 @@ extension OutputTestSuite {
       assertEqual(checkpoints.withLock { $0.last?.nextMediaTimeSeconds }, 154.25)
     }
 
-    @Test func finishReportsServiceFailure() async {
+    @Test("LUB-1062: Finish reports service failure") func finishReportsServiceFailure() async {
       let harness = YouTubeOutputConnectionHarness(finishError: "final upload failed")
       let ready = expectation(description: "ready")
       let sink = makeSink(
@@ -435,7 +450,8 @@ extension OutputTestSuite {
       await waitAsync(for: [finished], timeout: 1)
     }
 
-    @Test func finishTimeoutReportsFailureBeforeCompleting() async {
+    @Test("LUB-1062: Finish timeout reports failure before completing")
+    func finishTimeoutReportsFailureBeforeCompleting() async {
       let harness = YouTubeOutputConnectionHarness(holdsFinishReply: true)
       let ready = expectation(description: "ready")
       let sink = makeSink(
