@@ -28,7 +28,6 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXOutputTests
 
 schemes:

@@ -52,7 +52,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Easy | `WorkspaceShutdownCoordinatorIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/WorkspaceShutdownCoordinatorTests.swift` |
 | Easy | `WorkspaceV4RenderGraphUnitTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/WorkspaceV4RenderGraphTests.swift` |
 | Easy | `WorkspaceV4VisionFeatureUnitTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/WorkspaceV4VisionFeatureTests.swift` |
-| Easy | `AudioMixEngineUnitTestSuite` | `Tests/LDTXModuleTests/LDTXAudioEngine/AudioMixEngineTests.swift` |
 | Easy | `CaptureSessionRuntimeFailurePolicyUnitTestSuite` | `Tests/LDTXModuleTests/LDTXCapture/CaptureSessionRuntimeFailurePolicyTests.swift` |
 | Output | `DASHIngestEndpointUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHIngestEndpointTests.swift` |
 | Output | `DASHLiveUploadPipelineUnitTestSuite` | `Tests/LDTXOutputTests/Dash/DASHLiveUploadPipelineTests.swift` |

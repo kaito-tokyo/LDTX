@@ -81,10 +81,9 @@ final class WorkspaceNotifications: NSObject, UNUserNotificationCenterDelegate {
 
   nonisolated func userNotificationCenter(
     _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-    withCompletionHandler completionHandler: @escaping (Int) -> Void
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
-    // C++ interoperability imports this delegate's NS_OPTIONS parameter as Int.
-    completionHandler(Int(UNNotificationPresentationOptions([.banner, .list]).rawValue))
+    completionHandler([.banner, .list])
   }
 
   nonisolated func userNotificationCenter(

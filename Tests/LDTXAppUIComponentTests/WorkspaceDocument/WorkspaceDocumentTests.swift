@@ -90,29 +90,8 @@ extension AppUIComponentTestSuite {
       try Data([1]).write(to: model)
       let document = WorkspaceDocument()
       let editingState = document.stateService
-      editingState.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents = [
-          .with {
-            $0.vfxSource = .with {
-              $0.internalID = 7
-              $0.displayName = "Camera"
-              $0.deviceWidth = 1920
-              $0.deviceHeight = 1080
-            }
-          }
-        ]
-      }
-      editingState.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.visions = [
-          .with {
-            $0.ldtxSceneDetectorVision = .with {
-              $0.internalID = 5
-              $0.displayName = "Classifier"
-              $0.videoComponentInternalID = 7
-            }
-          }
-        ]
-      }
+      configureCamera(in: editingState)
+      configureClassifier(in: editingState)
       editingState.setVisionModelURL(model, for: 5, undoManager: nil)
       editingState.inspectorSelector = .init(kind: .ldtxSceneDetectorVision, internalID: 5)
       try await saveWorkspaceDocument(document, to: url)
@@ -161,7 +140,7 @@ extension AppUIComponentTestSuite {
       defer { pending?.resume(throwing: CancellationError()) }
       #expect(state.isInferring)
       try await saveWorkspaceDocument(document, to: url)
-      #expect(try WorkspaceBundleReaderV4(at: url).read() == saved)
+      expectWorkspaceContent(try WorkspaceBundleReaderV4(at: url).read(), equals: saved)
       // Drive the same persisted-adoption boundary after the successful unchanged save.
       // Keep model preparation outside this deterministic manual-inference test.
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
@@ -203,7 +182,7 @@ extension AppUIComponentTestSuite {
       let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       await coordinator.refreshPersistedWorkspace(at: missing) { isCurrent }
       #expect(document.operationErrors.count == (isCurrent ? 1 : 0))
-      #expect(document.workspaceSnapshot == nil)
+      expectWorkspaceContent(document.workspaceSnapshot, equals: nil)
       #expect(document.recordingState == .idle)
       await coordinator.shutdown()
     }
@@ -264,15 +243,13 @@ extension AppUIComponentTestSuite {
       try persistence.adoptRuntimeWorkspace(staleRuntime)
       await #expect(throws: (any Error).self) { try await controller.startOutput() }
       try persistence.adoptRuntimeWorkspace(try WorkspaceBundleReaderV4(at: url).read())
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Pending save"
-      }
+      setDisplayName("Pending save", in: document.stateService)
       let captured = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(captured.definition.displayName == "Pending save")
-      #expect(document.runtimeWorkspace == baseline)
-      #expect(controller.windowRuntime.workspace == baseline)
-      #expect(try WorkspaceBundleReaderV4(at: url).read() == baseline)
+      expectDisplayName(captured.definition.displayName, equals: "Pending save")
+      expectWorkspaceContent(document.runtimeWorkspace, equals: baseline)
+      expectWorkspaceContent(controller.windowRuntime.workspace, equals: baseline)
+      expectWorkspaceContent(try WorkspaceBundleReaderV4(at: url).read(), equals: baseline)
       // Capturing pending edits does not replace the last canonical read or start output.
       try await controller.validateOutputWorkspace()
       #expect(document.stateService.recordingState == .idle)
@@ -300,16 +277,14 @@ extension AppUIComponentTestSuite {
       try await document.apply(snapshot: read, previous: nil)
       let first = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(first == read)
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Later edit"
-      }
+      expectWorkspaceContent(first, equals: read)
+      setDisplayName("Later edit", in: document.stateService)
       let second = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(second.definition.displayName == "Later edit")
+      expectDisplayName(second.definition.displayName, equals: "Later edit")
       let coordinator = WorkspaceDocumentConnection(document: document)
       coordinator.synchronizeDocument()
-      #expect(document.stateService.workspaceDefinition.displayName == "Later edit")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "Later edit")
       await coordinator.shutdown()
     }
     @Test("LUB-1047: New Workspaces can be created and edited without saving")
@@ -322,9 +297,7 @@ extension AppUIComponentTestSuite {
       #expect(firstID.uuid.6 >> 4 == 7)
       let coordinator = WorkspaceDocumentConnection(document: first)
       let state = first.stateService
-      state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Draft"
-      }
+      setDisplayName("Draft", in: state)
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [
           .with {
@@ -348,7 +321,7 @@ extension AppUIComponentTestSuite {
         try await coordinator.runtimeCoordinator.startOutput()
       }
       #expect(state.recordingState == .idle)
-      #expect(state.workspaceDefinition.displayName == "Draft")
+      expectDisplayName(state.workspaceDefinition.displayName, equals: "Draft")
       await coordinator.shutdown()
     }
 
@@ -358,12 +331,10 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("Workspace.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Main"
-      }
+      setDisplayName("Main", in: document.stateService)
       try await saveWorkspaceDocument(document, to: url)
       let reopened = try await loadWorkspaceDocument(at: url)
-      #expect(reopened.workspace == document.workspace)
+      expectWorkspaceContent(reopened.workspace, equals: document.workspace)
       #expect(reopened.fileURL == nil)
       #expect(reopened.testSavedURL == url)
       #expect(reopened.stateService.visionModels.isEmpty)
@@ -376,34 +347,32 @@ extension AppUIComponentTestSuite {
       let url = root.appendingPathComponent("Formal.ldtxworkspace")
       let staged = root.appendingPathComponent("Staging.ldtxworkspace")
       let document = WorkspaceDocument()
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Saved"
-      }
+      setDisplayName("Saved", in: document.stateService)
       try await saveWorkspaceDocument(document, to: url)
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Pending"
-      }
+      setDisplayName("Pending", in: document.stateService)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(document.workspace == snapshot)
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Saved")
+      expectWorkspaceContent(document.workspace, equals: snapshot)
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "Saved")
       let progress = ProgressManager(totalCount: 1)
       try await WorkspaceDocument.Writer().write(
         snapshot: snapshot, to: staged, previous: nil,
         progress: progress.subprogress(assigningCount: 1))
       await document.refreshTestPersistedWorkspace()
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Saved")
-      #expect(document.stateService.workspaceDefinition.displayName == "Pending")
-      #expect(document.workspaceSnapshot?.definition.displayName == "Saved")
-      #expect(try WorkspaceBundleReaderV4(at: url).read().definition.displayName == "Saved")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "Saved")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "Pending")
+      expectDisplayName(document.workspaceSnapshot?.definition.displayName, equals: "Saved")
+      expectDisplayName(
+        try WorkspaceBundleReaderV4(at: url).read().definition.displayName, equals: "Saved")
       try FileManager.default.removeItem(at: url)
       try FileManager.default.moveItem(at: staged, to: url)
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Later"
-      }
+      setDisplayName("Later", in: document.stateService)
       await document.refreshTestPersistedWorkspace()
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Pending")
-      #expect(document.stateService.workspaceDefinition.displayName == "Later")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "Pending")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "Later")
     }
 
     @Test("LUB-1047: Write failure retains edits without publishing a captured snapshot")
@@ -412,14 +381,10 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: root) }
       try Data([1]).write(to: root)
       let document = WorkspaceDocument()
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Confirmed"
-      }
+      setDisplayName("Confirmed", in: document.stateService)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Later"
-      }
+      setDisplayName("Later", in: document.stateService)
       let progress = ProgressManager(totalCount: 1)
       await #expect(throws: (any Error).self) {
         try await WorkspaceDocument.Writer().write(
@@ -427,9 +392,9 @@ extension AppUIComponentTestSuite {
           to: root.appendingPathComponent("Impossible.ldtxworkspace"), previous: nil,
           progress: progress.subprogress(assigningCount: 1))
       }
-      #expect(document.workspaceSnapshot == nil)
-      #expect(document.stateService.workspaceDefinition.displayName == "Later")
-      #expect(snapshot.definition.displayName == "Confirmed")
+      expectWorkspaceContent(document.workspaceSnapshot, equals: nil)
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "Later")
+      expectDisplayName(snapshot.definition.displayName, equals: "Confirmed")
     }
 
     @Test("LUB-1047: Invalid data fails before creating a destination")
@@ -471,18 +436,7 @@ extension AppUIComponentTestSuite {
       defer { try? FileManager.default.removeItem(at: url) }
       try await saveWorkspaceDocument(document, to: url)
       let persisted = document.persistenceCoordinator.runtimeWorkspace
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents = [
-          .with {
-            $0.vfxSource = .with {
-              $0.internalID = 7
-              $0.displayName = "Camera"
-              $0.deviceWidth = 1920
-              $0.deviceHeight = 1080
-            }
-          }
-        ]
-      }
+      configureCamera(in: document)
       document.stateService.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [
           .with {
@@ -501,9 +455,9 @@ extension AppUIComponentTestSuite {
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
       #expect(snapshot == document.stateService.editingWorkspace)
-      #expect(document.workspace == snapshot)
+      expectWorkspaceContent(document.workspace, equals: snapshot)
       await #expect(throws: (any Error).self) { try await saveWorkspaceDocument(document, to: url) }
-      #expect(document.persistenceCoordinator.runtimeWorkspace == persisted)
+      expectWorkspaceContent(document.persistenceCoordinator.runtimeWorkspace, equals: persisted)
       #expect(
         document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x.num == 2)
     }
@@ -524,14 +478,13 @@ extension AppUIComponentTestSuite {
       let readProgress = ProgressManager(totalCount: 1)
       let incoming = try await WorkspaceDocument.Reader().read(
         from: url, progress: readProgress.subprogress(assigningCount: 1))
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Local"
-      }
+      setDisplayName("Local", in: document.stateService)
       try await document.apply(snapshot: incoming, previous: previous)
       document.testCoordinator.synchronizeDocument()
       await document.refreshTestPersistedWorkspace()
-      #expect(document.stateService.workspaceDefinition.displayName == "External")
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "External")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "External")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "External")
     }
 
     @Test("LUB-1047: Applying a content snapshot does not give a standalone document a URL")
@@ -539,7 +492,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       let source = WorkspaceV4Bundle(definition: .init(), preferences: .init())
       try await document.apply(snapshot: source, previous: nil)
-      #expect(document.workspaceSnapshot == source)
+      expectWorkspaceContent(document.workspaceSnapshot, equals: source)
       #expect(document.fileURL == nil)
     }
 
@@ -555,11 +508,9 @@ extension AppUIComponentTestSuite {
         13: URL(fileURLWithPath: "/Saved/13/Other.mlpackage"),
       ]
       try await document.apply(snapshot: incoming, previous: nil)
-      #expect(state.editingWorkspace == incoming)
-      #expect(document.workspaceSnapshot == incoming)
-      state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Local edits"
-      }
+      expectWorkspaceContent(state.editingWorkspace, equals: incoming)
+      expectWorkspaceContent(document.workspaceSnapshot, equals: incoming)
+      setDisplayName("Local edits", in: state)
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.preferences.audioChannelGainsDecibels[7] = .with {
           $0.set(num: -20, den: 10)
@@ -592,15 +543,15 @@ extension AppUIComponentTestSuite {
       }
       var expected = local
       expected.visionModels[11] = incoming.visionModels[11]
-      #expect(state.editingWorkspace == expected)
+      expectWorkspaceContent(state.editingWorkspace, equals: expected)
       #expect(state.visionModels[13] == nil)
       #expect(state.visionModels[15] == local.visionModels[15])
 
       // Reader applied synchronously. Later edits and explicit URL replacements
       // belong to the current editable value; URL routing must not replay the read.
       coordinator.synchronizeDocument()
-      #expect(state.editingWorkspace == expected)
-      #expect(document.workspaceSnapshot == incoming)
+      expectWorkspaceContent(state.editingWorkspace, equals: expected)
+      expectWorkspaceContent(document.workspaceSnapshot, equals: incoming)
       #expect(state.visionModels[13] == nil)
       #expect(state.visionModels[15] == local.visionModels[15])
       #expect(state.inspectorSelector == .init(kind: .workspaceCanvas))
@@ -627,8 +578,9 @@ extension AppUIComponentTestSuite {
         }
         try await Task.sleep(for: .milliseconds(5))
       }
-      #expect(document.stateService.workspaceDefinition.displayName == "Observed")
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Observed")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "Observed")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "Observed")
       await document.shutdown()
     }
 
@@ -655,29 +607,8 @@ extension AppUIComponentTestSuite {
       try Data([1]).write(to: first)
       try Data([2]).write(to: second)
       let document = WorkspaceDocument()
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents = [
-          .with {
-            $0.vfxSource = .with {
-              $0.internalID = 7
-              $0.displayName = "Camera"
-              $0.deviceWidth = 1920
-              $0.deviceHeight = 1080
-            }
-          }
-        ]
-      }
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.visions = [
-          .with {
-            $0.ldtxSceneDetectorVision = .with {
-              $0.internalID = 5
-              $0.displayName = "Classifier"
-              $0.videoComponentInternalID = 7
-            }
-          }
-        ]
-      }
+      configureCamera(in: document)
+      configureClassifier(in: document)
       let state = document.stateService
       state.setVisionModelURL(first, for: 5, undoManager: nil)
       let firstID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
@@ -735,7 +666,7 @@ extension AppUIComponentTestSuite {
         try await saveWorkspaceDocument(document, to: url)
         Issue.record("Expected read failure")
       } catch {}
-      #expect(document.persistenceCoordinator.runtimeWorkspace == saved)
+      expectWorkspaceContent(document.persistenceCoordinator.runtimeWorkspace, equals: saved)
       #expect(state.visionModels[missingID] == missing)
     }
 
@@ -744,9 +675,7 @@ extension AppUIComponentTestSuite {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let document = WorkspaceDocument()
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Original"
-      }
+      setDisplayName("Original", in: document.stateService)
       try await saveWorkspaceDocument(document, to: root)
       let previous = try #require(document.workspaceSnapshot)
       var incoming = previous
@@ -754,14 +683,16 @@ extension AppUIComponentTestSuite {
       try WorkspaceBundleWriterV4().write(incoming, to: root)
       document.stateService.isOutputActive = true
       try await document.apply(snapshot: incoming, previous: previous)
-      #expect(document.workspaceSnapshot == incoming)
+      expectWorkspaceContent(document.workspaceSnapshot, equals: incoming)
       document.testCoordinator.synchronizeDocument()
-      #expect(document.stateService.workspaceDefinition.displayName == "External")
+      expectDisplayName(document.stateService.workspaceDefinition.displayName, equals: "External")
       await document.refreshTestPersistedWorkspace()
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "Original")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "Original")
       document.stateService.isOutputActive = false
       await document.refreshTestPersistedWorkspace()
-      #expect(document.persistenceCoordinator.runtimeWorkspace.definition.displayName == "External")
+      expectDisplayName(
+        document.persistenceCoordinator.runtimeWorkspace.definition.displayName, equals: "External")
     }
 
     @Test("LUB-1030: SwiftUI reconstruction preserves runtime lifetime and close releases it once")
@@ -824,28 +755,24 @@ extension AppUIComponentTestSuite {
     func documentOwnsEditingState() async throws {
       let document = WorkspaceDocument()
       let state = document.stateService
-      state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Editing"
-      }
+      setDisplayName("Editing", in: state)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(snapshot.definition.displayName == "Editing")
+      expectDisplayName(snapshot.definition.displayName, equals: "Editing")
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: url) }
       let progress = ProgressManager(totalCount: 1)
       try await WorkspaceDocument.Writer().write(
         snapshot: snapshot, to: url, previous: nil,
         progress: progress.subprogress(assigningCount: 1))
-      #expect(try WorkspaceBundleReaderV4(at: url).read() == snapshot)
+      expectWorkspaceContent(try WorkspaceBundleReaderV4(at: url).read(), equals: snapshot)
       let coordinator = WorkspaceDocumentConnection(document: document)
       #expect(coordinator.runtimeCoordinator.stateService === state)
       coordinator.disconnect()
-      state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Disconnected"
-      }
+      setDisplayName("Disconnected", in: state)
       let disconnected = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(disconnected.definition.displayName == "Disconnected")
+      expectDisplayName(disconnected.definition.displayName, equals: "Disconnected")
       await coordinator.shutdown()
       #expect(document.stateService === state)
     }
@@ -855,23 +782,22 @@ extension AppUIComponentTestSuite {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let original = WorkspaceDocument()
-      original.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Loaded"
-      }
+      setDisplayName("Loaded", in: original.stateService)
       try await saveWorkspaceDocument(original, to: root)
       let progress = ProgressManager(totalCount: 1)
       let read = try await WorkspaceDocument.Reader().read(
         from: root, progress: progress.subprogress(assigningCount: 1))
       let document = WorkspaceDocument()
       try await document.apply(snapshot: read, previous: nil)
-      #expect(document.workspaceSnapshot?.definition.displayName == "Loaded")
+      expectDisplayName(document.workspaceSnapshot?.definition.displayName, equals: "Loaded")
       let coordinator = WorkspaceDocumentConnection(document: document)
       await coordinator.runtimeCoordinator.refreshPersistedWorkspace(at: root) { true }
       let undo = UndoManager()
 
       #expect(!undo.canUndo)
-      #expect(
-        coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName == "Loaded")
+      expectDisplayName(
+        coordinator.runtimeCoordinator.stateService.workspaceDefinition.displayName,
+        equals: "Loaded")
       #expect(
         coordinator.runtimeCoordinator.persistenceCoordinator.runtimeWorkspace
           == document.workspaceSnapshot)
@@ -896,11 +822,55 @@ extension AppUIComponentTestSuite {
         await Task.yield()
       }
       #expect(owner == nil)
-      document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.displayName = "Still editable"
+      setDisplayName("Still editable", in: document.stateService)
+      expectDisplayName(
+        document.stateService.workspaceDefinition.displayName, equals: "Still editable")
+      expectWorkspaceContent(document.workspaceSnapshot, equals: nil)
+    }
+
+    private func setDisplayName(_ name: String, in document: WorkspaceDocument) {
+      document.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.displayName = name
       }
-      #expect(document.stateService.workspaceDefinition.displayName == "Still editable")
-      #expect(document.workspaceSnapshot == nil)
+    }
+
+    private func configureCamera(in document: WorkspaceDocument) {
+      document.editWorkspace(undoManager: nil) { workspace in
+        var camera = Ldtx_Workspace_V4_VfxSourceComponent()
+        camera.internalID = 7
+        camera.displayName = "Camera"
+        camera.deviceWidth = 1920
+        camera.deviceHeight = 1080
+        var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+        component.vfxSource = camera
+        workspace.definition.videoComponents = [component]
+      }
+    }
+
+    private func configureClassifier(in document: WorkspaceDocument) {
+      document.editWorkspace(undoManager: nil) { workspace in
+        var classifier = Ldtx_Workspace_V4_LdtxSceneDetectorVision()
+        classifier.internalID = 5
+        classifier.displayName = "Classifier"
+        classifier.videoComponentInternalID = 7
+        var vision = Ldtx_Workspace_V4_VisionWrapper()
+        vision.ldtxSceneDetectorVision = classifier
+        workspace.definition.visions = [vision]
+      }
+    }
+
+    private func expectWorkspaceContent(
+      _ actual: WorkspaceV4Bundle?, equals expected: WorkspaceV4Bundle?,
+      sourceLocation: SourceLocation = #_sourceLocation()
+    ) {
+      #expect(actual == expected, sourceLocation: sourceLocation)
+    }
+
+    private func expectDisplayName(
+      _ actual: String?, equals expected: String?,
+      sourceLocation: SourceLocation = #_sourceLocation()
+    ) {
+      #expect(actual == expected, sourceLocation: sourceLocation)
     }
   }
 }

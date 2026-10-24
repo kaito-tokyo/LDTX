@@ -41,7 +41,6 @@ targets:
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXQuickLookThumbnail:
     type: app-extension
     platform: macOS
@@ -80,4 +79,3 @@ targets:
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
         ENABLE_HARDENED_RUNTIME: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx

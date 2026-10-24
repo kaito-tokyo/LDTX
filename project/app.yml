@@ -14,7 +14,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXAppletSupport
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXRecordPlayerApplet:
     type: framework
     platform: macOS
@@ -31,7 +30,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXRecordPlayerApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXWorkspaceAppletUI:
     type: framework
     platform: macOS
@@ -68,7 +66,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletUI
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
       configs:
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: >-
@@ -93,7 +90,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXSettingsApplet
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXVisionProgrammerApplet:
     type: framework
     platform: macOS
@@ -286,7 +282,6 @@ targets:
         DEAD_CODE_STRIPPING: "YES"
         DISABLE_DIAMOND_PROBLEM_DIAGNOSTIC: "YES"
         DEFINES_MODULE: "YES"
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         ENABLE_HARDENED_RUNTIME: "YES"
       configs:
         Debug:

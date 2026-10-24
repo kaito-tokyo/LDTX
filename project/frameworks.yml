@@ -48,7 +48,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXUtils:
     type: framework
     platform: macOS
@@ -85,7 +84,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
   LDTXAudioEngine:
     type: framework
@@ -113,7 +111,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXAudioEngine
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
         MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
@@ -173,7 +170,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXDeviceRegistry
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         OTHER_LDFLAGS: "$(inherited) -framework CoreAudio -framework CoreFoundation"
   LDTXDash:
     type: framework
@@ -284,7 +280,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXVideoComposition
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objc
   LDTXRecordBundleFormat:
     type: framework
     platform: macOS
@@ -337,7 +332,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXVideoRendering
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objc
   LDTXVision:
     type: framework
     platform: macOS
@@ -446,7 +440,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXProgramRuntime
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
   LDTXRichText:
     type: framework
@@ -493,7 +486,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletModel
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXWorkspaceAppletStore:
     type: framework
     platform: macOS
@@ -516,7 +508,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletStore
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXWorkspaceAppletService:
     type: framework
     platform: macOS
@@ -554,7 +545,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletService
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
         MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
   LDTXWorkspaceAppletController:
     type: framework
@@ -604,7 +594,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletController
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-        SWIFT_OBJC_INTEROP_MODE: objcxx
   LDTXFontRasterizer:
     type: framework
     platform: macOS

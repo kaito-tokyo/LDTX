@@ -115,7 +115,7 @@ extension AppUIComponentTestSuite {
       let content = window.contentPane
       let inspector = WorkspaceProgramsInspector(
         stateService: state, appletData: data)
-      #expect(inspector.programSelection.wrappedValue == nil)
+      expectProgramSelection(inspector.programSelection.wrappedValue, equals: nil)
       var first = Ldtx_Workspace_V4_ProgramDefinition()
       first.internalID = 11
       first.displayName = "Same Name"
@@ -124,37 +124,37 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [first, second]
       }
-      #expect(inspector.programSelection.wrappedValue == 11)
+      expectProgramSelection(inspector.programSelection.wrappedValue, equals: 11)
       data.updateState(for: url) { $0.selectedProgramInternalID = 22 }
       // Content and the Inspector resolve the same local selection.
-      #expect(
+      expectProgramSelection(
         content.appletData.selectedProgram(
           in: content.stateService.workspaceDefinition, for: content.stateService.localStateURL)?
-          .internalID == 22)
+          .internalID, equals: 22)
       let binding = inspector.programSelection
       #expect(!inspector.canSelectProgram)
-      #expect(binding.wrappedValue == 22)
+      expectProgramSelection(binding.wrappedValue, equals: 22)
       // This standalone Store has no runtime. A rejected write preserves selection.
       binding.wrappedValue = 11
-      #expect(binding.wrappedValue == 22)
-      #expect(data.state(for: url).selectedProgramInternalID == 22)
+      expectProgramSelection(binding.wrappedValue, equals: 22)
+      expectProgramSelection(data.state(for: url).selectedProgramInternalID, equals: 22)
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [first]
       }
-      #expect(binding.wrappedValue == 11)
-      #expect(inspector.programSelection.wrappedValue == 11)
-      #expect(data.state(for: url).selectedProgramInternalID == 22)
+      expectProgramSelection(binding.wrappedValue, equals: 11)
+      expectProgramSelection(inspector.programSelection.wrappedValue, equals: 11)
+      expectProgramSelection(data.state(for: url).selectedProgramInternalID, equals: 22)
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = []
       }
-      #expect(inspector.programSelection.wrappedValue == nil)
-      #expect(binding.wrappedValue == nil)
+      expectProgramSelection(inspector.programSelection.wrappedValue, equals: nil)
+      expectProgramSelection(binding.wrappedValue, equals: nil)
       binding.wrappedValue = nil
       #expect(
         content.appletData.selectedProgram(
           in: content.stateService.workspaceDefinition, for: content.stateService.localStateURL)
           == nil)
-      #expect(data.state(for: url).selectedProgramInternalID == 22)
+      expectProgramSelection(data.state(for: url).selectedProgramInternalID, equals: 22)
     }
 
     @Test("LUB-1049: UCT-1016.5: Sidebar selection starts empty and remains Window local")
@@ -496,41 +496,18 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.landscapeProfileID =
-          "sdr-landscape-1080p60"
-      }
-      first.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.portraitProfileID =
-          "sdr-portrait-1080p60"
-      }
-      let firstWindow = WorkspaceAppletCoordinator(
-        stateService: first.stateService,
-        persistenceCoordinator: first.persistenceCoordinator, appletData: data,
-        document: first)
-      first.addWindowController(firstWindow)
+      configureCanvasProfiles(in: first)
+      let firstWindow = attachCoordinator(to: first, appletData: data)
       firstWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/First-\(UUID()).ldtxworkspace"))
       let a = try firstWindow.windowRuntime.addProgram(displayName: "First")
       let b = try firstWindow.windowRuntime.addProgram(displayName: "Second")
-      second.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition = first.stateService.workspaceDefinition
-      }
-      second.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.preferences = first.stateService.workspacePreferences
-      }
-      let secondWindow = WorkspaceAppletCoordinator(
-        stateService: second.stateService,
-        persistenceCoordinator: second.persistenceCoordinator, appletData: data,
-        document: second)
-      second.addWindowController(secondWindow)
+      copyProgramState(from: first, to: second)
+      let secondWindow = attachCoordinator(to: second, appletData: data)
       secondWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/Second-\(UUID()).ldtxworkspace"))
       let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
         UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: savedRoot) }
-      try await saveWorkspaceDocument(
-        first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
-      try await saveWorkspaceDocument(
-        second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
+      try await saveDocumentPair(first, second, under: savedRoot)
       _ = await (try secondWindow.selectProgram(internalID: a)).value
       let landscape = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let portrait = try #require(firstWindow.windowRuntime.portraitRuntime)
@@ -539,24 +516,27 @@ extension AppUIComponentTestSuite {
       _ = await (try firstWindow.selectProgram(internalID: b)).value
       #expect(firstWindow.windowRuntime.landscapeRuntime === landscape)
       #expect(firstWindow.windowRuntime.portraitRuntime === portrait)
-      #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == b)
-      #expect(data.state(for: second.stateService.localStateURL!).selectedProgramInternalID == a)
+      expectProgramSelection(
+        data.state(for: first.stateService.localStateURL!).selectedProgramInternalID, equals: b)
+      expectProgramSelection(
+        data.state(for: second.stateService.localStateURL!).selectedProgramInternalID, equals: a)
       // Content is now the live AppKit controller connected to this document.
-      #expect(
+      expectProgramSelection(
         data.selectedProgram(
           in: first.stateService.workspaceDefinition, for: first.stateService.localStateURL)?
-          .internalID == b)
+          .internalID, equals: b)
       #expect(first.stateService.inspectorSelector == .init(kind: .workspacePrograms))
       let inspector = WorkspaceProgramsInspector(
         stateService: first.stateService, appletData: data,
         runtimeActions: { firstWindow })
       #expect(inspector.canSelectProgram)
-      #expect(inspector.programSelection.wrappedValue == b)
+      expectProgramSelection(inspector.programSelection.wrappedValue, equals: b)
       #expect(second.stateService.inspectorSelector == nil)
       #expect(first.stateService.workspaceDefinition == definition)
       #expect(throws: (any Error).self) { try firstWindow.selectProgram(internalID: Int64.max) }
       _ = await (try firstWindow.selectProgram(internalID: a)).value
-      #expect(data.state(for: first.stateService.localStateURL!).selectedProgramInternalID == a)
+      expectProgramSelection(
+        data.state(for: first.stateService.localStateURL!).selectedProgramInternalID, equals: a)
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: root) }
       let url = root.appendingPathComponent("Selection.ldtxworkspace")
@@ -566,24 +546,20 @@ extension AppUIComponentTestSuite {
       first.close()
       let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
-      let reopenedWindow = WorkspaceAppletCoordinator(
-        stateService: reopened.stateService,
-        persistenceCoordinator: reopened.persistenceCoordinator, appletData: data,
-        document: reopened)
-      reopened.addWindowController(reopenedWindow)
+      let reopenedWindow = attachCoordinator(to: reopened, appletData: data)
       // Opening an existing file supplies its URL without moving transient window state.
       reopened.stateService.localStateURL = nil
       reopenedWindow.adoptDocumentURL(url)
       let reopenedInspector = WorkspaceProgramsInspector(
         stateService: reopened.stateService, appletData: data,
         runtimeActions: { reopenedWindow })
-      #expect(data.state(for: url).selectedProgramInternalID == b)
+      expectProgramSelection(data.state(for: url).selectedProgramInternalID, equals: b)
       #expect(reopenedInspector.canSelectProgram)
-      #expect(reopenedInspector.programSelection.wrappedValue == b)
-      #expect(
+      expectProgramSelection(reopenedInspector.programSelection.wrappedValue, equals: b)
+      expectProgramSelection(
         data.selectedProgram(
           in: reopened.stateService.workspaceDefinition, for: reopened.stateService.localStateURL)?
-          .internalID == b)
+          .internalID, equals: b)
       #expect(reopened.stateService.inspectorSelector == nil)
       await reopenedWindow.shutdown()
       await secondWindow.shutdown()
@@ -603,19 +579,8 @@ extension AppUIComponentTestSuite {
         first.close()
         second.close()
       }
-      first.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.landscapeProfileID =
-          "sdr-landscape-1080p60"
-      }
-      first.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.portraitProfileID =
-          "sdr-portrait-1080p60"
-      }
-      let firstWindow = WorkspaceAppletCoordinator(
-        stateService: first.stateService,
-        persistenceCoordinator: first.persistenceCoordinator, appletData: data,
-        document: first)
-      first.addWindowController(firstWindow)
+      configureCanvasProfiles(in: first)
+      let firstWindow = attachCoordinator(to: first, appletData: data)
       let input = try firstWindow.windowRuntime.addVFXSource(displayName: "Camera")
       firstWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/First-\(UUID()).ldtxworkspace"))
       let program = try firstWindow.windowRuntime.addProgram(displayName: "Main")
@@ -624,17 +589,8 @@ extension AppUIComponentTestSuite {
       data.updateState(for: first.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
       }
-      second.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition = first.stateService.workspaceDefinition
-      }
-      second.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.preferences = first.stateService.workspacePreferences
-      }
-      let secondWindow = WorkspaceAppletCoordinator(
-        stateService: second.stateService,
-        persistenceCoordinator: second.persistenceCoordinator, appletData: data,
-        document: second)
-      second.addWindowController(secondWindow)
+      copyProgramState(from: first, to: second)
+      let secondWindow = attachCoordinator(to: second, appletData: data)
       secondWindow.adoptDocumentURL(URL(fileURLWithPath: "/tmp/Second-\(UUID()).ldtxworkspace"))
       data.updateState(for: second.stateService.localStateURL!) {
         $0.selectedProgramInternalID = program
@@ -642,10 +598,7 @@ extension AppUIComponentTestSuite {
       let savedRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
         UUID().uuidString)
       defer { try? FileManager.default.removeItem(at: savedRoot) }
-      try await saveWorkspaceDocument(
-        first, to: savedRoot.appendingPathComponent("First.ldtxworkspace"))
-      try await saveWorkspaceDocument(
-        second, to: savedRoot.appendingPathComponent("Second.ldtxworkspace"))
+      try await saveDocumentPair(first, second, under: savedRoot)
       let firstRuntime = try #require(firstWindow.windowRuntime.landscapeRuntime)
       let secondRuntime = try #require(secondWindow.windowRuntime.landscapeRuntime)
       data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "test-camera"), for: input)
@@ -804,6 +757,50 @@ extension AppUIComponentTestSuite {
       #expect(stateService.workspaceDefinition == definition)
       #expect(stateService.inspectorSelector == selection)
       #expect(data.physicalDeviceIDsByResourceInternalID == assignments)
+    }
+
+    private func configureCanvasProfiles(in document: WorkspaceDocument) {
+      document.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
+      }
+      document.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+      }
+    }
+
+    private func copyProgramState(from first: WorkspaceDocument, to second: WorkspaceDocument) {
+      second.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition = first.workspaceDefinition
+      }
+      second.editWorkspace(undoManager: nil) { workspace in
+        workspace.preferences = first.workspacePreferences
+      }
+    }
+
+    private func attachCoordinator(
+      to document: WorkspaceDocument, appletData: WorkspaceAppletData
+    ) -> WorkspaceAppletCoordinator {
+      let coordinator = WorkspaceAppletCoordinator(
+        stateService: document.stateService,
+        persistenceCoordinator: document.persistenceCoordinator, appletData: appletData,
+        document: document)
+      document.addWindowController(coordinator)
+      return coordinator
+    }
+
+    private func saveDocumentPair(
+      _ first: WorkspaceDocument, _ second: WorkspaceDocument, under root: URL
+    ) async throws {
+      try await saveWorkspaceDocument(first, to: root.appendingPathComponent("First.ldtxworkspace"))
+      try await saveWorkspaceDocument(
+        second, to: root.appendingPathComponent("Second.ldtxworkspace"))
+    }
+
+    private func expectProgramSelection(
+      _ actual: Int64?, equals expected: Int64?,
+      sourceLocation: SourceLocation = #_sourceLocation()
+    ) {
+      #expect(actual == expected, sourceLocation: sourceLocation)
     }
   }
 }

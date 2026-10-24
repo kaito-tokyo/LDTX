@@ -9,6 +9,11 @@ SPDX-License-Identifier: Apache-2.0
 See [dependency updates](dependency-updates.md) for Dependabot coverage, manifest
 and lock synchronization, and validation of update proposals.
 
+XcodeGen targets use C11 and C++20. Swift uses Objective-C interoperability;
+native AudioMixEngine unit tests run in the existing CMake test executable.
+Debug skips framework module verification. Release and Distribution retain it;
+use `ENABLE_MODULE_VERIFIER=YES` to enable it explicitly for a Debug build.
+
 **Set up Protobuf tools when needed:**
 
 ```sh

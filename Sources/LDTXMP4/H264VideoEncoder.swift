@@ -397,7 +397,7 @@ public final class H264VideoEncoder: @unchecked Sendable {
       .takeUnretainedValue()
     encoder.didEncode(
       status: status,
-      infoFlags: VTEncodeInfoFlags(rawValue: infoFlags),
+      infoFlags: infoFlags,
       sampleBuffer: sampleBuffer
     )
   }
