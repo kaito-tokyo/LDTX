@@ -14,6 +14,13 @@ native AudioMixEngine unit tests run in the existing CMake test executable.
 Debug skips framework module verification. Release and Distribution retain it;
 use `ENABLE_MODULE_VERIFIER=YES` to enable it explicitly for a Debug build.
 
+Debug enables compiler caching and path normalization, including generated
+module maps. CI applies these settings to package targets and preserves
+`.derivedData/CompilationCache.noindex` between runs. A clean build can reuse
+this cache; the first build still compiles uncached inputs. Release and
+Distribution keep their existing cache settings.
+Use `COMPILATION_CACHE_ENABLE_CACHING=NO` to build without compiler-result reuse.
+
 **Set up Protobuf tools when needed:**
 
 ```sh

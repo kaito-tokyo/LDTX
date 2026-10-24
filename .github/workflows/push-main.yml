@@ -24,6 +24,7 @@ jobs:
 
   swift:
     uses: ./.github/workflows/swift.yml
+    cache-mode: write
     permissions:
       contents: read
     with:
