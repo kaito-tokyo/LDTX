@@ -12,31 +12,62 @@ extension AppUIComponentTestSuite {
   struct UCT1006VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("LUB-1048: Writes representable fields and retains incomplete drafts")
-    func writesRepresentableFieldsAndRetainsIncompleteDrafts() throws {
+    enum TransformField: Int, Sendable, Codable {
+      case translationX, translationY, scaleX, scaleY
+    }
+
+    struct TransformInput: Sendable, Codable {
+      let field: TransformField
+      let input: String
+      let expectedNumerator: Int32
+      let expectedDenominator: UInt32
+    }
+
+    @Test(
+      "LUB-1048: Representable transform input commits only the selected field",
+      arguments: [
+        TransformInput(
+          field: .translationX, input: "960", expectedNumerator: 960, expectedDenominator: 1920),
+        TransformInput(
+          field: .translationY, input: "270", expectedNumerator: 270, expectedDenominator: 1080),
+        TransformInput(
+          field: .scaleX, input: "-1.25", expectedNumerator: -125, expectedDenominator: 100),
+        TransformInput(field: .scaleY, input: "2", expectedNumerator: 2, expectedDenominator: 1),
+      ])
+    func representableTransformInput(_ data: TransformInput) throws {
       let fixture = VideoLayersTestFixture()
       let row = try #require(fixture.editor.rows[1])
-      row.edit("960", at: 0)
-      row.edit("270", at: 1)
-      row.edit("-1.25", at: 2)
-      row.edit("2", at: 3)
+      let before = row.transform
+      row.edit(data.input, at: data.field.rawValue)
       let saved = try #require(fixture.editor.preferences.videoLayerTransforms[1])
-      #expect(saved.translationX.num == 960 && saved.translationX.den == 1920)
-      #expect(saved.translationY.num == 270 && saved.translationY.den == 1080)
-      #expect(saved.scaleX.double == -1.25)
-      #expect(saved.scaleY.double == 2)
-      row.edit("-", at: 0)
-      let before = fixture.editor.preferences
-      row.edit("0.5", at: 3)
-      #expect(row.strings[0] == "-")
-      #expect(row.hasLocalTextChanges)
+      let values = [
+        saved.translationX.double, saved.translationY.double, saved.scaleX.double,
+        saved.scaleY.double,
+      ]
+      let original = [
+        before.translationX.double, before.translationY.double, before.scaleX.double,
+        before.scaleY.double,
+      ]
       #expect(
-        fixture.editor.preferences.videoLayerTransforms[1]?.translationX == saved.translationX)
-      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.scaleY.double == 0.5)
+        values[data.field.rawValue] == Double(data.expectedNumerator)
+          / Double(data.expectedDenominator))
+      for field in 0..<4 where field != data.field.rawValue {
+        #expect(values[field] == original[field])
+      }
+    }
+
+    @Test("LUB-1048: Editing another transform field preserves an incomplete draft")
+    func editingAnotherFieldPreservesDraft() throws {
+      let fixture = VideoLayersTestFixture()
+      let row = try #require(fixture.editor.rows[1])
+      row.edit("-", at: 0)
+      row.edit("0.5", at: 3)
       fixture.editor.synchronizeRows()
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[0] == "-")
-      #expect(before.videoLayerTransforms[1]?.scaleY.double == 2)
+      #expect(row.hasLocalTextChanges)
+      #expect(row.transform.translationX.double == 0)
+      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.scaleY.double == 0.5)
     }
 
     @Test(

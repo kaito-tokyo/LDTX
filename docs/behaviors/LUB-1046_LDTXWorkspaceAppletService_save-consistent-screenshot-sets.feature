@@ -22,3 +22,15 @@ Feature: LDTXWorkspaceAppletService save consistent screenshot sets
     Given a recording with an accepted screenshot package copy whose write is suspended
     When Stop or Pause is requested
     Then new package copies are rejected and finalization waits for the accepted copy
+
+  @LUB-1046.4 @UIComponent
+  Scenario Outline: Keep screenshot actions available independently of output mode
+    Given a window with output active <outputActive> and local recording <localRecording>
+    When its screenshot toolbar action is invoked
+    Then the action is enabled and requests one capture from its own runtime
+
+    Examples:
+      | outputActive | localRecording |
+      | false        | false          |
+      | true         | false          |
+      | true         | true           |

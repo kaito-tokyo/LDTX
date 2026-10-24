@@ -6,10 +6,15 @@
 Feature: preserve window local layout
 
   @LUB-1049.1 @UIComponent
-  Scenario: Restore pane widths and content state
-    Given a window with expanded panes and edited pane content
-    When a pane is collapsed and expanded
-    Then its expanded width and hosted content are retained
+  Scenario Outline: Retain content while a side pane is hidden
+    Given a <pane> pane with an active editing draft
+    When that pane is collapsed and expanded
+    Then its hosted draft and accepted task results remain available
+
+    Examples:
+      | pane      |
+      | sidebar   |
+      | inspector |
 
   @LUB-1049.2 @UIComponent
   Scenario: Keep controls within their window
@@ -22,3 +27,9 @@ Feature: preserve window local layout
     Given a window whose panes have natural minimum sizes
     When panes or preview geometry change
     Then minimum window size and scrollable editor content remain consistent with visible panes
+
+  @LUB-1049.4 @UIComponent
+  Scenario: Restore the Sidebar's expanded width
+    Given a Sidebar expanded to 280 pixels
+    When it is collapsed and expanded
+    Then its width returns to 280 pixels without allowing collapse from window resizing

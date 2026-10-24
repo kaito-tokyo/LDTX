@@ -91,13 +91,22 @@ extension AppUIComponentTestSuite {
           in: state.workspaceDefinition,
           preferences: state.workspacePreferences
         ).isEmpty)
-      // Document Undo restores this same complete editing snapshot.
-      state.replaceEditingWorkspace(original, undoManager: nil)
-      #expect(state.editingWorkspace == original)
     }
 
-    @Test("LUB-1048: Active output closed and missing targets do not change content")
-    func activeOutputClosedAndMissingTargetsDoNotChangeContent() {
+    struct DeletionState: Sendable, Codable {
+      let outputActive: Bool
+      let closed: Bool
+      let targetID: Int64
+    }
+
+    @Test(
+      "LUB-1048: Unavailable deletion preserves document content",
+      arguments: [
+        DeletionState(outputActive: true, closed: false, targetID: 10),
+        DeletionState(outputActive: false, closed: true, targetID: 10),
+        DeletionState(outputActive: false, closed: false, targetID: 999),
+      ])
+    func unavailableDeletionPreservesContent(_ data: DeletionState) {
       let state = WorkspaceDocument()
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
@@ -105,43 +114,35 @@ extension AppUIComponentTestSuite {
         ]
       }
       let original = state.editingWorkspace
-      state.isOutputActive = true
-      VideoComponentDeletion.delete(10, from: state)
-      #expect(state.editingWorkspace == original)
-      state.isOutputActive = false
-      state.isClosed = true
-      VideoComponentDeletion.delete(10, from: state)
-      #expect(state.editingWorkspace == original)
-      state.isClosed = false
-      VideoComponentDeletion.delete(999, from: state)
+      state.isOutputActive = data.outputActive
+      state.isClosed = data.closed
+      VideoComponentDeletion.delete(data.targetID, from: state)
       #expect(state.editingWorkspace == original)
     }
 
-    @Test("LUB-1048: Vision inputs must be reassigned before deletion")
-    func visionInputsMustBeReassignedBeforeDeletion() {
-      for sceneDetector in [false, true] {
-        let state = WorkspaceDocument()
-        state.editWorkspace(undoManager: nil) { workspace in
-          workspace.definition.videoComponents = [.with { $0.vfxSource.internalID = 10 }]
-        }
-        state.editWorkspace(undoManager: nil) { workspace in
-          workspace.definition.visions = [
-            .with {
-              if sceneDetector {
-                $0.ldtxSceneDetectorVision.internalID = 30
-                $0.ldtxSceneDetectorVision.videoComponentInternalID = 10
-              } else {
-                $0.ocrVision.internalID = 30
-                $0.ocrVision.videoComponentInternalID = 10
-              }
-            }
-          ]
-        }
-        let original = state.editingWorkspace
-        #expect(VideoComponentDeletion.hasVisionInputReference(10, in: state))
-        VideoComponentDeletion.delete(10, from: state)
-        #expect(state.editingWorkspace == original)
+    @Test("LUB-1048: Vision inputs must be reassigned before deletion", arguments: [false, true])
+    func visionInputsMustBeReassignedBeforeDeletion(sceneDetector: Bool) {
+      let state = WorkspaceDocument()
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents = [.with { $0.vfxSource.internalID = 10 }]
       }
+      state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.visions = [
+          .with {
+            if sceneDetector {
+              $0.ldtxSceneDetectorVision.internalID = 30
+              $0.ldtxSceneDetectorVision.videoComponentInternalID = 10
+            } else {
+              $0.ocrVision.internalID = 30
+              $0.ocrVision.videoComponentInternalID = 10
+            }
+          }
+        ]
+      }
+      let original = state.editingWorkspace
+      #expect(VideoComponentDeletion.hasVisionInputReference(10, in: state))
+      VideoComponentDeletion.delete(10, from: state)
+      #expect(state.editingWorkspace == original)
     }
   }
 }

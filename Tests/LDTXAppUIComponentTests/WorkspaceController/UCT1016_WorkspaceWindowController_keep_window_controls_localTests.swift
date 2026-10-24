@@ -366,96 +366,122 @@ extension AppUIComponentTestSuite {
       #expect(document.fileURL == nil)
     }
 
-    @Test("LUB-1066: UCT-1016.8: Output buttons reflect state and invoke their own runtime")
-    func outputButtonsReflectStateAndDispatchToTheirWindow() async throws {
-      _ = NSApplication.shared
+    struct OutputControls: Sendable, Codable {
+      let state: RecordingStateInput
+      let stopEnabled: Bool
+      let toggleEnabled: Bool
+      let title: String
+    }
+
+    @Test(
+      "LUB-1066: UCT-1016.8: Output state determines toolbar availability",
+      arguments: [
+        OutputControls(
+          state: .idle, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
+        OutputControls(
+          state: .starting, stopEnabled: true, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .recording, stopEnabled: true, toggleEnabled: true, title: "Pause Output"),
+        OutputControls(
+          state: .pausing, stopEnabled: false, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .paused, stopEnabled: true, toggleEnabled: true, title: "Start Output"),
+        OutputControls(
+          state: .stopping, stopEnabled: false, toggleEnabled: false, title: "Start Output"),
+        OutputControls(
+          state: .failed, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
+      ])
+    func outputControlAvailability(_ data: OutputControls) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.recordingState = data.state.value
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: ToolbarDispatcher())
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let items = try #require(window.toolbar).items
+      let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
+      let toggle = try #require(
+        items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
+      #expect(window.validateToolbarItem(stop) == data.stopEnabled)
+      #expect(window.validateToolbarItem(toggle) == data.toggleEnabled)
+      #expect(toggle.menuFormRepresentation?.title == data.title)
+    }
+
+    struct OutputAction: Sendable, Codable {
+      let state: RecordingStateInput
+      let item: String
+      let expected: [String]
+    }
+
+    @Test(
+      "LUB-1066: UCT-1016.8: Toolbar actions reach only their owning runtime",
+      arguments: [
+        OutputAction(state: .idle, item: "workspace.startPauseOutput", expected: ["start"]),
+        OutputAction(state: .recording, item: "workspace.startPauseOutput", expected: ["pause"]),
+        OutputAction(state: .paused, item: "workspace.stopOutput", expected: ["stop"]),
+        OutputAction(state: .pausing, item: "workspace.startPauseOutput", expected: []),
+      ])
+    func outputAction(_ data: OutputAction) async throws {
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.recordingState = data.state.value
       let dispatcher = ToolbarDispatcher()
-      let otherDispatcher = ToolbarDispatcher()
+      let other = ToolbarDispatcher()
       let first = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
-      let second = makeWorkspaceTestWindow(dispatcher: otherDispatcher)
+      let second = makeWorkspaceTestWindow(dispatcher: other)
       defer {
         first.close()
         second.close()
       }
       await settleWorkspaceToolbar(first)
-      let items = try #require(first.toolbar).items
-      let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
-      let toggle = try #require(
-        items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
-      for (value, stopEnabled, toggleEnabled, label) in [
-        (WorkspaceRecordingState.idle, false, true, "Start Output"),
-        (.starting, true, false, "Start Output"),
-        (.recording, true, true, "Pause Output"),
-        (.pausing, false, false, "Start Output"),
-        (.paused, true, true, "Start Output"),
-        (.stopping, false, false, "Start Output"),
-        (.failed("Failure"), false, true, "Start Output"),
-      ] {
-        state.recordingState = value
-        await settleWorkspaceToolbar(first)
-        #expect(first.validateToolbarItem(stop) == stopEnabled)
-        #expect(first.validateToolbarItem(toggle) == toggleEnabled)
-        #expect(toggle.menuFormRepresentation?.title == label)
+      let item = try #require(
+        first.toolbar?.items.first { $0.itemIdentifier.rawValue == data.item })
+      try performWorkspaceToolbarAction(item)
+      await drainWorkspaceTestTasks()
+      #expect(dispatcher.actions == data.expected)
+      #expect(other.actions.isEmpty)
+    }
 
-      }
-      state.recordingState = .idle
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start"])
-      state.recordingState = .recording
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause"])
-      state.recordingState = .paused
-      try performWorkspaceToolbarAction(stop)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause", "stop"])
-      state.recordingState = .pausing
-      try performWorkspaceToolbarAction(toggle)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["start", "pause", "stop"])
-      #expect(otherDispatcher.actions.isEmpty)
-      state.recordingState = .idle
+    @Test("LUB-1066: UCT-1016.8: Toolbar start failure remains observable")
+    func toolbarStartFailureIsObservable() async throws {
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      let dispatcher = ToolbarDispatcher()
       dispatcher.failStart = true
-      await settleWorkspaceToolbar(first)
-      try performWorkspaceToolbarAction(toggle)
+      let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
+      defer { window.close() }
+      await settleWorkspaceToolbar(window)
+      let item = try #require(
+        window.toolbar?.items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
+      try performWorkspaceToolbarAction(item)
       await drainWorkspaceTestTasks()
       #expect(state.outputFailureMessage != nil)
     }
 
-    @Test("LUB-1046: UCT-1016.9: Screenshot actions remain available outside local recording")
-    func screenshotToolbarActionsRemainAvailable() async throws {
-      _ = NSApplication.shared
+    struct ScreenshotState: Sendable, Codable {
+      let outputActive: Bool
+      let localRecording: Bool
+    }
+
+    @Test(
+      "LUB-1046: UCT-1016.9: Screenshot action is independent of output mode",
+      arguments: [
+        ScreenshotState(outputActive: false, localRecording: false),
+        ScreenshotState(outputActive: true, localRecording: false),
+        ScreenshotState(outputActive: true, localRecording: true),
+      ])
+    func screenshotToolbarAction(_ data: ScreenshotState) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.isOutputActive = data.outputActive
+      state.isLocalRecording = data.localRecording
       let dispatcher = ToolbarDispatcher()
       let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
-      for (id, expected) in [
-        ("workspace.captureScreenshots", "screenshot")
-      ] {
-        let item = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == id })
-        #expect(item.isEnabled)
-        try performWorkspaceToolbarAction(item)
-        await drainWorkspaceTestTasks()
-        #expect(dispatcher.actions == [expected])
-        dispatcher.actions = []
-        state.isOutputActive = true
-        state.isLocalRecording = false
-        #expect(item.isEnabled)
-        state.isLocalRecording = true
-        await settleWorkspaceToolbar(window)
-        #expect(item.isEnabled)
-        #expect(item.isEnabled)
-        #expect(item.label != "Start Output")
-        try performWorkspaceToolbarAction(item)
-        await drainWorkspaceTestTasks()
-        #expect(dispatcher.actions == [expected])
-        dispatcher.actions = []
-        state.isOutputActive = false
-        state.isLocalRecording = false
-      }
+      let item = try #require(
+        window.toolbar?.items.first { $0.itemIdentifier.rawValue == "workspace.captureScreenshots" }
+      )
+      #expect(item.isEnabled)
+      try performWorkspaceToolbarAction(item)
+      await drainWorkspaceTestTasks()
+      #expect(dispatcher.actions == ["screenshot"])
     }
 
     @Test("LUB-1052: UCT-1016.10: Program selection updates only the owning Window runtimes")

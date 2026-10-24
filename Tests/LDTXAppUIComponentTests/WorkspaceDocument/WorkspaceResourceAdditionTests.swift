@@ -111,45 +111,56 @@ extension AppUIComponentTestSuite {
       #expect(state.workspaceDefinition.audioDevices.isEmpty)
     }
 
-    @Test("LUB-1050: Output state locks definition changes during transitions")
-    func outputStateLocksDefinitionChangesDuringTransitions() {
+    struct AdditionState: Sendable, Codable {
+      let state: RecordingStateInput
+      let allowed: Bool
+    }
+
+    @Test(
+      "LUB-1050: Output state determines resource addition availability",
+      arguments: [
+        AdditionState(state: .idle, allowed: true),
+        AdditionState(state: .paused, allowed: true),
+        AdditionState(state: .failed, allowed: true),
+        AdditionState(state: .starting, allowed: false),
+        AdditionState(state: .recording, allowed: false),
+        AdditionState(state: .pausing, allowed: false),
+        AdditionState(state: .stopping, allowed: false),
+      ])
+    func additionAvailability(_ data: AdditionState) {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      state.isOutputActive = data.state.value.isOutputActive
       var draft = WorkspaceAddDraft()
       draft.componentKind = .solidColor
       draft.name = "Color"
-      for value in [WorkspaceRecordingState.starting, .recording, .pausing, .stopping] {
-        state.isOutputActive = value.isOutputActive
-        #expect(!value.canStart)
-        #expect(
-          WorkspaceResourceAddition.validationMessage(
-            sheet: .videoComponent, draft: draft, devices: [], stateService: state) != nil)
-      }
-      for value in [WorkspaceRecordingState.idle, .paused, .failed("Failure")] {
-        state.isOutputActive = value.isOutputActive
-        #expect(value.canStart)
-        #expect(
-          WorkspaceResourceAddition.validationMessage(
-            sheet: .videoComponent, draft: draft, devices: [], stateService: state) == nil)
-      }
+      #expect(
+        (WorkspaceResourceAddition.validationMessage(
+          sheet: .videoComponent, draft: draft, devices: [], stateService: state) == nil)
+          == data.allowed)
     }
 
-    @Test("LUB-1050: Device name falls back and explicit name is trimmed")
-    func deviceNameFallsBackAndExplicitNameIsTrimmed() throws {
+    struct DeviceNameInput: Sendable, Codable {
+      let input: String
+      let expected: String
+    }
+
+    @Test(
+      "LUB-1050: Audio device addition resolves the supplied display name",
+      arguments: [
+        DeviceNameInput(input: "", expected: "Microphone"),
+        DeviceNameInput(input: "  Voice  ", expected: "Voice"),
+      ])
+    func deviceNameInput(_ data: DeviceNameInput) throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
-      let camera = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
+      let device = WorkspaceAddDeviceOption(
+        id: .coreAudioDevice(uid: "microphone"), name: "Microphone")
       var draft = WorkspaceAddDraft()
-      draft.physicalDeviceID = camera.id
+      draft.physicalDeviceID = device.id
+      draft.name = data.input
       let id = try WorkspaceResourceAddition.add(
-        sheet: .device, draft: draft, devices: [camera], stateService: state)
-      #expect(state.workspaceDefinition.audioDevices.first?.displayName == "Microphone")
+        sheet: .device, draft: draft, devices: [device], stateService: state)
+      #expect(state.workspaceDefinition.audioDevices.first?.displayName == data.expected)
       #expect(state.inspectorSelector == .init(kind: .audioInputDevice, internalID: id))
-      let audio = WorkspaceAddDeviceOption(id: .coreAudioDevice(uid: "camera"), name: "Microphone")
-      draft.physicalDeviceID = audio.id
-      draft.name = "  Voice  "
-      try WorkspaceResourceAddition.add(
-        sheet: .device, draft: draft, devices: [audio], stateService: state)
-      #expect(state.workspaceDefinition.audioDevices.last?.displayName == "Voice")
-      #expect(state.inspectorSelector?.kind == .audioInputDevice)
     }
 
     @Test("LUB-1050: Rejected adds leave definition and selection unchanged")

@@ -12,10 +12,10 @@ Feature: LDTXProtos preserve workspace values
     Then its numerator and denominator are preserved without reduction
 
   @LUB-1000.2 @Unit
-  Scenario: Keep field presence and unknown data
-    Given a V4 message containing absent optional fields and unknown fields
-    When the message is decoded and encoded
-    Then absent fields remain absent and unknown fields survive
+  Scenario: Preserve reserved Clock geometry during a font size update
+    Given a saved Clock containing reserved width and height fields
+    When its font size is set and the Clock is serialized
+    Then the new font size is stored without discarding the reserved geometry
 
   @LUB-1000.3 @Unit
   Scenario: Reject an unrepresentable decimal without mutation

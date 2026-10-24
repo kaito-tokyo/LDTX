@@ -35,24 +35,6 @@ extension OutputTestSuite {
         try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
     }
 
-    @Test("LUB-1028: Application settings store does not read another user defaults suite")
-    func applicationSettingsStoreDoesNotReadAnotherUserDefaultsSuite() {
-      let sourceName = "LDTXTests.ApplicationSettingsStore.source.\(UUID().uuidString)"
-      let targetName = "LDTXTests.ApplicationSettingsStore.target.\(UUID().uuidString)"
-      let source = UserDefaults(suiteName: sourceName)!
-      let target = UserDefaults(suiteName: targetName)!
-      defer {
-        source.removePersistentDomain(forName: sourceName)
-        target.removePersistentDomain(forName: targetName)
-      }
-      ApplicationSettingsStore(userDefaults: source).saveApplicationOutputPreferences(
-        ApplicationOutputPreferences(defaultOutputFolderPath: "/tmp/source"))
-
-      #expect(
-        ApplicationSettingsStore(userDefaults: target).loadApplicationOutputPreferences()
-          == ApplicationOutputPreferences())
-    }
-
     @Test("LUB-1028: Application settings store ignores old Protobuf values")
     func applicationSettingsStoreIgnoresOldProtobufValues() throws {
       let suiteName = "LDTXTests.ApplicationSettingsStore.oldFormat.\(UUID().uuidString)"

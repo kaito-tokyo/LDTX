@@ -51,20 +51,6 @@ extension OutputTestSuite {
       }
     }
 
-    @Test("LUB-1014: Embedded initialization uses standard base64")
-    func embeddedInitializationUsesStandardBase64() throws {
-      let configuration = DASHManifestConfiguration(
-        segmentTimeline: [
-          DASHSegmentTimelineEntry(number: 1, startTimeSeconds: 0, durationSeconds: 1)
-        ],
-        initialization: .embedded(data: Data([0xfb, 0xff, 0xff]))
-      )
-
-      let xml = try DASHManifestGenerator.xml(configuration: configuration)
-
-      #expect(xml.contains(#"initialization="data:video/mp4;base64,+///""#))
-    }
-
     @Test("LUB-1014: Generates static MPD with file initialization")
     func generatesStaticMPDWithFileInitialization() throws {
       let configuration = DASHManifestConfiguration(

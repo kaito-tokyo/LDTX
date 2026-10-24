@@ -6,16 +6,26 @@
 Feature: save and reload current document
 
   @LUB-1047.1 @UIComponent
-  Scenario: Keep unsaved edits independent of the persisted baseline
-    Given a Workspace with saved content A and pending edits B
-    When a snapshot is captured or a staging copy is written
-    Then pending edits remain B and the canonical saved baseline remains A
+  Scenario Outline: Keep pending edits independent of persisted content
+    Given saved content A and pending edits B
+    When <operation> is performed
+    Then pending edits remain B and the runtime baseline remains A
+
+    Examples:
+      | operation               |
+      | capture a snapshot      |
+      | write a staging copy    |
 
   @LUB-1047.2 @UIComponent
-  Scenario: Validate before replacing saved content
-    Given a Workspace whose pending content is invalid or whose write fails
-    When a save is attempted
-    Then the saved package and runtime baseline remain unchanged and pending edits remain available
+  Scenario Outline: Preserve content after an unsuccessful save
+    Given saved content A and pending edits B
+    When saving fails because <failure>
+    Then the saved package and runtime baseline remain A and pending edits remain B
+
+    Examples:
+      | failure                 |
+      | the ROI is invalid      |
+      | the destination cannot be written |
 
   @LUB-1047.3 @UIComponent
   Scenario: Reload canonical content without adding Undo

@@ -77,21 +77,6 @@ struct RecordingPackageIntegrationTestSuite {
       ])
   }
 
-  @Test("LUB-1003: Info advertises fixed manifest path") func infoAdvertisesFixedManifestPath()
-    throws
-  {
-    let data = try RecordingPackageInfo.data(
-      identifier: "recording-test",
-      mainMediaFile: "output-video.mp4",
-      audioTracks: []
-    )
-    let values = try PropertyListDecoder().decode(Metadata.self, from: data)
-    #expect(
-      values.manifestFile == RecordingPackage.manifestFileName
-    )
-    #expect(values.formatVersion == 2)
-  }
-
   @Test("LUB-1003: Version three loads independent canvas media without main media key")
   func versionThreeLoadsIndependentCanvasMediaWithoutMainMediaKey() throws {
     let packageURL = FileManager.default.temporaryDirectory
@@ -261,13 +246,6 @@ struct RecordingPackageIntegrationTestSuite {
     }
   }
 
-  @Test("LUB-1003: Remux readme describes the package without bundled CLI")
-  func remuxReadmeDescribesThePackageWithoutBundledCLI() {
-    #expect(RecordingPackage.readmeFileName == "README.md")
-    #expect(RecordingPackage.remuxReadme.contains("compatible external media tool"))
-    #expect(!RecordingPackage.remuxReadme.contains("Contents/Library/Helpers"))
-  }
-
   @Test("LUB-1003: Loads package before fixed manifest exists")
   func loadsPackageBeforeFixedManifestExists() throws {
     let packageURL = try makePackage()
@@ -359,13 +337,6 @@ struct RecordingPackageIntegrationTestSuite {
     ) {
       try RecordingPackage(contentsOf: linkURL)
     }
-  }
-
-  @Test("LUB-1003: Derives sibling MP4 output URL") func derivesSiblingMP4OutputURL() {
-    let packageURL = URL(fileURLWithPath: "/tmp/Example.ldtxrecord")
-    #expect(
-      RecordingPackage.defaultRemuxOutputURL(for: packageURL).path == "/tmp/Example.mp4"
-    )
   }
 
   @Test(

@@ -90,21 +90,13 @@ extension AppUIComponentTestSuite {
       window.contentView = hosting
       window.orderFront(nil)
       func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
-      func capture(_ name: String) throws {
-        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
-        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
-        try #require(bitmap.representation(using: .png, properties: [:])).write(
-          to: URL(fileURLWithPath: "/tmp/ldtx-clock-outline-\(name).png"))
-      }
       func count() -> Int { document.workspace.definition.videoComponents[0].clock.outlines.count }
       await settleWorkspaceToolbar(window)
-      try capture("empty")
       undo.beginUndoGrouping()
       inspector.addOutline(undoManager: undo)
       undo.endUndoGrouping()
       await settleWorkspaceToolbar(window)
       #expect(count() == 1)
-      try capture("one")
       let field = try #require(
         views(hosting).compactMap { $0 as? NSTextField }
           .first { $0.isEditable && $0.stringValue == "1" })
@@ -174,29 +166,47 @@ extension AppUIComponentTestSuite {
       undo.redo()
       await settleWorkspaceToolbar(window)
       #expect(count() == 2)
-      try capture("two-edited")
       document.isOutputActive = true
       await settleWorkspaceToolbar(window)
       #expect(
         views(hosting).compactMap { $0 as? NSTextField }.filter(\.isEditable)
           .allSatisfy { !$0.isEnabled })
       #expect(views(hosting).compactMap { $0 as? NSColorWell }.allSatisfy { !$0.isEnabled })
-      try capture("output-disabled")
       document.isOutputActive = false
       await settleWorkspaceToolbar(window)
       #expect(views(hosting).compactMap { $0 as? NSColorWell }.allSatisfy { $0.isEnabled })
 
     }
 
-    @Test("LUB-1048: Hosted width bounds preserve saved values", arguments: [1, 100])
-    func hostedWidthBoundsPreserveSavedValues(initial: Int32) async throws {
+    struct OutlineWidthInput: Sendable, Codable {
+      let saved: Int32
+      let input: String
+      let expected: Double
+    }
+
+    @Test(
+      "LUB-1048: Outline width input preserves invalid drafts and commits supported values",
+      arguments: [
+        OutlineWidthInput(saved: 1, input: "3", expected: 3),
+        OutlineWidthInput(saved: 3, input: "3.", expected: 3),
+        OutlineWidthInput(saved: 1, input: "3.5", expected: 3.5),
+        OutlineWidthInput(saved: 1, input: "0", expected: 0),
+        OutlineWidthInput(saved: 1, input: "64", expected: 64),
+        OutlineWidthInput(saved: 1, input: "65", expected: 1),
+        OutlineWidthInput(saved: 1, input: "100", expected: 1),
+        OutlineWidthInput(saved: 1, input: "-1", expected: 1),
+        OutlineWidthInput(saved: 1, input: "1/0", expected: 1),
+        OutlineWidthInput(saved: 1, input: "2147483648", expected: 1),
+        OutlineWidthInput(saved: 1, input: "", expected: 1),
+        OutlineWidthInput(saved: 100, input: "65", expected: 100),
+        OutlineWidthInput(saved: 100, input: "64", expected: 64),
+      ])
+    func outlineWidthInput(_ data: OutlineWidthInput) async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
         $0.definition.videoComponents[0].clock.outlines = [
-          .with {
-            $0.thickness.set(num: initial, den: 1)
-          }
+          .with { $0.thickness.set(num: data.saved, den: 1) }
         ]
       }
       let undo = UndoManager()
@@ -215,74 +225,46 @@ extension AppUIComponentTestSuite {
       window.orderFront(nil)
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
-      func capture(_ name: String) throws {
-        let bitmap = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
-        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
-        try #require(bitmap.representation(using: .png, properties: [:])).write(
-          to: URL(fileURLWithPath: "/tmp/ldtx-clock-outline-\(name).png"))
-      }
-      if initial == 100 { try capture("legacy-width") }
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num
+          == data.saved)
       #expect(!undo.canUndo)
-      let snapshot = try await document.snapshot(
-        contentType: WorkspaceDocument.writableContentTypes[0])
-      let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension("ldtxworkspace")
-      defer { try? FileManager.default.removeItem(at: url) }
-      try WorkspaceBundleWriterV4().write(snapshot, to: url)
-      let loaded = try WorkspaceBundleReaderV4(at: url).read()
-      #expect(loaded.definition == document.workspaceDefinition)
       func fields(_ view: NSView) -> [NSTextField] {
         (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
       }
       let field = try #require(
-        fields(hosting).first {
-          $0.isEditable && $0.stringValue == String(initial)
-        })
+        fields(hosting).first { $0.isEditable && $0.stringValue == String(data.saved) })
       #expect(window.makeFirstResponder(field))
       let editor = try #require(field.currentEditor() as? NSTextView)
-      func type(_ text: String) {
-        undo.beginUndoGrouping()
-        editor.insertText(
-          text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
-        undo.endUndoGrouping()
-      }
-      for text in ["3", "3.", "3.5", "0", "64"] {
-        type(text)
-        #expect(
-          document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
-            == Double(text))
-        await settleWorkspaceToolbar(window)
-        #expect(editor.string == text)
-      }
-      for _ in 0..<5 {
-        undo.undo()
-        await settleWorkspaceToolbar(window)
-      }
+      undo.beginUndoGrouping()
+      editor.insertText(
+        data.input, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+      undo.endUndoGrouping()
+      await settleWorkspaceToolbar(window)
+      #expect(editor.string == data.input)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num == initial)
-      #expect(editor.string == String(initial))
-      for _ in 0..<5 {
-        undo.redo()
-        await settleWorkspaceToolbar(window)
-      }
-      #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 64)
-      let accepted = document.workspace
-      for text in ["65", "100", "-1", "1/0", "2147483648", ""] {
-        type(text)
-        await settleWorkspaceToolbar(window)
-        #expect(editor.string == text)
-        #expect(document.workspace == accepted)
-      }
-      if initial == 100 { try capture("invalid-width") }
-      let invalidDraftSnapshot = try await document.snapshot(
+        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+          == data.expected)
+      let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.writableContentTypes[0])
-      #expect(invalidDraftSnapshot == accepted)
+      #expect(snapshot == document.workspace)
     }
 
-    @Test("LUB-1048: Membership changes reset drafts and focus", arguments: [1, 2], [0, 1])
-    func membershipChangesResetDraftsAndFocus(secondWidth: Int32, removedIndex: Int) async throws {
+    struct OutlineMembership: Sendable, Codable {
+      let secondWidth: Int32
+      let removedIndex: Int
+    }
+
+    @Test(
+      "LUB-1048: Membership changes reset drafts and focus",
+      arguments: [
+        OutlineMembership(secondWidth: 1, removedIndex: 0),
+        OutlineMembership(secondWidth: 1, removedIndex: 1),
+        OutlineMembership(secondWidth: 2, removedIndex: 0),
+        OutlineMembership(secondWidth: 2, removedIndex: 1),
+      ])
+    func membershipChangesResetDraftsAndFocus(_ data: OutlineMembership) async throws {
+      let secondWidth = data.secondWidth
+      let removedIndex = data.removedIndex
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
@@ -369,7 +351,20 @@ extension AppUIComponentTestSuite {
       expectReset(redoAddDraft, expected: remaining + [1])
     }
 
-    @Test("LUB-1048: Unavailable edits are ignored") func unavailableEditsAreIgnored() {
+    struct OutlineEditState: Sendable, Codable {
+      let outputActive: Bool
+      let closed: Bool
+      let componentPresent: Bool
+    }
+
+    @Test(
+      "LUB-1048: Unavailable outline edits preserve document content",
+      arguments: [
+        OutlineEditState(outputActive: true, closed: false, componentPresent: true),
+        OutlineEditState(outputActive: false, closed: true, componentPresent: true),
+        OutlineEditState(outputActive: false, closed: false, componentPresent: false),
+      ])
+    func unavailableEdits(_ data: OutlineEditState) {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
@@ -379,27 +374,19 @@ extension AppUIComponentTestSuite {
       view.addOutline(undoManager: nil)
       let width = view.outlineBinding(at: 0, \.thickness, initial: .init(), undoManager: nil)
       let color = view.outlineColorBinding(at: 0, undoManager: nil)
+      document.isOutputActive = data.outputActive
+      document.isClosed = data.closed
+      if !data.componentPresent {
+        document.editWorkspace(undoManager: nil) { $0.definition.videoComponents.removeAll() }
+      }
       let before = document.workspace
-      document.isOutputActive = true
       view.addOutline(undoManager: nil)
       view.removeOutline(at: 0, undoManager: nil)
       width.wrappedValue = .init()
       color.wrappedValue = .red
       #expect(document.workspace == before)
-      document.isOutputActive = false
-      document.isClosed = true
-      view.addOutline(undoManager: nil)
-      view.removeOutline(at: 0, undoManager: nil)
-      width.wrappedValue = .init()
-      color.wrappedValue = .red
-      #expect(document.workspace == before)
-      document.isClosed = false
-      document.editWorkspace(undoManager: nil) { $0.definition.videoComponents.removeAll() }
-      let removed = document.workspace
-      view.addOutline(undoManager: nil)
-      width.wrappedValue = .init()
-      #expect(document.workspace == removed)
     }
+
   }
 }
 

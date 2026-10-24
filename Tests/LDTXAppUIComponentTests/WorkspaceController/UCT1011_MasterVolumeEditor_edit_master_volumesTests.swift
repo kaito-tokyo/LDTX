@@ -14,11 +14,30 @@ extension AppUIComponentTestSuite {
   struct UCT1011MasterVolumeEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("LUB-1048: Writes on change and preserves invalid drafts")
-    func writesOnChangeAndPreservesInvalidDrafts() async throws {
+    struct VolumeInput: Sendable, Codable {
+      let input: String
+      let expectedNumerator: Int32
+      let accepted: Bool
+    }
+
+    @Test(
+      "LUB-1048: Master volume input commits tenths or preserves the accepted value",
+      arguments: [
+        VolumeInput(input: "-12.04", expectedNumerator: -120, accepted: true),
+        VolumeInput(input: "-80", expectedNumerator: -800, accepted: true),
+        VolumeInput(input: "20", expectedNumerator: 200, accepted: true),
+        VolumeInput(input: "-", expectedNumerator: -120, accepted: false),
+        VolumeInput(input: "100", expectedNumerator: -120, accepted: false),
+        VolumeInput(input: "-81", expectedNumerator: -120, accepted: false),
+        VolumeInput(input: "20.1", expectedNumerator: -120, accepted: false),
+        VolumeInput(input: "inf", expectedNumerator: -120, accepted: false),
+      ])
+    func volumeInput(_ data: VolumeInput) async throws {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [.with { $0.internalID = 100 }]
+        workspace.preferences.landscapeProgramPreferences[100, default: .init()]
+          .audioMasterVolumeDecibels.set(num: -120, den: 10)
       }
       let root = MasterVolumeEditor(
         stateService: state, appletData: WorkspaceAppletData(),
@@ -29,24 +48,15 @@ extension AppUIComponentTestSuite {
       let field = try #require(
         workspaceDescendants(window.contentView!)
           .compactMap { $0 as? NSTextField }.first { $0.isEditable })
-      try editWorkspaceField(field, text: "-12.04", window: window)
+      let before = state.workspacePreferences
+      try editWorkspaceField(field, text: data.input, window: window)
       await settleWorkspaceToolbar(window)
       #expect(
         state.workspacePreferences.landscapeProgramPreferences[100]?
-          .audioMasterVolumeDecibels == .with { $0.set(num: -120, den: 10) })
-      let before = state.workspacePreferences
-      for text in ["-", "100", "-81", "20.1", "inf"] {
-        try editWorkspaceField(field, text: text, window: window)
-        await settleWorkspaceToolbar(window)
+          .audioMasterVolumeDecibels == .with { $0.set(num: data.expectedNumerator, den: 10) })
+      if !data.accepted {
         #expect(state.workspacePreferences == before)
-        #expect(field.currentEditor()?.string == text)
-      }
-      for text in ["-80", "20"] {
-        try editWorkspaceField(field, text: text, window: window)
-        await settleWorkspaceToolbar(window)
-        #expect(
-          state.workspacePreferences.landscapeProgramPreferences[100]?
-            .audioMasterVolumeDecibels.double == Double(text))
+        #expect(field.currentEditor()?.string == data.input)
       }
       #expect(state.selectedAudioMix == .landscape)
     }

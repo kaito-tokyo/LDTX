@@ -12,10 +12,17 @@ Feature: pace and normalize output time
     Then render time is subtracted from the interval and missed deadlines do not create a burst
 
   @LUB-1059.2 @Unit
-  Scenario: Advance only with valid master timestamps
-    Given an output with a configured capture timing master
-    When timestamps repeat, move backward, disappear, or belong to a new capture session
-    Then invalid timestamps do not advance output and changing the timing epoch requires reset
+  Scenario Outline: Advance only with valid master timestamps
+    Given a selected video timing master with an accepted timestamp
+    When a subsequent timestamp is <timestamp>
+    Then output <result>
+
+    Examples:
+      | timestamp | result            |
+      | later     | advances          |
+      | missing   | does not advance  |
+      | repeated  | does not advance  |
+      | backward  | does not advance  |
 
   @LUB-1059.3 @Unit
   Scenario: Use host time without a configured master
@@ -34,3 +41,9 @@ Feature: pace and normalize output time
     Given samples arriving before output activation or out of order
     When the pending recording window advances
     Then only the bounded shared window is retained and late samples cannot move it backward
+
+  @LUB-1059.6 @Unit
+  Scenario: Require reset after changing timing masters
+    Given a selector with an established video timing master
+    When a different master is supplied without resetting the selector
+    Then the new master cannot advance the old timing epoch

@@ -468,50 +468,6 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
         })
     }
   }
-  @Test("LUB-1002: round trips independent canvas preferences through Protobuf")
-  func canvasPreferencesRoundTrip() throws {
-    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-    var landscape = Ldtx_Workspace_V4_ProgramPreferences()
-    landscape.audioMasterVolumeDecibels = .with {
-      $0.num = -16
-      $0.den = 5
-    }
-    preferences.audioChannelGainsDecibels[2] = .with {
-      $0.num = -61
-      $0.den = 10
-    }
-    landscape.videoLayerHidden[3] = true
-    var portrait = Ldtx_Workspace_V4_ProgramPreferences()
-    portrait.audioMasterVolumeDecibels = .with {
-      $0.num = 17
-      $0.den = 10
-    }
-    portrait.audioChannelMuted[2] = true
-    var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = .with {
-      $0.num = 1
-      $0.den = 2
-    }
-    transform.scaleY = .with {
-      $0.num = 1
-      $0.den = 1
-    }
-    portrait.videoLayerTransforms[3] = transform
-    preferences.landscapeProgramPreferences[1] = landscape
-    preferences.portraitProgramPreferences[1] = portrait
-    let decoded = try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-      serializedBytes: preferences.serializedData())
-    #expect(decoded == preferences)
-    #expect(
-      decoded.audioChannelGainsDecibels[2]
-        == Ldtx_Workspace_V4_Rational32.with {
-          $0.num = -61
-          $0.den = 10
-        })
-    #expect(decoded.landscapeProgramPreferences[1] == landscape)
-    #expect(decoded.portraitProgramPreferences[1] == portrait)
-  }
-
   @Test("LUB-1002: rejects a Workspace gain referencing a missing audio input")
   func rejectsDanglingAudioGain() throws {
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
@@ -673,25 +629,6 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
           $0.error == .unsupportedOutputProfile("custom-4k")
         } == true
       })
-  }
-
-  @Test("LUB-1002: signed fixed-width IDs and reference keys round trip without loss")
-  func signedIDsRoundTrip() throws {
-    for id in [Int64.min, -1, 0, 1, Int64.max] {
-      let program = Ldtx_Workspace_V4_ProgramDefinition.with { $0.internalID = id }
-      let encoded = try program.serializedData()
-      #expect(encoded.count == 9)
-      #expect(try Ldtx_Workspace_V4_ProgramDefinition(serializedBytes: encoded).internalID == id)
-      let preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4.with {
-        $0.landscapeProgramPreferences[id] = .with {
-          $0.videoLayerInternalIds = [id]
-          $0.videoLayerHidden[id] = true
-        }
-      }
-      #expect(
-        try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-          serializedBytes: preferences.serializedData()) == preferences)
-    }
   }
 
   @Test(

@@ -26,18 +26,6 @@ import Testing
     try WorkspaceBundleValidatorV4.validateRegionOfInterest(region)
   }
 
-  @Test("LUB-1000: Explicit zero round trips and clears back to one")
-  func explicitZeroRoundTripsAndClearsBackToOne() throws {
-    var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.scaleX = .with { $0.num = 0 }
-    let restored = try Ldtx_Workspace_V4_BasicTransform(serializedBytes: transform.serializedData())
-    #expect(restored.hasScaleX)
-    #expect(restored.scaleX.double == 0)
-    transform.clearScaleX()
-    #expect(transform.scaleX.double == 1)
-    #expect(!transform.hasScaleX)
-  }
-
   @Test("LUB-1000: Conversions preserve the represented value")
   func conversionsPreserveTheRepresentedValue() {
     #expect(

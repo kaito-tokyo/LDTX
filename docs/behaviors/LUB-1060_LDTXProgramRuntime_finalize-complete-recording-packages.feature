@@ -36,7 +36,19 @@ Feature: finalize complete recording packages
     Then distinct inputs receive distinct safe track identifiers while shared physical inputs produce one side track
 
   @LUB-1060.6 @Integration
-  Scenario: Create only enabled recording canvases
-    Given recording settings enabling one or both canvases
-    When recording files are created after the first accepted frame
-    Then only enabled canvases receive media files and stopping before media does not fabricate a recording
+  Scenario Outline: Create media files only for enabled canvases
+    Given landscape recording <landscape> and portrait recording <portrait>
+    When accepted media is recorded and finalized
+    Then the package contains <files>
+
+    Examples:
+      | landscape | portrait | files                               |
+      | true      | false    | landscape media only                |
+      | false     | true     | portrait media only                 |
+      | true      | true     | landscape and portrait media         |
+
+  @LUB-1060.7 @Integration
+  Scenario: Stop without fabricating an empty recording
+    Given a recording session that has not accepted its first video sample
+    When the session stops normally
+    Then stopping succeeds without creating a recording package

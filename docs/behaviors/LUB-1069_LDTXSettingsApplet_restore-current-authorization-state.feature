@@ -18,7 +18,12 @@ Feature: restore current authorization state
     Then the UI receives the verified channel identity or an actionable failure
 
   @LUB-1069.3 @Integration
-  Scenario: Avoid authorization persistence in test modes
-    Given settings running with a test-mode authorization provider
-    When authorization state is initialized or changed
+  Scenario Outline: Avoid authorization persistence in test modes
+    Given UI testing <uiTesting> and preview mode <preview>
+    When Settings loads authorization
     Then real authorization is neither restored nor persisted
+
+    Examples:
+      | uiTesting | preview |
+      | true      | false   |
+      | false     | true    |

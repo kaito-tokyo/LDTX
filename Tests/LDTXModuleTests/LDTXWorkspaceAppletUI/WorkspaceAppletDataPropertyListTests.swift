@@ -137,20 +137,6 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
       try PropertyListDecoder().decode(WorkspaceLocalState.self, from: legacy).monitorVolume == nil)
   }
 
-  @Test("LUB-1057: Round trips typed assignments in binary property list")
-  func roundTripsTypedAssignmentsInBinaryPropertyList() throws {
-    let assignments: [Int64: WorkspacePhysicalDeviceID] = [
-      8: .avCaptureDevice(uniqueID: "camera-uid"), 9: .coreAudioDevice(uid: "microphone-uid"),
-    ]
-    let encoder = PropertyListEncoder()
-    encoder.outputFormat = .binary
-    let data = try encoder.encode(assignments)
-    #expect(
-      try PropertyListDecoder().decode([Int64: WorkspacePhysicalDeviceID].self, from: data)
-        == assignments)
-    #expect(data.starts(with: Data("bplist".utf8)))
-  }
-
   @Test("LUB-1057: Ignores legacy assignments while retaining other local fields")
   func ignoresLegacyAssignmentsWhileRetainingOtherLocalFields() throws {
     let state = WorkspaceLocalState(

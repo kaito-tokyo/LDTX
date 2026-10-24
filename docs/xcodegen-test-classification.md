@@ -105,7 +105,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
 | Corelibs | `RecordingPackageIntegrationTestSuite` | `Tests/Corelibs/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXModuleTests/LDTXVision/VisionFramePoolTests.swift` |
-| Medium | `GoogleOAuthLoopbackListenerIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/GoogleOAuthLoopbackListenerTests.swift` |
 | Medium | `YouTubeAuthFileIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthFileTests.swift` |
 | Medium | `YouTubeAuthorizationServiceIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
 | Output | `YouTubeOutputVideoFrameHoldUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeOutputProtocol/YouTubeOutputVideoFrameHoldTests.swift` |

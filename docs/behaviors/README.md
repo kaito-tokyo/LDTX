@@ -22,8 +22,14 @@ tests. Features describe expectations, not test results.
 - Explicitly name every Swift Testing test with its LUB ID and readable case name
   in `@Test("LUB-1000: Preserve rational representations")`; retain existing UCT IDs.
 - Describe one observable contract per Scenario using Given, When, and Then.
-  Cover meaningful outcomes and failures, not private implementation steps or
-  individual assertions. Group equivalent inputs as test data.
+  Specify one SUT's public behavior, not helper calls, framework functionality,
+  individual assertions, or a sequence of unrelated operations.
+- Use Scenario Outline and Examples when situations vary. Put initial state,
+  input, and expected outcome in meaningful columns; keep a plain Scenario for
+  a single situation. Do not invent parameters solely to use an Outline.
+- UI tests use typed, independently runnable `@Test(arguments:)` datasets for
+  shared behavior. Describe situations with data, not case names or operation
+  scripts. Match Examples and Swift datasets by meaning without a runtime link.
 
 ## Maintenance
 
@@ -31,9 +37,13 @@ tests. Features describe expectations, not test results.
   unused without renumbering or maintaining a retirement registry.
 - Delete obsolete Features, Scenarios, and tests. Do not retain their contents
   in archives, comments, history documents, or completed review notes.
-- Keep tests that protect distinct current contracts. Consolidate duplicates
-  and prefer the cheapest reliable verification boundary. Check for a missing
-  contract before deleting an unmapped test; no fixed test count or one-to-one
-  Scenario-to-test mapping is required.
+- Keep each SUT's distinct guarantees even when another layer has similar
+  assertions. Remove redundant checks, framework-only tests, and trivial helper
+  tests; retain direct tests of independently complex calculations or boundaries.
+- Use equivalence classes and boundary values outside UI. Use explicit situation
+  datasets for UI; require a behavioral reason for Cartesian products. Never
+  combine unrelated behaviors merely to reduce the number of test declarations.
+- Check for a missing contract before deleting an unmapped test. No fixed test
+  count or one-to-one Scenario-to-test mapping is required.
 - Keep this README limited to rules. Case additions and removals require no
   README update; do not add indexes, counts, coverage status, or progress reports.

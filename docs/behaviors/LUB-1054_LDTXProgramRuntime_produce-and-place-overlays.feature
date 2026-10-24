@@ -6,10 +6,16 @@
 Feature: produce and place overlays
 
   @LUB-1054.1 @Integration
-  Scenario: Publish only the current overlay generation
+  Scenario Outline: Reject obsolete overlay publication
     Given an overlay render in flight
-    When configuration is replaced, deactivated, or removed
-    Then obsolete work cannot publish and valid current work eventually replaces the texture
+    When its producer is <change>
+    Then that render cannot publish into the current generation
+
+    Examples:
+      | change      |
+      | reconfigured |
+      | deactivated |
+      | reactivated |
 
   @LUB-1054.2 @Integration
   Scenario: Retry a failed refresh without discarding the last texture
@@ -30,13 +36,25 @@ Feature: produce and place overlays
     Then glyph orientation, opacity, clipping, and scale match the authored content without shrinking text
 
   @LUB-1054.5 @Integration
-  Scenario: Bound raster allocation and require usable font data
-    Given an overlay requesting excessive pixels or an unavailable font
-    When rendering is attempted
-    Then it fails without excessive allocation or replacing a previously valid texture
+  Scenario Outline: Reject excessive Dynamic Text raster dimensions
+    Given Dynamic Text with width <width> and height <height>
+    When its overlay is rendered
+    Then rendering <result>
+
+    Examples:
+      | width | height | result                         |
+      | 16384 | 16384  | fails before raster allocation |
+      | 4096  | 2049   | fails before raster allocation |
+      | 4096  | 2048   | creates the requested texture  |
 
   @LUB-1054.6 @Integration
   Scenario: Drive Clock from its own current-time source
     Given an active Clock with an injected time zone and current-time provider
     When timer updates occur while frame timestamps vary
     Then displayed time follows that provider and timers stop on deactivation or release
+
+  @LUB-1054.7 @Integration
+  Scenario: Report unavailable font data
+    Given an overlay renderer with a missing font resource
+    When the renderer is constructed
+    Then construction reports unavailable font data

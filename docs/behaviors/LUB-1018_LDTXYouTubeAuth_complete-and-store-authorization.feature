@@ -11,11 +11,16 @@ Feature: LDTXYouTubeAuth complete and store authorization
     When the client configuration is decoded
     Then decoding fails with an unsupported client type error
 
-  @LUB-1018.2 @Integration
-  Scenario: Handle the loopback callback
-    Given an authorization listener expecting a callback
-    When a callback for that authorization arrives
-    Then the authorization response is delivered to its waiting caller
+  @LUB-1018.2 @Unit
+  Scenario Outline: Validate the authorization redirect address
+    Given a listener URL with host <host>
+    When the redirect address is validated
+    Then validation <result>
+
+    Examples:
+      | host      | result                            |
+      | 127.0.0.1 | returns the unchanged listener URL |
+      | ::1       | rejects the listener URL           |
 
   @LUB-1018.3 @Integration
   Scenario: Preserve account storage boundaries

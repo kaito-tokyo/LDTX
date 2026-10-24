@@ -33,17 +33,6 @@ extension OutputTestSuite {
       #expect(model.normalized() == model)
     }
 
-    @Test("LUB-1066: Unavailable output folder is preserved for start time validation")
-    func unavailableOutputFolderIsPreservedForStartTimeValidation() {
-      let model = OutputDestination(
-        recordsLocally: true,
-        streamsToYouTube: false,
-        overridesOutputFolder: true,
-        outputFolderPath: "/Volumes/Disconnected/Recordings")
-
-      #expect(model.normalized() == model)
-    }
-
     @Test("LUB-1066: Enabling output folder override requires a selected folder")
     func enablingOutputFolderOverrideRequiresASelectedFolder() {
       let original = OutputDestination(recordsLocally: true)

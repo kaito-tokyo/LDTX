@@ -18,10 +18,15 @@ Feature: LDTXProgram persist program definitions
     Then the layer remains visible in Program B
 
   @LUB-1001.3 @Unit
-  Scenario: Mute without discarding the configured gain
-    Given an audio channel with gain 0.5
-    When the channel is muted and then unmuted
-    Then muting produces zero output gain and unmuting restores gain 0.5
+  Scenario Outline: Apply mute without discarding the configured gain
+    Given an audio channel with configured gain 0.5
+    When its mute state is set to <muted>
+    Then its output gain is <outputGain> and its configured gain remains 0.5
+
+    Examples:
+      | muted | outputGain |
+      | true  | 0          |
+      | false | 0.5        |
 
   @LUB-1001.4 @Unit
   Scenario: Import a legacy uniform layer scale
@@ -30,15 +35,31 @@ Feature: LDTXProgram persist program definitions
     Then both axes retain that uniform scale
 
   @LUB-1001.5 @Unit
-  Scenario: Keep resource references stable through Program edits
-    Given named video layers and audio inputs referenced by multiple Programs
-    When resources are reordered, renamed, or removed
-    Then unaffected identities and preferences remain stable
-    And stale references are removed without dropping unrelated generated audio
+  Scenario Outline: Update only affected resource references
+    Given Programs referencing a camera and unrelated content
+    When the camera reference is <change>
+    Then <result> and unrelated content remains intact
+
+    Examples:
+      | change               | result                                      |
+      | renamed              | the existing preferences follow the new name |
+      | removed              | references to the removed camera disappear  |
+      | removed from Program A | Program B retains its reference           |
 
   @LUB-1001.6 @Unit
-  Scenario: Bound audio channel gain
-    Given a channel gain expressed in decibels or linear units
-    When it is converted and stored
-    Then the supported range is minus 80 through plus 20 decibels
-    And stored gains are clamped to that range
+  Scenario Outline: Convert supported decibel boundaries to linear gain
+    Given an audio channel gain of <decibels> decibels
+    When the gain is converted to linear units
+    Then the result is <linear>
+
+    Examples:
+      | decibels | linear |
+      | -80      | 0.0001 |
+      | 0        | 1      |
+      | 20       | 10     |
+
+  @LUB-1001.7 @Unit
+  Scenario: Clamp a stored audio gain
+    Given a channel with a requested gain above the supported maximum
+    When the channel gain is stored in Program preferences
+    Then the stored linear gain is limited to plus 20 decibels
