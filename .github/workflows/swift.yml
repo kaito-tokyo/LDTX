@@ -140,6 +140,8 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
+            -xcconfig ci_scripts/production-swift-batching.xcconfig \
+            -showBuildTimingSummary \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY=- \
             PROVISIONING_PROFILE= \
