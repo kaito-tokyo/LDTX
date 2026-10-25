@@ -4,7 +4,7 @@
 
 import Foundation
 
-public struct YouTubeOutputMediaTime: Equatable, Sendable {
+public struct YouTubeOutputMediaTime: Codable, Equatable, Sendable {
   public var value: Int64
   public var timescale: Int32
 
@@ -14,7 +14,7 @@ public struct YouTubeOutputMediaTime: Equatable, Sendable {
   }
 }
 
-public struct YouTubeOutputH264Format: Equatable, Sendable {
+public struct YouTubeOutputH264Format: Codable, Equatable, Sendable {
   public var parameterSets: [Data]
   public var nalUnitHeaderLength: Int32
   public var width: Int32
@@ -40,7 +40,7 @@ extension YouTubeOutputH264Format {
   }
 }
 
-public struct YouTubeOutputH264AccessUnit: Equatable, Sendable {
+public struct YouTubeOutputH264AccessUnit: Codable, Equatable, Sendable {
   public var presentationTime: YouTubeOutputMediaTime
   public var decodeTime: YouTubeOutputMediaTime?
   public var duration: YouTubeOutputMediaTime
@@ -67,7 +67,7 @@ public struct YouTubeOutputH264AccessUnit: Equatable, Sendable {
   }
 }
 
-public struct YouTubeOutputSharedMemorySlice: Equatable, Sendable {
+public struct YouTubeOutputSharedMemorySlice: Codable, Equatable, Sendable {
   public var slot: Int
   public var generation: UInt64
   public var offset: Int
@@ -81,11 +81,11 @@ public struct YouTubeOutputSharedMemorySlice: Equatable, Sendable {
   }
 }
 
-public enum YouTubeOutputPCMSampleFormat: Equatable, Sendable {
+public enum YouTubeOutputPCMSampleFormat: Codable, Equatable, Sendable {
   case float32Interleaved
 }
 
-public struct YouTubeOutputPCMBuffer: Equatable, Sendable {
+public struct YouTubeOutputPCMBuffer: Codable, Equatable, Sendable {
   public var presentationTime: YouTubeOutputMediaTime
   public var duration: YouTubeOutputMediaTime
   public var sampleRate: Int32
@@ -113,7 +113,7 @@ public struct YouTubeOutputPCMBuffer: Equatable, Sendable {
   }
 }
 
-public struct YouTubeOutputMediaBatch: Equatable, Sendable {
+public struct YouTubeOutputMediaBatch: Codable, Equatable, Sendable {
   public var protocolVersion: UInt32
   public var context: YouTubeOutputContext
   public var sequence: UInt64
