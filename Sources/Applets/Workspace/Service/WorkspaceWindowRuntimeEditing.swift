@@ -8,7 +8,6 @@ import LDTXProtos
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
-import SwiftProtobuf
 
 extension WorkspaceWindowRuntime {
   public func editDefinition(

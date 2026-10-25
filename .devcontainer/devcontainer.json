@@ -1,0 +1,5 @@
+{
+  "name": "LDTX Corelibs (Linux)",
+  "image": "swift:6.4.0-trixie",
+  "postCreateCommand": ["swift", "package", "--package-path", "Packages/Corelibs", "resolve"]
+}

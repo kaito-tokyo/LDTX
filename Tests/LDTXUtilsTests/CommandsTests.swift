@@ -11,7 +11,6 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceBundleFormat
-import SwiftProtobuf
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)

@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+targets:
+  ldtx:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/ldtx-cli
+    dependencies:
+      - target: LDTXUtils
+      - package: swift-argument-parser
+        product: ArgumentParser
+    settings:
+      base:
+        PRODUCT_NAME: ldtx
+        OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path @executable_path/PackageFrameworks"
+  # These tests redirect process stdout/stderr and mutate the environment.
+  # Preserve the process boundary previously provided by their SwiftPM target.
+  LDTXUtilsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/LDTXUtilsTests
+    dependencies:
+      - target: LDTXUtils
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletStore
+      - package: Corelibs
+        product: LDTXCorelibs
+      - package: swift-argument-parser
+        product: ArgumentParser
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUtilsTests
+
+schemes:
+  ldtx:
+    build:
+      targets:
+        ldtx: all
+        LDTXUtilsTests: [test]
+    test:
+      config: Debug
+      targets:
+        - LDTXUtilsTests

@@ -7,7 +7,7 @@ import LDTXProtosMacOSExtra
 import SwiftUI
 import Testing
 
-@Suite
+@Suite(.tags(.medium))
 struct ExtendedSRGBColorUnitTestSuite {
   @Test("LUB-1004: Uses defaults for missing components", arguments: [0, 1, 2, 3])
   func usesDefaultsForMissingComponents(component: Int) throws {

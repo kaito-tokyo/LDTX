@@ -7,7 +7,7 @@ import LDTXProtos
 import LDTXProtosMacOSExtra
 import Testing
 
-@Suite struct VisionRegionTests {
+@Suite(.tags(.medium)) struct VisionRegionUnitTestSuite {
   private func region() -> Ldtx_Workspace_V4_VisionRegionOfInterest {
     .with {
       $0.x = .with {

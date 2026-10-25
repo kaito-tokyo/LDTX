@@ -47,17 +47,17 @@ jobs:
         uses: actions/cache@v6.1.0
         with:
           path: |
-            .build/artifacts
-            .build/checkouts
-            .build/repositories
-            .build/workspace-state.json
-          key: corelibs-swift-6.4.0-trixie-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
+            Packages/Corelibs/.build/artifacts
+            Packages/Corelibs/.build/checkouts
+            Packages/Corelibs/.build/repositories
+            Packages/Corelibs/.build/workspace-state.json
+          key: corelibs-swift-6.4.0-trixie-${{ runner.arch }}-${{ hashFiles('Packages/Corelibs/Package.resolved') }}
           restore-keys: |
             corelibs-swift-6.4.0-trixie-${{ runner.arch }}-
 
       - name: Build and test Corelibs
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
+        run: swift test --package-path Packages/Corelibs --disable-index-store -debug-info-format none --jobs "$(nproc)"
 
   golden_gate:
     runs-on: xcode-27
@@ -186,23 +186,6 @@ jobs:
           cmake -S . -B build -DLDTX_AUDIO_ENGINE_TSAN=ON
           cmake --build build
           ctest --test-dir build --output-on-failure
-
-      - name: Cache SwiftPM dependencies
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            .build/artifacts
-            .build/checkouts
-            .build/repositories
-            .build/workspace-state.json
-          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: |
-            swiftpm-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Run CLI and macOS protobuf-extra tests
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          swift test --disable-index-store -debug-info-format none --jobs "$(sysctl -n hw.logicalcpu)" --filter 'LDTXUtilsTests|LDTXProtosMacOSExtraTests'
 
       - name: Run App Automation MCP tests
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}

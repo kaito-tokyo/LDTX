@@ -89,9 +89,9 @@ Undo/Redo and are disabled during output. Clock has a transparent background; it
 background-color fields are reserved and have no editor.
 
 Clock's former `width` and `height` Protobuf fields are reserved. Older V4 Clocks
-without `font_size` automatically import at 48 pixels, preserving the reserved
-geometry as unknown data. Reading does not rewrite the package; the new font
-size is stored on the next save.
+without `font_size` automatically import at 48 pixels. Unknown and reserved
+protobuf fields are discarded when decoding. Reading does not rewrite the
+package; the new font size is stored on the next save.
 
 ## Vision Programmer
 
@@ -106,8 +106,11 @@ For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
 
 ## Internal Framework Modules
 
-This table lists the non-test library targets declared in `project.yml` and generated
-as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packages.
+This table lists the app's library modules. Corelibs modules are defined by
+`Packages/Corelibs/Package.swift` and exported as one dynamic LDTXCorelibs product.
+Other modules are XcodeGen framework targets. The internal nanopb C target contains
+message descriptors and callbacks into the Swift models. External libraries
+remain SwiftPM dependencies.
 
 | Module                     | Description                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
@@ -122,7 +125,7 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXProgram                | Program runtime definitions and output profiles.                           |
-| LDTXProtos                 | SwiftProtobuf messages and Workspace integrity validation. |
+| LDTXProtos                 | Swift Workspace data models, nanopb codecs, and integrity validation. |
 | LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
 | LDTXWorkspaceBundleFormat  | Workspace bundle values, `.ldtxworkspace` package IO, and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
@@ -146,11 +149,11 @@ as dynamic Xcode frameworks. External libraries remain Xcode-managed Swift packa
 | LDTXWorkspaceAppletUI       | Observable Workspace document, SwiftUI interface, Metal bridges, and local app data. |
 | LDTXYouTube                | YouTube Live API models and client.                                |
 | LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
-| LDTXYouTubeOutputProtocol  | Protobuf messages and sequencing utilities for YouTube output IPC. |
+| LDTXYouTubeOutputProtocol  | Binary PropertyList messages and sequencing utilities for YouTube output IPC. |
 | LDTXYouTubeRTMPS           | YouTube-specific secure RTMP publishing and dual-output coordination. |
 
-Linux-compatible modules are maintained under `Sources/Corelibs`. XcodeGen and
-SwiftPM build the same sources independently; see the [Corelibs build guide](docs/build.md#corelibs)
+Linux-compatible modules are maintained under `Packages/Corelibs` and share one
+SwiftPM manifest. XcodeGen consumes the local package product; see the [Corelibs build guide](docs/build.md#corelibs)
 for Docker verification and test placement.
 
 See [`docs/ldtxrecord.md`](docs/ldtxrecord.md) for the stable recording-package

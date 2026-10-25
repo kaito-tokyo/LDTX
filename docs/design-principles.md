@@ -247,6 +247,9 @@ the relevant design or feature documentation instead.
 
 ## Protobuf defaults and Rational values
 
+- Workspace codecs discard unknown and reserved fields while decoding. They do
+  not preserve those fields across a read/write cycle.
+
 - Read ordinary protobuf fields through their generated getters, which expose
   the schema's fixed defaults. Do not turn absent fields into contextual defaults
   or hide presence checks inside convenience accessors. Oneof absence must be

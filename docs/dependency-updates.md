@@ -6,61 +6,45 @@ SPDX-License-Identifier: Apache-2.0
 
 # Dependency updates
 
-Dependabot proposes weekly updates for GitHub Actions, the root Swift package,
-and AppAuth in the Xcode package lock. No dependency
-versions are changed just by enabling this configuration. Review every proposal
-and complete the synchronization and validation steps below before merging.
+Dependabot proposes weekly updates for GitHub Actions, the Corelibs Swift package,
+and the app's AppAuth and ArgumentParser dependencies. Review each proposal and
+validate the affected build graphs before merging.
 
 ## Swift and XcodeGen
 
-`Package.swift` owns the exact SwiftProtobuf and ArgumentParser pins shared by
-SwiftPM and XcodeGen. `project.yml` owns app package declarations. The committed
-Xcode `Package.resolved` provides AppAuth update proposals. Dependabot does not
-edit XcodeGen YAML. Its root Swift job prioritizes `Package.swift` over Xcode
-locks, so a separate `/LDTX.xcodeproj` job discovers `project.xcworkspace` and
-updates only `github.com/openid/appauth-ios`. Shared packages are proposed only
-through the root job to avoid competing updates.
+`Packages/Corelibs/Package.swift` owns nanopb and its C/Swift configuration macros.
+`project.yml` references the Corelibs local package and owns AppAuth and
+ArgumentParser declarations. There is no root Package.swift. Dependabot's Swift
+scope at `/Packages/Corelibs` updates the nanopb manifest/lock; the separate
+`/LDTX.xcodeproj` scope proposes AppAuth and ArgumentParser lock updates.
 
-This uses the supported `swift` ecosystem and the upstream updater's
-[Xcode discovery](https://github.com/dependabot/dependabot-core/blob/main/swift/lib/dependabot/swift/file_fetcher.rb),
-[lock parsing](https://github.com/dependabot/dependabot-core/blob/main/swift/lib/dependabot/swift/file_parser/package_resolved_parser.rb),
-and [Xcode lock updater](https://github.com/dependabot/dependabot-core/blob/main/swift/lib/dependabot/swift/file_updater.rb).
-The generated `project.pbxproj` is intentionally untracked. A lock-only AppAuth
-proposal therefore needs its new exact version copied to `project.yml` before
-Xcode resolves packages; generating and resolving first would restore the old pin.
-Confirm the first hosted Dependabot run after this configuration reaches main:
-upstream implementation support alone does not prove a hosted run succeeded.
-
-On the proposal branch, manually copy shared exact versions from `Package.swift`
-into the corresponding `project.yml` declarations. For an AppAuth lock proposal,
-copy its proposed version from the Xcode `Package.resolved` into `project.yml`
-before generating or resolving the project. For a manual AppAuth update, edit
-its `exactVersion` directly in `project.yml`.
-
-Then run from the repository root:
+For an Xcode lock proposal, copy the proposed version to the corresponding
+`exactVersion` in project.yml before regenerating or resolving the project.
+Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
+update, keep the runtime pin and generator's version check aligned.
+The Python generator's protobuf runtime is pinned in
+`Tools/GenerateNanopbProtos/requirements.txt`; keep it compatible with the external
+protoc version used to prepare descriptors.
 
 ```sh
-swift package resolve
+swift package --package-path Packages/Corelibs resolve
 xcodegen generate
 xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
   -derivedDataPath .derivedData -resolvePackageDependencies
 ```
 
-Review both resolver-produced lock diffs together with the manifest changes.
-Check that shared packages have matching versions and commit revisions in both
-locks and that each declaration matches its resolved version. Commit the
-manifests and locks together. New app packages require a deliberate Dependabot
-coverage policy. There is no custom synchronization script or dedicated CI check
-for cross-manifest pin consistency or Python requirement syntax; reviewers must
-verify these manually.
+Review the manifests and resolver-produced locks together. nanopb must resolve
+to the same version and revision in the Corelibs and Xcode locks. The generated
+project.pbxproj is intentionally untracked. New app packages require a deliberate
+Dependabot coverage policy. Confirm hosted Dependabot behavior after this
+configuration reaches main.
 
-Swift CI runs Linux Corelibs, macOS CLI tests, and the Xcode
-`pr` test plan on dependency pull requests. After Xcode package resolution, CI
-rejects changes to the tracked Xcode lock, including a regenerated `originHash`;
-commit the resolver-produced lock before retrying CI. Run the relevant local
-commands from [the build guide](build.md) as well; AppAuth changes require the app-side Xcode
-build/tests, not only root SwiftPM tests. SwiftProtobuf changes also require
-checking generated Protobuf compatibility and the documented generator version.
+CI runs Linux Corelibs and the Xcode pr plan, including CLI and macOS
+protobuf-extra tests. After Xcode resolution, CI rejects changes to the tracked
+Xcode lock, including originHash; commit the resolver-produced lock before
+retrying CI. nanopb changes also require checking configuration macros, codec
+round trips, and `generate.py --check` against an external descriptor as described
+in the [generator guide](../Tools/GenerateNanopbProtos/README.md).
 
 ## Python model tooling
 

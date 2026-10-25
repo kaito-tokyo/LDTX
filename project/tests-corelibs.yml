@@ -6,14 +6,10 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/Corelibs
+      - Packages/Corelibs/Tests
     dependencies:
-      - target: LDTXRecordBundleFormat
-      - target: LDTXProtos
-      - target: LDTXProgram
-      - target: LDTXWorkspaceBundleFormat
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
