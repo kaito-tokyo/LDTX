@@ -1,0 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+// SPDX-License-Identifier: Apache-2.0
+
+// CI-only Debug override. Unlisted product types, including XCTest bundles,
+// retain their inherited flags. Include Swift package library dependencies.
+OTHER_SWIFT_FLAGS = $(inherited) $(LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_$(CONFIGURATION)_$(PRODUCT_TYPE:identifier))
+
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_application = -driver-batch-count 4
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_framework = -driver-batch-count 4
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_tool = -driver-batch-count 4
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_app_extension = -driver-batch-count 4
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_xpc_service = -driver-batch-count 4
+LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_org_swift_product_type_library_static = -driver-batch-count 4
