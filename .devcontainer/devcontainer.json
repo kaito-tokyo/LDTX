@@ -1,5 +1,10 @@
 {
   "name": "LDTX Corelibs (Linux)",
   "image": "swift:6.4.0-trixie",
-  "postCreateCommand": ["swift", "package", "--package-path", "Packages/Corelibs", "resolve"]
+  "postCreateCommand": ["swift", "package", "--package-path", "Packages/Corelibs", "resolve"],
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  }
 }
