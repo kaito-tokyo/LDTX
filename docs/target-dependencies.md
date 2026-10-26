@@ -29,7 +29,6 @@ flowchart TD
     Contract --> Model
     Contract --> Protos
     Model --> Program
-    Program --> Protos
     Runtime --> Contract
     Devices --> Contract
     Devices --> Capture[LDTXCapture]
@@ -55,6 +54,9 @@ direct target dependency on ProgramRuntime, DeviceRegistry, Capture, Vision,
 BackgroundSegmentation, VideoComposition, VideoRendering, TaskQueue, YouTube or
 YouTubeRTMPS. Device previews use presentation fixtures; GPU preview
 assembly is compiled in the controller target.
+
+LDTXProgram contains independent Foundation values. It does not import or
+re-export LDTXProtos, so Program and message compilation can run in parallel.
 
 ## Message encoding
 
