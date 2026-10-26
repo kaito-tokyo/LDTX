@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @MainActor

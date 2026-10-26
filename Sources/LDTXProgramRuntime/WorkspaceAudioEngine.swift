@@ -4,7 +4,7 @@ import CoreMedia
 import Foundation
 import LDTXAudioEngine
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 import OSLog
 import os
 

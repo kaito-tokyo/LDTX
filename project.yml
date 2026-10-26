@@ -76,8 +76,6 @@ include:
     relativePaths: false
   - path: project/cli.yml
     relativePaths: false
-  - path: project/tests-corelibs.yml
-    relativePaths: false
   - path: project/tests-modules.yml
     relativePaths: false
   - path: project/tests-output.yml

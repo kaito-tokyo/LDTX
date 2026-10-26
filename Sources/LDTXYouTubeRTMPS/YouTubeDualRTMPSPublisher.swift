@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 
 public enum YouTubeRTMPSCanvas: String, Sendable, Equatable, Hashable {
   case landscape

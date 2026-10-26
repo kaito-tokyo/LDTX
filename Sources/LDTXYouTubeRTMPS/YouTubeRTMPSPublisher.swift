@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 
 private actor EstablishmentRace {
   private enum Outcome: Equatable { case pending, established, timedOut }

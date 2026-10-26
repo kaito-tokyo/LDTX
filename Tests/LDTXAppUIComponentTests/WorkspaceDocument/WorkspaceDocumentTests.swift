@@ -3,15 +3,14 @@
 
 import AppKit
 import CoreImage
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXRichText
 import LDTXVision
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import SwiftUI
 import Testing
 

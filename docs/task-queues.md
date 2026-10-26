@@ -20,7 +20,7 @@ their external IDs are assigned at creation. Entering Output requires a
 successfully saved `.ldtxworkspace` and locks structural editing; it does not
 implicitly save the editing state. The same runtime retains the persisted document lock
 and owns the Output Operation until normal finalization or failure cleanup is
-complete. `LDTXWorkspaceBundleFormat` performs every `.ldtxworkspace` filesystem
+complete. `LDTXCorelibs/WorkspaceBundleFormat` performs every `.ldtxworkspace` filesystem
 operation; the Runtime owns operation timing and lock lifetime.
 
 - **Event task queue:** The Workspace Window runtime owns the event queue. It

@@ -3,10 +3,9 @@
 
 import AppKit
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceBundleFormat
 import Observation
 import SwiftUI
 import UniformTypeIdentifiers

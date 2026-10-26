@@ -4,7 +4,7 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import Testing

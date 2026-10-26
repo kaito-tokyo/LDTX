@@ -33,8 +33,8 @@
     {
       "parallelizable" : false,
       "target" : {
-        "containerPath" : "container:LDTX.xcodeproj",
-        "identifier" : "AF349AA2C58E469BDBEFD99B",
+        "containerPath" : "container:Packages/LDTXCorelibs",
+        "identifier" : "LDTXCorelibsTests",
         "name" : "LDTXCorelibsTests"
       }
     },

@@ -5,8 +5,8 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import LDTXCorelibs
 import LDTXInternalProtocols
-import LDTXProgram
 import LDTXProgramRendering
 import LDTXVideoComposition
 import LDTXVideoRendering

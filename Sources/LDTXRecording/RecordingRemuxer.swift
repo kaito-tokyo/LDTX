@@ -4,7 +4,7 @@
 
 @preconcurrency import AVFoundation
 import Foundation
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 
 public struct RecordingRemuxer: Sendable {
   public init() {}

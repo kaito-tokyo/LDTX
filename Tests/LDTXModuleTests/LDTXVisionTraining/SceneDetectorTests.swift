@@ -5,7 +5,7 @@ import CoreImage
 import CoreML
 import CreateMLComponents
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXRichText
 import LDTXVision
 import LDTXVisionTraining

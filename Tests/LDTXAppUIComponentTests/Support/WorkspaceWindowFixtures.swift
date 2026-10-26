@@ -3,9 +3,9 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXCorelibs
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel

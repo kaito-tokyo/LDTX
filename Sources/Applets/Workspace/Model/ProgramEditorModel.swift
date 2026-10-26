@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 
 public enum ProgramOutputProfileID: String, Codable, CaseIterable, Sendable {
   case sdrLandscape1080p60 = "sdr-landscape-1080p60"

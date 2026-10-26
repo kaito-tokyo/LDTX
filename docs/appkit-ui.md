@@ -535,7 +535,7 @@ disconnects the service's runtime actions before releasing resources.
 
 ## Validation before saving
 
-Reader and Writer use WorkspaceBundleValidatorV4 in LDTXWorkspaceBundleFormat
+Reader and Writer use WorkspaceBundleValidatorV4 in LDTXCorelibs/WorkspaceBundleFormat
 as their content gate. Validation collects independent field-level issues,
 including model resource references, into one error containing the diagnostic
 array. Invalid values are rejected without normalization. The document framework

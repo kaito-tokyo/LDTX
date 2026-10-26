@@ -6,7 +6,7 @@ import AVFoundation
 import CoreAudio
 import Foundation
 import LDTXCapture
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletInterface
 import Observation
 

@@ -53,17 +53,18 @@ patch is applied. Handwritten extensions in `Messages/` are preserved.
 ## Generated sources and runtime
 
 The tool emits Swift models and field adapters into
-`Packages/LDTXCorelibs/LDTXProtos/Messages`. The official nanopb generator produces
-the C structs, FIELDLISTs and runtime descriptors under `NanopbMessages`.
+`Packages/LDTXCorelibs/Sources/LDTXCorelibs/Messages`. The official nanopb generator
+produces the C structs, FIELDLISTs and runtime descriptors under
+`Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated`.
 Its options are `type:FT_CALLBACK`, `no_unions:true`, `callback_datatype:"void *"`
 and `callback_function:"ldtx_nanopb_field_callback"`. Our wrapper only adds the
 umbrella header and `StorageChecks.c`, which checks that every C struct
 contains only callback context pointers, not copies of Swift payloads.
 
-Schema-independent Swift reader/writer and JSON helpers live in the LDTXNanopb
-target. Common C callback contexts and wire validation live in LDTXNanopbSupport.
-Generated Swift models import the former; the generated umbrella references the
-latter. These common targets do not depend on any generated Workspace descriptor.
+Swift reader/writer, JSON helpers, and message models share the LDTXCorelibs
+target. Common C callback contexts and wire validation are compiled alongside
+the descriptors in LDTXNanopbGenerated. Its umbrella includes the handwritten
+LDTXNanopbCallbacks.h bridge header.
 
 The supported schema profile is the repository's Edition 2024 messages with
 explicit presence, defaults, nested messages/enums, maps and oneofs. These
@@ -77,6 +78,6 @@ Swift handles oneof replacement/merge semantics, presence, defaults and ProtoJSO
 Unknown payload fields are discarded. Both packed and expanded repeated scalar
 inputs are accepted; output uses expanded fields. Map output is ordered by key.
 
-LDTXProtos is a target in the Corelibs local package. Its shared manifest owns the runtime nanopb
-pin and C/Swift configuration macros. Message tests remain in the root
+The Corelibs manifest owns the local nanopb reference and C/Swift configuration
+macros. Message tests remain in the shared
 `LDTXCorelibsTests` target. YouTube IPC remains independent, using binary PropertyLists.

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import Observation
 
 @MainActor @Observable

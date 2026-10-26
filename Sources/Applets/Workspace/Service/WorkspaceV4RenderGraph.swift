@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXRichText
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore

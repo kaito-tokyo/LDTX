@@ -36,33 +36,31 @@ brew install protobuf
 
 ## Corelibs
 
-Linux-compatible modules live directly under `Packages/LDTXCorelibs/<module>`.
-`Packages/LDTXCorelibs/Package.swift` defines LDTXProtos, LDTXProgram,
-LDTXWorkspaceBundleFormat, LDTXRecordBundleFormat, the schema-independent
-LDTXNanopb Swift runtime, and its common/schema-specific C targets. There is no
-repository-root manifest or per-module manifest.
-Generated LDTXProtos models and handwritten extensions remain in `Messages/`.
+`Packages/LDTXCorelibs/Package.swift` defines one Swift target, `LDTXCorelibs`,
+and its C implementation dependency, `LDTXNanopbGenerated`. Sources live under
+`Packages/LDTXCorelibs/Sources/<target>`. There is no repository-root manifest.
+Swift code is organized into `Messages`, `Values`, `Program`, `Nanopb`,
+`WorkspaceBundleFormat`, and `RecordBundleFormat` directories.
+`Messages` is reserved for Protobuf and its handwritten extensions.
 See [target dependencies](target-dependencies.md) for their boundaries and
 Workspace UI's presentation contracts.
 
-XcodeGen references the local package's dynamic `LDTXCorelibs` product. The
-four Swift module names remain unchanged. One dynamic product provides a single
-implementation across the application's framework graph; nanopb and the generated
-C target remain implementation dependencies. Recording bundle IO and DASH parsing
-remain in LDTXRecordBundleFormat; AVFoundation operations remain in LDTXRecording.
-
-LDTXProgram has no Protos dependency or re-export, allowing their compilation to
-overlap. All Corelibs Swift targets share the nanopb C importer settings defined
-in the manifest. Keep them consistent when adding targets: differing macro
-conditions cause duplicate Foundation and other SDK module builds.
+XcodeGen references the local package's dynamic `LDTXCorelibs` product, and all
+Swift consumers use `import LDTXCorelibs`. One dynamic product provides a single
+implementation across the application's framework graph. The official nanopb
+package and generated C target remain implementation dependencies. Keep Swift's
+C importer macros aligned with the C targets. AVFoundation operations remain in
+LDTXRecording outside Corelibs.
 
 On Linux, files that only use Foundation's Swift value APIs import
 FoundationEssentials. Files using compatibility APIs such as JSONSerialization,
 NSNumber, NSNull, PropertyListSerialization, and XMLParser retain Foundation.
 Apple platforms use the SDK's Foundation module. Pure Swift values need neither.
 
-Tests live in `Packages/LDTXCorelibs/Tests/<module>Tests`. SwiftPM and XcodeGen both
-run them as `LDTXCorelibsTests`:
+Tests live in `Packages/LDTXCorelibs/Tests/<module>Tests` and are defined once as
+SwiftPM's `LDTXCorelibsTests`. `project/corelibs.yml` and the Xcode test plans
+reference that package target directly; XcodeGen does not create another test
+bundle or source group.
 
 ```sh
 git submodule update --init Vendors/nanopb
@@ -150,10 +148,10 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Packages/LDTXCorelibs/LDTXProtos/Messages/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Packages/LDTXCorelibs/LDTXProtos/Messages/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
-| `Packages/LDTXCorelibs/LDTXProtos/NanopbMessages/*.pb.c`, `include/*.pb.h` | `Protos/*.proto` via the official nanopb generator |
-| `Packages/LDTXCorelibs/LDTXProtos/NanopbMessages/StorageChecks.c` | Message descriptors and callback-only storage policy |
+| `Packages/LDTXCorelibs/Sources/LDTXCorelibs/Messages/envelope.pb.swift` | `Protos/envelope.proto` |
+| `Packages/LDTXCorelibs/Sources/LDTXCorelibs/Messages/workspace_v4_*.pb.swift` | `Protos/workspace_v4_*.proto` |
+| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/*.pb.c`, `include/*.pb.h` | `Protos/*.proto` via the official nanopb generator |
+| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/StorageChecks.c` | Message descriptors and callback-only storage policy |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
@@ -220,7 +218,7 @@ by key. The Swift Clang importer uses the same three configuration macros as the
 upstream nanopb package.
 
 YouTube output IPC uses Codable models encoded as binary PropertyLists. It has
-no protobuf schema or LDTXProtos dependency; protocol version 9 identifies this
+no protobuf schema or Corelibs dependency; protocol version 9 identifies this
 wire format. Update both app and embedded XPC service together.
 
 **If the MediaPipe Selfie Segmenter model must be updated:**
@@ -358,9 +356,7 @@ Cloud, which is the release build authority. Its separate Test action runs the
 hostless framework tests using the `LDTXModuleTests` scheme and `Hard` plan.
 
 ```sh
-reuse --no-multiprocessing lint
-swift format lint --recursive .
-git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
+bin/check
 ```
 
 ## Public-log privacy regression

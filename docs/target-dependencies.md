@@ -21,19 +21,17 @@ flowchart TD
     Controller --> Contract[LDTXWorkspaceAppletInterface]
     UI --> Contract
     UI --> Model[LDTXWorkspaceAppletModel]
-    UI --> Protos[LDTXProtos]
-    UI --> Bundles[LDTXWorkspaceBundleFormat]
-    UI --> Program[LDTXProgram]
+    UI --> Corelibs[LDTXCorelibs]
     UI --> MacValues[LDTXProtosMacOSExtra]
     UI --> Views[LDTXAppletSupport / LDTXRichText / LDTXVariableMacro]
     Contract --> Model
-    Contract --> Protos
-    Model --> Program
+    Contract --> Corelibs
+    Model --> Corelibs
     Runtime --> Contract
     Devices --> Contract
     Devices --> Capture[LDTXCapture]
-    Capture --> Protos
-    RTMPS[LDTXYouTubeRTMPS] --> Protos
+    Capture --> Corelibs
+    RTMPS[LDTXYouTubeRTMPS] --> Corelibs
 ```
 
 Workspace UI consumes device-discovery, audio-peak and preview-accessibility
@@ -45,7 +43,7 @@ Vision model metadata is loaded through WorkspaceRuntimeActions. The coordinator
 calls the classifier service and projects the result into a Foundation-only
 WorkspaceVisionModelInformation value. UI does not import Vision or CoreML.
 Camera/audio device descriptions, RTMPS configuration and transport values,
-output actions and audio-master selection also live in Protos; their implementations
+output actions and audio-master selection also live in Corelibs/Values; their implementations
 remain in the capture, discovery, streaming and audio-engine modules.
 
 UI still uses the lightweight Corelibs bundle values and document IO, model/editing
@@ -55,39 +53,33 @@ BackgroundSegmentation, VideoComposition, VideoRendering, TaskQueue, YouTube or
 YouTubeRTMPS. Device previews use presentation fixtures; GPU preview
 assembly is compiled in the controller target.
 
-LDTXProgram contains independent Foundation values. It does not import or
-re-export LDTXProtos, so Program and message compilation can run in parallel.
+Corelibs is one Swift module. Messages, Values, Program, Nanopb,
+WorkspaceBundleFormat, and RecordBundleFormat are source directories rather
+than separate module boundaries. `Messages` is reserved for Protobuf.
 
 ## Message encoding
 
 ```mermaid
 flowchart TD
-    Protos[LDTXProtos] --> SwiftRuntime[LDTXNanopb]
-    Protos --> Messages[LDTXNanopbMessages]
-    SwiftRuntime --> Support[LDTXNanopbSupport]
-    SwiftRuntime --> nanopb
-    Messages --> Support
-    Messages --> nanopb
-    Support --> nanopb
+    Corelibs[LDTXCorelibs: Swift] --> Generated[LDTXNanopbGenerated: C]
+    Corelibs --> nanopb
+    Generated --> nanopb
 ```
 
-LDTXNanopb owns the schema-independent Swift reader/writer, message protocol and
-JSON scalar helpers. LDTXNanopbSupport owns the synchronous C callback context and
-wire-type validation. Neither target depends on generated Workspace messages.
-LDTXNanopbMessages contains only the official generator's schema-specific C
-definitions, umbrella header and storage assertions. LDTXProtos owns generated
-Swift models, data contracts and their schema-specific extensions.
+LDTXCorelibs owns the Swift reader/writer, message protocol, JSON scalar helpers,
+generated models, shared values, Program definitions, and bundle IO.
+LDTXNanopbGenerated contains the official generator's C descriptors, storage
+assertions, synchronous callback context, and wire-type validation.
 
-Internal cross-target adapter operations use Swift package access. C descriptor
-types are not promoted into the public message API. Corelibs still exports one
-dynamic product so these implementation targets are linked once per process.
+C descriptor types are not promoted into the public message API. Corelibs exports
+one dynamic product so the implementation is linked once per process.
 
 ## Verification
 
-Build the schema-independent runtime and the shared tests independently:
+Build the shared module and run its tests:
 
 ```sh
-swift build --package-path Packages/LDTXCorelibs --target LDTXNanopb
+swift build --package-path Packages/LDTXCorelibs
 swift test --package-path Packages/LDTXCorelibs
 ```
 

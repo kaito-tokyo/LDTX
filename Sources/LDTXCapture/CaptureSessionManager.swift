@@ -6,7 +6,7 @@
 import AudioToolbox
 import CoreMedia
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import OSLog
 
 public struct CaptureSessionVideoRequest: Equatable, Sendable {

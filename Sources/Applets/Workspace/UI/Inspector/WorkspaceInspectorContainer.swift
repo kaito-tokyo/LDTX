@@ -4,10 +4,10 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXCorelibs
 import LDTXRichText
 import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceBundleFormat
 import SwiftUI
 
 public struct WorkspaceInspectorContainer: View {

@@ -9,10 +9,8 @@ import Foundation
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
-import LDTXRecordBundleFormat
 import LDTXRecording
 import LDTXTaskQueue
 import LDTXWorkspaceAppletModel

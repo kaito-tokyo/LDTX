@@ -5,7 +5,7 @@
 import CoreMedia
 import Foundation
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRendering
 @testable import LDTXProgramRuntime
 import Testing

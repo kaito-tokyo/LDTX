@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 import SwiftUI
 
 extension Ldtx_Workspace_V4_Color {

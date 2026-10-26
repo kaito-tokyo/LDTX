@@ -4,11 +4,10 @@
 
 import AppKit
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import SwiftUI
 import Testing
 

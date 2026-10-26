@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 
 /// Preview adapter; Workspace owns the native engine independently of panes.
 public final class ProgramAudioMonitor: @unchecked Sendable {

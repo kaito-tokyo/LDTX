@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import SwiftUI
 
 extension Bindable where Value == WorkspaceDocument {

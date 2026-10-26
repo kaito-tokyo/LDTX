@@ -3,7 +3,7 @@
 
 import CoreImage
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletService
 import Testing
 

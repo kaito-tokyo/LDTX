@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 
 public protocol ProgramLibraryService {
   func loadProgramDefinitions() throws -> [SavedProgramDefinitionRecord]

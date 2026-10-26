@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
-import LDTXProgram
+import LDTXCorelibs
 @testable import LDTXProgramRuntime
 import LDTXVideoComposition
 @testable import LDTXVideoRendering

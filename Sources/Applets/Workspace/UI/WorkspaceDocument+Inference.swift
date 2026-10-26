@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
-import LDTXWorkspaceBundleFormat
+import LDTXCorelibs
 
 extension WorkspaceDocument {
   public func inferenceRequest(

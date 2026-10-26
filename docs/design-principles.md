@@ -19,7 +19,9 @@ the relevant design or feature documentation instead.
 
 ## Workspace UI depends on presentation contracts
 
-- Workspace UI consumes Protos values and presentation/operation contracts.
+- Use `Messages` only for Protobuf messages and their schema-specific extensions.
+  Handwritten shared values that are not Protobuf messages belong in `Values`.
+- Workspace UI consumes Corelibs values and presentation/operation contracts.
   Capture, discovery, rendering, inference and streaming implementations are
   supplied by the controller/composition root rather than imported into UI.
 

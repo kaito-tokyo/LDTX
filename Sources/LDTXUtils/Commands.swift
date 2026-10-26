@@ -4,14 +4,12 @@
 
 import ArgumentParser
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
-import LDTXRecordBundleFormat
 import LDTXRecording
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 
 public struct LdtxCLI: AsyncParsableCommand {
   public init() {}

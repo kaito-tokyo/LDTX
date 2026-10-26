@@ -136,9 +136,10 @@ exercised through the SUT, even when they do not appear as imports in the test.
 process stdout/stderr and mutate environment variables. It remains hostless.
 macOS protobuf-extra suites run in LDTXModuleTests with Medium tags.
 
-Corelibs suites under `Packages/LDTXCorelibs/Tests/<module>Tests` remain in
-`LDTXCorelibsTests` for XcodeGen and SwiftPM, including deterministic Unit suites
-and filesystem Integration suites. SwiftPM tests are outside the tier rule.
+Corelibs suites under `Packages/LDTXCorelibs/Tests/<module>Tests` belong to SwiftPM's
+`LDTXCorelibsTests`, including deterministic Unit suites and filesystem Integration
+suites. Xcode schemes and test plans reference the package target directly rather
+than defining a second target. These tests are outside the tier rule.
 
 Direct UI component and Document tests remain in `LDTXAppUIComponentTests` with
 its serialized MainActor parent. Application UI automation remains in

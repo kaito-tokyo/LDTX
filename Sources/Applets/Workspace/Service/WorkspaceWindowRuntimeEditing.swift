@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
-import LDTXProtos
+import LDTXCorelibs
 @_exported import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 
 extension WorkspaceWindowRuntime {
   public func editDefinition(

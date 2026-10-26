@@ -4,10 +4,9 @@
 import CoreImage
 import Foundation
 import LDTXCapture
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Testing
 
 extension OutputTestSuite {

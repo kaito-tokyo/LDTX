@@ -4,7 +4,7 @@
 
 @preconcurrency import AVFoundation
 import Foundation
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 
 public struct RecordingPackageVerifier: Sendable {
   public init() {}

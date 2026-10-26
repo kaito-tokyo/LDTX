@@ -5,7 +5,7 @@
 
 import PackageDescription
 
-// Keep C importer settings identical so Foundation and nanopb modules can be reused.
+// Match the official nanopb runtime's C configuration in Swift imports.
 let nanopbSwiftSettings: [SwiftSetting] = [
   .unsafeFlags([
     "-Xcc", "-DPB_FIELD_32BIT=1", "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
@@ -19,15 +19,15 @@ let package = Package(
   products: [
     .library(
       name: "LDTXCorelibs", type: .dynamic,
-      targets: ["LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat", "LDTXRecordBundleFormat"]
+      targets: ["LDTXCorelibs"]
     )
   ],
   dependencies: [.package(path: "../../Vendors/nanopb")],
   targets: [
     .target(
-      name: "LDTXNanopbSupport",
+      name: "LDTXNanopbGenerated",
       dependencies: [.product(name: "nanopb", package: "nanopb")],
-      path: "LDTXNanopbSupport",
+      path: "Sources/LDTXNanopbGenerated",
       publicHeadersPath: "include",
       cSettings: [
         .define("PB_FIELD_32BIT", to: "1"),
@@ -36,45 +36,14 @@ let package = Package(
       ]
     ),
     .target(
-      name: "LDTXNanopb",
-      dependencies: ["LDTXNanopbSupport", .product(name: "nanopb", package: "nanopb")],
-      path: "LDTXNanopb",
-      swiftSettings: nanopbSwiftSettings
-    ),
-    .target(
-      name: "LDTXNanopbMessages",
-      dependencies: ["LDTXNanopbSupport", .product(name: "nanopb", package: "nanopb")],
-      path: "LDTXProtos/NanopbMessages",
-      publicHeadersPath: "include",
-      cSettings: [
-        .define("PB_FIELD_32BIT", to: "1"),
-        .define("PB_NO_PACKED_STRUCTS", to: "1"),
-        .define("PB_ENABLE_MALLOC", to: "1"),
-      ]
-    ),
-    .target(
-      name: "LDTXProtos",
-      dependencies: ["LDTXNanopb", "LDTXNanopbMessages"],
-      path: "LDTXProtos",
-      exclude: ["NanopbMessages"],
-      sources: ["Messages", "Exports.swift"],
-      swiftSettings: nanopbSwiftSettings
-    ),
-    .target(name: "LDTXProgram", path: "LDTXProgram", swiftSettings: nanopbSwiftSettings),
-    .target(
-      name: "LDTXWorkspaceBundleFormat", dependencies: ["LDTXProtos"],
-      path: "LDTXWorkspaceBundleFormat",
-      swiftSettings: nanopbSwiftSettings
-    ),
-    .target(
-      name: "LDTXRecordBundleFormat", path: "LDTXRecordBundleFormat",
+      name: "LDTXCorelibs",
+      dependencies: ["LDTXNanopbGenerated", .product(name: "nanopb", package: "nanopb")],
+      path: "Sources/LDTXCorelibs",
       swiftSettings: nanopbSwiftSettings
     ),
     .testTarget(
       name: "LDTXCorelibsTests",
-      dependencies: [
-        "LDTXProtos", "LDTXProgram", "LDTXWorkspaceBundleFormat", "LDTXRecordBundleFormat",
-      ],
+      dependencies: ["LDTXCorelibs"],
       path: "Tests",
       swiftSettings: nanopbSwiftSettings
     ),

@@ -5,12 +5,11 @@
 import ArgumentParser
 import Darwin
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXUtils
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("LDTX Workspace CLI commands", .serialized)

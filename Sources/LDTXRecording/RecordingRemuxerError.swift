@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 
 public enum RecordingRemuxerError: Error, LocalizedError, Equatable, Sendable {
   case outputAlreadyExists(URL)

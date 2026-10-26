@@ -4,7 +4,7 @@
 import CoreMedia
 import Foundation
 import LDTXAudioEngine
-import LDTXProgram
+import LDTXCorelibs
 @testable import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService

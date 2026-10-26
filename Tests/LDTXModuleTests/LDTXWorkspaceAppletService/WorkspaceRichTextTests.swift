@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import LDTXRichText
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @MainActor @Suite(.tags(.medium)) struct WorkspaceRichTextIntegrationTestSuite {

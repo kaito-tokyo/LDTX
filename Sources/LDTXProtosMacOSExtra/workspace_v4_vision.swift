@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreGraphics
-import LDTXProtos
+import LDTXCorelibs
 
 extension Ldtx_Workspace_V4_VisionRegionOfInterest {
   /// Projects normalized coordinates into the supplied image extent.

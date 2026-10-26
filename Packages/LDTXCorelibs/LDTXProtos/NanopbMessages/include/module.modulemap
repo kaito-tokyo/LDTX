@@ -1,4 +1,0 @@
-module LDTXNanopbMessages {
-    umbrella header "LDTXNanopbMessages.h"
-    export *
-}

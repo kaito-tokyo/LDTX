@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-@testable import LDTXRecordBundleFormat
+@testable import LDTXCorelibs
 import Testing
 
 @Suite

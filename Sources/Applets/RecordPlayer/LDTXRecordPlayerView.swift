@@ -4,7 +4,7 @@
 
 @preconcurrency import AVFoundation
 import AVKit
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 import LDTXRecording
 import OSLog
 import Observation

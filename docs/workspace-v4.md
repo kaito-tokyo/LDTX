@@ -36,8 +36,8 @@ part of saving.
 
 Importing a model does not compile it or execute inference.
 
-`LDTXProtos` owns protobuf message types and attribute accessors.
-`LDTXWorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and
+`LDTXCorelibs/Messages` owns protobuf message types and attribute accessors.
+`LDTXCorelibs/WorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and
 `WorkspaceBundleValidatorV4`. The validator is the Read/Write content gate:
 it returns all independent diagnostics with field paths, entity IDs and violation
 codes, without correcting values. Reader and Writer reject invalid content with
@@ -87,7 +87,7 @@ Individual writes remain available for CLI operations. DocumentWriter delegates
 complete-bundle saves to WriterV4 at the framework-supplied staging destination;
 WriterV4 does not replace the entire package directory.
 Shared bundle values are defined by
-`LDTXWorkspaceBundleFormat`; read and write operations propagate Foundation and
+`LDTXCorelibs/WorkspaceBundleFormat`; read and write operations propagate Foundation and
 Protobuf errors. `WorkspaceLockService` belongs to Workspace runtime
 coordination: the Runtime retains the package lock for the open-window lifetime,
 while CLI commands hold it for the duration of an operation. The Reader and

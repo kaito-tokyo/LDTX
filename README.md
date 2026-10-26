@@ -106,7 +106,7 @@ For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
 
 ## Internal Framework Modules
 
-This table lists the app's library modules. Corelibs modules are defined by
+This table lists the app's library modules. Corelibs targets are defined by
 `Packages/LDTXCorelibs/Package.swift` and exported as one dynamic LDTXCorelibs product.
 Other modules are XcodeGen framework targets. The internal nanopb C target contains
 message descriptors and callbacks into the Swift models. External libraries
@@ -124,16 +124,13 @@ remain SwiftPM dependencies.
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
-| LDTXProgram                | Program runtime definitions and output profiles.                           |
-| LDTXProtos                 | Swift Workspace data models, nanopb codecs, and integrity validation. |
-| LDTXNanopb                 | Schema-independent Swift nanopb adapters and JSON scalar helpers. |
+| LDTXCorelibs               | Shared values, Protobuf models/codecs, Program definitions, and bundle IO. |
+| LDTXNanopbGenerated        | Generated nanopb C descriptors, callback bridge, and storage checks. |
 | LDTXWorkspaceAppletInterface | Workspace presentation and runtime-operation contracts. |
 | LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
-| LDTXWorkspaceBundleFormat  | Workspace bundle values, `.ldtxworkspace` package IO, and on-disk format validation. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecordPlayerApplet      | Recording playback windows, pane UI, and marker persistence.       |
-| LDTXRecordBundleFormat | Recording bundle structure, metadata IO, and DASH timing parsing. |
 | LDTXRecording              | Media-track validation, playback composition, and remux.     |
 | LDTXTaskQueue              | Workspace event sequencing and Session-scoped task flow.           |
 | LDTXUtils                  | Command-line utilities shared by the LDTX helper tool.            |

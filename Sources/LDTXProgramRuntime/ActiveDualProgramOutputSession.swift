@@ -4,7 +4,7 @@
 
 import CoreMedia
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 
 /// Owns the fixed Landscape and Portrait output pipelines for one Workspace
 /// output operation. Capture and the session clock are shared upstream; each

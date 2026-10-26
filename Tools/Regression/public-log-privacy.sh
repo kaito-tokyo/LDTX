@@ -4,14 +4,26 @@
 set -eu
 # Build the focused Xcode tests first. Run this script outside the agent sandbox,
 # as required by AGENTS.md for /usr/bin/log. It does not change logging settings.
-repository=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+repository=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
 products=${1:-"$repository/.derivedData/Build/Products/Debug"}
 probe_directory=$(mktemp -d "${TMPDIR:-/tmp}/ldtx-log-privacy.XXXXXX")
 trap 'rm -rf "$probe_directory"' EXIT HUP INT TERM
+generated_headers=$repository/Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/include
+cat > "$probe_directory/nanopb.modulemap" <<EOF
+module nanopb {
+  umbrella "$repository/Vendors/nanopb/spm_headers"
+  export *
+}
+EOF
 xcrun swiftc -swift-version 6 -parse-as-library -cxx-interoperability-mode=default \
-  -module-cache-path "$probe_directory/cache" -F "$products" -I "$products" \
-  -framework LDTXDash -framework LDTXProgram -framework LDTXProgramRuntime \
+  -module-cache-path "$probe_directory/cache" -F "$products" -F "$products/PackageFrameworks" -I "$products" \
+  -Xcc -fmodule-map-file="$generated_headers/module.modulemap" \
+  -Xcc -fmodule-map-file="$probe_directory/nanopb.modulemap" \
+  -Xcc -I"$repository/Vendors/nanopb/spm_headers" \
+  -Xcc -DPB_FIELD_32BIT=1 -Xcc -DPB_NO_PACKED_STRUCTS=1 -Xcc -DPB_ENABLE_MALLOC=1 \
+  -framework LDTXDash -framework LDTXCorelibs -framework LDTXProgramRuntime \
   -Xlinker -rpath -Xlinker "$products" \
+  -Xlinker -rpath -Xlinker "$products/PackageFrameworks" \
   "$repository/Tools/Regression/PublicLogPrivacy.swift" -o "$probe_directory/probe"
 # Xcode test runners can enable private logging. Use an ordinary process here.
 probe_output=$(env -u OS_ACTIVITY_DT_MODE "$probe_directory/probe")

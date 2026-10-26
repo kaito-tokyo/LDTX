@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Vision schedule planning", .tags(.easy))

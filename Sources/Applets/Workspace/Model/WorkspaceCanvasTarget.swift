@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
-import LDTXProtos
+import LDTXCorelibs
 
 /// Identifies the fields to read and update for one Program canvas.
 public struct WorkspaceCanvasTarget {

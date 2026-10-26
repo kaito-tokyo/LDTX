@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
-import LDTXProtos
+import LDTXCorelibs
 import simd
 
 #if canImport(Metal)

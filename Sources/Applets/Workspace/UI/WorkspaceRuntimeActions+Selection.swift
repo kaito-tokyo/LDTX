@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 import LDTXWorkspaceAppletInterface
-import LDTXWorkspaceBundleFormat
 
 extension WorkspaceRuntimeActions {
   @MainActor public func inferSelectedVision(

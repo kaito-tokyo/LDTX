@@ -6,7 +6,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 import OSLog
 
 public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
