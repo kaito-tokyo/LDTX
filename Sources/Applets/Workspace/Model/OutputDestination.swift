@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import SwiftProtobuf
 
 public enum YouTubeIngestMode: UInt32, Codable, CaseIterable, Equatable, Sendable {
   case dash = 0

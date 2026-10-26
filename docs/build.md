@@ -31,48 +31,66 @@ build times.
 **Set up Protobuf tools when needed:**
 
 ```sh
-brew install protobuf swift-protobuf
+brew install protobuf
 ```
 
 ## Corelibs
 
-Linux-compatible modules live in `Sources/Corelibs/<module>`.
-XcodeGen builds these sources directly as framework targets; the Xcode project
-has no dependency on a local Swift package. SwiftPM builds the same sources
-independently. On Linux, the root package includes only Corelibs and their tests;
-on macOS, it also includes the existing CLI targets.
+`Packages/LDTXCorelibs/Package.swift` defines the Swift targets `LDTXCorelibs`
+and `LDTXMessages`, and the C target `LDTXNanopbGenerated`. Sources live under
+`Packages/LDTXCorelibs/Sources/<target>`. There is no repository-root manifest.
+`LDTXMessages` owns Protobuf models, handwritten message extensions, and the
+copying codec. `LDTXCorelibs` owns `Values`, `Program`, `WorkspaceBundleFormat`,
+and `RecordBundleFormat`, and re-exports the public Swift message API.
+See [target dependencies](target-dependencies.md) for their boundaries and
+Workspace UI's presentation contracts.
 
-Recording bundle IO and DASH parsing live in `LDTXRecordBundleFormat`;
-AVFoundation media operations remain in `LDTXRecording`.
+XcodeGen references the local package's dynamic `LDTXCorelibs` product, and all
+Swift consumers use `import LDTXCorelibs`. One dynamic product provides a single
+implementation across the application's framework graph. The official nanopb
+package and generated C target are internal imports of `LDTXMessages`. Keep its
+C importer macros aligned with the C targets. AVFoundation operations remain in
+LDTXRecording outside Corelibs.
 
-Tests live in `Tests/Corelibs/<module>Tests`. XcodeGen and SwiftPM both
-include them in the `LDTXCorelibsTests` target.
+On Linux, files that only use Foundation's Swift value APIs import
+FoundationEssentials. Files using compatibility APIs such as JSONSerialization,
+NSNumber, NSDecimalNumber, NSString, NSURLErrorKey, PropertyListSerialization,
+and XMLParser retain Foundation. Generated message models and the shared nanopb
+codec follow the same rule; their generator emits the conditional import.
+Apple platforms use the SDK's Foundation module. Pure Swift values need neither.
 
-Verify the Linux build and tests with the same image used by CI:
+Tests live in `Packages/LDTXCorelibs/Tests/LDTXCorelibsTests/<area>` and are defined once as
+SwiftPM's `LDTXCorelibsTests`. `project/corelibs.yml` and the Xcode test plans
+reference that package target directly; XcodeGen does not create another test
+bundle or source group.
+
+```sh
+git submodule update --init Vendors/nanopb
+swift build --package-path Packages/LDTXCorelibs
+swift test --package-path Packages/LDTXCorelibs
+```
+
+GitHub Codespaces uses `.devcontainer/devcontainer.json`, which initializes the
+nanopb submodule and resolves this package. Python and protoc are needed only
+when regenerating message sources.
+For Linux verification with the CI image:
 
 ```sh
 docker run --rm \
   --mount "type=bind,source=$PWD,target=/workspace,readonly" \
   swift:6.4.0-trixie bash -euo pipefail -c '
-    mkdir -p /tmp/package/Sources /tmp/package/Tests
-    cp /workspace/Package.swift /workspace/Package.resolved /tmp/package/
-    cp -R /workspace/Sources/Corelibs /tmp/package/Sources/
-    cp -R /workspace/Tests/Corelibs /tmp/package/Tests/
-    cd /tmp/package
-    swift test --disable-index-store -debug-info-format none --jobs "$(nproc)"
+    mkdir -p /tmp/ldtx/Packages /tmp/ldtx/Vendors
+    cp -R /workspace/Packages/LDTXCorelibs /tmp/ldtx/Packages/LDTXCorelibs
+    cp -R /workspace/Vendors/nanopb /tmp/ldtx/Vendors/nanopb
+    swift test --package-path /tmp/ldtx/Packages/LDTXCorelibs --scratch-path /tmp/corelibs-build \
+      --disable-index-store -debug-info-format none --jobs "$(nproc)"
   '
 ```
 
-CI disables indexing and debug-info generation for SwiftPM tests and sets build
-parallelism to the runner CPU count. Debug-info generation remains available
-for local debugging by omitting `-debug-info-format none`.
-
-The reusable Xcode workflow runs Corelibs on Linux alongside the single macOS
-`golden_gate` job. Pull requests run Corelibs tests only on Linux. Pushes to
-`main` also run Corelibs tests on macOS. The macOS job selects the `pr` test
-plan for pull requests and the `push-main` plan for pushes to `main`. Both plans
-include Easy, Medium, Hard, Output, UI component, UI automation, and XPC tests; only
-`push-main` includes Corelibs tests.
+CI disables indexing and debug-info generation for SwiftPM tests and sets
+parallelism to the runner CPU count. The reusable workflow runs Corelibs on Linux.
+The macOS `pr` plan omits Corelibs; `push-main` includes them. Both plans include
+the isolated CLI tests, while macOS protobuf-extra tests run in LDTXModuleTests.
 
 ## Xcode Cloud tests
 
@@ -132,16 +150,23 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Sources/Corelibs/LDTXProtos/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Sources/Corelibs/LDTXProtos/youtube_output.pb.swift`      | `Protos/youtube_output.proto`                     |
-| `Sources/Corelibs/LDTXProtos/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/*.pb.swift` | `Protos/*.proto` |
+| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/*.pb.h`, `*.pb.c` | `Protos/*.proto` via the official nanopb generator |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
-All schemas under `Protos` use Edition 2024. Generate them with a compiler and
-SwiftProtobuf generator that support that edition (verified with protoc 36.2
-and protoc-gen-swift 1.38.1). Singular fields use the edition default of
-explicit presence; do not set file-level `IMPLICIT` presence.
+The official `.pb.c` files supply the descriptor definitions and compile directly
+in `LDTXNanopbGenerated`.
+All schemas under `Protos` use Edition 2024. Run protoc 36.2 externally to create
+a FileDescriptorSet, then use the Python generator in
+[the generate-nanopb-protos skill](../.agents/skills/generate-nanopb-protos/SKILL.md) to generate
+Swift models and adapters. Generate C headers and sources separately with the official
+nanopb generator and `Protos/*.options`, following the skill's commands.
+The Swift generator reads descriptors using Python protobuf and never invokes
+protoc or nanopb. The app uses
+the official nanopb SwiftPM package at runtime; no generator runs during normal builds. Singular
+fields use the edition default of explicit presence; do not set file-level
+`IMPLICIT` presence.
 The `uses_24_hour_time` field retains its existing name with a field-level
 legacy naming-style override.
 
@@ -149,21 +174,14 @@ legacy naming-style override.
 documented at `docs/protos/workspace.html`.
 
 ```sh
-protoc \
-  --proto_path=Protos \
-  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
-  --swift_opt=Visibility=Public \
-  --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/Corelibs/LDTXProtos \
-  Protos/envelope.proto \
-  Protos/workspace_v4_definition.proto \
-  Protos/workspace_v4_input_device.proto \
-  Protos/workspace_v4_preferences.proto \
-  Protos/workspace_v4_output_settings.proto \
-  Protos/workspace_v4_vfx.proto \
-  Protos/workspace_v4_video_component.proto \
-  Protos/workspace_v4_vision.proto \
-  Protos/workspace_v4_types.proto
+git submodule update --init Vendors/nanopb
+mkdir -p /tmp/ldtx-proto-input
+protoc -I Protos --include_imports --include_source_info \
+  --descriptor_set_out=/tmp/ldtx-proto-input/schemas.pb Protos/*.proto
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
+  --descriptor /tmp/ldtx-proto-input/schemas.pb
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
+  --descriptor /tmp/ldtx-proto-input/schemas.pb --check
 ```
 
 **Regenerate the Workspace v4 reference:**
@@ -189,17 +207,23 @@ The Custom Element parses the source in the browser using the fixed
 The original source remains readable when JavaScript or the CDN is unavailable.
 These pages describe behavior; they do not execute tests or report test results.
 
-**If `Protos/youtube_output.proto` changes:**
+The generator updates checked-in sources using `apply_patch` (required on PATH).
+`--check` verifies reproducibility of Swift sources without writing files.
+Regenerate C headers separately into a temporary directory and compare them
+with the checked-in headers. The descriptor input is supplied with `--descriptor`;
+the tool never invokes protoc. Generated models retain explicit presence and
+fixed schema defaults. The official pb_decode path fills an owned C message,
+which is copied into the Swift model before pb_release frees its allocations.
+Encoding copies into C storage and uses pb_encode, then releases that storage.
+Unknown fields are discarded. Strings use length-delimited C bytes storage to
+preserve embedded NULs; copying into Swift rejects invalid UTF-8. No field
+callbacks or preliminary wire-type scan are used. Map output is ordered
+by key. The Swift Clang importer uses the same three configuration macros as the
+upstream nanopb package.
 
-```sh
-protoc \
-  --proto_path=Protos \
-  --plugin=protoc-gen-swift="$(brew --prefix swift-protobuf)/bin/protoc-gen-swift" \
-  --swift_opt=Visibility=Public \
-  --swift_opt=FileNaming=DropPath \
-  --swift_out=Sources/Corelibs/LDTXProtos \
-  Protos/youtube_output.proto
-```
+YouTube output IPC uses Codable models encoded as binary PropertyLists. It has
+no protobuf schema or Corelibs dependency; protocol version 9 identifies this
+wire format. Update both app and embedded XPC service together.
 
 **If the MediaPipe Selfie Segmenter model must be updated:**
 
@@ -233,35 +257,28 @@ xcodegen generate
 
 **Build the standalone `ldtx` CLI:**
 
-The standalone CLI is defined by `Package.swift` independently from the
-XcodeGen project. It contains only recording and workspace file operations.
+The standalone CLI is an XcodeGen-managed command-line target. It contains only
+recording and workspace file operations. Corelibs are supplied by the local package.
 
 ```sh
-swift package resolve
-swift build -c release --product ldtx
-"$(swift build -c release --show-bin-path)/ldtx" --help
+xcodegen generate
+xcodebuild -project LDTX.xcodeproj -scheme ldtx -configuration Release \
+  -destination platform=macOS -derivedDataPath .derivedData build
+.derivedData/Build/Products/Release/ldtx --help
 ```
 
-The Xcode project does not read or generate `Package.swift`.
-
-The app-side modules are built by Xcode from `project.yml`. The standalone
-SwiftPM package intentionally defines only the file-operation dependency graph:
-
-```sh
-swift build -c release --target LDTXRecording
-swift build -c release --target LDTXProgram
-swift build -c release --target LDTXWorkspaceAppletModel
-swift build -c release --target LDTXWorkspaceAppletStore
-swift build -c release --target LDTXWorkspaceAppletService
-```
+Other app-side modules and the helper remain XcodeGen targets. The CLI tests
+remain in an isolated hostless LDTXUtilsTests bundle because they redirect process
+stdout/stderr and mutate environment variables. macOS protobuf-extra tests run in
+the shared LDTXModuleTests target with Medium tags.
 
 ## Recording CLI
 
-Run the standalone CLI from the SwiftPM build directory:
+Run the standalone CLI from the Xcode build directory:
 
 ```sh
-"$(swift build -c release --show-bin-path)/ldtx" record --help
-"$(swift build -c release --show-bin-path)/ldtx" workspace --help
+.derivedData/Build/Products/Release/ldtx record --help
+.derivedData/Build/Products/Release/ldtx workspace --help
 ```
 
 The app-bundled `LDTXHelper` has the additional `app` and `mcp` surfaces. Its
@@ -274,19 +291,14 @@ See [`testing.md`](testing.md) for the PTS regression policy and the cases that
 must be retained when changing timing or media pipelines.
 
 ```sh
-swift test
+swift test --package-path Packages/LDTXCorelibs
 ```
 
-**Test Swift modules if needed:**
+**Test macOS modules if needed:**
 
 ```sh
-swift test --filter LDTXProgramEasyTests
-swift test --filter LDTXDashEasyTests
-swift test --filter LDTXYouTubeEasyTests
-swift test --filter LDTXMediaTimingEasyTests
-swift test --filter LDTXMP4EasyTests
-swift test --filter LDTXVideoRenderingHardTests
-swift test --filter LDTXAudioEngineEasyTests
+xcodebuild -project LDTX.xcodeproj -scheme LDTXModuleTests -testPlan Easy \
+  -destination platform=macOS -derivedDataPath .derivedData test
 ```
 
 **Build the LDTX app if needed:**
@@ -316,7 +328,7 @@ xcodebuild \
 **Run the package and app integration tests if needed:**
 
 ```sh
-swift test
+swift test --package-path Packages/LDTXCorelibs
 
 xcodebuild \
   -project LDTX.xcodeproj \
@@ -348,9 +360,7 @@ Cloud, which is the release build authority. Its separate Test action runs the
 hostless framework tests using the `LDTXModuleTests` scheme and `Hard` plan.
 
 ```sh
-reuse --no-multiprocessing lint
-swift format lint --recursive .
-git ls-files '*.cpp' '*.hpp' | xargs clang-format --dry-run --Werror
+bin/check
 ```
 
 ## Public-log privacy regression

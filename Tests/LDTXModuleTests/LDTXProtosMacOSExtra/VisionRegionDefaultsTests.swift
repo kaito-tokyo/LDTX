@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreGraphics
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import Testing
 
@@ -10,9 +10,9 @@ import Testing
   @Test("LUB-1004: Absent fields project using input pixel defaults")
   func absentFieldsProjectUsingInputPixelDefaults() throws {
     var value = Ldtx_Workspace_V4_VisionRegionOfInterest()
-    value.x.num = 320
-    value.width.num = 640
-    value.height.num = 180
+    value.x = .with { $0.num = 320 }
+    value.width = .with { $0.num = 640 }
+    value.height = .with { $0.num = 180 }
     let resolved = try value.resolved(inputSize: (1920, 1080))
     #expect(
       resolved.rect(in: CGRect(x: 0, y: 0, width: 1920, height: 1080))

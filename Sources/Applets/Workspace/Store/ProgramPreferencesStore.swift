@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 
 @MainActor
 struct ProgramPreferencesStore: RevisionedStore {

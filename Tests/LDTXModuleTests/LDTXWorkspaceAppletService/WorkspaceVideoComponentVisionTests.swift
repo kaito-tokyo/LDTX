@@ -5,13 +5,12 @@ import CoreImage
 import CoreVideo
 import Foundation
 import LDTXCapture
+import LDTXCorelibs
 import LDTXInternalProtocols
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 import Metal
 import Testing
 
@@ -57,17 +56,20 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     try runtime.editDefinition { definition in
       definition.videoComponents = [Int64(1), 2].map { id in
         .with { wrapper in
-          wrapper.vfxSource = .with { source in
-            source.internalID = id
-            source.displayName = "Camera \(id)"
-            source.deviceWidth = 1280
-            source.deviceHeight = 720
-            if id == 2 {
-              source.effects = [
-                .with { $0.backgroundRemoval = .with { $0.model = .mediapipeLandscape } }
-              ]
-            }
-          }
+          wrapper.videoComponent = .vfxSource(
+            .with { source in
+              source.internalID = id
+              source.displayName = "Camera \(id)"
+              source.deviceWidth = 1280
+              source.deviceHeight = 720
+              if id == 2 {
+                source.effects = [
+                  .with {
+                    $0.videoEffect = .backgroundRemoval(.with { $0.model = .mediapipeLandscape })
+                  }
+                ]
+              }
+            })
         }
       }
     }
@@ -91,8 +93,10 @@ struct WorkspaceVideoComponentVisionIntegrationTestSuite {
     #expect(raw.image.extent == effect.image.extent)
     #expect(raw.image.extent == CGRect(x: 0, y: 0, width: 1280, height: 720))
     var croppedVision = try #require(context.vision(rawID))
-    croppedVision.regionOfInterest.x.num = 640
-    croppedVision.regionOfInterest.width.num = 640
+    croppedVision.regionOfInterest = .with {
+      $0.x = .with { $0.num = 640 }
+      $0.width = .with { $0.num = 640 }
+    }
     let cropped = try await readyFrame(runtime: runtime, vision: croppedVision)
     #expect(cropped.image.extent == CGRect(x: 640, y: 0, width: 640, height: 720))
     // A zero-alpha effect produces black; the unprocessed synthetic pattern remains visible.

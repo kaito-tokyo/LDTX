@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreGraphics
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import Testing
 
-@Suite struct VisionRegionTests {
+@Suite(.tags(.medium)) struct VisionRegionUnitTestSuite {
   private func region() -> Ldtx_Workspace_V4_VisionRegionOfInterest {
     .with {
       $0.x = .with {
@@ -44,17 +44,17 @@ import Testing
     let extent = CGRect(x: 10, y: -20, width: 800, height: 400)
     let value = Ldtx_Workspace_V4_VisionRegionOfInterest()
     #expect(value.rect(in: extent) == extent)
-    #expect(!value.hasWidth && !value.hasHeight)
+    #expect((value.width == nil) && (value.height == nil))
   }
 
   @Test("LUB-1004: Projection uses fixed defaults for unset components")
   func projectionUsesFixedDefaultsForUnsetComponents() {
     var value = region()
-    value.clearX()
-    value.width.clearNum()
+    value.x = nil
+    value.width?.num = nil
     let rect = value.rect(in: CGRect(x: 10, y: 20, width: 100, height: 100))
     #expect(rect.minX == 10)
     #expect(rect.width == 50)
-    #expect(!value.hasX && !value.width.hasNum)
+    #expect((value.x == nil) && (value.width?.num == nil))
   }
 }

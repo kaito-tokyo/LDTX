@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
@@ -41,12 +41,16 @@ extension AppUIComponentTestSuite {
       row.edit(data.input, at: data.field.rawValue)
       let saved = try #require(fixture.editor.preferences.videoLayerTransforms[1])
       let values = [
-        saved.translationX.double, saved.translationY.double, saved.scaleX.double,
-        saved.scaleY.double,
+        (saved.translationX ?? .init()).double,
+        (saved.translationY ?? .init()).double,
+        (saved.scaleX ?? .init()).double,
+        (saved.scaleY ?? .init()).double,
       ]
       let original = [
-        before.translationX.double, before.translationY.double, before.scaleX.double,
-        before.scaleY.double,
+        (before.translationX ?? .init()).double,
+        (before.translationY ?? .init()).double,
+        (before.scaleX ?? .init()).double,
+        (before.scaleY ?? .init()).double,
       ]
       #expect(
         values[data.field.rawValue] == Double(data.expectedNumerator)
@@ -66,8 +70,11 @@ extension AppUIComponentTestSuite {
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[0] == "-")
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.translationX.double == 0)
-      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.scaleY.double == 0.5)
+      #expect(
+        (row.transform.translationX ?? .init()).double
+          == 0)
+      #expect(
+        fixture.editor.preferences.videoLayerTransforms[1]?.scaleY?.double == 0.5)
     }
 
     @Test(
@@ -80,7 +87,8 @@ extension AppUIComponentTestSuite {
       row.edit(text, at: 2)
       #expect(fixture.state.workspacePreferences == before)
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.scaleX.double == 1)
+      #expect(
+        (row.transform.scaleX ?? .init()).double == 1)
       fixture.update(ids: [3, 1, 2])
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[2] == text)
@@ -92,7 +100,9 @@ extension AppUIComponentTestSuite {
       let row = try #require(fixture.editor.rows[1])
       row.edit(text, at: 0)
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.translationX.double == 0)
+      #expect(
+        (row.transform.translationX ?? .init()).double
+          == 0)
     }
 
     @Test("LUB-1048: Stale callbacks do not edit removed layers")
@@ -143,7 +153,8 @@ extension AppUIComponentTestSuite {
       let field = try #require(fields.first)
       try editWorkspaceField(field, text: "960", window: window)
       await settleWorkspaceToolbar(window)
-      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.translationX.double == 0.5)
+      #expect(
+        fixture.editor.preferences.videoLayerTransforms[1]?.translationX?.double == 0.5)
     }
   }
 }

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import SwiftProtobuf
 
 @objc public protocol LDTXYouTubeOutputServiceProcessXPC {
   func bootstrap(
@@ -27,7 +26,7 @@ public enum LDTXYouTubeOutputServiceProcessInterfaces {
       as? String
       ?? "tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess"
   }
-  public static let protocolVersion: UInt32 = 8
+  public static let protocolVersion: UInt32 = 9
 
   public static func service() -> NSXPCInterface {
     NSXPCInterface(with: LDTXYouTubeOutputServiceProcessXPC.self)
@@ -179,20 +178,16 @@ public struct YouTubeOutputResetRequest: Codable, Equatable, Sendable {
   }
 }
 
-public protocol YouTubeOutputWireMessage {
-  associatedtype Proto: SwiftProtobuf.Message
-  init(proto: Proto) throws
-  func makeProto() -> Proto
-}
-
 public enum YouTubeOutputCoding {
-  public static func encode<T: YouTubeOutputWireMessage>(_ value: T) throws -> Data {
-    try value.makeProto().serializedData()
+  public static func encode<T: Encodable>(_ value: T) throws -> Data {
+    let encoder = PropertyListEncoder()
+    encoder.outputFormat = .binary
+    return try encoder.encode(value)
   }
 
-  public static func decode<T: YouTubeOutputWireMessage>(_ type: T.Type, from data: Data) throws
+  public static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws
     -> T
   {
-    try T(proto: T.Proto(serializedBytes: data))
+    try PropertyListDecoder().decode(type, from: data)
   }
 }

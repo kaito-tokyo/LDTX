@@ -4,7 +4,7 @@
 
 import AVFoundation
 import AppKit
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 import LDTXRecording
 import Observation
 import SwiftUI

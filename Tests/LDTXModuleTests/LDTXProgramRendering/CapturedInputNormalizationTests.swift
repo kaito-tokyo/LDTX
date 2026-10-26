@@ -8,8 +8,8 @@ import CoreVideo
 import Foundation
 import LDTXBackgroundSegmentation
 import LDTXCapture
+import LDTXCorelibs
 import LDTXInternalProtocols
-import LDTXProgram
 import LDTXProgramRendering
 @_spi(CaptureConversion) @testable import LDTXProgramRuntime
 import Metal

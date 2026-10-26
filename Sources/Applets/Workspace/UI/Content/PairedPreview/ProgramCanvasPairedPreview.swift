@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 import MetalKit
 import SwiftUI
 
@@ -13,8 +13,8 @@ public final class ProgramCanvasPairedPreview {
   private let previewDelegate: any MTKViewDelegate
   fileprivate let onSelectLandscape: () -> Void
   fileprivate let onSelectPortrait: () -> Void
-  var accessibilityImage: PreviewAccessibilityImageStore? {
-    (previewDelegate as? any ProgramPreviewAccessibilityImageSource)?.accessibilityImage
+  var accessibilityImage: (any PreviewAccessibilityImageReading)? {
+    (previewDelegate as? any ProgramPreviewAccessibilityImageSource)?.previewAccessibilityImage
   }
 
   public init(

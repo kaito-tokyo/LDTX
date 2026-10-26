@@ -9,10 +9,8 @@ import Foundation
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
-import LDTXRecordBundleFormat
 import LDTXRecording
 import LDTXTaskQueue
 import LDTXWorkspaceAppletModel
@@ -122,9 +120,11 @@ public final class WorkspaceV4RecordingSession {
           userInfo: [NSLocalizedDescriptionKey: "Select a Program before starting recording."]))
     }
     let output = windowRuntime.workspace.outputSettings
-    let recordsLandscape = output.recordingEnabled && output.recordingSettings.recordsLandscape
-    let recordsPortrait = output.recordingEnabled && output.recordingSettings.recordsPortrait
-    guard recordsLandscape || recordsPortrait || output.youtubeEnabled else {
+    let recordsLandscape =
+      (output.recordingEnabled == true) && (output.recordingSettings?.recordsLandscape == true)
+    let recordsPortrait =
+      (output.recordingEnabled == true) && (output.recordingSettings?.recordsPortrait == true)
+    guard recordsLandscape || recordsPortrait || (output.youtubeEnabled == true) else {
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return .failure(
         NSError(
@@ -158,10 +158,12 @@ public final class WorkspaceV4RecordingSession {
     let baseDirectory = outputDirectory()
     let runsLandscape =
       recordsLandscape
-      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesLandscapeRTMPS)
+      || ((output.youtubeEnabled == true)
+        && (output.youtubeSettings?.ingestMode ?? .unspecified).usesLandscapeRTMPS)
     let runsPortrait =
       recordsPortrait
-      || (output.youtubeEnabled && output.youtubeSettings.ingestMode.usesPortraitRTMPS)
+      || ((output.youtubeEnabled == true)
+        && (output.youtubeSettings?.ingestMode ?? .unspecified).usesPortraitRTMPS)
     do {
       if recordsLandscape || recordsPortrait {
         try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(
@@ -184,7 +186,8 @@ public final class WorkspaceV4RecordingSession {
 
     let youtubeService: YouTubeRTMPSWorkspaceService?
     do {
-      youtubeService = output.youtubeEnabled ? try makeYouTubeRTMPSService(for: output) : nil
+      youtubeService =
+        (output.youtubeEnabled == true) ? try makeYouTubeRTMPSService(for: output) : nil
     } catch {
       sleepInhibitor.stop()
       recordFailure(error, phase: .output)
@@ -205,7 +208,7 @@ public final class WorkspaceV4RecordingSession {
           audioTracks: inputAudioTracks,
           recordsLandscape: recordsLandscape,
           recordsPortrait: recordsPortrait,
-          customFields: output.recordingSettings.customFields,
+          customFields: output.recordingSettings?.customFields ?? [:],
           firstVideoAccepted: { [weak self] url in
             self?.latestRecordingBundleURL = url
           },
@@ -434,11 +437,12 @@ public final class WorkspaceV4RecordingSession {
           name: "Portrait", pixelBuffer: frame.pixelBuffer, programCanvas: .portrait))
     }
     for wrapper in windowRuntime.definition.videoComponents {
-      guard case .vfxSource(let input)? = wrapper.videoComponent,
-        case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[input.internalID],
+      guard case .vfxSource(let input)? = wrapper.videoComponent, let inputID = input.internalID,
+        let name = input.displayName,
+        case .avCaptureDevice(let cameraID)? = physicalDeviceIDsProvider()[inputID],
         let frame = windowRuntime.captureSessionCoordinator.latestFrame(forCameraID: cameraID)
       else { continue }
-      sources.append(ScreenCaptureSource(name: input.displayName, pixelBuffer: frame.pixelBuffer))
+      sources.append(ScreenCaptureSource(name: name, pixelBuffer: frame.pixelBuffer))
     }
     return try await captureScreenshots(
       sources: sources, capturedAt: Date(),
@@ -525,7 +529,7 @@ public final class WorkspaceV4RecordingSession {
     portraitHub: ProgramOutputMediaHub
   ) {
     guard let output = sessionOutputSettings else { return }
-    switch output.youtubeSettings.ingestMode {
+    switch output.youtubeSettings?.ingestMode ?? .unspecified {
     case .unspecified, .landscapeRtmps:
       youtubeLandscapeSubscription = landscapeHub.subscribe(
         mainVideo: service.appendLandscapeVideo,
@@ -746,7 +750,7 @@ public final class WorkspaceV4RecordingSession {
   private func preferences(_ preference: Ldtx_Workspace_V4_ProgramPreferences) -> ProgramPreferences
   {
     let gain =
-      (preference.hasAudioMasterVolumeDecibels ? preference.audioMasterVolumeDecibels.double : 0)
+      (preference.audioMasterVolumeDecibels?.double ?? 0)
     var preferences = ProgramPreferences(
       masterVolume: ProgramPreferences.linearAudioChannelGain(fromDecibels: gain))
     let gains = windowRuntime.preferences.audioChannelGainsDecibels
@@ -766,10 +770,10 @@ public final class WorkspaceV4RecordingSession {
       uniqueKeysWithValues: windowRuntime.definition.audioDevices
         .compactMap {
           let input = $0
-          guard
-            case .coreAudioDevice(let physicalID)? = physicalDeviceIDsProvider()[input.internalID]
+          guard let inputID = input.internalID,
+            case .coreAudioDevice(let physicalID)? = physicalDeviceIDsProvider()[inputID]
           else { return nil }
-          return ("v4-\(input.internalID)", physicalID)
+          return ("v4-\(inputID)", physicalID)
         })
   }
 
@@ -777,8 +781,8 @@ public final class WorkspaceV4RecordingSession {
     let names: [String: String] = Dictionary(
       uniqueKeysWithValues:
         windowRuntime.definition.audioDevices.compactMap { input in
-          let device = input
-          return ("v4-\(device.internalID)", device.displayName)
+          guard let id = input.internalID, let name = input.displayName else { return nil }
+          return ("v4-\(id)", name)
         })
     return SessionRecordAudioTrack.make(
       deviceIDsByInputKey: audioDeviceIDsByInputKey(), deviceNamesByInputKey: names)

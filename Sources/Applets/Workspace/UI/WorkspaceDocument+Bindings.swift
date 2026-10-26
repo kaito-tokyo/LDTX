@@ -2,8 +2,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import SwiftUI
+
+extension Binding {
+  /// Resolves a display value without inserting it into the stored document.
+  /// Only an actual edit writes a value into an absent field.
+  func defaulting<Wrapped>(to value: Wrapped) -> Binding<Wrapped> where Value == Wrapped? {
+    Binding<Wrapped>(get: { wrappedValue ?? value }, set: { wrappedValue = $0 })
+  }
+}
 
 extension Bindable where Value == WorkspaceDocument {
   @MainActor

@@ -4,20 +4,17 @@
 
 import AppKit
 import LDTXAppletSupport
-import LDTXDeviceRegistry
-import LDTXProgramRuntime
+import LDTXCorelibs
 import LDTXRichText
-import LDTXTaskQueue
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceBundleFormat
-import LDTXYouTubeRTMPS
 import SwiftUI
 
 public struct WorkspaceInspectorContainer: View {
   @Environment(\.undoManager) private var undoManager
   @Environment(\.workspaceReportError) private var reportError
   private var workspaceURL: URL? { stateService.localStateURL }
-  let deviceRegistry: DeviceRegistryService
+  let deviceRegistry: any WorkspaceDeviceRegistry
   @Bindable var appletData: WorkspaceAppletData
   @Bindable var stateService: WorkspaceDocument
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
@@ -26,7 +23,7 @@ public struct WorkspaceInspectorContainer: View {
   private weak var document: (any WorkspaceDocumentContext)?
 
   public init(
-    deviceRegistry: DeviceRegistryService,
+    deviceRegistry: any WorkspaceDeviceRegistry,
     stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
     variableStore: @escaping () -> [LDTXVariableKey: String]? = { nil },
@@ -185,13 +182,18 @@ public struct WorkspaceInspectorContainer: View {
           },
           vision: vision,
           modelURL: Binding(
-            get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
+            get: { vision.wrappedValue.modelInternalID.flatMap { stateService.visionModels[$0] } },
             set: { stateService.setVisionModelURL($0, for: internalID, undoManager: undoManager) }),
-          persistedModelURL: runtimeWorkspace()?.visionModels[
-            vision.wrappedValue.modelInternalID],
+          persistedModelURL: vision.wrappedValue.modelInternalID.flatMap {
+            runtimeWorkspace()?.visionModels[$0]
+          },
           inferenceResult: stateService.visionResults[internalID],
           inferenceFailure: stateService.visionFailureMessages[internalID],
-          modelPreparationGeneration: stateService.modelPreparationGeneration
+          modelPreparationGeneration: stateService.modelPreparationGeneration,
+          readModelInformation: { url in
+            guard let actions = runtimeActions() else { throw CancellationError() }
+            return try await actions.readVisionModelInformation(at: url)
+          }
         )
         .environment(\.outputActive, stateService.isOutputActive)
       } else {
@@ -220,7 +222,7 @@ public struct WorkspaceInspectorContainer: View {
 
     HStack(spacing: 0) {
       WorkspaceSidebar(
-        stateService: stateService, deviceRegistry: DeviceRegistryService(),
+        stateService: stateService, deviceRegistry: PreviewDeviceRegistry(),
         appletData: WorkspaceAppletData()
       )
       .frame(width: 230)
@@ -228,7 +230,7 @@ public struct WorkspaceInspectorContainer: View {
       Divider()
 
       WorkspaceInspectorContainer(
-        deviceRegistry: DeviceRegistryService(), stateService: stateService,
+        deviceRegistry: PreviewDeviceRegistry(), stateService: stateService,
         appletData: WorkspaceAppletData()
       )
       .padding(16)

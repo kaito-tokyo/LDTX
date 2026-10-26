@@ -7,15 +7,13 @@ import CoreML
 import CoreVideo
 import Foundation
 import LDTXBackgroundSegmentation
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXProtosMacOSExtra
 import LDTXRichText
 import LDTXTaskQueue
 import LDTXVision
 import LDTXWorkspaceAppletModel
-import LDTXWorkspaceBundleFormat
 import OSLog
 import Observation
 
@@ -248,23 +246,25 @@ public final class WorkspaceWindowRuntime {
     let assignments = physicalDeviceIDsProvider()
     for wrapper in workspace.definition.videoComponents {
       guard case .vfxSource(let source) = wrapper.videoComponent,
-        case .avCaptureDevice(let id)? = assignments[source.internalID], !id.isEmpty
+        let sourceID = source.internalID,
+        case .avCaptureDevice(let id)? = assignments[sourceID], !id.isEmpty
       else { continue }
       videoCameraIDs.insert(id)
     }
     for device in workspace.definition.audioDevices {
-      guard case .coreAudioDevice(let id)? = assignments[device.internalID], !id.isEmpty
+      guard let deviceID = device.internalID,
+        case .coreAudioDevice(let id)? = assignments[deviceID], !id.isEmpty
       else { continue }
       audioDeviceIDs.insert(id)
     }
-    let canvas = workspace.definition.canvasConfiguration
+    let frameRate = workspace.definition.canvasConfiguration?.frameRate ?? 0
     captureSessionCoordinator.synchronizePhysicalInputCapturesReportingResult(
       videoCameraIDs: videoCameraIDs,
       audioDeviceIDs: audioDeviceIDs,
       availableCameraIDs: availableCameraIDs,
       canvasWidth: 1_920,
       canvasHeight: 1_080,
-      frameRate: canvas.frameRate == 0 ? 60 : Int(canvas.frameRate),
+      frameRate: frameRate == 0 ? 60 : Int(frameRate),
       completionHandler: completionHandler
     )
   }
@@ -352,9 +352,12 @@ public final class WorkspaceWindowRuntime {
   private func frameForVision(
     _ vision: Ldtx_Workspace_V4_OcrVision
   ) async throws -> WorkspaceVisionAnalysisFrame {
-    try await frameForVision(
-      componentID: vision.videoComponentInternalID,
-      region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil)
+    guard let componentID = vision.videoComponentInternalID else {
+      throw WorkspaceVisionFeatureError.referencedVideoComponentMissing
+    }
+    return try await frameForVision(
+      componentID: componentID,
+      region: vision.regionOfInterest)
   }
 
   public func classify(
@@ -371,25 +374,26 @@ public final class WorkspaceWindowRuntime {
     classifyResult: (CIImage) async throws -> VisionClassificationResult
   ) async throws -> String {
     let context = visionFeatureContext
+    guard let visionID = vision.internalID else { throw NanopbError.malformed }
     do {
       let frame = try await frameForSceneDetector()
       let recordingPackageURL = context.recordingPackageURL()
       let result = try await classifyResult(frame.image)
       guard context.isCurrent() else { throw CancellationError() }
-      context.reportResult(vision.internalID, result.displayText)
+      context.reportResult(visionID, result.displayText)
       context.reportVariables(
-        vision.internalID,
+        visionID,
         [
           .label: result.topCandidate?.label ?? "",
           .confidence: result.topCandidate.map { String($0.confidence) } ?? "0",
         ])
       if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
-        context.archiveResult?(vision.internalID, frame.image, result.displayText)
+        context.archiveResult?(visionID, frame.image, result.displayText)
       }
       return result.displayText
     } catch {
       guard context.isCurrent() else { throw CancellationError() }
-      if !(error is CancellationError) { context.reportFailure(vision.internalID, error) }
+      if !(error is CancellationError) { context.reportFailure(visionID, error) }
       throw error
     }
   }
@@ -416,15 +420,16 @@ public final class WorkspaceWindowRuntime {
     _ vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision
   ) async throws -> WorkspaceVisionAnalysisFrame {
     guard
+      let componentID = vision.videoComponentInternalID,
       let size = definition.videoComponents.first(where: {
-        $0.internalID == vision.videoComponentInternalID && $0.canBeVisionInput
+        $0.internalID == componentID && $0.canBeVisionInput
       })?.renderingSize, size.width > 0, size.height > 0
     else {
       throw WorkspaceVisionFeatureError.referencedVideoComponentMissing
     }
     guard
       case .avCaptureDevice(let cameraID)? =
-        physicalDeviceIDsProvider()[vision.videoComponentInternalID]
+        physicalDeviceIDsProvider()[componentID]
     else {
       throw WorkspaceVisionFeatureError.vfxSourceHasNoPhysicalCamera
     }
@@ -432,8 +437,8 @@ public final class WorkspaceWindowRuntime {
       throw WorkspaceVisionFeatureError.frameUnavailable
     }
     return try await frameForVision(
-      componentID: vision.videoComponentInternalID,
-      region: vision.hasRegionOfInterest ? vision.regionOfInterest : nil,
+      componentID: componentID,
+      region: vision.regionOfInterest,
       inputSize: CGSize(width: CGFloat(size.width), height: CGFloat(size.height)))
   }
 

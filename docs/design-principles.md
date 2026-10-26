@@ -17,6 +17,14 @@ describe *what must be true* and *how trade-offs are decided*; detailed API
 contracts, individual control behavior, and implementation procedures belong in
 the relevant design or feature documentation instead.
 
+## Workspace UI depends on presentation contracts
+
+- Use `Messages` only for Protobuf messages and their schema-specific extensions.
+  Handwritten shared values that are not Protobuf messages belong in `Values`.
+- Workspace UI consumes Corelibs values and presentation/operation contracts.
+  Capture, discovery, rendering, inference and streaming implementations are
+  supplied by the controller/composition root rather than imported into UI.
+
 ## Version 4 is the authoritative workspace model
 
 - Version 4 Workspace protobuf documents are the authoritative representation
@@ -246,6 +254,9 @@ the relevant design or feature documentation instead.
   text undo is disabled and no private history or undo shortcut interception exists.
 
 ## Protobuf defaults and Rational values
+
+- Workspace codecs discard unknown and reserved fields while decoding. They do
+  not preserve those fields across a read/write cycle.
 
 - Read ordinary protobuf fields through their generated getters, which expose
   the schema's fixed defaults. Do not turn absent fields into contextual defaults

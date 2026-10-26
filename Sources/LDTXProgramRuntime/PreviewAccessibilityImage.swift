@@ -3,6 +3,7 @@
 
 import CoreGraphics
 import Foundation
+import LDTXWorkspaceAppletInterface
 import Metal
 import QuartzCore
 
@@ -75,7 +76,9 @@ public struct PreviewAccessibilityImage: @unchecked Sendable {
 }
 
 /// Keeps one preview drawable alive; GPU readback and conversion run only for AXImageData requests.
-public final class PreviewAccessibilityImageStore: @unchecked Sendable {
+public final class PreviewAccessibilityImageStore: PreviewAccessibilityImageReading,
+  @unchecked Sendable
+{
   private struct Source: @unchecked Sendable {
     let texture: MTLTexture
     let commandQueue: MTLCommandQueue

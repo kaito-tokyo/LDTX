@@ -8,9 +8,12 @@ targets:
     platform: macOS
     sources:
       - Tests/LDTXModuleTests
+      - Tests/LDTXProtosMacOSExtraTests
       - Tests/Support/TestTags.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXAppletSupport
+      - target: LDTXProtosMacOSExtra
       - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
@@ -19,11 +22,10 @@ targets:
       - target: LDTXInternalProtocols
       - target: LDTXMP4
       - target: LDTXMediaTiming
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
-      - target: LDTXProtos
-      - target: LDTXRecordBundleFormat
       - target: LDTXRecordPlayerApplet
       - target: LDTXRecording
       - target: LDTXRichText
@@ -39,15 +41,14 @@ targets:
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletUI
-      - target: LDTXWorkspaceBundleFormat
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeOutputProtocol
       - target: LDTXYouTubeRTMPS
       - package: AppAuth-iOS
         product: AppAuth
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
+      - package: swift-argument-parser
+        product: ArgumentParser
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

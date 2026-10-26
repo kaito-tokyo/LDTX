@@ -6,7 +6,7 @@ import AppKit
 import CoreText
 import CoreVideo
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 @testable import LDTXProgramRuntime
 import LDTXRichText
 import Metal

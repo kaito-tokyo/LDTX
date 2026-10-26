@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @Suite("Vision schedule planning", .tags(.easy))
@@ -18,12 +17,13 @@ struct WorkspaceVisionScheduleUnitTestSuite {
     #expect(
       WorkspaceV4PersistenceCoordinator.preferencesDuringOutput(live, membership: baseline) == live)
     live.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [3, 7]
-    live.landscapeProgramPreferences[1, default: .init()].audioMasterVolumeDecibels.set(
-      num: -100, den: 10)
+    live.landscapeProgramPreferences[1, default: .init()].audioMasterVolumeDecibels = .with {
+      $0.set(num: -100, den: 10)
+    }
     live.landscapeProgramPreferences[1, default: .init()].videoLayerHidden[3] = true
     let safe = WorkspaceV4PersistenceCoordinator.preferencesDuringOutput(live, membership: baseline)
     #expect(safe.landscapeProgramPreferences[1]?.videoLayerInternalIds == [3, 5, 5])
-    #expect(safe.landscapeProgramPreferences[1]?.audioMasterVolumeDecibels.num == -100)
+    #expect(safe.landscapeProgramPreferences[1]?.audioMasterVolumeDecibels?.num == -100)
     #expect(safe.landscapeProgramPreferences[1]?.videoLayerHidden[3] == true)
   }
 

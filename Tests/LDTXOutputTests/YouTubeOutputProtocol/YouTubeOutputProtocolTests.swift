@@ -9,6 +9,16 @@ import Testing
 extension OutputTestSuite {
   @Suite
   struct YouTubeOutputProtocolUnitTestSuite {
+    @Test("Binary PropertyList retains full-width context revisions")
+    func fullWidthRevision() throws {
+      let context = YouTubeOutputContext(sessionID: UUID(), revision: UInt64.max)
+      let bytes = try YouTubeOutputCoding.encode(context)
+      #expect(bytes.starts(with: Data("bplist00".utf8)))
+      #expect(try YouTubeOutputCoding.decode(YouTubeOutputContext.self, from: bytes) == context)
+      #expect(throws: (any Error).self) {
+        _ = try YouTubeOutputCoding.decode(YouTubeOutputContext.self, from: Data([0xff]))
+      }
+    }
     @Test("LUB-1015: Derives codec string from SPS constraint flags")
     func derivesCodecStringFromSPSConstraintFlags() {
       let format = YouTubeOutputH264Format(
@@ -50,6 +60,7 @@ extension OutputTestSuite {
       )
 
       let encoded = try YouTubeOutputCoding.encode(bootstrap)
+      #expect(encoded.starts(with: Data("bplist00".utf8)))
       let decoded = try YouTubeOutputCoding.decode(YouTubeOutputBootstrap.self, from: encoded)
 
       #expect(decoded == bootstrap)
@@ -91,8 +102,8 @@ extension OutputTestSuite {
       #expect(decoded == request)
     }
 
-    @Test("LUB-1015: H264 and PCM media batch round trips as Protobuf")
-    func h264AndPCMMediaBatchRoundTripsAsProtobuf() throws {
+    @Test("LUB-1015: H264 and PCM media batch round trips as binary PropertyList")
+    func h264AndPCMMediaBatchRoundTripsAsBinaryPropertyList() throws {
       let time = YouTubeOutputMediaTime(value: 90_000, timescale: 90_000)
       let batch = YouTubeOutputMediaBatch(
         context: YouTubeOutputContext(sessionID: UUID(), revision: 5),

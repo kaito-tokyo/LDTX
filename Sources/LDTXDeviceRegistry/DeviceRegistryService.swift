@@ -6,6 +6,8 @@ import AVFoundation
 import CoreAudio
 import Foundation
 import LDTXCapture
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import Observation
 
 public enum DeviceRegistryServiceError: Error, LocalizedError {
@@ -20,7 +22,7 @@ public enum DeviceRegistryServiceError: Error, LocalizedError {
 
 @MainActor
 @Observable
-public final class DeviceRegistryService {
+public final class DeviceRegistryService: WorkspaceDeviceRegistry {
   public private(set) var cameras: [CameraCaptureSource] = []
   public private(set) var audioInputDevices: [AudioInputDevice] = []
   public private(set) var error: (any Error)?

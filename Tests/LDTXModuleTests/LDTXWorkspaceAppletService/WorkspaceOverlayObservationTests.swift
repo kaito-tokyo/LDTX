@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXRichText
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Testing
 
 @MainActor
@@ -18,20 +17,21 @@ import Testing
         $0.programs = [.with { $0.internalID = 100 }]
         $0.visions = [
           .with {
-            $0.ocrVision = .with { $0.internalID = 11 }
+            $0.vision = .ocrVision(.with { $0.internalID = 11 })
           }
         ]
         $0.videoComponents = [
           .with {
-            $0.dynamicText = .with {
-              $0.internalID = 7
-              $0.rtfdDocument = try! LDTXRichTextDocument(
-                NSAttributedString(
-                  attachment: LDTXVariableReference(id: "11", sel: "text").attachment())
-              ).rtfd
-              $0.width.set(num: 1, den: 2)
-              $0.height.set(num: 1, den: 10)
-            }
+            $0.videoComponent = .dynamicText(
+              .with {
+                $0.internalID = 7
+                $0.rtfdDocument = try! LDTXRichTextDocument(
+                  NSAttributedString(
+                    attachment: LDTXVariableReference(id: "11", sel: "text").attachment())
+                ).rtfd
+                $0.width = .with { $0.set(num: 1, den: 2) }
+                $0.height = .with { $0.set(num: 1, den: 10) }
+              })
           }
         ]
       },

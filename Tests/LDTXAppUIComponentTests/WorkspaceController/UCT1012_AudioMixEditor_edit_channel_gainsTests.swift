@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
@@ -24,7 +24,7 @@ extension AppUIComponentTestSuite {
       state.selectedAudioMix = .portrait
       let editor = AudioMixEditor(
         stateService: state, appletData: WorkspaceAppletData(),
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       #expect(editor.setAudioChannelGain(-12, forAudioInputDeviceInternalID: 10))
       let saved = state.workspacePreferences
       #expect(saved.audioChannelGainsDecibels[10] == .with { $0.set(num: -120, den: 10) })
@@ -38,7 +38,7 @@ extension AppUIComponentTestSuite {
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
       let editor = AudioMixEditor(
         stateService: state, appletData: WorkspaceAppletData(),
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       let window = hostWorkspaceView(editor)
       defer { window.close() }
       let host = try #require(window.contentViewController as? NSHostingController<AudioMixEditor>)

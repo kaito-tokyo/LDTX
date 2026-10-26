@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXDeviceRegistry
-import LDTXProtos
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct VfxVideoComponentInspector: View {
   @Environment(\.undoManager) private var undoManager
   let stateService: WorkspaceDocument
   let internalID: Int64
-  let deviceRegistry: DeviceRegistryService
+  let deviceRegistry: any WorkspaceDeviceRegistry
   let appletData: WorkspaceAppletData
 
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }

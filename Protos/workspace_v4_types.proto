@@ -9,20 +9,20 @@ edition = "2024";
 package ldtx.workspace.v4;
 
 message Rational32 {
-  sint32 num = 1 [default = 0];
-  uint32 den = 2 [default = 1];
+  sint32 num = 1;
+  uint32 den = 2;
 }
 
 message Rational32DefaultOne {
-  sint32 num = 1 [default = 1];
-  uint32 den = 2 [default = 1];
+  sint32 num = 1;
+  uint32 den = 2;
 }
 
 message Color {
-  float red = 1 [default = 0];
-  float green = 2 [default = 0];
-  float blue = 3 [default = 0];
-  float alpha = 4 [default = 0];
+  float red = 1;
+  float green = 2;
+  float blue = 3;
+  float alpha = 4;
 }
 
 // LdtxInternalId is a Workspace-local entity identifier represented by sfixed64.

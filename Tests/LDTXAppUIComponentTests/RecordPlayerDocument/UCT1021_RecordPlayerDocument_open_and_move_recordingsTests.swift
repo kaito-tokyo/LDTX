@@ -4,7 +4,7 @@
 
 import AVFoundation
 import Foundation
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 @testable import LDTXRecordPlayerApplet
 import LDTXRecording
 import Testing

@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+* fallback_type:FT_POINTER
+ldtx.workspace.v4.DynamicTextComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.FillSolidColorComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.FillLinearGradientComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.FillRadialGradientComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.FillConicGradientComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.VfxSourceComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.TestPatternComponent.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.ClockComponent.display_name type_override:TYPE_BYTES

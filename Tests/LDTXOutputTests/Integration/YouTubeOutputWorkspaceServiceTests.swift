@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 import LDTXDash
-import LDTXProgram
 @testable import LDTXProgramRuntime
 import LDTXYouTubeOutputProtocol
 import Testing

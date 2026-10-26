@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import LDTXYouTubeRTMPS
@@ -20,10 +20,11 @@ extension AppUIComponentTestSuite {
       ]
       definition.visions = [
         .with {
-          $0.ocrVision = .with {
-            $0.internalID = 3
-            $0.displayName = "Program 3"
-          }
+          $0.vision = .ocrVision(
+            .with {
+              $0.internalID = 3
+              $0.displayName = "Program 3"
+            })
         }
       ]
       definition.programs = [
@@ -244,40 +245,80 @@ extension AppUIComponentTestSuite {
       let component = try #require(state.workspaceDefinition.videoComponents.first)
       switch kind {
       case .vfxSource:
-        #expect(component.vfxSource.internalID == id)
-        #expect(component.vfxSource.deviceWidth == 1920)
-        #expect(component.vfxSource.deviceHeight == 1080)
-      case .solidColor: #expect(component.solidColorFill.extendedSrgbColor.alpha == 1)
+        guard case .vfxSource(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
+        #expect(value.internalID == id)
+        #expect(value.deviceWidth == 1920)
+        #expect(value.deviceHeight == 1080)
+      case .solidColor:
+        guard case .solidColorFill(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+        #expect(value.extendedSrgbColor?.alpha == 1)
       case .dynamicText:
-        #expect(component.dynamicText.internalID == id)
-        #expect(component.dynamicText.width.double == 0.5)
-        #expect(component.dynamicText.height.double == 0.1)
-        #expect(!component.dynamicText.rtfdDocument.isEmpty)
+        guard case .dynamicText(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
+        #expect(value.internalID == id)
+        #expect(value.width?.double == 0.5)
+        #expect(value.height?.double == 0.1)
+        #expect(value.rtfdDocument?.isEmpty == false)
       case .linearGradient:
+        guard case .linearGradientFill(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
         #expect(
-          component.linearGradientFill.endX
+          value.endX
             == Ldtx_Workspace_V4_Rational32.with {
               $0.num = 1
               $0.den = 1
             })
       case .radialGradient:
+        guard case .radialGradientFill(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
         #expect(
-          component.radialGradientFill.outerRadius
+          value.outerRadius
             == Ldtx_Workspace_V4_Rational32.with {
               $0.num = 1
               $0.den = 2
             })
       case .conicGradient:
+        guard case .conicGradientFill(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
         #expect(
-          component.conicGradientFill.centerX
+          value.centerX
             == Ldtx_Workspace_V4_Rational32.with {
               $0.num = 1
               $0.den = 2
             })
       case .clock:
-        #expect(component.clock.showsSeconds)
-        #expect(component.clock.fontSize.float == 48)
-      case .testPattern: #expect(component.testPattern.internalID == id)
+        guard case .clock(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+
+        #expect(value.showsSeconds == true)
+        #expect(value.fontSize?.float == 48)
+      case .testPattern:
+        guard case .testPattern(let value) = component.videoComponent else {
+          Issue.record("Wrong component case")
+          return
+        }
+        #expect(value.internalID == id)
       }
       #expect(state.workspaceDefinition.programs == [program])
     }
@@ -295,10 +336,17 @@ extension AppUIComponentTestSuite {
       draft.videoComponentID = 7
       let id = try WorkspaceResourceAddition.add(
         sheet: .vision, draft: draft, devices: [], stateService: state)
-      let vision = try #require(state.workspaceDefinition.visions.first?.ocrVision)
+      guard case .ocrVision(let vision) = state.workspaceDefinition.visions.first?.vision else {
+        Issue.record("Missing OCR")
+        return
+      }
+      guard case .intervalTrigger(let trigger) = vision.triggers.first?.trigger else {
+        Issue.record("Missing interval trigger")
+        return
+      }
       #expect(vision.videoComponentInternalID == 7)
       #expect(
-        vision.triggers.first?.intervalTrigger.intervalSeconds
+        trigger.intervalSeconds
           == Ldtx_Workspace_V4_Rational32.with {
             $0.num = 5
             $0.den = 1

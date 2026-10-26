@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
-import LDTXDeviceRegistry
-import LDTXProtos
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct AudioInputDeviceInspector: View {
@@ -12,7 +12,7 @@ struct AudioInputDeviceInspector: View {
   weak var document: (any WorkspaceDocumentContext)? = nil
   let stateService: WorkspaceDocument
   let internalID: Int64
-  let deviceRegistry: DeviceRegistryService
+  let deviceRegistry: any WorkspaceDeviceRegistry
   @Bindable var appletData: WorkspaceAppletData
 
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }

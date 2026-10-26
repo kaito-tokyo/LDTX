@@ -12,16 +12,17 @@ updates:
     exclude-paths:
       - ".github/workflows/*.lock.yml"
 
-  - package-ecosystem: swift
+  - package-ecosystem: gitsubmodule
     directory: /
     schedule:
       interval: weekly
 
   # This scope has no Package.swift, so Dependabot discovers the Xcode lock.
-  # Shared dependencies are updated through the root package above.
+  # nanopb is updated through its Git submodule above.
   - package-ecosystem: swift
     directory: /LDTX.xcodeproj
     schedule:
       interval: weekly
     allow:
       - dependency-name: github.com/openid/appauth-ios
+      - dependency-name: github.com/apple/swift-argument-parser

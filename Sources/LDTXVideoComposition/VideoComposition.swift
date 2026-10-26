@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreVideo
+import LDTXCorelibs
 import simd
 
 #if canImport(Metal)
@@ -229,12 +230,6 @@ public struct CameraInputComponent: MetalVideoComponent {
     }
   }
 #endif
-
-public enum CameraInputColorRangeOverride: String, Codable, Equatable, Sendable {
-  case unspecified
-  case videoRange
-  case fullRange
-}
 
 public struct TestPatternComponent: MetalVideoComponent {
   public var timeSeconds: Float

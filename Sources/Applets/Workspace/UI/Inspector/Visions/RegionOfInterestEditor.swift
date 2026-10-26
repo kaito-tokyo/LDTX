@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import SwiftUI
 
 struct RegionOfInterestEditor: View {
@@ -18,19 +18,19 @@ struct RegionOfInterestEditor: View {
   }
 
   static func numeratorBinding<Value: Rational32Value>(
-    _ value: Binding<Value>
+    _ value: Binding<Value?>
   ) -> Binding<Int32?> {
     Binding(
-      get: { value.wrappedValue.numIfPresent },
+      get: { value.wrappedValue?.num },
       set: { numerator in
-        var rational = value.wrappedValue
-        rational.numIfPresent = numerator
+        var rational = value.wrappedValue ?? .init()
+        rational.num = numerator
         value.wrappedValue = rational
       })
   }
 
   private func rationalTextField<Value: Rational32Value>(
-    value: Binding<Value>,
+    value: Binding<Value?>,
     numeratorPrompt: Text?,
     defaultDenominator: UInt32,
     numeratorLabel: LocalizedStringResource,
@@ -47,7 +47,7 @@ struct RegionOfInterestEditor: View {
       Text("/")
       TextField(
         denominatorLabel,
-        value: value.denIfPresent,
+        value: value.defaulting(to: .init()).den,
         formatter: NullableIntegerFormatter<UInt32>(),
         prompt: Text(String(defaultDenominator))
       )

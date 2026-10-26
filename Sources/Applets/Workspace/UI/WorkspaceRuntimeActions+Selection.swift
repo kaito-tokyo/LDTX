@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXWorkspaceBundleFormat
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 
 extension WorkspaceRuntimeActions {
   @MainActor public func inferSelectedVision(
@@ -12,7 +13,7 @@ extension WorkspaceRuntimeActions {
     guard !stateService.isClosed, !stateService.isInferring,
       let request = stateService.inferenceRequest(document: document, workspace: runtimeWorkspace())
     else { return }
-    let id = request.vision.internalID
+    guard let id = request.vision.internalID else { return }
     let editingVision = stateService.workspaceDefinition.visions.first { $0.internalID == id }
     func isCurrent() -> Bool {
       guard !stateService.isClosed,

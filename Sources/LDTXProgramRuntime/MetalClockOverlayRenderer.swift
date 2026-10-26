@@ -5,8 +5,8 @@
 import AppKit
 import CoreText
 import Foundation
+import LDTXCorelibs
 import LDTXFontRasterizer
-import LDTXProgram
 import LDTXRichText
 import Metal
 import simd

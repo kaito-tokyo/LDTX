@@ -3,7 +3,7 @@
 
 import AppKit
 import CoreImage
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletService
 import Testing
 
@@ -36,7 +36,7 @@ struct ManualOCRRecognitionIntegrationTestSuite {
       vision: { $0 == 11 ? vision : nil }, frameForVision: { _ in .init(image: image) },
       reportResult: { _, text in completion = .success(text) },
       reportFailure: { _, error in completion = .failure(error) })
-    feature.synchronize(visions: [.with { $0.ocrVision = vision }], context: context)
+    feature.synchronize(visions: [.with { $0.vision = .ocrVision(vision) }], context: context)
     for _ in 0..<2 {
       completion = nil
       feature.runOCR(visionInternalID: 11)

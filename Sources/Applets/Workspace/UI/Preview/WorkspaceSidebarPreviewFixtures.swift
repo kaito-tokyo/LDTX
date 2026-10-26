@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #if DEBUG
-  import LDTXProtos
+  import LDTXCorelibs
 
   @MainActor
-  enum WorkspaceSidebarPreviewFixtures {
-    static func makeUIState(
+  public enum WorkspaceSidebarPreviewFixtures {
+    public static func makeUIState(
       inspectorSelector: WorkspaceInspectorSelector? = nil,
       isOutputActive: Bool = false
     ) -> WorkspaceDocument {
@@ -31,17 +31,19 @@
       vfxSource.internalID = 3
       vfxSource.displayName = "Camera Source"
       var vfxSourceWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      vfxSourceWrapper.vfxSource = vfxSource
+      vfxSourceWrapper.videoComponent = .vfxSource(vfxSource)
 
       var solidColorFill = Ldtx_Workspace_V4_FillSolidColorComponent()
       solidColorFill.internalID = 4
       solidColorFill.displayName = "Background"
-      solidColorFill.extendedSrgbColor.red = 95.0 / 255.0
-      solidColorFill.extendedSrgbColor.green = 178.0 / 255.0
-      solidColorFill.extendedSrgbColor.blue = 203.0 / 255.0
-      solidColorFill.extendedSrgbColor.alpha = 1
+      solidColorFill.extendedSrgbColor = .with {
+        $0.red = 95.0 / 255.0
+        $0.green = 178.0 / 255.0
+        $0.blue = 203.0 / 255.0
+        $0.alpha = 1
+      }
       var solidColorWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      solidColorWrapper.solidColorFill = solidColorFill
+      solidColorWrapper.videoComponent = .solidColorFill(solidColorFill)
 
       var linearGradientFill = Ldtx_Workspace_V4_FillLinearGradientComponent()
       linearGradientFill.internalID = 5
@@ -58,16 +60,20 @@
       linearGradientFill.endY = .with {
         $0.set(num: 1, den: 1)
       }
-      linearGradientFill.startExtendedSrgbColor.red = 95.0 / 255.0
-      linearGradientFill.startExtendedSrgbColor.green = 178.0 / 255.0
-      linearGradientFill.startExtendedSrgbColor.blue = 203.0 / 255.0
-      linearGradientFill.startExtendedSrgbColor.alpha = 1
-      linearGradientFill.endExtendedSrgbColor.red = 1
-      linearGradientFill.endExtendedSrgbColor.green = 1
-      linearGradientFill.endExtendedSrgbColor.blue = 1
-      linearGradientFill.endExtendedSrgbColor.alpha = 1
+      linearGradientFill.startExtendedSrgbColor = .with {
+        $0.red = 95.0 / 255.0
+        $0.green = 178.0 / 255.0
+        $0.blue = 203.0 / 255.0
+        $0.alpha = 1
+      }
+      linearGradientFill.endExtendedSrgbColor = .with {
+        $0.red = 1
+        $0.green = 1
+        $0.blue = 1
+        $0.alpha = 1
+      }
       var linearGradientWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      linearGradientWrapper.linearGradientFill = linearGradientFill
+      linearGradientWrapper.videoComponent = .linearGradientFill(linearGradientFill)
 
       var radialGradientFill = Ldtx_Workspace_V4_FillRadialGradientComponent()
       radialGradientFill.internalID = 6
@@ -84,16 +90,20 @@
       radialGradientFill.outerRadius = .with {
         $0.set(num: 18, den: 25)
       }
-      radialGradientFill.innerExtendedSrgbColor.red = 95.0 / 255.0
-      radialGradientFill.innerExtendedSrgbColor.green = 178.0 / 255.0
-      radialGradientFill.innerExtendedSrgbColor.blue = 203.0 / 255.0
-      radialGradientFill.innerExtendedSrgbColor.alpha = 1
-      radialGradientFill.outerExtendedSrgbColor.red = 1
-      radialGradientFill.outerExtendedSrgbColor.green = 1
-      radialGradientFill.outerExtendedSrgbColor.blue = 1
-      radialGradientFill.outerExtendedSrgbColor.alpha = 1
+      radialGradientFill.innerExtendedSrgbColor = .with {
+        $0.red = 95.0 / 255.0
+        $0.green = 178.0 / 255.0
+        $0.blue = 203.0 / 255.0
+        $0.alpha = 1
+      }
+      radialGradientFill.outerExtendedSrgbColor = .with {
+        $0.red = 1
+        $0.green = 1
+        $0.blue = 1
+        $0.alpha = 1
+      }
       var radialGradientWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      radialGradientWrapper.radialGradientFill = radialGradientFill
+      radialGradientWrapper.videoComponent = .radialGradientFill(radialGradientFill)
 
       var conicGradientFill = Ldtx_Workspace_V4_FillConicGradientComponent()
       conicGradientFill.internalID = 7
@@ -107,29 +117,33 @@
       conicGradientFill.startAngleRadians = .with {
         $0.set(num: 0, den: 1)
       }
-      conicGradientFill.startExtendedSrgbColor.red = 95.0 / 255.0
-      conicGradientFill.startExtendedSrgbColor.green = 178.0 / 255.0
-      conicGradientFill.startExtendedSrgbColor.blue = 203.0 / 255.0
-      conicGradientFill.startExtendedSrgbColor.alpha = 1
-      conicGradientFill.endExtendedSrgbColor.red = 1
-      conicGradientFill.endExtendedSrgbColor.green = 1
-      conicGradientFill.endExtendedSrgbColor.blue = 1
-      conicGradientFill.endExtendedSrgbColor.alpha = 1
+      conicGradientFill.startExtendedSrgbColor = .with {
+        $0.red = 95.0 / 255.0
+        $0.green = 178.0 / 255.0
+        $0.blue = 203.0 / 255.0
+        $0.alpha = 1
+      }
+      conicGradientFill.endExtendedSrgbColor = .with {
+        $0.red = 1
+        $0.green = 1
+        $0.blue = 1
+        $0.alpha = 1
+      }
       var conicGradientWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      conicGradientWrapper.conicGradientFill = conicGradientFill
+      conicGradientWrapper.videoComponent = .conicGradientFill(conicGradientFill)
 
       var clock = Ldtx_Workspace_V4_ClockComponent()
       clock.internalID = 8
       clock.displayName = "On Air Clock"
       clock.fontSize = .with { $0.set(num: 48, den: 1) }
       var clockWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      clockWrapper.clock = clock
+      clockWrapper.videoComponent = .clock(clock)
 
       var testPattern = Ldtx_Workspace_V4_TestPatternComponent()
       testPattern.internalID = 9
       testPattern.displayName = "Color Bars"
       var testPatternWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-      testPatternWrapper.testPattern = testPattern
+      testPatternWrapper.videoComponent = .testPattern(testPattern)
       definition.videoComponents = [
         vfxSourceWrapper, solidColorWrapper, linearGradientWrapper, radialGradientWrapper,
         conicGradientWrapper, clockWrapper, testPatternWrapper,
@@ -140,18 +154,18 @@
         $0.set(num: 5, den: 1)
       }
       var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-      triggerWrapper.intervalTrigger = intervalTrigger
+      triggerWrapper.trigger = .intervalTrigger(intervalTrigger)
       var ocrVision = Ldtx_Workspace_V4_OcrVision()
       ocrVision.internalID = 10
       ocrVision.displayName = "Program Text OCR"
       ocrVision.videoComponentInternalID = vfxSource.internalID
       ocrVision.triggers = [triggerWrapper]
       var ocrVisionWrapper = Ldtx_Workspace_V4_VisionWrapper()
-      ocrVisionWrapper.ocrVision = ocrVision
+      ocrVisionWrapper.vision = .ocrVision(ocrVision)
       definition.visions = [
         ocrVisionWrapper,
         WorkspaceResourceFactory.makeLdtxSceneDetectorVision(
-          id: 11, name: "Scene Classifier", componentID: vfxSource.internalID),
+          id: 11, name: "Scene Classifier", componentID: 3),
       ]
 
       return definition

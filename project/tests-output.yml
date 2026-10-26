@@ -9,15 +9,16 @@ targets:
     sources:
       - Tests/LDTXOutputTests
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXRichText
       - target: LDTXCapture
       - target: LDTXDash
       - target: LDTXMediaTiming
       - target: LDTXMP4
-      - target: LDTXProgram
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
-      - target: LDTXRecordBundleFormat
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletService

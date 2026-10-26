@@ -23,7 +23,8 @@ targets:
       - sdk: AVKit.framework
       - target: LDTXAppletSupport
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordPlayerApplet
@@ -40,26 +41,14 @@ targets:
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
+      - target: LDTXWorkspaceAppletInterface
+      - target: LDTXWorkspaceAppletModel
+      - target: LDTXProtosMacOSExtra
       - target: LDTXVariableMacro
       - target: LDTXRichText
-      - target: LDTXVision
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXInternalProtocols
-      - target: LDTXProgram
-      - target: LDTXProgramRuntime
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXYouTube
       - target: LDTXAppletSupport
-      - target: LDTXCapture
-      - target: LDTXDeviceRegistry
-      - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceBundleFormat
-      - target: LDTXProtos
-      - target: LDTXProtosMacOSExtra
-      - package: SwiftProtobuf
-      - target: LDTXYouTubeRTMPS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
@@ -200,7 +189,8 @@ targets:
         embed: true
       - target: LDTXYouTubeOutputProtocol
         embed: true
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
         embed: true
       - target: LDTXProgramRendering
         embed: true
@@ -209,8 +199,6 @@ targets:
       - target: LDTXTaskQueue
         embed: true
       - target: LDTXRecording
-        embed: true
-      - target: LDTXRecordBundleFormat
         embed: true
       - target: LDTXVideoComposition
         embed: true
@@ -226,8 +214,6 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletModel
         embed: true
-      - target: LDTXProtos
-        embed: true
       - target: LDTXProtosMacOSExtra
         embed: true
       - target: LDTXWorkspaceAppletStore
@@ -240,32 +226,22 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
-      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXWorkspaceAppletInterface
         embed: true
-        embed: true
-      # The app directly constructs WorkspaceDocument from the UI framework.
+        codeSign: true
       - target: LDTXWorkspaceAppletUI
+        # The app directly constructs WorkspaceDocument from this UI framework.
         link: true
         embed: true
       - target: LDTXFontRasterizer
         embed: true
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
       - package: AppAuth-iOS
         product: AppAuth
         embed: false
-    scripts:
-      - name: Embed SwiftProtobuf for LDTXHelper
-        script: |
-          set -euo pipefail
-          framework_dir="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-          mkdir -p "${framework_dir}"
-          for package_framework in "${BUILT_PRODUCTS_DIR}"/PackageFrameworks/SwiftProtobuf*_PackageProduct.framework; do
-            test -d "${package_framework}"
-            ditto "${package_framework}" "${framework_dir}/$(basename "${package_framework}")"
-          done
-        basedOnDependencyAnalysis: false
+      - package: swift-argument-parser
+        product: ArgumentParser
+        # Xcode embeds and signs its synthesized package-product framework.
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
@@ -309,6 +285,7 @@ schemes:
       targets:
         LDTXApp: all
         LDTXHelper: all
+        ldtx: [test]
     test:
       config: Debug
       testPlans:

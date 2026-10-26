@@ -3,9 +3,9 @@
 
 import AppKit
 import LDTXAppletSupport
+import LDTXCorelibs
 import LDTXDeviceRegistry
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXTaskQueue
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
@@ -87,6 +87,9 @@ private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  func readVisionModelInformation(at url: URL) async throws -> WorkspaceVisionModelInformation {
+    throw CancellationError()
+  }
   func canRunOCR(visionInternalID: Int64) -> Bool { false }
   func runOCR(visionInternalID: Int64) {}
 

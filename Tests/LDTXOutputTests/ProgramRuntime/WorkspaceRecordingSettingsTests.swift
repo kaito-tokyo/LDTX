@@ -4,10 +4,9 @@
 import CoreImage
 import Foundation
 import LDTXCapture
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Testing
 
 extension OutputTestSuite {
@@ -216,7 +215,7 @@ extension OutputTestSuite {
       definition.programs = [program]
       var workspace = WorkspaceV4Bundle(definition: definition, preferences: .init())
       workspace.outputSettings.youtubeEnabled = true
-      workspace.outputSettings.youtubeSettings.ingestMode = .landscapeRtmps
+      workspace.outputSettings.youtubeSettings = .with { $0.ingestMode = .landscapeRtmps }
       let original = workspace.outputSettings
       let persistence = WorkspaceV4PersistenceCoordinator(
         workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
@@ -236,13 +235,13 @@ extension OutputTestSuite {
       session.stateDidChange = { state in
         if state == .starting, !changed {
           changed = true
-          workspace.outputSettings.youtubeSettings.ingestMode = .portraitRtmps
+          workspace.outputSettings.youtubeSettings?.ingestMode = .portraitRtmps
         }
       }
       await session.start()
       #expect(changed)
       #expect(session.sessionOutputSettings == original)
-      #expect(runtime.workspace.outputSettings.youtubeSettings.ingestMode == .portraitRtmps)
+      #expect(runtime.workspace.outputSettings.youtubeSettings?.ingestMode == .portraitRtmps)
       await session.stop()
       #expect(session.sessionOutputSettings == nil)
       await session.start()

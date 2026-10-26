@@ -1,0 +1,10 @@
+{
+  "name": "LDTX Corelibs (Linux)",
+  "image": "swift:6.4.0-trixie",
+  "postCreateCommand": "git submodule update --init Vendors/nanopb && swift package --package-path Packages/LDTXCorelibs resolve",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  }
+}

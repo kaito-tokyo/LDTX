@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import SwiftUI
 import Testing
 
-@Suite
+@Suite(.tags(.medium))
 struct ExtendedSRGBColorUnitTestSuite {
   @Test("LUB-1004: Uses defaults for missing components", arguments: [0, 1, 2, 3])
   func usesDefaultsForMissingComponents(component: Int) throws {
@@ -18,10 +18,10 @@ struct ExtendedSRGBColorUnitTestSuite {
       $0.alpha = 0
     }
     switch component {
-    case 0: color.clearRed()
-    case 1: color.clearGreen()
-    case 2: color.clearBlue()
-    default: color.clearAlpha()
+    case 0: color.red = nil
+    case 1: color.green = nil
+    case 2: color.blue = nil
+    default: color.alpha = nil
     }
     let converted = try #require(color.extendedSRGBNSColor)
     #expect(converted.redComponent == 0)
@@ -37,7 +37,7 @@ struct ExtendedSRGBColorUnitTestSuite {
     #expect(
       converted.redComponent == 0 && converted.greenComponent == 0 && converted.blueComponent == 0)
     #expect(converted.alphaComponent == 1)
-    #expect(!color.hasRed && !color.hasGreen && !color.hasBlue)
+    #expect((color.red == nil) && (color.green == nil) && (color.blue == nil))
   }
 
   @Test("LUB-1004: Preserves explicit zero and extended components")
@@ -51,7 +51,9 @@ struct ExtendedSRGBColorUnitTestSuite {
     let nsColor = try #require(source.extendedSRGBNSColor)
     #expect(nsColor.colorSpace == .extendedSRGB)
     let restored = try #require(Ldtx_Workspace_V4_Color(extendedSRGBNSColor: nsColor))
-    #expect(restored.hasRed && restored.hasGreen && restored.hasBlue && restored.hasAlpha)
+    #expect(
+      (restored.red != nil) && (restored.green != nil) && (restored.blue != nil)
+        && (restored.alpha != nil))
     #expect(restored.red == source.red)
     #expect(restored.green == source.green)
     #expect(restored.blue == 0)
@@ -61,10 +63,10 @@ struct ExtendedSRGBColorUnitTestSuite {
   @Test("LUB-1004: Converts other color spaces") func convertsOtherColorSpaces() throws {
     let source = NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 0.8)
     let value = try #require(Ldtx_Workspace_V4_Color(extendedSRGBNSColor: source))
-    #expect(abs(value.red - 0.2) < 0.00001)
-    #expect(abs(value.green - 0.4) < 0.00001)
-    #expect(abs(value.blue - 0.6) < 0.00001)
-    #expect(abs(value.alpha - 0.8) < 0.00001)
+    #expect(abs(try #require(value.red) - 0.2) < 0.00001)
+    #expect(abs(try #require(value.green) - 0.4) < 0.00001)
+    #expect(abs(try #require(value.blue) - 0.6) < 0.00001)
+    #expect(abs(try #require(value.alpha) - 0.8) < 0.00001)
   }
   @Test("LUB-1004: Swift UI bridge uses extended srgb") func swiftUIBridgeUsesExtendedSRGB() throws
   {
@@ -76,10 +78,10 @@ struct ExtendedSRGBColorUnitTestSuite {
     }
     let color = try #require(source.extendedSRGBSwiftUIColor)
     let restored = try #require(Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color))
-    #expect(abs(restored.red - source.red) < 0.00001)
-    #expect(abs(restored.green - source.green) < 0.00001)
-    #expect(abs(restored.blue - source.blue) < 0.00001)
-    #expect(abs(restored.alpha - source.alpha) < 0.00001)
+    #expect(abs(try #require(restored.red) - (#require(source.red))) < 0.00001)
+    #expect(abs(try #require(restored.green) - (#require(source.green))) < 0.00001)
+    #expect(abs(try #require(restored.blue) - (#require(source.blue))) < 0.00001)
+    #expect(abs(try #require(restored.alpha) - (#require(source.alpha))) < 0.00001)
   }
 
 }

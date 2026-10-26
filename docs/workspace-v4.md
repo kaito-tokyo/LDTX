@@ -36,8 +36,8 @@ part of saving.
 
 Importing a model does not compile it or execute inference.
 
-`LDTXProtos` owns protobuf message types and attribute accessors.
-`LDTXWorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and
+`LDTXMessages/Messages` owns protobuf message types and attribute accessors.
+`LDTXCorelibs/WorkspaceBundleFormat` owns WorkspaceV4Bundle, package reads, writes, and
 `WorkspaceBundleValidatorV4`. The validator is the Read/Write content gate:
 it returns all independent diagnostics with field paths, entity IDs and violation
 codes, without correcting values. Reader and Writer reject invalid content with
@@ -87,7 +87,7 @@ Individual writes remain available for CLI operations. DocumentWriter delegates
 complete-bundle saves to WriterV4 at the framework-supplied staging destination;
 WriterV4 does not replace the entire package directory.
 Shared bundle values are defined by
-`LDTXWorkspaceBundleFormat`; read and write operations propagate Foundation and
+`LDTXCorelibs/WorkspaceBundleFormat`; read and write operations propagate Foundation and
 Protobuf errors. `WorkspaceLockService` belongs to Workspace runtime
 coordination: the Runtime retains the package lock for the open-window lifetime,
 while CLI commands hold it for the duration of an operation. The Reader and
@@ -103,12 +103,20 @@ UUIDv7 `external_id` and a `WorkspaceDefinitionV4` or `WorkspacePreferencesV4`
 payload. The protobuf message comments are the normative format specification;
 the rendered reference is [workspace.html](protos/workspace.html).
 
-The CLI creates Workspace v4 packages from protobuf JSON when needed:
+The CLI creates Workspace v4 packages from Swift Codable JSON when needed:
 
 ```sh
 ldtx workspace create Unite-20260910.ldtxworkspace --json definition.json \
   --preferences-json preferences.json
 ```
+
+Generate these inputs with `JSONEncoder` using the Corelibs message types.
+This is not ProtoJSON: property names are Swift names, oneofs use synthesized
+associated-value enum objects, enum values are integers, and integer-keyed maps
+use Codable's array representation. Non-optional collection properties must be
+present when decoding. Missing singular fields remain nil; explicit zero, false,
+and empty values retain their presence. Application defaults are resolved by
+consumers rather than supplied by message getters.
 
 `ldtx workspace dump` prints the stored v4 Program layer references, and
 `ldtx workspace validate` verifies that both persisted documents are valid v4

@@ -3,7 +3,7 @@
 
 import CoreImage
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXRichText
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
@@ -18,10 +18,15 @@ struct WorkspaceVisionVariableIntegrationTestSuite {
   func manualAndAutomaticOCRPublishVariables(automatic: Bool, output: String) async throws {
     let vision = Ldtx_Workspace_V4_OcrVision.with {
       $0.internalID = 11
-      $0.triggers = [.with { $0.intervalTrigger.intervalSeconds.set(num: 1, den: 1) }]
+      $0.triggers = [
+        .with {
+          $0.trigger = .intervalTrigger(
+            .with { $0.intervalSeconds = .with { $0.set(num: 1, den: 1) } })
+        }
+      ]
     }
     let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-      $0.visions = [.with { $0.ocrVision = vision }]
+      $0.visions = [.with { $0.vision = .ocrVision(vision) }]
     }
     let key = LDTXVariableKey(visionID: 11, item: .text)
     var store = [LDTXVariableKey: String](definition: definition)

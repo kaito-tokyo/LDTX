@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
-import LDTXProtos
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import SwiftUI
 
@@ -10,7 +10,7 @@ struct MasterVolumeEditor: View {
   @Environment(\.undoManager) private var undoManager
   let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
-  let peakMeter: ProgramAudioPeakMeter
+  let peakMeter: any ProgramAudioPeakMeterPresenting
   let reportError: (Error) -> Void
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
 
@@ -46,7 +46,7 @@ struct MasterVolumeEditor: View {
       get: {
         id.flatMap {
           guard let preference = stateService.workspacePreferences[keyPath: target.preferences][$0],
-            preference.hasAudioMasterVolumeDecibels
+            preference.audioMasterVolumeDecibels != nil
           else { return nil }
           return preference.audioMasterVolumeDecibels
         } ?? .with { $0.set(num: 0, den: 10) }
@@ -113,7 +113,8 @@ struct AudioDecibelField: View {
           draft = text
           guard let parsed = try? RationalParseStrategy().parse(text),
             (-80...20).contains(parsed.double),
-            let encoded = try? Rational32DecibelEncoding.encode(parsed.double)
+            let encoded = try? Rational32DecibelEncoding.encode(
+              parsed.double)
           else {
             hasInvalidDraft = true
             return

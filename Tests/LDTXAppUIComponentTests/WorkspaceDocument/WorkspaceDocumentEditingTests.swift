@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import Observation
 import SwiftUI
 import Synchronization
@@ -199,8 +198,12 @@ extension AppUIComponentTestSuite {
     func deletionIsOneUndoForDefinitionAndBothCanvasPreferences() {
       let document = WorkspaceDocument(
         definition: .with {
-          $0.videoComponents = [.with { $0.vfxSource.internalID = 7 }]
-          $0.canvasConfiguration.ptsMasterVfxSourceInternalID = 7
+          $0.videoComponents = [
+            .with { $0.videoComponent = .vfxSource(.with { $0.internalID = 7 }) }
+          ]
+          $0.canvasConfiguration = .with {
+            $0.ptsMasterVfxSourceInternalID = 7
+          }
         },
         preferences: .with {
           $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [7] }
@@ -215,7 +218,7 @@ extension AppUIComponentTestSuite {
       undo.endUndoGrouping()
       let deleted = document.workspace
       #expect(deleted.definition.videoComponents.isEmpty)
-      #expect(!deleted.definition.canvasConfiguration.hasPtsMasterVfxSourceInternalID)
+      #expect(deleted.definition.canvasConfiguration?.ptsMasterVfxSourceInternalID == nil)
       #expect(deleted.preferences.landscapeProgramPreferences[1]?.videoLayerInternalIds == [])
       #expect(deleted.preferences.portraitProgramPreferences[2]?.videoLayerInternalIds == [])
       undo.undo()
@@ -280,9 +283,9 @@ extension AppUIComponentTestSuite {
     }
 
     @Test("LUB-1031: Model choice registers one undo for identifier and asset")
-    func modelChoiceRegistersOneUndoForIdentifierAndAsset() {
+    func modelChoiceRegistersOneUndoForIdentifierAndAsset() throws {
       let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4.with {
-        $0.visions = [.with { $0.ldtxSceneDetectorVision.internalID = 1 }]
+        $0.visions = [.with { $0.vision = .ldtxSceneDetectorVision(.with { $0.internalID = 1 }) }]
       }
       let document = WorkspaceDocument(definition: definition)
       let undo = UndoManager()
@@ -294,7 +297,11 @@ extension AppUIComponentTestSuite {
       document.setVisionModelURL(model, for: 1, undoManager: undo)
       undo.endUndoGrouping()
       let selected = document.workspace
-      let id = selected.definition.visions[0].ldtxSceneDetectorVision.modelInternalID
+      guard case .ldtxSceneDetectorVision(let vision) = selected.definition.visions[0].vision else {
+        Issue.record("Missing classifier")
+        return
+      }
+      let id = try #require(vision.modelInternalID)
       #expect(id > 0)
       #expect(selected.visionModels[id] == model)
       undo.undo()

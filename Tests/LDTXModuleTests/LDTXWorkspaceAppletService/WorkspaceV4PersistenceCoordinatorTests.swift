@@ -3,15 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 @testable import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 @testable import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import Observation
 import Security
@@ -73,9 +71,11 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let timestamp: Int64 = 1_800_000_000_000 << 15
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.audioDevices = [.with { $0.internalID = timestamp | 1 }]
-    definition.videoComponents = [.with { $0.vfxSource = .with { $0.internalID = timestamp | 3 } }]
+    definition.videoComponents = [
+      .with { $0.videoComponent = .vfxSource(.with { $0.internalID = timestamp | 3 }) }
+    ]
     definition.programs = [.with { $0.internalID = timestamp | 5 }]
-    definition.visions = [.with { $0.ocrVision = .with { $0.internalID = timestamp | 7 } }]
+    definition.visions = [.with { $0.vision = .ocrVision(.with { $0.internalID = timestamp | 7 }) }]
     var suffix: Int64 = -1
     var sleeps: [TimeInterval] = []
     let generator = WorkspaceInternalIDGenerator(
@@ -325,13 +325,17 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
   private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = displayName
-    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
-    definition.canvasConfiguration.frameRate = 60
-    definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
-    definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
+    definition.canvasConfiguration = .with {
+      $0.landscapeProfileID = "sdr-landscape-1080p60"
+      $0.portraitProfileID = "sdr-portrait-1080p60"
+      $0.frameRate = 60
+      $0.landscapeVideoBitRate = 6_000_000
+      $0.portraitVideoBitRate = 6_000_000
+    }
     let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
-      $0.youtubeSettings.ingestMode = .landscapeRtmps
+      $0.youtubeSettings = .with {
+        $0.ingestMode = .landscapeRtmps
+      }
     }
     return WorkspaceV4Bundle(
       definition: definition, preferences: .init(), outputSettings: outputSettings)

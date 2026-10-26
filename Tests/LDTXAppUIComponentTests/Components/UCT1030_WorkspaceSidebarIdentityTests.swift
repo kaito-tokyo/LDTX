@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
@@ -31,10 +31,10 @@ extension AppUIComponentTestSuite {
     @Test("LUB-1048: Temporary UI identities never modify Proto IDs or their presence")
     func preservesProtoValues() {
       let visions: [Ldtx_Workspace_V4_VisionWrapper] = [
-        .init(), .with { $0.ocrVision = .init() },
-        .with { $0.ocrVision.internalID = 0 },
-        .with { $0.ocrVision.internalID = -1 },
-        .with { $0.ocrVision.internalID = 11 },
+        .init(), .with { $0.vision = .ocrVision(.init()) },
+        .with { $0.vision = .ocrVision(.with { $0.internalID = 0 }) },
+        .with { $0.vision = .ocrVision(.with { $0.internalID = -1 }) },
+        .with { $0.vision = .ocrVision(.with { $0.internalID = 11 }) },
       ]
       let rows = WorkspaceSidebar.rows(visions) { $0.internalID }
       #expect(rows.map(\.id) == [-1, -2, -3, -4, 11])

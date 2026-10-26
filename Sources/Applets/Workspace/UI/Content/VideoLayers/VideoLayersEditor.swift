@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletModel
 import Observation
 import SwiftUI
@@ -98,10 +98,14 @@ final class VideoLayersEditorState {
         else { return }
         let (transform, incomplete) = self.parsedTransform(for: row)
         let previous = row.transform
-        if transform.translationX.double == previous.translationX.double,
-          transform.translationY.double == previous.translationY.double,
-          transform.scaleX.double == previous.scaleX.double,
-          transform.scaleY.double == previous.scaleY.double
+        if (transform.translationX?.double ?? 0)
+          == (previous.translationX?.double ?? 0),
+          (transform.translationY?.double ?? 0)
+            == (previous.translationY?.double ?? 0),
+          (transform.scaleX?.double ?? 1)
+            == (previous.scaleX?.double ?? 1),
+          (transform.scaleY?.double ?? 1)
+            == (previous.scaleY?.double ?? 1)
         {
           row.hasLocalTextChanges = incomplete
           return
@@ -135,12 +139,12 @@ final class VideoLayersEditorState {
     var hasIncompleteText = false
     let previous = state.transform
     let fallback = [
-      previous.translationX, previous.translationY,
+      previous.translationX ?? .init(), previous.translationY ?? .init(),
       Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleX.num, den: previous.scaleX.den)
+        $0.set(num: previous.scaleX?.num ?? 1, den: previous.scaleX?.den ?? 1)
       },
       Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleY.num, den: previous.scaleY.den)
+        $0.set(num: previous.scaleY?.num ?? 1, den: previous.scaleY?.den ?? 1)
       },
     ]
     let values = state.strings.enumerated().map { index, text in

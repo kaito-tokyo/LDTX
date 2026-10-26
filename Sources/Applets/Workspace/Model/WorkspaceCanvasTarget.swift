@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgram
-import LDTXProtos
+import LDTXCorelibs
 
 /// Identifies the fields to read and update for one Program canvas.
 public struct WorkspaceCanvasTarget {
@@ -11,8 +10,8 @@ public struct WorkspaceCanvasTarget {
     WritableKeyPath<
       Ldtx_Workspace_V4_WorkspacePreferencesV4, [Int64: Ldtx_Workspace_V4_ProgramPreferences]
     >
-  public let profileID: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, String>
-  public let videoBitRate: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, UInt32>
+  public let profileID: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, String?>
+  public let videoBitRate: KeyPath<Ldtx_Workspace_V4_CanvasConfiguration, UInt32?>
   public let defaultProfile: ProgramOutputProfile
   public let expectedProfileID: String
 
@@ -49,8 +48,8 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
     else {
       throw WorkspaceCanvasSnapshotError.missingProgram(programInternalID)
     }
-    let config = definition.canvasConfiguration
-    let profileID = config[keyPath: target.profileID]
+    let config = definition.canvasConfiguration ?? .init()
+    let profileID = config[keyPath: target.profileID] ?? ""
     guard profileID.isEmpty || profileID == target.expectedProfileID else {
       throw WorkspaceCanvasSnapshotError.unsupportedOutputProfile(profileID)
     }
@@ -58,10 +57,11 @@ public struct WorkspaceProgramCanvasSnapshot: Sendable {
     self.programInternalID = programInternalID
     self.preferences = preferences[keyPath: target.preferences][programInternalID] ?? .init()
     layerIDs = self.preferences[keyPath: target.layerIDs]
-    let bitRate = config[keyPath: target.videoBitRate]
+    let bitRate = config[keyPath: target.videoBitRate] ?? 0
     outputProfile =
       bitRate == 0 ? target.defaultProfile : target.defaultProfile.withVideoBitRate(Int(bitRate))
-    frameRate = config.frameRate == 0 ? outputProfile.frameRate : Int(config.frameRate)
+    let configuredRate = config.frameRate ?? 0
+    frameRate = configuredRate == 0 ? outputProfile.frameRate : Int(configuredRate)
   }
 }
 

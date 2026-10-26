@@ -4,8 +4,8 @@
 
 import CoreImage
 import Foundation
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXRichText
 import LDTXVision
 import LDTXWorkspaceAppletModel
@@ -13,7 +13,6 @@ import LDTXWorkspaceAppletService
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import LDTXYouTubeRTMPS
 import Testing
 
@@ -25,8 +24,8 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     var saved = runtime.workspace
     saved.definition.visions = [
-      .with { $0.ocrVision = .with { $0.internalID = 11 } },
-      .with { $0.ldtxSceneDetectorVision = .with { $0.internalID = 22 } },
+      .with { $0.vision = .ocrVision(.with { $0.internalID = 11 }) },
+      .with { $0.vision = .ldtxSceneDetectorVision(.with { $0.internalID = 22 }) },
     ]
     try runtime.persistenceCoordinator.adoptRuntimeWorkspace(saved)
     let text = LDTXVariableKey(visionID: 11, item: .text)
@@ -74,7 +73,7 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let runtime = try makeRuntime(capture: WorkspaceCaptureSessionCoordinator())
     let vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with { $0.internalID = 22 }
     var workspace = runtime.workspace
-    workspace.definition.visions = [.with { $0.ldtxSceneDetectorVision = vision }]
+    workspace.definition.visions = [.with { $0.vision = .ldtxSceneDetectorVision(vision) }]
     try runtime.persistenceCoordinator.adoptRuntimeWorkspace(workspace)
     runtime.visionFeatureContext.reportResult(22, "Previous result")
     runtime.visionFeatureContext.reportVariables(22, [.label: "Previous", .confidence: "0.5"])
@@ -278,7 +277,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     ])
   func resolvesSingleCanvasRTMPSDestination(mode: Ldtx_Workspace_V4_YouTubeIngestMode) throws {
     var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
-    output.youtubeSettings.ingestMode = mode
+    output.youtubeSettings = .with {
+      $0.ingestMode = mode
+    }
     let configuration = YouTubeRTMPSStreamKeyConfiguration(
       id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
       streamKey: "landscape-key")
@@ -303,7 +304,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   @Test("LUB-1052: rejects V4 RTMPS without the selected Stream Key")
   func rejectsMissingRTMPSStreamKey() {
     var output = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
-    output.youtubeSettings.ingestMode = .portraitRtmps
+    output.youtubeSettings = .with {
+      $0.ingestMode = .portraitRtmps
+    }
 
     #expect(throws: WorkspaceV4YouTubeOutputError.missingPortraitStreamKey) {
       try WorkspaceV4YouTubeRTMPSDestinationResolver.resolve(
@@ -322,9 +325,9 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     videoInput.internalID = 1
     videoInput.displayName = "Camera"
     var inputWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    inputWrapper.vfxSource = videoInput
+    inputWrapper.videoComponent = .vfxSource(videoInput)
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.ocrVision = vision
+    wrapper.vision = .ocrVision(vision)
     try runtime.editDefinition {
       $0.videoComponents = [inputWrapper]
       $0.visions = [wrapper]
@@ -606,15 +609,21 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     let classifierID = source + 1
     try runtime.editDefinition {
       let index = $0.videoComponents.firstIndex { $0.internalID == source }!
-      $0.videoComponents[index].vfxSource.deviceWidth = 1920
-      $0.videoComponents[index].vfxSource.deviceHeight = 1080
+      guard case .vfxSource(var component) = $0.videoComponents[index].videoComponent else {
+        Issue.record("Missing VFX source")
+        return
+      }
+      component.deviceWidth = 1920
+      component.deviceHeight = 1080
+      $0.videoComponents[index].videoComponent = .vfxSource(component)
       $0.visions.append(
         .with {
-          $0.ldtxSceneDetectorVision = .with {
-            $0.internalID = classifierID
-            $0.displayName = "Classifier"
-            $0.videoComponentInternalID = source
-          }
+          $0.vision = .ldtxSceneDetectorVision(
+            .with {
+              $0.internalID = classifierID
+              $0.displayName = "Classifier"
+              $0.videoComponentInternalID = source
+            })
         })
     }
     let before = runtime.definition
@@ -623,11 +632,15 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
     }
     #expect(runtime.definition == before)
     try runtime.removeVision(internalID: classifierID)
-    try runtime.editDefinition { $0.canvasConfiguration.ptsMasterVfxSourceInternalID = source }
+    try runtime.editDefinition {
+      var canvas = $0.canvasConfiguration ?? .init()
+      canvas.ptsMasterVfxSourceInternalID = source
+      $0.canvasConfiguration = canvas
+    }
     #expect(throws: WorkspaceRuntimeError.resourceInUse(source)) {
       try runtime.removeVideoComponent(internalID: source)
     }
-    try runtime.editDefinition { $0.canvasConfiguration.clearPtsMasterVfxSourceInternalID() }
+    try runtime.editDefinition { $0.canvasConfiguration?.ptsMasterVfxSourceInternalID = nil }
     try runtime.removeVideoComponent(internalID: source)
     #expect(runtime.definition.videoComponents.isEmpty)
   }
@@ -663,13 +676,17 @@ struct WorkspaceWindowRuntimeIntegrationTestSuite {
   private func cleanWorkspace(displayName: String) -> WorkspaceV4Bundle {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = displayName
-    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
-    definition.canvasConfiguration.frameRate = 60
-    definition.canvasConfiguration.landscapeVideoBitRate = 6_000_000
-    definition.canvasConfiguration.portraitVideoBitRate = 6_000_000
+    definition.canvasConfiguration = .with {
+      $0.landscapeProfileID = "sdr-landscape-1080p60"
+      $0.portraitProfileID = "sdr-portrait-1080p60"
+      $0.frameRate = 60
+      $0.landscapeVideoBitRate = 6_000_000
+      $0.portraitVideoBitRate = 6_000_000
+    }
     let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
-      $0.youtubeSettings.ingestMode = .landscapeRtmps
+      $0.youtubeSettings = .with {
+        $0.ingestMode = .landscapeRtmps
+      }
     }
     return WorkspaceV4Bundle(
       definition: definition, preferences: .init(), outputSettings: outputSettings)

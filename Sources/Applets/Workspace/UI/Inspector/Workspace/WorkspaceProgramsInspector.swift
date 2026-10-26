@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
-import LDTXProgramRuntime
-import LDTXProtos
-import LDTXTaskQueue
-import LDTXYouTubeRTMPS
+import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 struct WorkspaceProgramSelector: View {
@@ -19,7 +17,7 @@ struct WorkspaceProgramSelector: View {
     } else {
       Picker("Program", selection: $selection) {
         ForEach(programs, id: \.internalID) {
-          Text($0.displayName).tag(Optional($0.internalID))
+          Text($0.displayName ?? "").tag($0.internalID)
         }
       }
       .pickerStyle(.radioGroup)
@@ -59,14 +57,16 @@ struct WorkspaceProgramsInspector: View {
       .disabled(!canSelectProgram)
       ForEach(stateService.workspaceDefinition.programs, id: \.internalID) { program in
         HStack {
-          Text(program.displayName)
+          Text(program.displayName ?? "")
           Spacer()
           Button("Rename…") {
-            nameDraft = program.displayName
-            renameTarget = ActionTarget(id: program.internalID, name: program.displayName)
+            guard let id = program.internalID else { return }
+            nameDraft = program.displayName ?? ""
+            renameTarget = ActionTarget(id: id, name: program.displayName ?? "")
           }
           Button("Delete…", role: .destructive) {
-            deleteTarget = ActionTarget(id: program.internalID, name: program.displayName)
+            guard let id = program.internalID else { return }
+            deleteTarget = ActionTarget(id: id, name: program.displayName ?? "")
             showsDeleteConfirmation = true
           }
         }

@@ -6,12 +6,10 @@ import CoreImage
 import CoreMedia
 import CoreVideo
 import Foundation
+import LDTXCorelibs
 import LDTXMP4
 @testable import LDTXProgramRuntime
-import LDTXProtos
-import LDTXRecordBundleFormat
 @testable import LDTXWorkspaceAppletService
-import LDTXWorkspaceBundleFormat
 import Synchronization
 import Testing
 
@@ -57,7 +55,7 @@ extension OutputTestSuite {
         scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
         recognizeText: { _, _ in "manual recording result" })
       var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-      wrapper.ocrVision = vision
+      wrapper.vision = .ocrVision(vision)
       feature.synchronize(visions: [wrapper], context: context)
       feature.runOCR(visionInternalID: 41)
       while !feature.canRunOCR(visionInternalID: 41) { await Task.yield() }

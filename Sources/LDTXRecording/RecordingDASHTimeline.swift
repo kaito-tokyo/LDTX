@@ -4,7 +4,7 @@
 
 import CoreMedia
 import Foundation
-import LDTXRecordBundleFormat
+import LDTXCorelibs
 
 public struct RecordingDASHTimeline {
   public static let audioStartScheme = RecordingDASHManifestTimeline.audioStartScheme

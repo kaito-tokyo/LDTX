@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import Testing
 
 extension AppUIComponentTestSuite {
@@ -24,32 +23,46 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [10, 20].map { id in
           .with {
-            $0.vfxSource.internalID = Int64(id)
-            $0.vfxSource.displayName = "Source \(id)"
-            $0.vfxSource.deviceWidth = 1920
-            $0.vfxSource.deviceHeight = 1080
+            $0.videoComponent = .vfxSource(
+              .with {
+                $0.internalID = Int64(id)
+                $0.displayName = "Source \(id)"
+                $0.deviceWidth = 1920
+                $0.deviceHeight = 1080
+              })
           }
         }
       }
       state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.ptsMasterVfxSourceInternalID = 10
+        workspace.definition.canvasConfiguration = .with {
+          $0.ptsMasterVfxSourceInternalID = 10
+        }
       }
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [
           .with {
-            $0.ocrVision.internalID = 30
-            $0.ocrVision.displayName = "OCR"
-            $0.ocrVision.videoComponentInternalID = 20
+            $0.vision = .ocrVision(
+              .with {
+                $0.internalID = 30
+                $0.displayName = "OCR"
+                $0.videoComponentInternalID = 20
+              })
           },
           .with {
-            $0.ldtxSceneDetectorVision.internalID = 40
-            $0.ldtxSceneDetectorVision.displayName = "Scene"
-            $0.ldtxSceneDetectorVision.videoComponentInternalID = 20
+            $0.vision = .ldtxSceneDetectorVision(
+              .with {
+                $0.internalID = 40
+                $0.displayName = "Scene"
+                $0.videoComponentInternalID = 20
+              })
           },
           .with {
-            $0.ocrVision.internalID = 50
-            $0.ocrVision.displayName = "Other OCR"
-            $0.ocrVision.videoComponentInternalID = 20
+            $0.vision = .ocrVision(
+              .with {
+                $0.internalID = 50
+                $0.displayName = "Other OCR"
+                $0.videoComponentInternalID = 20
+              })
           },
         ]
       }
@@ -57,7 +70,7 @@ extension AppUIComponentTestSuite {
         $0.videoLayerInternalIds = [10, 20, 10]
         $0.videoLayerTransforms = [10: .init(), 20: .init()]
         $0.videoLayerHidden = [10: true, 20: false]
-        $0.audioMasterVolumeDecibels.set(num: -30, den: 10)
+        $0.audioMasterVolumeDecibels = .with { $0.set(num: -30, den: 10) }
       }
       for id: Int64 in [100, 200] {
         state.editWorkspace(undoManager: nil) { workspace in
@@ -71,7 +84,7 @@ extension AppUIComponentTestSuite {
       let original = state.editingWorkspace
       VideoComponentDeletion.delete(10, from: state)
       #expect(state.workspaceDefinition.videoComponents.compactMap(\.internalID) == [20])
-      #expect(!state.workspaceDefinition.canvasConfiguration.hasPtsMasterVfxSourceInternalID)
+      #expect(state.workspaceDefinition.canvasConfiguration?.ptsMasterVfxSourceInternalID == nil)
       #expect(state.workspaceDefinition.visions == original.definition.visions)
       #expect(state.inspectorSelector == nil)
       for preferences in [
@@ -124,17 +137,25 @@ extension AppUIComponentTestSuite {
     func visionInputsMustBeReassignedBeforeDeletion(sceneDetector: Bool) {
       let state = WorkspaceDocument()
       state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents = [.with { $0.vfxSource.internalID = 10 }]
+        workspace.definition.videoComponents = [
+          .with { $0.videoComponent = .vfxSource(.with { $0.internalID = 10 }) }
+        ]
       }
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [
           .with {
             if sceneDetector {
-              $0.ldtxSceneDetectorVision.internalID = 30
-              $0.ldtxSceneDetectorVision.videoComponentInternalID = 10
+              $0.vision = .ldtxSceneDetectorVision(
+                .with {
+                  $0.internalID = 30
+                  $0.videoComponentInternalID = 10
+                })
             } else {
-              $0.ocrVision.internalID = 30
-              $0.ocrVision.videoComponentInternalID = 10
+              $0.vision = .ocrVision(
+                .with {
+                  $0.internalID = 30
+                  $0.videoComponentInternalID = 10
+                })
             }
           }
         ]

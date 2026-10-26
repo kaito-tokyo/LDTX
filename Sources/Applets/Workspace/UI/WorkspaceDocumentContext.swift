@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
-import LDTXWorkspaceBundleFormat
+import LDTXCorelibs
 
 /// The document information needed by Workspace UI, independent of its persistence API.
 @MainActor

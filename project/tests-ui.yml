@@ -9,7 +9,8 @@ targets:
       - Tests/LDTXAppUITests
     dependencies:
       - target: LDTXApp
-      - target: LDTXRecordBundleFormat
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUITests

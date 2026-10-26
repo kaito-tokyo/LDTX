@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 
 enum AMF0Value: Sendable {
   case number(Double)

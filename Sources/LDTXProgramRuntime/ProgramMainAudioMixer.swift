@@ -3,7 +3,7 @@
 import CoreMedia
 import Foundation
 import LDTXCapture
-import LDTXProgram
+import LDTXCorelibs
 
 protocol ProgramMainAudioMixing: AnyObject, Sendable {
   func start(

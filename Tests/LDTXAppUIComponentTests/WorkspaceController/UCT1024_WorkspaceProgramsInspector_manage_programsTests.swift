@@ -4,7 +4,7 @@
 import AppKit
 import LDTXAppletSupport
 import LDTXBackgroundSegmentation
-import LDTXProtos
+import LDTXCorelibs
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import Testing
@@ -39,10 +39,11 @@ extension AppUIComponentTestSuite {
       service.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [
           .with {
-            $0.ocrVision = .with {
-              $0.internalID = 4
-              $0.displayName = "Vision"
-            }
+            $0.vision = .ocrVision(
+              .with {
+                $0.internalID = 4
+                $0.displayName = "Vision"
+              })
           }
         ]
       }

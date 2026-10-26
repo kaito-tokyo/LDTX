@@ -2,8 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
-import LDTXVision
+import LDTXCorelibs
 import SwiftUI
 
 struct LdtxSceneDetectorVisionInspector: View {
@@ -17,7 +16,10 @@ struct LdtxSceneDetectorVisionInspector: View {
   var modelPreparationGeneration: UInt64 = 0
 
   @Environment(\.outputActive) var outputActive
-  @State private var modelInformation: VisionImageClassifierService.ModelInformation?
+  var readModelInformation: (URL) async throws -> WorkspaceVisionModelInformation = { _ in
+    throw CocoaError(.featureUnsupported)
+  }
+  @State private var modelInformation: WorkspaceVisionModelInformation?
   @State private var modelInformationFailure: String?
 
   var modelInformationURL: URL? { persistedModelURL ?? modelURL }
@@ -25,7 +27,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   var body: some View {
     Form {
       Section("Vision - Create ML Image Classifier") {
-        TextField("Name", text: $vision.displayName)
+        TextField("Name", text: $vision.displayName.defaulting(to: ""))
         VisionInputVideoComponentDropdown(
           videoComponents: videoComponents, selection: $vision.videoComponentInternalIDIfPresent,
           title: "Input video", requiresPositiveSize: true)
@@ -59,7 +61,8 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
       Section("Region of Interest") {
         if let inputSize {
-          RegionOfInterestEditor(inputSize: inputSize, roi: $vision.regionOfInterest)
+          RegionOfInterestEditor(
+            inputSize: inputSize, roi: $vision.regionOfInterest.defaulting(to: .init()))
         } else {
           Text("Select an input video to edit the region of interest.")
         }
@@ -85,8 +88,7 @@ struct LdtxSceneDetectorVisionInspector: View {
       let noCompile = outputActive
       let generation = modelPreparationGeneration
       do {
-        let information = try await VisionImageClassifierService.readModelInformation(
-          at: url)
+        let information = try await readModelInformation(url)
         guard modelInformationURL == url, outputActive == noCompile,
           modelPreparationGeneration == generation
         else { return }
@@ -107,7 +109,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   }
 
   private func cropAndScaleLabel(
-    _ information: VisionImageClassifierService.ModelInformation
+    _ information: WorkspaceVisionModelInformation
   ) -> LocalizedStringResource {
     switch information.cropAndScaleAction {
     case .centerCrop: "Center Crop"
@@ -129,10 +131,13 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
 
     let videoComponent = Ldtx_Workspace_V4_VideoComponentWrapper.with {
-      $0.vfxSource.internalID = 7
-      $0.vfxSource.displayName = "Camera"
-      $0.vfxSource.deviceWidth = 1920
-      $0.vfxSource.deviceHeight = 1080
+      $0.videoComponent = .vfxSource(
+        .with {
+          $0.internalID = 7
+          $0.displayName = "Camera"
+          $0.deviceWidth = 1920
+          $0.deviceHeight = 1080
+        })
     }
 
     LdtxSceneDetectorVisionInspector(

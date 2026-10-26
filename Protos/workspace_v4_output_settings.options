@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+* fallback_type:FT_POINTER
+ldtx.workspace.v4.RecordingOutputSettings.CustomFieldsEntry.key type_override:TYPE_BYTES
+ldtx.workspace.v4.RecordingOutputSettings.CustomFieldsEntry.value type_override:TYPE_BYTES

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import SwiftUI
 
 struct TriggerEditor: View {
@@ -21,7 +21,10 @@ struct TriggerEditor: View {
   }
 
   private func intervalTrigger(seconds: Int32) -> Ldtx_Workspace_V4_VisionTriggerWrapper {
-    .with { $0.intervalTrigger.intervalSeconds.set(num: seconds, den: 1) }
+    .with {
+      $0.trigger = .intervalTrigger(
+        .with { $0.intervalSeconds = .with { $0.set(num: seconds, den: 1) } })
+    }
   }
 }
 

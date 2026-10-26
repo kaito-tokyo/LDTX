@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 @testable import LDTXWorkspaceAppletController
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
@@ -37,11 +37,11 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [.with { $0.internalID = 100 }]
         workspace.preferences.landscapeProgramPreferences[100, default: .init()]
-          .audioMasterVolumeDecibels.set(num: -120, den: 10)
+          .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
       }
       let root = MasterVolumeEditor(
         stateService: state, appletData: WorkspaceAppletData(),
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       let window = hostWorkspaceView(root)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
@@ -79,7 +79,7 @@ extension AppUIComponentTestSuite {
       let window = hostWorkspaceView(
         MasterVolumeEditor(
           stateService: state, appletData: data,
-          peakMeter: .init(), reportError: { _ in }))
+          peakMeter: StubAudioPeakMeter(), reportError: { _ in }))
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       func firstField() throws -> NSTextField {
@@ -90,7 +90,7 @@ extension AppUIComponentTestSuite {
       try editWorkspaceField(firstField(), text: "-12", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
-        state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
+        state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels?
           .double == -12)
       #expect(state.workspacePreferences.landscapeProgramPreferences[100] == nil)
       data.updateState(for: url) { $0.selectedProgramInternalID = 100 }
@@ -98,7 +98,7 @@ extension AppUIComponentTestSuite {
       try editWorkspaceField(firstField(), text: "-6", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
-        state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
+        state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels?
           .double == -6)
       window.makeFirstResponder(nil)
       await settleWorkspaceToolbar(window)
@@ -122,7 +122,7 @@ extension AppUIComponentTestSuite {
       let before = state.editingWorkspace
       let editor = MasterVolumeEditor(
         stateService: state, appletData: data,
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       #expect(editor.setMonitorVolume(-11.899999999999999))
       #expect(data.state(for: url).monitorVolume == -11.9)
       #expect(!editor.setMonitorVolume(.infinity))

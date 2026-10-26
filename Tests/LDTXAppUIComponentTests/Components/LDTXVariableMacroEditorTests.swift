@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProtos
+import LDTXCorelibs
 import LDTXRichText
 @testable import LDTXVariableMacro
 @testable import LDTXWorkspaceAppletController
@@ -230,8 +230,11 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
           .with {
-            $0.dynamicText.internalID = 33
-            $0.dynamicText.rtfdDocument = original.rtfd
+            $0.videoComponent = .dynamicText(
+              .with {
+                $0.internalID = 33
+                $0.rtfdDocument = original.rtfd
+              })
           }
         ]
       }
@@ -289,10 +292,17 @@ extension AppUIComponentTestSuite {
         )
       }
       await settleWorkspaceToolbar(window)
+      guard
+        case .dynamicText(let storedText) = state.workspaceDefinition.videoComponents[0]
+          .videoComponent
+      else {
+        Issue.record("Missing dynamic text")
+        return
+      }
       #expect(
         try native.document
           == (try LDTXRichTextDocument(
-            rtfd: state.workspaceDefinition.videoComponents[0].dynamicText.rtfdDocument)))
+            rtfd: #require(storedText.rtfdDocument))))
       native.update(
         document: richDocument([.text("New document"), .variable(first)]),
         keys: [first, second], names: native.names, isEnabled: true)
@@ -314,17 +324,28 @@ private struct HostedEditor: View {
   var undoManager: UndoManager? = nil
 
   var body: some View {
-    LDTXVariableMacroEditor(
-      document: try! LDTXRichTextDocument(
-        rtfd: state.workspaceDefinition.videoComponents[0].dynamicText.rtfdDocument),
-      keys: keys, name: { $0.sel },
-      onDocumentChange: { richText in
-        state.editWorkspace(undoManager: undoManager) { workspace in
-          workspace.definition.videoComponents[0].dynamicText.rtfdDocument = richText.rtfd
+    if case .dynamicText(let text) = state.workspaceDefinition.videoComponents[0].videoComponent,
+      let rtfd = text.rtfdDocument
+    {
+      LDTXVariableMacroEditor(
+        document: try! LDTXRichTextDocument(
+          rtfd: rtfd),
+        keys: keys, name: { $0.sel },
+        onDocumentChange: { richText in
+          state.editWorkspace(undoManager: undoManager) { workspace in
+            guard
+              case .dynamicText(var text) = workspace.definition.videoComponents[0].videoComponent
+            else {
+              Issue.record("Missing dynamic text")
+              return
+            }
+            text.rtfdDocument = richText.rtfd
+            workspace.definition.videoComponents[0].videoComponent = .dynamicText(text)
+          }
         }
-      }
-    )
-    .frame(minHeight: 120)
+      )
+      .frame(minHeight: 120)
+    }
   }
 }
 

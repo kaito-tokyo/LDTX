@@ -316,7 +316,7 @@ module: consumers import their dependencies directly. Shared state enums live
 in Model; runtime protocols and Program resolution live in Service. XcodeGen generates the
 per-target membership exceptions, so a source compiles in one Xcode target.
 Adding or removing Workspace files requires regenerating the project to update
-these exceptions. SwiftPM-only entrypoints remain managed by Package.swift.
+these exceptions. Corelibs are defined by `Packages/LDTXCorelibs/Package.swift`; CLI entrypoints remain XcodeGen-managed.
 
 XcodeGen 2.46 does not generate synchronized-folder public-header visibility
 exceptions. The AudioEngine and FontRasterizer public headers therefore retain
@@ -535,7 +535,7 @@ disconnects the service's runtime actions before releasing resources.
 
 ## Validation before saving
 
-Reader and Writer use WorkspaceBundleValidatorV4 in LDTXWorkspaceBundleFormat
+Reader and Writer use WorkspaceBundleValidatorV4 in LDTXCorelibs/WorkspaceBundleFormat
 as their content gate. Validation collects independent field-level issues,
 including model resource references, into one error containing the diagnostic
 array. Invalid values are rejected without normalization. The document framework

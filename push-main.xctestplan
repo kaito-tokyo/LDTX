@@ -13,6 +13,13 @@
     {
       "target" : {
         "containerPath" : "container:LDTX.xcodeproj",
+        "identifier" : "176A61BD16DDB041EDA289F8",
+        "name" : "LDTXUtilsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:LDTX.xcodeproj",
         "identifier" : "C7741D6E32696FBB1F22F09E",
         "name" : "LDTXOutputTests"
       }
@@ -40,8 +47,8 @@
     },
     {
       "target" : {
-        "containerPath" : "container:LDTX.xcodeproj",
-        "identifier" : "AF349AA2C58E469BDBEFD99B",
+        "containerPath" : "container:Packages/LDTXCorelibs",
+        "identifier" : "LDTXCorelibsTests",
         "name" : "LDTXCorelibsTests"
       }
     },

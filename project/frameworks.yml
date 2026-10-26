@@ -2,13 +2,22 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-schemes:
-  LDTXWorkspaceBundleFormat:
-    build:
-      targets:
-        LDTXWorkspaceBundleFormat: all
-
 targets:
+  LDTXWorkspaceAppletInterface:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Interface
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
+      - target: LDTXWorkspaceAppletModel
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletInterface
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletInterface
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXVisionTraining:
     type: framework
     platform: macOS
@@ -27,7 +36,8 @@ targets:
       - Sources/LDTXProtosMacOSExtra
     dependencies:
       - target: LDTXRichText
-      - target: LDTXProtos
+      - package: Corelibs
+        product: LDTXCorelibs
       - sdk: AppKit.framework
     settings:
       base:
@@ -56,7 +66,8 @@ targets:
     dependencies:
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXProgramRuntime
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
@@ -64,18 +75,12 @@ targets:
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeRTMPS
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - target: LDTXWorkspaceBundleFormat
-      - target: LDTXProtos
       - target: LDTXProtosMacOSExtra
       - package: swift-argument-parser
         product: ArgumentParser
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUtils
@@ -151,6 +156,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXCapture
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCapture
@@ -163,6 +171,9 @@ targets:
     sources:
       - Sources/LDTXDeviceRegistry
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
     settings:
       base:
@@ -211,62 +222,10 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXYouTubeOutputProtocol
-    dependencies:
-      - target: LDTXProtos
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeOutputProtocol
         PRODUCT_MODULE_NAME: LDTXYouTubeOutputProtocol
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-  LDTXProgram:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/Corelibs/LDTXProgram
-    dependencies:
-      - target: LDTXProtos
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgram
-        PRODUCT_MODULE_NAME: LDTXProgram
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-  LDTXProtos:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/Corelibs/LDTXProtos
-    dependencies:
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProtos
-        PRODUCT_MODULE_NAME: LDTXProtos
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-  LDTXWorkspaceBundleFormat:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/Corelibs/LDTXWorkspaceBundleFormat
-    dependencies:
-      - target: LDTXProtos
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceBundleFormat
-        PRODUCT_MODULE_NAME: LDTXWorkspaceBundleFormat
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXVideoComposition:
@@ -274,21 +233,13 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXVideoComposition
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoComposition
         PRODUCT_MODULE_NAME: LDTXVideoComposition
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-  LDTXRecordBundleFormat:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/Corelibs/LDTXRecordBundleFormat
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecordBundleFormat
-        PRODUCT_MODULE_NAME: LDTXRecordBundleFormat
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
   LDTXRecording:
@@ -297,7 +248,8 @@ targets:
     sources:
       - Sources/LDTXRecording
     dependencies:
-      - target: LDTXRecordBundleFormat
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXRecording
@@ -325,6 +277,8 @@ targets:
       - path: Resources/LDTX/Metal/VideoCompositorShaders.metal
         buildPhase: resources
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXVideoComposition
     settings:
       base:
@@ -354,7 +308,8 @@ targets:
     sources:
       - Sources/LDTXProgramRendering
     dependencies:
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXVideoComposition
     settings:
       base:
@@ -367,6 +322,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXYouTubeRTMPS
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeRTMPS
@@ -379,6 +337,8 @@ targets:
     sources:
       - Sources/LDTXYouTube
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXDash
       - target: LDTXYouTubeRTMPS
     settings:
@@ -417,6 +377,7 @@ targets:
       - path: Resources/LDTX/Metal/ClockOverlayShaders.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXRichText
       - target: LDTXAudioEngine
       - target: LDTXCapture
@@ -426,10 +387,10 @@ targets:
       - target: LDTXMP4
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXProgramRendering
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
@@ -475,11 +436,8 @@ targets:
         includes:
           - Model
     dependencies:
-      - target: LDTXProtos
-      - target: LDTXProgram
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletModel
@@ -495,13 +453,9 @@ targets:
           - Store
     dependencies:
       - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceBundleFormat
-      - target: LDTXProtos
-      - target: LDTXProgram
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXYouTubeRTMPS
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletStore
@@ -520,25 +474,21 @@ targets:
       - target: LDTXBackgroundSegmentation
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
-      - target: LDTXWorkspaceBundleFormat
-      - target: LDTXProtos
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXProtosMacOSExtra
       - target: LDTXCapture
       - target: LDTXAppletSupport
       - target: LDTXDash
       - target: LDTXInternalProtocols
-      - target: LDTXProgram
       - target: LDTXProgramRuntime
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXVision
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletService
@@ -559,13 +509,16 @@ targets:
           - WorkspaceDocumentConnection.swift
           - WorkspaceDocumentCloseCoordinator.swift
           - WorkspaceAppletCoordinator.swift
+          - WorkspaceAppletCoordinator+ModelInformation.swift
+          - Preview
           - WorkspaceStreamDeck.swift
           - StreamDeckHID.swift
           - StreamDeckReports.swift
           - WorkspaceAppletDelegate.swift
     dependencies:
-      - target: LDTXProtos
-      - target: LDTXWorkspaceBundleFormat
+      - target: LDTXWorkspaceAppletInterface
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
@@ -576,7 +529,6 @@ targets:
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
       - target: LDTXInternalProtocols
-      - target: LDTXProgram
       - target: LDTXProgramRuntime
       - target: LDTXProgramRendering
       - target: LDTXVideoComposition
@@ -585,7 +537,6 @@ targets:
       - target: LDTXMP4
       - target: LDTXYouTube
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
       - target: LDTXTaskQueue
       - target: LDTXYouTubeRTMPS
     settings:

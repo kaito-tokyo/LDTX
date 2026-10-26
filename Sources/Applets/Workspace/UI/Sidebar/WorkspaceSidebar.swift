@@ -3,17 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
-import LDTXDeviceRegistry
-import LDTXProgramRuntime
-import LDTXTaskQueue
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
   @Environment(\.undoManager) private var undoManager
   @Bindable var stateService: WorkspaceDocument
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  private let deviceRegistry: DeviceRegistryService
+  private let deviceRegistry: any WorkspaceDeviceRegistry
   private let appletData: WorkspaceAppletData
   private weak var document: (any WorkspaceDocumentContext)?
   @State private var addSheet: WorkspaceAddSheet?
@@ -21,7 +18,7 @@ public struct WorkspaceSidebar: View {
   @State private var additionFailure: String?
 
   public init(
-    stateService: WorkspaceDocument, deviceRegistry: DeviceRegistryService,
+    stateService: WorkspaceDocument, deviceRegistry: any WorkspaceDeviceRegistry,
     appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
@@ -49,7 +46,7 @@ public struct WorkspaceSidebar: View {
 
   public var body: some View {
     let inputDevices = Self.rows(stateService.workspaceDefinition.audioDevices) {
-      $0.hasInternalID ? $0.internalID : nil
+      ($0.internalID != nil) ? $0.internalID : nil
     }
     let videoComponents = Self.rows(stateService.workspaceDefinition.videoComponents) {
       $0.internalID
@@ -75,12 +72,12 @@ public struct WorkspaceSidebar: View {
           ForEach(inputDevices, id: \.id) { row in
             let device = row.value
             if row.isSelectable {
-              Label(device.displayName, systemImage: "waveform")
+              Label(device.displayName ?? "(invalid)", systemImage: "waveform")
                 .tag(
                   WorkspaceInspectorSelector(kind: .audioInputDevice, internalID: device.internalID)
                 )
             } else {
-              Label(device.displayName, systemImage: "waveform").disabled(true)
+              Label(device.displayName ?? "(invalid)", systemImage: "waveform").disabled(true)
             }
           }
 
@@ -101,42 +98,42 @@ public struct WorkspaceSidebar: View {
             if row.isSelectable {
               switch component.videoComponent {
               case .vfxSource(let source):
-                Label(source.displayName, systemImage: "play.rectangle")
+                Label(source.displayName ?? "(invalid)", systemImage: "play.rectangle")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .vfxVideoComponent, internalID: source.internalID))
               case .solidColorFill(let fill):
-                Label(fill.displayName, systemImage: "paintpalette")
+                Label(fill.displayName ?? "(invalid)", systemImage: "paintpalette")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .solidColorFillVideoComponent, internalID: fill.internalID))
               case .linearGradientFill(let fill):
-                Label(fill.displayName, systemImage: "paintpalette")
+                Label(fill.displayName ?? "(invalid)", systemImage: "paintpalette")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .linearGradientFillVideoComponent, internalID: fill.internalID))
               case .radialGradientFill(let fill):
-                Label(fill.displayName, systemImage: "paintpalette")
+                Label(fill.displayName ?? "(invalid)", systemImage: "paintpalette")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .radialGradientFillVideoComponent, internalID: fill.internalID))
               case .conicGradientFill(let fill):
-                Label(fill.displayName, systemImage: "paintpalette")
+                Label(fill.displayName ?? "(invalid)", systemImage: "paintpalette")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .conicGradientFillVideoComponent, internalID: fill.internalID))
               case .clock(let clock):
-                Label(clock.displayName, systemImage: "clock")
+                Label(clock.displayName ?? "(invalid)", systemImage: "clock")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .clockVideoComponent, internalID: clock.internalID))
               case .dynamicText(let text):
-                Label(text.displayName, systemImage: "text.badge.plus")
+                Label(text.displayName ?? "(invalid)", systemImage: "text.badge.plus")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .dynamicTextVideoComponent, internalID: text.internalID))
               case .testPattern(let testPattern):
-                Label(testPattern.displayName, systemImage: "testtube.2")
+                Label(testPattern.displayName ?? "(invalid)", systemImage: "testtube.2")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .testPatternVideoComponent, internalID: testPattern.internalID))
@@ -166,12 +163,12 @@ public struct WorkspaceSidebar: View {
             if row.isSelectable {
               switch vision.vision {
               case .ocrVision(let ocrVision):
-                Label(ocrVision.displayName, systemImage: "eye")
+                Label(ocrVision.displayName ?? "(invalid)", systemImage: "eye")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .ocrVision, internalID: ocrVision.internalID))
               case .ldtxSceneDetectorVision(let classifierVision):
-                Label(classifierVision.displayName, systemImage: "eye")
+                Label(classifierVision.displayName ?? "(invalid)", systemImage: "eye")
                   .tag(
                     WorkspaceInspectorSelector(
                       kind: .ldtxSceneDetectorVision,
@@ -273,7 +270,7 @@ public struct WorkspaceSidebar: View {
   #Preview("Workspace Sidebar") {
     @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
     WorkspaceSidebar(
-      stateService: stateService, deviceRegistry: DeviceRegistryService(),
+      stateService: stateService, deviceRegistry: PreviewDeviceRegistry(),
       appletData: WorkspaceAppletData()
     )
     .frame(width: 260, height: 640)

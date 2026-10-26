@@ -22,7 +22,7 @@ message VideoEffectWrapper {
 message CustomVideoEffect {
   // The JSON representation of this custom Video Effect. Its format is
   // unspecified.
-  string json = 1 [default = ""];
+  string json = 1;
 }
 
 // A Video Effect that removes the background from input video.
@@ -35,5 +35,5 @@ message BackgroundRemovalVfxEffect {
   }
 
   // The background-removal model to use.
-  Model model = 1 [default = UNSPECIFIED];
+  Model model = 1;
 }

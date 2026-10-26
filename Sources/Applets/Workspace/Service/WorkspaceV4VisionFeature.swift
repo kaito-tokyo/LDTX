@@ -3,7 +3,7 @@
 
 import CoreImage
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXRichText
 import LDTXVision
 import LDTXWorkspaceAppletModel
@@ -64,9 +64,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     let keys = Set(
       visions.compactMap { wrapper -> ModelKey? in
         guard case .ldtxSceneDetectorVision(let vision)? = wrapper.vision,
-          let url = context.modelURL(vision.modelInternalID)
+          let modelID = vision.modelInternalID, let url = context.modelURL(modelID)
         else { return nil }
-        return ModelKey(id: vision.modelInternalID, url: url)
+        return ModelKey(id: modelID, url: url)
       })
     let changed =
       stopped || self.visions != visions || self.context == nil || keys != modelKeys
@@ -82,20 +82,20 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       resultsByVisionInternalID = resultsByVisionInternalID.filter { validIDs.contains($0.key) }
       models = models.filter { keys.contains($0.key) }
       let triggers = visions.flatMap { wrapper -> [WorkspaceVisionSchedule.Trigger] in
-        let id: Int64
+        guard let id = wrapper.internalID else { return [] }
         let triggers: [Ldtx_Workspace_V4_VisionTriggerWrapper]
         switch wrapper.vision {
         case .ocrVision(let vision):
-          id = vision.internalID
           triggers = vision.triggers
         case .ldtxSceneDetectorVision(let vision):
-          id = vision.internalID
           triggers = vision.triggers
         case nil: return []
         }
         return triggers.compactMap {
           guard case .intervalTrigger(let interval)? = $0.trigger else { return nil }
-          return .init(visionID: id, periodMilliseconds: interval.intervalSeconds.double * 1000)
+          return .init(
+            visionID: id,
+            periodMilliseconds: (interval.intervalSeconds?.double ?? 0) * 1000)
         }
       }
       _ = scheduler.synchronize(
@@ -104,9 +104,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           guard let self, let context = self.context else { return false }
           if context.vision(id) != nil { return true }
           guard let vision = context.sceneDetector(id),
-            let url = context.modelURL(vision.modelInternalID)
+            let modelID = vision.modelInternalID, let url = context.modelURL(modelID)
           else { return false }
-          return models[ModelKey(id: vision.modelInternalID, url: url)] != nil
+          return models[ModelKey(id: modelID, url: url)] != nil
         },
         execute: { [weak self] id, generation in
           await self?.execute(id, generation: generation)
@@ -162,10 +162,11 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     guard let context, !context.isOutputActive(), !stopped else { return }
     for wrapper in visions {
       guard case .ldtxSceneDetectorVision(let vision)? = wrapper.vision,
-        let url = context.modelURL(vision.modelInternalID)
+        let visionID = vision.internalID,
+        let modelID = vision.modelInternalID, let url = context.modelURL(modelID)
       else { continue }
-      let key = ModelKey(id: vision.modelInternalID, url: url)
-      if let error = modelFailures[key] { context.reportFailure(vision.internalID, error) }
+      let key = ModelKey(id: modelID, url: url)
+      if let error = modelFailures[key] { context.reportFailure(visionID, error) }
       guard models[key] == nil, preparations[key] == nil, modelFailures[key] == nil else {
         continue
       }
@@ -183,9 +184,10 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           models[key] = service
           for wrapper in visions {
             guard case .ldtxSceneDetectorVision(let current)? = wrapper.vision,
+              let currentID = current.internalID,
               current.modelInternalID == key.id, self.context?.modelURL(key.id) == key.url
             else { continue }
-            self.context?.reportPreparationRecovered(current.internalID)
+            self.context?.reportPreparationRecovered(currentID)
           }
           self.context?.reportModelPrepared(key.id)
         } catch {
@@ -193,9 +195,10 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           modelFailures[key] = error
           for wrapper in visions {
             guard case .ldtxSceneDetectorVision(let current)? = wrapper.vision,
+              let currentID = current.internalID,
               current.modelInternalID == key.id, self.context?.modelURL(key.id) == key.url
             else { continue }
-            self.context?.reportFailure(current.internalID, error)
+            self.context?.reportFailure(currentID, error)
           }
         }
       }
@@ -234,12 +237,12 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     guard let context = explicitContext ?? context, !stopped else { return }
     let ocr = context.vision(id)
     let classifier = context.sceneDetector(id)
-    let url = classifier.flatMap { context.modelURL($0.modelInternalID) }
+    let url = classifier?.modelInternalID.flatMap { context.modelURL($0) }
     func isCurrent() -> Bool {
       !stopped && context.isCurrent() && (generation.map { scheduler.isCurrent($0) } ?? true)
         && (self.context?.videoComponents ?? context.videoComponents) == context.videoComponents
         && context.vision(id) == ocr && context.sceneDetector(id) == classifier
-        && (classifier.map { context.modelURL($0.modelInternalID) == url } ?? true)
+        && (classifier.map { $0.modelInternalID.flatMap { context.modelURL($0) } == url } ?? true)
     }
     do {
       let frame: WorkspaceVisionAnalysisFrame
@@ -251,8 +254,10 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         recordingPackageURL = context.recordingPackageURL()
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
         variables = [.text: output]
-      } else if let classifier, let url, let frameProvider = context.frameForSceneDetector {
-        guard let service = models[ModelKey(id: classifier.modelInternalID, url: url)] else {
+      } else if let classifier, let modelID = classifier.modelInternalID, let url,
+        let frameProvider = context.frameForSceneDetector
+      {
+        guard let service = models[ModelKey(id: modelID, url: url)] else {
           return
         }
         frame = try await frameProvider(classifier)
@@ -283,8 +288,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
   static func ocrConfiguration(for vision: Ldtx_Workspace_V4_OcrVision) -> VisionOCRConfiguration {
     VisionOCRConfiguration(
       recognitionLanguages: vision.recognitionLanguages,
-      usesLanguageCorrection: vision.usesLanguageCorrection,
+      usesLanguageCorrection: vision.usesLanguageCorrection ?? false,
       customWords: vision.customWords,
-      minimumTextHeight: vision.minimumTextHeight.float)
+      minimumTextHeight: vision.minimumTextHeight?.float
+        ?? 0)
   }
 }

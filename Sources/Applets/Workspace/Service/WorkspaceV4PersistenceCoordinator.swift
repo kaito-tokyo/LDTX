@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProgram
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
-import LDTXWorkspaceBundleFormat
 import Observation
 
 /// Projects the document's model into window-scoped runtimes.

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProtos
+import LDTXCorelibs
 import LDTXProtosMacOSExtra
 import SwiftUI
 
@@ -27,18 +27,26 @@ struct ClockInspector: View {
   private var formContent: some View {
     if let component {
       Section("Clock") {
-        TextField("Name", text: componentBinding(\.displayName, initial: component.displayName))
-          .disabled(isRecording)
+        TextField(
+          "Name",
+          text: componentBinding(\.displayName, initial: component.displayName).defaulting(to: "")
+        )
+        .disabled(isRecording)
         numericField(
           "Font Size", value: rationalBinding(\.fontSize, initial: component.fontSize))
-        Toggle("Show Date", isOn: componentBinding(\.showsDate, initial: component.showsDate))
         Toggle(
-          "Show Seconds", isOn: componentBinding(\.showsSeconds, initial: component.showsSeconds))
+          "Show Date",
+          isOn: componentBinding(\.showsDate, initial: component.showsDate).defaulting(to: false))
+        Toggle(
+          "Show Seconds",
+          isOn: componentBinding(\.showsSeconds, initial: component.showsSeconds).defaulting(
+            to: false))
         Toggle(
           "24-Hour Time",
-          isOn: componentBinding(\.uses24HourTime, initial: component.uses24HourTime))
+          isOn: componentBinding(\.uses24HourTime, initial: component.uses24HourTime).defaulting(
+            to: false))
         Toggle("Use Fixed UTC Offset", isOn: hasUtcOffsetBinding)
-        if component.hasUtcOffsetMinutes {
+        if component.utcOffsetMinutes != nil {
           LabeledContent("UTC Offset (minutes)") {
             TextField("Minutes", value: utcOffsetBinding, format: .number)
               .multilineTextAlignment(.trailing)
@@ -59,7 +67,8 @@ struct ClockInspector: View {
             ClockOutlineWidthField(
               value: outlineBinding(
                 at: index, \.thickness, initial: component.outlines[index].thickness,
-                undoManager: undoManager))
+                undoManager: undoManager
+              ).defaulting(to: .init()))
             HStack {
               Spacer()
               Button("Remove Outline", role: .destructive) {
@@ -109,7 +118,7 @@ struct ClockInspector: View {
     let binding = outlineBinding(
       at: index, \.extendedSrgbColor, initial: .init(), undoManager: undoManager)
     return Binding(
-      get: { binding.wrappedValue.extendedSRGBSwiftUIColor ?? .clear },
+      get: { binding.wrappedValue?.extendedSRGBSwiftUIColor ?? .clear },
       set: { next in
         guard let color = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         binding.wrappedValue = color
@@ -173,19 +182,19 @@ struct ClockInspector: View {
   }
 
   private func rationalBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Rational32>,
-    initial: Ldtx_Workspace_V4_Rational32
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Rational32?>,
+    initial: Ldtx_Workspace_V4_Rational32?
   ) -> Binding<Ldtx_Workspace_V4_Rational32> {
-    componentBinding(keyPath, initial: initial)
+    componentBinding(keyPath, initial: initial).defaulting(to: .with { $0.set(num: 48, den: 1) })
   }
 
   private func colorBinding(
     _ colorKeyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Color
+      Ldtx_Workspace_V4_ClockComponent, Ldtx_Workspace_V4_Color?
     >
   ) -> Binding<Color> {
     Binding(
-      get: { component?[keyPath: colorKeyPath].extendedSRGBSwiftUIColor ?? .clear },
+      get: { component?[keyPath: colorKeyPath]?.extendedSRGBSwiftUIColor ?? .clear },
       set: { next in
         guard let color = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateVideoComponent { wrapper in
@@ -199,11 +208,11 @@ struct ClockInspector: View {
 
   private var hasUtcOffsetBinding: Binding<Bool> {
     Binding(
-      get: { component?.hasUtcOffsetMinutes ?? false },
+      get: { component?.utcOffsetMinutes != nil },
       set: { enabled in
         updateVideoComponent { wrapper in
           guard case .clock(var value) = wrapper.videoComponent else { return }
-          if enabled { value.utcOffsetMinutes = 0 } else { value.clearUtcOffsetMinutes() }
+          if enabled { value.utcOffsetMinutes = 0 } else { value.utcOffsetMinutes = nil }
           wrapper.videoComponent = .clock(value)
         }
       }

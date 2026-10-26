@@ -3,15 +3,14 @@
 
 import AppKit
 import CoreImage
+import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtos
 import LDTXRichText
 import LDTXVision
 @testable import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import SwiftUI
 import Testing
 
@@ -29,7 +28,12 @@ extension AppUIComponentTestSuite {
       let id = try document.controller.windowRuntime.addOcrVision(
         displayName: "OCR", videoComponentInternalID: component)
       document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.visions[0].ocrVision.triggers = []
+        guard case .ocrVision(var vision) = workspace.definition.visions[0].vision else {
+          Issue.record("Missing OCR")
+          return
+        }
+        vision.triggers = []
+        workspace.definition.visions[0].vision = .ocrVision(vision)
       }
       try await saveWorkspaceDocument(document, to: root)
       let saved = try WorkspaceBundleReaderV4(at: root).read()
@@ -63,7 +67,14 @@ extension AppUIComponentTestSuite {
       #expect(try runtime.readVariable(key) == "")
       runtime.visionFeatureContext.reportVariables(id, [.text: "second"])
       state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.visions[0].ocrVision.regionOfInterest.width.set(num: 1, den: 0)
+        guard case .ocrVision(var vision) = workspace.definition.visions[0].vision else {
+          Issue.record("Missing OCR")
+          return
+        }
+        var roi = vision.regionOfInterest ?? .init()
+        roi.width = .with { $0.set(num: 1, den: 0) }
+        vision.regionOfInterest = roi
+        workspace.definition.visions[0].vision = .ocrVision(vision)
       }
       await #expect(throws: (any Error).self) {
         try await saveWorkspaceDocument(document, to: root)
@@ -113,7 +124,10 @@ extension AppUIComponentTestSuite {
       try persistence.adoptRuntimeWorkspace(saved)
       let runtime = WorkspaceWindowRuntime(
         persistence: persistence, captureSessionCoordinator: WorkspaceCaptureSessionCoordinator())
-      let vision = saved.definition.visions[0].ldtxSceneDetectorVision
+      guard case .ldtxSceneDetectorVision(let vision) = saved.definition.visions[0].vision else {
+        Issue.record("Missing classifier")
+        return
+      }
       let key = LDTXVariableKey(visionID: 5, item: .label)
       let oldContext = runtime.visionFeatureContext
       let dispatcher = ToolbarDispatcher()
@@ -418,7 +432,7 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument()
       document.stateService.editWorkspace(undoManager: nil) { workspace in
         workspace.preferences.landscapeProgramPreferences[7] = .with {
-          $0.audioMasterVolumeDecibels.set(num: -50, den: 10)
+          $0.audioMasterVolumeDecibels = .with { $0.set(num: -50, den: 10) }
         }
       }
       #expect(
@@ -440,17 +454,24 @@ extension AppUIComponentTestSuite {
       document.stateService.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.visions = [
           .with {
-            $0.ocrVision = .with {
-              $0.internalID = 9
-              $0.displayName = "OCR"
-              $0.videoComponentInternalID = 7
-            }
+            $0.vision = .ocrVision(
+              .with {
+                $0.internalID = 9
+                $0.displayName = "OCR"
+                $0.videoComponentInternalID = 7
+              })
           }
         ]
       }
       document.stateService.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.visions[0].ocrVision.regionOfInterest.x
-          .set(num: 2, den: 1)
+        guard case .ocrVision(var vision) = workspace.definition.visions[0].vision else {
+          Issue.record("Missing OCR")
+          return
+        }
+        var roi = vision.regionOfInterest ?? .init()
+        roi.x = .with { $0.set(num: 2, den: 1) }
+        vision.regionOfInterest = roi
+        workspace.definition.visions[0].vision = .ocrVision(vision)
       }
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
@@ -458,8 +479,13 @@ extension AppUIComponentTestSuite {
       expectWorkspaceContent(document.workspace, equals: snapshot)
       await #expect(throws: (any Error).self) { try await saveWorkspaceDocument(document, to: url) }
       expectWorkspaceContent(document.persistenceCoordinator.runtimeWorkspace, equals: persisted)
-      #expect(
-        document.stateService.workspaceDefinition.visions[0].ocrVision.regionOfInterest.x.num == 2)
+      guard
+        case .ocrVision(let vision) = document.stateService.workspaceDefinition.visions[0].vision
+      else {
+        Issue.record("Missing OCR")
+        return
+      }
+      #expect(vision.regionOfInterest?.x?.num == 2)
     }
 
     @Test("LUB-1047: A reload explicitly overwrites the editing documents")
@@ -610,17 +636,24 @@ extension AppUIComponentTestSuite {
       configureCamera(in: document)
       configureClassifier(in: document)
       let state = document.stateService
+      func modelID(in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) -> Int64? {
+        guard case .ldtxSceneDetectorVision(let vision) = definition.visions[0].vision else {
+          Issue.record("Missing classifier")
+          return nil
+        }
+        return vision.modelInternalID
+      }
       state.setVisionModelURL(first, for: 5, undoManager: nil)
-      let firstID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
+      let firstID = try #require(modelID(in: state.workspaceDefinition))
       #expect(firstID > 0)
       state.setVisionModelURL(first, for: 5, undoManager: nil)
       #expect(
-        state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
+        modelID(in: state.workspaceDefinition) == firstID)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(snapshot.definition.visions[0].ldtxSceneDetectorVision.modelInternalID == firstID)
+      #expect(modelID(in: snapshot.definition) == firstID)
       state.setVisionModelURL(second, for: 5, undoManager: nil)
-      let secondID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
+      let secondID = try #require(modelID(in: state.workspaceDefinition))
       #expect(secondID != firstID)
       let progress = ProgressManager(totalCount: 1)
       try await WorkspaceDocument.Writer().write(
@@ -630,7 +663,7 @@ extension AppUIComponentTestSuite {
       document.controller.adoptDocumentURL(url)
       await document.refreshTestPersistedWorkspace()
       #expect(
-        state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == secondID)
+        modelID(in: state.workspaceDefinition) == secondID)
       #expect(state.visionModels[secondID] == second)
       let firstURL = url.appendingPathComponent("VisionModels/\(firstID)/First.mlmodel")
       #expect(try Data(contentsOf: firstURL) == Data([1]))
@@ -654,13 +687,13 @@ extension AppUIComponentTestSuite {
       #expect(try Data(contentsOf: firstURL) == Data([1]))
       #expect(try Data(contentsOf: secondURL) == Data([2]))
       state.setVisionModelURL(nil, for: 5, undoManager: nil)
-      #expect(state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID == 0)
+      #expect(modelID(in: state.workspaceDefinition) == nil)
       try await saveWorkspaceDocument(document, to: url)
       #expect(try Data(contentsOf: firstURL) == Data([1]))
       #expect(try Data(contentsOf: secondURL) == Data([2]))
       let missing = root.appendingPathComponent("Missing.mlmodel")
       state.setVisionModelURL(missing, for: 5, undoManager: nil)
-      let missingID = state.workspaceDefinition.visions[0].ldtxSceneDetectorVision.modelInternalID
+      let missingID = try #require(modelID(in: state.workspaceDefinition))
       let saved = document.persistenceCoordinator.runtimeWorkspace
       do {
         try await saveWorkspaceDocument(document, to: url)
@@ -842,7 +875,7 @@ extension AppUIComponentTestSuite {
         camera.deviceWidth = 1920
         camera.deviceHeight = 1080
         var component = Ldtx_Workspace_V4_VideoComponentWrapper()
-        component.vfxSource = camera
+        component.videoComponent = .vfxSource(camera)
         workspace.definition.videoComponents = [component]
       }
     }
@@ -854,7 +887,7 @@ extension AppUIComponentTestSuite {
         classifier.displayName = "Classifier"
         classifier.videoComponentInternalID = 7
         var vision = Ldtx_Workspace_V4_VisionWrapper()
-        vision.ldtxSceneDetectorVision = classifier
+        vision.vision = .ldtxSceneDetectorVision(classifier)
         workspace.definition.visions = [vision]
       }
     }

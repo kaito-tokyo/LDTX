@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
-import LDTXProtos
-import LDTXTaskQueue
+import LDTXCorelibs
 import LDTXWorkspaceAppletModel
-import LDTXYouTubeRTMPS
 import SwiftUI
 
 struct OcrVisionInspector: View {
@@ -22,16 +19,16 @@ struct OcrVisionInspector: View {
         Button("Run", systemImage: "text.viewfinder", action: run)
           .disabled(stateService.isClosed || !canRun())
           .accessibilityIdentifier("workspace.runOCR")
-        if let failure = stateService.visionFailureMessages[vision.internalID] {
+        if let id = vision.internalID, let failure = stateService.visionFailureMessages[id] {
           Text(failure).foregroundStyle(.red)
-        } else if let result = stateService.visionResults[vision.internalID] {
+        } else if let id = vision.internalID, let result = stateService.visionResults[id] {
           Text(result.isEmpty ? "No text recognized." : result).textSelection(.enabled)
         } else {
           Text("Waiting for recognition.").foregroundStyle(.secondary)
         }
       }
       Section("OCR Vision") {
-        TextField("Name", text: $vision.displayName)
+        TextField("Name", text: $vision.displayName.defaulting(to: ""))
         VisionInputVideoComponentDropdown(
           videoComponents: stateService.workspaceDefinition.videoComponents,
           selection: $vision.videoComponentInternalIDIfPresent)
@@ -42,7 +39,7 @@ struct OcrVisionInspector: View {
         LabeledContent("Recognition", value: "Accurate")
         Toggle(
           "Language Correction",
-          isOn: $vision.usesLanguageCorrection
+          isOn: $vision.usesLanguageCorrection.defaulting(to: false)
         )
         TextField(
           "Languages (comma separated)",
@@ -56,7 +53,8 @@ struct OcrVisionInspector: View {
             set: { vision.customWords = Self.commaSeparatedValues($0) }))
         LabeledContent("Minimum Text Height") {
           TextField(
-            "Fraction", value: $vision.minimumTextHeight, format: RationalFormatStyle()
+            "Fraction", value: $vision.minimumTextHeight.defaulting(to: .init()),
+            format: RationalFormatStyle()
           )
           .multilineTextAlignment(.trailing)
           .frame(width: 90)
@@ -67,7 +65,7 @@ struct OcrVisionInspector: View {
         RegionOfInterestEditor(
           inputSize: stateService.workspaceDefinition.videoComponents.first {
             $0.internalID == vision.videoComponentInternalID
-          }?.renderingSize ?? (1920, 1080), roi: $vision.regionOfInterest)
+          }?.renderingSize ?? (1920, 1080), roi: $vision.regionOfInterest.defaulting(to: .init()))
       }
       .disabled(stateService.isOutputActive)
     }

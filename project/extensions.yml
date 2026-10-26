@@ -12,7 +12,8 @@ targets:
       - target: LDTXRecording
         embed: true
         codeSign: true
-      - target: LDTXRecordBundleFormat
+      - package: Corelibs
+        product: LDTXCorelibs
         embed: true
         codeSign: true
     info:
@@ -50,7 +51,8 @@ targets:
       - target: LDTXRecording
         embed: true
         codeSign: true
-      - target: LDTXRecordBundleFormat
+      - package: Corelibs
+        product: LDTXCorelibs
         embed: true
         codeSign: true
     info:

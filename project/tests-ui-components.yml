@@ -12,6 +12,7 @@ targets:
           - AppDelegate.swift
           - WorkspaceNotifications.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXVariableMacro
       - target: LDTXRichText
       - target: LDTXVisionProgrammerApplet
@@ -21,16 +22,12 @@ targets:
       - target: LDTXWorkspaceAppletController
       - target: LDTXRecordPlayerApplet
       - target: LDTXRecording
-      - target: LDTXRecordBundleFormat
-      - target: LDTXWorkspaceBundleFormat
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXWorkspaceAppletUI
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - target: LDTXProgram
-      - target: LDTXProtos
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppUIComponentTests

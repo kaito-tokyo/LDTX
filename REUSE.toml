@@ -11,6 +11,7 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 [[annotations]]
 path = [
   ".github/workflows/actions.lock",
+  ".devcontainer/devcontainer.json",
   ".swift-format",
   ".swift-version",
   ".vscode/launch.json",

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
-import LDTXProtos
+import LDTXCorelibs
 import LDTXWorkspaceAppletUI
-import LDTXWorkspaceBundleFormat
 import Observation
 
 @MainActor @Observable
@@ -15,7 +14,10 @@ final class InferenceDocumentContext: WorkspaceDocumentContext {
   func adopt(_ store: WorkspaceDocument) {
     var definition = store.workspaceDefinition
     for index in definition.visions.indices {
-      definition.visions[index].ldtxSceneDetectorVision.modelInternalID = 5
+      if case .ldtxSceneDetectorVision(var vision) = definition.visions[index].vision {
+        vision.modelInternalID = 5
+        definition.visions[index].vision = .ldtxSceneDetectorVision(vision)
+      }
     }
     store.editWorkspace(undoManager: nil) { workspace in
       workspace.definition = definition

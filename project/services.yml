@@ -28,12 +28,10 @@ targets:
       - target: LDTXYouTubeOutputProtocol
         embed: true
         codeSign: true
-      - target: LDTXProtos
+      - package: Corelibs
+        product: LDTXCorelibs
         embed: true
         codeSign: true
-      - package: SwiftProtobuf
-        product: SwiftProtobuf
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
@@ -46,6 +44,8 @@ targets:
     sources:
       - Sources/LDTXHelper
     dependencies:
+      - package: swift-argument-parser
+        product: ArgumentParser
       - target: LDTXUtils
         embed: false
       - target: LDTXAppHelper

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 
 struct FLVPacket: Equatable, Sendable {
   var typeID: UInt8
