@@ -899,8 +899,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   public var isClosing: Bool { closeRequestTask != nil }
 
   public var canCutRecording: Bool {
-    !isClosing && !stateService.isClosed && !transactionalCommands.isStalled
-      && recordingSession.canCutRecording
+    !isClosing && !stateService.isClosed && recordingSession.canCutRecording
       && !transactionalCommands.contains(.cutRecording)
       && !transactionalCommands.contains(.stopOutputSession)
   }

@@ -10,6 +10,29 @@ import Testing
 extension AppUIComponentTestSuite {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
+    @Test(.timeLimit(.minutes(1)))
+    func explicitCutRetryRecoversStalledCommandQueue() async {
+      let coordinator = WorkspaceAppletCoordinator(document: WorkspaceDocument())
+      let initial = await coordinator.transactionalCommands.submit(.cutRecording) {
+        throw NSError(domain: "cut-fixture", code: 1)
+      }
+      guard case .failed = initial else {
+        Issue.record("The first Cut should stall after an operation failure")
+        return
+      }
+      #expect(coordinator.transactionalCommands.isStalled)
+
+      var retried = false
+      let retry = await coordinator.cutRecording(using: { retried = true })
+      guard case .succeeded = retry else {
+        Issue.record("An explicit Cut retry should reopen the stalled command queue")
+        return
+      }
+      #expect(retried)
+      #expect(!coordinator.transactionalCommands.isStalled)
+      await coordinator.shutdown()
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func stopOrCloseSupersedesCutWaitingBehindAnotherCommand(closing: Bool) async {
       let document = WorkspaceDocument()

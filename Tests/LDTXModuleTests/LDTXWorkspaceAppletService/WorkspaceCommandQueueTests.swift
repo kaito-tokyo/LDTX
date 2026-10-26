@@ -257,7 +257,7 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
     let queue = WorkspaceCommandQueue(label: "test.command-failure") { notification, error in
       notifications.append(contentsOf: notification)
       reportCount += 1
-      #expect(reconciled.count == 6)
+      #expect(reconciled.count == 7)
       #expect(error.code == 42)
     }
     let running = Task {
@@ -276,8 +276,8 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
     }
     await entered.wait()
     let commands: [WorkspaceTransactionalCommand] = [
-      .updateDeviceAssignment, .switchProgram, .startOutputSession, .closeWorkspace,
-      .stopOutputSession,
+      .updateDeviceAssignment, .switchProgram, .startOutputSession, .cutRecording,
+      .closeWorkspace, .stopOutputSession,
     ]
     var pending: [Task<WorkspaceCommandQueue.Outcome, Never>] = []
     for command in commands {
@@ -288,8 +288,8 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
           }
         })
     }
-    for _ in 0..<1_000 where queue.pendingCommandCount != 6 { await Task.yield() }
-    try #require(queue.pendingCommandCount == 6)
+    for _ in 0..<1_000 where queue.pendingCommandCount != 7 { await Task.yield() }
+    try #require(queue.pendingCommandCount == 7)
     fail.signal()
     await cleanupEntered.wait()
     #expect(queue.isRecovering)
@@ -311,8 +311,8 @@ struct WorkspaceCommandQueueIntegrationTestSuite {
       #expect(error.code == 42)
     }
     #expect(Set(reconciled) == Set(WorkspaceTransactionalCommand.allCases))
-    #expect(reconciled.count == 6)
-    #expect(notifications.count == 6)
+    #expect(reconciled.count == 7)
+    #expect(notifications.count == 7)
     #expect(queue.retryNumber == 1)
     #expect(reportCount == 1)
     #expect(notifications.contains { $0.dialog == .stopFailed })

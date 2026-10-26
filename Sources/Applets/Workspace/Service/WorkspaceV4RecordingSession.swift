@@ -243,7 +243,9 @@ public final class WorkspaceV4RecordingSession {
         }
         let recordService = try makeService()
         try recordService.start()
-        prepareRecordingMedia(recordService, makeReplacement: makeService)
+        prepareRecordingMedia(
+          recordService, inputAudioTrackIDs: Set(tracks.map(\.trackID)),
+          makeReplacement: makeService)
         adoptStartedRecordingService(recordService)
         service = recordService
       } else {
@@ -312,6 +314,7 @@ public final class WorkspaceV4RecordingSession {
 
   func prepareRecordingMedia(
     _ service: any SessionRecordServicing,
+    inputAudioTrackIDs: Set<String> = [],
     makeReplacement: @escaping () throws -> SessionRecordService
   ) {
     makeReplacementRecording = makeReplacement
@@ -319,7 +322,7 @@ public final class WorkspaceV4RecordingSession {
     recordMediaCore = core
     recordingAudioReady = false
     isCutRecoveryPending = false
-    core.install(service)
+    core.install(service, inputAudioTrackIDs: inputAudioTrackIDs)
     core.setCallbacks(
       commitRequest: { [weak self] id in self?.completeCutBoundary(id) },
       eventHandler: { _ in },
@@ -435,6 +438,7 @@ public final class WorkspaceV4RecordingSession {
           visionArchiveQueue.async { continuation.resume() }
         }
         await core.waitForPendingOperations()
+        guard await core.waitForAudioFences(for: previous) else { return }
         await withCheckedContinuation { continuation in
           let deferred = core.deferFinalizationUntilInputAudioCallbacksDrain(for: previous) {
             continuation.resume()
@@ -480,14 +484,16 @@ public final class WorkspaceV4RecordingSession {
   ) async -> SessionRecordFinalizationResult {
     await withCheckedContinuation { continuation in
       let race = RecordFinalizationRace(continuation: continuation)
+      var finalizationTask: Task<Void, Never>?
       let timeout = Task { @MainActor [cutFinalizationTimeout] in
         do { try await Task.sleep(for: cutFinalizationTimeout) } catch { return }
         guard !Task.isCancelled else { return }
         race.finish(.failed(ProgramOutputMediaChannelError.drainTimedOut))
+        finalizationTask?.cancel()
         service.abandonAfterMediaDrainTimeout()
       }
       race.installTimeoutTask(timeout)
-      Task { @MainActor in
+      finalizationTask = Task { @MainActor in
         await beforeFinalization?()
         guard !race.isFinished else { return }
         if cancelling {

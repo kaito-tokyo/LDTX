@@ -113,6 +113,24 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     var didRequestCommit = false
   }
 
+  private struct CommittedAudioBoundary: @unchecked Sendable {
+    let previous: any SessionRecordServicing
+    let replacement: any SessionRecordServicing
+    let landscapeStart: CMTime?
+    let portraitStart: CMTime?
+    let inputStart: CMTime
+    let inputTrackIDs: Set<String>
+    var didReachLandscapeFence: Bool
+    var didReachPortraitFence: Bool
+    var didReachInputFences: Set<String> = []
+    var waiters: [AudioFenceWaiter] = []
+
+    var hasReachedAllFences: Bool {
+      didReachLandscapeFence && didReachPortraitFence
+        && inputTrackIDs.isSubset(of: didReachInputFences)
+    }
+  }
+
   struct CommitResult {
     let previous: any SessionRecordServicing
     let current: any SessionRecordServicing
@@ -131,6 +149,8 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private var audioFormatReadinessChanged: @MainActor @Sendable () -> Void = {}
   private var activeService: (any SessionRecordServicing)?
   private var boundary: Boundary?
+  private var committedAudioBoundary: CommittedAudioBoundary?
+  private var inputAudioTrackIDs: Set<String> = []
   private var replacementPreparation: ReplacementPreparation?
   private let preparationLock = NSLock()
   private var admittedPreparation: ReplacementPreparation?
@@ -213,7 +233,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func install(_ service: any SessionRecordServicing) {
+  func install(_ service: any SessionRecordServicing, inputAudioTrackIDs: Set<String> = []) {
     submissionLock.withLock {
       submissionState = SubmissionState(
         isOpen: true, generation: submissionState.generation &+ 1)
@@ -229,6 +249,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       deliveredAudioEnd = .invalid
       earliestCutTime = .invalid
       boundary = nil
+      releaseAudioFenceWaiters(returning: false)
+      committedAudioBoundary = nil
+      self.inputAudioTrackIDs = inputAudioTrackIDs
       isCutPending = false
       pendingCutAudio = []
       pendingCutAudioByteCount = 0
@@ -247,6 +270,8 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       activeService = service
       inputCallbackLock.withLock { inputCallbackService = service }
       boundary = nil
+      releaseAudioFenceWaiters(returning: false)
+      committedAudioBoundary = nil
       isCutPending = false
       latestMainAudioFormatDescription = nil
       latestPortraitAudioFormatDescription = nil
@@ -274,6 +299,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     let resetState: @Sendable () -> Void = { [self] in
       activeService = nil
       boundary = nil
+      releaseAudioFenceWaiters(returning: false)
+      committedAudioBoundary = nil
+      inputAudioTrackIDs = []
       isCutPending = false
       pendingCutAudio = []
       pendingCutAudioByteCount = 0
@@ -391,6 +419,48 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       inputDrainHandlers[id] = handler
       return true
     }
+  }
+
+  func waitForAudioFences(for service: any SessionRecordServicing) async -> Bool {
+    let waiter = AudioFenceWaiter()
+    return await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        waiter.install(continuation)
+        queue.async { [self] in
+          guard !waiter.isFinished else { return }
+          guard var audioBoundary = committedAudioBoundary,
+            audioBoundary.previous === service
+          else {
+            waiter.finish(returning: true)
+            return
+          }
+          if audioBoundary.hasReachedAllFences {
+            committedAudioBoundary = nil
+            waiter.finish(returning: true)
+            return
+          }
+          audioBoundary.waiters.append(waiter)
+          committedAudioBoundary = audioBoundary
+        }
+      }
+    } onCancel: { [weak self] in
+      waiter.finish(returning: false)
+      self?.queue.async { [weak self] in
+        self?.removeAudioFenceWaiter(waiter, for: service)
+      }
+    }
+  }
+
+  private func removeAudioFenceWaiter(
+    _ waiter: AudioFenceWaiter, for service: any SessionRecordServicing
+  ) {
+    guard var audioBoundary = committedAudioBoundary,
+      audioBoundary.previous === service
+    else { return }
+    audioBoundary.waiters.removeAll { $0 === waiter }
+    // A cancelled finalization wait abandons the old package. Future media must
+    // not continue routing into that writer.
+    committedAudioBoundary = audioBoundary.waiters.isEmpty ? nil : audioBoundary
   }
 
   func receiveVideoSynchronously(_ sampleBuffer: CMSampleBuffer, operationID: UUID) -> UUID? {
@@ -562,6 +632,15 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     _ boundary: Boundary, replacement: any SessionRecordServicing,
     didCommit: (CommitResult) -> Void
   ) {
+    committedAudioBoundary = CommittedAudioBoundary(
+      previous: boundary.previous,
+      replacement: replacement,
+      landscapeStart: boundary.landscapeFirstVideo?.presentationTimeStamp,
+      portraitStart: boundary.portraitFirstVideo?.presentationTimeStamp,
+      inputStart: boundary.firstPresentationTime,
+      inputTrackIDs: inputAudioTrackIDs,
+      didReachLandscapeFence: !boundary.previous.recordsLandscapeOutput,
+      didReachPortraitFence: !boundary.previous.recordsPortraitOutput)
     activeService = replacement
     inputCallbackLock.withLock {
       inputCallbackService = replacement
@@ -579,6 +658,12 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         ) { service, sample in
           service.appendMainAudioMix(sample)
         }
+        if var audioBoundary = committedAudioBoundary {
+          audioBoundary.didReachLandscapeFence =
+            audioBoundary.didReachLandscapeFence
+            || Self.hasReachedFence(buffer, at: audioBoundary.landscapeStart)
+          committedAudioBoundary = audioBoundary
+        }
       case .portraitAudio(let buffer):
         deliverAudio(
           buffer, at: boundary.portraitFirstVideo?.presentationTimeStamp,
@@ -586,12 +671,24 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         ) { service, sample in
           service.appendPortraitAudioMix(sample)
         }
+        if var audioBoundary = committedAudioBoundary {
+          audioBoundary.didReachPortraitFence =
+            audioBoundary.didReachPortraitFence
+            || Self.hasReachedFence(buffer, at: audioBoundary.portraitStart)
+          committedAudioBoundary = audioBoundary
+        }
       case .inputAudio(let buffer, let trackID):
         deliverAudio(
           buffer, at: boundary.firstPresentationTime,
           previous: boundary.previous, replacement: replacement
         ) { service, sample in
           service.appendInputAudio(sample, trackID: trackID)
+        }
+        if var audioBoundary = committedAudioBoundary,
+          Self.hasReachedFence(buffer, at: audioBoundary.inputStart)
+        {
+          audioBoundary.didReachInputFences.insert(trackID)
+          committedAudioBoundary = audioBoundary
         }
       case .video(let buffer) where buffer === boundary.landscapeFirstVideo:
         continue
@@ -604,6 +701,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
             ? boundary.previous : replacement)
       }
     }
+    completeAudioFenceWaitersIfReady()
   }
 
   /// PCM buffers can straddle a video boundary. Split by audio sample index so
@@ -816,6 +914,22 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         Task { @MainActor [audioFormatReadinessChanged] in audioFormatReadinessChanged() }
       }
     }
+    if var audioBoundary = committedAudioBoundary,
+      audioBoundary.replacement === activeService
+    {
+      deliverAudio(
+        sampleBuffer, at: audioBoundary.landscapeStart,
+        previous: audioBoundary.previous, replacement: audioBoundary.replacement
+      ) { service, sample in
+        service.appendMainAudioMix(sample)
+      }
+      audioBoundary.didReachLandscapeFence =
+        audioBoundary.didReachLandscapeFence
+        || Self.hasReachedFence(sampleBuffer, at: audioBoundary.landscapeStart)
+      committedAudioBoundary = audioBoundary
+      completeAudioFenceWaitersIfReady()
+      return
+    }
     if boundary != nil {
       appendToBoundary(.mainAudio(sampleBuffer))
     } else if isCutPending {
@@ -838,6 +952,22 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         Task { @MainActor [audioFormatReadinessChanged] in audioFormatReadinessChanged() }
       }
     }
+    if var audioBoundary = committedAudioBoundary,
+      audioBoundary.replacement === activeService
+    {
+      deliverAudio(
+        sampleBuffer, at: audioBoundary.portraitStart,
+        previous: audioBoundary.previous, replacement: audioBoundary.replacement
+      ) { service, sample in
+        service.appendPortraitAudioMix(sample)
+      }
+      audioBoundary.didReachPortraitFence =
+        audioBoundary.didReachPortraitFence
+        || Self.hasReachedFence(sampleBuffer, at: audioBoundary.portraitStart)
+      committedAudioBoundary = audioBoundary
+      completeAudioFenceWaitersIfReady()
+      return
+    }
     if boundary != nil {
       appendToBoundary(.portraitAudio(sampleBuffer))
     } else if isCutPending {
@@ -853,6 +983,22 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     trackID: String,
     callback: InputAudioCallback? = nil
   ) {
+    if var audioBoundary = committedAudioBoundary,
+      audioBoundary.replacement === activeService
+    {
+      deliverAudio(
+        sampleBuffer, at: audioBoundary.inputStart,
+        previous: audioBoundary.previous, replacement: audioBoundary.replacement
+      ) { service, sample in
+        service.appendInputAudio(sample, trackID: trackID)
+      }
+      if Self.hasReachedFence(sampleBuffer, at: audioBoundary.inputStart) {
+        audioBoundary.didReachInputFences.insert(trackID)
+      }
+      committedAudioBoundary = audioBoundary
+      completeAudioFenceWaitersIfReady()
+      return
+    }
     if let callback {
       let callbackServiceID = ObjectIdentifier(callback.service)
       if let fence = inputCallbackLock.withLock({ inputCutFences[callbackServiceID] }),
@@ -1047,6 +1193,26 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     if let handler { Task { @MainActor in handler() } }
   }
 
+  private func completeAudioFenceWaitersIfReady() {
+    guard let audioBoundary = committedAudioBoundary, audioBoundary.hasReachedAllFences,
+      !audioBoundary.waiters.isEmpty
+    else { return }
+    committedAudioBoundary = nil
+    for waiter in audioBoundary.waiters { waiter.finish(returning: true) }
+  }
+
+  private func releaseAudioFenceWaiters(returning result: Bool) {
+    guard let audioBoundary = committedAudioBoundary else { return }
+    for waiter in audioBoundary.waiters { waiter.finish(returning: result) }
+  }
+
+  private static func hasReachedFence(_ sampleBuffer: CMSampleBuffer, at boundary: CMTime?) -> Bool
+  {
+    guard let boundary, boundary.isNumeric else { return true }
+    guard sampleBuffer.presentationTimeStamp.isNumeric else { return false }
+    return CMTimeCompare(sampleBuffer.presentationTimeStamp, boundary) >= 0
+  }
+
   private func rollbackBoundary() {
     if let preparation = replacementPreparation {
       replacementPreparation = nil
@@ -1145,6 +1311,35 @@ private final class RecordMediaDrainRace: @unchecked Sendable {
 
   func finish(_ result: Result<Void, ProgramOutputMediaChannelError>) {
     let continuation = lock.withLock {
+      let continuation = self.continuation
+      self.continuation = nil
+      return continuation
+    }
+    continuation?.resume(returning: result)
+  }
+}
+
+private final class AudioFenceWaiter: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<Bool, Never>?
+  private var result: Bool?
+
+  var isFinished: Bool { lock.withLock { result != nil } }
+
+  func install(_ continuation: CheckedContinuation<Bool, Never>) {
+    let result = lock.withLock { () -> Bool? in
+      if let result { return result }
+      self.continuation = continuation
+      return nil
+    }
+    if let result { continuation.resume(returning: result) }
+  }
+
+  func finish(returning result: Bool) {
+    let continuation = lock.withLock {
+      () -> CheckedContinuation<Bool, Never>? in
+      guard self.result == nil else { return nil }
+      self.result = result
       let continuation = self.continuation
       self.continuation = nil
       return continuation

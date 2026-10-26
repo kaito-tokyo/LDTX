@@ -642,7 +642,7 @@ extension OutputTestSuite {
         commitRequest: { boundary = $0 }, eventHandler: { _ in },
         failureHandler: { Issue.record("Unexpected delivery error: \($0)") },
         cutStateChanged: { _ in })
-      core.install(previous)
+      core.install(previous, inputAudioTrackIDs: ["input"])
       let operationID = UUID()
       core.enqueueMainAudio(try audioSample())
       core.enqueuePortraitAudio(try audioSample())
@@ -677,24 +677,56 @@ extension OutputTestSuite {
         try retime(audioSample(), frame: 2, timescale: 10), trackID: "input",
         callback: oldCallback)
       core.enqueueInputAudio(
-        try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
-        callback: newCallback)
-      core.enqueueInputAudio(
         try retime(audioSample(), frame: 5, timescale: 20),
         trackID: "input", callback: crossingCallback)
-      core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
-      core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
       await core.waitForPendingOperations()
-      let old = previous.events.withLock { $0 }
-      let new = replacement.events.withLock { $0 }
-      #expect(old.contains("input:2"))
-      #expect(old.contains("landscapeAudio:2"))
-      #expect(old.contains("portraitAudio:2"))
       if failCommit {
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
+          callback: newCallback)
+        core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        await core.waitForPendingOperations()
+        let old = previous.events.withLock { $0 }
+        #expect(old.contains("input:2"))
+        #expect(old.contains("landscapeAudio:2"))
+        #expect(old.contains("portraitAudio:2"))
         #expect(old.contains("input:4"))
         #expect(old.contains("landscapeVideo:3"))
         #expect(old.contains("portraitVideo:3"))
       } else {
+        // Mixer callbacks can arrive after replacement commit with timestamps
+        // from before the video boundary. Keep routing those samples by PTS.
+        core.enqueueMainAudio(try retime(audioSample(), frame: 5, timescale: 20))
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 5, timescale: 20))
+        let lateInputCallback = try #require(core.beginInputAudioCallback())
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 5, timescale: 20), trackID: "input",
+          callback: lateInputCallback)
+        await core.waitForPendingOperations()
+
+        let didFinishAudioFences = Mutex(false)
+        let audioFences = Task {
+          let result = await core.waitForAudioFences(for: previous)
+          didFinishAudioFences.withLock { $0 = true }
+          return result
+        }
+        await core.waitForPendingOperations()
+        #expect(!didFinishAudioFences.withLock { $0 })
+        core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
+          callback: try #require(core.beginInputAudioCallback()))
+        await core.waitForPendingOperations()
+        #expect(!didFinishAudioFences.withLock { $0 })
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        #expect(await audioFences.value)
+
+        let old = previous.events.withLock { $0 }
+        let new = replacement.events.withLock { $0 }
+        #expect(old.contains("input:2"))
+        #expect(old.contains("landscapeAudio:2"))
+        #expect(old.contains("portraitAudio:2"))
         #expect(!old.contains("input:4"))
         #expect(new.contains("input:4"))
         #expect(new.contains("landscapeVideo:3"))
