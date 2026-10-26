@@ -38,6 +38,13 @@ public struct WorkspaceToolbar: ToolbarContent {
           action: action, runtimeActions: runtimeActions)
       }
     }
+    ToolbarItem(id: "workspace.cutRecording", placement: .navigation) {
+      Button("Cut Recording", systemImage: "scissors") {
+        Task { await runtimeActions()?.cutRecording() }
+      }
+      .disabled(!(runtimeActions()?.canCutRecording ?? false))
+      .accessibilityIdentifier("workspace.cutRecording")
+    }
     ToolbarItem(id: "workspace.runInference", placement: .primaryAction) {
       Button("Run Inference", systemImage: "sparkles", action: runInference)
         .disabled(

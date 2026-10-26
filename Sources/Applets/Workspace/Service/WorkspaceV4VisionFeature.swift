@@ -246,12 +246,14 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
     }
     do {
       let frame: WorkspaceVisionAnalysisFrame
-      let recordingPackageURL: URL?
+      // Capture ownership and timeline before the first asynchronous frame wait.
+      // A Cut can replace the active package while frame acquisition is pending.
+      let recordingPackageURL = context.recordingPackageURL()
+      let recordingTimelineMilliseconds = context.recordingTimelineMilliseconds?()
       let output: String
       let variables: [LDTXVariableItem: String]
       if let ocr {
         frame = try await context.frameForVision(ocr)
-        recordingPackageURL = context.recordingPackageURL()
         output = try await recognizeText(frame.image, Self.ocrConfiguration(for: ocr))
         variables = [.text: output]
       } else if let classifier, let modelID = classifier.modelInternalID, let url,
@@ -261,7 +263,6 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           return
         }
         frame = try await frameProvider(classifier)
-        recordingPackageURL = context.recordingPackageURL()
         let result = try await service.classifyResult(image: frame.image)
         output = result.displayText
         variables = [
@@ -276,7 +277,12 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       context.reportResult(id, output)
       context.reportVariables(id, variables)
       if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
-        context.archiveResult?(id, frame.image, output)
+        if let archiveTimedResult = context.archiveTimedResult {
+          archiveTimedResult(
+            id, frame.image, output, recordingTimelineMilliseconds, recordingPackageURL)
+        } else {
+          context.archiveResult?(id, frame.image, output)
+        }
       }
     } catch {
       guard isCurrent() else { return }

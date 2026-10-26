@@ -753,6 +753,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   ) async -> WorkspaceCommandOutcome {
     if stateService.isClosed { return .succeeded }
     if let closeRequestTask { return await closeRequestTask.value }
+    // Cancel an in-flight boundary before normal close admission rejects output-active state.
+    recordingSession.cancelPendingCut()
     do { try validateCloseAdmission() } catch {
       reportError(error)
       return .rejected(error as NSError)
@@ -864,6 +866,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public func pauseOutput() async {
+    recordingSession.cancelPendingCut()
     guard recordingSession.state == .recording else { return }
     if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
     _ = await transactionalCommands.submit(
@@ -873,6 +876,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public func stopOutput() async {
+    recordingSession.cancelPendingCut()
     if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
     _ = await transactionalCommands.submit(
       .stopOutputSession,
@@ -893,6 +897,34 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   public var isClosing: Bool { closeRequestTask != nil }
+
+  public var canCutRecording: Bool {
+    !isClosing && !stateService.isClosed && !transactionalCommands.isStalled
+      && recordingSession.canCutRecording
+      && !transactionalCommands.contains(.cutRecording)
+      && !transactionalCommands.contains(.stopOutputSession)
+  }
+
+  public func cutRecording() async {
+    guard canCutRecording else { return }
+    _ = await cutRecording { [self] in try await recordingSession.cutWithResult().get() }
+  }
+
+  @discardableResult
+  func cutRecording(using cut: @escaping @MainActor () async throws -> Void) async
+    -> WorkspaceCommandOutcome
+  {
+    if transactionalCommands.isStalled { await transactionalCommands.resumeForNewRequests() }
+    return await transactionalCommands.submit(
+      .cutRecording,
+      validate: { [self] in try validateOutputStop() },
+      operation: { [self] in
+        // A Stop or Close may have arrived while this Cut waited in the queue.
+        guard !isClosing, !transactionalCommands.contains(.stopOutputSession)
+        else { return }
+        try await cut()
+      })
+  }
 
   public func actionState(_ action: WorkspaceAction) -> WorkspaceActionState {
     let controls = WorkspaceOutputControls(

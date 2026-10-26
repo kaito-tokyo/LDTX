@@ -38,6 +38,7 @@ public final class WorkspaceWindowRuntime {
   @ObservationIgnored let portraitOverlays = ProgramOverlayProducer()
   @ObservationIgnored private var isShutDown = false
   var visionArchiveHandler: ((Int64, CIImage, String) -> Void)?
+  var visionArchiveTimedHandler: ((Int64, CIImage, String, UInt64?, URL) -> Void)?
   var visionArchiveTimelineProvider: (() -> UInt64?)?
   var visionArchivePackageURL: URL?
 
@@ -299,6 +300,9 @@ public final class WorkspaceWindowRuntime {
         self?.visionArchiveTimelineProvider?()
       }
     )
+    context.archiveTimedResult = { [weak self] internalID, image, output, timeline, package in
+      self?.visionArchiveTimedHandler?(internalID, image, output, timeline, package)
+    }
     context.isCurrent = { [weak self] in self?.variableStoreGeneration == generation }
     context.reportVariables = { [weak self] id, values in
       guard let self, variableStoreGeneration == generation else { return }
@@ -375,8 +379,11 @@ public final class WorkspaceWindowRuntime {
     let context = visionFeatureContext
     guard let visionID = vision.internalID else { throw NanopbError.malformed }
     do {
-      let frame = try await frameForSceneDetector()
+      // Keep archive ownership tied to the request that began before any
+      // asynchronous frame/model work could cross a recording Cut.
       let recordingPackageURL = context.recordingPackageURL()
+      let recordingTimelineMilliseconds = context.recordingTimelineMilliseconds?()
+      let frame = try await frameForSceneDetector()
       let result = try await classifyResult(frame.image)
       guard context.isCurrent() else { throw CancellationError() }
       context.reportResult(visionID, result.displayText)
@@ -387,7 +394,13 @@ public final class WorkspaceWindowRuntime {
           .confidence: result.topCandidate.map { String($0.confidence) } ?? "0",
         ])
       if let recordingPackageURL, context.recordingPackageURL() == recordingPackageURL {
-        context.archiveResult?(visionID, frame.image, result.displayText)
+        if let archiveTimedResult = context.archiveTimedResult {
+          archiveTimedResult(
+            visionID, frame.image, result.displayText, recordingTimelineMilliseconds,
+            recordingPackageURL)
+        } else {
+          context.archiveResult?(visionID, frame.image, result.displayText)
+        }
       }
       return result.displayText
     } catch {

@@ -32,9 +32,16 @@ public protocol WorkspaceRuntimeActions: AnyObject {
   >
   @MainActor func updateProgramRuntimes()
   @MainActor func startOutput() async throws
+  @MainActor var canCutRecording: Bool { get }
+  @MainActor func cutRecording() async
   @MainActor func pauseOutput() async
   @MainActor func stopOutput() async
   @MainActor func updateMixPreferences()
   @MainActor func captureScreenshots() async throws -> [WorkspaceScreenshot]
   @MainActor func openScreenshotsDirectory()
+}
+
+extension WorkspaceRuntimeActions {
+  @MainActor public var canCutRecording: Bool { false }
+  @MainActor public func cutRecording() async {}
 }
