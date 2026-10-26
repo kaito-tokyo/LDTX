@@ -15,6 +15,14 @@ private final class AudioSamples: @unchecked Sendable {
 
 @Suite(.tags(.medium))
 struct ProgramAudioMonitorMixerIntegrationTestSuite {
+  @Test("LUB-1055: Missing physical inputs do not claim an audio fence")
+  func missingPhysicalInputDoesNotClaimAudioFence() {
+    let engine = WorkspaceAudioEngine(hardwareEnabled: false)
+    engine.synchronizePhysicalInputs(["disconnected-device"])
+    #expect(!engine.hasActivePhysicalInput(uid: "disconnected-device"))
+    #expect(!engine.hasActivePhysicalInput(uid: "unassigned-device"))
+  }
+
   @Test("LUB-1055: No input still emits clocked silence after deadline")
   func noInputStillEmitsClockedSilenceAfterDeadline() throws {
     let engine = WorkspaceAudioEngine(hardwareEnabled: false)

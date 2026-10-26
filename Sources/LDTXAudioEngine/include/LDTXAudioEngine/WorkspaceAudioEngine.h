@@ -30,6 +30,8 @@ void LDTXAudioSetErrorHandler(LDTXWorkspaceAudioEngine *, LDTXAudioErrorHandler,
 // kind: 0 physical, 1 sweep sine, 2 silence, 3 externally submitted test PCM.
 LDTXAudioID LDTXAudioAddInput(LDTXWorkspaceAudioEngine *, const char *uid, uint32_t kind, double sampleRate,
                               uint32_t channels);
+// Returns whether a physical input currently has an open, live HAL unit.
+bool LDTXAudioHasActiveInput(LDTXWorkspaceAudioEngine *, const char *uid);
 void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *, LDTXAudioID);
 LDTXAudioID LDTXAudioCreateBus(LDTXWorkspaceAudioEngine *);
 void LDTXAudioConfigureBus(LDTXWorkspaceAudioEngine *, LDTXAudioID, const LDTXAudioRoute *, uint32_t count,

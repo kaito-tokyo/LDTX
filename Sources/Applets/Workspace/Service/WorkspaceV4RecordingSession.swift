@@ -78,9 +78,9 @@ public final class WorkspaceV4RecordingSession {
     subsystem: "tokyo.kaito.ldtx", category: "WorkspaceOutputCleanup")
   private let screenCaptureService: ScreenCaptureService
   @ObservationIgnored private var pendingScreenshotCount = 0
-  @ObservationIgnored private var pendingPackageScreenshotCount = 0
+  @ObservationIgnored private var pendingPackageScreenshotCounts: [URL: Int] = [:]
   @ObservationIgnored private var packageScreenshotDrainWaiters:
-    [CheckedContinuation<Void, Never>] = []
+    [URL: [CheckedContinuation<Void, Never>]] = [:]
   private let sleepInhibitor = OutputSleepInhibitor()
   @ObservationIgnored public var stateDidChange: (@MainActor (State) -> Void)?
   public var state: State {
@@ -431,14 +431,24 @@ public final class WorkspaceV4RecordingSession {
           userInfo: [NSLocalizedDescriptionKey: "The recording cut was interrupted."])
       }
       adoptStartedRecordingService(next)
+      let audioDeviceIDsByTrackID = Dictionary(
+        uniqueKeysWithValues: inputAudioTracks.map { ($0.trackID, $0.deviceID) })
+      let audioEngine = windowRuntime.captureSessionCoordinator.audioEngine
       let result = await finishPreviousRecordingAfterCut(previous) { [self] in
         // All accepted old-package work is fenced before asking its writer to finalize.
-        await drainPackageScreenshots()
+        await drainPackageScreenshots(for: previous)
         await withCheckedContinuation { continuation in
           visionArchiveQueue.async { continuation.resume() }
         }
         await core.waitForPendingOperations()
-        guard await core.waitForAudioFences(for: previous) else { return }
+        guard
+          await core.waitForAudioFences(
+            for: previous,
+            isInputTrackActive: { trackID in
+              guard let deviceID = audioDeviceIDsByTrackID[trackID] else { return false }
+              return audioEngine.hasActivePhysicalInput(uid: deviceID)
+            })
+        else { return }
         await withCheckedContinuation { continuation in
           let deferred = core.deferFinalizationUntilInputAudioCallbacksDrain(for: previous) {
             continuation.resume()
@@ -600,7 +610,7 @@ public final class WorkspaceV4RecordingSession {
     }
     cleanupPhase("vision-archive", completed: true)
     cleanupPhase("package-screenshots", completed: false)
-    await drainPackageScreenshots()
+    if let recordService { await drainPackageScreenshots(for: recordService) }
     cleanupPhase("package-screenshots", completed: true)
     if let recordService {
       cleanupPhase("recording", completed: false)
@@ -710,24 +720,31 @@ public final class WorkspaceV4RecordingSession {
         pixelBuffer: source.pixelBuffer, name: source.name, programCanvas: source.programCanvas)
     }
     var directories = [globalDirectory]
-    var copiesToPackage = false
+    var packageScreenshotDirectory: URL?
     // Snapshot and admission share MainActor with pause/stop. Finalization drains
     // accepted copies; later requests see the transition state and save globally.
     if state == .recording, let recordService,
       recordService.hasAcceptedFirstVideo,
       recordService.recordingTimelineMilliseconds() != nil
     {
-      directories.append(recordService.packageDirectory.appendingPathComponent("Screenshots"))
-      copiesToPackage = true
-      pendingPackageScreenshotCount += 1
+      let packageDirectory = recordService.packageDirectory.appendingPathComponent(
+        "Screenshots", isDirectory: true
+      ).standardizedFileURL
+      directories.append(packageDirectory)
+      packageScreenshotDirectory = packageDirectory
+      pendingPackageScreenshotCounts[packageDirectory, default: 0] += 1
     }
     defer {
-      if copiesToPackage {
-        pendingPackageScreenshotCount -= 1
-        if pendingPackageScreenshotCount == 0 {
-          let waiters = packageScreenshotDrainWaiters
-          packageScreenshotDrainWaiters.removeAll()
+      if let packageScreenshotDirectory {
+        let remaining = (pendingPackageScreenshotCounts[packageScreenshotDirectory] ?? 1) - 1
+        if remaining == 0 {
+          pendingPackageScreenshotCounts[packageScreenshotDirectory] = nil
+          let waiters =
+            packageScreenshotDrainWaiters.removeValue(
+              forKey: packageScreenshotDirectory) ?? []
           for waiter in waiters { waiter.resume() }
+        } else {
+          pendingPackageScreenshotCounts[packageScreenshotDirectory] = remaining
         }
       }
     }
@@ -740,9 +757,14 @@ public final class WorkspaceV4RecordingSession {
 
   // The output transition has closed package admission. Only this session's
   // package copies enter this scope; their normal shared-writer FIFO wait remains.
-  private func drainPackageScreenshots() async {
-    guard pendingPackageScreenshotCount > 0 else { return }
-    await withCheckedContinuation { packageScreenshotDrainWaiters.append($0) }
+  private func drainPackageScreenshots(for service: any SessionRecordServicing) async {
+    let packageDirectory = service.packageDirectory.appendingPathComponent(
+      "Screenshots", isDirectory: true
+    ).standardizedFileURL
+    guard pendingPackageScreenshotCounts[packageDirectory, default: 0] > 0 else { return }
+    await withCheckedContinuation {
+      packageScreenshotDrainWaiters[packageDirectory, default: []].append($0)
+    }
   }
 
   public var screenshotsDirectory: URL? {

@@ -106,6 +106,9 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
       return input
     }
   }
+  public func hasActivePhysicalInput(uid: String) -> Bool {
+    uid.withCString { LDTXAudioHasActiveInput(native, $0) }
+  }
   func synchronizePhysicalInputs(_ uids: Set<String>) {
     lock.withLock {
       for uid in uids { _ = input(uid: uid) }

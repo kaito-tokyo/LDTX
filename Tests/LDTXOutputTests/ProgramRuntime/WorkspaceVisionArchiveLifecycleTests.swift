@@ -706,21 +706,28 @@ extension OutputTestSuite {
         await core.waitForPendingOperations()
 
         let didFinishAudioFences = Mutex(false)
+        let inputAudioActive = Mutex(true)
         let audioFences = Task {
-          let result = await core.waitForAudioFences(for: previous)
+          let result = await core.waitForAudioFences(for: previous) { _ in
+            inputAudioActive.withLock { $0 }
+          }
           didFinishAudioFences.withLock { $0 = true }
           return result
         }
         await core.waitForPendingOperations()
         #expect(!didFinishAudioFences.withLock { $0 })
+        // A source can disappear while the old package waits for its audio
+        // watermark. Once unavailable, no later sample can provide that fence.
+        inputAudioActive.withLock { $0 = false }
         core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
-        core.enqueueInputAudio(
-          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
-          callback: try #require(core.beginInputAudioCallback()))
         await core.waitForPendingOperations()
         #expect(!didFinishAudioFences.withLock { $0 })
         core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
         #expect(await audioFences.value)
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
+          callback: try #require(core.beginInputAudioCallback()))
+        await core.waitForPendingOperations()
 
         let old = previous.events.withLock { $0 }
         let new = replacement.events.withLock { $0 }
@@ -1269,6 +1276,82 @@ extension OutputTestSuite {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func replacementPackageScreenshotDoesNotDelayCutFinalization() async throws {
+      let manager = CutPackageBlockingFileManager()
+      let screenshotQueue = DispatchQueue(label: "test.cut-package-screenshot-worker")
+      let screenCapture = ScreenCaptureService(
+        fileManager: manager, captureQueue: screenshotQueue)
+      let fixture = try Fixture(
+        cutFinalizationTimeout: .seconds(3), screenCaptureService: screenCapture)
+      defer { fixture.cleanup() }
+      let oldRelease = DispatchSemaphore(value: 0)
+      let replacementRelease = DispatchSemaphore(value: 0)
+      let replacementPackageURL = Mutex<URL?>(nil)
+      defer {
+        oldRelease.signal()
+        replacementRelease.signal()
+      }
+      manager.block(package: fixture.package, until: oldRelease)
+
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        let replacement = try SessionRecordService(
+          baseDirectory: fixture.root, recordID: "cut-screenshot-replacement",
+          writerConfiguration: SegmentedMP4WriterConfiguration(
+            width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+          audioTracks: [],
+          failureHandler: { Issue.record("Unexpected replacement error: \($0)") })
+        replacementPackageURL.withLock { $0 = replacement.packageDirectory }
+        manager.block(package: replacement.packageDirectory, until: replacementRelease)
+        return replacement
+      }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service, landscapeHub: landscape, portraitHub: portrait,
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      landscape.publishMainAudioMix(try frameAudio())
+      landscape.publishMainVideo(try videoSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+
+      let oldScreenshot = Task { try await fixture.screenshot() }
+      while !manager.startedPackages.withLock({
+        $0.contains(fixture.package.standardizedFileURL.path)
+      }) {
+        await Task.yield()
+      }
+
+      let cut = Task { await fixture.session.cutWithResult() }
+      while !fixture.session.isCutPending { await Task.yield() }
+      for frame in 1...5 {
+        landscape.publishMainAudioMix(try retime(frameAudio(), frame: Int64(frame)))
+        landscape.publishMainVideo(try retime(videoSample(), frame: Int64(frame)))
+        await Task.yield()
+      }
+      while replacementPackageURL.withLock({ $0 }) == nil { await Task.yield() }
+      let replacementPackage = replacementPackageURL.withLock { $0! }
+      while fixture.session.latestRecordingBundleURL != replacementPackage { await Task.yield() }
+
+      let replacementScreenshot = Task { try await fixture.screenshot() }
+      oldRelease.signal()
+      while !manager.startedPackages.withLock({
+        $0.contains(replacementPackage.standardizedFileURL.path)
+      }) {
+        await Task.yield()
+      }
+
+      // The replacement copy remains blocked, but the previous package owns
+      // no more pending screenshots and can finish independently.
+      let cutResult = await cut.value
+      try cutResult.get()
+      #expect(fixture.isFinalized)
+      replacementRelease.signal()
+      try await oldScreenshot.value
+      try await replacementScreenshot.value
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func screenshotsDuringCancellationCannotCreateOrRecreatePackage() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -1681,6 +1764,31 @@ private final class OtherWorkspaceBlockingFileManager: FileManager, @unchecked S
     if first {
       _ = release.wait(timeout: .now() + 15)
       unblocked.withLock { $0 = true }
+    }
+    try super.createDirectory(
+      at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
+  }
+}
+
+private final class CutPackageBlockingFileManager: FileManager, @unchecked Sendable {
+  let startedPackages = Mutex<Set<String>>([])
+  private let gates = Mutex<[String: DispatchSemaphore]>([:])
+
+  func block(package: URL, until release: DispatchSemaphore) {
+    gates.withLock { $0[package.standardizedFileURL.path] = release }
+  }
+
+  override func createDirectory(
+    at url: URL, withIntermediateDirectories createIntermediates: Bool,
+    attributes: [FileAttributeKey: Any]? = nil
+  ) throws {
+    let packagePath = url.standardizedFileURL.deletingLastPathComponent().path
+    let release =
+      url.lastPathComponent == "Screenshots"
+      ? gates.withLock { $0[packagePath] } : nil
+    if let release {
+      startedPackages.withLock { $0.insert(packagePath) }
+      _ = release.wait(timeout: .now() + 15)
     }
     try super.createDirectory(
       at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)

@@ -421,9 +421,34 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     }
   }
 
-  func waitForAudioFences(for service: any SessionRecordServicing) async -> Bool {
+  func waitForAudioFences(
+    for service: any SessionRecordServicing,
+    isInputTrackActive: @escaping @Sendable (String) -> Bool = { _ in true }
+  ) async -> Bool {
     let waiter = AudioFenceWaiter()
-    return await withTaskCancellationHandler {
+    let inputTrackIDs = queue.sync {
+      guard let audioBoundary = committedAudioBoundary, audioBoundary.previous === service else {
+        return Set<String>()
+      }
+      return audioBoundary.inputTrackIDs
+    }
+    let availabilityMonitor = Task { [weak self] in
+      while !waiter.isFinished && !Task.isCancelled {
+        do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+        guard !Task.isCancelled else { return }
+        let inactiveTrackIDs = Set(inputTrackIDs.filter { !isInputTrackActive($0) })
+        guard !inactiveTrackIDs.isEmpty else { continue }
+        self?.queue.async { [weak self] in
+          guard let self, var audioBoundary = self.committedAudioBoundary,
+            audioBoundary.previous === service
+          else { return }
+          audioBoundary.didReachInputFences.formUnion(inactiveTrackIDs)
+          self.committedAudioBoundary = audioBoundary
+          self.completeAudioFenceWaitersIfReady()
+        }
+      }
+    }
+    let result = await withTaskCancellationHandler {
       await withCheckedContinuation { continuation in
         waiter.install(continuation)
         queue.async { [self] in
@@ -449,6 +474,8 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
         self?.removeAudioFenceWaiter(waiter, for: service)
       }
     }
+    availabilityMonitor.cancel()
+    return result
   }
 
   private func removeAudioFenceWaiter(
