@@ -16,6 +16,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    exclude-paths:
+      - "Vendors/**"
 
   # This scope has no Package.swift, so Dependabot discovers the Xcode lock.
   # nanopb is updated through its Git submodule above.
