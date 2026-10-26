@@ -10,10 +10,22 @@ import Testing
 struct VisionRegionUnitTestSuite {
   private func region() -> Ldtx_Workspace_V4_VisionRegionOfInterest {
     .with {
-      $0.x = .with { $0.num = 1; $0.den = 4 }
-      $0.y = .with { $0.num = 1; $0.den = 2 }
-      $0.width = .with { $0.num = 1; $0.den = 2 }
-      $0.height = .with { $0.num = 1; $0.den = 4 }
+      $0.x = .with {
+        $0.num = 1
+        $0.den = 4
+      }
+      $0.y = .with {
+        $0.num = 1
+        $0.den = 2
+      }
+      $0.width = .with {
+        $0.num = 1
+        $0.den = 2
+      }
+      $0.height = .with {
+        $0.num = 1
+        $0.den = 4
+      }
     }
   }
 
