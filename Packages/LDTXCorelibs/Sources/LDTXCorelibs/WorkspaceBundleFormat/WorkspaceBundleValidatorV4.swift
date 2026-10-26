@@ -63,10 +63,11 @@ extension WorkspaceBundleValidatorV4 {
     for (index, wrapper) in workspace.definition.visions.enumerated() {
       guard case .ldtxSceneDetectorVision(let vision) = wrapper.vision else { continue }
       let path = "definition.visions[\(index)].ldtx_scene_detector_vision.model_internal_id"
-      if vision.modelInternalID < 0 {
-        collector.add(path, .invalidModelID(vision.modelInternalID), id: vision.internalID)
-      } else if vision.modelInternalID > 0, workspace.visionModels[vision.modelInternalID] == nil {
-        collector.add(path, .missingVisionModel(vision.modelInternalID), id: vision.internalID)
+      let modelID = vision.modelInternalID ?? 0
+      if modelID < 0 {
+        collector.add(path, .invalidModelID(modelID), id: vision.internalID)
+      } else if modelID > 0, workspace.visionModels[modelID] == nil {
+        collector.add(path, .missingVisionModel(modelID), id: vision.internalID)
       }
     }
     return collector.issues
@@ -121,8 +122,8 @@ extension WorkspaceBundleValidatorV4 {
     }
 
     // A failed denominator check stops only computations dependent on this value.
-    mutating func rational(_ value: any Rational32Value, path: String, id: Int64?) -> Bool {
-      guard value.den > 0 else {
+    mutating func rational(_ value: (any Rational32Value)?, path: String, id: Int64?) -> Bool {
+      guard (value?.den ?? 1) > 0 else {
         add(path + ".den", .invalidRational, id: id)
         return false
       }
@@ -130,19 +131,22 @@ extension WorkspaceBundleValidatorV4 {
     }
 
     mutating func unit(
-      _ value: any Rational32Value, path: String, id: Int64?,
+      _ value: (any Rational32Value)?, path: String, id: Int64?,
       positive: Bool = false, error: WorkspaceV4IntegrityError
     ) -> Bool {
       guard rational(value, path: path, id: id) else { return false }
-      guard positive ? value.num > 0 : value.num >= 0, Int64(value.num) <= Int64(value.den) else {
+      guard positive ? (value?.num ?? 0) > 0 : (value?.num ?? 0) >= 0,
+        Int64((value?.num ?? 0)) <= Int64((value?.den ?? 1))
+      else {
         add(path, error, id: id)
         return false
       }
       return true
     }
 
-    func less(_ lhs: any Rational32Value, _ rhs: any Rational32Value) -> Bool {
-      Int128(lhs.num) * Int128(rhs.den) < Int128(rhs.num) * Int128(lhs.den)
+    func less(_ lhs: (any Rational32Value)?, _ rhs: (any Rational32Value)?) -> Bool {
+      Int128((lhs?.num ?? 0)) * Int128((rhs?.den ?? 1)) < Int128((rhs?.num ?? 0))
+        * Int128((lhs?.den ?? 1))
     }
 
     func componentPath(_ wrapper: Ldtx_Workspace_V4_VideoComponentWrapper, _ path: String) -> String
@@ -192,14 +196,16 @@ extension WorkspaceBundleValidatorV4 {
       }
     }
 
-    func fits(_ start: any Rational32Value, _ size: any Rational32Value) -> Bool {
-      Int128(start.num) * Int128(size.den) + Int128(size.num) * Int128(start.den)
-        <= Int128(start.den) * Int128(size.den)
+    func fits(_ start: (any Rational32Value)?, _ size: (any Rational32Value)?) -> Bool {
+      Int128((start?.num ?? 0)) * Int128((size?.den ?? 1)) + Int128((size?.num ?? 0))
+        * Int128((start?.den ?? 1))
+        <= Int128((start?.den ?? 1)) * Int128((size?.den ?? 1))
     }
 
-    mutating func color(_ value: Ldtx_Workspace_V4_Color, path: String, id: Int64?) {
+    mutating func color(_ value: Ldtx_Workspace_V4_Color?, path: String, id: Int64?) {
       for (field, component) in [
-        ("red", value.red), ("green", value.green), ("blue", value.blue), ("alpha", value.alpha),
+        ("red", (value?.red ?? 0)), ("green", (value?.green ?? 0)), ("blue", (value?.blue ?? 0)),
+        ("alpha", (value?.alpha ?? 0)),
       ] {
         if !component.isFinite || (field == "alpha" && !(0...1).contains(component)) {
           add(path + "." + field, .invalidColor, id: id)
@@ -209,19 +215,19 @@ extension WorkspaceBundleValidatorV4 {
 
     mutating func transform(_ value: Ldtx_Workspace_V4_BasicTransform, path: String, id: Int64?) {
       for (field, rationalValue) in [
-        ("translation_x", value.hasTranslationX ? value.translationX : nil),
-        ("translation_y", value.hasTranslationY ? value.translationY : nil),
-        ("top_inset", value.hasTopInset ? value.topInset : nil),
-        ("right_inset", value.hasRightInset ? value.rightInset : nil),
-        ("bottom_inset", value.hasBottomInset ? value.bottomInset : nil),
-        ("left_inset", value.hasLeftInset ? value.leftInset : nil),
+        ("translation_x", value.translationX),
+        ("translation_y", value.translationY),
+        ("top_inset", value.topInset),
+        ("right_inset", value.rightInset),
+        ("bottom_inset", value.bottomInset),
+        ("left_inset", value.leftInset),
       ] {
         if let rationalValue {
           _ = unit(rationalValue, path: path + "." + field, id: id, error: .invalidBasicTransform)
         }
       }
-      if value.hasScaleX { _ = rational(value.scaleX, path: path + ".scale_x", id: id) }
-      if value.hasScaleY { _ = rational(value.scaleY, path: path + ".scale_y", id: id) }
+      if value.scaleX != nil { _ = rational(value.scaleX, path: path + ".scale_x", id: id) }
+      if value.scaleY != nil { _ = rational(value.scaleY, path: path + ".scale_y", id: id) }
     }
 
     mutating func definition(_ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4) {
@@ -276,9 +282,9 @@ extension WorkspaceBundleValidatorV4 {
           add(path + ".display_name", .emptyDisplayName, id: id)
         }
       }
-      let canvas = definition.canvasConfiguration
-      if canvas.frameRate != 0 && !(1...240).contains(canvas.frameRate) {
-        add("definition.canvas_configuration.frame_rate", .unsupportedFrameRate(canvas.frameRate))
+      let canvas = definition.canvasConfiguration ?? .init()
+      if let rate = canvas.frameRate, rate != 0 && !(1...240).contains(rate) {
+        add("definition.canvas_configuration.frame_rate", .unsupportedFrameRate(rate))
       }
       for (field, profile) in [
         ("landscape_profile_id", canvas.landscapeProfileID),
@@ -286,7 +292,7 @@ extension WorkspaceBundleValidatorV4 {
       ] {
         let expected =
           field == "landscape_profile_id" ? "sdr-landscape-1080p60" : "sdr-portrait-1080p60"
-        if !profile.isEmpty && profile != expected {
+        if let profile, !profile.isEmpty && profile != expected {
           add("definition.canvas_configuration." + field, .unsupportedOutputProfile(profile))
         }
       }
@@ -296,12 +302,12 @@ extension WorkspaceBundleValidatorV4 {
           if case .vfxSource(let source) = wrapper.videoComponent { return source.internalID }
           return nil
         })
-      if canvas.hasPtsMasterVfxSourceInternalID,
-        !sources.contains(canvas.ptsMasterVfxSourceInternalID)
+      if let sourceID = canvas.ptsMasterVfxSourceInternalID,
+        !sources.contains(sourceID)
       {
         add(
           "definition.canvas_configuration.pts_master_vfx_source_internal_id",
-          .missingVfxSource(canvas.ptsMasterVfxSourceInternalID))
+          .missingVfxSource(sourceID))
       }
       for (index, component) in definition.videoComponents.enumerated() {
         videoComponent(
@@ -355,7 +361,7 @@ extension WorkspaceBundleValidatorV4 {
         color(fill.startExtendedSrgbColor, path: path + ".start_extended_srgb_color", id: id)
         color(fill.endExtendedSrgbColor, path: path + ".end_extended_srgb_color", id: id)
       case .dynamicText(let text):
-        if !text.hasRtfdDocument || text.rtfdDocument.isEmpty {
+        if text.rtfdDocument?.isEmpty != false {
           add(path + ".rtfd_document", .invalidVariableMacro, id: id)
         }
         _ = unit(
@@ -368,7 +374,10 @@ extension WorkspaceBundleValidatorV4 {
       case .clock(let clock):
         color(
           clock.foregroundExtendedSrgbColor, path: path + ".foreground_extended_srgb_color", id: id)
-        if rational(clock.fontSize, path: path + ".font_size", id: id), clock.fontSize.num <= 0 {
+        if let fontSize = clock.fontSize,
+          rational(fontSize, path: path + ".font_size", id: id),
+          (fontSize.num ?? 0) <= 0
+        {
           add(path + ".font_size", .invalidClockGeometry, id: id)
         }
         if clock.outlines.count > 2 { add(path + ".outlines", .invalidClockGeometry, id: id) }
@@ -376,7 +385,7 @@ extension WorkspaceBundleValidatorV4 {
           color(
             outline.extendedSrgbColor, path: path + ".outlines[\(i)].extended_srgb_color", id: id)
           let p = path + ".outlines[\(i)].thickness"
-          if rational(outline.thickness, path: p, id: id), outline.thickness.num < 0 {
+          if rational(outline.thickness, path: p, id: id), (outline.thickness?.num ?? 0) < 0 {
             add(p, .invalidClockGeometry, id: id)
           }
         }
@@ -396,20 +405,20 @@ extension WorkspaceBundleValidatorV4 {
       let id = wrapper.internalID
       switch wrapper.vision {
       case .ocrVision(let vision):
-        input = vision.videoComponentInternalID
-        present = vision.hasVideoComponentInternalID
+        input = vision.videoComponentInternalID ?? 0
+        present = (vision.videoComponentInternalID != nil)
         triggers = vision.triggers
-        roi = vision.hasRegionOfInterest ? vision.regionOfInterest : nil
-        if vision.hasMinimumTextHeight {
+        roi = vision.regionOfInterest
+        if vision.minimumTextHeight != nil {
           _ = unit(
             vision.minimumTextHeight, path: path + ".minimum_text_height", id: id,
             error: .invalidMinimumTextHeight)
         }
       case .ldtxSceneDetectorVision(let vision):
-        input = vision.videoComponentInternalID
-        present = vision.hasVideoComponentInternalID
+        input = vision.videoComponentInternalID ?? 0
+        present = (vision.videoComponentInternalID != nil)
         triggers = vision.triggers
-        roi = vision.hasRegionOfInterest ? vision.regionOfInterest : nil
+        roi = vision.regionOfInterest
       case nil: return
       }
       if !present {
@@ -432,7 +441,8 @@ extension WorkspaceBundleValidatorV4 {
           continue
         }
         if rational(interval.intervalSeconds, path: p + ".interval_seconds", id: id),
-          Int128(interval.intervalSeconds.num) * 10 < Int128(interval.intervalSeconds.den)
+          Int128((interval.intervalSeconds?.num ?? 0)) * 10
+            < Int128((interval.intervalSeconds?.den ?? 1))
         {
           add(p + ".interval_seconds", .invalidVisionInterval, id: id)
         }
@@ -452,7 +462,9 @@ extension WorkspaceBundleValidatorV4 {
       for (id, gain) in preferences.audioChannelGainsDecibels.sorted(by: { $0.key < $1.key }) {
         let p = "preferences.audio_channel_gains_decibels[\(id)]"
         if !audio.contains(id) { add(p, .missingAudioInputDevice(id), id: id) }
-        if rational(gain, path: p, id: id), !(-80...20).contains(gain.double) {
+        if rational(gain, path: p, id: id),
+          !(-80...20).contains(gain.double(defaultNumerator: 0, defaultDenominator: 1))
+        {
           add(p, .invalidAudioChannelGain, id: id)
         }
       }
@@ -472,11 +484,15 @@ extension WorkspaceBundleValidatorV4 {
           where !components.contains(component) {
             add(p + ".video_layer_internal_ids[\(index)]", .missingVideoLayer(component), id: id)
           }
-          if preference.hasAudioMasterVolumeDecibels {
+          if preference.audioMasterVolumeDecibels != nil {
             let valid = rational(
               preference.audioMasterVolumeDecibels, path: p + ".audio_master_volume_decibels",
               id: id)
-            if valid, !(-80...20).contains(preference.audioMasterVolumeDecibels.double) {
+            if valid,
+              !(-80...20).contains(
+                (preference.audioMasterVolumeDecibels?.double(
+                  defaultNumerator: 0, defaultDenominator: 1) ?? 0))
+            {
               add(p + ".audio_master_volume_decibels", .invalidMasterVolume, id: id)
             }
           }

@@ -14,6 +14,14 @@ extension AppUIComponentTestSuite {
   struct ClockInspectorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
+    private func outlines(in workspace: WorkspaceV4Bundle) -> [Ldtx_Workspace_V4_ClockTextOutline] {
+      guard case .clock(let clock) = workspace.definition.videoComponents[0].videoComponent else {
+        Issue.record("Missing clock")
+        return []
+      }
+      return clock.outlines
+    }
+
     @Test("LUB-1048: Repeated edits history and persistence")
     func repeatedEditsHistoryAndPersistence() async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
@@ -35,7 +43,7 @@ extension AppUIComponentTestSuite {
       let color = view.outlineColorBinding(at: 0, undoManager: undo)
       for numerator in [0, 3, 7] {
         edit { width.wrappedValue = .with { $0.set(num: Int32(numerator), den: 2) } }
-        #expect(width.wrappedValue.num == numerator)
+        #expect(width.wrappedValue?.num == Int32(numerator))
       }
       edit { color.wrappedValue = Color(red: 0.25, green: 0.5, blue: 0.75, opacity: 0.4) }
       edit { view.addOutline(undoManager: undo) }
@@ -43,16 +51,16 @@ extension AppUIComponentTestSuite {
       edit { view.addOutline(undoManager: undo) }
       #expect(document.workspace == edited)
       edit { view.removeOutline(at: 0, undoManager: undo) }
-      #expect(document.workspace.definition.videoComponents[0].clock.outlines.count == 1)
+      #expect(outlines(in: document.workspace).count == 1)
       undo.undo()
       #expect(document.workspace == edited)
-      #expect(width.wrappedValue.num == 7)
+      #expect(width.wrappedValue?.num == 7)
       #expect(
         Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: color.wrappedValue)
-          == edited.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor)
+          == outlines(in: edited)[0].extendedSrgbColor)
       undo.redo()
       edit { view.removeOutline(at: 0, undoManager: undo) }
-      #expect(document.workspace.definition.videoComponents[0].clock.outlines.isEmpty)
+      #expect(outlines(in: document.workspace).isEmpty)
       edit { view.removeOutline(at: 0, undoManager: undo) }
       edit { width.wrappedValue = .init() }
       #expect(document.workspace == original)
@@ -89,7 +97,7 @@ extension AppUIComponentTestSuite {
       window.contentView = hosting
       window.orderFront(nil)
       func views(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
-      func count() -> Int { document.workspace.definition.videoComponents[0].clock.outlines.count }
+      func count() -> Int { outlines(in: document.workspace).count }
       await settleWorkspaceToolbar(window)
       undo.beginUndoGrouping()
       inspector.addOutline(undoManager: undo)
@@ -108,7 +116,8 @@ extension AppUIComponentTestSuite {
         undo.endUndoGrouping()
         #expect(window.firstResponder === editor)
         #expect(
-          document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+          outlines(in: document.workspace)[0].thickness?.double(
+            defaultNumerator: 0, defaultDenominator: 1)
             == Double(text))
       }
       let editor = try #require(field.currentEditor() as? NSTextView)
@@ -120,16 +129,20 @@ extension AppUIComponentTestSuite {
       try WorkspaceBundleWriterV4().write(snapshot, to: url)
       let loaded = try WorkspaceBundleReaderV4(at: url).read()
       #expect(window.firstResponder === editor)
-      #expect(loaded.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+      #expect(
+        outlines(in: loaded)[0].thickness?.double(defaultNumerator: 0, defaultDenominator: 1) == 3.5
+      )
       undo.undo()
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 1.5)
+        outlines(in: document.workspace)[0].thickness?.double(
+          defaultNumerator: 0, defaultDenominator: 1) == 1.5)
       #expect(editor.string == "1.5")
       undo.redo()
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double == 3.5)
+        outlines(in: document.workspace)[0].thickness?.double(
+          defaultNumerator: 0, defaultDenominator: 1) == 3.5)
       #expect(editor.string == "3.5")
       let well = try #require(views(hosting).compactMap { $0 as? NSColorWell }.last)
       let color = NSColor(srgbRed: 0.25, green: 0.5, blue: 0.75, alpha: 0.4)
@@ -139,19 +152,19 @@ extension AppUIComponentTestSuite {
       undo.endUndoGrouping()
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+        outlines(in: document.workspace)[0].extendedSrgbColor
           == Ldtx_Workspace_V4_Color(extendedSRGBNSColor: color))
-      let editedColor = document.workspace.definition.videoComponents[0].clock.outlines[0]
+      let editedColor = outlines(in: document.workspace)[0]
         .extendedSrgbColor
       undo.undo()
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+        outlines(in: document.workspace)[0].extendedSrgbColor
           != editedColor)
       undo.redo()
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].extendedSrgbColor
+        outlines(in: document.workspace)[0].extendedSrgbColor
           == editedColor)
       undo.beginUndoGrouping()
       inspector.addOutline(undoManager: undo)
@@ -204,9 +217,14 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
-        $0.definition.videoComponents[0].clock.outlines = [
-          .with { $0.thickness.set(num: data.saved, den: 1) }
+        guard case .clock(var clock) = $0.definition.videoComponents[0].videoComponent else {
+          Issue.record("Missing clock")
+          return
+        }
+        clock.outlines = [
+          .with { $0.thickness = .with { $0.set(num: data.saved, den: 1) } }
         ]
+        $0.definition.videoComponents[0].videoComponent = .clock(clock)
       }
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -224,7 +242,7 @@ extension AppUIComponentTestSuite {
       window.orderFront(nil)
       await settleWorkspaceToolbar(window)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.num
+        outlines(in: document.workspace)[0].thickness?.num
           == data.saved)
       #expect(!undo.canUndo)
       func fields(_ view: NSView) -> [NSTextField] {
@@ -241,7 +259,8 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(editor.string == data.input)
       #expect(
-        document.workspace.definition.videoComponents[0].clock.outlines[0].thickness.double
+        outlines(in: document.workspace)[0].thickness?.double(
+          defaultNumerator: 0, defaultDenominator: 1)
           == data.expected)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.writableContentTypes[0])
@@ -267,9 +286,14 @@ extension AppUIComponentTestSuite {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
-        $0.definition.videoComponents[0].clock.outlines = [1, secondWidth].map { width in
-          .with { $0.thickness.set(num: width, den: 1) }
+        guard case .clock(var clock) = $0.definition.videoComponents[0].videoComponent else {
+          Issue.record("Missing clock")
+          return
         }
+        clock.outlines = [1, secondWidth].map { width in
+          .with { $0.thickness = .with { $0.set(num: width, den: 1) } }
+        }
+        $0.definition.videoComponents[0].videoComponent = .clock(clock)
       }
       let inspector = ClockInspector(
         stateService: document, appletData: WorkspaceAppletData(), internalID: 11)
@@ -289,7 +313,7 @@ extension AppUIComponentTestSuite {
         (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
       }
       func widths() -> [Int32] {
-        document.workspace.definition.videoComponents[0].clock.outlines.map { $0.thickness.num }
+        outlines(in: document.workspace).compactMap { $0.thickness?.num }
       }
       func displayedWidths() -> [String] {
         fields(hosting).filter {

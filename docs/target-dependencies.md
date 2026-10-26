@@ -53,23 +53,27 @@ BackgroundSegmentation, VideoComposition, VideoRendering, TaskQueue, YouTube or
 YouTubeRTMPS. Device previews use presentation fixtures; GPU preview
 assembly is compiled in the controller target.
 
-Corelibs is one Swift module. Messages, Values, Program, Nanopb,
-WorkspaceBundleFormat, and RecordBundleFormat are source directories rather
-than separate module boundaries. `Messages` is reserved for Protobuf.
+Corelibs depends on `LDTXMessages` and re-exports its Swift message API.
+`Messages` is reserved for Protobuf within that module.
 
 ## Message encoding
 
 ```mermaid
 flowchart TD
-    Corelibs[LDTXCorelibs: Swift] --> Generated[LDTXNanopbGenerated: C]
-    Corelibs --> nanopb
+    Corelibs[LDTXCorelibs: Swift] --> Messages[LDTXMessages: Swift]
+    Messages --> Generated[LDTXNanopbGenerated: C]
+    Messages --> nanopb
     Generated --> nanopb
 ```
 
-LDTXCorelibs owns the Swift reader/writer, message protocol, JSON scalar helpers,
-generated models, shared values, Program definitions, and bundle IO.
-LDTXNanopbGenerated contains the official generator's C descriptors, storage
-assertions, synchronous callback context, and wire-type validation.
+LDTXMessages owns the Swift/C copying codec, message protocol, and generated models.
+Each message generates direct `init(cMessage:)` and `write(to:)` conversions.
+Shared functions handle strings, bytes, arrays, maps, enums, and C allocation
+lifetimes; there are no KeyPath tables or type-erased field callbacks.
+LDTXCorelibs owns shared values, Program definitions, and bundle IO.
+LDTXNanopbGenerated exposes the official generator's typed C message structures
+and their descriptors. The nanopb runtime owns decoded allocations until the
+codec has copied them into Swift and calls pb_release.
 
 C descriptor types are not promoted into the public message API. Corelibs exports
 one dynamic product so the implementation is linked once per process.

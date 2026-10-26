@@ -712,10 +712,14 @@ extension AppUIComponentTestSuite {
       let reopened = try await loadWorkspaceDocument(at: url)
       defer { reopened.close() }
       #expect(reopened.stateService.workspaceDefinition == expected)
-      #expect(
-        reopened.stateService.workspaceDefinition.visions.first?.ocrVision.videoComponentInternalID
-          == inputID
-      )
+      guard
+        case .ocrVision(let vision) = reopened.stateService.workspaceDefinition.visions.first?
+          .vision
+      else {
+        Issue.record("Missing OCR")
+        return
+      }
+      #expect(vision.videoComponentInternalID == inputID)
     }
 
     @Test("LUB-1049: UCT-1016.14: Sidebar Preview uses its provided state")
@@ -759,10 +763,10 @@ extension AppUIComponentTestSuite {
 
     private func configureCanvasProfiles(in document: WorkspaceDocument) {
       document.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-      }
-      document.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
+        workspace.definition.canvasConfiguration = .with {
+          $0.landscapeProfileID = "sdr-landscape-1080p60"
+          $0.portraitProfileID = "sdr-portrait-1080p60"
+        }
       }
     }
 

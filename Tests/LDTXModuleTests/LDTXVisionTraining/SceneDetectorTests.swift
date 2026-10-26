@@ -195,7 +195,10 @@ struct SceneDetectorIntegrationTestSuite {
         return service
       })
     let trigger = Ldtx_Workspace_V4_VisionTriggerWrapper.with {
-      $0.intervalTrigger.intervalSeconds.set(num: 1, den: 1)
+      $0.trigger = .intervalTrigger(
+        .with {
+          $0.intervalSeconds = .with { $0.set(num: 1, den: 1) }
+        })
     }
     var classifier = Ldtx_Workspace_V4_LdtxSceneDetectorVision.with {
       $0.internalID = 5
@@ -208,7 +211,10 @@ struct SceneDetectorIntegrationTestSuite {
       $0.recognitionLanguages = ["en-US"]
     }
     func wrappers() -> [Ldtx_Workspace_V4_VisionWrapper] {
-      [.with { $0.ldtxSceneDetectorVision = classifier }, .with { $0.ocrVision = ocr }]
+      [
+        .with { $0.vision = .ldtxSceneDetectorVision(classifier) },
+        .with { $0.vision = .ocrVision(ocr) },
+      ]
     }
     var results: [(Int64, String)] = []
     var variables: [Int64: [LDTXVariableItem: String]] = [:]
@@ -265,7 +271,9 @@ struct SceneDetectorIntegrationTestSuite {
     for _ in 0..<10 { await Task.yield() }
     scheduler.tick()
     try await waitUntil { frameContinuation != nil }
-    context.videoComponents = [.with { $0.vfxSource.deviceWidth = 1280 }]
+    context.videoComponents = [
+      .with { $0.videoComponent = .vfxSource(.with { $0.deviceWidth = 1280 }) }
+    ]
     feature.synchronize(visions: wrappers(), context: context)
     frameContinuation?.resume()
     await feature.stop()

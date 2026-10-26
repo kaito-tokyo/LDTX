@@ -5,14 +5,6 @@
 
 import PackageDescription
 
-// Match the official nanopb runtime's C configuration in Swift imports.
-let nanopbSwiftSettings: [SwiftSetting] = [
-  .unsafeFlags([
-    "-Xcc", "-DPB_FIELD_32BIT=1", "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
-    "-Xcc", "-DPB_ENABLE_MALLOC=1",
-  ])
-]
-
 let package = Package(
   name: "LDTXCorelibs",
   platforms: [.macOS("27.0")],
@@ -36,16 +28,26 @@ let package = Package(
       ]
     ),
     .target(
-      name: "LDTXCorelibs",
+      name: "LDTXMessages",
       dependencies: ["LDTXNanopbGenerated", .product(name: "nanopb", package: "nanopb")],
-      path: "Sources/LDTXCorelibs",
-      swiftSettings: nanopbSwiftSettings
+      path: "Sources/LDTXMessages",
+      // Match the official nanopb runtime's C configuration in Swift imports.
+      swiftSettings: [
+        .unsafeFlags([
+          "-Xcc", "-DPB_FIELD_32BIT=1", "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
+          "-Xcc", "-DPB_ENABLE_MALLOC=1",
+        ])
+      ]
+    ),
+    .target(
+      name: "LDTXCorelibs",
+      dependencies: ["LDTXMessages"],
+      path: "Sources/LDTXCorelibs"
     ),
     .testTarget(
       name: "LDTXCorelibsTests",
-      dependencies: ["LDTXCorelibs"],
-      path: "Tests",
-      swiftSettings: nanopbSwiftSettings
+      dependencies: ["LDTXCorelibs", "LDTXMessages"],
+      path: "Tests/LDTXCorelibsTests"
     ),
   ]
 )

@@ -23,9 +23,9 @@ Git submodule scope updates nanopb; the separate
 For an Xcode lock proposal, copy the proposed version to the corresponding
 `exactVersion` in project.yml before regenerating or resolving the project.
 Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
-update, keep the runtime pin and generator's version check aligned.
-The Python generator's protobuf runtime is pinned in the PEP 723 inline metadata
-of `Tools/GenerateNanopbProtos/generate.py`. pipx with the pip backend manages
+update, use the same pinned checkout for the runtime and official C generator.
+The Python generator's protobuf runtime and Jinja2 are pinned in the PEP 723 inline metadata
+of `.agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py`. pipx with the pip backend manages
 its isolated environment;
 keep the pin compatible with the external protoc version used to prepare descriptors.
 
@@ -46,8 +46,8 @@ CI runs Linux Corelibs and the Xcode pr plan, including CLI and macOS
 protobuf-extra tests. After Xcode resolution, CI rejects changes to the tracked
 Xcode lock, including originHash; commit the resolver-produced lock before
 retrying CI. nanopb changes also require checking configuration macros, codec
-round trips, and `generate.py --check` against an external descriptor as described
-in the [generator guide](../Tools/GenerateNanopbProtos/README.md).
+round trips, official C header regeneration, and `generate-nanopb-headers.py --check` against an external descriptor as described
+in the [generator guide](../.agents/skills/generate-nanopb-protos/references/generation.md).
 
 ## Python model tooling
 

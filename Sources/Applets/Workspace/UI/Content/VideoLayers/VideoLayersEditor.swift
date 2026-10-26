@@ -98,10 +98,14 @@ final class VideoLayersEditorState {
         else { return }
         let (transform, incomplete) = self.parsedTransform(for: row)
         let previous = row.transform
-        if transform.translationX.double == previous.translationX.double,
-          transform.translationY.double == previous.translationY.double,
-          transform.scaleX.double == previous.scaleX.double,
-          transform.scaleY.double == previous.scaleY.double
+        if (transform.translationX?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
+          == (previous.translationX?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+          (transform.translationY?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
+            == (previous.translationY?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+          (transform.scaleX?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
+            == (previous.scaleX?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1),
+          (transform.scaleY?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
+            == (previous.scaleY?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
         {
           row.hasLocalTextChanges = incomplete
           return
@@ -135,12 +139,12 @@ final class VideoLayersEditorState {
     var hasIncompleteText = false
     let previous = state.transform
     let fallback = [
-      previous.translationX, previous.translationY,
+      previous.translationX ?? .init(), previous.translationY ?? .init(),
       Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleX.num, den: previous.scaleX.den)
+        $0.set(num: previous.scaleX?.num ?? 1, den: previous.scaleX?.den ?? 1)
       },
       Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleY.num, den: previous.scaleY.den)
+        $0.set(num: previous.scaleY?.num ?? 1, den: previous.scaleY?.den ?? 1)
       },
     ]
     let values = state.strings.enumerated().map { index, text in

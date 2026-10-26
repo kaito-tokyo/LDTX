@@ -156,7 +156,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       let names = stateService.workspaceDefinition.videoComponents.compactMap {
         component -> String? in
         guard case .vfxSource(let source) = component.videoComponent,
-          appletData.physicalDeviceID(for: source.internalID) == .avCaptureDevice(uniqueID: uid)
+          let id = source.internalID,
+          appletData.physicalDeviceID(for: id) == .avCaptureDevice(uniqueID: uid)
         else { return nil }
         return component.displayName
       }
@@ -679,9 +680,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
     let output = windowRuntime.workspace.outputSettings
     guard
-      (output.recordingEnabled
-        && (output.recordingSettings.recordsLandscape || output.recordingSettings.recordsPortrait))
-        || output.youtubeEnabled
+      (output.recordingEnabled == true
+        && (output.recordingSettings?.recordsLandscape == true
+          || output.recordingSettings?.recordsPortrait == true))
+        || output.youtubeEnabled == true
     else {
       throw NSError(
         domain: "WorkspaceOutput", code: 2,
@@ -982,24 +984,27 @@ extension WorkspaceAppletCoordinator {
   public func classify(
     vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, modelURL: URL
   ) async throws -> String {
+    guard let visionID = vision.internalID, let modelID = vision.modelInternalID else {
+      throw CocoaError(.fileReadCorruptFile)
+    }
     let context = windowRuntime.visionFeatureContext
     let service: VisionImageClassifierService
     do {
       guard
         windowRuntime.definition.visions.contains(where: {
           $0.vision == .ldtxSceneDetectorVision(vision)
-        }), let url = windowRuntime.workspace.visionModels[vision.modelInternalID],
+        }), let url = windowRuntime.workspace.visionModels[modelID],
         url.standardizedFileURL == modelURL.standardizedFileURL
       else { throw CocoaError(.fileReadNoSuchFile) }
       guard
         let preparedService = await visionFeature.classifierService(
-          modelID: vision.modelInternalID, url: modelURL)
+          modelID: modelID, url: modelURL)
       else { throw CocoaError(.fileReadNoSuchFile) }
       guard context.isCurrent() else { throw CancellationError() }
       service = preparedService
     } catch {
       guard context.isCurrent() else { throw CancellationError() }
-      if !(error is CancellationError) { context.reportFailure(vision.internalID, error) }
+      if !(error is CancellationError) { context.reportFailure(visionID, error) }
       throw error
     }
     return try await windowRuntime.classify(vision: vision, service: service)
@@ -1190,18 +1195,18 @@ extension WorkspaceAppletCoordinator {
     let audioDeviceIDs = Dictionary(
       uniqueKeysWithValues: windowRuntime.definition.audioDevices.compactMap {
         input -> (String, String)? in
-        guard
+        guard let id = input.internalID,
           case .coreAudioDevice(let physicalID)? =
-            appletData.physicalDeviceID(for: input.internalID)
+            appletData.physicalDeviceID(for: id)
         else { return nil }
-        return ("v4-\(input.internalID)", physicalID)
+        return ("v4-\(id)", physicalID)
       })
     let monitoredKeys = Set(
       windowRuntime.definition.audioDevices.compactMap { input -> String? in
-        guard
-          localState.monitorAudioInputDeviceInternalIDs.contains(input.internalID)
+        guard let id = input.internalID,
+          localState.monitorAudioInputDeviceInternalIDs.contains(id)
         else { return nil }
-        return "v4-\(input.internalID)"
+        return "v4-\(id)"
       })
     updatePeakMeterGains()
     let preferences = WorkspaceV4RenderGraph.monitorPreferences(

@@ -21,11 +21,14 @@ typealias RationalFormatStyle = RationalValueFormatStyle<Ldtx_Workspace_V4_Ratio
 
 struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
   var multiplier: UInt64 = 1
+  var defaultNumerator: Int32 = 0
   var parseStrategy: RationalValueParseStrategy<Value> { .init(divisor: multiplier) }
   func format(_ value: Value) -> String {
-    guard value.den > 0 else { return String(value.double) }
-    var magnitude = Int128(value.num).magnitude * UInt128(multiplier)
-    var denominator = UInt128(value.den)
+    let num = value.num ?? defaultNumerator
+    let den = value.den ?? 1
+    guard den > 0 else { return String(Double(num) / Double(den)) }
+    var magnitude = Int128(num).magnitude * UInt128(multiplier)
+    var denominator = UInt128(den)
     var a = magnitude
     var b = denominator
     while b != 0 { (a, b) = (b, a % b) }
@@ -34,9 +37,9 @@ struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
     var d = denominator
     while d % 2 == 0 { d /= 2 }
     while d % 5 == 0 { d /= 5 }
-    guard d == 1 else { return "\(value.num < 0 ? "-" : "")\(magnitude)/\(denominator)" }
+    guard d == 1 else { return "\(num < 0 ? "-" : "")\(magnitude)/\(denominator)" }
     let divisor = UInt128(denominator)
-    var output = (value.num < 0 ? "-" : "") + String(magnitude / divisor)
+    var output = (num < 0 ? "-" : "") + String(magnitude / divisor)
     var remainder = magnitude % divisor
     if remainder != 0 { output += "." }
     while remainder != 0 {
@@ -134,7 +137,7 @@ enum RationalSliderEncoding {
 extension Binding where Value == Ldtx_Workspace_V4_Rational32 {
   func sliderValue(denominator: UInt32) -> Binding<Double> {
     Binding<Double>(
-      get: { wrappedValue.double },
+      get: { wrappedValue.double(defaultNumerator: 0, defaultDenominator: 1) },
       set: {
         if let value = try? RationalSliderEncoding.encode($0, denominator: denominator) {
           wrappedValue = value
@@ -148,13 +151,15 @@ enum RationalFractionInput {
   static func fields<Value: Rational32Value>(
     for value: Value, defaultDenominator: UInt32
   ) -> (numerator: String, denominator: String) {
-    let scaled = Int64(value.num) * Int64(defaultDenominator)
-    if value.den > 0, scaled % Int64(value.den) == 0,
-      let numerator = Int32(exactly: scaled / Int64(value.den))
+    let num = value.num ?? 0
+    let den = value.den ?? 1
+    let scaled = Int64(num) * Int64(defaultDenominator)
+    if den > 0, scaled % Int64(den) == 0,
+      let numerator = Int32(exactly: scaled / Int64(den))
     {
       return (String(numerator), String(defaultDenominator))
     }
-    return (String(value.num), String(value.den))
+    return (String(num), String(den))
   }
 
   static func parse<Value: Rational32Value>(

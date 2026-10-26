@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+  internal import Glibc
+#else
+  import Foundation
+#endif
 
 public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Codable, Sendable {
   case inputCameraDevice

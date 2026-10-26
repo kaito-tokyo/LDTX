@@ -52,12 +52,12 @@ message IntervalVisionTrigger {
 // An image-analysis request that recognizes text in an image.
 message OcrVision {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Vision shown in the Workspace sidebar.
   string display_name = 2;
   // The LdtxInternalId of the Video Component analyzed after effects and
   // before Program placement.
-  sfixed64 video_component_internal_id = 3 [default = 0];
+  sfixed64 video_component_internal_id = 3;
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
@@ -65,7 +65,7 @@ message OcrVision {
   // The BCP 47 languages Vision detects, in priority order.
   repeated string recognition_languages = 6;
   // Whether Vision applies language correction during text recognition.
-  bool uses_language_correction = 7 [default = false];
+  bool uses_language_correction = 7;
   // The words that supplement Vision's lexicon during word recognition.
   // Vision uses these only when language correction is enabled.
   repeated string custom_words = 8;
@@ -76,12 +76,12 @@ message OcrVision {
 // An image-analysis request that detects a scene using an LDTX Scene Detector model.
 message LdtxSceneDetectorVision {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Vision shown in the Workspace sidebar.
   string display_name = 2;
   // The LdtxInternalId of the Video Component analyzed after effects and
   // before Program placement.
-  sfixed64 video_component_internal_id = 3 [default = 0];
+  sfixed64 video_component_internal_id = 3;
   // The region of the input image in which Vision performs the request.
   VisionRegionOfInterest region_of_interest = 4;
   // The conditions that automatically trigger this Vision.
@@ -93,5 +93,5 @@ message LdtxSceneDetectorVision {
   // in lexicographic basename order within that model directory. Model IDs
   // are assigned when selecting models, not when saving. Previous models
   // are retained and are not overwritten when a new model is saved.
-  sfixed64 model_internal_id = 6 [default = 0];
+  sfixed64 model_internal_id = 6;
 }

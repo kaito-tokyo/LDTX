@@ -1,8 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 # SPDX-License-Identifier: Apache-2.0
 
-# Preserve generated output; validate it with GenerateNanopbProtos --check.
-Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/*.pb.c
-Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/include/*.pb.h
-Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/include/LDTXNanopbGenerated.h
-Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/StorageChecks.c
+# Preserve official nanopb output; regenerate and compare using the skill.
+Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/*.pb.h
+Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/*.pb.c

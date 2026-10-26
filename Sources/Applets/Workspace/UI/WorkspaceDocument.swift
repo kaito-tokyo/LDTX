@@ -105,13 +105,13 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
         case .ldtxSceneDetectorVision(var vision) = workspace.definition.visions[index].vision
       else { return }
       if let url {
-        guard workspace.visionModels[vision.modelInternalID] != url else { return }
+        if let id = vision.modelInternalID, workspace.visionModels[id] == url { return }
         let id = WorkspaceResourceFactory.nextInternalID(
           in: workspace.definition, additionalIDs: Set(workspace.visionModels.keys))
         workspace.visionModels[id] = url
         vision.modelInternalID = id
       } else {
-        vision.modelInternalID = 0
+        vision.modelInternalID = nil
       }
       workspace.definition.visions[index].vision = .ldtxSceneDetectorVision(vision)
     }
@@ -129,7 +129,7 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
     onRelease: (@MainActor (UUID) -> Void)? = nil
   ) {
     var definition = definition
-    if definition.displayName.isEmpty { definition.displayName = "Untitled" }
+    if definition.displayName?.isEmpty != false { definition.displayName = "Untitled" }
     self.workspace = WorkspaceV4Bundle(
       definitionExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),
       preferencesExternalID: WorkspaceBundleWriterV4.makeExternalID().uuidString.lowercased(),

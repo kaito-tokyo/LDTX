@@ -21,8 +21,8 @@ struct WorkspaceCanvasInspector: View {
     Section("Canvas") {
       Stepper("Frame Rate: \(frameRate)", value: frameRateBinding, in: 1...240)
         .disabled(stateService.isOutputActive)
-      LabeledContent("Landscape Profile", value: canvas.landscapeProfileID)
-      LabeledContent("Portrait Profile", value: canvas.portraitProfileID)
+      LabeledContent("Landscape Profile", value: canvas.landscapeProfileID ?? "")
+      LabeledContent("Portrait Profile", value: canvas.portraitProfileID ?? "")
       LabeledContent("Landscape Bit Rate") {
         TextField("Bits per second", value: landscapeBitRateBinding, format: .number)
           .multilineTextAlignment(.trailing)
@@ -36,7 +36,7 @@ struct WorkspaceCanvasInspector: View {
       Picker("PTS Master VFX Source", selection: ptsMasterBinding) {
         Text("Automatic").tag(Int64?.none)
         ForEach(videoDevices, id: \.internalID) { device in
-          Text(device.displayName).tag(Optional(device.internalID))
+          Text(device.displayName ?? "").tag(device.internalID)
         }
         if let selected = ptsMasterBinding.wrappedValue,
           !videoDevices.contains(where: { $0.internalID == selected })
@@ -51,7 +51,7 @@ struct WorkspaceCanvasInspector: View {
   }
 
   private var canvas: Ldtx_Workspace_V4_CanvasConfiguration {
-    stateService.workspaceDefinition.canvasConfiguration
+    stateService.workspaceDefinition.canvasConfiguration ?? .init()
   }
 
   private var videoDevices: [Ldtx_Workspace_V4_VfxSourceComponent] {
@@ -62,7 +62,7 @@ struct WorkspaceCanvasInspector: View {
   }
 
   private var frameRate: Int {
-    let value = stateService.workspaceDefinition.canvasConfiguration.frameRate
+    let value = stateService.workspaceDefinition.canvasConfiguration?.frameRate ?? 0
     return value == 0 ? 60 : Int(value)
   }
 
@@ -71,7 +71,9 @@ struct WorkspaceCanvasInspector: View {
       get: { frameRate },
       set: { value in
         var definition = stateService.workspaceDefinition
-        definition.canvasConfiguration.frameRate = UInt32(value)
+        var configuration = definition.canvasConfiguration ?? .init()
+        configuration.frameRate = UInt32(value)
+        definition.canvasConfiguration = configuration
         stateService.editWorkspace(undoManager: undoManager) { workspace in
           workspace.definition = definition
         }
@@ -88,14 +90,16 @@ struct WorkspaceCanvasInspector: View {
   }
 
   private func bitRateBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_CanvasConfiguration, UInt32>
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_CanvasConfiguration, UInt32?>
   ) -> Binding<Int> {
     Binding(
-      get: { Int(canvas[keyPath: keyPath]) },
+      get: { Int(canvas[keyPath: keyPath] ?? 0) },
       set: { value in
         let rate = UInt32(min(max(value, 100_000), 100_000_000))
         var definition = stateService.workspaceDefinition
-        definition.canvasConfiguration[keyPath: keyPath] = rate
+        var configuration = definition.canvasConfiguration ?? .init()
+        configuration[keyPath: keyPath] = rate
+        definition.canvasConfiguration = configuration
         stateService.editWorkspace(undoManager: undoManager) { workspace in
           workspace.definition = definition
         }
@@ -106,16 +110,17 @@ struct WorkspaceCanvasInspector: View {
   private var ptsMasterBinding: Binding<Int64?> {
     Binding(
       get: {
-        canvas.hasPtsMasterVfxSourceInternalID
-          ? canvas.ptsMasterVfxSourceInternalID : nil
+        canvas.ptsMasterVfxSourceInternalID
       },
       set: { internalID in
         var definition = stateService.workspaceDefinition
+        var configuration = definition.canvasConfiguration ?? .init()
         if let internalID {
-          definition.canvasConfiguration.ptsMasterVfxSourceInternalID = internalID
+          configuration.ptsMasterVfxSourceInternalID = internalID
         } else {
-          definition.canvasConfiguration.clearPtsMasterVfxSourceInternalID()
+          configuration.ptsMasterVfxSourceInternalID = nil
         }
+        definition.canvasConfiguration = configuration
         stateService.editWorkspace(undoManager: undoManager) { workspace in
           workspace.definition = definition
         }

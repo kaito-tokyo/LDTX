@@ -19,6 +19,10 @@ struct WorkspaceOutputInspector: View {
   @State private var landscapeKeyDraft: String?
   @State private var portraitKeyDraft: String?
 
+  private var recording: Binding<Ldtx_Workspace_V4_RecordingOutputSettings> {
+    $outputSettings.recordingSettings.defaulting(to: .init())
+  }
+
   var body: some View {
     Form {
       Section("Recording") {
@@ -30,18 +34,18 @@ struct WorkspaceOutputInspector: View {
             }
           }
         }
-        Toggle("Enable Recording", isOn: $outputSettings.recordingEnabled)
-        Toggle("Record Landscape", isOn: $outputSettings.recordingSettings.recordsLandscape)
-        Toggle("Record Portrait", isOn: $outputSettings.recordingSettings.recordsPortrait)
+        Toggle("Enable Recording", isOn: $outputSettings.recordingEnabled.defaulting(to: false))
+        Toggle("Record Landscape", isOn: recording.recordsLandscape.defaulting(to: false))
+        Toggle("Record Portrait", isOn: recording.recordsPortrait.defaulting(to: false))
         Text("Custom Fields").font(.headline)
-        ForEach(outputSettings.recordingSettings.customFields.keys.sorted(), id: \.self) { key in
+        ForEach(recording.wrappedValue.customFields.keys.sorted(), id: \.self) { key in
           HStack {
             TextField(
               key,
               text:
-                Binding($outputSettings.recordingSettings.customFields[key]) ?? .constant(""))
+                Binding(recording.customFields[key]) ?? .constant(""))
             Button("Remove", systemImage: "minus", role: .destructive) {
-              outputSettings.recordingSettings.customFields.removeValue(forKey: key)
+              recording.wrappedValue.customFields.removeValue(forKey: key)
             }
             .labelStyle(.iconOnly)
           }
@@ -52,10 +56,11 @@ struct WorkspaceOutputInspector: View {
         }
       }
       Section("YouTube") {
-        Toggle("Stream to YouTube", isOn: $outputSettings.youtubeEnabled)
+        Toggle("Stream to YouTube", isOn: $outputSettings.youtubeEnabled.defaulting(to: false))
         Picker(
           "YouTube Ingest",
-          selection: $outputSettings.youtubeSettings.ingestMode
+          selection: $outputSettings.youtubeSettings.defaulting(to: .init()).ingestMode.defaulting(
+            to: .landscapeRtmps)
         ) {
           Text("Landscape RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.landscapeRtmps)
           Text("Portrait RTMPS").tag(Ldtx_Workspace_V4_YouTubeIngestMode.portraitRtmps)
@@ -65,12 +70,12 @@ struct WorkspaceOutputInspector: View {
           "Landscape Stream Key", selection: $appletData.landscapeYouTubeLiveStreamIDs[externalID],
           draft: $landscapeKeyDraft
         )
-        .disabled(!outputSettings.youtubeSettings.ingestMode.usesLandscapeRTMPS)
+        .disabled(!(outputSettings.youtubeSettings?.ingestMode ?? .unspecified).usesLandscapeRTMPS)
         streamKeyPicker(
           "Portrait Stream Key", selection: $appletData.portraitYouTubeLiveStreamIDs[externalID],
           draft: $portraitKeyDraft
         )
-        .disabled(!outputSettings.youtubeSettings.ingestMode.usesPortraitRTMPS)
+        .disabled(!(outputSettings.youtubeSettings?.ingestMode ?? .unspecified).usesPortraitRTMPS)
         Button("Manage Stream Keys") { isShowingStreamKeyManager = true }
           .popover(isPresented: $isShowingStreamKeyManager) {
             WorkspaceV4StreamKeyManager(
@@ -104,15 +109,15 @@ struct WorkspaceOutputInspector: View {
             .keyboardShortcut(.cancelAction)
           Button("Add") {
             guard !isOutputActive, !newCustomFieldKey.isEmpty,
-              outputSettings.recordingSettings.customFields[newCustomFieldKey] == nil
+              recording.wrappedValue.customFields[newCustomFieldKey] == nil
             else { return }
-            outputSettings.recordingSettings.customFields[newCustomFieldKey] = ""
+            recording.wrappedValue.customFields[newCustomFieldKey] = ""
             isAddingCustomField = false
           }
           .keyboardShortcut(.defaultAction)
           .disabled(
             isOutputActive || newCustomFieldKey.isEmpty
-              || outputSettings.recordingSettings.customFields[newCustomFieldKey] != nil)
+              || recording.wrappedValue.customFields[newCustomFieldKey] != nil)
         }
       }
       .padding()
@@ -232,13 +237,12 @@ private struct RecordingFolderPicker: View {
       let definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
       var outputSettings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
       outputSettings.recordingEnabled = true
-      outputSettings.recordingSettings.recordsLandscape = true
-      outputSettings.recordingSettings.recordsPortrait = true
-      outputSettings.youtubeSettings.ingestMode = .dualRtmps
-      outputSettings.recordingSettings.customFields = [
-        "game": "Pokémon UNITE",
-        "player": "Preview Player",
-      ]
+      outputSettings.recordingSettings = .with {
+        $0.recordsLandscape = true
+        $0.recordsPortrait = true
+        $0.customFields = ["game": "Pokémon UNITE", "player": "Preview Player"]
+      }
+      outputSettings.youtubeSettings = .with { $0.ingestMode = .dualRtmps }
       return WorkspaceDocument(
         definition: definition, preferences: .init(), isOutputActive: isOutputActive,
         outputSettings: outputSettings)

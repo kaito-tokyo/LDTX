@@ -109,7 +109,7 @@ For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
 This table lists the app's library modules. Corelibs targets are defined by
 `Packages/LDTXCorelibs/Package.swift` and exported as one dynamic LDTXCorelibs product.
 Other modules are XcodeGen framework targets. The internal nanopb C target contains
-message descriptors and callbacks into the Swift models. External libraries
+message descriptors; Swift models copy to and from owned C messages. External libraries
 remain SwiftPM dependencies.
 
 | Module                     | Description                                                        |
@@ -124,8 +124,9 @@ remain SwiftPM dependencies.
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
 | LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
-| LDTXCorelibs               | Shared values, Protobuf models/codecs, Program definitions, and bundle IO. |
-| LDTXNanopbGenerated        | Generated nanopb C descriptors, callback bridge, and storage checks. |
+| LDTXCorelibs               | Shared values, Program definitions, bundle IO, and re-exported Swift messages. |
+| LDTXMessages               | Swift Protobuf messages and copying codec. |
+| LDTXNanopbGenerated        | Generated nanopb C message structures and descriptors. |
 | LDTXWorkspaceAppletInterface | Workspace presentation and runtime-operation contracts. |
 | LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |

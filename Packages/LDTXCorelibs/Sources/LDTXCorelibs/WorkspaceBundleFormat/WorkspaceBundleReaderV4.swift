@@ -41,9 +41,10 @@ public struct WorkspaceBundleReaderV4 {
     let outputSettingsEnvelope = try Ldtx_Envelope_WorkspaceOutputSettingsEnvelope(
       serializedBytes: try Data(contentsOf: bundleURL.appending(path: "output_settings.pb")))
     guard
-      case .workspaceDefinitionV4 = definitionEnvelope.workspaceDefinition,
-      case .workspacePreferencesV4 = preferencesEnvelope.workspacePreferences,
-      case .workspaceOutputSettingsV4 = outputSettingsEnvelope.workspaceOutputSettings,
+      case .workspaceDefinitionV4(let definition) = definitionEnvelope.workspaceDefinition,
+      case .workspacePreferencesV4(let preferences) = preferencesEnvelope.workspacePreferences,
+      case .workspaceOutputSettingsV4(let outputSettings) = outputSettingsEnvelope
+        .workspaceOutputSettings,
       let outputSettingsExternalID = outputSettingsEnvelope.externalIDAsUUID,
       let definitionExternalID = definitionEnvelope.externalIDAsUUID,
       isUUIDv7(definitionExternalID),
@@ -53,24 +54,13 @@ public struct WorkspaceBundleReaderV4 {
       throw CocoaError(.fileReadCorruptFile, userInfo: [NSURLErrorKey: bundleURL])
     }
 
-    // Pre-font-size V4 Clocks only stored their fixed extent. Adopt the current
-    // default font size on import; unknown and reserved fields are discarded.
-    for index in definitionEnvelope.workspaceDefinitionV4.videoComponents.indices {
-      guard
-        case .clock(var clock) = definitionEnvelope.workspaceDefinitionV4.videoComponents[index]
-          .videoComponent, !clock.hasFontSize
-      else { continue }
-      clock.fontSize.set(num: 48, den: 1)
-      definitionEnvelope.workspaceDefinitionV4.videoComponents[index].clock = clock
-    }
-
     let workspace = WorkspaceV4Bundle(
       definitionExternalID: definitionExternalID.uuidString.lowercased(),
       preferencesExternalID: preferencesExternalID.uuidString.lowercased(),
-      definition: definitionEnvelope.workspaceDefinitionV4,
-      preferences: preferencesEnvelope.workspacePreferencesV4,
+      definition: definition,
+      preferences: preferences,
       outputSettingsExternalID: outputSettingsExternalID.uuidString.lowercased(),
-      outputSettings: outputSettingsEnvelope.workspaceOutputSettingsV4,
+      outputSettings: outputSettings,
       visionModels: try WorkspaceModelFiles.read(at: bundleURL))
     try WorkspaceBundleValidatorV4.validate(workspace)
     return workspace

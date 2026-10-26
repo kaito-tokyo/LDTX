@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public struct WorkspaceBundleWriterV4 {
   public let bundleURL: URL?
@@ -122,7 +126,7 @@ public struct WorkspaceBundleWriterV4 {
     try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
     envelope.externalIDAsUUID = externalID
-    envelope.workspaceDefinitionV4 = definition
+    envelope.workspaceDefinition = .workspaceDefinitionV4(definition)
     return try envelope.serializedData()
   }
 
@@ -132,7 +136,7 @@ public struct WorkspaceBundleWriterV4 {
     try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
     envelope.externalIDAsUUID = externalID
-    envelope.workspacePreferencesV4 = preferences
+    envelope.workspacePreferences = .workspacePreferencesV4(preferences)
     return try envelope.serializedData()
   }
 
@@ -142,7 +146,7 @@ public struct WorkspaceBundleWriterV4 {
     try validateExternalID(externalID)
     var envelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
     envelope.externalIDAsUUID = externalID
-    envelope.workspaceOutputSettingsV4 = outputSettings
+    envelope.workspaceOutputSettings = .workspaceOutputSettingsV4(outputSettings)
     return try envelope.serializedData()
   }
 

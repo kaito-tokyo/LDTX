@@ -30,10 +30,12 @@ extension Dictionary where Key == LDTXVariableKey, Value == String {
     for wrapper in definition.visions {
       switch wrapper.vision {
       case .ocrVision(let vision):
-        self[.init(visionID: vision.internalID, item: .text)] = ""
+        guard let id = vision.internalID else { continue }
+        self[.init(visionID: id, item: .text)] = ""
       case .ldtxSceneDetectorVision(let vision):
-        self[.init(visionID: vision.internalID, item: .label)] = ""
-        self[.init(visionID: vision.internalID, item: .confidence)] = "0"
+        guard let id = vision.internalID else { continue }
+        self[.init(visionID: id, item: .label)] = ""
+        self[.init(visionID: id, item: .confidence)] = "0"
       case nil: break
       }
     }

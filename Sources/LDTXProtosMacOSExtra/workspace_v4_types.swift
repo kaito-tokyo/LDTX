@@ -7,12 +7,14 @@ import LDTXCorelibs
 import SwiftUI
 
 extension Ldtx_Workspace_V4_Color {
-  /// Interprets RGBA components, including protobuf defaults, as extended sRGB.
+  /// Interprets missing RGBA components as zero in extended sRGB.
   /// RGB values are not clamped.
   public var extendedSRGBNSColor: NSColor? {
     return NSColor(
       colorSpace: .extendedSRGB,
-      components: [CGFloat(red), CGFloat(green), CGFloat(blue), CGFloat(alpha)],
+      components: [
+        CGFloat(red ?? 0), CGFloat(green ?? 0), CGFloat(blue ?? 0), CGFloat(alpha ?? 0),
+      ],
       count: 4)
   }
 
@@ -29,7 +31,7 @@ extension Ldtx_Workspace_V4_Color {
 }
 
 extension Ldtx_Workspace_V4_Color {
-  /// Interprets RGBA components, including protobuf defaults, as extended sRGB for SwiftUI.
+  /// Interprets missing RGBA components as zero in extended sRGB for SwiftUI.
   public var extendedSRGBSwiftUIColor: SwiftUI.Color? {
     extendedSRGBNSColor.map { SwiftUI.Color(nsColor: $0) }
   }

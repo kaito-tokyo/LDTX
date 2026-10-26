@@ -45,10 +45,22 @@ extension AppUIComponentTestSuite {
       }
       #expect(store.workspaceDefinition.visions.isEmpty)
       store.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents[0].vfxSource.deviceWidth = 1920
+        guard case .vfxSource(var source) = workspace.definition.videoComponents[0].videoComponent
+        else {
+          Issue.record("Missing source")
+          return
+        }
+        source.deviceWidth = 1920
+        workspace.definition.videoComponents[0].videoComponent = .vfxSource(source)
       }
       store.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents[0].vfxSource.deviceHeight = 1080
+        guard case .vfxSource(var source) = workspace.definition.videoComponents[0].videoComponent
+        else {
+          Issue.record("Missing source")
+          return
+        }
+        source.deviceHeight = 1080
+        workspace.definition.videoComponents[0].videoComponent = .vfxSource(source)
       }
       _ = try WorkspaceResourceAddition.add(
         sheet: .vision, draft: draft, devices: [], stateService: store)
@@ -85,9 +97,12 @@ extension AppUIComponentTestSuite {
       store.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
           .with {
-            $0.vfxSource.internalID = 7
-            $0.vfxSource.deviceWidth = 1920
-            $0.vfxSource.deviceHeight = 1080
+            $0.videoComponent = .vfxSource(
+              .with {
+                $0.internalID = 7
+                $0.deviceWidth = 1920
+                $0.deviceHeight = 1080
+              })
           }
         ]
       }
@@ -136,9 +151,12 @@ extension AppUIComponentTestSuite {
       store.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [7, 9].map { id in
           .with {
-            $0.vfxSource.internalID = Int64(id)
-            $0.vfxSource.deviceWidth = 1920
-            $0.vfxSource.deviceHeight = 1080
+            $0.videoComponent = .vfxSource(
+              .with {
+                $0.internalID = Int64(id)
+                $0.deviceWidth = 1920
+                $0.deviceHeight = 1080
+              })
           }
         }
       }
@@ -165,12 +183,25 @@ extension AppUIComponentTestSuite {
       switch change {
       case "input":
         store.editWorkspace(undoManager: nil) { workspace in
-          workspace.definition.visions[0].ldtxSceneDetectorVision.videoComponentInternalID = 9
+          guard case .ldtxSceneDetectorVision(var vision) = workspace.definition.visions[0].vision
+          else {
+            Issue.record("Missing classifier")
+            return
+          }
+          vision.videoComponentInternalID = 9
+          workspace.definition.visions[0].vision = .ldtxSceneDetectorVision(vision)
         }
       case "roi":
         store.editWorkspace(undoManager: nil) { workspace in
-          workspace.definition.visions[0].ldtxSceneDetectorVision.regionOfInterest.x.set(
-            num: 1, den: 10)
+          guard case .ldtxSceneDetectorVision(var vision) = workspace.definition.visions[0].vision
+          else {
+            Issue.record("Missing classifier")
+            return
+          }
+          var roi = vision.regionOfInterest ?? .init()
+          roi.x = .with { $0.set(num: 1, den: 10) }
+          vision.regionOfInterest = roi
+          workspace.definition.visions[0].vision = .ldtxSceneDetectorVision(vision)
         }
       default:
         store.setVisionModelURL(
@@ -188,28 +219,35 @@ extension AppUIComponentTestSuite {
 
     @Test("LUB-1048: ROI editing preserves absent fields for image-size defaults")
     func roiNumeratorDefaults() throws {
-      var rational = Ldtx_Workspace_V4_Rational32()
+      var rational: Ldtx_Workspace_V4_Rational32? = nil
       let binding = Binding(get: { rational }, set: { rational = $0 })
       let numerator = RegionOfInterestEditor.numeratorBinding(binding)
-      #expect(numerator.wrappedValue == nil && !rational.hasDen)
+      #expect(numerator.wrappedValue == nil && rational == nil)
       numerator.wrappedValue = 320
-      #expect(rational.num == 320 && !rational.hasDen)
+      #expect(rational?.num == 320 && rational?.den == nil)
       var region = Ldtx_Workspace_V4_VisionRegionOfInterest()
       region.x = rational
-      #expect(try region.resolved(inputSize: (1920, 1080)).x.double == 1.0 / 6)
-      rational.den = 1080
+      #expect(
+        try region.resolved(inputSize: (1920, 1080)).x?.double(
+          defaultNumerator: 0, defaultDenominator: 1) == 1.0 / 6)
+      rational?.den = 1080
       numerator.wrappedValue = 180
-      #expect(rational.den == 1080)
+      #expect(rational?.den == 1080)
       numerator.wrappedValue = nil
-      #expect(!rational.hasNum && rational.den == 1080)
+      #expect(rational?.num == nil && rational?.den == 1080)
     }
 
     @Test("LUB-1048: Classifier Inspector receives the resolved input size")
     func fractionDefaultsAndValidation() throws {
       let source = WorkspaceResourceFactory.makeVFXSource(id: 7, name: "Camera")
       var configuredSource = source
-      configuredSource.vfxSource.deviceWidth = 1280
-      configuredSource.vfxSource.deviceHeight = 720
+      guard case .vfxSource(var sourceValue) = source.videoComponent else {
+        Issue.record("Missing source")
+        return
+      }
+      sourceValue.deviceWidth = 1280
+      sourceValue.deviceHeight = 720
+      configuredSource.videoComponent = .vfxSource(sourceValue)
       let videoComponents = [
         configuredSource, WorkspaceResourceFactory.makeSolidColor(id: 8, name: "Fill"),
       ]
@@ -240,12 +278,16 @@ extension AppUIComponentTestSuite {
       }
       let boundStore = Bindable(wrappedValue: store)
       let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
-      binding.regionOfInterest.width.num.wrappedValue = 3
-      binding.regionOfInterest.width.den.wrappedValue = 4
+      let width = binding.regionOfInterest.defaulting(to: .init()).width.defaulting(to: .init())
+      width.num.wrappedValue = 3
+      width.den.wrappedValue = 4
+      guard case .ldtxSceneDetectorVision(let updated) = store.workspaceDefinition.visions[0].vision
+      else {
+        Issue.record("Missing classifier")
+        return
+      }
       #expect(
-        store.workspaceDefinition.visions[0].ldtxSceneDetectorVision.regionOfInterest.width
-          .double
-          == 0.75)
+        updated.regionOfInterest?.width?.double(defaultNumerator: 0, defaultDenominator: 1) == 0.75)
     }
 
     @Test("LUB-1048: Classifier added through the sheet flow saves and reopens with its settings")
@@ -261,10 +303,22 @@ extension AppUIComponentTestSuite {
         ]
       }
       store.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents[0].vfxSource.deviceWidth = 1920
+        guard case .vfxSource(var source) = workspace.definition.videoComponents[0].videoComponent
+        else {
+          Issue.record("Missing source")
+          return
+        }
+        source.deviceWidth = 1920
+        workspace.definition.videoComponents[0].videoComponent = .vfxSource(source)
       }
       store.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents[0].vfxSource.deviceHeight = 1080
+        guard case .vfxSource(var source) = workspace.definition.videoComponents[0].videoComponent
+        else {
+          Issue.record("Missing source")
+          return
+        }
+        source.deviceHeight = 1080
+        workspace.definition.videoComponents[0].videoComponent = .vfxSource(source)
       }
       var draft = WorkspaceAddDraft()
       draft.name = "Scene"
@@ -277,10 +331,10 @@ extension AppUIComponentTestSuite {
       let boundStore = Bindable(wrappedValue: store)
       let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: id))
       binding.wrappedValue.regionOfInterest = .with {
-        $0.x.set(num: 2, den: 10)
-        $0.y.set(num: 1, den: 10)
-        $0.width.set(num: 5, den: 10)
-        $0.height.set(num: 6, den: 10)
+        $0.x = .with { $0.set(num: 2, den: 10) }
+        $0.y = .with { $0.set(num: 1, den: 10) }
+        $0.width = .with { $0.set(num: 5, den: 10) }
+        $0.height = .with { $0.set(num: 6, den: 10) }
       }
       let url = root.appendingPathComponent("Classifier.ldtxworkspace")
       try await saveWorkspaceDocument(document, to: url)
@@ -289,7 +343,11 @@ extension AppUIComponentTestSuite {
       #expect(
         reopened.stateService.workspaceDefinition.visions == store.workspaceDefinition.visions)
       #expect(binding.wrappedValue.videoComponentInternalID == 1)
-      #expect(binding.wrappedValue.triggers.first?.intervalTrigger.intervalSeconds.double == 5)
+      guard case .intervalTrigger(let trigger) = binding.wrappedValue.triggers.first?.trigger else {
+        Issue.record("Missing interval trigger")
+        return
+      }
+      #expect(trigger.intervalSeconds?.double(defaultNumerator: 0, defaultDenominator: 1) == 5)
     }
 
     @Test(
@@ -305,10 +363,10 @@ extension AppUIComponentTestSuite {
       let boundStore = Bindable(wrappedValue: store)
       let binding = try #require(boundStore.ldtxSceneDetectorVision(internalID: 2))
       let invalidRegion: Ldtx_Workspace_V4_VisionRegionOfInterest = .with {
-        $0.x.set(num: 8, den: 10)
-        $0.y.set(num: 0, den: 10)
-        $0.width.set(num: 5, den: 10)
-        $0.height.set(num: 10, den: 10)
+        $0.x = .with { $0.set(num: 8, den: 10) }
+        $0.y = .with { $0.set(num: 0, den: 10) }
+        $0.width = .with { $0.set(num: 5, den: 10) }
+        $0.height = .with { $0.set(num: 10, den: 10) }
       }
       #expect(throws: (any Error).self) {
         try WorkspaceBundleValidatorV4.validateRegionOfInterest(invalidRegion)
@@ -319,7 +377,7 @@ extension AppUIComponentTestSuite {
         ]
       }
       binding.wrappedValue.displayName = "Removed classifier"
-      #expect(store.workspaceDefinition.visions.first?.ocrVision.displayName == "OCR")
+      #expect(store.workspaceDefinition.visions.first?.displayName == "OCR")
       #expect(boundStore.ldtxSceneDetectorVision(internalID: 2) == nil)
     }
   }

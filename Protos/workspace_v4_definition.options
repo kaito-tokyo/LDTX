@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+* fallback_type:FT_POINTER
+ldtx.workspace.v4.WorkspaceDefinitionV4.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.ProgramDefinition.display_name type_override:TYPE_BYTES
+ldtx.workspace.v4.CanvasConfiguration.landscape_profile_id type_override:TYPE_BYTES
+ldtx.workspace.v4.CanvasConfiguration.portrait_profile_id type_override:TYPE_BYTES

@@ -4,5 +4,4 @@
 
 module LDTXNanopbGenerated {
     umbrella header "LDTXNanopbGenerated.h"
-    export *
 }

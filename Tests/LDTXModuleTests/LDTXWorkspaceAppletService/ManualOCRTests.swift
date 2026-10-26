@@ -30,7 +30,7 @@ struct ManualOCRIntegrationTestSuite {
       },
       reportResult: { _, _ in results += 1 },
       reportFailure: { _, _ in failures += 1 })
-    feature.synchronize(visions: [.with { $0.ocrVision = vision }], context: context)
+    feature.synchronize(visions: [.with { $0.vision = .ocrVision(vision) }], context: context)
     feature.runOCR(visionInternalID: 11)
     while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
     #expect(failures == 1)
@@ -66,7 +66,7 @@ struct ManualOCRIntegrationTestSuite {
       reportFailure: { _, error in failures.append(error as NSError) },
       archiveResult: { _, _, _ in archives += 1 })
     context.recordingPackageURL = { URL(fileURLWithPath: "/tmp/backend-failure.ldtxrecord") }
-    feature.synchronize(visions: [.with { $0.ocrVision = vision }], context: context)
+    feature.synchronize(visions: [.with { $0.vision = .ocrVision(vision) }], context: context)
     feature.runOCR(visionInternalID: 11)
     while !feature.canRunOCR(visionInternalID: 11) { await Task.yield() }
     #expect(failures.count == 1)
@@ -86,7 +86,7 @@ struct ManualOCRIntegrationTestSuite {
   @Test("LUB-1045: Manual admission and completion", arguments: [false, true], Completion.allCases)
   func manualAdmissionAndCompletion(recording: Bool, completion: Completion) async {
     var vision: Ldtx_Workspace_V4_OcrVision? = .with { $0.internalID = 11 }
-    let wrapper = Ldtx_Workspace_V4_VisionWrapper.with { $0.ocrVision = vision! }
+    let wrapper = Ldtx_Workspace_V4_VisionWrapper.with { $0.vision = .ocrVision(vision!) }
     var current = true
     var targetExists = true
     var package = recording ? URL(fileURLWithPath: "/tmp/manual-ocr.ldtxrecord") : nil

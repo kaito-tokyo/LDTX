@@ -18,10 +18,10 @@ enum WorkspaceResourceFactory {
         string: "Dynamic Text",
         attributes: [.font: NSFont.systemFont(ofSize: 48), .foregroundColor: NSColor.white])
     ).rtfd
-    text.width.set(num: 1, den: 2)
-    text.height.set(num: 1, den: 10)
+    text.width = .with { $0.set(num: 1, den: 2) }
+    text.height = .with { $0.set(num: 1, den: 10) }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.dynamicText = text
+    wrapper.videoComponent = .dynamicText(text)
     return wrapper
   }
 
@@ -39,7 +39,7 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.vfxSource = component
+    wrapper.videoComponent = .vfxSource(component)
     return wrapper
   }
 
@@ -54,7 +54,7 @@ enum WorkspaceResourceFactory {
     component.displayName = name
     component.extendedSrgbColor = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.solidColorFill = component
+    wrapper.videoComponent = .solidColorFill(component)
     return wrapper
   }
 
@@ -67,7 +67,7 @@ enum WorkspaceResourceFactory {
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.clock = component
+    wrapper.videoComponent = .clock(component)
     return wrapper
   }
 
@@ -86,7 +86,7 @@ enum WorkspaceResourceFactory {
     }
     component.endExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.linearGradientFill = component
+    wrapper.videoComponent = .linearGradientFill(component)
     return wrapper
   }
 
@@ -108,7 +108,7 @@ enum WorkspaceResourceFactory {
     component.innerExtendedSrgbColor = gradientStartColor
     component.outerExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.radialGradientFill = component
+    wrapper.videoComponent = .radialGradientFill(component)
     return wrapper
   }
 
@@ -126,7 +126,7 @@ enum WorkspaceResourceFactory {
     component.startExtendedSrgbColor = gradientStartColor
     component.endExtendedSrgbColor = gradientEndColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.conicGradientFill = component
+    wrapper.videoComponent = .conicGradientFill(component)
     return wrapper
   }
 
@@ -135,7 +135,7 @@ enum WorkspaceResourceFactory {
     component.internalID = id
     component.displayName = name
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.testPattern = component
+    wrapper.videoComponent = .testPattern(component)
     return wrapper
   }
 
@@ -147,14 +147,14 @@ enum WorkspaceResourceFactory {
       $0.set(num: 5, den: 1)
     }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-    triggerWrapper.intervalTrigger = trigger
+    triggerWrapper.trigger = .intervalTrigger(trigger)
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = name
     vision.videoComponentInternalID = componentID
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.ocrVision = vision
+    wrapper.vision = .ocrVision(vision)
     return wrapper
   }
 
@@ -166,14 +166,14 @@ enum WorkspaceResourceFactory {
       $0.set(num: 5, den: 1)
     }
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-    triggerWrapper.intervalTrigger = trigger
+    triggerWrapper.trigger = .intervalTrigger(trigger)
     var vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision()
     vision.internalID = id
     vision.displayName = name
     vision.videoComponentInternalID = componentID
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.ldtxSceneDetectorVision = vision
+    wrapper.vision = .ldtxSceneDetectorVision(vision)
     return wrapper
   }
 

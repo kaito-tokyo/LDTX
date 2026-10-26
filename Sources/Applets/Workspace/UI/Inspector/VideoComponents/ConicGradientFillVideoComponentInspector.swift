@@ -33,32 +33,32 @@ struct ConicGradientFillVideoComponentInspector: View {
   }
 
   private var centerX: Ldtx_Workspace_V4_Rational32 {
-    component?.centerX
+    component.map { $0.centerX ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 2)
       }
   }
 
   private var centerY: Ldtx_Workspace_V4_Rational32 {
-    component?.centerY
+    component.map { $0.centerY ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 2)
       }
   }
 
   private var startAngleRadians: Ldtx_Workspace_V4_Rational32 {
-    component?.startAngleRadians
+    component.map { $0.startAngleRadians ?? .init() }
       ?? .with {
         $0.set(num: 0, den: 1)
       }
   }
 
   private var startColor: Color {
-    component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black
+    component.flatMap { ($0.startExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .black
   }
 
   private var endColor: Color {
-    component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white
+    component.flatMap { ($0.endExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .white
   }
 
   var body: some View {
@@ -78,7 +78,8 @@ struct ConicGradientFillVideoComponentInspector: View {
 
         TextField(
           "Name",
-          text: componentBinding(\.displayName, initial: "(invalid)", undoManager: undoManager))
+          text: componentBinding(
+            \.displayName, initial: component == nil ? "(invalid)" : "", undoManager: undoManager))
         LabeledContent("Center X") {
           Slider(
             value: componentBinding(\.centerX, initial: centerX, undoManager: undoManager)
@@ -113,7 +114,7 @@ struct ConicGradientFillVideoComponentInspector: View {
   }
 
   func componentBinding<Value>(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillConicGradientComponent, Value>,
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillConicGradientComponent, Value?>,
     initial: Value, undoManager: UndoManager?
   ) -> Binding<Value> {
     Binding(
@@ -125,12 +126,14 @@ struct ConicGradientFillVideoComponentInspector: View {
 
   func colorBinding(
     _ keyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_FillConicGradientComponent, Ldtx_Workspace_V4_Color
+      Ldtx_Workspace_V4_FillConicGradientComponent, Ldtx_Workspace_V4_Color?
     >,
     initial: Color, undoManager: UndoManager?
   ) -> Binding<Color> {
     Binding(
-      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      get: {
+        component.flatMap { ($0[keyPath: keyPath] ?? .init()).extendedSRGBSwiftUIColor } ?? initial
+      },
       set: { next in
         guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }
@@ -158,9 +161,12 @@ struct ConicGradientFillVideoComponentInspector: View {
   private var gradient: AngularGradient {
     AngularGradient(
       colors: [startColor, endColor],
-      center: UnitPoint(x: centerX.double, y: centerY.double),
-      startAngle: .radians(startAngleRadians.double),
-      endAngle: .radians(startAngleRadians.double + 2 * .pi))
+      center: UnitPoint(
+        x: centerX.double(defaultNumerator: 0, defaultDenominator: 1),
+        y: centerY.double(defaultNumerator: 0, defaultDenominator: 1)),
+      startAngle: .radians(startAngleRadians.double(defaultNumerator: 0, defaultDenominator: 1)),
+      endAngle: .radians(
+        startAngleRadians.double(defaultNumerator: 0, defaultDenominator: 1) + 2 * .pi))
   }
 }
 

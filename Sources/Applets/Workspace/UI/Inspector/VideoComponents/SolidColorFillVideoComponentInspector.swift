@@ -33,7 +33,7 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   private var color: Color {
-    component?.extendedSrgbColor.extendedSRGBSwiftUIColor
+    component.flatMap { ($0.extendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor }
       ?? Color(red: 1, green: 0, blue: 1)
   }
 
@@ -68,7 +68,7 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   func componentBinding<Value>(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Value>,
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Value?>,
     initial: Value, undoManager: UndoManager?
   ) -> Binding<Value> {
     Binding(
@@ -79,11 +79,13 @@ struct SolidColorFillVideoComponentInspector: View {
   }
 
   func colorBinding(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Ldtx_Workspace_V4_Color>,
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillSolidColorComponent, Ldtx_Workspace_V4_Color?>,
     initial: Color, undoManager: UndoManager?
   ) -> Binding<Color> {
     Binding(
-      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      get: {
+        component.flatMap { ($0[keyPath: keyPath] ?? .init()).extendedSRGBSwiftUIColor } ?? initial
+      },
       set: { next in
         guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }

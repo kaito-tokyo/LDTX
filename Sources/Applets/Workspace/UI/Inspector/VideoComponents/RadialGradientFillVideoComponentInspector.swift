@@ -33,39 +33,39 @@ struct RadialGradientFillVideoComponentInspector: View {
   }
 
   private var centerX: Ldtx_Workspace_V4_Rational32 {
-    component?.centerX
+    component.map { $0.centerX ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 2)
       }
   }
 
   private var centerY: Ldtx_Workspace_V4_Rational32 {
-    component?.centerY
+    component.map { $0.centerY ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 2)
       }
   }
 
   private var innerRadius: Ldtx_Workspace_V4_Rational32 {
-    component?.innerRadius
+    component.map { $0.innerRadius ?? .init() }
       ?? .with {
         $0.set(num: 0, den: 1)
       }
   }
 
   private var outerRadius: Ldtx_Workspace_V4_Rational32 {
-    component?.outerRadius
+    component.map { $0.outerRadius ?? .init() }
       ?? .with {
         $0.set(num: 18, den: 25)
       }
   }
 
   private var innerColor: Color {
-    component?.innerExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .white
+    component.flatMap { ($0.innerExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .white
   }
 
   private var outerColor: Color {
-    component?.outerExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black
+    component.flatMap { ($0.outerExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .black
   }
 
   var body: some View {
@@ -85,7 +85,8 @@ struct RadialGradientFillVideoComponentInspector: View {
 
         TextField(
           "Name",
-          text: componentBinding(\.displayName, initial: "(invalid)", undoManager: undoManager))
+          text: componentBinding(
+            \.displayName, initial: component == nil ? "(invalid)" : "", undoManager: undoManager))
         LabeledContent("Center X") {
           Slider(
             value: componentBinding(\.centerX, initial: centerX, undoManager: undoManager)
@@ -124,7 +125,7 @@ struct RadialGradientFillVideoComponentInspector: View {
   }
 
   func componentBinding<Value>(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillRadialGradientComponent, Value>,
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillRadialGradientComponent, Value?>,
     initial: Value, undoManager: UndoManager?
   ) -> Binding<Value> {
     Binding(
@@ -136,12 +137,14 @@ struct RadialGradientFillVideoComponentInspector: View {
 
   func colorBinding(
     _ keyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_FillRadialGradientComponent, Ldtx_Workspace_V4_Color
+      Ldtx_Workspace_V4_FillRadialGradientComponent, Ldtx_Workspace_V4_Color?
     >,
     initial: Color, undoManager: UndoManager?
   ) -> Binding<Color> {
     Binding(
-      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      get: {
+        component.flatMap { ($0[keyPath: keyPath] ?? .init()).extendedSRGBSwiftUIColor } ?? initial
+      },
       set: { next in
         guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }
@@ -169,9 +172,11 @@ struct RadialGradientFillVideoComponentInspector: View {
   private var gradient: RadialGradient {
     RadialGradient(
       colors: [innerColor, outerColor],
-      center: UnitPoint(x: centerX.double, y: centerY.double),
-      startRadius: CGFloat(innerRadius.double) * 96,
-      endRadius: CGFloat(outerRadius.double) * 96)
+      center: UnitPoint(
+        x: centerX.double(defaultNumerator: 0, defaultDenominator: 1),
+        y: centerY.double(defaultNumerator: 0, defaultDenominator: 1)),
+      startRadius: CGFloat(innerRadius.double(defaultNumerator: 0, defaultDenominator: 1)) * 96,
+      endRadius: CGFloat(outerRadius.double(defaultNumerator: 0, defaultDenominator: 1)) * 96)
   }
 }
 

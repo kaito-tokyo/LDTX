@@ -182,10 +182,11 @@ public struct WorkspaceInspectorContainer: View {
           },
           vision: vision,
           modelURL: Binding(
-            get: { stateService.visionModels[vision.wrappedValue.modelInternalID] },
+            get: { vision.wrappedValue.modelInternalID.flatMap { stateService.visionModels[$0] } },
             set: { stateService.setVisionModelURL($0, for: internalID, undoManager: undoManager) }),
-          persistedModelURL: runtimeWorkspace()?.visionModels[
-            vision.wrappedValue.modelInternalID],
+          persistedModelURL: vision.wrappedValue.modelInternalID.flatMap {
+            runtimeWorkspace()?.visionModels[$0]
+          },
           inferenceResult: stateService.visionResults[internalID],
           inferenceFailure: stateService.visionFailureMessages[internalID],
           modelPreparationGeneration: stateService.modelPreparationGeneration,

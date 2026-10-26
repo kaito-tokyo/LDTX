@@ -15,7 +15,7 @@ struct WorkspaceV4VisionFeatureUnitTestSuite {
   @Test("LUB-1071: Uses fixed Protobuf default for minimum text height")
   func usesFixedProtobufDefaultForMinimumTextHeight() {
     let vision = Ldtx_Workspace_V4_OcrVision()
-    #expect(!vision.hasMinimumTextHeight)
+    #expect((vision.minimumTextHeight == nil))
     #expect(WorkspaceV4VisionFeature.ocrConfiguration(for: vision).minimumTextHeight == 0)
   }
 

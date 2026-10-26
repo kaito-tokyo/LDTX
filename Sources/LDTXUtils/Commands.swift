@@ -84,11 +84,11 @@ public struct WorkspaceCommand: ParsableCommand {
 
   struct Create: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-      abstract: "Create a new Workspace v4 package, optionally from protobuf JSON.")
+      abstract: "Create a new Workspace v4 package, optionally from Swift Codable JSON.")
     @Argument(help: "Path for a new .ldtxworkspace package.") var package: String
     @Option(help: "Workspace display name.") var name: String?
-    @Option(help: "WorkspaceDefinitionV4 protobuf JSON to import.") var json: String?
-    @Option(help: "WorkspacePreferencesV4 protobuf JSON to import with --json.")
+    @Option(help: "WorkspaceDefinitionV4 Swift Codable JSON to import.") var json: String?
+    @Option(help: "WorkspacePreferencesV4 Swift Codable JSON to import with --json.")
     var preferencesJSON: String?
 
     mutating func run() async throws {
@@ -105,13 +105,15 @@ public struct WorkspaceCommand: ParsableCommand {
         do {
           var workspace: WorkspaceV4Bundle
           if let json = command.json {
-            var definition = try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
-              jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: json)))
+            var definition = try JSONDecoder().decode(
+              Ldtx_Workspace_V4_WorkspaceDefinitionV4.self,
+              from: Data(contentsOf: URL(fileURLWithPath: json)))
             if let name = command.name { definition.displayName = name }
             let preferences =
               try command.preferencesJSON.map {
-                try Ldtx_Workspace_V4_WorkspacePreferencesV4(
-                  jsonUTF8Data: Data(contentsOf: URL(fileURLWithPath: $0)))
+                try JSONDecoder().decode(
+                  Ldtx_Workspace_V4_WorkspacePreferencesV4.self,
+                  from: Data(contentsOf: URL(fileURLWithPath: $0)))
               } ?? Ldtx_Workspace_V4_WorkspacePreferencesV4()
             workspace = WorkspaceV4Bundle(
               definition: definition,
@@ -229,14 +231,17 @@ public func workspaceV4DebugDump(
     format: WorkspaceV4DebugDump.format,
     definitionExternalID: workspace.definitionExternalID ?? "",
     preferencesExternalID: workspace.preferencesExternalID ?? "",
-    displayName: workspace.definition.displayName,
-    programs: programs.map {
-      WorkspaceV4DebugDump.Program(
-        internalID: $0.internalID, displayName: $0.displayName,
+    displayName: workspace.definition.displayName ?? "",
+    programs: try programs.map {
+      guard let id = $0.internalID, let name = $0.displayName else {
+        throw ValidationError("Program is missing its identifier or display name")
+      }
+      return WorkspaceV4DebugDump.Program(
+        internalID: id, displayName: name,
         landscapeVideoLayerInternalIDs: workspace.preferences.landscapeProgramPreferences[
-          $0.internalID]?.videoLayerInternalIds ?? [],
+          id]?.videoLayerInternalIds ?? [],
         portraitVideoLayerInternalIDs: workspace.preferences.portraitProgramPreferences[
-          $0.internalID]?.videoLayerInternalIds ?? [])
+          id]?.videoLayerInternalIds ?? [])
     })
 }
 

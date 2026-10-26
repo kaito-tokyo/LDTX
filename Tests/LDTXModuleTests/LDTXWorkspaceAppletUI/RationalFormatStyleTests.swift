@@ -37,7 +37,7 @@ struct RationalFormatStyleUnitTestSuite {
     let binding = Binding(get: { value }, set: { value = $0 }).sliderValue(denominator: 1_000_000)
     for input in [0.123456789, Double.pi, 2 * Double.pi] {
       binding.wrappedValue = input
-      #expect(abs(value.double - input) <= 0.0000005)
+      #expect(abs(value.double(defaultNumerator: 0, defaultDenominator: 1) - input) <= 0.0000005)
       #expect(value.den == 1_000_000)
     }
     let previous = value

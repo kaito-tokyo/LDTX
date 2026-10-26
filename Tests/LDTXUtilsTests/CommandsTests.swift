@@ -80,12 +80,26 @@ struct CommandsSystemTestSuite {
       importedProgram.internalID = 42
       importedProgram.displayName = "Imported"
       definition.programs = [importedProgram]
+      definition.videoComponents = [
+        .with {
+          $0.videoComponent = .vfxSource(
+            .with {
+              $0.internalID = 7
+              $0.displayName = "Camera"
+              $0.deviceWidth = 1920
+              $0.deviceHeight = 1080
+            })
+        }
+      ]
       let definitionURL = root.appendingPathComponent("definition.json")
-      try definition.jsonUTF8Data().write(to: definitionURL)
+      try JSONEncoder().encode(definition).write(to: definitionURL)
       var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
-      preferences.landscapeProgramPreferences[42] = .init()
+      preferences.landscapeProgramPreferences[42] = .with {
+        $0.videoLayerInternalIds = [7]
+        $0.videoLayerHidden[7] = false
+      }
       let preferencesURL = root.appendingPathComponent("preferences.json")
-      try preferences.jsonUTF8Data().write(to: preferencesURL)
+      try JSONEncoder().encode(preferences).write(to: preferencesURL)
 
       var command = try WorkspaceCommand.Create.parse([
         packageURL.path, "--json", definitionURL.path, "--preferences-json", preferencesURL.path,
@@ -95,6 +109,8 @@ struct CommandsSystemTestSuite {
       let workspace = try WorkspaceBundleReaderV4(at: packageURL).read()
       #expect(workspace.definition.displayName == "Overridden")
       #expect(workspace.preferences.landscapeProgramPreferences[42] != nil)
+      #expect(workspace.definition.videoComponents == definition.videoComponents)
+      #expect(workspace.preferences == preferences)
     }
   }
 
@@ -237,20 +253,21 @@ struct CommandsSystemTestSuite {
       var definitionEnvelope = Ldtx_Envelope_WorkspaceDefinitionEnvelope()
       definitionEnvelope.externalIDAsUUID = try #require(
         UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000001"))
-      definitionEnvelope.workspaceDefinitionV4 = definition
+      definitionEnvelope.workspaceDefinition = .workspaceDefinitionV4(definition)
       try definitionEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("definition.pb"))
       var preferencesEnvelope = Ldtx_Envelope_WorkspacePreferencesEnvelope()
       preferencesEnvelope.externalIDAsUUID = try #require(
         UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000002"))
-      preferencesEnvelope.workspacePreferencesV4 = .with {
-        $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [999] }
-      }
+      preferencesEnvelope.workspacePreferences = .workspacePreferencesV4(
+        .with {
+          $0.landscapeProgramPreferences[1] = .with { $0.videoLayerInternalIds = [999] }
+        })
       try preferencesEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("preferences.pb"))
       var outputEnvelope = Ldtx_Envelope_WorkspaceOutputSettingsEnvelope()
       outputEnvelope.externalIDAsUUID = UUID(uuidString: "0198f4b4-1fa3-7000-8000-000000000003")
-      outputEnvelope.workspaceOutputSettingsV4 = .init()
+      outputEnvelope.workspaceOutputSettings = .workspaceOutputSettingsV4(.init())
       try outputEnvelope.serializedData().write(
         to: invalid.appendingPathComponent("output_settings.pb"))
       var invalidCommand = try WorkspaceCommand.Validate.parse([invalid.path])
@@ -264,22 +281,25 @@ struct CommandsSystemTestSuite {
       var workspace = makeWorkspace(displayName: "Invalid RTFD")
       workspace.definition.videoComponents = [
         .with {
-          $0.dynamicText.internalID = 1
-          $0.dynamicText.displayName = "Invalid RTFD"
-          $0.dynamicText.width = .with {
-            $0.num = 1
-            $0.den = 1
-          }
-          $0.dynamicText.height = .with {
-            $0.num = 1
-            $0.den = 1
-          }
-          $0.dynamicText.rtfdDocument = Data("<macro/>".utf8)
+          $0.videoComponent = .dynamicText(
+            .with {
+              $0.internalID = 1
+              $0.displayName = "Invalid RTFD"
+              $0.width = .with {
+                $0.num = 1
+                $0.den = 1
+              }
+              $0.height = .with {
+                $0.num = 1
+                $0.den = 1
+              }
+              $0.rtfdDocument = Data("<macro/>".utf8)
+            })
         }
       ]
       let json = root.appendingPathComponent("definition.json")
       try WorkspaceBundleValidatorV4.validate(workspace)
-      try workspace.definition.jsonUTF8Data().write(to: json)
+      try JSONEncoder().encode(workspace.definition).write(to: json)
       let created = root.appendingPathComponent("Created.ldtxworkspace")
       var create = try WorkspaceCommand.Create.parse([created.path, "--json", json.path])
       await #expect(throws: (any Error).self) { try await create.run() }
@@ -316,22 +336,22 @@ struct CommandsSystemTestSuite {
     firstLandscape.internalID = 10
     firstLandscape.displayName = "First landscape"
     var firstLandscapeWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    firstLandscapeWrapper.solidColorFill = firstLandscape
+    firstLandscapeWrapper.videoComponent = .solidColorFill(firstLandscape)
     var firstPortrait = Ldtx_Workspace_V4_FillSolidColorComponent()
     firstPortrait.internalID = 20
     firstPortrait.displayName = "First portrait"
     var firstPortraitWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    firstPortraitWrapper.solidColorFill = firstPortrait
+    firstPortraitWrapper.videoComponent = .solidColorFill(firstPortrait)
     var secondLandscape = Ldtx_Workspace_V4_FillSolidColorComponent()
     secondLandscape.internalID = 30
     secondLandscape.displayName = "Second landscape"
     var secondLandscapeWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    secondLandscapeWrapper.solidColorFill = secondLandscape
+    secondLandscapeWrapper.videoComponent = .solidColorFill(secondLandscape)
     var secondPortrait = Ldtx_Workspace_V4_FillSolidColorComponent()
     secondPortrait.internalID = 40
     secondPortrait.displayName = "Second portrait"
     var secondPortraitWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    secondPortraitWrapper.solidColorFill = secondPortrait
+    secondPortraitWrapper.videoComponent = .solidColorFill(secondPortrait)
     definition.videoComponents = [
       firstLandscapeWrapper, firstPortraitWrapper, secondLandscapeWrapper, secondPortraitWrapper,
     ]

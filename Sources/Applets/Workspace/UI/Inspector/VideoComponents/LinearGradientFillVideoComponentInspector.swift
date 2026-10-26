@@ -33,39 +33,39 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   private var startX: Ldtx_Workspace_V4_Rational32 {
-    component?.startX
+    component.map { $0.startX ?? .init() }
       ?? .with {
         $0.set(num: 0, den: 1)
       }
   }
 
   private var startY: Ldtx_Workspace_V4_Rational32 {
-    component?.startY
+    component.map { $0.startY ?? .init() }
       ?? .with {
         $0.set(num: 0, den: 1)
       }
   }
 
   private var endX: Ldtx_Workspace_V4_Rational32 {
-    component?.endX
+    component.map { $0.endX ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 1)
       }
   }
 
   private var endY: Ldtx_Workspace_V4_Rational32 {
-    component?.endY
+    component.map { $0.endY ?? .init() }
       ?? .with {
         $0.set(num: 1, den: 1)
       }
   }
 
   private var startColor: Color {
-    component?.startExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black
+    component.flatMap { ($0.startExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .black
   }
 
   private var endColor: Color {
-    component?.endExtendedSrgbColor.extendedSRGBSwiftUIColor ?? .black
+    component.flatMap { ($0.endExtendedSrgbColor ?? .init()).extendedSRGBSwiftUIColor } ?? .black
   }
 
   var body: some View {
@@ -85,7 +85,8 @@ struct LinearGradientFillVideoComponentInspector: View {
 
         TextField(
           "Name",
-          text: componentBinding(\.displayName, initial: "(invalid)", undoManager: undoManager))
+          text: componentBinding(
+            \.displayName, initial: component == nil ? "(invalid)" : "", undoManager: undoManager))
         LabeledContent("Start X") {
           Slider(
             value: componentBinding(\.startX, initial: startX, undoManager: undoManager)
@@ -124,7 +125,7 @@ struct LinearGradientFillVideoComponentInspector: View {
   }
 
   func componentBinding<Value>(
-    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillLinearGradientComponent, Value>,
+    _ keyPath: WritableKeyPath<Ldtx_Workspace_V4_FillLinearGradientComponent, Value?>,
     initial: Value, undoManager: UndoManager?
   ) -> Binding<Value> {
     Binding(
@@ -136,12 +137,14 @@ struct LinearGradientFillVideoComponentInspector: View {
 
   func colorBinding(
     _ keyPath: WritableKeyPath<
-      Ldtx_Workspace_V4_FillLinearGradientComponent, Ldtx_Workspace_V4_Color
+      Ldtx_Workspace_V4_FillLinearGradientComponent, Ldtx_Workspace_V4_Color?
     >,
     initial: Color, undoManager: UndoManager?
   ) -> Binding<Color> {
     Binding(
-      get: { component?[keyPath: keyPath].extendedSRGBSwiftUIColor ?? initial },
+      get: {
+        component.flatMap { ($0[keyPath: keyPath] ?? .init()).extendedSRGBSwiftUIColor } ?? initial
+      },
       set: { next in
         guard let value = Ldtx_Workspace_V4_Color(extendedSRGBSwiftUIColor: next) else { return }
         updateComponent(undoManager: undoManager) { $0[keyPath: keyPath] = value }
@@ -169,8 +172,12 @@ struct LinearGradientFillVideoComponentInspector: View {
   private var gradient: LinearGradient {
     LinearGradient(
       colors: [startColor, endColor],
-      startPoint: UnitPoint(x: startX.double, y: startY.double),
-      endPoint: UnitPoint(x: endX.double, y: endY.double))
+      startPoint: UnitPoint(
+        x: startX.double(defaultNumerator: 0, defaultDenominator: 1),
+        y: startY.double(defaultNumerator: 0, defaultDenominator: 1)),
+      endPoint: UnitPoint(
+        x: endX.double(defaultNumerator: 0, defaultDenominator: 1),
+        y: endY.double(defaultNumerator: 0, defaultDenominator: 1)))
   }
 }
 

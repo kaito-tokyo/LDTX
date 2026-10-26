@@ -41,7 +41,7 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.vfxSource = component
+    wrapper.videoComponent = .vfxSource(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -56,7 +56,7 @@ extension WorkspaceWindowRuntime {
     component.displayName = displayName
     component.extendedSrgbColor = color
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.solidColorFill = component
+    wrapper.videoComponent = .solidColorFill(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -85,7 +85,7 @@ extension WorkspaceWindowRuntime {
     }
     component.endExtendedSrgbColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.linearGradientFill = component
+    wrapper.videoComponent = .linearGradientFill(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -114,7 +114,7 @@ extension WorkspaceWindowRuntime {
     component.innerExtendedSrgbColor = innerColor
     component.outerExtendedSrgbColor = outerColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.radialGradientFill = component
+    wrapper.videoComponent = .radialGradientFill(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -137,7 +137,7 @@ extension WorkspaceWindowRuntime {
     component.startExtendedSrgbColor = startColor
     component.endExtendedSrgbColor = endColor
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.conicGradientFill = component
+    wrapper.videoComponent = .conicGradientFill(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -153,7 +153,7 @@ extension WorkspaceWindowRuntime {
     component.showsSeconds = true
     component.uses24HourTime = true
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.clock = component
+    wrapper.videoComponent = .clock(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -165,7 +165,7 @@ extension WorkspaceWindowRuntime {
     component.internalID = id
     component.displayName = displayName
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.testPattern = component
+    wrapper.videoComponent = .testPattern(component)
     try editWorkspace { $0.definition.videoComponents.append(wrapper) }
     return id
   }
@@ -181,7 +181,7 @@ extension WorkspaceWindowRuntime {
     var trigger = Ldtx_Workspace_V4_IntervalVisionTrigger()
     trigger.intervalSeconds = intervalSeconds
     var triggerWrapper = Ldtx_Workspace_V4_VisionTriggerWrapper()
-    triggerWrapper.intervalTrigger = trigger
+    triggerWrapper.trigger = .intervalTrigger(trigger)
     var vision = Ldtx_Workspace_V4_OcrVision()
     vision.internalID = id
     vision.displayName = displayName
@@ -189,7 +189,7 @@ extension WorkspaceWindowRuntime {
     vision.videoComponentInternalID = videoComponentInternalID
     vision.triggers = [triggerWrapper]
     var wrapper = Ldtx_Workspace_V4_VisionWrapper()
-    wrapper.ocrVision = vision
+    wrapper.vision = .ocrVision(vision)
     try editWorkspace { $0.definition.visions.append(wrapper) }
     return id
   }
@@ -224,7 +224,10 @@ extension WorkspaceWindowRuntime {
   public func setAudioChannelGain(
     _ value: Ldtx_Workspace_V4_Rational32, forAudioInputDeviceInternalID id: Int64
   ) throws {
-    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
+    guard
+      let value = try? Rational32DecibelEncoding.encode(
+        value.double(defaultNumerator: 0, defaultDenominator: 1))
+    else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
     }
     try editWorkspace { workspace in
@@ -252,7 +255,10 @@ extension WorkspaceWindowRuntime {
   )
     throws
   {
-    guard let value = try? Rational32DecibelEncoding.encode(value.double) else {
+    guard
+      let value = try? Rational32DecibelEncoding.encode(
+        value.double(defaultNumerator: 0, defaultDenominator: 1))
+    else {
       throw WorkspaceRuntimeError.invalidAudioMasterVolume
     }
     try editProgramPreference(programInternalID, target: target) {
@@ -305,7 +311,7 @@ extension WorkspaceWindowRuntime {
           }
         }
         guard !usedByProgram, !usedByVision,
-          definition.canvasConfiguration.ptsMasterVfxSourceInternalID != id
+          definition.canvasConfiguration?.ptsMasterVfxSourceInternalID != id
         else { throw WorkspaceRuntimeError.resourceInUse(id) }
         let before = workspace.definition.videoComponents.count
         workspace.definition.videoComponents.removeAll {

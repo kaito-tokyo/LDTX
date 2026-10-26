@@ -161,11 +161,12 @@ enum WorkspaceResourceAddition {
       inspectorKind = .audioInputDevice
     case .videoComponent:
       var component = try draft.componentKind.make(id: id, name: name)
-      if draft.componentKind == .vfxSource,
+      if case .vfxSource(var source) = component.videoComponent,
         let device = devices.first(where: { $0.id == draft.physicalDeviceID && !$0.isAudio })
       {
-        component.vfxSource.deviceWidth = device.width
-        component.vfxSource.deviceHeight = device.height
+        source.deviceWidth = device.width
+        source.deviceHeight = device.height
+        component.videoComponent = .vfxSource(source)
       }
       definition.videoComponents.append(component)
       inspectorKind = draft.componentKind.inspectorKind
@@ -198,7 +199,8 @@ enum WorkspaceResourceAddition {
     String
   > {
     var names = Set(
-      definition.audioDevices.map(\.displayName) + definition.programs.map(\.displayName))
+      definition.audioDevices.compactMap(\.displayName)
+        + definition.programs.compactMap(\.displayName))
     for component in definition.videoComponents {
       if let name = component.displayName { names.insert(name) }
     }

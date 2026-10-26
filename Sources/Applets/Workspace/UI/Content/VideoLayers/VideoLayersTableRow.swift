@@ -30,15 +30,17 @@ import SwiftUI
     strings = [
       pixelPosition(transform.translationX, size: canvasWidth),
       pixelPosition(transform.translationY, size: canvasHeight),
-      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleX),
-      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(transform.scaleY),
+      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>(defaultNumerator: 1).format(
+        transform.scaleX ?? .init()),
+      RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>(defaultNumerator: 1).format(
+        transform.scaleY ?? .init()),
     ]
     displayedStrings = strings
     hasLocalTextChanges = false
   }
 
-  private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32, size: Double) -> String {
-    let pixels = (value.double * size).rounded()
+  private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32?, size: Double) -> String {
+    let pixels = ((value?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0) * size).rounded()
     guard let integer = Int32(exactly: pixels) else { return "0" }
     return String(integer)
   }

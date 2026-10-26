@@ -18,7 +18,13 @@ extension AppUIComponentTestSuite {
       let row = try #require(fixture.editor.rows[1])
       row.edit("-", at: 0)
       fixture.state.editWorkspace(undoManager: nil) { workspace in
-        workspace.definition.videoComponents[0].vfxSource.displayName = "Renamed"
+        guard case .vfxSource(var source) = workspace.definition.videoComponents[0].videoComponent
+        else {
+          Issue.record("Missing source")
+          return
+        }
+        source.displayName = "Renamed"
+        workspace.definition.videoComponents[0].videoComponent = .vfxSource(source)
       }
       fixture.state.editWorkspace(undoManager: nil) { workspace in
         workspace.preferences.landscapeProgramPreferences[100, default: .init()]
@@ -78,8 +84,8 @@ extension AppUIComponentTestSuite {
       let fixture = VideoLayersTestFixture(ids: [1, 2, 3, 4])
       try fixture.state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.videoComponents = [
-          .with { $0.vfxSource.internalID = 1 },
-          .with { $0.clock.internalID = 2 },
+          .with { $0.videoComponent = .vfxSource(.with { $0.internalID = 1 }) },
+          .with { $0.videoComponent = .clock(.with { $0.internalID = 2 }) },
           WorkspaceResourceFactory.makeSolidColor(id: 3, name: "Fill"),
           try WorkspaceResourceFactory.makeDynamicText(id: 4, name: "Text"),
         ]

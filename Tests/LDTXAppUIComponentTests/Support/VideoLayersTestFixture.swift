@@ -20,8 +20,11 @@ final class VideoLayersTestFixture {
     state.editWorkspace(undoManager: nil) { workspace in
       workspace.definition.videoComponents = ids.map { id in
         .with {
-          $0.vfxSource.internalID = id
-          $0.vfxSource.displayName = "Layer \(id)"
+          $0.videoComponent = .vfxSource(
+            .with {
+              $0.internalID = id
+              $0.displayName = "Layer \(id)"
+            })
         }
       }
     }

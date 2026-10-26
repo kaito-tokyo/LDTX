@@ -234,7 +234,9 @@ extension AppUIComponentTestSuite {
       data.setPhysicalDeviceID(.avCaptureDevice(uniqueID: "unavailable-camera"), for: 1)
       let document = WorkspaceDocument(
         definition: .with {
-          $0.videoComponents = [.with { $0.vfxSource = .with { $0.internalID = 1 } }]
+          $0.videoComponents = [
+            .with { $0.videoComponent = .vfxSource(.with { $0.internalID = 1 }) }
+          ]
         }, preferences: .init())
       let coordinator = WorkspaceAppletCoordinator(document: document, appletData: data)
       try coordinator.persistenceCoordinator.adoptRuntimeWorkspace(document.editingWorkspace)
@@ -323,10 +325,11 @@ extension AppUIComponentTestSuite {
         definition: .with {
           $0.videoComponents = [
             .with {
-              $0.vfxSource = .with {
-                $0.internalID = 1
-                $0.displayName = "Missing camera"
-              }
+              $0.videoComponent = .vfxSource(
+                .with {
+                  $0.internalID = 1
+                  $0.displayName = "Missing camera"
+                })
             }
           ]
         }, preferences: .init())

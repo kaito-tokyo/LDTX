@@ -27,7 +27,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   var body: some View {
     Form {
       Section("Vision - Create ML Image Classifier") {
-        TextField("Name", text: $vision.displayName)
+        TextField("Name", text: $vision.displayName.defaulting(to: ""))
         VisionInputVideoComponentDropdown(
           videoComponents: videoComponents, selection: $vision.videoComponentInternalIDIfPresent,
           title: "Input video", requiresPositiveSize: true)
@@ -61,7 +61,8 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
       Section("Region of Interest") {
         if let inputSize {
-          RegionOfInterestEditor(inputSize: inputSize, roi: $vision.regionOfInterest)
+          RegionOfInterestEditor(
+            inputSize: inputSize, roi: $vision.regionOfInterest.defaulting(to: .init()))
         } else {
           Text("Select an input video to edit the region of interest.")
         }
@@ -130,10 +131,13 @@ struct LdtxSceneDetectorVisionInspector: View {
       }
 
     let videoComponent = Ldtx_Workspace_V4_VideoComponentWrapper.with {
-      $0.vfxSource.internalID = 7
-      $0.vfxSource.displayName = "Camera"
-      $0.vfxSource.deviceWidth = 1920
-      $0.vfxSource.deviceHeight = 1080
+      $0.videoComponent = .vfxSource(
+        .with {
+          $0.internalID = 7
+          $0.displayName = "Camera"
+          $0.deviceWidth = 1920
+          $0.deviceHeight = 1080
+        })
     }
 
     LdtxSceneDetectorVisionInspector(

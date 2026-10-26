@@ -20,15 +20,19 @@ struct WorkspaceProgramSwitchingIntegrationTestSuite {
     defer { try? FileManager.default.removeItem(at: directory) }
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.displayName = "Switch Test"
-    definition.canvasConfiguration.landscapeProfileID = "sdr-landscape-1080p60"
-    definition.canvasConfiguration.portraitProfileID = "sdr-portrait-1080p60"
-    definition.canvasConfiguration.frameRate = 30
-    definition.canvasConfiguration.landscapeVideoBitRate = 1_000_000
-    definition.canvasConfiguration.portraitVideoBitRate = 1_000_000
+    definition.canvasConfiguration = .with {
+      $0.landscapeProfileID = "sdr-landscape-1080p60"
+      $0.portraitProfileID = "sdr-portrait-1080p60"
+      $0.frameRate = 30
+      $0.landscapeVideoBitRate = 1_000_000
+      $0.portraitVideoBitRate = 1_000_000
+    }
     let outputSettings: Ldtx_Workspace_V4_WorkspaceOutputSettingsV4 = .with {
       $0.recordingEnabled = true
-      $0.recordingSettings.recordsLandscape = true
-      $0.recordingSettings.recordsPortrait = true
+      $0.recordingSettings = .with {
+        $0.recordsLandscape = true
+        $0.recordsPortrait = true
+      }
     }
     var workspace = WorkspaceV4Bundle(
       definition: definition, preferences: .init(), outputSettings: outputSettings)

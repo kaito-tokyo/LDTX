@@ -41,7 +41,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
   {
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()
-    component.testPattern.internalID = 2
+    component.videoComponent = .testPattern(.with { $0.internalID = 2 })
     definition.videoComponents = [component]
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 1
@@ -65,11 +65,11 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(try graph().layerPreferences.first?.destinationScaleX == 0)
   }
 
-  @Test("LUB-1072: Clock font size is independent of the target canvas")
-  func preservesClockDimensions() throws {
+  @Test("LUB-1072: Clock font size is independent of the target canvas", arguments: [false, true])
+  func preservesClockDimensions(explicitFontSize: Bool) throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()
     clock.internalID = 1
-    clock.fontSize = .with { $0.set(num: 48, den: 1) }
+    if explicitFontSize { clock.fontSize = .with { $0.set(num: 48, den: 1) } }
     clock.foregroundExtendedSrgbColor = .with {
       $0.red = 0.25
       $0.green = 0.5
@@ -77,7 +77,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       $0.alpha = 0.75
     }
     var wrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    wrapper.clock = clock
+    wrapper.videoComponent = .clock(clock)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
@@ -109,9 +109,11 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     program.internalID = 7
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.programs = [program]
-    definition.canvasConfiguration.landscapeVideoBitRate = 8_000_000
-    definition.canvasConfiguration.portraitVideoBitRate = 4_000_000
-    definition.canvasConfiguration.frameRate = 30
+    definition.canvasConfiguration = .with {
+      $0.landscapeVideoBitRate = 8_000_000
+      $0.portraitVideoBitRate = 4_000_000
+      $0.frameRate = 30
+    }
     var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
     preferences.landscapeProgramPreferences[7] = .init()
     preferences.landscapeProgramPreferences[7, default: .init()].videoLayerInternalIds = [1, 2]
@@ -137,7 +139,7 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var video = Ldtx_Workspace_V4_VfxSourceComponent()
     video.internalID = 11
     var input = Ldtx_Workspace_V4_VideoComponentWrapper()
-    input.vfxSource = video
+    input.videoComponent = .vfxSource(video)
     var audio = Ldtx_Workspace_V4_AudioInputDevice()
     audio.internalID = 12
     var program = Ldtx_Workspace_V4_ProgramDefinition()
@@ -243,12 +245,12 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var removal = Ldtx_Workspace_V4_BackgroundRemovalVfxEffect()
     removal.model = .mediapipeLandscape
     var effect = Ldtx_Workspace_V4_VideoEffectWrapper()
-    effect.backgroundRemoval = removal
+    effect.videoEffect = .backgroundRemoval(removal)
     var source = Ldtx_Workspace_V4_VfxSourceComponent()
     source.internalID = 12
     source.effects = [effect]
     var component = Ldtx_Workspace_V4_VideoComponentWrapper()
-    component.vfxSource = source
+    component.videoComponent = .vfxSource(source)
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
@@ -279,22 +281,22 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     var solid = Ldtx_Workspace_V4_FillSolidColorComponent()
     solid.internalID = 20
     var solidWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    solidWrapper.solidColorFill = solid
+    solidWrapper.videoComponent = .solidColorFill(solid)
 
     var linear = Ldtx_Workspace_V4_FillLinearGradientComponent()
     linear.internalID = 21
     var linearWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    linearWrapper.linearGradientFill = linear
+    linearWrapper.videoComponent = .linearGradientFill(linear)
 
     var radial = Ldtx_Workspace_V4_FillRadialGradientComponent()
     radial.internalID = 22
     var radialWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    radialWrapper.radialGradientFill = radial
+    radialWrapper.videoComponent = .radialGradientFill(radial)
 
     var conic = Ldtx_Workspace_V4_FillConicGradientComponent()
     conic.internalID = 23
     var conicWrapper = Ldtx_Workspace_V4_VideoComponentWrapper()
-    conicWrapper.conicGradientFill = conic
+    conicWrapper.videoComponent = .conicGradientFill(conic)
 
     var program = Ldtx_Workspace_V4_ProgramDefinition()
     program.internalID = 7

@@ -35,19 +35,22 @@ public struct WorkspaceV4RenderGraph: Sendable {
         var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
-      let topInsetRational = Self.unitInterval(transform.topInset.float, default: 0)
+      let topInsetRational = Self.unitInterval(
+        (transform.topInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
       let rightInsetRational = Self.unitInterval(
-        transform.rightInset.float, default: 0)
+        (transform.rightInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
       let bottomInsetRational = Self.unitInterval(
-        transform.bottomInset.float, default: 0)
+        (transform.bottomInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
       let leftInsetRational = Self.unitInterval(
-        transform.leftInset.float, default: 0)
+        (transform.leftInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
       let translationXRational = Self.unitInterval(
-        transform.translationX.float, default: 0)
+        (transform.translationX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0
+      )
       let translationYRational = Self.unitInterval(
-        transform.translationY.float, default: 0)
-      let scaleX = transform.scaleX.float
-      let scaleY = transform.scaleY.float
+        (transform.translationY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0
+      )
+      let scaleX = (transform.scaleX?.float(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
+      let scaleY = (transform.scaleY?.float(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
         input.sourceCropTop = topInsetRational * 100
@@ -87,7 +90,8 @@ public struct WorkspaceV4RenderGraph: Sendable {
     self.layerPreferences = layerPreferences
     var audioPreferences = ProgramPreferences(
       masterVolume: Self.linearGain(
-        (preference.hasAudioMasterVolumeDecibels ? preference.audioMasterVolumeDecibels.double : 0))
+        (preference.audioMasterVolumeDecibels?.double(defaultNumerator: 0, defaultDenominator: 1)
+          ?? 0))
     )
     let gains = canvas.audioChannelGainsDecibels
     let mutedAudio = preference.audioChannelMuted
@@ -96,7 +100,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
         let id = input.inputDeviceID.flatMap({ Int64($0.dropFirst(3)) })
       else { continue }
       audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(
-        (gains[id]?.double ?? 0))
+        (gains[id]?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0))
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
     audioPreferences.videoLayersByProgramName["v4-\(canvas.programInternalID)"] = layerPreferences
@@ -110,100 +114,114 @@ public struct WorkspaceV4RenderGraph: Sendable {
     Dictionary(
       uniqueKeysWithValues: definition.videoComponents.compactMap {
         wrapper -> (Int64, ProgramComponent)? in
-        guard let concrete = wrapper.videoComponent else { return nil }
+        guard let concrete = wrapper.videoComponent, let id = wrapper.internalID else { return nil }
         switch concrete {
         case .solidColorFill(let fill):
           return (
-            fill.internalID,
+            id,
             .fillSolidColor(
               FillSolidColorComponent(
-                red: fill.extendedSrgbColor.red, green: fill.extendedSrgbColor.green,
-                blue: fill.extendedSrgbColor.blue,
-                alpha: fill.extendedSrgbColor.alpha))
+                red: (fill.extendedSrgbColor?.red ?? 0),
+                green: (fill.extendedSrgbColor?.green ?? 0),
+                blue: (fill.extendedSrgbColor?.blue ?? 0),
+                alpha: (fill.extendedSrgbColor?.alpha ?? 0)))
           )
         case .linearGradientFill(let fill):
           return (
-            fill.internalID,
+            id,
             .fillLinearGradient(
               FillLinearGradientComponent(
-                startX: fill.startX.float, startY: fill.startY.float,
-                endX: fill.endX.float, endY: fill.endY.float,
-                startRed: fill.startExtendedSrgbColor.red,
-                startGreen: fill.startExtendedSrgbColor.green,
-                startBlue: fill.startExtendedSrgbColor.blue,
-                startAlpha: fill.startExtendedSrgbColor.alpha,
-                endRed: fill.endExtendedSrgbColor.red, endGreen: fill.endExtendedSrgbColor.green,
-                endBlue: fill.endExtendedSrgbColor.blue, endAlpha: fill.endExtendedSrgbColor.alpha))
+                startX: (fill.startX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                startY: (fill.startY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                endX: (fill.endX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                endY: (fill.endY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                startRed: (fill.startExtendedSrgbColor?.red ?? 0),
+                startGreen: (fill.startExtendedSrgbColor?.green ?? 0),
+                startBlue: (fill.startExtendedSrgbColor?.blue ?? 0),
+                startAlpha: (fill.startExtendedSrgbColor?.alpha ?? 0),
+                endRed: (fill.endExtendedSrgbColor?.red ?? 0),
+                endGreen: (fill.endExtendedSrgbColor?.green ?? 0),
+                endBlue: (fill.endExtendedSrgbColor?.blue ?? 0),
+                endAlpha: (fill.endExtendedSrgbColor?.alpha ?? 0)))
           )
         case .radialGradientFill(let fill):
           return (
-            fill.internalID,
+            id,
             .fillRadialGradient(
               FillRadialGradientComponent(
-                centerX: fill.centerX.float,
-                centerY: fill.centerY.float,
-                innerRadius: fill.innerRadius.float,
-                outerRadius: fill.outerRadius.float, innerRed: fill.innerExtendedSrgbColor.red,
-                innerGreen: fill.innerExtendedSrgbColor.green,
-                innerBlue: fill.innerExtendedSrgbColor.blue,
-                innerAlpha: fill.innerExtendedSrgbColor.alpha,
-                outerRed: fill.outerExtendedSrgbColor.red,
-                outerGreen: fill.outerExtendedSrgbColor.green,
-                outerBlue: fill.outerExtendedSrgbColor.blue,
-                outerAlpha: fill.outerExtendedSrgbColor.alpha))
+                centerX: (fill.centerX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                centerY: (fill.centerY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                innerRadius: (fill.innerRadius?.float(defaultNumerator: 0, defaultDenominator: 1)
+                  ?? 0),
+                outerRadius: (fill.outerRadius?.float(defaultNumerator: 0, defaultDenominator: 1)
+                  ?? 0), innerRed: (fill.innerExtendedSrgbColor?.red ?? 0),
+                innerGreen: (fill.innerExtendedSrgbColor?.green ?? 0),
+                innerBlue: (fill.innerExtendedSrgbColor?.blue ?? 0),
+                innerAlpha: (fill.innerExtendedSrgbColor?.alpha ?? 0),
+                outerRed: (fill.outerExtendedSrgbColor?.red ?? 0),
+                outerGreen: (fill.outerExtendedSrgbColor?.green ?? 0),
+                outerBlue: (fill.outerExtendedSrgbColor?.blue ?? 0),
+                outerAlpha: (fill.outerExtendedSrgbColor?.alpha ?? 0)))
           )
         case .conicGradientFill(let fill):
           return (
-            fill.internalID,
+            id,
             .fillConicGradient(
               FillConicGradientComponent(
-                centerX: fill.centerX.float,
-                centerY: fill.centerY.float,
-                startAngleRadians: fill.startAngleRadians.float,
-                startRed: fill.startExtendedSrgbColor.red,
-                startGreen: fill.startExtendedSrgbColor.green,
-                startBlue: fill.startExtendedSrgbColor.blue,
-                startAlpha: fill.startExtendedSrgbColor.alpha,
-                endRed: fill.endExtendedSrgbColor.red,
-                endGreen: fill.endExtendedSrgbColor.green, endBlue: fill.endExtendedSrgbColor.blue,
-                endAlpha: fill.endExtendedSrgbColor.alpha))
+                centerX: (fill.centerX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                centerY: (fill.centerY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                startAngleRadians: (fill.startAngleRadians?.float(
+                  defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                startRed: (fill.startExtendedSrgbColor?.red ?? 0),
+                startGreen: (fill.startExtendedSrgbColor?.green ?? 0),
+                startBlue: (fill.startExtendedSrgbColor?.blue ?? 0),
+                startAlpha: (fill.startExtendedSrgbColor?.alpha ?? 0),
+                endRed: (fill.endExtendedSrgbColor?.red ?? 0),
+                endGreen: (fill.endExtendedSrgbColor?.green ?? 0),
+                endBlue: (fill.endExtendedSrgbColor?.blue ?? 0),
+                endAlpha: (fill.endExtendedSrgbColor?.alpha ?? 0)))
           )
         case .vfxSource(let source):
           return (
-            source.internalID,
-            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-\(source.internalID)"))
+            id,
+            .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-\(id)"))
           )
         case .clock(let clock):
           return (
-            clock.internalID,
+            id,
             .clock(
               ClockComponent(
-                fontSize: clock.fontSize.float,
-                showsSeconds: clock.showsSeconds, uses24HourTime: clock.uses24HourTime,
-                foregroundRed: clock.foregroundExtendedSrgbColor.red,
-                foregroundGreen: clock.foregroundExtendedSrgbColor.green,
-                foregroundBlue: clock.foregroundExtendedSrgbColor.blue,
-                foregroundAlpha: clock.foregroundExtendedSrgbColor.alpha,
-                showsDate: clock.showsDate, usesSystemTimeZone: !clock.hasUtcOffsetMinutes,
-                utcOffsetMinutes: clock.utcOffsetMinutes,
+                fontSize: (clock.fontSize?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 48),
+                showsSeconds: (clock.showsSeconds ?? false),
+                uses24HourTime: (clock.uses24HourTime ?? false),
+                foregroundRed: (clock.foregroundExtendedSrgbColor?.red ?? 0),
+                foregroundGreen: (clock.foregroundExtendedSrgbColor?.green ?? 0),
+                foregroundBlue: (clock.foregroundExtendedSrgbColor?.blue ?? 0),
+                foregroundAlpha: (clock.foregroundExtendedSrgbColor?.alpha ?? 0),
+                showsDate: (clock.showsDate ?? false),
+                usesSystemTimeZone: (clock.utcOffsetMinutes == nil),
+                utcOffsetMinutes: clock.utcOffsetMinutes ?? 0,
                 outlines: clock.outlines.map {
                   ClockTextOutline(
-                    thickness: $0.thickness.float, color: colorString($0.extendedSrgbColor))
+                    thickness: ($0.thickness?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                    color: colorString($0.extendedSrgbColor))
                 }))
           )
         case .dynamicText(let text):
           var overlay = ClockComponent(
-            destinationWidth: text.width.float, destinationHeight: text.height.float)
+            destinationWidth: (text.width?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+            destinationHeight: (text.height?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
+          )
           overlay.resolvedRTFD = text.rtfdDocument
-          if let document = try? LDTXRichTextDocument(rtfd: text.rtfdDocument),
+          if let rtfd = text.rtfdDocument, let document = try? LDTXRichTextDocument(rtfd: rtfd),
             let expanded = try? document.expanded(resolve: { reference in
               variableStore?[LDTXVariableKey(id: reference.id, sel: reference.sel)] ?? ""
             }), let resolved = try? LDTXRichTextDocument(expanded)
           {
             overlay.resolvedRTFD = resolved.rtfd
           }
-          return (text.internalID, .clock(overlay))
-        case .testPattern(let pattern): return (pattern.internalID, .testPattern)
+          return (id, .clock(overlay))
+        case .testPattern(let pattern): return (id, .testPattern)
         }
       })
   }
@@ -213,10 +231,11 @@ public struct WorkspaceV4RenderGraph: Sendable {
   ) -> [ProgramAudioChannel] {
     definition.audioDevices.compactMap {
       let device = $0
+      guard let id = device.internalID else { return nil }
       return ProgramAudioChannel(
-        name: "v4-\(device.internalID)",
+        name: "v4-\(id)",
         component: .inputAudioDevice(
-          InputAudioDeviceComponent(inputDeviceID: "v4-\(device.internalID)"))
+          InputAudioDeviceComponent(inputDeviceID: "v4-\(id)"))
       )
     }
   }
@@ -228,8 +247,11 @@ public struct WorkspaceV4RenderGraph: Sendable {
   ) -> ProgramPreferences {
     var result = ProgramPreferences(masterVolume: linearGain(volumeDecibels))
     for device in definition.audioDevices {
-      result.audioChannelGainsByName["v4-\(device.internalID)"] =
-        linearGain(preferences.audioChannelGainsDecibels[device.internalID]?.double ?? 0)
+      guard let id = device.internalID else { continue }
+      result.audioChannelGainsByName["v4-\(id)"] =
+        linearGain(
+          preferences.audioChannelGainsDecibels[id]?.double(
+            defaultNumerator: 0, defaultDenominator: 1) ?? 0)
     }
     return result
   }
@@ -238,10 +260,11 @@ public struct WorkspaceV4RenderGraph: Sendable {
     ProgramPreferences.linearAudioChannelGain(fromDecibels: decibels)
   }
 
-  private static func colorString(_ color: Ldtx_Workspace_V4_Color) -> String {
+  private static func colorString(_ color: Ldtx_Workspace_V4_Color?) -> String {
     return String(
-      format: "#%02X%02X%02X%02X", colorComponent(color.red), colorComponent(color.green),
-      colorComponent(color.blue), colorComponent(color.alpha))
+      format: "#%02X%02X%02X%02X", colorComponent(color?.red ?? 0),
+      colorComponent(color?.green ?? 0),
+      colorComponent(color?.blue ?? 0), colorComponent(color?.alpha ?? 0))
   }
 
   private static func colorComponent(_ value: Float) -> Int {
@@ -284,24 +307,24 @@ extension WorkspaceV4RenderGraph {
     let frameRate = canvas.frameRate
     var cameraIDs: [String: String] = [:]
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.videoComponent,
-        layerIDs.contains(source.internalID),
+      guard case .vfxSource(let source)? = wrapper.videoComponent, let sourceID = source.internalID,
+        layerIDs.contains(sourceID),
         case .avCaptureDevice(let physicalID)? =
-          physicalDeviceIDs[source.internalID]
+          physicalDeviceIDs[sourceID]
       else { continue }
-      cameraIDs["v4-\(source.internalID)"] = physicalID
+      cameraIDs["v4-\(sourceID)"] = physicalID
     }
     var inputDeviceNames: [String: String] = [:]
     for wrapper in definition.videoComponents {
-      guard case .vfxSource(let source)? = wrapper.videoComponent,
-        layerIDs.contains(source.internalID)
+      guard case .vfxSource(let source)? = wrapper.videoComponent, let sourceID = source.internalID,
+        layerIDs.contains(sourceID)
       else { continue }
-      inputDeviceNames["v4-\(source.internalID)"] = source.displayName
+      inputDeviceNames["v4-\(sourceID)"] = source.displayName
     }
     let masterCameraID: String?
-    if definition.canvasConfiguration.hasPtsMasterVfxSourceInternalID,
+    if let masterID = definition.canvasConfiguration?.ptsMasterVfxSourceInternalID,
       case .avCaptureDevice(let id)? = physicalDeviceIDs[
-        definition.canvasConfiguration.ptsMasterVfxSourceInternalID]
+        masterID]
     {
       masterCameraID = id
     } else {
@@ -368,13 +391,14 @@ extension WorkspaceV4RenderGraph {
     Set(
       definition.videoComponents.compactMap { wrapper -> String? in
         guard case .vfxSource(let source)? = wrapper.videoComponent,
-          layerIDs.contains(source.internalID),
+          let sourceID = source.internalID,
+          layerIDs.contains(sourceID),
           source.effects.contains(where: { effect in
             guard case .backgroundRemoval(let removal)? = effect.videoEffect else { return false }
             return removal.model == .mediapipeLandscape
           })
         else { return nil }
-        return "v4-\(source.internalID)"
+        return "v4-\(sourceID)"
       })
   }
 }

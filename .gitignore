@@ -5,7 +5,8 @@
 .DS_Store
 .build/
 .derivedData*/
-.venv
+.swiftpm/
+.venv/
 
 /build/
 /docs/dist/

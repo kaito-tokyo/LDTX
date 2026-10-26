@@ -15,7 +15,7 @@ module nanopb {
   export *
 }
 EOF
-xcrun swiftc -swift-version 6 -parse-as-library -cxx-interoperability-mode=default \
+xcrun swiftc -swift-version 6 -parse-as-library \
   -module-cache-path "$probe_directory/cache" -F "$products" -F "$products/PackageFrameworks" -I "$products" \
   -Xcc -fmodule-map-file="$generated_headers/module.modulemap" \
   -Xcc -fmodule-map-file="$probe_directory/nanopb.modulemap" \

@@ -41,7 +41,7 @@ message VideoComponentWrapper {
 // Text with Variable Macro references, rendered relative to the Landscape Canvas.
 // No intrinsic image size; cannot be used as a Vision input.
 message DynamicTextComponent {
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   string display_name = 2;
   Rational32 width = 3;
   Rational32 height = 4;
@@ -56,7 +56,7 @@ message DynamicTextComponent {
 // It must not be referenced as a Vision input.
 message FillSolidColorComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The source color at every Canvas point, in extended sRGB. RGB components
@@ -75,7 +75,7 @@ message FillSolidColorComponent {
 // It must not be referenced as a Vision input.
 message FillLinearGradientComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The start point X coordinate, normalized by the rendering Canvas width,
@@ -116,7 +116,7 @@ message FillLinearGradientComponent {
 // It must not be referenced as a Vision input.
 message FillRadialGradientComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -155,7 +155,7 @@ message FillRadialGradientComponent {
 // It must not be referenced as a Vision input.
 message FillConicGradientComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The center X coordinate, normalized by the rendering Canvas width,
@@ -191,13 +191,13 @@ message FillConicGradientComponent {
 // than Rational32 values normalized to a Canvas.
 message VfxSourceComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   // The configured device image width in pixels.
-  uint32 device_width = 3 [default = 0];
+  uint32 device_width = 3;
   // The configured device image height in pixels.
-  uint32 device_height = 4 [default = 0];
+  uint32 device_height = 4;
   // The VFX effects applied to the input video, in evaluation order.
   repeated VideoEffectWrapper effects = 5;
 }
@@ -207,7 +207,7 @@ message VfxSourceComponent {
 // It must not be referenced as a Vision input.
 message TestPatternComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
 }
@@ -217,7 +217,7 @@ message TestPatternComponent {
 // It must not be referenced as a Vision input.
 message ClockComponent {
   // An LdtxInternalId for this entity.
-  sfixed64 internal_id = 1 [default = 0];
+  sfixed64 internal_id = 1;
   // The name of this Video Component shown in the Workspace sidebar.
   string display_name = 2;
   reserved 3, 4;
@@ -226,13 +226,13 @@ message ClockComponent {
   // The same pixel size is used on the Portrait Canvas.
   Rational32 font_size = 12;
   // Whether the rendered Clock includes the date.
-  bool shows_date = 5 [default = false];
+  bool shows_date = 5;
   // Whether the rendered time includes seconds.
-  bool shows_seconds = 6 [default = false];
+  bool shows_seconds = 6;
   // Whether the rendered time uses a 24-hour clock.
-  bool uses_24_hour_time = 7 [features.enforce_naming_style = STYLE_LEGACY, default = false];
+  bool uses_24_hour_time = 7 [features.enforce_naming_style = STYLE_LEGACY];
   // The fixed offset from UTC in minutes.
-  sint32 utc_offset_minutes = 8 [default = 0];
+  sint32 utc_offset_minutes = 8;
   // The color of the rendered date and time text, in extended sRGB.
   // RGB components use the nonlinear sRGB transfer function and may extend
   // beyond [0, 1]. Alpha is straight, in [0, 1], and is not transfer-function

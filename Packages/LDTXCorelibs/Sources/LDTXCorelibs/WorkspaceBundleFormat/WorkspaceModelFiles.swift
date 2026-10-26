@@ -13,8 +13,8 @@ public enum WorkspaceModelFiles {
   public static func modelURL(
     for vision: Ldtx_Workspace_V4_LdtxSceneDetectorVision, in models: [Int64: URL]
   ) -> URL? {
-    guard vision.modelInternalID > 0 else { return nil }
-    return models[vision.modelInternalID]
+    guard let id = vision.modelInternalID, id > 0 else { return nil }
+    return models[id]
   }
 
   static func validateDirectory(_ url: URL) throws {

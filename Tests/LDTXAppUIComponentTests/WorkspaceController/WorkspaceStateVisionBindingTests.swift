@@ -28,8 +28,8 @@ extension AppUIComponentTestSuite {
         workspace.definition.visions.reverse()
       }
       binding.wrappedValue.displayName = "Renamed"
-      #expect(store.workspaceDefinition.visions[0].ocrVision.displayName == "Other")
-      #expect(store.workspaceDefinition.visions[1].ocrVision.displayName == "Renamed")
+      #expect(store.workspaceDefinition.visions[0].displayName == "Other")
+      #expect(store.workspaceDefinition.visions[1].displayName == "Renamed")
 
       store.isOutputActive = true
       binding.wrappedValue.displayName = "Assigned during output"

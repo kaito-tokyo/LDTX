@@ -36,28 +36,30 @@ brew install protobuf
 
 ## Corelibs
 
-`Packages/LDTXCorelibs/Package.swift` defines one Swift target, `LDTXCorelibs`,
-and its C implementation dependency, `LDTXNanopbGenerated`. Sources live under
+`Packages/LDTXCorelibs/Package.swift` defines the Swift targets `LDTXCorelibs`
+and `LDTXMessages`, and the C target `LDTXNanopbGenerated`. Sources live under
 `Packages/LDTXCorelibs/Sources/<target>`. There is no repository-root manifest.
-Swift code is organized into `Messages`, `Values`, `Program`, `Nanopb`,
-`WorkspaceBundleFormat`, and `RecordBundleFormat` directories.
-`Messages` is reserved for Protobuf and its handwritten extensions.
+`LDTXMessages` owns Protobuf models, handwritten message extensions, and the
+copying codec. `LDTXCorelibs` owns `Values`, `Program`, `WorkspaceBundleFormat`,
+and `RecordBundleFormat`, and re-exports the public Swift message API.
 See [target dependencies](target-dependencies.md) for their boundaries and
 Workspace UI's presentation contracts.
 
 XcodeGen references the local package's dynamic `LDTXCorelibs` product, and all
 Swift consumers use `import LDTXCorelibs`. One dynamic product provides a single
 implementation across the application's framework graph. The official nanopb
-package and generated C target remain implementation dependencies. Keep Swift's
+package and generated C target are internal imports of `LDTXMessages`. Keep its
 C importer macros aligned with the C targets. AVFoundation operations remain in
 LDTXRecording outside Corelibs.
 
 On Linux, files that only use Foundation's Swift value APIs import
 FoundationEssentials. Files using compatibility APIs such as JSONSerialization,
-NSNumber, NSNull, PropertyListSerialization, and XMLParser retain Foundation.
+NSNumber, NSDecimalNumber, NSString, NSURLErrorKey, PropertyListSerialization,
+and XMLParser retain Foundation. Generated message models and the shared nanopb
+codec follow the same rule; their generator emits the conditional import.
 Apple platforms use the SDK's Foundation module. Pure Swift values need neither.
 
-Tests live in `Packages/LDTXCorelibs/Tests/<module>Tests` and are defined once as
+Tests live in `Packages/LDTXCorelibs/Tests/LDTXCorelibsTests/<area>` and are defined once as
 SwiftPM's `LDTXCorelibsTests`. `project/corelibs.yml` and the Xcode test plans
 reference that package target directly; XcodeGen does not create another test
 bundle or source group.
@@ -148,19 +150,20 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Packages/LDTXCorelibs/Sources/LDTXCorelibs/Messages/envelope.pb.swift` | `Protos/envelope.proto` |
-| `Packages/LDTXCorelibs/Sources/LDTXCorelibs/Messages/workspace_v4_*.pb.swift` | `Protos/workspace_v4_*.proto` |
-| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/*.pb.c`, `include/*.pb.h` | `Protos/*.proto` via the official nanopb generator |
-| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/StorageChecks.c` | Message descriptors and callback-only storage policy |
+| `Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/*.pb.swift` | `Protos/*.proto` |
+| `Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/*.pb.h`, `*.pb.c` | `Protos/*.proto` via the official nanopb generator |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
+The official `.pb.c` files supply the descriptor definitions and compile directly
+in `LDTXNanopbGenerated`.
 All schemas under `Protos` use Edition 2024. Run protoc 36.2 externally to create
 a FileDescriptorSet, then use the Python generator in
-[`Tools/GenerateNanopbProtos`](../Tools/GenerateNanopbProtos/README.md) to generate
-Swift models and callback-only C definitions. The tool reads descriptors using
-Python protobuf, delegates C generation to the official nanopb generator, and
-generates the Swift adapters. The app uses
+[the generate-nanopb-protos skill](../.agents/skills/generate-nanopb-protos/SKILL.md) to generate
+Swift models and adapters. Generate C headers and sources separately with the official
+nanopb generator and `Protos/*.options`, following the skill's commands.
+The Swift generator reads descriptors using Python protobuf and never invokes
+protoc or nanopb. The app uses
 the official nanopb SwiftPM package at runtime; no generator runs during normal builds. Singular
 fields use the edition default of explicit presence; do not set file-level
 `IMPLICIT` presence.
@@ -175,11 +178,9 @@ git submodule update --init Vendors/nanopb
 mkdir -p /tmp/ldtx-proto-input
 protoc -I Protos --include_imports --include_source_info \
   --descriptor_set_out=/tmp/ldtx-proto-input/schemas.pb Protos/*.proto
-protoc -I Vendors/nanopb/generator/proto \
-  --python_out=/tmp/ldtx-proto-input nanopb.proto
-pipx run --backend pip --path Tools/GenerateNanopbProtos/generate.py \
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb
-pipx run --backend pip --path Tools/GenerateNanopbProtos/generate.py \
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb --check
 ```
 
@@ -207,13 +208,16 @@ The original source remains readable when JavaScript or the CDN is unavailable.
 These pages describe behavior; they do not execute tests or report test results.
 
 The generator updates checked-in sources using `apply_patch` (required on PATH).
-`--check` verifies reproducibility of C and Swift sources without
-writing files. The descriptor input is supplied explicitly with `--descriptor`;
+`--check` verifies reproducibility of Swift sources without writing files.
+Regenerate C headers separately into a temporary directory and compare them
+with the checked-in headers. The descriptor input is supplied with `--descriptor`;
 the tool never invokes protoc. Generated models retain explicit presence and
-fixed schema defaults. The official pb_encode/pb_decode path uses field callbacks;
-C structs hold only context pointers, not copies of the Swift payloads. Unknown
-fields are discarded. String decoding fills Swift String's
-initialization buffer directly and rejects invalid UTF-8. Map output is ordered
+fixed schema defaults. The official pb_decode path fills an owned C message,
+which is copied into the Swift model before pb_release frees its allocations.
+Encoding copies into C storage and uses pb_encode, then releases that storage.
+Unknown fields are discarded. Strings use length-delimited C bytes storage to
+preserve embedded NULs; copying into Swift rejects invalid UTF-8. No field
+callbacks or preliminary wire-type scan are used. Map output is ordered
 by key. The Swift Clang importer uses the same three configuration macros as the
 upstream nanopb package.
 

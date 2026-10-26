@@ -7,7 +7,8 @@ extension Ldtx_Workspace_V4_WorkspaceDefinitionV4 {
   public func validateRichTextDocuments() throws {
     for wrapper in videoComponents {
       if case .dynamicText(let component) = wrapper.videoComponent {
-        _ = try LDTXRichTextDocument(rtfd: component.rtfdDocument)
+        guard let document = component.rtfdDocument else { throw NanopbError.malformed }
+        _ = try LDTXRichTextDocument(rtfd: document)
       }
     }
   }

@@ -22,18 +22,19 @@ struct DynamicTextInspector: View {
         stateService: stateService, appletData: appletData, componentID: internalID)
       if let component {
         Section("Dynamic Text") {
-          TextField("Name", text: binding(\.displayName, fallback: component.displayName))
+          TextField("Name", text: binding(\.displayName, fallback: component.displayName ?? ""))
           LabeledContent("Width") {
             TextField(
-              "Width", value: binding(\.width, fallback: component.width),
+              "Width", value: binding(\.width, fallback: component.width ?? .init()),
               format: RationalFormatStyle())
           }
           LabeledContent("Height") {
             TextField(
-              "Height", value: binding(\.height, fallback: component.height),
+              "Height", value: binding(\.height, fallback: component.height ?? .init()),
               format: RationalFormatStyle())
           }
-          if let document = try? LDTXRichTextDocument(rtfd: component.rtfdDocument) {
+          if let rtfd = component.rtfdDocument, let document = try? LDTXRichTextDocument(rtfd: rtfd)
+          {
             let keys = [LDTXVariableKey: String](definition: stateService.workspaceDefinition).keys
               .sorted {
                 $0.path < $1.path
@@ -86,7 +87,7 @@ struct DynamicTextInspector: View {
   }
 
   private func binding<T>(
-    _ key: WritableKeyPath<Ldtx_Workspace_V4_DynamicTextComponent, T>, fallback: T
+    _ key: WritableKeyPath<Ldtx_Workspace_V4_DynamicTextComponent, T?>, fallback: T
   ) -> Binding<T> {
     Binding(
       get: { component?[keyPath: key] ?? fallback },
@@ -99,7 +100,7 @@ struct DynamicTextInspector: View {
         else { return }
         value[keyPath: key] = next
         stateService.editWorkspace(undoManager: undoManager) { workspace in
-          workspace.definition.videoComponents[index].dynamicText = value
+          workspace.definition.videoComponents[index].videoComponent = .dynamicText(value)
         }
       })
   }
@@ -109,7 +110,7 @@ struct DynamicTextInspector: View {
   > {
     Binding(
       get: {
-        component.flatMap { try? LDTXRichTextDocument(rtfd: $0.rtfdDocument) } ?? fallback
+        component?.rtfdDocument.flatMap { try? LDTXRichTextDocument(rtfd: $0) } ?? fallback
       },
       set: { next in
         guard !stateService.isOutputActive, var value = component,
@@ -119,7 +120,7 @@ struct DynamicTextInspector: View {
         else { return }
         value.rtfdDocument = next.rtfd
         stateService.editWorkspace(undoManager: undoManager) { workspace in
-          workspace.definition.videoComponents[index].dynamicText = value
+          workspace.definition.videoComponents[index].videoComponent = .dynamicText(value)
         }
       })
   }

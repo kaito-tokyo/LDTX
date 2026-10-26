@@ -21,7 +21,7 @@ extension WorkspaceDocument {
         }
         return nil
       }).first,
-      vision.modelInternalID > 0,
+      let modelID = vision.modelInternalID, modelID > 0,
       workspaceDefinition.visions.contains(where: {
         $0.vision == .ldtxSceneDetectorVision(vision)
       }),
@@ -30,7 +30,7 @@ extension WorkspaceDocument {
           && $0.renderingSize != nil
       })
     else { return nil }
-    guard let url = workspace.visionModels[vision.modelInternalID] else { return nil }
+    guard let url = workspace.visionModels[modelID] else { return nil }
     return (vision, url)
   }
 

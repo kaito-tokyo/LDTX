@@ -37,7 +37,7 @@ extension AppUIComponentTestSuite {
       state.editWorkspace(undoManager: nil) { workspace in
         workspace.definition.programs = [.with { $0.internalID = 100 }]
         workspace.preferences.landscapeProgramPreferences[100, default: .init()]
-          .audioMasterVolumeDecibels.set(num: -120, den: 10)
+          .audioMasterVolumeDecibels = .with { $0.set(num: -120, den: 10) }
       }
       let root = MasterVolumeEditor(
         stateService: state, appletData: WorkspaceAppletData(),
@@ -90,16 +90,16 @@ extension AppUIComponentTestSuite {
       try editWorkspaceField(firstField(), text: "-12", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
-        state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels
-          .double == -12)
+        state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels?
+          .double(defaultNumerator: 0, defaultDenominator: 1) == -12)
       #expect(state.workspacePreferences.landscapeProgramPreferences[100] == nil)
       data.updateState(for: url) { $0.selectedProgramInternalID = 100 }
       await settleWorkspaceToolbar(window)
       try editWorkspaceField(firstField(), text: "-6", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
-        state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels
-          .double == -6)
+        state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels?
+          .double(defaultNumerator: 0, defaultDenominator: 1) == -6)
       window.makeFirstResponder(nil)
       await settleWorkspaceToolbar(window)
       state.editWorkspace(undoManager: nil) { workspace in

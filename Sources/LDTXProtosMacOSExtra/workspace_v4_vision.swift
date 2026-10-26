@@ -10,9 +10,13 @@ extension Ldtx_Workspace_V4_VisionRegionOfInterest {
   /// Uses its bottom-left origin and actual size without clipping.
   public func rect(in imageExtent: CGRect) -> CGRect {
     CGRect(
-      x: imageExtent.minX + imageExtent.width * CGFloat(x.double),
-      y: imageExtent.minY + imageExtent.height * CGFloat(y.double),
-      width: imageExtent.width * CGFloat(width.double),
-      height: imageExtent.height * CGFloat(height.double))
+      x: imageExtent.minX + imageExtent.width
+        * CGFloat(x?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+      y: imageExtent.minY + imageExtent.height
+        * CGFloat(y?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+      width: imageExtent.width
+        * CGFloat(width?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1),
+      height: imageExtent.height
+        * CGFloat(height?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1))
   }
 }

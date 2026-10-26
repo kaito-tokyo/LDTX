@@ -22,12 +22,13 @@ import Testing
     var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
     definition.videoComponents = [
       .with {
-        $0.dynamicText = .with {
-          $0.internalID = 2
-          $0.width.set(num: 1, den: 2)
-          $0.height.set(num: 1, den: 10)
-          $0.rtfdDocument = try! LDTXRichTextDocument(content).rtfd
-        }
+        $0.videoComponent = .dynamicText(
+          .with {
+            $0.internalID = 2
+            $0.width = .with { $0.set(num: 1, den: 2) }
+            $0.height = .with { $0.set(num: 1, den: 10) }
+            $0.rtfdDocument = try! LDTXRichTextDocument(content).rtfd
+          })
       }
     ]
     let original = definition
@@ -43,14 +44,23 @@ import Testing
     #expect(definition == original)
     #expect(definition.videoComponents[0].canBeVisionInput == false)
     try definition.validateRichTextDocuments()
-    definition.videoComponents[0].dynamicText.rtfdDocument = Data("<macro/>".utf8)
+    guard case .dynamicText(var text) = definition.videoComponents[0].videoComponent else {
+      Issue.record("Missing dynamic text")
+      return
+    }
+    text.rtfdDocument = Data("<macro/>".utf8)
+    definition.videoComponents[0].videoComponent = .dynamicText(text)
     #expect(throws: (any Error).self) { try definition.validateRichTextDocuments() }
   }
 
   @Test("LUB-1005: New dynamic text contains valid RTFD and bundle preserves bytes")
   func newDynamicTextContainsValidRTFDAndBundlePreservesBytes() throws {
     let component = try WorkspaceResourceFactory.makeDynamicText(id: 33, name: "Text")
-    let document = try LDTXRichTextDocument(rtfd: component.dynamicText.rtfdDocument)
+    guard case .dynamicText(let text) = component.videoComponent else {
+      Issue.record("Missing dynamic text")
+      return
+    }
+    let document = try LDTXRichTextDocument(rtfd: #require(text.rtfdDocument))
     #expect(try document.attributedString().string == "Dynamic Text")
     let workspace = WorkspaceV4Bundle(
       definition: .with { $0.videoComponents = [component] }, preferences: .init())
@@ -59,7 +69,13 @@ import Testing
     defer { try? FileManager.default.removeItem(at: url) }
     try WorkspaceBundleWriterV4().write(workspace, to: url)
     let restored = try WorkspaceBundleReaderV4(at: url).read()
-    #expect(restored.definition.videoComponents[0].dynamicText.rtfdDocument == document.rtfd)
+    guard
+      case .dynamicText(let restoredText) = restored.definition.videoComponents[0].videoComponent
+    else {
+      Issue.record("Missing restored dynamic text")
+      return
+    }
+    #expect(restoredText.rtfdDocument == document.rtfd)
     try restored.definition.validateRichTextDocuments()
   }
 }

@@ -25,11 +25,12 @@ struct VideoComponentProgramLayers: View {
   var body: some View {
     Section("Video Layers") {
       if let program = appletData.selectedProgram(
-        in: stateService.workspaceDefinition, for: stateService.localStateURL)
+        in: stateService.workspaceDefinition, for: stateService.localStateURL),
+        let programID = program.internalID
       {
-        LabeledContent("Program", value: program.displayName)
-        Toggle("Landscape", isOn: membership(for: program.internalID, target: .landscape))
-        Toggle("Portrait", isOn: membership(for: program.internalID, target: .portrait))
+        LabeledContent("Program", value: program.displayName ?? "")
+        Toggle("Landscape", isOn: membership(for: programID, target: .landscape))
+        Toggle("Portrait", isOn: membership(for: programID, target: .portrait))
       } else {
         Text("No program selected").foregroundStyle(.secondary)
         Toggle("Landscape", isOn: .constant(false)).disabled(true)
@@ -69,7 +70,7 @@ struct VideoComponentProgramLayers: View {
           }
           )
         else { return false }
-        return stateService.workspacePreferences[keyPath: target.preferences][program.internalID]?
+        return stateService.workspacePreferences[keyPath: target.preferences][programID]?
           .videoLayerInternalIds.contains(id) ?? false
       },
       set: { value in

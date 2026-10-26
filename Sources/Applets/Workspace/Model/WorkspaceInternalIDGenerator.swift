@@ -43,9 +43,9 @@ public final class WorkspaceInternalIDGenerator {
   public func next(
     in definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4, additionalIDs: Set<Int64> = []
   ) -> Int64 {
-    let ids = Set(definition.audioDevices.map(\.internalID))
+    let ids = Set(definition.audioDevices.compactMap(\.internalID))
       .union(definition.videoComponents.compactMap(\.internalID))
-      .union(definition.programs.map(\.internalID))
+      .union(definition.programs.compactMap(\.internalID))
       .union(definition.visions.compactMap(\.internalID))
       .union(additionalIDs)
     return next(existingIDs: ids)

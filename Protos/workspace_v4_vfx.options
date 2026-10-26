@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+
+* fallback_type:FT_POINTER
+ldtx.workspace.v4.CustomVideoEffect.json type_override:TYPE_BYTES

@@ -41,12 +41,16 @@ extension AppUIComponentTestSuite {
       row.edit(data.input, at: data.field.rawValue)
       let saved = try #require(fixture.editor.preferences.videoLayerTransforms[1])
       let values = [
-        saved.translationX.double, saved.translationY.double, saved.scaleX.double,
-        saved.scaleY.double,
+        (saved.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
+        (saved.translationY ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
+        (saved.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
+        (saved.scaleY ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
       ]
       let original = [
-        before.translationX.double, before.translationY.double, before.scaleX.double,
-        before.scaleY.double,
+        (before.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
+        (before.translationY ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
+        (before.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
+        (before.scaleY ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
       ]
       #expect(
         values[data.field.rawValue] == Double(data.expectedNumerator)
@@ -66,8 +70,12 @@ extension AppUIComponentTestSuite {
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[0] == "-")
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.translationX.double == 0)
-      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.scaleY.double == 0.5)
+      #expect(
+        (row.transform.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1)
+          == 0)
+      #expect(
+        fixture.editor.preferences.videoLayerTransforms[1]?.scaleY?.double(
+          defaultNumerator: 1, defaultDenominator: 1) == 0.5)
     }
 
     @Test(
@@ -80,7 +88,8 @@ extension AppUIComponentTestSuite {
       row.edit(text, at: 2)
       #expect(fixture.state.workspacePreferences == before)
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.scaleX.double == 1)
+      #expect(
+        (row.transform.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1) == 1)
       fixture.update(ids: [3, 1, 2])
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[2] == text)
@@ -92,7 +101,9 @@ extension AppUIComponentTestSuite {
       let row = try #require(fixture.editor.rows[1])
       row.edit(text, at: 0)
       #expect(row.hasLocalTextChanges)
-      #expect(row.transform.translationX.double == 0)
+      #expect(
+        (row.transform.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1)
+          == 0)
     }
 
     @Test("LUB-1048: Stale callbacks do not edit removed layers")
@@ -143,7 +154,9 @@ extension AppUIComponentTestSuite {
       let field = try #require(fields.first)
       try editWorkspaceField(field, text: "960", window: window)
       await settleWorkspaceToolbar(window)
-      #expect(fixture.editor.preferences.videoLayerTransforms[1]?.translationX.double == 0.5)
+      #expect(
+        fixture.editor.preferences.videoLayerTransforms[1]?.translationX?.double(
+          defaultNumerator: 0, defaultDenominator: 1) == 0.5)
     }
   }
 }
