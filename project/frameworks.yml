@@ -29,23 +29,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXVisionTraining
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXProtosMacOSExtra:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXProtosMacOSExtra
-    dependencies:
-      - target: LDTXRichText
-      - package: Corelibs
-        product: LDTXCorelibs
-      - sdk: AppKit.framework
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProtosMacOSExtra
-        PRODUCT_MODULE_NAME: LDTXProtosMacOSExtra
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        SKIP_INSTALL: YES
   LDTXAppHelper:
     type: framework
     platform: macOS
@@ -64,21 +47,13 @@ targets:
     sources:
       - Sources/LDTXUtils
     dependencies:
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXCapture
       - package: Corelibs
         product: LDTXCorelibs
       - target: LDTXProgramRuntime
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeRTMPS
       - target: LDTXRecording
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - target: LDTXProtosMacOSExtra
       - package: swift-argument-parser
         product: ArgumentParser
     settings:
@@ -195,17 +170,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXDash
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXMediaTiming:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXMediaTiming
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXMediaTiming
-        PRODUCT_MODULE_NAME: LDTXMediaTiming
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
   LDTXMP4:
     type: framework
     platform: macOS
@@ -291,10 +255,6 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXVision
-    dependencies:
-      - target: LDTXInternalProtocols
-      - target: LDTXTaskQueue
-      - target: LDTXWorkspaceAppletModel
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVision
@@ -383,7 +343,6 @@ targets:
       - target: LDTXCapture
       - target: LDTXDash
       - target: LDTXInternalProtocols
-      - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
@@ -394,7 +353,8 @@ targets:
       - target: LDTXTaskQueue
       - target: LDTXVideoComposition
       - target: LDTXVideoRendering
-      - target: LDTXFontRasterizer
+      - package: LDTXFontRasterizer
+        product: LDTXFontRasterizer
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXProgramRuntime
@@ -438,6 +398,7 @@ targets:
     dependencies:
       - package: Corelibs
         product: LDTXCorelibs
+      - target: LDTXRichText
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletModel
@@ -455,7 +416,6 @@ targets:
       - target: LDTXWorkspaceAppletModel
       - package: Corelibs
         product: LDTXCorelibs
-      - target: LDTXYouTubeRTMPS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletStore
@@ -476,17 +436,11 @@ targets:
       - target: LDTXWorkspaceAppletStore
       - package: Corelibs
         product: LDTXCorelibs
-      - target: LDTXProtosMacOSExtra
       - target: LDTXCapture
-      - target: LDTXAppletSupport
-      - target: LDTXDash
-      - target: LDTXInternalProtocols
       - target: LDTXProgramRuntime
       - target: LDTXRecording
       - target: LDTXTaskQueue
       - target: LDTXVision
-      - target: LDTXYouTube
-      - target: LDTXYouTubeAuth
       - target: LDTXYouTubeRTMPS
       - target: LDTXYouTubeOutputProtocol
     settings:
@@ -520,23 +474,14 @@ targets:
       - package: Corelibs
         product: LDTXCorelibs
       - target: LDTXWorkspaceAppletModel
-      - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletUI
-      - target: LDTXAppletSupport
-      - target: LDTXAudioEngine
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDeviceRegistry
       - target: LDTXInternalProtocols
       - target: LDTXProgramRuntime
-      - target: LDTXProgramRendering
-      - target: LDTXVideoComposition
       - target: LDTXVideoRendering
-      - target: LDTXDash
-      - target: LDTXMP4
-      - target: LDTXYouTube
-      - target: LDTXRecording
       - target: LDTXTaskQueue
       - target: LDTXYouTubeRTMPS
     settings:
@@ -545,23 +490,3 @@ targets:
         PRODUCT_MODULE_NAME: LDTXWorkspaceAppletController
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXFontRasterizer:
-    type: framework
-    platform: macOS
-    sources:
-      - path: Sources/LDTXFontRasterizer
-        excludes:
-          - include
-      - path: Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h
-        group: Public Headers/LDTXFontRasterizer
-        buildPhase: headers
-        headerVisibility: public
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXFontRasterizer
-        PRODUCT_MODULE_NAME: LDTXFontRasterizer
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXFontRasterizer/include $(SRCROOT)/Vendors/stb"
-        MODULEMAP_FILE: Sources/LDTXFontRasterizer/include/module.modulemap
-        OTHER_CFLAGS: "$(inherited) -Wno-comma"

@@ -41,7 +41,8 @@ are not imported or referenced by Workspace data.
 ## Glyph rasterizer
 
 Clock uses the official `stb_truetype.h` from the `nothings/stb` project at
-commit `31c1ad37456438565541f4919958214b6e762fb4`. The vendored header is used
+commit `31c1ad37456438565541f4919958214b6e762fb4`, vendored in the
+`LDTXFontRasterizer` package. The header is used
 only to turn the fixed Clock glyph subset (digits, separators, and AM/PM) into
 an 8-bit signed-distance-field atlas. The ASCII-indexed metrics table is kept
 for simple renderer lookup, while unused glyphs are not rasterized. The edge is

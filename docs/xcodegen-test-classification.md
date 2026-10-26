@@ -42,7 +42,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 
 | Tier | Suite | Source |
 | --- | --- | --- |
-| Easy | `ApplicationTerminationCoordinatorIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXAppletSupport/ApplicationTerminationCoordinatorTests.swift` |
 | Output | `OutputSettingsModelUnitTestSuite` | `Tests/LDTXOutputTests/App/OutputSettingsModelTests.swift` |
 | Easy | `ProgramLibraryUnitTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/ProgramLibraryTests.swift` |
 | Easy | `ProgramPairPreviewRegionsUnitTestSuite` | `Tests/LDTXModuleTests/LDTXProgramRuntime/ProgramPairPreviewRegionsTests.swift` |
@@ -92,8 +91,6 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Medium | `WorkspaceCaptureSessionCoordinatorIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXProgramRuntime/WorkspaceCaptureSessionCoordinatorTests.swift` |
 | Output | `YouTubeOutputMediaBatcherIntegrationTestSuite` | `Tests/LDTXOutputTests/Integration/YouTubeOutputMediaBatcherTests.swift` |
 | Output | `MP4TimingBoxUnitTestSuite` | `Tests/LDTXOutputTests/MP4/MP4TimingBoxTests.swift` |
-| Output | `AudioChannelTimelineUnitTestSuite` | `Tests/LDTXOutputTests/MediaTiming/AudioChannelTimelineTests.swift` |
-| Output | `AudioFramePTSClockUnitTestSuite` | `Tests/LDTXOutputTests/MediaTiming/AudioFramePTSClockTests.swift` |
 | Output | `DualCanvasRecordingPackageIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/DualCanvasRecordingPackageTests.swift` |
 | Medium | `ProgramAudioMonitorMixerIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXProgramRuntime/ProgramAudioMonitorMixerTests.swift` |
 | Output | `ProgramOutputMediaHubIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramOutputMediaHubTests.swift` |

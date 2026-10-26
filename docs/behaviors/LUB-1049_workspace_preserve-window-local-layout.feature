@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@LUB-1049 @LDTXAppletSupport
+@LUB-1049
 Feature: preserve window local layout
 
   @LUB-1049.1 @UIComponent

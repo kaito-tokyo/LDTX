@@ -14,11 +14,15 @@ let package = Package(
       targets: ["LDTXCorelibs"]
     )
   ],
-  dependencies: [.package(path: "../../Vendors/nanopb")],
+  dependencies: [
+    .package(path: "../../Vendors/nanopb")
+  ],
   targets: [
     .target(
       name: "LDTXNanopbGenerated",
-      dependencies: [.product(name: "nanopb", package: "nanopb")],
+      dependencies: [
+        .product(name: "nanopb", package: "nanopb")
+      ],
       path: "Sources/LDTXNanopbGenerated",
       publicHeadersPath: "include",
       cSettings: [
@@ -29,12 +33,15 @@ let package = Package(
     ),
     .target(
       name: "LDTXMessages",
-      dependencies: ["LDTXNanopbGenerated", .product(name: "nanopb", package: "nanopb")],
+      dependencies: [
+        "LDTXNanopbGenerated",
+        .product(name: "nanopb", package: "nanopb"),
+      ],
       path: "Sources/LDTXMessages",
-      // Match the official nanopb runtime's C configuration in Swift imports.
       swiftSettings: [
         .unsafeFlags([
-          "-Xcc", "-DPB_FIELD_32BIT=1", "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
+          "-Xcc", "-DPB_FIELD_32BIT=1",
+          "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
           "-Xcc", "-DPB_ENABLE_MALLOC=1",
         ])
       ]

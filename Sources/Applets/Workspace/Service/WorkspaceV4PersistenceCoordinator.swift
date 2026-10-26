@@ -5,7 +5,6 @@
 import Foundation
 import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import Observation

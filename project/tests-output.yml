@@ -15,7 +15,6 @@ targets:
       - target: LDTXRichText
       - target: LDTXCapture
       - target: LDTXDash
-      - target: LDTXMediaTiming
       - target: LDTXMP4
       - target: LDTXProgramRendering
       - target: LDTXProgramRuntime
