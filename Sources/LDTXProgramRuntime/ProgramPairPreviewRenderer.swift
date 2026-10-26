@@ -4,17 +4,14 @@
 
 import CoreVideo
 import LDTXVideoRendering
+import LDTXWorkspaceAppletInterface
 import Metal
 import MetalKit
-
-/// Supplies completed drawable snapshots to the preview's accessibility element.
-public protocol ProgramPreviewAccessibilityImageSource: MTKViewDelegate {
-  var accessibilityImage: PreviewAccessibilityImageStore { get }
-}
 
 /// Renders two ProgramRuntime frames into the owner's single MTKView.
 public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibilityImageSource {
   public let accessibilityImage = PreviewAccessibilityImageStore()
+  public var previewAccessibilityImage: any PreviewAccessibilityImageReading { accessibilityImage }
   private struct Configuration {
     var landscapeSize: CGSize
     var portraitSize: CGSize
@@ -202,29 +199,6 @@ public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibi
 }
 
 /// Pixel-aligned equal-height regions with a transparent four-pixel gap.
-public struct ProgramPairPreviewRegions {
-  public let landscape: CGRect
-  public let portrait: CGRect
-  public let gap: CGRect
-
-  public init(drawable: CGSize, landscapeSize: CGSize, portraitSize: CGSize) {
-    let landscapeRatio = max(1, landscapeSize.width) / max(1, landscapeSize.height)
-    let portraitRatio = max(1, portraitSize.width) / max(1, portraitSize.height)
-    let gapWidth = min(4, max(0, floor(drawable.width)))
-    let availableWidth = max(0, drawable.width - gapWidth)
-    let height = floor(
-      max(0, min(drawable.height, availableWidth / (landscapeRatio + portraitRatio))))
-    let landscapeWidth = floor(height * landscapeRatio)
-    let portraitWidth = floor(height * portraitRatio)
-    let totalWidth = landscapeWidth + gapWidth + portraitWidth
-    let x = floor((drawable.width - totalWidth) / 2)
-    let y = floor((drawable.height - height) / 2)
-    landscape = CGRect(x: x, y: y, width: landscapeWidth, height: height)
-    gap = CGRect(x: x + landscapeWidth, y: y, width: gapWidth, height: height)
-    portrait = CGRect(x: gap.maxX, y: y, width: portraitWidth, height: height)
-  }
-}
-
 private final class ProgramPairFrameLease: @unchecked Sendable {
   let frames: [ProgramFrame?]
   var textures: [CVMetalTexture] = []

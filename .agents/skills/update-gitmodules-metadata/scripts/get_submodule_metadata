@@ -1,0 +1,57 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+# SPDX-License-Identifier: Apache-2.0
+set -euo pipefail
+
+[[ $# == 1 ]] || {
+  echo 'Usage: get_submodule_metadata PATH' >&2
+  exit 2
+}
+cd "$(git rev-parse --show-toplevel)"
+path=${1#./}
+path=${path%/}
+case "$path" in
+Vendors/nanopb) baseurl=https://github.com/nanopb/nanopb/archive/refs/tags ;;
+Vendors/doctest) baseurl=https://github.com/doctest/doctest/archive/refs/tags ;;
+*)
+  echo "Unsupported path: $path" >&2
+  exit 1
+  ;;
+esac
+
+# Find the section by its path, then read the authoritative Git tag.
+prefix=$(git config --file .gitmodules --list | awk -F= -v path="$path" '
+  $1 ~ /^submodule\..*\.path$/ && substr($0,length($1)+2) == path {
+    sub(/path$/,"",$1); print $1; matches++
+  }
+  END { exit (matches != 1) }
+')
+tag=$(git config --file .gitmodules --get "${prefix}x-tag")
+git check-ref-format "refs/tags/$tag"
+
+# Compute both archives before emitting results.
+temporary=$(mktemp -d)
+trap 'rm -rf "$temporary"' EXIT
+for suffix in tar.gz zip; do
+  kind=${suffix/tar.gz/tarball}
+  url=$baseurl/$tag.$suffix
+  archive=$temporary/$suffix
+  curl -fsSL --max-time 120 -o "$archive" "$url"
+  case "$suffix" in
+  tar.gz) tar -tzf "$archive" >/dev/null ;;
+  zip) unzip -tq "$archive" >/dev/null ;;
+  esac
+  hash=$(openssl dgst -sha256 "$archive")
+  printf 'x-%s-url=%s\nx-%s-hash=sha256:%s\n' \
+    "$kind" "$url" "$kind" "${hash##* }" >>"$temporary/results"
+done
+
+# Print expected values and flag differences without editing .gitmodules.
+awk -F= -v prefix="$prefix" '
+  NR == FNR { actual[$1]=substr($0,length($1)+2); next }
+  {
+    value=substr($0,length($1)+2); print $1 " = " value
+    if (actual[prefix $1] != value) { print "Mismatch: " $1; failed=1 }
+  }
+  END { exit failed }
+' <(git config --file .gitmodules --list) "$temporary/results"

@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXProgramRuntime
 import LDTXProtos
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import SwiftUI
 
@@ -10,7 +10,7 @@ struct AudioMixEditor: View {
   @Environment(\.undoManager) private var undoManager
   let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
-  let peakMeter: ProgramAudioPeakMeter
+  let peakMeter: any ProgramAudioPeakMeterPresenting
   let reportError: (Error) -> Void
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }
 

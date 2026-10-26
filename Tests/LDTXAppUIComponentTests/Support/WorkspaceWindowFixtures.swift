@@ -87,6 +87,9 @@ private final class WorkspaceTestDocumentContext: WorkspaceDocumentContext {
 @MainActor
 @Observable
 final class ToolbarDispatcher: WorkspaceRuntimeActions {
+  func readVisionModelInformation(at url: URL) async throws -> WorkspaceVisionModelInformation {
+    throw CancellationError()
+  }
   func canRunOCR(visionInternalID: Int64) -> Bool { false }
   func runOCR(visionInternalID: Int64) {}
 

@@ -41,7 +41,7 @@ extension AppUIComponentTestSuite {
       }
       let root = MasterVolumeEditor(
         stateService: state, appletData: WorkspaceAppletData(),
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       let window = hostWorkspaceView(root)
       defer { window.close() }
       await settleWorkspaceToolbar(window)
@@ -79,7 +79,7 @@ extension AppUIComponentTestSuite {
       let window = hostWorkspaceView(
         MasterVolumeEditor(
           stateService: state, appletData: data,
-          peakMeter: .init(), reportError: { _ in }))
+          peakMeter: StubAudioPeakMeter(), reportError: { _ in }))
       defer { window.close() }
       await settleWorkspaceToolbar(window)
       func firstField() throws -> NSTextField {
@@ -122,7 +122,7 @@ extension AppUIComponentTestSuite {
       let before = state.editingWorkspace
       let editor = MasterVolumeEditor(
         stateService: state, appletData: data,
-        peakMeter: .init(), reportError: { _ in })
+        peakMeter: StubAudioPeakMeter(), reportError: { _ in })
       #expect(editor.setMonitorVolume(-11.899999999999999))
       #expect(data.state(for: url).monitorVolume == -11.9)
       #expect(!editor.setMonitorVolume(.infinity))

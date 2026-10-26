@@ -17,6 +17,12 @@ describe *what must be true* and *how trade-offs are decided*; detailed API
 contracts, individual control behavior, and implementation procedures belong in
 the relevant design or feature documentation instead.
 
+## Workspace UI depends on presentation contracts
+
+- Workspace UI consumes Protos values and presentation/operation contracts.
+  Capture, discovery, rendering, inference and streaming implementations are
+  supplied by the controller/composition root rather than imported into UI.
+
 ## Version 4 is the authoritative workspace model
 
 - Version 4 Workspace protobuf documents are the authoritative representation

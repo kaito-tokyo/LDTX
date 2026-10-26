@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXProtos
-import LDTXVision
 import SwiftUI
 
 struct LdtxSceneDetectorVisionInspector: View {
@@ -17,7 +16,10 @@ struct LdtxSceneDetectorVisionInspector: View {
   var modelPreparationGeneration: UInt64 = 0
 
   @Environment(\.outputActive) var outputActive
-  @State private var modelInformation: VisionImageClassifierService.ModelInformation?
+  var readModelInformation: (URL) async throws -> WorkspaceVisionModelInformation = { _ in
+    throw CocoaError(.featureUnsupported)
+  }
+  @State private var modelInformation: WorkspaceVisionModelInformation?
   @State private var modelInformationFailure: String?
 
   var modelInformationURL: URL? { persistedModelURL ?? modelURL }
@@ -85,8 +87,7 @@ struct LdtxSceneDetectorVisionInspector: View {
       let noCompile = outputActive
       let generation = modelPreparationGeneration
       do {
-        let information = try await VisionImageClassifierService.readModelInformation(
-          at: url)
+        let information = try await readModelInformation(url)
         guard modelInformationURL == url, outputActive == noCompile,
           modelPreparationGeneration == generation
         else { return }
@@ -107,7 +108,7 @@ struct LdtxSceneDetectorVisionInspector: View {
   }
 
   private func cropAndScaleLabel(
-    _ information: VisionImageClassifierService.ModelInformation
+    _ information: WorkspaceVisionModelInformation
   ) -> LocalizedStringResource {
     switch information.cropAndScaleAction {
     case .centerCrop: "Center Crop"

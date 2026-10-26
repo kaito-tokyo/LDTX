@@ -36,11 +36,14 @@ brew install protobuf
 
 ## Corelibs
 
-Linux-compatible modules live directly under `Packages/Corelibs/<module>`.
-`Packages/Corelibs/Package.swift` defines LDTXProtos, LDTXProgram,
-LDTXWorkspaceBundleFormat, LDTXRecordBundleFormat and the internal nanopb C
-adapter target. There is no repository-root manifest or per-module manifest.
+Linux-compatible modules live directly under `Packages/LDTXCorelibs/<module>`.
+`Packages/LDTXCorelibs/Package.swift` defines LDTXProtos, LDTXProgram,
+LDTXWorkspaceBundleFormat, LDTXRecordBundleFormat, the schema-independent
+LDTXNanopb Swift runtime, and its common/schema-specific C targets. There is no
+repository-root manifest or per-module manifest.
 Generated LDTXProtos models and handwritten extensions remain in `Messages/`.
+See [target dependencies](target-dependencies.md) for their boundaries and
+Workspace UI's presentation contracts.
 
 XcodeGen references the local package's dynamic `LDTXCorelibs` product. The
 four Swift module names remain unchanged. One dynamic product provides a single
@@ -48,24 +51,28 @@ implementation across the application's framework graph; nanopb and the generate
 C target remain implementation dependencies. Recording bundle IO and DASH parsing
 remain in LDTXRecordBundleFormat; AVFoundation operations remain in LDTXRecording.
 
-Tests live in `Packages/Corelibs/Tests/<module>Tests`. SwiftPM and XcodeGen both
+Tests live in `Packages/LDTXCorelibs/Tests/<module>Tests`. SwiftPM and XcodeGen both
 run them as `LDTXCorelibsTests`:
 
 ```sh
-swift build --package-path Packages/Corelibs
-swift test --package-path Packages/Corelibs
+git submodule update --init Vendors/nanopb
+swift build --package-path Packages/LDTXCorelibs
+swift test --package-path Packages/LDTXCorelibs
 ```
 
-GitHub Codespaces uses `.devcontainer/devcontainer.json`, which resolves this
-package. Python and protoc are needed only when regenerating message sources.
+GitHub Codespaces uses `.devcontainer/devcontainer.json`, which initializes the
+nanopb submodule and resolves this package. Python and protoc are needed only
+when regenerating message sources.
 For Linux verification with the CI image:
 
 ```sh
 docker run --rm \
   --mount "type=bind,source=$PWD,target=/workspace,readonly" \
   swift:6.4.0-trixie bash -euo pipefail -c '
-    cp -R /workspace/Packages/Corelibs /tmp/corelibs
-    swift test --package-path /tmp/corelibs --scratch-path /tmp/corelibs-build \
+    mkdir -p /tmp/ldtx/Packages /tmp/ldtx/Vendors
+    cp -R /workspace/Packages/LDTXCorelibs /tmp/ldtx/Packages/LDTXCorelibs
+    cp -R /workspace/Vendors/nanopb /tmp/ldtx/Vendors/nanopb
+    swift test --package-path /tmp/ldtx/Packages/LDTXCorelibs --scratch-path /tmp/corelibs-build \
       --disable-index-store -debug-info-format none --jobs "$(nproc)"
   '
 ```
@@ -133,10 +140,10 @@ the commands below.
 | Generated output                                      | Source of truth                                  |
 | ----------------------------------------------------- | ------------------------------------------------ |
 | `LDTX.xcodeproj`                                      | `project.yml`                                    |
-| `Packages/Corelibs/LDTXProtos/Messages/envelope.pb.swift`             | `Protos/envelope.proto`                            |
-| `Packages/Corelibs/LDTXProtos/Messages/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
-| `Packages/Corelibs/LDTXProtos/NanopbMessages/*.pb.c`, `include/*.pb.h` | `Protos/*.proto` via the official nanopb generator |
-| `Packages/Corelibs/LDTXProtos/NanopbMessages/StorageChecks.c` | Message descriptors and callback-only storage policy |
+| `Packages/LDTXCorelibs/LDTXProtos/Messages/envelope.pb.swift`             | `Protos/envelope.proto`                            |
+| `Packages/LDTXCorelibs/LDTXProtos/Messages/workspace_v4_*.pb.swift`       | `Protos/workspace_v4_*.proto`                      |
+| `Packages/LDTXCorelibs/LDTXProtos/NanopbMessages/*.pb.c`, `include/*.pb.h` | `Protos/*.proto` via the official nanopb generator |
+| `Packages/LDTXCorelibs/LDTXProtos/NanopbMessages/StorageChecks.c` | Message descriptors and callback-only storage policy |
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
@@ -156,17 +163,15 @@ legacy naming-style override.
 documented at `docs/protos/workspace.html`.
 
 ```sh
-python3 -m venv /tmp/ldtx-proto-generator
-/tmp/ldtx-proto-generator/bin/pip install -r Tools/GenerateNanopbProtos/requirements.txt
-swift package --package-path Packages/Corelibs resolve
+git submodule update --init Vendors/nanopb
 mkdir -p /tmp/ldtx-proto-input
 protoc -I Protos --include_imports --include_source_info \
   --descriptor_set_out=/tmp/ldtx-proto-input/schemas.pb Protos/*.proto
-protoc -I Packages/Corelibs/.build/checkouts/nanopb/generator/proto \
+protoc -I Vendors/nanopb/generator/proto \
   --python_out=/tmp/ldtx-proto-input nanopb.proto
-/tmp/ldtx-proto-generator/bin/python Tools/GenerateNanopbProtos/generate.py \
+pipx run --backend pip --path Tools/GenerateNanopbProtos/generate.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb
-/tmp/ldtx-proto-generator/bin/python Tools/GenerateNanopbProtos/generate.py \
+pipx run --backend pip --path Tools/GenerateNanopbProtos/generate.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb --check
 ```
 
@@ -274,7 +279,7 @@ See [`testing.md`](testing.md) for the PTS regression policy and the cases that
 must be retained when changing timing or media pipelines.
 
 ```sh
-swift test --package-path Packages/Corelibs
+swift test --package-path Packages/LDTXCorelibs
 ```
 
 **Test macOS modules if needed:**
@@ -311,7 +316,7 @@ xcodebuild \
 **Run the package and app integration tests if needed:**
 
 ```sh
-swift test --package-path Packages/Corelibs
+swift test --package-path Packages/LDTXCorelibs
 
 xcodebuild \
   -project LDTX.xcodeproj \

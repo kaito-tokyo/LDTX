@@ -5,6 +5,7 @@
 import AVFoundation
 import CoreMedia
 import Foundation
+import LDTXProtos
 
 public protocol CameraCaptureStreaming: Sendable {
   func startCameraCapture(

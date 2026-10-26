@@ -102,7 +102,7 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Output | `ProgramVideoPTSSelectorHostClockIntegrationTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorHostClockTests.swift` |
 | Output | `ProgramVideoPTSSelectorUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/ProgramVideoPTSSelectorTests.swift` |
 | Output | `RecordingTimelineNormalizerUnitTestSuite` | `Tests/LDTXOutputTests/ProgramRuntime/RecordingTimelineNormalizerTests.swift` |
-| Corelibs | `RecordingPackageIntegrationTestSuite` | `Packages/Corelibs/Tests/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
+| Corelibs | `RecordingPackageIntegrationTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXRecordBundleFormatTests/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXModuleTests/LDTXVision/VisionFramePoolTests.swift` |
 | Medium | `YouTubeAuthFileIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthFileTests.swift` |
 | Medium | `YouTubeAuthorizationServiceIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
@@ -136,7 +136,7 @@ exercised through the SUT, even when they do not appear as imports in the test.
 process stdout/stderr and mutate environment variables. It remains hostless.
 macOS protobuf-extra suites run in LDTXModuleTests with Medium tags.
 
-Corelibs suites under `Packages/Corelibs/Tests/<module>Tests` remain in
+Corelibs suites under `Packages/LDTXCorelibs/Tests/<module>Tests` remain in
 `LDTXCorelibsTests` for XcodeGen and SwiftPM, including deterministic Unit suites
 and filesystem Integration suites. SwiftPM tests are outside the tier rule.
 
@@ -146,12 +146,12 @@ its serialized MainActor parent. Application UI automation remains in
 
 | Target | Suite | Source |
 | --- | --- | --- |
-| `LDTXCorelibsTests` | `ProgramComponentPersistenceUnitTestSuite` | `Packages/Corelibs/Tests/LDTXProgramTests/ProgramComponentPersistenceTests.swift` |
-| `LDTXCorelibsTests` | `ProgramPreferencesUnitTestSuite` | `Packages/Corelibs/Tests/LDTXProgramTests/ProgramPreferencesTests.swift` |
-| `LDTXCorelibsTests` | `Rational32UnitTestSuite` | `Packages/Corelibs/Tests/LDTXProtosTests/Rational32Tests.swift` |
-| `LDTXCorelibsTests` | `WorkspaceBundleValidatorV4UnitTestSuite` | `Packages/Corelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceBundleValidatorTests.swift` |
-| `LDTXCorelibsTests` | `WorkspaceV4DiagnosticsIntegrationTestSuite` | `Packages/Corelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceV4DiagnosticsTests.swift` |
-| `LDTXCorelibsTests` | `WorkspaceBundleFormatIntegrationTestSuite` | `Packages/Corelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceBundleFormatTests.swift` |
+| `LDTXCorelibsTests` | `ProgramComponentPersistenceUnitTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXProgramTests/ProgramComponentPersistenceTests.swift` |
+| `LDTXCorelibsTests` | `ProgramPreferencesUnitTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXProgramTests/ProgramPreferencesTests.swift` |
+| `LDTXCorelibsTests` | `Rational32UnitTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXProtosTests/Rational32Tests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceBundleValidatorV4UnitTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceBundleValidatorTests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceV4DiagnosticsIntegrationTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceV4DiagnosticsTests.swift` |
+| `LDTXCorelibsTests` | `WorkspaceBundleFormatIntegrationTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXWorkspaceBundleFormatTests/WorkspaceBundleFormatTests.swift` |
 
 Output suites share the serialized `OutputTestSuite` parent to coordinate
 media-session startup and callbacks while preserving individual Unit and

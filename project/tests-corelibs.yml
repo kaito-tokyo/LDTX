@@ -6,7 +6,7 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Packages/Corelibs/Tests
+      - Packages/LDTXCorelibs/Tests
     dependencies:
       - package: Corelibs
         product: LDTXCorelibs

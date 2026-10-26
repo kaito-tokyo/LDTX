@@ -12,13 +12,13 @@ updates:
     exclude-paths:
       - ".github/workflows/*.lock.yml"
 
-  - package-ecosystem: swift
-    directory: /Packages/Corelibs
+  - package-ecosystem: gitsubmodule
+    directory: /
     schedule:
       interval: weekly
 
   # This scope has no Package.swift, so Dependabot discovers the Xcode lock.
-  # nanopb is updated through the Corelibs manifest above.
+  # nanopb is updated through its Git submodule above.
   - package-ecosystem: swift
     directory: /LDTX.xcodeproj
     schedule:

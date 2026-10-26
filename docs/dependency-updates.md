@@ -6,35 +6,38 @@ SPDX-License-Identifier: Apache-2.0
 
 # Dependency updates
 
-Dependabot proposes weekly updates for GitHub Actions, the Corelibs Swift package,
+Dependabot proposes weekly updates for GitHub Actions, Git submodules,
 and the app's AppAuth and ArgumentParser dependencies. Review each proposal and
 validate the affected build graphs before merging.
 
 ## Swift and XcodeGen
 
-`Packages/Corelibs/Package.swift` owns nanopb and its C/Swift configuration macros.
-`project.yml` references the Corelibs local package and owns AppAuth and
-ArgumentParser declarations. There is no root Package.swift. Dependabot's Swift
-scope at `/Packages/Corelibs` updates the nanopb manifest/lock; the separate
+`Vendors/nanopb` pins the nanopb runtime and generator as a Git submodule.
+`Packages/LDTXCorelibs/Package.swift` references its official local SwiftPM package
+and owns the adapter targets' C/Swift configuration macros.
+`project/corelibs.yml` references the Corelibs local package. `project.yml` owns AppAuth and
+ArgumentParser declarations. There is no root Package.swift. Dependabot's
+Git submodule scope updates nanopb; the separate
 `/LDTX.xcodeproj` scope proposes AppAuth and ArgumentParser lock updates.
 
 For an Xcode lock proposal, copy the proposed version to the corresponding
 `exactVersion` in project.yml before regenerating or resolving the project.
 Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
 update, keep the runtime pin and generator's version check aligned.
-The Python generator's protobuf runtime is pinned in
-`Tools/GenerateNanopbProtos/requirements.txt`; keep it compatible with the external
-protoc version used to prepare descriptors.
+The Python generator's protobuf runtime is pinned in the PEP 723 inline metadata
+of `Tools/GenerateNanopbProtos/generate.py`. pipx with the pip backend manages
+its isolated environment;
+keep the pin compatible with the external protoc version used to prepare descriptors.
 
 ```sh
-swift package --package-path Packages/Corelibs resolve
+swift package --package-path Packages/LDTXCorelibs resolve
 xcodegen generate
 xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
   -derivedDataPath .derivedData -resolvePackageDependencies
 ```
 
-Review the manifests and resolver-produced locks together. nanopb must resolve
-to the same version and revision in the Corelibs and Xcode locks. The generated
+Review the manifests and resolver-produced locks together. nanopb's revision is
+recorded by the Git submodule rather than a SwiftPM lock. The generated
 project.pbxproj is intentionally untracked. New app packages require a deliberate
 Dependabot coverage policy. Confirm hosted Dependabot behavior after this
 configuration reaches main.

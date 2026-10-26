@@ -41,24 +41,14 @@ targets:
       - path: Resources/LDTX/Metal/AudioPeakMeter.metal
         buildPhase: resources
     dependencies:
-      - target: LDTXVariableMacro
-      - target: LDTXRichText
-      - target: LDTXVision
-      - target: LDTXBackgroundSegmentation
-      - target: LDTXInternalProtocols
       - package: Corelibs
         product: LDTXCorelibs
-      - target: LDTXProgramRuntime
-      - target: LDTXTaskQueue
-      - target: LDTXVideoComposition
-      - target: LDTXVideoRendering
-      - target: LDTXYouTube
-      - target: LDTXAppletSupport
-      - target: LDTXCapture
-      - target: LDTXDeviceRegistry
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
       - target: LDTXProtosMacOSExtra
-      - target: LDTXYouTubeRTMPS
+      - target: LDTXVariableMacro
+      - target: LDTXRichText
+      - target: LDTXAppletSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
@@ -236,6 +226,9 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletController
         embed: true
+      - target: LDTXWorkspaceAppletInterface
+        embed: true
+        codeSign: true
       - target: LDTXWorkspaceAppletUI
         # The app directly constructs WorkspaceDocument from this UI framework.
         link: true

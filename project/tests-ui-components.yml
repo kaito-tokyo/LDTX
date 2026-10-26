@@ -12,6 +12,7 @@ targets:
           - AppDelegate.swift
           - WorkspaceNotifications.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXVariableMacro
       - target: LDTXRichText
       - target: LDTXVisionProgrammerApplet

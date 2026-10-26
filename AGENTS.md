@@ -130,7 +130,7 @@ rather than inferring its tier from hardware use or CI behavior.
   component targets. Corelibs bundle IO remains in CorelibsTests. Keep XPC
   process isolation tests in XpcTests.
 - **CorelibsTests target:** Shared Linux-compatible module tests under
-  `Packages/Corelibs/Tests` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
+  `Packages/LDTXCorelibs/Tests` belong in `LDTXCorelibsTests` for both XcodeGen and SwiftPM.
   This target may contain deterministic unit tests and filesystem integration
   tests; keep their Unit or Integration scope in suite names.
 - **UnitTestSuite:** Tests of one SUT in isolation, with no special setup,

@@ -3,7 +3,6 @@
 
 import AppKit
 import Foundation
-import LDTXProgramRuntime
 import LDTXProtos
 import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
@@ -40,7 +39,7 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
   public var externalID: String? { workspace.definitionExternalID }
   public var preferencesExternalID: String? { workspace.preferencesExternalID }
   public var outputSettingsExternalID: String? { workspace.outputSettingsExternalID }
-  public var selectedAudioMix: ProgramAudioPeakMeter.Master = .landscape
+  public var selectedAudioMix: WorkspaceAudioMaster = .landscape
 
   public var inspectorSelector: WorkspaceInspectorSelector?
   public var isInspectorVisible = true

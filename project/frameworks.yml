@@ -3,6 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
+  LDTXWorkspaceAppletInterface:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Applets/Workspace/Interface
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
+      - target: LDTXWorkspaceAppletModel
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletInterface
+        PRODUCT_MODULE_NAME: LDTXWorkspaceAppletInterface
+        GENERATE_INFOPLIST_FILE: YES
+        DEFINES_MODULE: YES
   LDTXVisionTraining:
     type: framework
     platform: macOS
@@ -141,6 +156,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXCapture
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXCapture
@@ -153,6 +171,9 @@ targets:
     sources:
       - Sources/LDTXDeviceRegistry
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXCapture
     settings:
       base:
@@ -212,6 +233,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXVideoComposition
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXVideoComposition
@@ -253,6 +277,8 @@ targets:
       - path: Resources/LDTX/Metal/VideoCompositorShaders.metal
         buildPhase: resources
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXVideoComposition
     settings:
       base:
@@ -296,6 +322,9 @@ targets:
     platform: macOS
     sources:
       - Sources/LDTXYouTubeRTMPS
+    dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeRTMPS
@@ -308,6 +337,8 @@ targets:
     sources:
       - Sources/LDTXYouTube
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXDash
       - target: LDTXYouTubeRTMPS
     settings:
@@ -346,6 +377,7 @@ targets:
       - path: Resources/LDTX/Metal/ClockOverlayShaders.metal
         buildPhase: resources
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXRichText
       - target: LDTXAudioEngine
       - target: LDTXCapture
@@ -477,11 +509,14 @@ targets:
           - WorkspaceDocumentConnection.swift
           - WorkspaceDocumentCloseCoordinator.swift
           - WorkspaceAppletCoordinator.swift
+          - WorkspaceAppletCoordinator+ModelInformation.swift
+          - Preview
           - WorkspaceStreamDeck.swift
           - StreamDeckHID.swift
           - StreamDeckReports.swift
           - WorkspaceAppletDelegate.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - package: Corelibs
         product: LDTXCorelibs
       - target: LDTXWorkspaceAppletModel

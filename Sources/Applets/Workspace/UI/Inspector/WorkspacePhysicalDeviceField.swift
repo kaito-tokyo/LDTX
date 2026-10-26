@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import LDTXDeviceRegistry
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import SwiftUI
 
@@ -12,7 +12,7 @@ struct WorkspacePhysicalDeviceField: View {
   let isAudio: Bool
   let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
-  let deviceRegistry: DeviceRegistryService
+  let deviceRegistry: any WorkspaceDeviceRegistry
   var isEditable = true
 
   var runtimeActions: () -> (any WorkspaceRuntimeActions)? = { nil }

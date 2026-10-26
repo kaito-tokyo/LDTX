@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXProgramRuntime
+import LDTXWorkspaceAppletInterface
 
 // Legacy AX callbacks are serviced synchronously on AppKit's main thread.
 private struct AXCallbackValue: @unchecked Sendable { let value: Any? }
@@ -13,12 +13,12 @@ private struct AXCallbackValue: @unchecked Sendable { let value: Any? }
 @MainActor
 final class PreviewImageAccessibilityElement: NSObject {
   private weak var host: NSView?
-  private let store: PreviewAccessibilityImageStore?
+  private let store: (any PreviewAccessibilityImageReading)?
   private let selectLandscape: () -> Void
   private let selectPortrait: () -> Void
 
   init(
-    host: NSView, store: PreviewAccessibilityImageStore?,
+    host: NSView, store: (any PreviewAccessibilityImageReading)?,
     selectLandscape: @escaping () -> Void, selectPortrait: @escaping () -> Void
   ) {
     self.host = host

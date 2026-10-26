@@ -3,17 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXAppletSupport
-import LDTXDeviceRegistry
-import LDTXProgramRuntime
-import LDTXTaskQueue
-import LDTXYouTubeRTMPS
+import LDTXWorkspaceAppletInterface
 import SwiftUI
 
 public struct WorkspaceSidebar: View {
   @Environment(\.undoManager) private var undoManager
   @Bindable var stateService: WorkspaceDocument
   private let runtimeActions: () -> (any WorkspaceRuntimeActions)?
-  private let deviceRegistry: DeviceRegistryService
+  private let deviceRegistry: any WorkspaceDeviceRegistry
   private let appletData: WorkspaceAppletData
   private weak var document: (any WorkspaceDocumentContext)?
   @State private var addSheet: WorkspaceAddSheet?
@@ -21,7 +18,7 @@ public struct WorkspaceSidebar: View {
   @State private var additionFailure: String?
 
   public init(
-    stateService: WorkspaceDocument, deviceRegistry: DeviceRegistryService,
+    stateService: WorkspaceDocument, deviceRegistry: any WorkspaceDeviceRegistry,
     appletData: WorkspaceAppletData,
     document: (any WorkspaceDocumentContext)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
@@ -273,7 +270,7 @@ public struct WorkspaceSidebar: View {
   #Preview("Workspace Sidebar") {
     @Previewable @State var stateService = WorkspaceSidebarPreviewFixtures.makeUIState()
     WorkspaceSidebar(
-      stateService: stateService, deviceRegistry: DeviceRegistryService(),
+      stateService: stateService, deviceRegistry: PreviewDeviceRegistry(),
       appletData: WorkspaceAppletData()
     )
     .frame(width: 260, height: 640)

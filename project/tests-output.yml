@@ -9,6 +9,7 @@ targets:
     sources:
       - Tests/LDTXOutputTests
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - package: Corelibs
         product: LDTXCorelibs
       - target: LDTXRichText

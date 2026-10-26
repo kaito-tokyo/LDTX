@@ -6,8 +6,8 @@
   import LDTXProtos
 
   @MainActor
-  enum WorkspaceSidebarPreviewFixtures {
-    static func makeUIState(
+  public enum WorkspaceSidebarPreviewFixtures {
+    public static func makeUIState(
       inspectorSelector: WorkspaceInspectorSelector? = nil,
       isOutputActive: Bool = false
     ) -> WorkspaceDocument {

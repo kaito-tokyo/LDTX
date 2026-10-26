@@ -11,6 +11,7 @@ targets:
       - Tests/LDTXProtosMacOSExtraTests
       - Tests/Support/TestTags.swift
     dependencies:
+      - target: LDTXWorkspaceAppletInterface
       - target: LDTXAppletSupport
       - target: LDTXProtosMacOSExtra
       - target: LDTXAudioEngine

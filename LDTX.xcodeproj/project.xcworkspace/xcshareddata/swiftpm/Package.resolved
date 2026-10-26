@@ -1,5 +1,5 @@
 {
-  "originHash" : "b25eca4a28bbffb36ef39d61530cb39b540527357a2ff086fdcf9ae2507615ef",
+  "originHash" : "e0124a9d44f8ff83ad4fe2694d017d7c586ef7eabb81b49d35501363ba9f305d",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "a972daac82d449d58ab119e91c68153e29ddac33",
         "version" : "3.0.0"
-      }
-    },
-    {
-      "identity" : "nanopb",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/nanopb/nanopb.git",
-      "state" : {
-        "revision" : "160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f",
-        "version" : "0.4.92"
       }
     },
     {
