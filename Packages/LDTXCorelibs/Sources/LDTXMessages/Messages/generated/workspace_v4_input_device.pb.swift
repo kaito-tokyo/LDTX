@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_AudioInputDevice: NanopbMessage {
   public init() {}
@@ -26,7 +26,9 @@ public struct Ldtx_Workspace_V4_AudioInputDevice: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_AudioInputDevice: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_AudioInputDevice { ldtx_workspace_v4_AudioInputDevice() }
+  static var emptyCMessage: ldtx_workspace_v4_AudioInputDevice {
+    ldtx_workspace_v4_AudioInputDevice()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_AudioInputDevice_msg }
 

@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: NanopbMessage {
   public init() {}
@@ -30,7 +30,9 @@ public struct Ldtx_Workspace_V4_WorkspaceDefinitionV4: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_WorkspaceDefinitionV4 { ldtx_workspace_v4_WorkspaceDefinitionV4() }
+  static var emptyCMessage: ldtx_workspace_v4_WorkspaceDefinitionV4 {
+    ldtx_workspace_v4_WorkspaceDefinitionV4()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspaceDefinitionV4_msg }
 
@@ -41,12 +43,17 @@ extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: NanopbConvertibleMessage {
       try Ldtx_Workspace_V4_ProgramDefinition(cMessage: $0)
     }
     if cMessage.has_canvas_configuration {
-      canvasConfiguration = try Ldtx_Workspace_V4_CanvasConfiguration(cMessage: cMessage.canvas_configuration)
+      canvasConfiguration = try Ldtx_Workspace_V4_CanvasConfiguration(
+        cMessage: cMessage.canvas_configuration)
     }
-    audioDevices = try NanopbCodec.array(cMessage.audio_devices, count: cMessage.audio_devices_count) {
+    audioDevices = try NanopbCodec.array(
+      cMessage.audio_devices, count: cMessage.audio_devices_count
+    ) {
       try Ldtx_Workspace_V4_AudioInputDevice(cMessage: $0)
     }
-    videoComponents = try NanopbCodec.array(cMessage.video_components, count: cMessage.video_components_count) {
+    videoComponents = try NanopbCodec.array(
+      cMessage.video_components, count: cMessage.video_components_count
+    ) {
       try Ldtx_Workspace_V4_VideoComponentWrapper(cMessage: $0)
     }
     visions = try NanopbCodec.array(cMessage.visions, count: cMessage.visions_count) {
@@ -65,10 +72,14 @@ extension Ldtx_Workspace_V4_WorkspaceDefinitionV4: NanopbConvertibleMessage {
       message.canvas_configuration = try value.makeCMessage()
       message.has_canvas_configuration = true
     }
-    try NanopbCodec.copyArray(audioDevices, to: &message.audio_devices, count: &message.audio_devices_count) {
+    try NanopbCodec.copyArray(
+      audioDevices, to: &message.audio_devices, count: &message.audio_devices_count
+    ) {
       try $0.makeCMessage()
     }
-    try NanopbCodec.copyArray(videoComponents, to: &message.video_components, count: &message.video_components_count) {
+    try NanopbCodec.copyArray(
+      videoComponents, to: &message.video_components, count: &message.video_components_count
+    ) {
       try $0.makeCMessage()
     }
     try NanopbCodec.copyArray(visions, to: &message.visions, count: &message.visions_count) {
@@ -91,7 +102,9 @@ public struct Ldtx_Workspace_V4_ProgramDefinition: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_ProgramDefinition: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_ProgramDefinition { ldtx_workspace_v4_ProgramDefinition() }
+  static var emptyCMessage: ldtx_workspace_v4_ProgramDefinition {
+    ldtx_workspace_v4_ProgramDefinition()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ProgramDefinition_msg }
 
@@ -132,7 +145,9 @@ public struct Ldtx_Workspace_V4_CanvasConfiguration: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_CanvasConfiguration: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_CanvasConfiguration { ldtx_workspace_v4_CanvasConfiguration() }
+  static var emptyCMessage: ldtx_workspace_v4_CanvasConfiguration {
+    ldtx_workspace_v4_CanvasConfiguration()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_CanvasConfiguration_msg }
 

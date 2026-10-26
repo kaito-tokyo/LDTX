@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_VideoComponentWrapper: NanopbMessage {
   public init() {}
@@ -36,7 +36,9 @@ public struct Ldtx_Workspace_V4_VideoComponentWrapper: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_VideoComponentWrapper: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_VideoComponentWrapper { ldtx_workspace_v4_VideoComponentWrapper() }
+  static var emptyCMessage: ldtx_workspace_v4_VideoComponentWrapper {
+    ldtx_workspace_v4_VideoComponentWrapper()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_VideoComponentWrapper_msg }
 
@@ -44,21 +46,33 @@ extension Ldtx_Workspace_V4_VideoComponentWrapper: NanopbConvertibleMessage {
     self.init()
     switch cMessage.which_video_component {
     case 1:
-      videoComponent = .solidColorFill(try Ldtx_Workspace_V4_FillSolidColorComponent(cMessage: cMessage.video_component.solid_color_fill))
+      videoComponent = .solidColorFill(
+        try Ldtx_Workspace_V4_FillSolidColorComponent(
+          cMessage: cMessage.video_component.solid_color_fill))
     case 2:
-      videoComponent = .linearGradientFill(try Ldtx_Workspace_V4_FillLinearGradientComponent(cMessage: cMessage.video_component.linear_gradient_fill))
+      videoComponent = .linearGradientFill(
+        try Ldtx_Workspace_V4_FillLinearGradientComponent(
+          cMessage: cMessage.video_component.linear_gradient_fill))
     case 3:
-      videoComponent = .radialGradientFill(try Ldtx_Workspace_V4_FillRadialGradientComponent(cMessage: cMessage.video_component.radial_gradient_fill))
+      videoComponent = .radialGradientFill(
+        try Ldtx_Workspace_V4_FillRadialGradientComponent(
+          cMessage: cMessage.video_component.radial_gradient_fill))
     case 4:
-      videoComponent = .conicGradientFill(try Ldtx_Workspace_V4_FillConicGradientComponent(cMessage: cMessage.video_component.conic_gradient_fill))
+      videoComponent = .conicGradientFill(
+        try Ldtx_Workspace_V4_FillConicGradientComponent(
+          cMessage: cMessage.video_component.conic_gradient_fill))
     case 5:
-      videoComponent = .vfxSource(try Ldtx_Workspace_V4_VfxSourceComponent(cMessage: cMessage.video_component.vfx_source))
+      videoComponent = .vfxSource(
+        try Ldtx_Workspace_V4_VfxSourceComponent(cMessage: cMessage.video_component.vfx_source))
     case 6:
-      videoComponent = .clock(try Ldtx_Workspace_V4_ClockComponent(cMessage: cMessage.video_component.clock))
+      videoComponent = .clock(
+        try Ldtx_Workspace_V4_ClockComponent(cMessage: cMessage.video_component.clock))
     case 7:
-      videoComponent = .testPattern(try Ldtx_Workspace_V4_TestPatternComponent(cMessage: cMessage.video_component.test_pattern))
+      videoComponent = .testPattern(
+        try Ldtx_Workspace_V4_TestPatternComponent(cMessage: cMessage.video_component.test_pattern))
     case 8:
-      videoComponent = .dynamicText(try Ldtx_Workspace_V4_DynamicTextComponent(cMessage: cMessage.video_component.dynamic_text))
+      videoComponent = .dynamicText(
+        try Ldtx_Workspace_V4_DynamicTextComponent(cMessage: cMessage.video_component.dynamic_text))
     case 0: videoComponent = nil
     default: throw NanopbError.malformed
     }
@@ -112,7 +126,9 @@ public struct Ldtx_Workspace_V4_DynamicTextComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_DynamicTextComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_DynamicTextComponent { ldtx_workspace_v4_DynamicTextComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_DynamicTextComponent {
+    ldtx_workspace_v4_DynamicTextComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_DynamicTextComponent_msg }
 
@@ -168,7 +184,9 @@ public struct Ldtx_Workspace_V4_FillSolidColorComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_FillSolidColorComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_FillSolidColorComponent { ldtx_workspace_v4_FillSolidColorComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_FillSolidColorComponent {
+    ldtx_workspace_v4_FillSolidColorComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_FillSolidColorComponent_msg }
 
@@ -218,7 +236,9 @@ public struct Ldtx_Workspace_V4_FillLinearGradientComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_FillLinearGradientComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_FillLinearGradientComponent { ldtx_workspace_v4_FillLinearGradientComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_FillLinearGradientComponent {
+    ldtx_workspace_v4_FillLinearGradientComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_FillLinearGradientComponent_msg }
 
@@ -235,7 +255,8 @@ extension Ldtx_Workspace_V4_FillLinearGradientComponent: NanopbConvertibleMessag
       startY = try Ldtx_Workspace_V4_Rational32(cMessage: cMessage.start_y)
     }
     if cMessage.has_start_extended_srgb_color {
-      startExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.start_extended_srgb_color)
+      startExtendedSrgbColor = try Ldtx_Workspace_V4_Color(
+        cMessage: cMessage.start_extended_srgb_color)
     }
     if cMessage.has_end_x {
       endX = try Ldtx_Workspace_V4_Rational32(cMessage: cMessage.end_x)
@@ -303,7 +324,9 @@ public struct Ldtx_Workspace_V4_FillRadialGradientComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_FillRadialGradientComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_FillRadialGradientComponent { ldtx_workspace_v4_FillRadialGradientComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_FillRadialGradientComponent {
+    ldtx_workspace_v4_FillRadialGradientComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_FillRadialGradientComponent_msg }
 
@@ -326,10 +349,12 @@ extension Ldtx_Workspace_V4_FillRadialGradientComponent: NanopbConvertibleMessag
       outerRadius = try Ldtx_Workspace_V4_Rational32(cMessage: cMessage.outer_radius)
     }
     if cMessage.has_inner_extended_srgb_color {
-      innerExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.inner_extended_srgb_color)
+      innerExtendedSrgbColor = try Ldtx_Workspace_V4_Color(
+        cMessage: cMessage.inner_extended_srgb_color)
     }
     if cMessage.has_outer_extended_srgb_color {
-      outerExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.outer_extended_srgb_color)
+      outerExtendedSrgbColor = try Ldtx_Workspace_V4_Color(
+        cMessage: cMessage.outer_extended_srgb_color)
     }
   }
 
@@ -387,7 +412,9 @@ public struct Ldtx_Workspace_V4_FillConicGradientComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_FillConicGradientComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_FillConicGradientComponent { ldtx_workspace_v4_FillConicGradientComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_FillConicGradientComponent {
+    ldtx_workspace_v4_FillConicGradientComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_FillConicGradientComponent_msg }
 
@@ -407,7 +434,8 @@ extension Ldtx_Workspace_V4_FillConicGradientComponent: NanopbConvertibleMessage
       startAngleRadians = try Ldtx_Workspace_V4_Rational32(cMessage: cMessage.start_angle_radians)
     }
     if cMessage.has_start_extended_srgb_color {
-      startExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.start_extended_srgb_color)
+      startExtendedSrgbColor = try Ldtx_Workspace_V4_Color(
+        cMessage: cMessage.start_extended_srgb_color)
     }
     if cMessage.has_end_extended_srgb_color {
       endExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.end_extended_srgb_color)
@@ -462,7 +490,9 @@ public struct Ldtx_Workspace_V4_VfxSourceComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_VfxSourceComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_VfxSourceComponent { ldtx_workspace_v4_VfxSourceComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_VfxSourceComponent {
+    ldtx_workspace_v4_VfxSourceComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_VfxSourceComponent_msg }
 
@@ -519,7 +549,9 @@ public struct Ldtx_Workspace_V4_TestPatternComponent: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_TestPatternComponent: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_TestPatternComponent { ldtx_workspace_v4_TestPatternComponent() }
+  static var emptyCMessage: ldtx_workspace_v4_TestPatternComponent {
+    ldtx_workspace_v4_TestPatternComponent()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_TestPatternComponent_msg }
 
@@ -589,7 +621,8 @@ extension Ldtx_Workspace_V4_ClockComponent: NanopbConvertibleMessage {
       utcOffsetMinutes = cMessage.utc_offset_minutes
     }
     if cMessage.has_foreground_extended_srgb_color {
-      foregroundExtendedSrgbColor = try Ldtx_Workspace_V4_Color(cMessage: cMessage.foreground_extended_srgb_color)
+      foregroundExtendedSrgbColor = try Ldtx_Workspace_V4_Color(
+        cMessage: cMessage.foreground_extended_srgb_color)
     }
     outlines = try NanopbCodec.array(cMessage.outlines, count: cMessage.outlines_count) {
       try Ldtx_Workspace_V4_ClockTextOutline(cMessage: $0)
@@ -648,7 +681,9 @@ public struct Ldtx_Workspace_V4_ClockTextOutline: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_ClockTextOutline: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_ClockTextOutline { ldtx_workspace_v4_ClockTextOutline() }
+  static var emptyCMessage: ldtx_workspace_v4_ClockTextOutline {
+    ldtx_workspace_v4_ClockTextOutline()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ClockTextOutline_msg }
 

@@ -3,16 +3,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
 
-internal import LDTXNanopbGenerated
-internal import nanopb
-
-public enum Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model: Hashable, Sendable, CaseIterable, NanopbEnumeration {
+public enum Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model: Hashable, Sendable, CaseIterable,
+  NanopbEnumeration
+{
   case unspecified
   case mediapipeLandscape
   case UNRECOGNIZED(Int)
@@ -56,7 +58,9 @@ public struct Ldtx_Workspace_V4_VideoEffectWrapper: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_VideoEffectWrapper: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_VideoEffectWrapper { ldtx_workspace_v4_VideoEffectWrapper() }
+  static var emptyCMessage: ldtx_workspace_v4_VideoEffectWrapper {
+    ldtx_workspace_v4_VideoEffectWrapper()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_VideoEffectWrapper_msg }
 
@@ -64,9 +68,12 @@ extension Ldtx_Workspace_V4_VideoEffectWrapper: NanopbConvertibleMessage {
     self.init()
     switch cMessage.which_video_effect {
     case 1:
-      videoEffect = .custom(try Ldtx_Workspace_V4_CustomVideoEffect(cMessage: cMessage.video_effect.custom))
+      videoEffect = .custom(
+        try Ldtx_Workspace_V4_CustomVideoEffect(cMessage: cMessage.video_effect.custom))
     case 2:
-      videoEffect = .backgroundRemoval(try Ldtx_Workspace_V4_BackgroundRemovalVfxEffect(cMessage: cMessage.video_effect.background_removal))
+      videoEffect = .backgroundRemoval(
+        try Ldtx_Workspace_V4_BackgroundRemovalVfxEffect(
+          cMessage: cMessage.video_effect.background_removal))
     case 0: videoEffect = nil
     default: throw NanopbError.malformed
     }
@@ -98,7 +105,9 @@ public struct Ldtx_Workspace_V4_CustomVideoEffect: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_CustomVideoEffect: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_CustomVideoEffect { ldtx_workspace_v4_CustomVideoEffect() }
+  static var emptyCMessage: ldtx_workspace_v4_CustomVideoEffect {
+    ldtx_workspace_v4_CustomVideoEffect()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_CustomVideoEffect_msg }
 
@@ -129,20 +138,24 @@ public struct Ldtx_Workspace_V4_BackgroundRemovalVfxEffect: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_BackgroundRemovalVfxEffect: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_BackgroundRemovalVfxEffect { ldtx_workspace_v4_BackgroundRemovalVfxEffect() }
+  static var emptyCMessage: ldtx_workspace_v4_BackgroundRemovalVfxEffect {
+    ldtx_workspace_v4_BackgroundRemovalVfxEffect()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_BackgroundRemovalVfxEffect_msg }
 
   init(cMessage: ldtx_workspace_v4_BackgroundRemovalVfxEffect) throws {
     self.init()
     if cMessage.has_model {
-      model = try NanopbCodec.decodeEnum(cMessage.model, as: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model.self)
+      model = try NanopbCodec.decodeEnum(
+        cMessage.model, as: Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model.self)
     }
   }
 
   func write(to message: inout ldtx_workspace_v4_BackgroundRemovalVfxEffect) throws {
     if let value = model {
-      message.model = try NanopbCodec.encodeEnum(value, as: ldtx_workspace_v4_BackgroundRemovalVfxEffect_Model.self)
+      message.model = try NanopbCodec.encodeEnum(
+        value, as: ldtx_workspace_v4_BackgroundRemovalVfxEffect_Model.self)
       message.has_model = true
     }
   }

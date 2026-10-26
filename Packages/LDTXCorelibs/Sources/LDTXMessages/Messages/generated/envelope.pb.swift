@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Envelope_WorkspaceDefinitionEnvelope: NanopbMessage {
   public init() {}
@@ -31,7 +31,9 @@ public struct Ldtx_Envelope_WorkspaceDefinitionEnvelope: NanopbMessage {
 }
 
 extension Ldtx_Envelope_WorkspaceDefinitionEnvelope: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_envelope_WorkspaceDefinitionEnvelope { ldtx_envelope_WorkspaceDefinitionEnvelope() }
+  static var emptyCMessage: ldtx_envelope_WorkspaceDefinitionEnvelope {
+    ldtx_envelope_WorkspaceDefinitionEnvelope()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_envelope_WorkspaceDefinitionEnvelope_msg }
 
@@ -40,7 +42,9 @@ extension Ldtx_Envelope_WorkspaceDefinitionEnvelope: NanopbConvertibleMessage {
     externalID = try NanopbCodec.optionalData(cMessage.external_id)
     switch cMessage.which_workspace_definition {
     case 2:
-      workspaceDefinition = .workspaceDefinitionV4(try Ldtx_Workspace_V4_WorkspaceDefinitionV4(cMessage: cMessage.workspace_definition.workspace_definition_v4))
+      workspaceDefinition = .workspaceDefinitionV4(
+        try Ldtx_Workspace_V4_WorkspaceDefinitionV4(
+          cMessage: cMessage.workspace_definition.workspace_definition_v4))
     case 0: workspaceDefinition = nil
     default: throw NanopbError.malformed
     }
@@ -78,7 +82,9 @@ public struct Ldtx_Envelope_WorkspacePreferencesEnvelope: NanopbMessage {
 }
 
 extension Ldtx_Envelope_WorkspacePreferencesEnvelope: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_envelope_WorkspacePreferencesEnvelope { ldtx_envelope_WorkspacePreferencesEnvelope() }
+  static var emptyCMessage: ldtx_envelope_WorkspacePreferencesEnvelope {
+    ldtx_envelope_WorkspacePreferencesEnvelope()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_envelope_WorkspacePreferencesEnvelope_msg }
 
@@ -87,7 +93,9 @@ extension Ldtx_Envelope_WorkspacePreferencesEnvelope: NanopbConvertibleMessage {
     externalID = try NanopbCodec.optionalData(cMessage.external_id)
     switch cMessage.which_workspace_preferences {
     case 2:
-      workspacePreferences = .workspacePreferencesV4(try Ldtx_Workspace_V4_WorkspacePreferencesV4(cMessage: cMessage.workspace_preferences.workspace_preferences_v4))
+      workspacePreferences = .workspacePreferencesV4(
+        try Ldtx_Workspace_V4_WorkspacePreferencesV4(
+          cMessage: cMessage.workspace_preferences.workspace_preferences_v4))
     case 0: workspacePreferences = nil
     default: throw NanopbError.malformed
     }
@@ -125,7 +133,9 @@ public struct Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: NanopbMessage {
 }
 
 extension Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_envelope_WorkspaceOutputSettingsEnvelope { ldtx_envelope_WorkspaceOutputSettingsEnvelope() }
+  static var emptyCMessage: ldtx_envelope_WorkspaceOutputSettingsEnvelope {
+    ldtx_envelope_WorkspaceOutputSettingsEnvelope()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_envelope_WorkspaceOutputSettingsEnvelope_msg }
 
@@ -134,7 +144,9 @@ extension Ldtx_Envelope_WorkspaceOutputSettingsEnvelope: NanopbConvertibleMessag
     externalID = try NanopbCodec.optionalData(cMessage.external_id)
     switch cMessage.which_workspace_output_settings {
     case 2:
-      workspaceOutputSettings = .workspaceOutputSettingsV4(try Ldtx_Workspace_V4_WorkspaceOutputSettingsV4(cMessage: cMessage.workspace_output_settings.workspace_output_settings_v4))
+      workspaceOutputSettings = .workspaceOutputSettingsV4(
+        try Ldtx_Workspace_V4_WorkspaceOutputSettingsV4(
+          cMessage: cMessage.workspace_output_settings.workspace_output_settings_v4))
     case 0: workspaceOutputSettings = nil
     default: throw NanopbError.malformed
     }

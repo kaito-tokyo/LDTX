@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_Rational32: NanopbMessage {
   public init() {}
@@ -66,7 +66,9 @@ public struct Ldtx_Workspace_V4_Rational32DefaultOne: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_Rational32DefaultOne: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_Rational32DefaultOne { ldtx_workspace_v4_Rational32DefaultOne() }
+  static var emptyCMessage: ldtx_workspace_v4_Rational32DefaultOne {
+    ldtx_workspace_v4_Rational32DefaultOne()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_Rational32DefaultOne_msg }
 

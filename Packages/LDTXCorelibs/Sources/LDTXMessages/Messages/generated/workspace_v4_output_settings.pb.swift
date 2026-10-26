@@ -3,16 +3,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
 
-internal import LDTXNanopbGenerated
-internal import nanopb
-
-public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterable, NanopbEnumeration {
+public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterable, NanopbEnumeration
+{
   case unspecified
   case landscapeRtmps
   case portraitRtmps
@@ -53,7 +54,10 @@ public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterabl
     }
   }
 
-  public static let allCases: [Self] = [.unspecified, .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls, .portraitHls, .landscapeDash, .portraitDash]
+  public static let allCases: [Self] = [
+    .unspecified, .landscapeRtmps, .portraitRtmps, .dualRtmps, .landscapeHls, .portraitHls,
+    .landscapeDash, .portraitDash,
+  ]
 }
 
 public struct Ldtx_Workspace_V4_WorkspaceOutputSettingsV4: NanopbMessage {
@@ -72,7 +76,9 @@ public struct Ldtx_Workspace_V4_WorkspaceOutputSettingsV4: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_WorkspaceOutputSettingsV4: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_WorkspaceOutputSettingsV4 { ldtx_workspace_v4_WorkspaceOutputSettingsV4() }
+  static var emptyCMessage: ldtx_workspace_v4_WorkspaceOutputSettingsV4 {
+    ldtx_workspace_v4_WorkspaceOutputSettingsV4()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspaceOutputSettingsV4_msg }
 
@@ -82,13 +88,15 @@ extension Ldtx_Workspace_V4_WorkspaceOutputSettingsV4: NanopbConvertibleMessage 
       recordingEnabled = cMessage.recording_enabled
     }
     if cMessage.has_recording_settings {
-      recordingSettings = try Ldtx_Workspace_V4_RecordingOutputSettings(cMessage: cMessage.recording_settings)
+      recordingSettings = try Ldtx_Workspace_V4_RecordingOutputSettings(
+        cMessage: cMessage.recording_settings)
     }
     if cMessage.has_youtube_enabled {
       youtubeEnabled = cMessage.youtube_enabled
     }
     if cMessage.has_youtube_settings {
-      youtubeSettings = try Ldtx_Workspace_V4_YouTubeOutputSettings(cMessage: cMessage.youtube_settings)
+      youtubeSettings = try Ldtx_Workspace_V4_YouTubeOutputSettings(
+        cMessage: cMessage.youtube_settings)
     }
   }
 
@@ -127,7 +135,9 @@ public struct Ldtx_Workspace_V4_RecordingOutputSettings: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_RecordingOutputSettings: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_RecordingOutputSettings { ldtx_workspace_v4_RecordingOutputSettings() }
+  static var emptyCMessage: ldtx_workspace_v4_RecordingOutputSettings {
+    ldtx_workspace_v4_RecordingOutputSettings()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_RecordingOutputSettings_msg }
 
@@ -140,7 +150,8 @@ extension Ldtx_Workspace_V4_RecordingOutputSettings: NanopbConvertibleMessage {
       recordsPortrait = cMessage.records_portrait
     }
     customFields = try NanopbCodec.map(
-      cMessage.custom_fields, count: cMessage.custom_fields_count, entry: Ldtx_Workspace_V4_RecordingOutputSettings_CustomFieldsEntry.self)
+      cMessage.custom_fields, count: cMessage.custom_fields_count,
+      entry: Ldtx_Workspace_V4_RecordingOutputSettings_CustomFieldsEntry.self)
   }
 
   func write(to message: inout ldtx_workspace_v4_RecordingOutputSettings) throws {
@@ -175,9 +186,13 @@ extension Ldtx_Workspace_V4_RecordingOutputSettings_CustomFieldsEntry: NanopbMap
   static var defaultKey: String { "" }
   static var defaultValue: String { "" }
 
-  static var emptyCMessage: ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry { ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry {
+    ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry()
+  }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_RecordingOutputSettings_CustomFieldsEntry) throws {
     self.init()
@@ -208,20 +223,24 @@ public struct Ldtx_Workspace_V4_YouTubeOutputSettings: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_YouTubeOutputSettings: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_YouTubeOutputSettings { ldtx_workspace_v4_YouTubeOutputSettings() }
+  static var emptyCMessage: ldtx_workspace_v4_YouTubeOutputSettings {
+    ldtx_workspace_v4_YouTubeOutputSettings()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_YouTubeOutputSettings_msg }
 
   init(cMessage: ldtx_workspace_v4_YouTubeOutputSettings) throws {
     self.init()
     if cMessage.has_ingest_mode {
-      ingestMode = try NanopbCodec.decodeEnum(cMessage.ingest_mode, as: Ldtx_Workspace_V4_YouTubeIngestMode.self)
+      ingestMode = try NanopbCodec.decodeEnum(
+        cMessage.ingest_mode, as: Ldtx_Workspace_V4_YouTubeIngestMode.self)
     }
   }
 
   func write(to message: inout ldtx_workspace_v4_YouTubeOutputSettings) throws {
     if let value = ingestMode {
-      message.ingest_mode = try NanopbCodec.encodeEnum(value, as: ldtx_workspace_v4_YouTubeIngestMode.self)
+      message.ingest_mode = try NanopbCodec.encodeEnum(
+        value, as: ldtx_workspace_v4_YouTubeIngestMode.self)
       message.has_ingest_mode = true
     }
   }

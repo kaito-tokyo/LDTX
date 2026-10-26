@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_WorkspacePreferencesV4: NanopbMessage {
   public init() {}
@@ -27,34 +27,46 @@ public struct Ldtx_Workspace_V4_WorkspacePreferencesV4: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_WorkspacePreferencesV4: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4 { ldtx_workspace_v4_WorkspacePreferencesV4() }
+  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4 {
+    ldtx_workspace_v4_WorkspacePreferencesV4()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspacePreferencesV4_msg }
 
   init(cMessage: ldtx_workspace_v4_WorkspacePreferencesV4) throws {
     self.init()
     audioChannelGainsDecibels = try NanopbCodec.map(
-      cMessage.audio_channel_gains_decibels, count: cMessage.audio_channel_gains_decibels_count, entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry.self)
+      cMessage.audio_channel_gains_decibels, count: cMessage.audio_channel_gains_decibels_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry.self)
     landscapeProgramPreferences = try NanopbCodec.map(
-      cMessage.landscape_program_preferences, count: cMessage.landscape_program_preferences_count, entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry.self)
+      cMessage.landscape_program_preferences, count: cMessage.landscape_program_preferences_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry.self)
     portraitProgramPreferences = try NanopbCodec.map(
-      cMessage.portrait_program_preferences, count: cMessage.portrait_program_preferences_count, entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry.self)
+      cMessage.portrait_program_preferences, count: cMessage.portrait_program_preferences_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry.self)
   }
 
   func write(to message: inout ldtx_workspace_v4_WorkspacePreferencesV4) throws {
     try NanopbCodec.copyMap(
-      audioChannelGainsDecibels, to: &message.audio_channel_gains_decibels, count: &message.audio_channel_gains_decibels_count,
-      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry.self, less: (<))
+      audioChannelGainsDecibels, to: &message.audio_channel_gains_decibels,
+      count: &message.audio_channel_gains_decibels_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry.self, less: (<)
+    )
     try NanopbCodec.copyMap(
-      landscapeProgramPreferences, to: &message.landscape_program_preferences, count: &message.landscape_program_preferences_count,
-      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry.self, less: (<))
+      landscapeProgramPreferences, to: &message.landscape_program_preferences,
+      count: &message.landscape_program_preferences_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry.self,
+      less: (<))
     try NanopbCodec.copyMap(
-      portraitProgramPreferences, to: &message.portrait_program_preferences, count: &message.portrait_program_preferences_count,
-      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry.self, less: (<))
+      portraitProgramPreferences, to: &message.portrait_program_preferences,
+      count: &message.portrait_program_preferences_count,
+      entry: Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry.self,
+      less: (<))
   }
 }
 
-public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry: NanopbMessage {
+public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry: NanopbMessage
+{
   public init() {}
 
   public var key: Int64?
@@ -71,9 +83,12 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntr
   static var defaultKey: Int64 { 0 }
   static var defaultValue: Ldtx_Workspace_V4_Rational32 { Ldtx_Workspace_V4_Rational32() }
 
-  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry { ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry
+  { ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry() }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry) throws {
     self.init()
@@ -85,7 +100,9 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntr
     }
   }
 
-  func write(to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry) throws {
+  func write(
+    to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntry
+  ) throws {
     if let value = key {
       message.key = value
       message.has_key = true
@@ -97,7 +114,9 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_AudioChannelGainsDecibelsEntr
   }
 }
 
-public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry: NanopbMessage {
+public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry:
+  NanopbMessage
+{
   public init() {}
 
   public var key: Int64?
@@ -110,13 +129,20 @@ public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferenc
   public func serializedData() throws -> Data { try encode() }
 }
 
-extension Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry: NanopbMapEntry {
+extension Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry: NanopbMapEntry
+{
   static var defaultKey: Int64 { 0 }
-  static var defaultValue: Ldtx_Workspace_V4_ProgramPreferences { Ldtx_Workspace_V4_ProgramPreferences() }
+  static var defaultValue: Ldtx_Workspace_V4_ProgramPreferences {
+    Ldtx_Workspace_V4_ProgramPreferences()
+  }
 
-  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry { ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry() }
+  static var emptyCMessage:
+    ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry
+  { ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry() }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry) throws {
     self.init()
@@ -128,7 +154,9 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEn
     }
   }
 
-  func write(to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry) throws {
+  func write(
+    to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_LandscapeProgramPreferencesEntry
+  ) throws {
     if let value = key {
       message.key = value
       message.has_key = true
@@ -140,7 +168,9 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_LandscapeProgramPreferencesEn
   }
 }
 
-public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry: NanopbMessage {
+public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry:
+  NanopbMessage
+{
   public init() {}
 
   public var key: Int64?
@@ -155,11 +185,16 @@ public struct Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreference
 
 extension Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry: NanopbMapEntry {
   static var defaultKey: Int64 { 0 }
-  static var defaultValue: Ldtx_Workspace_V4_ProgramPreferences { Ldtx_Workspace_V4_ProgramPreferences() }
+  static var defaultValue: Ldtx_Workspace_V4_ProgramPreferences {
+    Ldtx_Workspace_V4_ProgramPreferences()
+  }
 
-  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry { ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry
+  { ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry() }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry) throws {
     self.init()
@@ -171,7 +206,9 @@ extension Ldtx_Workspace_V4_WorkspacePreferencesV4_PortraitProgramPreferencesEnt
     }
   }
 
-  func write(to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry) throws {
+  func write(
+    to message: inout ldtx_workspace_v4_WorkspacePreferencesV4_PortraitProgramPreferencesEntry
+  ) throws {
     if let value = key {
       message.key = value
       message.has_key = true
@@ -200,24 +237,32 @@ public struct Ldtx_Workspace_V4_ProgramPreferences: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_ProgramPreferences: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences { ldtx_workspace_v4_ProgramPreferences() }
+  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences {
+    ldtx_workspace_v4_ProgramPreferences()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ProgramPreferences_msg }
 
   init(cMessage: ldtx_workspace_v4_ProgramPreferences) throws {
     self.init()
     if cMessage.has_audio_master_volume_decibels {
-      audioMasterVolumeDecibels = try Ldtx_Workspace_V4_Rational32(cMessage: cMessage.audio_master_volume_decibels)
+      audioMasterVolumeDecibels = try Ldtx_Workspace_V4_Rational32(
+        cMessage: cMessage.audio_master_volume_decibels)
     }
     audioChannelMuted = try NanopbCodec.map(
-      cMessage.audio_channel_muted, count: cMessage.audio_channel_muted_count, entry: Ldtx_Workspace_V4_ProgramPreferences_AudioChannelMutedEntry.self)
-    videoLayerInternalIds = try NanopbCodec.array(cMessage.video_layer_internal_ids, count: cMessage.video_layer_internal_ids_count) {
+      cMessage.audio_channel_muted, count: cMessage.audio_channel_muted_count,
+      entry: Ldtx_Workspace_V4_ProgramPreferences_AudioChannelMutedEntry.self)
+    videoLayerInternalIds = try NanopbCodec.array(
+      cMessage.video_layer_internal_ids, count: cMessage.video_layer_internal_ids_count
+    ) {
       $0
     }
     videoLayerTransforms = try NanopbCodec.map(
-      cMessage.video_layer_transforms, count: cMessage.video_layer_transforms_count, entry: Ldtx_Workspace_V4_ProgramPreferences_VideoLayerTransformsEntry.self)
+      cMessage.video_layer_transforms, count: cMessage.video_layer_transforms_count,
+      entry: Ldtx_Workspace_V4_ProgramPreferences_VideoLayerTransformsEntry.self)
     videoLayerHidden = try NanopbCodec.map(
-      cMessage.video_layer_hidden, count: cMessage.video_layer_hidden_count, entry: Ldtx_Workspace_V4_ProgramPreferences_VideoLayerHiddenEntry.self)
+      cMessage.video_layer_hidden, count: cMessage.video_layer_hidden_count,
+      entry: Ldtx_Workspace_V4_ProgramPreferences_VideoLayerHiddenEntry.self)
   }
 
   func write(to message: inout ldtx_workspace_v4_ProgramPreferences) throws {
@@ -226,13 +271,18 @@ extension Ldtx_Workspace_V4_ProgramPreferences: NanopbConvertibleMessage {
       message.has_audio_master_volume_decibels = true
     }
     try NanopbCodec.copyMap(
-      audioChannelMuted, to: &message.audio_channel_muted, count: &message.audio_channel_muted_count,
+      audioChannelMuted, to: &message.audio_channel_muted,
+      count: &message.audio_channel_muted_count,
       entry: Ldtx_Workspace_V4_ProgramPreferences_AudioChannelMutedEntry.self, less: (<))
-    try NanopbCodec.copyArray(videoLayerInternalIds, to: &message.video_layer_internal_ids, count: &message.video_layer_internal_ids_count) {
+    try NanopbCodec.copyArray(
+      videoLayerInternalIds, to: &message.video_layer_internal_ids,
+      count: &message.video_layer_internal_ids_count
+    ) {
       $0
     }
     try NanopbCodec.copyMap(
-      videoLayerTransforms, to: &message.video_layer_transforms, count: &message.video_layer_transforms_count,
+      videoLayerTransforms, to: &message.video_layer_transforms,
+      count: &message.video_layer_transforms_count,
       entry: Ldtx_Workspace_V4_ProgramPreferences_VideoLayerTransformsEntry.self, less: (<))
     try NanopbCodec.copyMap(
       videoLayerHidden, to: &message.video_layer_hidden, count: &message.video_layer_hidden_count,
@@ -257,9 +307,13 @@ extension Ldtx_Workspace_V4_ProgramPreferences_AudioChannelMutedEntry: NanopbMap
   static var defaultKey: Int64 { 0 }
   static var defaultValue: Bool { false }
 
-  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry { ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry {
+    ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry()
+  }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_ProgramPreferences_AudioChannelMutedEntry) throws {
     self.init()
@@ -300,9 +354,13 @@ extension Ldtx_Workspace_V4_ProgramPreferences_VideoLayerTransformsEntry: Nanopb
   static var defaultKey: Int64 { 0 }
   static var defaultValue: Ldtx_Workspace_V4_BasicTransform { Ldtx_Workspace_V4_BasicTransform() }
 
-  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry { ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry {
+    ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry()
+  }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry) throws {
     self.init()
@@ -314,7 +372,9 @@ extension Ldtx_Workspace_V4_ProgramPreferences_VideoLayerTransformsEntry: Nanopb
     }
   }
 
-  func write(to message: inout ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry) throws {
+  func write(to message: inout ldtx_workspace_v4_ProgramPreferences_VideoLayerTransformsEntry)
+    throws
+  {
     if let value = key {
       message.key = value
       message.has_key = true
@@ -343,9 +403,13 @@ extension Ldtx_Workspace_V4_ProgramPreferences_VideoLayerHiddenEntry: NanopbMapE
   static var defaultKey: Int64 { 0 }
   static var defaultValue: Bool { false }
 
-  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry { ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry() }
+  static var emptyCMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry {
+    ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry()
+  }
 
-  static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry_msg }
+  static var descriptor: pb_msgdesc_t {
+    ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry_msg
+  }
 
   init(cMessage: ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry) throws {
     self.init()

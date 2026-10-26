@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+internal import LDTXNanopbGenerated
+internal import nanopb
+
 #if os(Linux)
   import FoundationEssentials
 #else
   import Foundation
 #endif
-
-internal import LDTXNanopbGenerated
-internal import nanopb
 
 public struct Ldtx_Workspace_V4_VisionWrapper: NanopbMessage {
   public init() {}
@@ -40,7 +40,9 @@ extension Ldtx_Workspace_V4_VisionWrapper: NanopbConvertibleMessage {
     case 1:
       vision = .ocrVision(try Ldtx_Workspace_V4_OcrVision(cMessage: cMessage.vision.ocr_vision))
     case 2:
-      vision = .ldtxSceneDetectorVision(try Ldtx_Workspace_V4_LdtxSceneDetectorVision(cMessage: cMessage.vision.ldtx_scene_detector_vision))
+      vision = .ldtxSceneDetectorVision(
+        try Ldtx_Workspace_V4_LdtxSceneDetectorVision(
+          cMessage: cMessage.vision.ldtx_scene_detector_vision))
     case 0: vision = nil
     default: throw NanopbError.malformed
     }
@@ -75,7 +77,9 @@ public struct Ldtx_Workspace_V4_VisionRegionOfInterest: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_VisionRegionOfInterest: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_VisionRegionOfInterest { ldtx_workspace_v4_VisionRegionOfInterest() }
+  static var emptyCMessage: ldtx_workspace_v4_VisionRegionOfInterest {
+    ldtx_workspace_v4_VisionRegionOfInterest()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_VisionRegionOfInterest_msg }
 
@@ -132,7 +136,9 @@ public struct Ldtx_Workspace_V4_VisionTriggerWrapper: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_VisionTriggerWrapper: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_VisionTriggerWrapper { ldtx_workspace_v4_VisionTriggerWrapper() }
+  static var emptyCMessage: ldtx_workspace_v4_VisionTriggerWrapper {
+    ldtx_workspace_v4_VisionTriggerWrapper()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_VisionTriggerWrapper_msg }
 
@@ -140,7 +146,8 @@ extension Ldtx_Workspace_V4_VisionTriggerWrapper: NanopbConvertibleMessage {
     self.init()
     switch cMessage.which_trigger {
     case 1:
-      trigger = .intervalTrigger(try Ldtx_Workspace_V4_IntervalVisionTrigger(cMessage: cMessage.trigger.interval_trigger))
+      trigger = .intervalTrigger(
+        try Ldtx_Workspace_V4_IntervalVisionTrigger(cMessage: cMessage.trigger.interval_trigger))
     case 0: trigger = nil
     default: throw NanopbError.malformed
     }
@@ -169,7 +176,9 @@ public struct Ldtx_Workspace_V4_IntervalVisionTrigger: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_IntervalVisionTrigger: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_IntervalVisionTrigger { ldtx_workspace_v4_IntervalVisionTrigger() }
+  static var emptyCMessage: ldtx_workspace_v4_IntervalVisionTrigger {
+    ldtx_workspace_v4_IntervalVisionTrigger()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_IntervalVisionTrigger_msg }
 
@@ -223,12 +232,15 @@ extension Ldtx_Workspace_V4_OcrVision: NanopbConvertibleMessage {
       videoComponentInternalID = cMessage.video_component_internal_id
     }
     if cMessage.has_region_of_interest {
-      regionOfInterest = try Ldtx_Workspace_V4_VisionRegionOfInterest(cMessage: cMessage.region_of_interest)
+      regionOfInterest = try Ldtx_Workspace_V4_VisionRegionOfInterest(
+        cMessage: cMessage.region_of_interest)
     }
     triggers = try NanopbCodec.array(cMessage.triggers, count: cMessage.triggers_count) {
       try Ldtx_Workspace_V4_VisionTriggerWrapper(cMessage: $0)
     }
-    recognitionLanguages = try NanopbCodec.array(cMessage.recognition_languages, count: cMessage.recognition_languages_count) {
+    recognitionLanguages = try NanopbCodec.array(
+      cMessage.recognition_languages, count: cMessage.recognition_languages_count
+    ) {
       try NanopbCodec.string($0)
     }
     if cMessage.has_uses_language_correction {
@@ -261,14 +273,19 @@ extension Ldtx_Workspace_V4_OcrVision: NanopbConvertibleMessage {
     try NanopbCodec.copyArray(triggers, to: &message.triggers, count: &message.triggers_count) {
       try $0.makeCMessage()
     }
-    try NanopbCodec.copyArray(recognitionLanguages, to: &message.recognition_languages, count: &message.recognition_languages_count) {
+    try NanopbCodec.copyArray(
+      recognitionLanguages, to: &message.recognition_languages,
+      count: &message.recognition_languages_count
+    ) {
       try NanopbCodec.makeString($0)
     }
     if let value = usesLanguageCorrection {
       message.uses_language_correction = value
       message.has_uses_language_correction = true
     }
-    try NanopbCodec.copyArray(customWords, to: &message.custom_words, count: &message.custom_words_count) {
+    try NanopbCodec.copyArray(
+      customWords, to: &message.custom_words, count: &message.custom_words_count
+    ) {
       try NanopbCodec.makeString($0)
     }
     if let value = minimumTextHeight {
@@ -296,7 +313,9 @@ public struct Ldtx_Workspace_V4_LdtxSceneDetectorVision: NanopbMessage {
 }
 
 extension Ldtx_Workspace_V4_LdtxSceneDetectorVision: NanopbConvertibleMessage {
-  static var emptyCMessage: ldtx_workspace_v4_LdtxSceneDetectorVision { ldtx_workspace_v4_LdtxSceneDetectorVision() }
+  static var emptyCMessage: ldtx_workspace_v4_LdtxSceneDetectorVision {
+    ldtx_workspace_v4_LdtxSceneDetectorVision()
+  }
 
   static var descriptor: pb_msgdesc_t { ldtx_workspace_v4_LdtxSceneDetectorVision_msg }
 
@@ -310,7 +329,8 @@ extension Ldtx_Workspace_V4_LdtxSceneDetectorVision: NanopbConvertibleMessage {
       videoComponentInternalID = cMessage.video_component_internal_id
     }
     if cMessage.has_region_of_interest {
-      regionOfInterest = try Ldtx_Workspace_V4_VisionRegionOfInterest(cMessage: cMessage.region_of_interest)
+      regionOfInterest = try Ldtx_Workspace_V4_VisionRegionOfInterest(
+        cMessage: cMessage.region_of_interest)
     }
     triggers = try NanopbCodec.array(cMessage.triggers, count: cMessage.triggers_count) {
       try Ldtx_Workspace_V4_VisionTriggerWrapper(cMessage: $0)
