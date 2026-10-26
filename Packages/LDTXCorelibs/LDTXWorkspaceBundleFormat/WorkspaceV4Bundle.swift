@@ -2,8 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
 import LDTXProtos
+
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public struct WorkspaceV4Bundle: Equatable, Sendable {
   public var definitionExternalID: String?

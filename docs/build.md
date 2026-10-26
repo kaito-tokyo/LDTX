@@ -51,6 +51,16 @@ implementation across the application's framework graph; nanopb and the generate
 C target remain implementation dependencies. Recording bundle IO and DASH parsing
 remain in LDTXRecordBundleFormat; AVFoundation operations remain in LDTXRecording.
 
+LDTXProgram has no Protos dependency or re-export, allowing their compilation to
+overlap. All Corelibs Swift targets share the nanopb C importer settings defined
+in the manifest. Keep them consistent when adding targets: differing macro
+conditions cause duplicate Foundation and other SDK module builds.
+
+On Linux, files that only use Foundation's Swift value APIs import
+FoundationEssentials. Files using compatibility APIs such as JSONSerialization,
+NSNumber, NSNull, PropertyListSerialization, and XMLParser retain Foundation.
+Apple platforms use the SDK's Foundation module. Pure Swift values need neither.
+
 Tests live in `Packages/LDTXCorelibs/Tests/<module>Tests`. SwiftPM and XcodeGen both
 run them as `LDTXCorelibsTests`:
 

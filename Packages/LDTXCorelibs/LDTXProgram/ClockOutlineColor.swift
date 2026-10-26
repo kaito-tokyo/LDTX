@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public struct ClockOutlineColor: Equatable, Sendable {
   public var red: Float

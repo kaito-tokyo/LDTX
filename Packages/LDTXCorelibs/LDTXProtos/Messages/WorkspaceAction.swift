@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
-
 /// Output operations shared by the toolbar and hardware controls.
 public enum WorkspaceAction: String, CaseIterable, Sendable {
   case stopOutput

@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
-
 public struct AudioInputDevice: Identifiable, Equatable, Sendable {
   public let uid: String
   public let name: String

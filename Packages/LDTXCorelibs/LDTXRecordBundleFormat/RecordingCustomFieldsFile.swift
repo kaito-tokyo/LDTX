@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public enum RecordingCustomFieldsFile {
   public static func write(_ fields: [String: String], to packageDirectory: URL) throws {

@@ -2,8 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
 import LDTXProtos
+
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public enum WorkspaceBundleReader {
   case v4(WorkspaceBundleReaderV4)

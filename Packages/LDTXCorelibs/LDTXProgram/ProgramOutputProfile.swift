@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
-
 /// The complete contract for an output that can be streamed or recorded by LDTX.
 public struct ProgramOutputProfile: Equatable, Sendable {
   public let id: String

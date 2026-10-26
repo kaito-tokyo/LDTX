@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 public struct YouTubeRTMPSDestination: Sendable, Equatable, CustomStringConvertible,
   CustomDebugStringConvertible

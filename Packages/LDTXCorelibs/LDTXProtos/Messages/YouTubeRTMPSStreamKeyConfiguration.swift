@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import Foundation
+#if os(Linux)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 /// A primary endpoint, backup endpoint, and shared key managed as one unit.
 public struct YouTubeRTMPSStreamKeyConfiguration: Codable, Identifiable, Equatable, Sendable,
