@@ -173,10 +173,10 @@ struct RadialGradientFillVideoComponentInspector: View {
     RadialGradient(
       colors: [innerColor, outerColor],
       center: UnitPoint(
-        x: centerX.double(defaultNumerator: 0, defaultDenominator: 1),
-        y: centerY.double(defaultNumerator: 0, defaultDenominator: 1)),
-      startRadius: CGFloat(innerRadius.double(defaultNumerator: 0, defaultDenominator: 1)) * 96,
-      endRadius: CGFloat(outerRadius.double(defaultNumerator: 0, defaultDenominator: 1)) * 96)
+        x: centerX.double,
+        y: centerY.double),
+      startRadius: CGFloat(innerRadius.double) * 96,
+      endRadius: CGFloat(outerRadius.double) * 96)
   }
 }
 

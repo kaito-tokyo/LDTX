@@ -98,14 +98,14 @@ final class VideoLayersEditorState {
         else { return }
         let (transform, incomplete) = self.parsedTransform(for: row)
         let previous = row.transform
-        if (transform.translationX?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
-          == (previous.translationX?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-          (transform.translationY?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
-            == (previous.translationY?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-          (transform.scaleX?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
-            == (previous.scaleX?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1),
-          (transform.scaleY?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
-            == (previous.scaleY?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
+        if (transform.translationX?.double ?? 0)
+          == (previous.translationX?.double ?? 0),
+          (transform.translationY?.double ?? 0)
+            == (previous.translationY?.double ?? 0),
+          (transform.scaleX?.double ?? 1)
+            == (previous.scaleX?.double ?? 1),
+          (transform.scaleY?.double ?? 1)
+            == (previous.scaleY?.double ?? 1)
         {
           row.hasLocalTextChanges = incomplete
           return

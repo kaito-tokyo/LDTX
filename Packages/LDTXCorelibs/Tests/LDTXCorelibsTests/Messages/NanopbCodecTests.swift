@@ -91,7 +91,7 @@ struct NanopbCodecUnitTestSuite {
         $0.effects = [
           .with { $0.videoEffect = .custom(.with { $0.json = "allocated" }) },
           .with {
-            $0.videoEffect = .backgroundRemoval(.with { $0.model = .UNRECOGNIZED(Int.max) })
+            $0.videoEffect = .backgroundRemoval(.with { $0.model = .unrecognized(Int.max) })
           },
         ]
       }
@@ -175,7 +175,7 @@ struct NanopbCodecUnitTestSuite {
   func unknownEnums() throws {
     for rawValue in [777, -1] {
       let value = Ldtx_Workspace_V4_YouTubeOutputSettings.with {
-        $0.ingestMode = .UNRECOGNIZED(rawValue)
+        $0.ingestMode = .unrecognized(rawValue)
       }
       #expect(
         try Ldtx_Workspace_V4_YouTubeOutputSettings(serializedBytes: value.serializedData())

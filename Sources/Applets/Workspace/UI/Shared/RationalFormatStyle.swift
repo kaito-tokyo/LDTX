@@ -21,10 +21,9 @@ typealias RationalFormatStyle = RationalValueFormatStyle<Ldtx_Workspace_V4_Ratio
 
 struct RationalValueFormatStyle<Value: Rational32Value>: ParseableFormatStyle {
   var multiplier: UInt64 = 1
-  var defaultNumerator: Int32 = 0
   var parseStrategy: RationalValueParseStrategy<Value> { .init(divisor: multiplier) }
   func format(_ value: Value) -> String {
-    let num = value.num ?? defaultNumerator
+    let num = value.num ?? Value.defaultNumerator
     let den = value.den ?? 1
     guard den > 0 else { return String(Double(num) / Double(den)) }
     var magnitude = Int128(num).magnitude * UInt128(multiplier)
@@ -137,7 +136,7 @@ enum RationalSliderEncoding {
 extension Binding where Value == Ldtx_Workspace_V4_Rational32 {
   func sliderValue(denominator: UInt32) -> Binding<Double> {
     Binding<Double>(
-      get: { wrappedValue.double(defaultNumerator: 0, defaultDenominator: 1) },
+      get: { wrappedValue.double },
       set: {
         if let value = try? RationalSliderEncoding.encode($0, denominator: denominator) {
           wrappedValue = value

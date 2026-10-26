@@ -382,15 +382,13 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     roi.width?.den = nil
     let bytes = try roi.serializedData()
     #expect(
-      try roi.resolved(inputSize: (1920, 1080)).width?.double(
-        defaultNumerator: 1, defaultDenominator: 1) == 1.0 / 1920)
+      try roi.resolved(inputSize: (1920, 1080)).width?.double == 1.0 / 1920)
     try WorkspaceBundleValidatorV4.validateRegionOfInterest(roi, inputSize: (1920, 1080))
     #expect(try roi.serializedData() == bytes)
     roi.width?.num = nil
     roi.width?.den = 1920
     #expect(
-      try roi.resolved(inputSize: (1920, 1080)).width?.double(
-        defaultNumerator: 1, defaultDenominator: 1) == 1)
+      try roi.resolved(inputSize: (1920, 1080)).width?.double == 1)
     roi.width?.den = 0
     #expect(throws: WorkspaceV4ValidationError.self) {
       try WorkspaceBundleValidatorV4.validateRegionOfInterest(roi, inputSize: (1920, 1080))
@@ -434,8 +432,8 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
     let roi = try #require(vision.regionOfInterest)
     let resolved = try roi.resolved(inputSize: (1920, 1080))
     #expect(
-      resolved.width?.double(defaultNumerator: 1, defaultDenominator: 1) == 1.0 / 6
-        && resolved.height?.double(defaultNumerator: 1, defaultDenominator: 1) == 1.0 / 6)
+      resolved.width?.double == 1.0 / 6
+        && resolved.height?.double == 1.0 / 6)
     #expect((roi.width?.den == nil) && (roi.height?.den == nil))
   }
 

@@ -266,8 +266,8 @@ extension AppUIComponentTestSuite {
         }
 
         #expect(value.internalID == id)
-        #expect(value.width?.double(defaultNumerator: 0, defaultDenominator: 1) == 0.5)
-        #expect(value.height?.double(defaultNumerator: 0, defaultDenominator: 1) == 0.1)
+        #expect(value.width?.double == 0.5)
+        #expect(value.height?.double == 0.1)
         #expect(value.rtfdDocument?.isEmpty == false)
       case .linearGradient:
         guard case .linearGradientFill(let value) = component.videoComponent else {
@@ -312,7 +312,7 @@ extension AppUIComponentTestSuite {
         }
 
         #expect(value.showsSeconds == true)
-        #expect(value.fontSize?.float(defaultNumerator: 0, defaultDenominator: 1) == 48)
+        #expect(value.fontSize?.float == 48)
       case .testPattern:
         guard case .testPattern(let value) = component.videoComponent else {
           Issue.record("Wrong component case")

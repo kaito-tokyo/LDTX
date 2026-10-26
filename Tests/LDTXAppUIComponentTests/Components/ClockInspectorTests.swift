@@ -116,8 +116,7 @@ extension AppUIComponentTestSuite {
         undo.endUndoGrouping()
         #expect(window.firstResponder === editor)
         #expect(
-          outlines(in: document.workspace)[0].thickness?.double(
-            defaultNumerator: 0, defaultDenominator: 1)
+          outlines(in: document.workspace)[0].thickness?.double
             == Double(text))
       }
       let editor = try #require(field.currentEditor() as? NSTextView)
@@ -130,19 +129,17 @@ extension AppUIComponentTestSuite {
       let loaded = try WorkspaceBundleReaderV4(at: url).read()
       #expect(window.firstResponder === editor)
       #expect(
-        outlines(in: loaded)[0].thickness?.double(defaultNumerator: 0, defaultDenominator: 1) == 3.5
+        outlines(in: loaded)[0].thickness?.double == 3.5
       )
       undo.undo()
       await settleWorkspaceToolbar(window)
       #expect(
-        outlines(in: document.workspace)[0].thickness?.double(
-          defaultNumerator: 0, defaultDenominator: 1) == 1.5)
+        outlines(in: document.workspace)[0].thickness?.double == 1.5)
       #expect(editor.string == "1.5")
       undo.redo()
       await settleWorkspaceToolbar(window)
       #expect(
-        outlines(in: document.workspace)[0].thickness?.double(
-          defaultNumerator: 0, defaultDenominator: 1) == 3.5)
+        outlines(in: document.workspace)[0].thickness?.double == 3.5)
       #expect(editor.string == "3.5")
       let well = try #require(views(hosting).compactMap { $0 as? NSColorWell }.last)
       let color = NSColor(srgbRed: 0.25, green: 0.5, blue: 0.75, alpha: 0.4)
@@ -259,8 +256,7 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(editor.string == data.input)
       #expect(
-        outlines(in: document.workspace)[0].thickness?.double(
-          defaultNumerator: 0, defaultDenominator: 1)
+        outlines(in: document.workspace)[0].thickness?.double
           == data.expected)
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.writableContentTypes[0])

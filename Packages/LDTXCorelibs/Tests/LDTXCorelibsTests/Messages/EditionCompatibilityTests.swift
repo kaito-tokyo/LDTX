@@ -24,7 +24,7 @@ struct EditionCompatibilityUnitTestSuite {
     #expect(try clock.serializedData().isEmpty)
     clock.fontSize = .with { $0.set(num: 48, den: 1) }
     let restored = try Ldtx_Workspace_V4_ClockComponent(serializedBytes: clock.serializedData())
-    #expect(restored.fontSize?.double(defaultNumerator: 0, defaultDenominator: 1) == 48)
+    #expect(restored.fontSize?.double == 48)
     #expect(restored == clock)
     #expect(try clock.serializedData().contains(0x62))  // field 12, length-delimited
   }

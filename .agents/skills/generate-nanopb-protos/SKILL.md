@@ -7,7 +7,8 @@ name: generate-nanopb-protos
 description: Regenerate or change LDTX's nanopb C headers, C sources, and Swift message adapters.
 ---
 
-`protoc` 36.2 or higher and `pipx` must be installed. `Vendors/nanopb` submodule must be populated.
+`protoc` 36.2 or higher, `pipx`, and Swift 6.4 with `swift format` must be installed.
+Swift output is formatted using the repository's `.swift-format` before writing or checking it. `Vendors/nanopb` submodule must be populated.
 
 ## Generating pb.h and pb.c files
 

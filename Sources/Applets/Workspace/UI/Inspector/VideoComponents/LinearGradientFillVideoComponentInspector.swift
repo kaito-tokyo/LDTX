@@ -173,11 +173,11 @@ struct LinearGradientFillVideoComponentInspector: View {
     LinearGradient(
       colors: [startColor, endColor],
       startPoint: UnitPoint(
-        x: startX.double(defaultNumerator: 0, defaultDenominator: 1),
-        y: startY.double(defaultNumerator: 0, defaultDenominator: 1)),
+        x: startX.double,
+        y: startY.double),
       endPoint: UnitPoint(
-        x: endX.double(defaultNumerator: 0, defaultDenominator: 1),
-        y: endY.double(defaultNumerator: 0, defaultDenominator: 1)))
+        x: endX.double,
+        y: endY.double))
   }
 }
 

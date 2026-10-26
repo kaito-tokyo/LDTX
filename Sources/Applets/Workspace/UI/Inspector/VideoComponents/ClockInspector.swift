@@ -280,7 +280,7 @@ private struct ClockOutlineWidthField: View {
           set: { text in
             draft = text
             guard let parsed = try? RationalParseStrategy().parse(text),
-              (0...64).contains(parsed.double(defaultNumerator: 0, defaultDenominator: 1))
+              (0...64).contains(parsed.double)
             else {
               hasInvalidDraft = true
               return
@@ -304,7 +304,7 @@ private struct ClockOutlineWidthField: View {
     if hasInvalidDraft {
       Text("Enter a width from 0 to 64 pixels. The last accepted width is unchanged.")
         .font(.caption).foregroundStyle(.secondary)
-    } else if value.double(defaultNumerator: 0, defaultDenominator: 1) > 64 {
+    } else if value.double > 64 {
       Text("This saved width renders at 64 pixels. Enter 0–64 to change it.")
         .font(.caption).foregroundStyle(.secondary)
     }

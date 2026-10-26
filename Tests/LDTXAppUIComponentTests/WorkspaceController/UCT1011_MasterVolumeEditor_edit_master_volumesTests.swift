@@ -91,7 +91,7 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(
         state.workspacePreferences.landscapeProgramPreferences[200]?.audioMasterVolumeDecibels?
-          .double(defaultNumerator: 0, defaultDenominator: 1) == -12)
+          .double == -12)
       #expect(state.workspacePreferences.landscapeProgramPreferences[100] == nil)
       data.updateState(for: url) { $0.selectedProgramInternalID = 100 }
       await settleWorkspaceToolbar(window)
@@ -99,7 +99,7 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(
         state.workspacePreferences.landscapeProgramPreferences[100]?.audioMasterVolumeDecibels?
-          .double(defaultNumerator: 0, defaultDenominator: 1) == -6)
+          .double == -6)
       window.makeFirstResponder(nil)
       await settleWorkspaceToolbar(window)
       state.editWorkspace(undoManager: nil) { workspace in

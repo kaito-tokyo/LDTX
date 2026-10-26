@@ -43,7 +43,7 @@ public enum {{ enum.name }}: Hashable, Sendable, CaseIterable, NanopbEnumeration
 {% for case in enum.cases %}
   case {{ case.name }}
 {% endfor %}
-  case UNRECOGNIZED(Int)
+  case unrecognized(Int)
 
   public init() { self = .{{ enum.cases[0].name }} }
 
@@ -52,7 +52,7 @@ public enum {{ enum.name }}: Hashable, Sendable, CaseIterable, NanopbEnumeration
 {% for case in enum.cases %}
     case {{ case.number }}: self = .{{ case.name }}
 {% endfor %}
-    default: self = .UNRECOGNIZED(rawValue)
+    default: self = .unrecognized(rawValue)
     }
   }
 
@@ -61,7 +61,7 @@ public enum {{ enum.name }}: Hashable, Sendable, CaseIterable, NanopbEnumeration
 {% for case in enum.cases %}
     case .{{ case.name }}: return {{ case.number }}
 {% endfor %}
-    case .UNRECOGNIZED(let value): return value
+    case .unrecognized(let value): return value
     }
   }
 

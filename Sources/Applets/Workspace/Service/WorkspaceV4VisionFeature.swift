@@ -95,8 +95,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           guard case .intervalTrigger(let interval)? = $0.trigger else { return nil }
           return .init(
             visionID: id,
-            periodMilliseconds: (interval.intervalSeconds?.double(
-              defaultNumerator: 0, defaultDenominator: 1) ?? 0) * 1000)
+            periodMilliseconds: (interval.intervalSeconds?.double ?? 0) * 1000)
         }
       }
       _ = scheduler.synchronize(
@@ -291,7 +290,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
       recognitionLanguages: vision.recognitionLanguages,
       usesLanguageCorrection: vision.usesLanguageCorrection ?? false,
       customWords: vision.customWords,
-      minimumTextHeight: vision.minimumTextHeight?.float(defaultNumerator: 0, defaultDenominator: 1)
+      minimumTextHeight: vision.minimumTextHeight?.float
         ?? 0)
   }
 }

@@ -64,7 +64,7 @@ struct MasterVolumeEditor: View {
       Image(systemName: symbol).frame(width: 20).accessibilityLabel(name)
       AudioChannelControl(
         value: Binding(
-          get: { value.wrappedValue.double(defaultNumerator: 0, defaultDenominator: 1) },
+          get: { value.wrappedValue.double },
           set: {
             if let encoded = try? Rational32DecibelEncoding.encode($0) {
               value.wrappedValue = encoded
@@ -87,8 +87,7 @@ struct MasterVolumeEditor: View {
   func setMonitorVolume(_ value: Double) -> Bool {
     guard let url = stateService.localStateURL else { return false }
     do {
-      let volume = try Rational32DecibelEncoding.encode(value).double(
-        defaultNumerator: 0, defaultDenominator: 1)
+      let volume = try Rational32DecibelEncoding.encode(value).double
       appletData.updateState(for: url) { $0.monitorVolume = volume }
       runtimeActions()?.updateAudioMonitorValues()
       return true
@@ -113,9 +112,9 @@ struct AudioDecibelField: View {
         set: { text in
           draft = text
           guard let parsed = try? RationalParseStrategy().parse(text),
-            (-80...20).contains(parsed.double(defaultNumerator: 0, defaultDenominator: 1)),
+            (-80...20).contains(parsed.double),
             let encoded = try? Rational32DecibelEncoding.encode(
-              parsed.double(defaultNumerator: 0, defaultDenominator: 1))
+              parsed.double)
           else {
             hasInvalidDraft = true
             return

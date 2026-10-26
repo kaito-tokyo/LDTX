@@ -162,11 +162,11 @@ struct ConicGradientFillVideoComponentInspector: View {
     AngularGradient(
       colors: [startColor, endColor],
       center: UnitPoint(
-        x: centerX.double(defaultNumerator: 0, defaultDenominator: 1),
-        y: centerY.double(defaultNumerator: 0, defaultDenominator: 1)),
-      startAngle: .radians(startAngleRadians.double(defaultNumerator: 0, defaultDenominator: 1)),
+        x: centerX.double,
+        y: centerY.double),
+      startAngle: .radians(startAngleRadians.double),
       endAngle: .radians(
-        startAngleRadians.double(defaultNumerator: 0, defaultDenominator: 1) + 2 * .pi))
+        startAngleRadians.double + 2 * .pi))
   }
 }
 

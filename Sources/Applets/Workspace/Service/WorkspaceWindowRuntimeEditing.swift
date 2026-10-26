@@ -226,7 +226,7 @@ extension WorkspaceWindowRuntime {
   ) throws {
     guard
       let value = try? Rational32DecibelEncoding.encode(
-        value.double(defaultNumerator: 0, defaultDenominator: 1))
+        value.double)
     else {
       throw WorkspaceRuntimeError.invalidAudioChannelGain
     }
@@ -257,7 +257,7 @@ extension WorkspaceWindowRuntime {
   {
     guard
       let value = try? Rational32DecibelEncoding.encode(
-        value.double(defaultNumerator: 0, defaultDenominator: 1))
+        value.double)
     else {
       throw WorkspaceRuntimeError.invalidAudioMasterVolume
     }

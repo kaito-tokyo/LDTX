@@ -463,7 +463,7 @@ extension WorkspaceBundleValidatorV4 {
         let p = "preferences.audio_channel_gains_decibels[\(id)]"
         if !audio.contains(id) { add(p, .missingAudioInputDevice(id), id: id) }
         if rational(gain, path: p, id: id),
-          !(-80...20).contains(gain.double(defaultNumerator: 0, defaultDenominator: 1))
+          !(-80...20).contains(gain.double)
         {
           add(p, .invalidAudioChannelGain, id: id)
         }
@@ -490,8 +490,7 @@ extension WorkspaceBundleValidatorV4 {
               id: id)
             if valid,
               !(-80...20).contains(
-                (preference.audioMasterVolumeDecibels?.double(
-                  defaultNumerator: 0, defaultDenominator: 1) ?? 0))
+                (preference.audioMasterVolumeDecibels ?? .init()).double)
             {
               add(p + ".audio_master_volume_decibels", .invalidMasterVolume, id: id)
             }

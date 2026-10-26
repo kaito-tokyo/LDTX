@@ -41,16 +41,16 @@ extension AppUIComponentTestSuite {
       row.edit(data.input, at: data.field.rawValue)
       let saved = try #require(fixture.editor.preferences.videoLayerTransforms[1])
       let values = [
-        (saved.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
-        (saved.translationY ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
-        (saved.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
-        (saved.scaleY ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
+        (saved.translationX ?? .init()).double,
+        (saved.translationY ?? .init()).double,
+        (saved.scaleX ?? .init()).double,
+        (saved.scaleY ?? .init()).double,
       ]
       let original = [
-        (before.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
-        (before.translationY ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1),
-        (before.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
-        (before.scaleY ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1),
+        (before.translationX ?? .init()).double,
+        (before.translationY ?? .init()).double,
+        (before.scaleX ?? .init()).double,
+        (before.scaleY ?? .init()).double,
       ]
       #expect(
         values[data.field.rawValue] == Double(data.expectedNumerator)
@@ -71,11 +71,10 @@ extension AppUIComponentTestSuite {
       #expect(row.strings[0] == "-")
       #expect(row.hasLocalTextChanges)
       #expect(
-        (row.transform.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1)
+        (row.transform.translationX ?? .init()).double
           == 0)
       #expect(
-        fixture.editor.preferences.videoLayerTransforms[1]?.scaleY?.double(
-          defaultNumerator: 1, defaultDenominator: 1) == 0.5)
+        fixture.editor.preferences.videoLayerTransforms[1]?.scaleY?.double == 0.5)
     }
 
     @Test(
@@ -89,7 +88,7 @@ extension AppUIComponentTestSuite {
       #expect(fixture.state.workspacePreferences == before)
       #expect(row.hasLocalTextChanges)
       #expect(
-        (row.transform.scaleX ?? .init()).double(defaultNumerator: 1, defaultDenominator: 1) == 1)
+        (row.transform.scaleX ?? .init()).double == 1)
       fixture.update(ids: [3, 1, 2])
       #expect(fixture.editor.rows[1] === row)
       #expect(row.strings[2] == text)
@@ -102,7 +101,7 @@ extension AppUIComponentTestSuite {
       row.edit(text, at: 0)
       #expect(row.hasLocalTextChanges)
       #expect(
-        (row.transform.translationX ?? .init()).double(defaultNumerator: 0, defaultDenominator: 1)
+        (row.transform.translationX ?? .init()).double
           == 0)
     }
 
@@ -155,8 +154,7 @@ extension AppUIComponentTestSuite {
       try editWorkspaceField(field, text: "960", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
-        fixture.editor.preferences.videoLayerTransforms[1]?.translationX?.double(
-          defaultNumerator: 0, defaultDenominator: 1) == 0.5)
+        fixture.editor.preferences.videoLayerTransforms[1]?.translationX?.double == 0.5)
     }
   }
 }

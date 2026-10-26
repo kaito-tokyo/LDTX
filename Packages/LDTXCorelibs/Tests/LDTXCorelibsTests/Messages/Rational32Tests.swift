@@ -48,7 +48,7 @@ struct Rational32UnitTestSuite {
       }
     }
     let zero = try Rational32DecibelEncoding.encode(
-      Ldtx_Workspace_V4_Rational32().double(defaultNumerator: 0, defaultDenominator: 1))
+      Ldtx_Workspace_V4_Rational32().double)
     #expect(zero.num == 0 && zero.den == 10)
   }
   @Test("LUB-1000: Converts valid values") func convertsValidValues() {
@@ -56,8 +56,8 @@ struct Rational32UnitTestSuite {
       $0.num = -1
       $0.den = 8
     }
-    #expect(value.float(defaultNumerator: 0, defaultDenominator: 1) == -0.125)
-    #expect(value.double(defaultNumerator: 0, defaultDenominator: 1) == -0.125)
+    #expect(value.float == -0.125)
+    #expect(value.double == -0.125)
   }
 
   @Test("LUB-1000: Uses standard division for zero denominator")
@@ -66,30 +66,30 @@ struct Rational32UnitTestSuite {
       $0.num = 1
       $0.den = 0
     }
-    #expect(value.float(defaultNumerator: 0, defaultDenominator: 1) == .infinity)
-    #expect(value.double(defaultNumerator: 0, defaultDenominator: 1) == .infinity)
+    #expect(value.float == .infinity)
+    #expect(value.double == .infinity)
     let negative = Ldtx_Workspace_V4_Rational32.with {
       $0.num = -1
       $0.den = 0
     }
-    #expect(negative.float(defaultNumerator: 0, defaultDenominator: 1) == -.infinity)
-    #expect(negative.double(defaultNumerator: 0, defaultDenominator: 1) == -.infinity)
-    #expect(Ldtx_Workspace_V4_Rational32().float(defaultNumerator: 0, defaultDenominator: 1) == 0)
-    #expect(Ldtx_Workspace_V4_Rational32().double(defaultNumerator: 0, defaultDenominator: 1) == 0)
-    #expect(Ldtx_Workspace_V4_Rational32().decimal(defaultNumerator: 0, defaultDenominator: 1) == 0)
+    #expect(negative.float == -.infinity)
+    #expect(negative.double == -.infinity)
+    #expect(Ldtx_Workspace_V4_Rational32().float == 0)
+    #expect(Ldtx_Workspace_V4_Rational32().double == 0)
+    #expect(Ldtx_Workspace_V4_Rational32().decimal == 0)
   }
 
   @Test("LUB-1000: Converts zero and extreme values") func convertsZeroAndExtremeValues() {
     let zero = Ldtx_Workspace_V4_Rational32.with { $0.den = 1 }
-    #expect(zero.float(defaultNumerator: 0, defaultDenominator: 1) == 0)
-    #expect(zero.double(defaultNumerator: 0, defaultDenominator: 1) == 0)
+    #expect(zero.float == 0)
+    #expect(zero.double == 0)
     let extreme = Ldtx_Workspace_V4_Rational32.with {
       $0.num = Int32.min
       $0.den = UInt32.max
     }
-    #expect(extreme.float(defaultNumerator: 0, defaultDenominator: 1) == -0.5)
+    #expect(extreme.float == -0.5)
     #expect(
-      extreme.double(defaultNumerator: 0, defaultDenominator: 1) == Double(Int32.min)
+      extreme.double == Double(Int32.min)
         / Double(UInt32.max))
   }
 
@@ -112,7 +112,7 @@ struct Rational32UnitTestSuite {
       $0.num = Int32.max
       $0.den = UInt32(Int32.max - 1)
     }
-    #expect((transform.translationX?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0) > 1)
+    #expect((transform.translationX?.double ?? 0) > 1)
     #expect(
       performing: {
         try WorkspaceBundleValidatorV4.validateTransform(transform)
@@ -130,7 +130,7 @@ struct Rational32UnitTestSuite {
     for text in ["1.25", "-1.2", "0", "1000", "0.000000001", "-2147483648"] {
       let decimal = try #require(Decimal(string: text))
       try value.set(decimal: decimal)
-      #expect(value.decimal(defaultNumerator: 0, defaultDenominator: 1) == decimal)
+      #expect(value.decimal == decimal)
       #expect((value.den ?? 0) > 0)
     }
     try value.set(decimal: Decimal(string: "1.25")!)
@@ -145,8 +145,8 @@ struct Rational32UnitTestSuite {
     }
     value.set(num: 0, den: 0)
     #expect(value.num == 0 && value.den == 0)
-    #expect(value.decimal(defaultNumerator: 0, defaultDenominator: 1).isNaN)
-    #expect(value.double(defaultNumerator: 0, defaultDenominator: 1).isNaN)
+    #expect(value.decimal.isNaN)
+    #expect(value.double.isNaN)
     #expect(try Ldtx_Workspace_V4_Rational32(serializedBytes: value.serializedData()) == value)
   }
 

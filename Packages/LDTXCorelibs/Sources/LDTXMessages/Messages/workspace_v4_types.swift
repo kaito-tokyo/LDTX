@@ -26,10 +26,15 @@ public enum Rational32DecibelEncoding {
 public protocol Rational32Value: NanopbMessage {
   var num: Int32? { get set }
   var den: UInt32? { get set }
+  static var defaultNumerator: Int32 { get }
 }
 
-extension Ldtx_Workspace_V4_Rational32: Rational32Value {}
-extension Ldtx_Workspace_V4_Rational32DefaultOne: Rational32Value {}
+extension Ldtx_Workspace_V4_Rational32: Rational32Value {
+  public static var defaultNumerator: Int32 { 0 }
+}
+extension Ldtx_Workspace_V4_Rational32DefaultOne: Rational32Value {
+  public static var defaultNumerator: Int32 { 1 }
+}
 
 extension Rational32Value {
   /// Copies the stored value without changing presence.
@@ -39,16 +44,16 @@ extension Rational32Value {
     den = value.den
   }
 
-  public func double(defaultNumerator: Int32, defaultDenominator: UInt32) -> Double {
-    Double(num ?? defaultNumerator) / Double(den ?? defaultDenominator)
+  public var double: Double {
+    Double(num ?? Self.defaultNumerator) / Double(den ?? 1)
   }
 
-  public func float(defaultNumerator: Int32, defaultDenominator: UInt32) -> Float {
-    Float(double(defaultNumerator: defaultNumerator, defaultDenominator: defaultDenominator))
+  public var float: Float {
+    Float(double)
   }
 
-  public func decimal(defaultNumerator: Int32, defaultDenominator: UInt32) -> Decimal {
-    Decimal(num ?? defaultNumerator) / Decimal(den ?? defaultDenominator)
+  public var decimal: Decimal {
+    Decimal(num ?? Self.defaultNumerator) / Decimal(den ?? 1)
   }
 
   public mutating func set(num: Int32, den: UInt32) {

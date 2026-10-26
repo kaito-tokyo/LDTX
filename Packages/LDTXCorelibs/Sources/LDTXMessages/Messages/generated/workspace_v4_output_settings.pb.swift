@@ -22,7 +22,7 @@ public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterabl
   case portraitHls
   case landscapeDash
   case portraitDash
-  case UNRECOGNIZED(Int)
+  case unrecognized(Int)
 
   public init() { self = .unspecified }
 
@@ -36,7 +36,7 @@ public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterabl
     case 5: self = .portraitHls
     case 6: self = .landscapeDash
     case 7: self = .portraitDash
-    default: self = .UNRECOGNIZED(rawValue)
+    default: self = .unrecognized(rawValue)
     }
   }
 
@@ -50,7 +50,7 @@ public enum Ldtx_Workspace_V4_YouTubeIngestMode: Hashable, Sendable, CaseIterabl
     case .portraitHls: return 5
     case .landscapeDash: return 6
     case .portraitDash: return 7
-    case .UNRECOGNIZED(let value): return value
+    case .unrecognized(let value): return value
     }
   }
 

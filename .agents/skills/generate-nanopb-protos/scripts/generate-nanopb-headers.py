@@ -10,6 +10,7 @@
 
 import argparse
 import itertools
+import subprocess
 from pathlib import Path
 from google.protobuf import descriptor_pb2 as pb
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -183,11 +184,14 @@ environment = Environment(
 template = environment.get_template('messages.swift.jinja')
 outputs = {}
 for file in files:
-    outputs[OUT / f'{Path(file.name).stem}.pb.swift'] = template.render(
+    rendered = template.render(
         enums=[enum_model(name, enum) for name, enum in enums.items()
                if owners[name] == file.name],
         messages=[message_model(name, message) for name, message in messages.items()
                   if owners[name] == file.name])
+    outputs[OUT / f'{Path(file.name).stem}.pb.swift'] = subprocess.run(
+        ['swift', 'format', 'format', '--configuration', str(ROOT / '.swift-format')],
+        input=rendered, text=True, capture_output=True, check=True).stdout
 
 
 # Prepare every output before modifying any files. Only generated Swift files

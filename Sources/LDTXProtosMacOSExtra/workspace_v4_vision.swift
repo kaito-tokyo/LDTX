@@ -11,12 +11,12 @@ extension Ldtx_Workspace_V4_VisionRegionOfInterest {
   public func rect(in imageExtent: CGRect) -> CGRect {
     CGRect(
       x: imageExtent.minX + imageExtent.width
-        * CGFloat(x?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+        * CGFloat(x?.double ?? 0),
       y: imageExtent.minY + imageExtent.height
-        * CGFloat(y?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+        * CGFloat(y?.double ?? 0),
       width: imageExtent.width
-        * CGFloat(width?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1),
+        * CGFloat(width?.double ?? 1),
       height: imageExtent.height
-        * CGFloat(height?.double(defaultNumerator: 1, defaultDenominator: 1) ?? 1))
+        * CGFloat(height?.double ?? 1))
   }
 }

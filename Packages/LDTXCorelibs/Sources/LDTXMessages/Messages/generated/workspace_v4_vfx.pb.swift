@@ -17,7 +17,7 @@ public enum Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model: Hashable, Sendab
 {
   case unspecified
   case mediapipeLandscape
-  case UNRECOGNIZED(Int)
+  case unrecognized(Int)
 
   public init() { self = .unspecified }
 
@@ -25,7 +25,7 @@ public enum Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model: Hashable, Sendab
     switch rawValue {
     case 0: self = .unspecified
     case 1: self = .mediapipeLandscape
-    default: self = .UNRECOGNIZED(rawValue)
+    default: self = .unrecognized(rawValue)
     }
   }
 
@@ -33,7 +33,7 @@ public enum Ldtx_Workspace_V4_BackgroundRemovalVfxEffect_Model: Hashable, Sendab
     switch self {
     case .unspecified: return 0
     case .mediapipeLandscape: return 1
-    case .UNRECOGNIZED(let value): return value
+    case .unrecognized(let value): return value
     }
   }
 

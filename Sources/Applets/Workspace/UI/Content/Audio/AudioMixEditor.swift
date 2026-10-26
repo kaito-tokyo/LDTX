@@ -54,7 +54,7 @@ struct AudioMixEditor: View {
               value: Binding(
                 get: {
                   stateService.workspacePreferences.audioChannelGainsDecibels[id]?
-                    .double(defaultNumerator: 0, defaultDenominator: 1) ?? 0
+                    .double ?? 0
                 },
                 set: { _ = setAudioChannelGain($0, forAudioInputDeviceInternalID: id) }),
               peakProvider: { peakMeter.peak(for: "v4-\(id)") },

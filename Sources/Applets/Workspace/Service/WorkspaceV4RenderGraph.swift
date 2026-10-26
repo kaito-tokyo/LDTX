@@ -36,21 +36,21 @@ public struct WorkspaceV4RenderGraph: Sendable {
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }
       let transform = transforms[internalID] ?? .init()
       let topInsetRational = Self.unitInterval(
-        (transform.topInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
+        (transform.topInset?.float ?? 0), default: 0)
       let rightInsetRational = Self.unitInterval(
-        (transform.rightInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
+        (transform.rightInset?.float ?? 0), default: 0)
       let bottomInsetRational = Self.unitInterval(
-        (transform.bottomInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
+        (transform.bottomInset?.float ?? 0), default: 0)
       let leftInsetRational = Self.unitInterval(
-        (transform.leftInset?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0)
+        (transform.leftInset?.float ?? 0), default: 0)
       let translationXRational = Self.unitInterval(
-        (transform.translationX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0
+        (transform.translationX?.float ?? 0), default: 0
       )
       let translationYRational = Self.unitInterval(
-        (transform.translationY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0), default: 0
+        (transform.translationY?.float ?? 0), default: 0
       )
-      let scaleX = (transform.scaleX?.float(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
-      let scaleY = (transform.scaleY?.float(defaultNumerator: 1, defaultDenominator: 1) ?? 1)
+      let scaleX = (transform.scaleX?.float ?? 1)
+      let scaleY = (transform.scaleY?.float ?? 1)
       let name = "v4-\(internalID)"
       if case .inputCameraDevice(var input) = component {
         input.sourceCropTop = topInsetRational * 100
@@ -90,7 +90,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
     self.layerPreferences = layerPreferences
     var audioPreferences = ProgramPreferences(
       masterVolume: Self.linearGain(
-        (preference.audioMasterVolumeDecibels?.double(defaultNumerator: 0, defaultDenominator: 1)
+        (preference.audioMasterVolumeDecibels?.double
           ?? 0))
     )
     let gains = canvas.audioChannelGainsDecibels
@@ -100,7 +100,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
         let id = input.inputDeviceID.flatMap({ Int64($0.dropFirst(3)) })
       else { continue }
       audioPreferences.audioChannelGainsByName[channel.name] = Self.linearGain(
-        (gains[id]?.double(defaultNumerator: 0, defaultDenominator: 1) ?? 0))
+        (gains[id]?.double ?? 0))
       audioPreferences.audioMutedByInputDeviceName[channel.name] = mutedAudio[id] ?? false
     }
     audioPreferences.videoLayersByProgramName["v4-\(canvas.programInternalID)"] = layerPreferences
@@ -131,10 +131,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
             id,
             .fillLinearGradient(
               FillLinearGradientComponent(
-                startX: (fill.startX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                startY: (fill.startY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                endX: (fill.endX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                endY: (fill.endY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                startX: (fill.startX?.float ?? 0),
+                startY: (fill.startY?.float ?? 0),
+                endX: (fill.endX?.float ?? 0),
+                endY: (fill.endY?.float ?? 0),
                 startRed: (fill.startExtendedSrgbColor?.red ?? 0),
                 startGreen: (fill.startExtendedSrgbColor?.green ?? 0),
                 startBlue: (fill.startExtendedSrgbColor?.blue ?? 0),
@@ -149,11 +149,11 @@ public struct WorkspaceV4RenderGraph: Sendable {
             id,
             .fillRadialGradient(
               FillRadialGradientComponent(
-                centerX: (fill.centerX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                centerY: (fill.centerY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                innerRadius: (fill.innerRadius?.float(defaultNumerator: 0, defaultDenominator: 1)
+                centerX: (fill.centerX?.float ?? 0),
+                centerY: (fill.centerY?.float ?? 0),
+                innerRadius: (fill.innerRadius?.float
                   ?? 0),
-                outerRadius: (fill.outerRadius?.float(defaultNumerator: 0, defaultDenominator: 1)
+                outerRadius: (fill.outerRadius?.float
                   ?? 0), innerRed: (fill.innerExtendedSrgbColor?.red ?? 0),
                 innerGreen: (fill.innerExtendedSrgbColor?.green ?? 0),
                 innerBlue: (fill.innerExtendedSrgbColor?.blue ?? 0),
@@ -168,10 +168,9 @@ public struct WorkspaceV4RenderGraph: Sendable {
             id,
             .fillConicGradient(
               FillConicGradientComponent(
-                centerX: (fill.centerX?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                centerY: (fill.centerY?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-                startAngleRadians: (fill.startAngleRadians?.float(
-                  defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                centerX: (fill.centerX?.float ?? 0),
+                centerY: (fill.centerY?.float ?? 0),
+                startAngleRadians: (fill.startAngleRadians?.float ?? 0),
                 startRed: (fill.startExtendedSrgbColor?.red ?? 0),
                 startGreen: (fill.startExtendedSrgbColor?.green ?? 0),
                 startBlue: (fill.startExtendedSrgbColor?.blue ?? 0),
@@ -191,7 +190,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
             id,
             .clock(
               ClockComponent(
-                fontSize: (clock.fontSize?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 48),
+                fontSize: (clock.fontSize?.float ?? 48),
                 showsSeconds: (clock.showsSeconds ?? false),
                 uses24HourTime: (clock.uses24HourTime ?? false),
                 foregroundRed: (clock.foregroundExtendedSrgbColor?.red ?? 0),
@@ -203,14 +202,14 @@ public struct WorkspaceV4RenderGraph: Sendable {
                 utcOffsetMinutes: clock.utcOffsetMinutes ?? 0,
                 outlines: clock.outlines.map {
                   ClockTextOutline(
-                    thickness: ($0.thickness?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
+                    thickness: ($0.thickness?.float ?? 0),
                     color: colorString($0.extendedSrgbColor))
                 }))
           )
         case .dynamicText(let text):
           var overlay = ClockComponent(
-            destinationWidth: (text.width?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0),
-            destinationHeight: (text.height?.float(defaultNumerator: 0, defaultDenominator: 1) ?? 0)
+            destinationWidth: (text.width?.float ?? 0),
+            destinationHeight: (text.height?.float ?? 0)
           )
           overlay.resolvedRTFD = text.rtfdDocument
           if let rtfd = text.rtfdDocument, let document = try? LDTXRichTextDocument(rtfd: rtfd),
@@ -250,8 +249,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
       guard let id = device.internalID else { continue }
       result.audioChannelGainsByName["v4-\(id)"] =
         linearGain(
-          preferences.audioChannelGainsDecibels[id]?.double(
-            defaultNumerator: 0, defaultDenominator: 1) ?? 0)
+          preferences.audioChannelGainsDecibels[id]?.double ?? 0)
     }
     return result
   }

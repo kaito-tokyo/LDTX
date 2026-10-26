@@ -228,8 +228,7 @@ extension AppUIComponentTestSuite {
       var region = Ldtx_Workspace_V4_VisionRegionOfInterest()
       region.x = rational
       #expect(
-        try region.resolved(inputSize: (1920, 1080)).x?.double(
-          defaultNumerator: 0, defaultDenominator: 1) == 1.0 / 6)
+        try region.resolved(inputSize: (1920, 1080)).x?.double == 1.0 / 6)
       rational?.den = 1080
       numerator.wrappedValue = 180
       #expect(rational?.den == 1080)
@@ -287,7 +286,7 @@ extension AppUIComponentTestSuite {
         return
       }
       #expect(
-        updated.regionOfInterest?.width?.double(defaultNumerator: 0, defaultDenominator: 1) == 0.75)
+        updated.regionOfInterest?.width?.double == 0.75)
     }
 
     @Test("LUB-1048: Classifier added through the sheet flow saves and reopens with its settings")
@@ -347,7 +346,7 @@ extension AppUIComponentTestSuite {
         Issue.record("Missing interval trigger")
         return
       }
-      #expect(trigger.intervalSeconds?.double(defaultNumerator: 0, defaultDenominator: 1) == 5)
+      #expect(trigger.intervalSeconds?.double == 5)
     }
 
     @Test(
