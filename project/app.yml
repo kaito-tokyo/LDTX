@@ -3,17 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
-  LDTXAppletSupport:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXAppletSupport
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppletSupport
-        PRODUCT_MODULE_NAME: LDTXAppletSupport
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: "YES"
   LDTXRecordPlayerApplet:
     type: framework
     platform: macOS
@@ -21,7 +10,6 @@ targets:
       - Sources/Applets/RecordPlayer
     dependencies:
       - sdk: AVKit.framework
-      - target: LDTXAppletSupport
       - target: LDTXRecording
       - package: Corelibs
         product: LDTXCorelibs
@@ -45,10 +33,8 @@ targets:
         product: LDTXCorelibs
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXWorkspaceAppletModel
-      - target: LDTXProtosMacOSExtra
       - target: LDTXVariableMacro
       - target: LDTXRichText
-      - target: LDTXAppletSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletUI
@@ -136,9 +122,6 @@ targets:
           copyFiles:
             destination: resources
     dependencies:
-      - target: LDTXAppletSupport
-        embed: true
-        codeSign: true
       - target: LDTXRecordPlayerApplet
         embed: true
         codeSign: true
@@ -183,8 +166,6 @@ targets:
         embed: true
       - target: LDTXInternalProtocols
         embed: true
-      - target: LDTXMediaTiming
-        embed: true
       - target: LDTXMP4
         embed: true
       - target: LDTXYouTubeOutputProtocol
@@ -214,8 +195,6 @@ targets:
         embed: true
       - target: LDTXWorkspaceAppletModel
         embed: true
-      - target: LDTXProtosMacOSExtra
-        embed: true
       - target: LDTXWorkspaceAppletStore
         embed: true
       - target: LDTXWorkspaceAppletService
@@ -233,7 +212,8 @@ targets:
         # The app directly constructs WorkspaceDocument from this UI framework.
         link: true
         embed: true
-      - target: LDTXFontRasterizer
+      - package: LDTXFontRasterizer
+        product: LDTXFontRasterizer
         embed: true
       - package: AppAuth-iOS
         product: AppAuth

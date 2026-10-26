@@ -9,7 +9,6 @@ import Foundation
 import LDTXBackgroundSegmentation
 import LDTXCorelibs
 import LDTXProgramRuntime
-import LDTXProtosMacOSExtra
 import LDTXRichText
 import LDTXTaskQueue
 import LDTXVision

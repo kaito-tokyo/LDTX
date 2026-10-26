@@ -5,7 +5,6 @@
 import ArgumentParser
 import Foundation
 import LDTXCorelibs
-import LDTXProtosMacOSExtra
 import LDTXRecording
 import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService

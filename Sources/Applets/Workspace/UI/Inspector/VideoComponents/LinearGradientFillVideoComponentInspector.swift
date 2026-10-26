@@ -4,7 +4,6 @@
 
 import Foundation
 import LDTXCorelibs
-import LDTXProtosMacOSExtra
 import SwiftUI
 
 struct LinearGradientFillVideoComponentInspector: View {

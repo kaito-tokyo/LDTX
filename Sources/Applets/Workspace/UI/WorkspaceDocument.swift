@@ -4,7 +4,6 @@
 import AppKit
 import Foundation
 import LDTXCorelibs
-import LDTXProtosMacOSExtra
 import LDTXWorkspaceAppletModel
 import Observation
 import SwiftUI

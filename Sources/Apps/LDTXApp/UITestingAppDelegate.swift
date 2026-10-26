@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import AppKit
-import LDTXAppletSupport
 import LDTXCorelibs
 import LDTXRecordPlayerApplet
 import LDTXRecording
@@ -17,7 +16,6 @@ import UniformTypeIdentifiers
 //  WorkspaceRecordingActivityReporting
 //{
 //  private var terminationPending = false
-//  private let terminationCoordinator = ApplicationTerminationCoordinator()
 //  private let workspaceRecordingActivityStore = WorkspaceRecordingActivityStore()
 //  private var launcher: NSWindowController?
 //  private var didFinishLaunching = false
@@ -119,7 +117,6 @@ import UniformTypeIdentifiers
 //        let participants = NSApp.windows.compactMap {
 //          $0.windowController as? DefaultWorkspaceAppletController
 //        }.map { controller in
-//          ApplicationTerminationCoordinator.Participant(
 //            confirm: { controller.confirmTermination() },
 //            cancelConfirmation: { controller.cancelTerminationConfirmation() },
 //            stop: { await controller.closeWorkspace() }

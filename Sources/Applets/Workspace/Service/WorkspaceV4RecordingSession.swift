@@ -6,7 +6,6 @@ import AVFAudio
 import AVFoundation
 import CoreImage
 import Foundation
-import LDTXAppletSupport
 import LDTXBackgroundSegmentation
 import LDTXCapture
 import LDTXCorelibs

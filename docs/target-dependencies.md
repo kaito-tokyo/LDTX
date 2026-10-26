@@ -22,11 +22,11 @@ flowchart TD
     UI --> Contract
     UI --> Model[LDTXWorkspaceAppletModel]
     UI --> Corelibs[LDTXCorelibs]
-    UI --> MacValues[LDTXProtosMacOSExtra]
-    UI --> Views[LDTXAppletSupport / LDTXRichText / LDTXVariableMacro]
+    UI --> Views[LDTXRichText / LDTXVariableMacro]
     Contract --> Model
     Contract --> Corelibs
     Model --> Corelibs
+    Model --> RichText[LDTXRichText]
     Runtime --> Contract
     Devices --> Contract
     Devices --> Capture[LDTXCapture]

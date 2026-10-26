@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-@LUB-1004 @LDTXProtosMacOSExtra
-Feature: LDTXProtosMacOSExtra convert platform values
+@LUB-1004 @Workspace
+Feature: convert Workspace values for platform use
 
   @LUB-1004.1 @Integration
   Scenario: Preserve color components
@@ -16,4 +16,3 @@ Feature: LDTXProtosMacOSExtra convert platform values
     Given a Vision region with missing bounds and a known input size
     When the effective region is resolved
     Then missing coordinates use zero and missing extents use the input dimensions
-

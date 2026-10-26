@@ -107,8 +107,8 @@ For standalone testing, run the `LDTXVisionProgrammerApp` scheme in Xcode.
 ## Internal Framework Modules
 
 This table lists the app's library modules. Corelibs targets are defined by
-`Packages/LDTXCorelibs/Package.swift` and exported as one dynamic LDTXCorelibs product.
-Other modules are XcodeGen framework targets. The internal nanopb C target contains
+`Packages/LDTXCorelibs/Package.swift`; `LDTXCorelibs` and `LDTXFontRasterizer` are
+dynamic SwiftPM products. Other modules are XcodeGen framework targets. The internal nanopb C target contains
 message descriptors; Swift models copy to and from owned C messages. External libraries
 remain SwiftPM dependencies.
 
@@ -122,13 +122,11 @@ remain SwiftPM dependencies.
 | LDTXDash                   | DASH manifest, ingest endpoint, upload, and local-file pipeline.   |
 | LDTXFontRasterizer         | C-backed TrueType glyph rasterization used by runtime overlays.    |
 | LDTXInternalProtocols      | Internal interfaces shared across optional feature boundaries.     |
-| LDTXMediaTiming            | Audio timeline and presentation-timestamp clock utilities.         |
 | LDTXMP4                    | Segmented MP4 writing and audio/video sample normalization.        |
 | LDTXCorelibs               | Shared values, Program definitions, bundle IO, and re-exported Swift messages. |
 | LDTXMessages               | Swift Protobuf messages and copying codec. |
 | LDTXNanopbGenerated        | Generated nanopb C message structures and descriptors. |
 | LDTXWorkspaceAppletInterface | Workspace presentation and runtime-operation contracts. |
-| LDTXProtosMacOSExtra       | macOS-specific extensions for Protobuf values, including AppKit color conversion. |
 | LDTXProgramRendering       | Translation from Program definitions to renderable compositions.   |
 | LDTXProgramRuntime         | Runtime services for preview, capture, recording, and streaming.   |
 | LDTXRecordPlayerApplet      | Recording playback windows, pane UI, and marker persistence.       |

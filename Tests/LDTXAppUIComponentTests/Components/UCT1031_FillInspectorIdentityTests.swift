@@ -3,7 +3,6 @@
 
 import AppKit
 import LDTXCorelibs
-import LDTXProtosMacOSExtra
 @testable import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
