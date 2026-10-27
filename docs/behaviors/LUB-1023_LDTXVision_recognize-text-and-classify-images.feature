@@ -9,7 +9,7 @@ Feature: Recognize text and classify images
   Scenario: Recognize text using configured languages
     Environment constraint: GitHub Actions hosted arm64 VMs can fail real OCR
     with E5RT error 11 and "No available backends on platform [universal] for
-    compute units ane". PR and main workflows exclude
+ compute units ane". PR and main workflows now include
     WorkspaceClockOCRIntegrationTestSuite and ManualOCRRecognitionIntegrationTestSuite.
     Run real recognition on a supported Mac; local plans and Xcode Cloud retain it.
     Keep these CI exclusions unless backend availability is verified on the runner.

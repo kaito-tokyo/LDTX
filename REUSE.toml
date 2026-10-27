@@ -17,7 +17,6 @@ path = [
   ".swift-version",
   ".vscode/launch.json",
   ".vscode/settings.json",
-  "*.xctestplan",
   "compile_flags.txt",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",

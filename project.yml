@@ -7,11 +7,6 @@ name: LDTX
 fileGroups:
   - .agents
   - Protos
-  - pr.xctestplan
-  - push-main.xctestplan
-  - Easy.xctestplan
-  - Medium.xctestplan
-  - Hard.xctestplan
 
 configs:
   Debug: debug

@@ -12,11 +12,6 @@ cache-mode: write
 on:
   pull_request:
   workflow_call:
-    inputs:
-      test-plan:
-        type: string
-        description: The test plan to run
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,7 +51,6 @@ jobs:
       contents: read
 
     env:
-      LDTX_TEST_PLAN: ${{ inputs.test-plan || 'pr' }}
 
     steps:
       - name: Checkout
@@ -125,7 +119,6 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan "$LDTX_TEST_PLAN" \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -154,9 +147,6 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan "$LDTX_TEST_PLAN" \
-            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
-            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
