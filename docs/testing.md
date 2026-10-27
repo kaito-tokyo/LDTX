@@ -191,8 +191,9 @@ Its behavior definitions live in [`scenarios/`](scenarios/README.md): each
 `UCT-1000` through `UCT-1023` Feature has one test file and child suite, and
 each numbered Scenario has one test with the same ID in its display name.
 Shared setup and probes live in the test target's `Support` directory.
-`LDTXAppUITests` runs separately and uses the normal application delegate for
-launch and main-menu smoke tests.
+Tests that would launch the application solely to inspect menus or operating
+system dialogs are not included; directly constructed windows and views belong
+in `LDTXAppUIComponentTests`.
 The embedded XPC service process-boundary test remains in the isolated
 `LDTXAppXpcTests` scheme. The `LDTXModuleTests` scheme selects the `Easy`,
 `Medium`, or `Hard` tagged test plan within its shared hostless target;
@@ -240,8 +241,8 @@ Debug configuration, macOS 27, and the `LDTXTests` test plan. Leave signing to
 Xcode Cloud and keep the existing release Archive workflows unchanged.
 `ci_scripts/ci_post_clone.sh` generates the project before the test action.
 HardTests is a hostless unit-test bundle exercising the frameworks listed in
-`AGENTS.md`. It neither uses XCUI nor launches an application host.
-UI automation belongs only in `LDTXAppUITests`; only XpcTests may use `TEST_HOST`.
+`AGENTS.md`. It neither uses XCUI nor launches an application host. Only XpcTests
+may use `TEST_HOST`.
 The local command for the same test plan is:
 
 ```sh

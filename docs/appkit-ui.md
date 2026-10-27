@@ -300,7 +300,7 @@ Inspector selection starts at nil and is neither encoded nor restored; the forme
 versioned selection key is ignored. SwiftUI owns column layout; preview height is
 stored separately in application preferences.
 
-Run `LDTXAppUIComponentTests` for directly constructed component, document lifecycle, saving, window, sheet, observation, and meter tests. These share a serialized MainActor parent suite and one Document Controller in a hostless AppKit test process. `LDTXAppUITests` launches the normal application for launch and main-menu smoke tests. The embedded XPC process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen and run builds and tests outside the sandbox.
+Run `LDTXAppUIComponentTests` for directly constructed component, document lifecycle, saving, window, sheet, observation, and meter tests. These share a serialized MainActor parent suite and one Document Controller in a hostless AppKit test process. The suite can host SwiftUI views directly in `NSWindow` instances without launching the application or automating system menus and dialogs. The embedded XPC process-boundary test remains isolated in `LDTXAppXpcTests`. Generate project changes with XcodeGen and run builds and tests outside the sandbox.
 
 ## Source folders
 

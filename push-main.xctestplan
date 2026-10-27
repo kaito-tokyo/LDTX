@@ -51,13 +51,6 @@
         "identifier" : "LDTXCorelibsTests",
         "name" : "LDTXCorelibsTests"
       }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:LDTX.xcodeproj",
-        "identifier" : "15340823757700E8DC6965C3",
-        "name" : "LDTXAppUITests"
-      }
     }
   ],
   "version" : 1
