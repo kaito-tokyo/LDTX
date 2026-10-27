@@ -5,25 +5,41 @@
 #
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["protobuf==7.36.2", "Jinja2==3.1.6"]
+# dependencies = ["protobuf==7.36.2", "Jinja2==3.1.6", "grpcio-tools==1.85.0"]
 # ///
 
 import argparse
 import itertools
 import subprocess
+import tempfile
 from pathlib import Path
 from google.protobuf import descriptor_pb2 as pb
+from grpc_tools import protoc
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 ROOT = Path(__file__).resolve().parents[4]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--descriptor', required=True, type=Path)
+parser.add_argument('--descriptor', type=Path)
 parser.add_argument('--check', action='store_true')
 args = parser.parse_args()
 BASE = ROOT / 'Packages/LDTXCorelibs/Sources'
 OUT = BASE / 'LDTXMessages/Messages/generated'
 F = pb.FieldDescriptorProto
-descriptor_set = pb.FileDescriptorSet.FromString(args.descriptor.read_bytes())
+if args.descriptor:
+    descriptor_data = args.descriptor.read_bytes()
+else:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        descriptor_path = Path(temporary_directory) / 'schemas.pb'
+        proto_directory = ROOT / 'Protos'
+        status = protoc.main([
+            'protoc', f'-I{proto_directory}', '--include_imports',
+            '--include_source_info', f'--descriptor_set_out={descriptor_path}',
+            *(str(path) for path in sorted(proto_directory.glob('*.proto'))),
+        ])
+        if status:
+            parser.error(f'grpc_tools.protoc failed with exit status {status}')
+        descriptor_data = descriptor_path.read_bytes()
+descriptor_set = pb.FileDescriptorSet.FromString(descriptor_data)
 files = sorted(descriptor_set.file, key=lambda file: file.name)
 expected = {path.name for path in (ROOT / 'Protos').glob('*.proto')}
 if {file.name for file in files} != expected or len(files) != len(expected):

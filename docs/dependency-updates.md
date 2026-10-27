@@ -15,7 +15,7 @@ validate the affected build graphs before merging.
 The nanopb runtime is copied into `Packages/LDTXCorelibs/Sources/nanopb`; its
 upstream revision and license are recorded beside the sources. The C generator
 and its support files are copied under
-`.agents/skills/generate-nanopb-protos/nanopb`, with matching upstream sidecars.
+`.agents/skills/ldtx-protoc-gen/nanopb`, with matching upstream sidecars.
 `Packages/LDTXCorelibs/Package.swift` owns the runtime target
 and the adapter targets' C/Swift configuration macros.
 `project/corelibs.yml` references the Corelibs local package. `project.yml` owns AppAuth and
@@ -27,10 +27,11 @@ For an Xcode lock proposal, copy the proposed version to the corresponding
 Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
 update, refresh the runtime and generator copies from the same upstream commit
 and update both sidecars.
-The Python generator's protobuf runtime and Jinja2 are pinned in the PEP 723 inline metadata
-of `.agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py`. pipx with the pip backend manages
-its isolated environment;
-keep the pin compatible with the external protoc version used to prepare descriptors.
+The Swift generator's protobuf runtime, Jinja2, and grpcio-tools are pinned in the
+PEP 723 inline metadata of
+`.agents/skills/ldtx-protoc-gen/scripts/ldtx-protoc-gen-swift.py`.
+pipx with the pip backend manages its isolated environment. The C generator's
+protobuf and grpcio-tools versions are declared on its pipx command line.
 
 ```sh
 swift package --package-path Packages/LDTXCorelibs resolve
@@ -49,8 +50,8 @@ CI runs Linux Corelibs and the Xcode pr plan, including CLI and macOS
 protobuf-extra tests. After Xcode resolution, CI rejects changes to the tracked
 Xcode lock, including originHash; commit the resolver-produced lock before
 retrying CI. nanopb changes also require checking configuration macros, codec
-round trips, official C header regeneration, and `generate-nanopb-headers.py --check` against an external descriptor as described
-in the [generator skill](../.agents/skills/generate-nanopb-protos/SKILL.md).
+round trips, official C header regeneration, and `ldtx-protoc-gen-swift.py --check` as described
+in the [generator skill](../.agents/skills/ldtx-protoc-gen/SKILL.md).
 
 ## Python model tooling
 
