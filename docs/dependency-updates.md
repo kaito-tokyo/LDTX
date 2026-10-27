@@ -15,7 +15,7 @@ validate the affected build graphs before merging.
 The nanopb runtime is copied into `Packages/LDTXCorelibs/Sources/nanopb`; its
 upstream revision and license are recorded beside the sources. The C generator
 and its support files are copied under
-`.agents/generate-nanopb-protos/nanopb`, with matching upstream sidecars.
+`.agents/skills/generate-nanopb-protos/nanopb`, with matching upstream sidecars.
 `Packages/LDTXCorelibs/Package.swift` owns the runtime target
 and the adapter targets' C/Swift configuration macros.
 `project/corelibs.yml` references the Corelibs local package. `project.yml` owns AppAuth and
@@ -28,7 +28,7 @@ Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
 update, refresh the runtime and generator copies from the same upstream commit
 and update both sidecars.
 The Python generator's protobuf runtime and Jinja2 are pinned in the PEP 723 inline metadata
-of `.agents/generate-nanopb-protos/scripts/generate-nanopb-headers.py`. pipx with the pip backend manages
+of `.agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py`. pipx with the pip backend manages
 its isolated environment;
 keep the pin compatible with the external protoc version used to prepare descriptors.
 
@@ -50,7 +50,7 @@ protobuf-extra tests. After Xcode resolution, CI rejects changes to the tracked
 Xcode lock, including originHash; commit the resolver-produced lock before
 retrying CI. nanopb changes also require checking configuration macros, codec
 round trips, official C header regeneration, and `generate-nanopb-headers.py --check` against an external descriptor as described
-in the [generator guide](../.agents/skills/generate-nanopb-protos/references/generation.md).
+in the [generator skill](../.agents/skills/generate-nanopb-protos/SKILL.md).
 
 ## Python model tooling
 

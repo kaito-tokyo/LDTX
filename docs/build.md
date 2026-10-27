@@ -175,9 +175,9 @@ documented at `docs/protos/workspace.html`.
 mkdir -p /tmp/ldtx-proto-input
 protoc -I Protos --include_imports --include_source_info \
   --descriptor_set_out=/tmp/ldtx-proto-input/schemas.pb Protos/*.proto
-pipx run --backend pip --path .agents/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb
-pipx run --backend pip --path .agents/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
+pipx run --backend pip --path .agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py \
   --descriptor /tmp/ldtx-proto-input/schemas.pb --check
 ```
 
