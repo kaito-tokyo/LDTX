@@ -57,3 +57,5 @@ schemes:
         LDTXModuleTests: all
     test:
       config: Debug
+      targets:
+        - LDTXModuleTests
