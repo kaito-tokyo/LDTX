@@ -19,6 +19,35 @@ public struct CLIValidationError: Error, LocalizedError {
   public var errorDescription: String? { message }
 }
 
+enum ParsedArg: Equatable {
+  case opt(key: String, value: String?, combined: Bool)
+  case posArg(String)
+}
+
+func parseArgs(_ args: ArraySlice<String>) -> [ParsedArg] {
+  var parsedArgs: [ParsedArg] = []
+  var tail = args
+  while let arg = tail.popFirst() {
+    if arg == "--" {
+      parsedArgs.append(contentsOf: tail.map(ParsedArg.posArg))
+      return parsedArgs
+    } else if let match = arg.wholeMatch(of: /(--[^=]+)=(.*)/.dotMatchesNewlines()) {
+      parsedArgs.append(
+        .opt(
+          key: String(match.output.1), value: String(match.output.2), combined: true))
+    } else if arg.hasPrefix("--") {
+      if tail.first?.hasPrefix("--") == false {
+        parsedArgs.append(.opt(key: arg, value: tail.popFirst(), combined: false))
+      } else {
+        parsedArgs.append(.opt(key: arg, value: nil, combined: false))
+      }
+    } else {
+      parsedArgs.append(.posArg(arg))
+    }
+  }
+  return parsedArgs
+}
+
 private struct CLIArguments {
   var positionals: [String] = []
   var values: [String: String] = [:]
@@ -28,37 +57,34 @@ private struct CLIArguments {
     _ arguments: [String], valueOptions: Set<String> = [], flags: Set<String> = []
   ) throws -> CLIArguments {
     var result = CLIArguments()
-    let aliases = ["-o": "--output"]
-    var index = 0
-    while index < arguments.count {
-      let argument = arguments[index]
-      let parts = argument.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-      let rawOption = String(parts[0])
-      let option = aliases[rawOption] ?? rawOption
-      let inlineValue = parts.count == 2 ? String(parts[1]) : nil
-      if valueOptions.contains(option) {
-        let value: String
-        if let inlineValue {
-          value = inlineValue
-        } else {
-          index += 1
-          guard index < arguments.count else {
-            throw CLIValidationError("Missing value for \(rawOption).")
+    let normalizedArguments = arguments.map { $0 == "-o" ? "--output" : $0 }
+    for argument in parseArgs(normalizedArguments[...]) {
+      switch argument {
+      case .posArg(let value):
+        result.positionals.append(value)
+      case .opt(let key, let value, let combined):
+        if valueOptions.contains(key) {
+          guard let value else {
+            throw CLIValidationError("Missing value for \(key).")
           }
-          value = arguments[index]
+          guard result.values[key] == nil else {
+            throw CLIValidationError("\(key) may only be specified once.")
+          }
+          result.values[key] = value
+        } else if flags.contains(key) {
+          guard !combined else {
+            throw CLIValidationError("\(key) does not accept a value.")
+          }
+          guard result.flags.insert(key).inserted else {
+            throw CLIValidationError("\(key) may only be specified once.")
+          }
+          // parseArgs treats the next non-option token as an option value. For
+          // boolean flags, preserve that token as a positional argument.
+          if let value { result.positionals.append(value) }
+        } else {
+          throw CLIValidationError("Unknown option: \(key)")
         }
-        guard result.values[option] == nil else {
-          throw CLIValidationError("\(rawOption) may only be specified once.")
-        }
-        result.values[option] = value
-      } else if flags.contains(option), inlineValue == nil {
-        result.flags.insert(option)
-      } else if argument.hasPrefix("-") {
-        throw CLIValidationError("Unknown option: \(argument)")
-      } else {
-        result.positionals.append(argument)
       }
-      index += 1
     }
     return result
   }

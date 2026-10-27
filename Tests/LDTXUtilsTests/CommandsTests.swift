@@ -25,6 +25,24 @@ struct CommandsSystemTestSuite {
     }
   }
 
+  @Test("LUB-1039: tokenizes options, combined values, and positional arguments")
+  func tokenizesCommandLineArguments() {
+    #expect(
+      parseArgs(["--name=Studio", "--strict", "workspace.ldtxworkspace", "--", "--literal"][...])
+        == [
+          .opt(key: "--name", value: "Studio", combined: true),
+          .opt(key: "--strict", value: "workspace.ldtxworkspace", combined: false),
+          .posArg("--literal"),
+        ])
+  }
+
+  @Test("LUB-1039: accepts boolean flags before positional arguments")
+  func acceptsFlagsBeforePositionals() throws {
+    let command = try RecordCommand.Verify.parse(["--strict", "record.ldtxrecord"])
+    #expect(command.strict)
+    #expect(command.path == "record.ldtxrecord")
+  }
+
   @Test("LUB-1039: parses the Workspace command tree")
   func parsesWorkspaceCommands() throws {
     #expect(
