@@ -9,8 +9,6 @@ targets:
       - Sources/ldtx-cli
     dependencies:
       - target: LDTXUtils
-      - package: swift-argument-parser
-        product: ArgumentParser
     settings:
       base:
         PRODUCT_NAME: ldtx
@@ -31,8 +29,6 @@ targets:
       - target: LDTXWorkspaceAppletStore
       - package: Corelibs
         product: LDTXCorelibs
-      - package: swift-argument-parser
-        product: ArgumentParser
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

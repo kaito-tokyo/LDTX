@@ -2,9 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@preconcurrency import AppAuth
 import Foundation
 import Security
+
+struct YouTubeAuthorizationState: Codable, Equatable, Sendable {
+  var accessToken: String
+  var refreshToken: String?
+  var expirationDate: Date
+}
 
 public enum YouTubeAuthorizationStoreError: Error, Equatable, LocalizedError {
   case encodingFailed
@@ -40,7 +45,7 @@ public struct YouTubeAuthorizationStore {
     self.service = service
   }
 
-  func load(clientID: String) throws -> OIDAuthState? {
+  func load(clientID: String) throws -> YouTubeAuthorizationState? {
     #if !LDTX_DISTRIBUTION
       if let file {
         guard let data = try file.read().authorizations[clientID] else { return nil }
@@ -53,7 +58,7 @@ public struct YouTubeAuthorizationStore {
     return try decode(keychainData)
   }
 
-  func save(_ authState: OIDAuthState, clientID: String) throws {
+  func save(_ authState: YouTubeAuthorizationState, clientID: String) throws {
     let data = try encode(authState)
     #if !LDTX_DISTRIBUTION
       if let file {
@@ -74,27 +79,24 @@ public struct YouTubeAuthorizationStore {
     try deleteFromKeychain(clientID: clientID)
   }
 
-  private func encode(_ authState: OIDAuthState) throws -> Data {
+  private func encode(_ authState: YouTubeAuthorizationState) throws -> Data {
     do {
-      return try NSKeyedArchiver.archivedData(
-        withRootObject: authState, requiringSecureCoding: true)
+      return try JSONEncoder().encode(authState)
     } catch {
       throw YouTubeAuthorizationStoreError.encodingFailed
     }
   }
 
-  private func decode(_ data: Data) throws -> OIDAuthState {
+  private func decode(_ data: Data) throws -> YouTubeAuthorizationState? {
     do {
-      guard
-        let authState = try NSKeyedUnarchiver.unarchivedObject(
-          ofClass: OIDAuthState.self, from: data)
-      else {
-        throw YouTubeAuthorizationStoreError.decodingFailed
-      }
-      return authState
+      return try JSONDecoder().decode(YouTubeAuthorizationState.self, from: data)
     } catch let error as YouTubeAuthorizationStoreError {
       throw error
     } catch {
+      // AppAuth stored secure keyed archives. They cannot be resumed by the
+      // first-party token store, so report them as unauthenticated and allow
+      // the user to authorize again.
+      if data.starts(with: Data("bplist00".utf8)) { return nil }
       throw YouTubeAuthorizationStoreError.decodingFailed
     }
   }

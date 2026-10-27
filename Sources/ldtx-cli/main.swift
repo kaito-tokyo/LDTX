@@ -2,12 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import ArgumentParser
+import Darwin
+import Foundation
 import LDTXUtils
 
 @main
-struct LDTXCommand: AsyncParsableCommand {
-  static let configuration = LdtxCLI.configuration
-
-  mutating func run() async throws {}
+struct LDTXCommand {
+  static func main() async {
+    do {
+      try await LdtxCLI.run()
+    } catch {
+      FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+      exit(EXIT_FAILURE)
+    }
+  }
 }

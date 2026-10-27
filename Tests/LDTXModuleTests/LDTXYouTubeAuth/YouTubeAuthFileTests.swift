@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import AppAuth
 import Foundation
 @testable import LDTXYouTubeAuth
 import Testing
@@ -46,12 +45,15 @@ struct YouTubeAuthFileIntegrationTestSuite {
     let authorization = YouTubeAuthorizationStore(file: file)
     #expect(try oauth.load() == nil)
     try oauth.save(clientJSON)
-    let state = OIDAuthState(
-      authorizationResponse: nil, tokenResponse: nil, registrationResponse: nil)
+    let state = YouTubeAuthorizationState(
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      expirationDate: Date(timeIntervalSince1970: 1_800_000_000))
     try authorization.save(state, clientID: "local-test")
     let reopenedFile = YouTubeAuthFile(url: url)
     #expect(try OAuthClientConfigurationStore(file: reopenedFile).load()?.clientID == "local-test")
-    #expect(try YouTubeAuthorizationStore(file: reopenedFile).load(clientID: "local-test") != nil)
+    #expect(
+      try YouTubeAuthorizationStore(file: reopenedFile).load(clientID: "local-test") == state)
     try authorization.delete(clientID: "local-test")
     #expect(try oauth.load()?.clientID == "local-test")
     #expect(try authorization.load(clientID: "local-test") == nil)
@@ -59,6 +61,18 @@ struct YouTubeAuthFileIntegrationTestSuite {
     #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
     try oauth.delete()
     #expect(try oauth.load() == nil)
+  }
+
+  @Test("LUB-1018: Existing AppAuth archives require reauthorization")
+  func existingAppAuthArchiveRequiresReauthorization() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent(".YouTubeAuth")
+    try Data().write(to: url)
+    let file = YouTubeAuthFile(url: url)
+    try file.update { $0.authorizations["local-test"] = Data("bplist00old-appauth-state".utf8) }
+    #expect(try YouTubeAuthorizationStore(file: file).load(clientID: "local-test") == nil)
   }
 
   @Test("LUB-1018: Corrupt file does not fall back or get overwritten")

@@ -54,8 +54,6 @@ targets:
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletService
-      - package: swift-argument-parser
-        product: ArgumentParser
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXUtils
@@ -314,8 +312,6 @@ targets:
       - Sources/LDTXYouTubeAuth
     dependencies:
       - target: LDTXYouTube
-      - package: AppAuth-iOS
-        product: AppAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeAuth

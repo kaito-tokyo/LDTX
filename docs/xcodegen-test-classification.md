@@ -18,7 +18,7 @@ isolation tests remain in `LDTXAppXpcTests`.
 - Easy contains pure logic, including controlled fake-based interactions and
   serialization that do not execute platform APIs.
 - Medium contains macOS API tests, including filesystem, SQLite, Keychain,
-  AppAuth loopback, CoreGraphics, CoreAudio, AudioToolbox, CoreMedia, CoreVideo,
+  OAuth loopback, CoreGraphics, CoreAudio, AudioToolbox, CoreMedia, CoreVideo,
   CoreImage, and non-View SwiftUI value APIs. CoreImage image copying does not
   itself exercise Vision OCR.
 - Hard contains tests exercising Vision, VideoToolbox, CoreML, Metal, or

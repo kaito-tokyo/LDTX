@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import ArgumentParser
 import Foundation
 import LDTXCorelibs
 import LDTXRecording
@@ -10,21 +9,94 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletService
 import LDTXWorkspaceAppletStore
 
-public struct LdtxCLI: AsyncParsableCommand {
-  public init() {}
+public struct CLIValidationError: Error, LocalizedError {
+  private let message: String
 
-  public static let configuration = CommandConfiguration(
-    commandName: "ldtx",
-    abstract: "Inspect, verify, and remux LDTX recording packages.",
-    subcommands: [
-      RecordCommand.self, WorkspaceCommand.self,
-    ]
-  )
+  public init(_ message: String) {
+    self.message = message
+  }
 
-  public static let fileSubcommands: [any ParsableCommand.Type] = [
-    WorkspaceCommand.self,
-    RecordCommand.self,
-  ]
+  public var errorDescription: String? { message }
+}
+
+private struct CLIArguments {
+  var positionals: [String] = []
+  var values: [String: String] = [:]
+  var flags: Set<String> = []
+
+  static func parse(
+    _ arguments: [String], valueOptions: Set<String> = [], flags: Set<String> = []
+  ) throws -> CLIArguments {
+    var result = CLIArguments()
+    let aliases = ["-o": "--output"]
+    var index = 0
+    while index < arguments.count {
+      let argument = arguments[index]
+      let parts = argument.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+      let rawOption = String(parts[0])
+      let option = aliases[rawOption] ?? rawOption
+      let inlineValue = parts.count == 2 ? String(parts[1]) : nil
+      if valueOptions.contains(option) {
+        let value: String
+        if let inlineValue {
+          value = inlineValue
+        } else {
+          index += 1
+          guard index < arguments.count else {
+            throw CLIValidationError("Missing value for \(rawOption).")
+          }
+          value = arguments[index]
+        }
+        guard result.values[option] == nil else {
+          throw CLIValidationError("\(rawOption) may only be specified once.")
+        }
+        result.values[option] = value
+      } else if flags.contains(option), inlineValue == nil {
+        result.flags.insert(option)
+      } else if argument.hasPrefix("-") {
+        throw CLIValidationError("Unknown option: \(argument)")
+      } else {
+        result.positionals.append(argument)
+      }
+      index += 1
+    }
+    return result
+  }
+}
+
+public enum LdtxCLI {
+  public static func parseAsRoot(_ arguments: [String]) throws -> Any {
+    guard let command = arguments.first else {
+      throw CLIValidationError("Expected 'workspace' or 'record'.")
+    }
+    switch command {
+    case "workspace":
+      return try WorkspaceCommand.parse(Array(arguments.dropFirst()))
+    case "record":
+      return try RecordCommand.parse(Array(arguments.dropFirst()))
+    default:
+      throw CLIValidationError("Unknown command: \(command)")
+    }
+  }
+
+  public static func run(arguments: [String] = Array(CommandLine.arguments.dropFirst()))
+    async throws
+  {
+    if arguments.isEmpty || arguments.contains("--help") || arguments.contains("-h") {
+      print("Usage: ldtx <workspace create|dump|validate|record inspect|verify|remux> …")
+      return
+    }
+    let command = try parseAsRoot(arguments)
+    switch command {
+    case let command as WorkspaceCommand.Create: try await command.run()
+    case let command as WorkspaceCommand.Dump: try command.run()
+    case let command as WorkspaceCommand.Validate: try command.run()
+    case let command as RecordCommand.Inspect: try await command.run()
+    case let command as RecordCommand.Verify: try await command.run()
+    case let command as RecordCommand.Remux: try await command.run()
+    default: throw CLIValidationError("Unsupported command.")
+    }
+  }
 
   public static func inspect(_ path: String) throws {
     let package = try RecordingPackage(contentsOf: URL(fileURLWithPath: path).standardizedFileURL)
@@ -72,34 +144,49 @@ public struct LdtxCLI: AsyncParsableCommand {
   }
 }
 
-public struct WorkspaceCommand: ParsableCommand {
-  public static let configuration = CommandConfiguration(
-    commandName: "workspace",
-    abstract: "Create, inspect, and validate protobuf-only Workspace v4 packages.",
-    subcommands: [Create.self, Dump.self, Validate.self]
-  )
+public enum WorkspaceCommand {
+  static func parse(_ arguments: [String]) throws -> Any {
+    guard let command = arguments.first else {
+      throw CLIValidationError("Expected 'create', 'dump', or 'validate'.")
+    }
+    let tail = Array(arguments.dropFirst())
+    switch command {
+    case "create": return try Create.parse(tail)
+    case "dump": return try Dump.parse(tail)
+    case "validate": return try Validate.parse(tail)
+    default: throw CLIValidationError("Unknown Workspace command: \(command)")
+    }
+  }
 
-  public init() {}
+  struct Create {
+    let package: String
+    let name: String?
+    let json: String?
+    let preferencesJSON: String?
 
-  struct Create: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-      abstract: "Create a new Workspace v4 package, optionally from Swift Codable JSON.")
-    @Argument(help: "Path for a new .ldtxworkspace package.") var package: String
-    @Option(help: "Workspace display name.") var name: String?
-    @Option(help: "WorkspaceDefinitionV4 Swift Codable JSON to import.") var json: String?
-    @Option(help: "WorkspacePreferencesV4 Swift Codable JSON to import with --json.")
-    var preferencesJSON: String?
+    static func parse(_ arguments: [String]) throws -> Create {
+      let parsed = try CLIArguments.parse(
+        arguments, valueOptions: ["--name", "--json", "--preferences-json"])
+      guard parsed.positionals.count == 1, let package = parsed.positionals.first else {
+        throw CLIValidationError("workspace create requires one package path.")
+      }
+      return Create(
+        package: package,
+        name: parsed.values["--name"],
+        json: parsed.values["--json"],
+        preferencesJSON: parsed.values["--preferences-json"])
+    }
 
-    mutating func run() async throws {
+    func run() async throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
       guard preferencesJSON == nil || json != nil else {
-        throw ValidationError("--preferences-json requires --json")
+        throw CLIValidationError("--preferences-json requires --json")
       }
       let command = self
       try coordinateWorkspace(at: url, writing: true) { url in
         let createdPackageDirectory = !FileManager.default.fileExists(atPath: url.path)
         guard createdPackageDirectory else {
-          throw ValidationError("Workspace already exists: \(url.path)")
+          throw CLIValidationError("Workspace already exists: \(url.path)")
         }
         do {
           var workspace: WorkspaceV4Bundle
@@ -127,7 +214,7 @@ public struct WorkspaceCommand: ParsableCommand {
           try WorkspaceBundleValidatorV4.validate(workspace)
           try workspace.definition.validateRichTextDocuments()
           guard var writer = WorkspaceBundleWriterV4(at: url) else {
-            throw ValidationError("Could not initialize Workspace writer: \(url.path)")
+            throw CLIValidationError("Could not initialize Workspace writer: \(url.path)")
           }
           let definitionExternalID = writer.makeExternalID()
           try writer.write(definition: workspace.definition, externalID: definitionExternalID)
@@ -150,13 +237,19 @@ public struct WorkspaceCommand: ParsableCommand {
     }
   }
 
-  struct Dump: ParsableCommand {
-    static let configuration = CommandConfiguration(
-      abstract: "Print a read-only debug dump of stored Program layers.")
-    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
-    @Option(help: "Limit output to one Program name.") var program: String?
+  struct Dump {
+    let package: String
+    let program: String?
 
-    mutating func run() throws {
+    static func parse(_ arguments: [String]) throws -> Dump {
+      let parsed = try CLIArguments.parse(arguments, valueOptions: ["--program"])
+      guard parsed.positionals.count == 1, let package = parsed.positionals.first else {
+        throw CLIValidationError("workspace dump requires one package path.")
+      }
+      return Dump(package: package, program: parsed.values["--program"])
+    }
+
+    func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
       let selectedProgram = program
       try coordinateWorkspace(at: url, writing: false) { url in
@@ -169,12 +262,18 @@ public struct WorkspaceCommand: ParsableCommand {
     }
   }
 
-  struct Validate: ParsableCommand {
-    static let configuration = CommandConfiguration(
-      abstract: "Validate protobuf-only v4 files, references, and profiles.")
-    @Argument(help: "Path to an .ldtxworkspace package.") var package: String
+  struct Validate {
+    let package: String
 
-    mutating func run() throws {
+    static func parse(_ arguments: [String]) throws -> Validate {
+      let parsed = try CLIArguments.parse(arguments)
+      guard parsed.positionals.count == 1, let package = parsed.positionals.first else {
+        throw CLIValidationError("workspace validate requires one package path.")
+      }
+      return Validate(package: package)
+    }
+
+    func run() throws {
       let url = URL(fileURLWithPath: package).standardizedFileURL
       try coordinateWorkspace(at: url, writing: false) { url in
         let reader: WorkspaceBundleReaderV4
@@ -182,7 +281,7 @@ public struct WorkspaceCommand: ParsableCommand {
         case .v4(let v4Reader):
           reader = v4Reader
         case .failure:
-          throw ValidationError("Unsupported Workspace format")
+          throw CLIValidationError("Unsupported Workspace format")
         }
         let workspace = try reader.read()
         try WorkspaceBundleValidatorV4.validate(workspace)
@@ -217,14 +316,14 @@ public func workspaceV4DebugDump(
   case .v4(let reader):
     v4Reader = reader
   case .failure:
-    throw ValidationError("Unsupported Workspace format")
+    throw CLIValidationError("Unsupported Workspace format")
   }
   let workspace = try v4Reader.read()
   let programs = workspace.definition.programs.filter {
     programName == nil || $0.displayName == programName
   }
   guard programName == nil || !programs.isEmpty else {
-    throw ValidationError("Program not found: \(programName ?? "")")
+    throw CLIValidationError("Program not found: \(programName ?? "")")
   }
   return WorkspaceV4DebugDump(
     format: WorkspaceV4DebugDump.format,
@@ -233,7 +332,7 @@ public func workspaceV4DebugDump(
     displayName: workspace.definition.displayName ?? "",
     programs: try programs.map {
       guard let id = $0.internalID, let name = $0.displayName else {
-        throw ValidationError("Program is missing its identifier or display name")
+        throw CLIValidationError("Program is missing its identifier or display name")
       }
       return WorkspaceV4DebugDump.Program(
         internalID: id, displayName: name,
@@ -244,7 +343,7 @@ public func workspaceV4DebugDump(
     })
 }
 
-public enum RecordingCanvasArgument: String, ExpressibleByArgument {
+public enum RecordingCanvasArgument: String {
   case landscape
   case portrait
 
@@ -253,34 +352,78 @@ public enum RecordingCanvasArgument: String, ExpressibleByArgument {
   }
 }
 
-public struct RecordCommand: AsyncParsableCommand {
-  public static let configuration = CommandConfiguration(
-    commandName: "record",
-    abstract: "Inspect, verify, and remux .ldtxrecord packages.",
-    subcommands: [Inspect.self, Verify.self, Remux.self]
-  )
-
-  public init() {}
-
-  struct Inspect: AsyncParsableCommand {
-    @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    mutating func run() async throws { try LdtxCLI.inspect(path) }
+public enum RecordCommand {
+  static func parse(_ arguments: [String]) throws -> Any {
+    guard let command = arguments.first else {
+      throw CLIValidationError("Expected 'inspect', 'verify', or 'remux'.")
+    }
+    let tail = Array(arguments.dropFirst())
+    switch command {
+    case "inspect": return try Inspect.parse(tail)
+    case "verify": return try Verify.parse(tail)
+    case "remux": return try Remux.parse(tail)
+    default: throw CLIValidationError("Unknown record command: \(command)")
+    }
   }
 
-  struct Verify: AsyncParsableCommand {
-    @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    @Flag(help: "Reject an unfinalized package instead of attempting recovery.") var strict = false
-    mutating func run() async throws { try await LdtxCLI.verify(path, strict: strict) }
+  struct Inspect {
+    let path: String
+    static func parse(_ arguments: [String]) throws -> Inspect {
+      let parsed = try CLIArguments.parse(arguments)
+      guard parsed.positionals.count == 1, let path = parsed.positionals.first else {
+        throw CLIValidationError("record inspect requires one package path.")
+      }
+      return Inspect(path: path)
+    }
+    func run() async throws { try LdtxCLI.inspect(path) }
   }
 
-  struct Remux: AsyncParsableCommand {
-    @Argument(help: "Path to an .ldtxrecord package.") var path: String
-    @Option(name: [.short, .long], help: "Output MP4 path.") var output: String?
-    @Flag(help: "Replace an existing output file.") var replace = false
-    @Flag(help: "Reject an unfinalized package instead of attempting recovery.") var strict = false
-    @Option(help: "Canvas to remux when a v3 recording contains both outputs.")
-    var canvas: RecordingCanvasArgument?
-    mutating func run() async throws {
+  struct Verify {
+    let path: String
+    let strict: Bool
+    static func parse(_ arguments: [String]) throws -> Verify {
+      let parsed = try CLIArguments.parse(arguments, flags: ["--strict"])
+      guard parsed.positionals.count == 1, let path = parsed.positionals.first else {
+        throw CLIValidationError("record verify requires one package path.")
+      }
+      return Verify(path: path, strict: parsed.flags.contains("--strict"))
+    }
+    func run() async throws { try await LdtxCLI.verify(path, strict: strict) }
+  }
+
+  struct Remux {
+    let path: String
+    let output: String?
+    let replace: Bool
+    let strict: Bool
+    let canvas: RecordingCanvasArgument?
+
+    static func parse(_ arguments: [String]) throws -> Remux {
+      let parsed = try CLIArguments.parse(
+        arguments,
+        valueOptions: ["-o", "--output", "--canvas"],
+        flags: ["--replace", "--strict"])
+      guard parsed.positionals.count == 1, let path = parsed.positionals.first else {
+        throw CLIValidationError("record remux requires one package path.")
+      }
+      let canvas: RecordingCanvasArgument?
+      if let rawValue = parsed.values["--canvas"] {
+        guard let parsedCanvas = RecordingCanvasArgument(rawValue: rawValue) else {
+          throw CLIValidationError("--canvas must be 'landscape' or 'portrait'.")
+        }
+        canvas = parsedCanvas
+      } else {
+        canvas = nil
+      }
+      return Remux(
+        path: path,
+        output: parsed.values["--output"],
+        replace: parsed.flags.contains("--replace"),
+        strict: parsed.flags.contains("--strict"),
+        canvas: canvas)
+    }
+
+    func run() async throws {
       try await LdtxCLI.remux(
         path, output: output, replace: replace, strict: strict, canvas: canvas?.value)
     }

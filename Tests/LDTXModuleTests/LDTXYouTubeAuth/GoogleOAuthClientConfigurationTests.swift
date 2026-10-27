@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@preconcurrency import AppAuth
 import Foundation
 @testable import LDTXYouTubeAuth
 import Testing
@@ -32,7 +31,8 @@ struct GoogleOAuthClientConfigurationUnitTestSuite {
 
   @Test("LUB-1018: Uses exact i pv4 loopback listener URL as redirect uri")
   func usesExactIPv4LoopbackListenerURLAsRedirectURI() throws {
-    let listenerURL = try #require(URL(string: "http://127.0.0.1:49152/"))
+    let listenerURL = try #require(
+      URL(string: "http://127.0.0.1:49152/oauth2callback"))
 
     let callbackURL = try LoopbackOAuthRedirect.validate(listenerURL: listenerURL)
 
@@ -42,9 +42,9 @@ struct GoogleOAuthClientConfigurationUnitTestSuite {
   @Test("LUB-1018: Rejects non i pv4 loopback listener") func rejectsNonIPv4LoopbackListener()
     throws
   {
-    let listenerURL = try #require(URL(string: "http://[::1]:49152/"))
+    let listenerURL = try #require(URL(string: "http://[::1]:49152/oauth2callback"))
 
-    #expect(throws: AppAuthAuthorizationPresenterError.self) {
+    #expect(throws: LoopbackOAuthAuthorizationError.self) {
       try LoopbackOAuthRedirect.validate(listenerURL: listenerURL)
     }
   }

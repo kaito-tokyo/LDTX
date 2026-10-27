@@ -41,10 +41,6 @@ targets:
       - target: LDTXYouTubeAuth
       - target: LDTXYouTubeOutputProtocol
       - target: LDTXYouTubeRTMPS
-      - package: AppAuth-iOS
-        product: AppAuth
-      - package: swift-argument-parser
-        product: ArgumentParser
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

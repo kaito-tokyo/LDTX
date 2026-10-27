@@ -6,8 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Dependency updates
 
-Dependabot proposes weekly updates for GitHub Actions and the app's AppAuth and
-ArgumentParser dependencies. Review each proposal and
+Dependabot proposes weekly updates for GitHub Actions. Review each proposal and
 validate the affected build graphs before merging.
 
 ## Swift and XcodeGen
@@ -18,9 +17,8 @@ and its support files are copied under
 `.agents/skills/ldtx-protoc-gen/nanopb`, with matching upstream sidecars.
 `Packages/LDTXCorelibs/Package.swift` owns the runtime target
 and the adapter targets' C/Swift configuration macros.
-`project/corelibs.yml` references the Corelibs local package. `project.yml` owns AppAuth and
-ArgumentParser declarations. There is no root Package.swift. The
-`/LDTX.xcodeproj` scope proposes AppAuth and ArgumentParser lock updates.
+`project/corelibs.yml` references the Corelibs local package. There is no root
+Package.swift. The app no longer has remote Swift package dependencies.
 
 For an Xcode lock proposal, copy the proposed version to the corresponding
 `exactVersion` in project.yml before regenerating or resolving the project.
@@ -57,8 +55,8 @@ in the [generator skill](../.agents/skills/ldtx-protoc-gen/SKILL.md).
 
 Model generation is maintained manually under `Tools/MediaPipeLandscapeCoreML/`.
 This deliberately supersedes the Python model-tooling Dependabot coverage added
-by PR #389; there is no `pip` update scope. Swift, AppAuth and GitHub Actions
-coverage remains enabled. This does not change repository security-alert settings.
+by PR #389; there is no `pip` update scope. GitHub Actions coverage remains
+enabled. This does not change repository security-alert settings.
 The unmerged model-tooling proposal PR #390 is superseded by this policy; it is
 not closed or modified by this reorganization.
 

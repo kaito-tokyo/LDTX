@@ -146,7 +146,7 @@ remain SwiftPM dependencies.
 | LDTXWorkspaceAppletController | SwiftUI Workspace document connections and runtime lifecycle.         |
 | LDTXWorkspaceAppletUI       | Observable Workspace document, SwiftUI interface, Metal bridges, and local app data. |
 | LDTXYouTube                | YouTube Live API models and client.                                |
-| LDTXYouTubeAuth            | Google OAuth and AppAuth-backed YouTube authorization.             |
+| LDTXYouTubeAuth            | Google OAuth authorization and token refresh for YouTube.          |
 | LDTXYouTubeOutputProtocol  | Binary PropertyList messages and sequencing utilities for YouTube output IPC. |
 | LDTXYouTubeRTMPS           | YouTube-specific secure RTMP publishing and dual-output coordination. |
 
