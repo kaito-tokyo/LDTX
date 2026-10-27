@@ -122,8 +122,8 @@ construct their own windows and hosted SwiftUI views.
 
 The complete macOS test suite includes `WorkspaceClockOCRIntegrationTestSuite`
 and `ManualOCRRecognitionIntegrationTestSuite`. If Vision fails to compile an
-OCR request on the Neural Engine, `VisionOCRService` retries using CPU compute
-devices supported by the request. Keep the real recognition suites tagged
+OCR request on the Neural Engine, `VisionOCRService` retries using supported CPU
+compute devices and then legacy Vision revision 2 on CPU. Keep the real recognition suites tagged
 `.hard` to describe their framework requirements.
 
 Run the manual OCR recognition test locally:

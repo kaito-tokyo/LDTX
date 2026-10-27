@@ -9,8 +9,8 @@ Feature: Recognize text and classify images
   Scenario: Recognize text using configured languages
     Environment constraint: Vision may fail to compile an OCR request on the
     hosted arm64 runner's Neural Engine (E5RT error 11). On failure, the OCR
-    service retries once using CPU compute devices supported by that request.
-    This scenario still requires successful real text recognition.
+    service retries with supported CPU compute devices, then with legacy Vision
+    revision 2 on CPU. This scenario still requires real text recognition.
 
     Given a known text image and an OCR configuration on a supported backend
     When text recognition completes
