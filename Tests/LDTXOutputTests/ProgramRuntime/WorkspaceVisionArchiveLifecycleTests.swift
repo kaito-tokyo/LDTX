@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
+@preconcurrency import AVFoundation
 import AudioToolbox
 import CoreImage
 import CoreMedia
@@ -10,12 +11,921 @@ import LDTXCorelibs
 import LDTXMP4
 @testable import LDTXProgramRuntime
 @testable import LDTXWorkspaceAppletService
+import Observation
 import Synchronization
 import Testing
 
 extension OutputTestSuite {
   @MainActor
   @Suite struct WorkspaceVisionArchiveLifecycleIntegrationTestSuite {
+    @Test(.timeLimit(.minutes(1)))
+    func manualSceneDetectorDoesNotArchiveAcrossCut() async throws {
+      var vision = Ldtx_Workspace_V4_LdtxSceneDetectorVision()
+      vision.internalID = 42
+      var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+      wrapper.vision = .ldtxSceneDetectorVision(vision)
+      var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+      definition.visions = [wrapper]
+      let fixture = try Fixture(definition: definition)
+      defer { fixture.cleanup() }
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        try SessionRecordService(
+          baseDirectory: fixture.root, recordID: "manual-scene-cut-replacement",
+          writerConfiguration: SegmentedMP4WriterConfiguration(
+            width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+          audioTracks: [],
+          failureHandler: { Issue.record("Unexpected replacement error: \($0)") })
+      }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service, landscapeHub: landscape, portraitHub: portrait,
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      landscape.publishMainAudioMix(try frameAudio())
+      landscape.publishMainVideo(try videoSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+
+      var resumeFrame: CheckedContinuation<Void, Never>?
+      var frameRequestStarted = false
+      let classification = Task {
+        try await fixture.runtime.classify(
+          vision: vision,
+          frameForSceneDetector: {
+            frameRequestStarted = true
+            await withCheckedContinuation { resumeFrame = $0 }
+            return .init(
+              image: CIImage(color: .white).cropped(
+                to: CGRect(x: 0, y: 0, width: 16, height: 16)))
+          },
+          classifyResult: { _ in
+            .init(candidates: [.init(label: "scene", confidence: 1)])
+          })
+      }
+      while !frameRequestStarted { await Task.yield() }
+
+      let previousPackage = fixture.service.packageDirectory
+      let cut = Task { await fixture.session.cutWithResult() }
+      while !fixture.session.isCutPending { await Task.yield() }
+      for frame in 1...5 {
+        landscape.publishMainAudioMix(try retime(frameAudio(), frame: Int64(frame)))
+        landscape.publishMainVideo(try retime(videoSample(), frame: Int64(frame)))
+        await Task.yield()
+      }
+      let cutResult = await cut.value
+      try cutResult.get()
+      let replacementPackage = try #require(fixture.session.latestRecordingBundleURL)
+      #expect(replacementPackage != previousPackage)
+
+      resumeFrame?.resume()
+      #expect(try await classification.value == "scene: 100.0%")
+      await fixture.drainArchives()
+      #expect(
+        !FileManager.default.fileExists(
+          atPath: previousPackage.appendingPathComponent("Visions").path))
+      #expect(
+        !FileManager.default.fileExists(
+          atPath: replacementPackage.appendingPathComponent("Visions").path))
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func cutsReplaceOnlyRecordingAndFinalizeOldPackage(failReplacement: Bool, dualCanvas: Bool)
+      async throws
+    {
+      let fixture = try Fixture(recordsPortrait: dualCanvas)
+      defer { fixture.cleanup() }
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      let streamCount = Mutex(0)
+      let stream = landscape.subscribe(
+        mainVideo: { _ in streamCount.withLock { $0 += 1 } },
+        mainAudioMix: { _ in })
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        if failReplacement { throw NSError(domain: "replacement-fixture", code: 17) }
+        return try SessionRecordService(
+          baseDirectory: fixture.root, recordID: "replacement",
+          writerConfiguration: SegmentedMP4WriterConfiguration(
+            width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+          audioTracks: [], recordsPortrait: dualCanvas,
+          failureHandler: { Issue.record("Unexpected replacement error: \($0)") })
+      }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service,
+        landscapeHub: landscape, portraitHub: portrait,
+        recordsLandscape: true, recordsPortrait: dualCanvas)
+      fixture.session.state = .recording
+      if dualCanvas {
+        portrait.publishMainAudioMix(try frameAudio())
+        portrait.publishMainVideo(try videoSample())
+      }
+      landscape.publishMainAudioMix(try frameAudio())
+      landscape.publishMainVideo(try videoSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+      var releaseOCR: CheckedContinuation<Void, Never>?
+      var recognized: String?
+      var variableResult: String?
+      var vision = Ldtx_Workspace_V4_OcrVision()
+      vision.internalID = 41
+      var context = fixture.runtime.visionFeatureContext
+      context.vision = { $0 == 41 ? vision : nil }
+      context.frameForVision = { _ in
+        .init(image: CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 16, height: 16)))
+      }
+      context.reportResult = { _, value in recognized = value }
+      context.reportVariables = { _, values in variableResult = values[.text] }
+      let feature = WorkspaceV4VisionFeature(
+        scheduler: WorkspaceVisionScheduler(now: { 0 }, random: { _ in 0 }, automaticTimer: false),
+        recognizeText: { _, _ in
+          await withCheckedContinuation { releaseOCR = $0 }
+          return "in-flight cut result"
+        })
+      var wrapper = Ldtx_Workspace_V4_VisionWrapper()
+      wrapper.vision = .ocrVision(vision)
+      feature.synchronize(visions: [wrapper], context: context)
+      feature.runOCR(visionInternalID: 41)
+      while releaseOCR == nil { await Task.yield() }
+      let cut = Task { await fixture.session.cutWithResult() }
+      while !fixture.session.isCutPending { await Task.yield() }
+      #expect(fixture.runtime.visionArchivePackageURL == nil)
+      // A second request cannot establish another replacement while the first waits.
+      if case .success = await fixture.session.cutWithResult() {
+        Issue.record("Repeated cut must be rejected")
+      }
+      for frame in 1...5 {
+        if dualCanvas {
+          portrait.publishMainAudioMix(try retime(frameAudio(), frame: Int64(frame)))
+          portrait.publishMainVideo(try retime(videoSample(), frame: Int64(frame)))
+        }
+        landscape.publishMainAudioMix(try retime(frameAudio(), frame: Int64(frame)))
+        landscape.publishMainVideo(try retime(videoSample(), frame: Int64(frame)))
+        await Task.yield()
+      }
+      let result = await cut.value
+      if failReplacement {
+        if case .failure(let error) = result {
+          #expect(error.code == 17)
+        } else {
+          Issue.record("Replacement preparation should fail")
+        }
+        #expect(!fixture.isFinalized)
+        #expect(fixture.runtime.visionArchivePackageURL == fixture.package)
+      } else {
+        try result.get()
+        #expect(fixture.isFinalized)
+        #expect(
+          fixture.runtime.visionArchivePackageURL?.lastPathComponent == "replacement.ldtxrecord")
+      }
+      #expect(fixture.session.state == .recording)
+      releaseOCR?.resume()
+      while !feature.canRunOCR(visionInternalID: 41) { await Task.yield() }
+      #expect(recognized == "in-flight cut result")
+      #expect(variableResult == "in-flight cut result")
+      await feature.stop()
+      landscape.publishMainAudioMix(try retime(frameAudio(), frame: 6))
+      landscape.publishMainVideo(try retime(videoSample(), frame: 6))
+      if dualCanvas {
+        portrait.publishMainAudioMix(try retime(frameAudio(), frame: 6))
+        portrait.publishMainVideo(try retime(videoSample(), frame: 6))
+      }
+      try (await fixture.session.stopWithResult()).get()
+      _ = await landscape.unsubscribeAndDrain(stream)
+      #expect(streamCount.withLock { $0 } == 7)
+      #expect(fixture.isFinalized)
+      #expect(fixture.hasArchives == failReplacement)
+      if !failReplacement {
+        #expect(
+          !FileManager.default.fileExists(
+            atPath: fixture.root
+              .appendingPathComponent("replacement.ldtxrecord/Visions").path))
+      }
+      let packages =
+        failReplacement
+        ? [fixture.package]
+        : [fixture.package, fixture.root.appendingPathComponent("replacement.ldtxrecord")]
+      for package in packages {
+        let landscapeTiming = try await mediaTiming(
+          package.appendingPathComponent("landscape.fragmented.mp4"))
+        #expect(CMTimeCompare(landscapeTiming.start, .zero) == 0)
+        // AAC padding can differ from the video endpoint by one packet.
+        #expect(
+          abs(CMTimeSubtract(landscapeTiming.videoDuration, landscapeTiming.audioDuration).seconds)
+            <= 1024.0 / 48000 + 0.001)
+        if dualCanvas {
+          let portraitTiming = try await mediaTiming(
+            package.appendingPathComponent("portrait.fragmented.mp4"))
+          #expect(CMTimeCompare(landscapeTiming.start, portraitTiming.start) == 0)
+          #expect(CMTimeCompare(landscapeTiming.videoDuration, portraitTiming.videoDuration) == 0)
+          #expect(CMTimeCompare(landscapeTiming.audioDuration, portraitTiming.audioDuration) == 0)
+        }
+      }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
+    func stopRollsBackWaitingCutAndDrainsIt(finishing: Finish) async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      let hub = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        Issue.record("Stop must not prepare a replacement")
+        return fixture.service
+      }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service,
+        landscapeHub: hub, portraitHub: ProgramOutputMediaHub(),
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      hub.publishMainAudioMix(try audioSample())
+      hub.publishMainVideo(try videoSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+      let cut = Task { await fixture.session.cutWithResult() }
+      while !fixture.session.isCutPending { await Task.yield() }
+      try
+        (await
+        (finishing == .stop
+        ? fixture.session.stopWithResult()
+        : fixture.session.pauseWithResult())).get()
+      try (await cut.value).get()
+      if finishing == .pauseThenStop { try (await fixture.session.stopWithResult()).get() }
+      #expect(fixture.session.state == (finishing == .pause ? .paused : .idle))
+      #expect(fixture.isFinalized)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cutTimeoutReleasesCrossCanvasBarrierAndLeavesRecordingActive() async throws {
+      let fixture = try Fixture(recordsPortrait: true, cutBoundaryTimeout: .milliseconds(50))
+      defer { fixture.cleanup() }
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        Issue.record("A blocked boundary must not prepare a replacement")
+        return fixture.service
+      }
+      let subscriptions = fixture.session.installRecordingSubscriptions(
+        service: fixture.service,
+        landscapeHub: landscape, portraitHub: portrait, recordsLandscape: true,
+        recordsPortrait: true)
+      fixture.session.state = .recording
+      for hub in [landscape, portrait] {
+        hub.publishMainAudioMix(try frameAudio())
+        hub.publishMainVideo(try videoSample())
+      }
+      while !fixture.session.canCutRecording { await Task.yield() }
+      let release = DispatchSemaphore(value: 0)
+      defer { release.signal() }
+      try #require(portrait.enqueueControl(subscriptions[1]) { release.wait() })
+      if case .success = await fixture.session.cutWithResult() {
+        Issue.record("A blocked cross-canvas boundary must time out")
+      }
+      // This control is behind Landscape's barrier. It can only complete when
+      // timeout has released that barrier, even while Portrait is still blocked.
+      await withCheckedContinuation { continuation in
+        let accepted = landscape.enqueueControl(subscriptions[0]) { continuation.resume() }
+        if !accepted { continuation.resume() }
+      }
+      #expect(fixture.session.state == .recording)
+      #expect(fixture.session.canCutRecording)
+      release.signal()
+      try (await fixture.session.stopWithResult()).get()
+      #expect(fixture.isFinalized)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func activeAppendCannotHoldTimedOutOrCancelledCutCommand(cancel: Bool) async throws {
+      let fixture = try Fixture(cutBoundaryTimeout: .milliseconds(30))
+      defer { fixture.cleanup() }
+      let previous = BoundaryRecorder()
+      let gate = DispatchSemaphore(value: 0)
+      previous.appendGate = gate
+      defer { gate.signal() }
+      fixture.session.prepareRecordingMedia(previous) {
+        Issue.record("A stalled active writer must not create a replacement")
+        return fixture.service
+      }
+      fixture.session.adoptStartedRecordingService(previous)
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      fixture.session.installRecordingSubscriptions(
+        service: previous, landscapeHub: landscape, portraitHub: portrait,
+        recordsLandscape: true, recordsPortrait: true)
+      fixture.session.state = .recording
+      landscape.publishMainAudioMix(try frameAudio())
+      portrait.publishMainAudioMix(try frameAudio())
+      while !fixture.session.canCutRecording { await Task.yield() }
+      let streamed = Mutex(0)
+      let stream = landscape.subscribe(
+        mainVideo: { _ in streamed.withLock { $0 += 1 } }, mainAudioMix: { _ in })
+      landscape.publishMainVideo(try videoSample())
+      while !previous.appendEntered.withLock({ $0 }) { await Task.yield() }
+      let commands = WorkspaceCommandQueue(label: "blocked-cut-fixture", reportFailure: { _, _ in })
+      let cut = Task {
+        await commands.submit(.cutRecording) {
+          try (await fixture.session.cutWithResult()).get()
+        }
+      }
+      while !fixture.session.isCutPending { await Task.yield() }
+      if cancel { fixture.session.cancelPendingCut() }
+      let outcome = await cut.value
+      if cancel {
+        guard case .succeeded = outcome else {
+          Issue.record("Cancelled Cut must complete without waiting for the active writer")
+          return
+        }
+      } else {
+        guard case .failed = outcome else {
+          Issue.record("Boundary deadline must report a bounded command failure")
+          return
+        }
+      }
+      #expect(!fixture.session.isCutPending)
+      #expect(!fixture.session.canCutRecording)
+      #expect(fixture.runtime.visionArchivePackageURL == previous.packageDirectory)
+      // The failed queue's normal explicit recovery can run before the native
+      // append returns; no consistency repair waits on the recording executor.
+      await commands.resumeForNewRequests()
+      var followingCommandRan = false
+      _ = await commands.submit(.switchProgram) { followingCommandRan = true }
+      #expect(followingCommandRan)
+      landscape.publishMainVideo(try retime(videoSample(), frame: 1))
+      while streamed.withLock({ $0 }) < 2 { await Task.yield() }
+      #expect(previous.abandonCount.withLock { $0 } == 0)
+      gate.signal()
+      while !fixture.session.canCutRecording { await Task.yield() }
+      try (await fixture.session.stopWithResult()).get()
+      #expect(previous.events.withLock { $0 }.contains("landscapeVideo:0"))
+      _ = await landscape.unsubscribeAndDrain(stream)
+      await withCheckedContinuation { continuation in
+        fixture.service.cancelBeforeFirstVideo { _ in continuation.resume() }
+      }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func cutFinalizationDeadlineIncludesArchiveAndSealWaits(blockSeal: Bool) async throws {
+      let fixture = try Fixture(cutFinalizationTimeout: .milliseconds(20))
+      defer { fixture.cleanup() }
+      let previous = BoundaryRecorder()
+      let gate = DispatchSemaphore(value: 0)
+      defer { gate.signal() }
+      if blockSeal { previous.sealGate = gate }
+      let result = await fixture.session.finishPreviousRecordingAfterCut(previous) {
+        if !blockSeal {
+          await withCheckedContinuation { continuation in
+            fixture.queue.async {
+              gate.wait()
+              continuation.resume()
+            }
+          }
+        }
+      }
+      guard case .failed(let error) = result else {
+        Issue.record("Pre-finalization waits must share the cut deadline")
+        return
+      }
+      #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+      #expect(previous.abandonCount.withLock { $0 } == 1)
+      #expect(previous.finishCount.withLock { $0 } == 0)
+      gate.signal()
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func cutDeadlinesIncludeCommitAdmissionAndBufferedReplay(blockAdmission: Bool) async throws {
+      let fixture = try Fixture(cutFinalizationTimeout: .milliseconds(20))
+      defer { fixture.cleanup() }
+      let core = WorkspaceRecordMediaCore()
+      let previous = BoundaryRecorder()
+      let replacement = BoundaryRecorder()
+      var boundary: UUID?
+      core.setCallbacks(
+        commitRequest: { boundary = $0 }, eventHandler: { _ in },
+        failureHandler: { Issue.record("Unexpected delivery error: \($0)") },
+        cutStateChanged: { _ in })
+      core.install(previous)
+      core.enqueueMainAudio(try audioSample())
+      core.enqueuePortraitAudio(try audioSample())
+      await core.waitForPendingOperations()
+      let gate = DispatchSemaphore(value: 0)
+      previous.audioGate = gate
+      defer { gate.signal() }
+      let operation = UUID()
+      core.enqueueCutRequest(for: previous)
+      core.enqueueMainAudio(try retime(audioSample(), frame: 2, timescale: 10))
+      core.enqueueVideo(try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      while boundary == nil { await Task.yield() }
+      if blockAdmission {
+        core.enqueueRollbackPendingCut()
+        while !previous.audioEntered.withLock({ $0 }) { await Task.yield() }
+      }
+      let result = await withCheckedContinuation { continuation in
+        core.enqueueCommit(
+          boundaryID: boundary!, operationID: operation, replacement: replacement,
+          preparationTimeout: .milliseconds(20)
+        ) { continuation.resume(returning: $0) }
+      }
+      if blockAdmission {
+        guard case .failure(let error) = result else {
+          Issue.record("Commit admission must time out behind a stalled rollback")
+          return
+        }
+        #expect(error is WorkspaceRecordingPreparationAbandoned)
+        #expect(replacement.abandonCount.withLock { $0 } == 1)
+        #expect(previous.abandonCount.withLock { $0 } == 0)
+      } else {
+        #expect(try result.get()?.current === replacement)
+        while !previous.audioEntered.withLock({ $0 }) { await Task.yield() }
+        let finalization = await fixture.session.finishPreviousRecordingAfterCut(previous) {
+          await core.waitForPendingOperations()
+        }
+        guard case .failed = finalization else {
+          Issue.record("Buffered replay belongs inside the old-package deadline")
+          return
+        }
+        #expect(previous.abandonCount.withLock { $0 } == 1)
+        #expect(replacement.abandonCount.withLock { $0 } == 0)
+        #expect(previous.finishCount.withLock { $0 } == 0)
+      }
+      gate.signal()
+      core.enqueueVideo(try retime(videoSample(), frame: 4, timescale: 10), operationID: operation)
+      await core.waitForPendingOperations()
+      let owner = blockAdmission ? previous : replacement
+      #expect(owner.events.withLock { $0 }.contains("landscapeVideo:4"))
+      try (await core.closeAndDrain()).get()
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cutFinalizationDeadlineIncludesInputCallbackFence() async throws {
+      let fixture = try Fixture(cutFinalizationTimeout: .milliseconds(20))
+      defer { fixture.cleanup() }
+      let core = WorkspaceRecordMediaCore()
+      let previous = BoundaryRecorder()
+      core.install(previous)
+      let callback = try #require(core.beginInputAudioCallback())
+      let result = await fixture.session.finishPreviousRecordingAfterCut(previous) {
+        await withCheckedContinuation { continuation in
+          if !core.deferFinalizationUntilInputAudioCallbacksDrain(
+            for: previous,
+            {
+              continuation.resume()
+            })
+          {
+            continuation.resume()
+          }
+        }
+      }
+      guard case .failed = result else {
+        Issue.record("Outstanding input callbacks must share the cut deadline")
+        return
+      }
+      #expect(previous.abandonCount.withLock { $0 } == 1)
+      #expect(previous.finishCount.withLock { $0 } == 0)
+      core.cancelInputAudioCallback(callback)
+      try (await core.closeAndDrain()).get()
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func queuedOldPackageFailureDoesNotStopReplacement() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      try fixture.service.acceptFirstVideo(videoSample())
+      fixture.service.appendMainAudioMix(try audioSample())
+      fixture.session.state = .recording
+      let replacement = try SessionRecordService(
+        baseDirectory: fixture.root, recordID: "new-owner",
+        writerConfiguration: SegmentedMP4WriterConfiguration(
+          width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+        audioTracks: [], failureHandler: { Issue.record("Unexpected replacement fault: \($0)") })
+      try replacement.start()
+      try replacement.acceptFirstVideo(videoSample())
+      replacement.appendMainAudioMix(try audioSample())
+      // Queue an old-owner callback, then commit the replacement before the
+      // callback's MainActor task runs. It must revalidate ownership at execution.
+      fixture.session.recordingServiceDidFail(
+        NSError(domain: "old-owner", code: 23),
+        packageURL: fixture.package)
+      fixture.session.adoptStartedRecordingService(replacement)
+      fixture.session.recordingServiceDidFail(
+        NSError(domain: "cancelled-replacement", code: 24),
+        packageURL: fixture.root.appendingPathComponent("cancelled.ldtxrecord"))
+      await Task.yield()
+      #expect(fixture.session.state == .recording)
+      #expect(fixture.session.outputFailures.primary == nil)
+      _ = await withCheckedContinuation { continuation in
+        fixture.service.finishAfterCut { continuation.resume(returning: $0) }
+      }
+      try (await fixture.session.stopWithResult()).get()
+      #expect(fixture.isFinalized)
+      #expect(
+        FileManager.default.fileExists(
+          atPath: replacement.packageDirectory
+            .appendingPathComponent(RecordingPackage.finalizedMarkerFileName).path))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func lateAudioPublishesCutReadinessToObservation() async throws {
+      let fixture = try Fixture()
+      defer { fixture.cleanup() }
+      let hub = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) { fixture.service }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service,
+        landscapeHub: hub, portraitHub: ProgramOutputMediaHub(),
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      hub.publishMainVideo(try videoSample())
+      while !fixture.service.hasAcceptedFirstVideo { await Task.yield() }
+      #expect(!fixture.session.canCutRecording)
+      let changed = Mutex(false)
+      withObservationTracking {
+        _ = fixture.session.canCutRecording
+      } onChange: {
+        changed.withLock { $0 = true }
+      }
+      hub.publishMainAudioMix(try audioSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+      #expect(changed.withLock { $0 })
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func cutFinalizationDeadlineHandlesStallsAndLateCallbacks(stalls: Bool) async throws {
+      let fixture = try Fixture(cutFinalizationTimeout: .milliseconds(20))
+      defer { fixture.cleanup() }
+      let service = BoundaryRecorder()
+      service.stallsFinalization = stalls
+      let result = await fixture.session.finishPreviousRecordingAfterCut(service)
+      if stalls {
+        guard case .failed(let error) = result else {
+          Issue.record("Stalled finalization must report a deadline failure")
+          return
+        }
+        #expect(error as? ProgramOutputMediaChannelError == .drainTimedOut)
+        #expect(service.abandonCount.withLock { $0 } == 1)
+        service.pendingFinalization?(.finalized)
+      } else {
+        guard case .finalized = result else {
+          Issue.record("Expected finalization")
+          return
+        }
+        #expect(service.abandonCount.withLock { $0 } == 0)
+      }
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    private func mediaTiming(_ url: URL) async throws -> (
+      start: CMTime, videoDuration: CMTime, audioDuration: CMTime
+    ) {
+      let asset = AVURLAsset(url: url)
+      let video = try #require(try await asset.loadTracks(withMediaType: .video).first)
+      let audio = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+      let videoRange = try await video.load(.timeRange)
+      let audioRange = try await audio.load(.timeRange)
+      for track in [video, audio] {
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(output)
+        #expect(reader.startReading())
+        var last: CMTime?
+        var count = 0
+        while let sample = output.copyNextSampleBuffer() {
+          // Readers may emit empty control buffers, or group multiple media
+          // samples. Inspect each media sample's timing rather than the wrapper.
+          for index in 0..<CMSampleBufferGetNumSamples(sample) {
+            var timing = CMSampleTimingInfo()
+            try #require(
+              CMSampleBufferGetSampleTimingInfo(
+                sample, at: index,
+                timingInfoOut: &timing) == noErr)
+            let pts = timing.presentationTimeStamp
+            #expect(pts.isNumeric)
+            if let last { #expect(CMTimeCompare(pts, last) > 0) }
+            last = pts
+            count += 1
+          }
+        }
+        #expect(count > 0)
+        #expect(reader.status == .completed)
+      }
+      return (videoRange.start, videoRange.duration, audioRange.duration)
+    }
+
+    private func frameAudio() throws -> CMSampleBuffer {
+      try audioSample(frameCount: 1600)
+    }
+
+    private func retime(_ sample: CMSampleBuffer, frame: Int64, timescale: Int32 = 30) throws
+      -> CMSampleBuffer
+    {
+      var timing = CMSampleTimingInfo()
+      #expect(CMSampleBufferGetSampleTimingInfo(sample, at: 0, timingInfoOut: &timing) == noErr)
+      timing.presentationTimeStamp = CMTime(value: frame, timescale: timescale)
+      timing.decodeTimeStamp = .invalid
+      var copy: CMSampleBuffer?
+      #expect(
+        CMSampleBufferCreateCopyWithNewTiming(
+          allocator: kCFAllocatorDefault,
+          sampleBuffer: sample, sampleTimingEntryCount: 1, sampleTimingArray: &timing,
+          sampleBufferOut: &copy) == noErr)
+      return try #require(copy)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func dualBoundaryRoutesMixedAndLateInputAudioByPTS(failCommit: Bool) async throws {
+      let core = WorkspaceRecordMediaCore()
+      let previous = BoundaryRecorder()
+      let replacement = BoundaryRecorder()
+      replacement.failFirstVideo = failCommit
+      var boundary: UUID?
+      core.setCallbacks(
+        commitRequest: { boundary = $0 }, eventHandler: { _ in },
+        failureHandler: { Issue.record("Unexpected delivery error: \($0)") },
+        cutStateChanged: { _ in })
+      core.install(previous, inputAudioTrackIDs: ["input"])
+      let operationID = UUID()
+      core.enqueueMainAudio(try audioSample())
+      core.enqueuePortraitAudio(try audioSample())
+      await core.waitForPendingOperations()
+      // A callback acquired before commit can arrive late and belongs to the old
+      // package only when its PTS precedes the committed recording boundary.
+      let oldCallback = try #require(core.beginInputAudioCallback())
+      let newCallback = try #require(core.beginInputAudioCallback())
+      let crossingCallback = try #require(core.beginInputAudioCallback())
+      core.enqueueCutRequest(for: previous)
+      core.enqueueMainAudio(try retime(audioSample(), frame: 2, timescale: 10))
+      core.enqueuePortraitAudio(try retime(audioSample(), frame: 2, timescale: 10))
+      core.enqueueMainAudio(try retime(audioSample(), frame: 5, timescale: 20))
+      core.enqueuePortraitAudio(try retime(audioSample(), frame: 5, timescale: 20))
+      core.enqueueVideo(
+        try retime(videoSample(), frame: 3, timescale: 10), operationID: operationID)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 3, timescale: 10), operationID: operationID)
+      while boundary == nil { await Task.yield() }
+      let result = await withCheckedContinuation { continuation in
+        core.enqueueCommit(
+          boundaryID: boundary!, operationID: operationID,
+          replacement: replacement
+        ) { continuation.resume(returning: $0) }
+      }
+      if failCommit {
+        if case .success = result { Issue.record("Commit should fail") }
+      } else {
+        #expect(try result.get() != nil)
+      }
+      core.enqueueInputAudio(
+        try retime(audioSample(), frame: 2, timescale: 10), trackID: "input",
+        callback: oldCallback)
+      core.enqueueInputAudio(
+        try retime(audioSample(), frame: 5, timescale: 20),
+        trackID: "input", callback: crossingCallback)
+      await core.waitForPendingOperations()
+      if failCommit {
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
+          callback: newCallback)
+        core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        await core.waitForPendingOperations()
+        let old = previous.events.withLock { $0 }
+        #expect(old.contains("input:2"))
+        #expect(old.contains("landscapeAudio:2"))
+        #expect(old.contains("portraitAudio:2"))
+        #expect(old.contains("input:4"))
+        #expect(old.contains("landscapeVideo:3"))
+        #expect(old.contains("portraitVideo:3"))
+      } else {
+        // Mixer callbacks can arrive after replacement commit with timestamps
+        // from before the video boundary. Keep routing those samples by PTS.
+        core.enqueueMainAudio(try retime(audioSample(), frame: 5, timescale: 20))
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 5, timescale: 20))
+        let lateInputCallback = try #require(core.beginInputAudioCallback())
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 5, timescale: 20), trackID: "input",
+          callback: lateInputCallback)
+        await core.waitForPendingOperations()
+
+        let didFinishAudioFences = Mutex(false)
+        let inputAudioActive = Mutex(true)
+        let audioFences = Task {
+          let result = await core.waitForAudioFences(for: previous) { _ in
+            inputAudioActive.withLock { $0 }
+          }
+          didFinishAudioFences.withLock { $0 = true }
+          return result
+        }
+        await core.waitForPendingOperations()
+        #expect(!didFinishAudioFences.withLock { $0 })
+        // A source can disappear while the old package waits for its audio
+        // watermark. Once unavailable, no later sample can provide that fence.
+        inputAudioActive.withLock { $0 = false }
+        core.enqueueMainAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        await core.waitForPendingOperations()
+        #expect(!didFinishAudioFences.withLock { $0 })
+        core.enqueuePortraitAudio(try retime(audioSample(), frame: 4, timescale: 10))
+        #expect(await audioFences.value)
+        core.enqueueInputAudio(
+          try retime(audioSample(), frame: 4, timescale: 10), trackID: "input",
+          callback: try #require(core.beginInputAudioCallback()))
+        await core.waitForPendingOperations()
+
+        let old = previous.events.withLock { $0 }
+        let new = replacement.events.withLock { $0 }
+        #expect(old.contains("input:2"))
+        #expect(old.contains("landscapeAudio:2"))
+        #expect(old.contains("portraitAudio:2"))
+        #expect(!old.contains("input:4"))
+        #expect(new.contains("input:4"))
+        #expect(new.contains("landscapeVideo:3"))
+        #expect(new.contains("portraitVideo:3"))
+        #expect(new.contains("landscapeAudio:4"))
+        #expect(new.contains("portraitAudio:4"))
+        for kind in ["input", "landscapeAudio", "portraitAudio"] {
+          #expect(old.contains("\(kind)Count:2400"))
+          #expect(new.contains("\(kind)Count:2400"))
+        }
+      }
+      _ = await core.closeAndDrain()
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func blockedReplacementPreparationRollsBackWithoutWaiting(
+      portrait: Bool, cancel: Bool
+    ) async throws {
+      let core = WorkspaceRecordMediaCore()
+      let previous = BoundaryRecorder()
+      let replacement = BoundaryRecorder()
+      replacement.blockPortrait = portrait
+      replacement.preparationGate = DispatchSemaphore(value: 0)
+      defer { replacement.preparationGate?.signal() }
+      var boundary: UUID?
+      core.setCallbacks(
+        commitRequest: { boundary = $0 }, eventHandler: { _ in },
+        failureHandler: { Issue.record("Unexpected delivery error: \($0)") },
+        cutStateChanged: { _ in })
+      core.install(previous)
+      let operation = UUID()
+      core.enqueueMainAudio(try audioSample())
+      core.enqueuePortraitAudio(try audioSample())
+      core.enqueueCutRequest(for: previous)
+      core.enqueueVideo(try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 3, timescale: 10), operationID: operation)
+      while boundary == nil { await Task.yield() }
+      let commit = Task { @MainActor in
+        await withCheckedContinuation { continuation in
+          core.enqueueCommit(
+            boundaryID: boundary!, operationID: operation, replacement: replacement,
+            preparationTimeout: .milliseconds(100)
+          ) { continuation.resume(returning: $0) }
+        }
+      }
+      while !replacement.preparationEntered.withLock({ $0 }) { await Task.yield() }
+      if cancel { core.enqueueRollbackPendingCut() }
+      let result = await commit.value
+      if case .failure(let error) = result {
+        #expect(error is WorkspaceRecordingPreparationAbandoned)
+      } else {
+        Issue.record("Blocked preparation must not commit")
+      }
+      #expect(replacement.abandonCount.withLock { $0 } == 1)
+      // Neither completion nor continued delivery requires releasing the writer.
+      core.enqueueVideo(try retime(videoSample(), frame: 4, timescale: 10), operationID: operation)
+      await core.waitForPendingOperations()
+      #expect(previous.events.withLock { $0 }.contains("landscapeVideo:3"))
+      #expect(previous.events.withLock { $0 }.contains("portraitVideo:3"))
+      #expect(previous.events.withLock { $0 }.contains("landscapeVideo:4"))
+      // A later attempt and Stop's media drain also remain independent of the
+      // quarantined writer. Publish a healthy replacement before releasing it.
+      boundary = nil
+      let healthy = BoundaryRecorder()
+      core.enqueueCutRequest(for: previous)
+      core.enqueueVideo(try retime(videoSample(), frame: 5, timescale: 10), operationID: operation)
+      core.enqueuePortraitVideo(
+        try retime(videoSample(), frame: 5, timescale: 10), operationID: operation)
+      while boundary == nil { await Task.yield() }
+      let retry = await withCheckedContinuation { continuation in
+        core.enqueueCommit(
+          boundaryID: boundary!, operationID: operation, replacement: healthy
+        ) { continuation.resume(returning: $0) }
+      }
+      #expect(try retry.get()?.current === healthy)
+      core.enqueueVideo(try retime(videoSample(), frame: 6, timescale: 10), operationID: operation)
+      await core.waitForPendingOperations()
+      #expect(healthy.events.withLock { $0 }.contains("landscapeVideo:6"))
+      try (await core.closeAndDrain()).get()
+      replacement.preparationGate?.signal()
+      while !replacement.preparationExited.withLock({ $0 }) { await Task.yield() }
+      #expect(!replacement.events.withLock { $0 }.contains("landscapeVideo:6"))
+    }
+
+    private final class BoundaryRecorder: SessionRecordServicing, @unchecked Sendable {
+      let packageDirectory = URL(fileURLWithPath: "/tmp/boundary-fixture.ldtxrecord")
+      let hasAcceptedFirstVideo = true
+      let recordsLandscapeOutput = true
+      let recordsPortraitOutput = true
+      var failFirstVideo = false
+      var stallsFinalization = false
+      var appendGate: DispatchSemaphore?
+      var sealGate: DispatchSemaphore?
+      var audioGate: DispatchSemaphore?
+      let audioEntered = Mutex(false)
+      let appendEntered = Mutex(false)
+      let finishCount = Mutex(0)
+      var preparationGate: DispatchSemaphore?
+      var blockPortrait = false
+      let preparationEntered = Mutex(false)
+      let preparationExited = Mutex(false)
+      func waitForPreparation(portrait: Bool) {
+        guard portrait == blockPortrait, let preparationGate else { return }
+        preparationEntered.withLock { $0 = true }
+        preparationGate.wait()
+        preparationExited.withLock { $0 = true }
+      }
+      let abandonCount = Mutex(0)
+      @MainActor var pendingFinalization:
+        (@MainActor @Sendable (SessionRecordFinalizationResult) -> Void)?
+      let events = Mutex<[String]>([])
+      func add(_ kind: String, _ sample: CMSampleBuffer) {
+        let frame = CMTimeConvertScale(
+          sample.presentationTimeStamp, timescale: 10,
+          method: .default
+        ).value
+        events.withLock {
+          $0.append("\(kind):\(frame)")
+          $0.append("\(kind)Count:\(CMSampleBufferGetNumSamples(sample))")
+        }
+      }
+      @MainActor func start() throws {}
+      func acceptFirstVideo(
+        _ sample: CMSampleBuffer,
+        mainAudioFormatDescription: CMAudioFormatDescription?
+      ) throws {
+        waitForPreparation(portrait: false)
+        if failFirstVideo { throw NSError(domain: "first-video-fixture", code: 19) }
+        appendMainVideo(sample)
+      }
+      func acceptFirstPortraitVideo(
+        _ sample: CMSampleBuffer,
+        mainAudioFormatDescription: CMAudioFormatDescription?
+      ) throws {
+        waitForPreparation(portrait: true)
+        appendPortraitVideo(sample)
+      }
+      func appendMainVideo(_ sample: CMSampleBuffer) {
+        if let appendGate,
+          appendEntered.withLock({ entered in
+            guard !entered else { return false }
+            entered = true
+            return true
+          })
+        {
+          appendGate.wait()
+        }
+        add("landscapeVideo", sample)
+      }
+      func appendPortraitVideo(_ sample: CMSampleBuffer) { add("portraitVideo", sample) }
+      func appendMainAudioMix(_ sample: CMSampleBuffer) {
+        if let audioGate,
+          audioEntered.withLock({ entered in
+            guard !entered else { return false }
+            entered = true
+            return true
+          })
+        {
+          audioGate.wait()
+        }
+        add("landscapeAudio", sample)
+      }
+      func appendPortraitAudioMix(_ sample: CMSampleBuffer) { add("portraitAudio", sample) }
+      func appendInputAudio(_ sample: CMSampleBuffer, trackID: String) { add("input", sample) }
+      func sealInputAudio() { sealGate?.wait() }
+      @MainActor func stop(
+        completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+      ) { completionHandler(.finalized) }
+      @MainActor func finishAfterCut(
+        completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+      ) {
+        finishCount.withLock { $0 += 1 }
+        if stallsFinalization {
+          pendingFinalization = completionHandler
+        } else {
+          completionHandler(.finalized)
+        }
+      }
+      @MainActor func stopPreservingIncompletePackage(
+        completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+      ) { completionHandler(.preservedIncomplete) }
+      @MainActor func abandonAfterMediaDrainTimeout() {
+        abandonCount.withLock { $0 += 1 }
+        pendingFinalization?(.preservedIncomplete)
+      }
+      @MainActor func cancelBeforeFirstVideo(
+        completionHandler: @escaping @MainActor @Sendable (SessionRecordFinalizationResult) -> Void
+      ) { completionHandler(.finalized) }
+      func recordingTimelineMilliseconds() -> UInt64? { 0 }
+    }
+
     enum Finish: CaseIterable { case stop, pause, pauseThenStop }
     enum InactiveScreenshotState: CaseIterable {
       case idle, starting, pausing, paused, stopping, failed
@@ -31,9 +941,7 @@ extension OutputTestSuite {
       }
     }
 
-    @Test(
-      "LUB-1045: Manual OCR uses recording archive", .timeLimit(.minutes(1)),
-      arguments: Finish.allCases)
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
     func manualOCRUsesRecordingArchive(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -72,9 +980,7 @@ extension OutputTestSuite {
       await feature.stop()
     }
 
-    @Test(
-      "LUB-1046: Stop does not wait for other workspace screenshot", .timeLimit(.minutes(1)),
-      arguments: [false, true], Finish.allCases)
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
     func stopDoesNotWaitForOtherWorkspaceScreenshot(ownCaptureFinished: Bool, finishing: Finish)
       async throws
     {
@@ -118,9 +1024,7 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(
-      "LUB-1046: Queued screenshots drain before stop and cancellation", .timeLimit(.minutes(1)),
-      arguments: [false, true], Finish.allCases)
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], Finish.allCases)
     func queuedScreenshotsDrainBeforeStopAndCancellation(firstVideo: Bool, finishing: Finish)
       async throws
     {
@@ -194,9 +1098,7 @@ extension OutputTestSuite {
       #expect(try fixture.packageScreenshots().count == (firstVideo ? 2 : 0))
     }
 
-    @Test(
-      "LUB-1070: Accepted archive precedes real package finalization", .timeLimit(.minutes(1)),
-      arguments: Finish.allCases)
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
     func acceptedArchivePrecedesRealPackageFinalization(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -262,9 +1164,7 @@ extension OutputTestSuite {
       #expect(try fixture.archiveMetadata() == metadata)
     }
 
-    @Test(
-      "LUB-1070: Cancellation before first video drains then deletes real package",
-      .timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(1)))
     func cancellationBeforeFirstVideoDrainsThenDeletesRealPackage() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -298,8 +1198,7 @@ extension OutputTestSuite {
       #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.root.path).isEmpty)
     }
 
-    @Test(
-      "LUB-1046: Screenshots before package readiness remain standalone", arguments: [false, true])
+    @Test(arguments: [false, true])
     func screenshotsBeforePackageReadinessRemainStandalone(recording: Bool) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -317,9 +1216,7 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(
-      "LUB-1046: Ready package rejects screenshots outside recording",
-      arguments: InactiveScreenshotState.allCases)
+    @Test(arguments: InactiveScreenshotState.allCases)
     func readyPackageRejectsScreenshotsOutsideRecording(state: InactiveScreenshotState)
       async throws
     {
@@ -335,9 +1232,7 @@ extension OutputTestSuite {
       try (await fixture.session.stopWithResult()).get()
     }
 
-    @Test(
-      "LUB-1046: Screenshots close admission before finalization", .timeLimit(.minutes(1)),
-      arguments: Finish.allCases)
+    @Test(.timeLimit(.minutes(1)), arguments: Finish.allCases)
     func screenshotsCloseAdmissionBeforeFinalization(finishing: Finish) async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -380,9 +1275,83 @@ extension OutputTestSuite {
       #expect(try Data(contentsOf: #require(accepted.first)) == acceptedData)
     }
 
-    @Test(
-      "LUB-1046: Screenshots during cancellation cannot create or recreate package",
-      .timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(1)))
+    func replacementPackageScreenshotDoesNotDelayCutFinalization() async throws {
+      let manager = CutPackageBlockingFileManager()
+      let screenshotQueue = DispatchQueue(label: "test.cut-package-screenshot-worker")
+      let screenCapture = ScreenCaptureService(
+        fileManager: manager, captureQueue: screenshotQueue)
+      let fixture = try Fixture(
+        cutFinalizationTimeout: .seconds(3), screenCaptureService: screenCapture)
+      defer { fixture.cleanup() }
+      let oldRelease = DispatchSemaphore(value: 0)
+      let replacementRelease = DispatchSemaphore(value: 0)
+      let replacementPackageURL = Mutex<URL?>(nil)
+      defer {
+        oldRelease.signal()
+        replacementRelease.signal()
+      }
+      manager.block(package: fixture.package, until: oldRelease)
+
+      let landscape = ProgramOutputMediaHub()
+      let portrait = ProgramOutputMediaHub()
+      fixture.session.prepareRecordingMedia(fixture.service) {
+        let replacement = try SessionRecordService(
+          baseDirectory: fixture.root, recordID: "cut-screenshot-replacement",
+          writerConfiguration: SegmentedMP4WriterConfiguration(
+            width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
+          audioTracks: [],
+          failureHandler: { Issue.record("Unexpected replacement error: \($0)") })
+        replacementPackageURL.withLock { $0 = replacement.packageDirectory }
+        manager.block(package: replacement.packageDirectory, until: replacementRelease)
+        return replacement
+      }
+      fixture.session.installRecordingSubscriptions(
+        service: fixture.service, landscapeHub: landscape, portraitHub: portrait,
+        recordsLandscape: true, recordsPortrait: false)
+      fixture.session.state = .recording
+      landscape.publishMainAudioMix(try frameAudio())
+      landscape.publishMainVideo(try videoSample())
+      while !fixture.session.canCutRecording { await Task.yield() }
+
+      let oldScreenshot = Task { try await fixture.screenshot() }
+      while !manager.startedPackages.withLock({
+        $0.contains(fixture.package.standardizedFileURL.path)
+      }) {
+        await Task.yield()
+      }
+
+      let cut = Task { await fixture.session.cutWithResult() }
+      while !fixture.session.isCutPending { await Task.yield() }
+      for frame in 1...5 {
+        landscape.publishMainAudioMix(try retime(frameAudio(), frame: Int64(frame)))
+        landscape.publishMainVideo(try retime(videoSample(), frame: Int64(frame)))
+        await Task.yield()
+      }
+      while replacementPackageURL.withLock({ $0 }) == nil { await Task.yield() }
+      let replacementPackage = replacementPackageURL.withLock { $0! }
+      while fixture.session.latestRecordingBundleURL != replacementPackage { await Task.yield() }
+
+      let replacementScreenshot = Task { try await fixture.screenshot() }
+      oldRelease.signal()
+      while !manager.startedPackages.withLock({
+        $0.contains(replacementPackage.standardizedFileURL.path)
+      }) {
+        await Task.yield()
+      }
+
+      // The replacement copy remains blocked, but the previous package owns
+      // no more pending screenshots and can finish independently.
+      let cutResult = await cut.value
+      try cutResult.get()
+      #expect(fixture.isFinalized)
+      replacementRelease.signal()
+      try await oldScreenshot.value
+      try await replacementScreenshot.value
+      try (await fixture.session.stopWithResult()).get()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func screenshotsDuringCancellationCannotCreateOrRecreatePackage() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -400,7 +1369,7 @@ extension OutputTestSuite {
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
     }
 
-    @Test("LUB-1046: Screenshots reject service already finalizing")
+    @Test
     func screenshotsRejectServiceAlreadyFinalizing() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -419,9 +1388,7 @@ extension OutputTestSuite {
       #expect(try fixture.globalScreenshots().count == 2)
     }
 
-    @Test(
-      "LUB-1070: Initiating failure without cleanup failure retains typed error",
-      .timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(1)))
     func initiatingFailureWithoutCleanupFailureRetainsTypedError() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -451,7 +1418,7 @@ extension OutputTestSuite {
       #expect(!FileManager.default.fileExists(atPath: fixture.package.path))
     }
 
-    @Test("LUB-1070: Initiating failure survives real archive failure", .timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(1)))
     func initiatingFailureSurvivesRealArchiveFailure() async throws {
       let fixture = try Fixture()
       defer { fixture.cleanup() }
@@ -469,9 +1436,7 @@ extension OutputTestSuite {
       #expect(fixture.isFinalized)
     }
 
-    @Test(
-      "LUB-1070: Initiating failure survives later callbacks and real finalization failure",
-      .timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(1)))
     func initiatingFailureSurvivesLaterCallbacksAndRealFinalizationFailure() async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }
@@ -519,9 +1484,7 @@ extension OutputTestSuite {
       #expect(fixture.session.outputFailures.secondary.isEmpty)
     }
 
-    @Test(
-      "LUB-1070: First cleanup failure becomes primary", .timeLimit(.minutes(1)),
-      arguments: [false, true])
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func firstCleanupFailureBecomesPrimary(pausing: Bool) async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }
@@ -539,9 +1502,7 @@ extension OutputTestSuite {
       #expect(!fixture.isFinalized)
     }
 
-    @Test(
-      "LUB-1070: Youtube cleanup failure survives later recording failure", .timeLimit(.minutes(1)),
-      arguments: [false, true])
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func youtubeCleanupFailureSurvivesLaterRecordingFailure(pausing: Bool) async throws {
       let fixture = try Fixture(recordingFailureHandler: { _ in })
       defer { fixture.cleanup() }
@@ -582,6 +1543,10 @@ extension OutputTestSuite {
       }
 
       init(
+        definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4 = .init(),
+        recordsPortrait: Bool = false,
+        cutBoundaryTimeout: Duration = .seconds(10),
+        cutFinalizationTimeout: Duration = .seconds(30),
         screenCaptureService: ScreenCaptureService? = nil,
         recordingFailureHandler: @escaping @MainActor (any Error) -> Void = {
           Issue.record("Unexpected recording failure: \($0)")
@@ -589,7 +1554,7 @@ extension OutputTestSuite {
       ) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var workspace = WorkspaceV4Bundle(definition: .init(), preferences: .init())
+        var workspace = WorkspaceV4Bundle(definition: definition, preferences: .init())
         let persistence = WorkspaceV4PersistenceCoordinator(
           workspaceSnapshot: { workspace }, replaceWorkspace: { workspace = $0 })
         let capture = WorkspaceCaptureSessionCoordinator(
@@ -601,12 +1566,14 @@ extension OutputTestSuite {
           windowRuntime: runtime,
           screenCaptureService: screenCaptureService
             ?? ScreenCaptureService(captureQueue: screenshotQueue),
-          visionArchiveQueue: queue)
+          visionArchiveQueue: queue, cutBoundaryTimeout: cutBoundaryTimeout,
+          cutFinalizationTimeout: cutFinalizationTimeout)
         service = try SessionRecordService(
           baseDirectory: root, recordID: "archive-lifecycle",
           writerConfiguration: SegmentedMP4WriterConfiguration(
             width: 16, height: 16, frameRate: 30, videoBitRate: 100_000),
-          audioTracks: [], failureHandler: recordingFailureHandler)
+          audioTracks: [], recordsPortrait: recordsPortrait, failureHandler: recordingFailureHandler
+        )
         try service.start()
         session.adoptStartedRecordingService(service)
       }
@@ -733,7 +1700,7 @@ extension OutputTestSuite {
       return try #require(sample)
     }
 
-    private func audioSample() throws -> CMSampleBuffer {
+    private func audioSample(frameCount: Int = 4800) throws -> CMSampleBuffer {
       var stream = AudioStreamBasicDescription(
         mSampleRate: 48_000, mFormatID: kAudioFormatLinearPCM,
         mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
@@ -751,8 +1718,8 @@ extension OutputTestSuite {
       var sample: CMSampleBuffer?
       #expect(
         CMSampleBufferCreateReady(
-          allocator: kCFAllocatorDefault, dataBuffer: try dataBlock(Data(count: 4_800 * 8)),
-          formatDescription: try #require(format), sampleCount: 4_800,
+          allocator: kCFAllocatorDefault, dataBuffer: try dataBlock(Data(count: frameCount * 8)),
+          formatDescription: try #require(format), sampleCount: frameCount,
           sampleTimingEntryCount: 1, sampleTimingArray: &timing,
           sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sample) == noErr)
       return try #require(sample)
@@ -797,6 +1764,31 @@ private final class OtherWorkspaceBlockingFileManager: FileManager, @unchecked S
     if first {
       _ = release.wait(timeout: .now() + 15)
       unblocked.withLock { $0 = true }
+    }
+    try super.createDirectory(
+      at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)
+  }
+}
+
+private final class CutPackageBlockingFileManager: FileManager, @unchecked Sendable {
+  let startedPackages = Mutex<Set<String>>([])
+  private let gates = Mutex<[String: DispatchSemaphore]>([:])
+
+  func block(package: URL, until release: DispatchSemaphore) {
+    gates.withLock { $0[package.standardizedFileURL.path] = release }
+  }
+
+  override func createDirectory(
+    at url: URL, withIntermediateDirectories createIntermediates: Bool,
+    attributes: [FileAttributeKey: Any]? = nil
+  ) throws {
+    let packagePath = url.standardizedFileURL.deletingLastPathComponent().path
+    let release =
+      url.lastPathComponent == "Screenshots"
+      ? gates.withLock { $0[packagePath] } : nil
+    if let release {
+      startedPackages.withLock { $0.insert(packagePath) }
+      _ = release.wait(timeout: .now() + 15)
     }
     try super.createDirectory(
       at: url, withIntermediateDirectories: createIntermediates, attributes: attributes)

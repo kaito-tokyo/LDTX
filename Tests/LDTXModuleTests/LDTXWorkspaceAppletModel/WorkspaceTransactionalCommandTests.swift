@@ -12,7 +12,7 @@ struct WorkspaceTransactionalCommandUnitTestSuite {
   func outputActivePermissionsAndStartingStopMatchTheConfirmedContract() {
     #expect(
       WorkspaceTransactionalCommand.allCases.map(\.isAllowedDuringOutput) == [
-        false, false, true, false, true, false,
+        false, false, true, false, true, true, false,
       ])
     #expect(WorkspaceRecordingState.starting.canStop)
     #expect(!WorkspaceRecordingState.starting.canStart)
@@ -62,7 +62,8 @@ struct WorkspaceTransactionalCommandUnitTestSuite {
     #expect(notifications.map(\.command) == commands)
     #expect(
       notifications.map(\.dialog) == [
-        .commandError, .commandError, .commandError, .commandError, .stopFailed, .closeFailed,
+        .commandError, .commandError, .commandError, .commandError, .commandError, .stopFailed,
+        .closeFailed,
       ])
     #expect(
       commands.filter(\.requiresConsistencyRepair) == [

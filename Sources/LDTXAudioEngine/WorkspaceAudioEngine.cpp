@@ -709,6 +709,25 @@ LDTXAudioID LDTXAudioAddInput(LDTXWorkspaceAudioEngine *e, const char *uid, uint
     return id;
   });
 }
+bool LDTXAudioHasActiveInput(LDTXWorkspaceAudioEngine *e, const char *uid) {
+  if (!uid || !*uid)
+    return false;
+  std::string name = uid;
+  return e->sync([&] {
+    for (auto &[id, input] : e->inputs) {
+      if (input.kind != 0 || input.uid != name || !input.enabled || !input.input ||
+          input.input->device == kAudioObjectUnknown)
+        continue;
+      AudioObjectPropertyAddress address{kAudioDevicePropertyDeviceIsAlive, kAudioObjectPropertyScopeGlobal,
+                                         kAudioObjectPropertyElementMain};
+      UInt32 alive = 0;
+      UInt32 size = sizeof(alive);
+      return AudioObjectGetPropertyData(input.input->device, &address, 0, nullptr, &size, &alive) == noErr &&
+             alive != 0;
+    }
+    return false;
+  });
+}
 void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
   e->sync([=] {
     e->delivery.stopDiscardingPending();
