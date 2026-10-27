@@ -60,8 +60,8 @@ codec follow the same rule; their generator emits the conditional import.
 Apple platforms use the SDK's Foundation module. Pure Swift values need neither.
 
 Tests live in `Packages/LDTXCorelibs/Tests/LDTXCorelibsTests/<area>` and are defined once as
-SwiftPM's `LDTXCorelibsTests`. `project/corelibs.yml` and the Xcode test plans
-reference that package target directly; XcodeGen does not create another test
+SwiftPM's `LDTXCorelibsTests`. `project/corelibs.yml` references that package
+target directly; XcodeGen does not create another test
 bundle or source group.
 
 ```sh
@@ -87,19 +87,18 @@ docker run --rm \
 
 CI disables indexing and debug-info generation for SwiftPM tests and sets
 parallelism to the runner CPU count. The reusable workflow runs Corelibs on Linux.
-The macOS `pr` plan omits Corelibs; `push-main` includes them. Both plans include
-the isolated CLI tests, while macOS protobuf-extra tests run in LDTXModuleTests.
+The macOS test invocation runs the complete suite, while Corelibs also runs
+separately on Linux.
 
 ## Xcode Cloud tests
 
-Select the shared `LDTXApp` scheme and `LDTXTests` plan for the Xcode Cloud
-test workflow, using `Debug`. The plan includes Easy, Medium, Hard, and Output tests.
+Select the shared `LDTXApp` scheme for the Xcode Cloud test workflow, using
+`Debug`. It runs the complete test suite.
 The macOS-only `LDTXOutputTests` scheme runs output configuration, media delivery,
 and recording/streaming service tests in one hostless bundle.
 Easy, Medium, and Hard share the hostless `LDTXModuleTests` bundle. Their suites
-carry `.easy`, `.medium`, and `.hard` Swift Testing tags. Select the `Easy`,
-`Medium`, or `Hard` test plan from the `LDTXModuleTests` scheme. `Easy` is the
-default plan; use `-testPlan` to select a plan on the command line.
+carry `.easy`, `.medium`, and `.hard` Swift Testing tags for classification;
+the standard test invocation runs all of them.
 It does not launch `LDTXApp` or use XCUI automation. Keep archive workflows on
 `LDTXApp` with `Distribution`.
 
@@ -109,7 +108,7 @@ Build the shared test bundle locally with:
 xcodegen generate
 xcodebuild \
   -project LDTX.xcodeproj \
-  -scheme LDTXModuleTests -testPlan Hard \
+  -scheme LDTXModuleTests \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
   build-for-testing
@@ -119,23 +118,19 @@ Unit-test bundles run without a host application, except XpcTests, which may use
 an application host to exercise its embedded XPC service. UI component tests
 construct their own windows and hosted SwiftUI views.
 
-### Real OCR on hosted runners
+### Real OCR recognition
 
-GitHub Actions excludes `WorkspaceClockOCRIntegrationTestSuite` and
-`ManualOCRRecognitionIntegrationTestSuite` from its shared macOS test invocation
-for both pull requests and pushes to `main`.
-The hosted arm64 VM can fail Vision text recognition with E5RT error 11 and
-`No available backends on platform [universal] for compute units ane`.
-These exclusions are not successful recognition tests. Keep the real recognition
-suite tagged `.hard` and run it locally on a supported Mac; it remains included in
-local test plans and Xcode Cloud's `Hard` plan selection. The deterministic manual
-OCR control, error/retry, UI, variable publication, and recording persistence
-tests remain enabled in GitHub Actions.
+The real-recognition suites `WorkspaceClockOCRIntegrationTestSuite` and
+`ManualOCRRecognitionIntegrationTestSuite` remain enabled for local testing and
+Xcode Cloud. GitHub Actions skips only these two suites because its hosted arm64
+runner cannot execute Vision OCR; deterministic OCR configuration and service
+integration tests continue to run there. Keep the real-recognition suites tagged
+`.hard` to describe their framework requirements.
 
-Run the manual OCR recognition test locally without the CI exclusions:
+Run the manual OCR recognition test locally:
 
 ```sh
-xcodebuild -project LDTX.xcodeproj -scheme LDTXModuleTests -testPlan Hard \
+xcodebuild -project LDTX.xcodeproj -scheme LDTXModuleTests \
   -destination platform=macOS -derivedDataPath .derivedData \
   -only-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite test
 ```
@@ -291,7 +286,7 @@ swift test --package-path Packages/LDTXCorelibs
 **Test macOS modules if needed:**
 
 ```sh
-xcodebuild -project LDTX.xcodeproj -scheme LDTXModuleTests -testPlan Easy \
+xcodebuild -project LDTX.xcodeproj -scheme LDTXModuleTests \
   -destination platform=macOS -derivedDataPath .derivedData test
 ```
 
@@ -327,7 +322,6 @@ swift test --package-path Packages/LDTXCorelibs
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
-  -testPlan Default \
   -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
@@ -337,7 +331,6 @@ xcodebuild \
 xcodebuild \
   -project LDTX.xcodeproj \
   -scheme LDTXApp \
-  -testPlan Default \
   -configuration Debug \
   -destination platform=macOS \
   -derivedDataPath .derivedData \
@@ -351,7 +344,7 @@ GitHub Actions is the pull-request merge gate: Swift package tests run in
 parallel with the hosted `LDTX` integration test. The `LDTX`
 application, Vision, and Quick Look archive are built and signed by Xcode
 Cloud, which is the release build authority. Its separate Test action runs the
-hostless framework tests using the `LDTXModuleTests` scheme and `Hard` plan.
+hostless framework tests using the `LDTXModuleTests` scheme.
 
 ```sh
 bin/check
@@ -359,7 +352,7 @@ bin/check
 
 ## Public-log privacy regression
 
-After building the `Hard` plan of `LDTXModuleTests` and the `LDTXOutputTests` suite, run:
+After building the `LDTXModuleTests` and `LDTXOutputTests` suites, run:
 
 ```sh
 Tools/Regression/public-log-privacy.sh

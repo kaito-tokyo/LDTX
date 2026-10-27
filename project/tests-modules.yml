@@ -57,8 +57,5 @@ schemes:
         LDTXModuleTests: all
     test:
       config: Debug
-      testPlans:
-        - path: Easy.xctestplan
-          defaultPlan: true
-        - path: Medium.xctestplan
-        - path: Hard.xctestplan
+      targets:
+        - LDTXModuleTests

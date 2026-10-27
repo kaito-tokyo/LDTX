@@ -180,10 +180,9 @@ LDTX_EXTERNAL_RECORDING_PATH=/path/to/recording.ldtxrecord/main.fragmented.mp4 \
   swift test --filter FileMP4WriterTests.testExternalRecordingPTSIsMonotonic
 ```
 
-The pull-request gate generates the Xcode project and runs the `LDTXApp` scheme,
-with `LDTXTests.xctestplan`, which runs Easy, Medium, and Hard once in the
-existing macOS job. Corelibs tests run separately on Linux. The hostless
-`LDTXAppUIComponentTests` target is included in the `Default` plan and
+The pull-request gate generates the Xcode project and runs the complete test
+suite in the `LDTXApp` scheme. Corelibs tests run separately on Linux. The hostless
+`LDTXAppUIComponentTests` target is included in the app test scheme and
 covers SwiftUI bindings and directly constructed AppKit components, Documents,
 Windows, and Sheets under a serialized MainActor parent suite. Its shared
 Document Controller resolves both Workspace and Recording document types.
@@ -195,12 +194,11 @@ Tests that would launch the application solely to inspect menus or operating
 system dialogs are not included; directly constructed windows and views belong
 in `LDTXAppUIComponentTests`.
 The embedded XPC service process-boundary test remains in the isolated
-`LDTXAppXpcTests` scheme. The `LDTXModuleTests` scheme selects the `Easy`,
-`Medium`, or `Hard` tagged test plan within its shared hostless target;
-`Easy` is the default plan.
+`LDTXAppXpcTests` scheme. Easy, Medium, and Hard tags classify suites but do not
+filter the standard test run.
 The macOS-only, hostless `LDTXOutputTests` target and scheme
 collect output configuration, media delivery, recording/streaming session, and
-output protocol tests across those framework tiers. All app test plans include
+output protocol tests across those framework tiers. The app test scheme includes
 this target; XPC process isolation stays in `LDTXAppXpcTests`. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
 tests. Full-app archive validation is owned by the release workflow and is
@@ -237,16 +235,16 @@ latency, but one local result alone does not establish a split boundary.
 
 A separate PR Test workflow named `On pull request - HardTests` can be configured in
 Xcode Cloud for pull requests targeting `main`. Select the `LDTXApp` scheme,
-Debug configuration, macOS 27, and the `LDTXTests` test plan. Leave signing to
+Debug configuration and macOS 27. Leave signing to
 Xcode Cloud and keep the existing release Archive workflows unchanged.
 `ci_scripts/ci_post_clone.sh` generates the project before the test action.
 HardTests is a hostless unit-test bundle exercising the frameworks listed in
 `AGENTS.md`. It neither uses XCUI nor launches an application host. Only XpcTests
 may use `TEST_HOST`.
-The local command for the same test plan is:
+The local command for the same test run is:
 
 ```sh
-xcodebuild -project LDTX.xcodeproj -scheme LDTXApp -testPlan LDTXTests \
+xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
   -configuration Debug -destination 'platform=macOS,arch=arm64' test
 ```
 

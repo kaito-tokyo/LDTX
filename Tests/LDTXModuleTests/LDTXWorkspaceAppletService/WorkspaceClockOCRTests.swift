@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import CoreImage
+import CoreVideo
 import Foundation
 import LDTXCapture
 import LDTXCorelibs
@@ -15,45 +16,37 @@ import Testing
 @Suite(.tags(.hard), .serialized)
 @MainActor
 struct WorkspaceClockOCRIntegrationTestSuite {
-  @Test(
-    "LUB-1023: Clock output is recognized",
-    .disabled("OCR execution is unavailable in the CI environment."))
+  @Test("LUB-1023: Clock output is recognized")
   func clockOutputIsRecognized() async throws {
     let capture = WorkspaceCaptureSessionCoordinator()
     let runtime = makeRuntime(capture: capture)
-    runtime.installComponentFrameRenderer(
-      VideoComponentFrameRenderer(
-        captureSessionCoordinator: capture))
-    defer { runtime.shutdown() }
+    let landscape = ProgramRuntime(captureSessionCoordinator: capture)
+    let portrait = ProgramRuntime(captureSessionCoordinator: capture)
+    runtime.installRuntimes(landscape: landscape, portrait: portrait)
+    defer {
+      landscape.stopPreview()
+      runtime.shutdown()
+    }
+    let program = try runtime.addProgram(displayName: "Clock OCR")
     let clock = try runtime.addClock(displayName: "Clock")
-    let id = try runtime.addOcrVision(displayName: "OCR", videoComponentInternalID: clock)
-    let vision = try #require(runtime.visionFeatureContext.vision(id))
-    let service = VisionOCRService()
-    var recognizedClock = false
-    for _ in 0..<10 {
-      try await Task.sleep(for: .milliseconds(100))
-      let current = try await readyFrame(runtime: runtime, vision: vision)
-      let output = try await service.recognizeText(
-        in: current.image,
-        configuration: .init(
-          recognitionLanguages: [], usesLanguageCorrection: false))
-      #expect(output.elapsedSeconds >= 0)
-      recognizedClock = recognizedClock || output.output.contains(":")
-    }
-    #expect(recognizedClock)
-  }
+    try runtime.setVideoLayerOrder([clock], forProgramInternalID: program, target: .landscape)
+    landscape.startPreview()
 
-  private func readyFrame(runtime: WorkspaceWindowRuntime, vision: Ldtx_Workspace_V4_OcrVision)
-    async throws -> WorkspaceVisionAnalysisFrame
-  {
+    var current: ProgramFrame?
     for _ in 0..<100 {
-      do {
-        return try await runtime.visionFeatureContext.frameForVision(vision)
-      } catch WorkspaceVisionFeatureError.frameUnavailable {
-        try await Task.sleep(for: .milliseconds(20))
+      if let frame = landscape.latestFrame(), !frame.isPreparingRenderResources {
+        current = frame
+        break
       }
+      try await Task.sleep(for: .milliseconds(50))
     }
-    throw WorkspaceVisionFeatureError.frameUnavailable
+    let frame = try #require(current)
+    let output = try await VisionOCRService().recognizeText(
+      in: CIImage(cvPixelBuffer: frame.pixelBuffer),
+      configuration: .init(
+        recognitionLanguages: ["en-US"], usesLanguageCorrection: false))
+    #expect(output.elapsedSeconds >= 0)
+    #expect(output.output.contains(":"), "OCR output: \(output.output)")
   }
 
   private func makeRuntime(

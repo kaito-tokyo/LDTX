@@ -98,8 +98,8 @@ The framework lists below are project conventions, not a general measure of
 hardware dependence or test difficulty. Computational cost, sandbox permissions,
 and CI availability do not determine the tier. Easy, Medium, and Hard share the
 hostless `LDTXModuleTests` target. Apply `.easy`, `.medium`, or `.hard` tags to
-their suites and select execution through test plans; do not create separate
-targets for these tiers. Decide CI execution separately from classification.
+their suites for classification; do not create separate targets for these
+tiers. Run the complete test suite in CI and Xcode Cloud without test plans.
 
 - **Easy tag:** Pure logic tests without platform-framework execution
   dependencies.
@@ -111,8 +111,8 @@ targets for these tiers. Decide CI execution separately from classification.
 - **Hard tag:** Tests that exercise **Vision**, **VideoToolbox**,
   **CoreML**, **CreateMLComponents**, **Metal**, or **AVFoundation**. Medium and Hard
   tests may have the same Unit or Integration scope; their framework dependencies distinguish them.
-  Run the shared hostless target with the Hard test plan in Xcode Cloud; do not
-  add XCUI automation.
+  Run the shared hostless target as part of the complete test suite in CI and
+  Xcode Cloud; do not add XCUI automation.
 
 For tests outside OutputTests, classify the APIs exercised by the test and its SUT,
 not merely import statements or unrelated transitive dependencies. A test

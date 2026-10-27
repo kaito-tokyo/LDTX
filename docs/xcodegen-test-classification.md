@@ -9,8 +9,8 @@ SPDX-License-Identifier: Apache-2.0
 `AGENTS.md` is the source of truth. Classify the APIs exercised by each test and
 its SUT, rather than imports, computational cost, permissions, or CI availability.
 Unit and Integration scope is independent of the Easy, Medium, and Hard tiers.
-These tiers are suite tags in the shared `LDTXModuleTests` target, selected by
-the `Easy`, `Medium`, and `Hard` test plans.
+These tiers are suite tags in the shared `LDTXModuleTests` target. Standard
+test runs execute all tiers; tags remain useful for classification.
 Output-related suites use the macOS-only, hostless `LDTXOutputTests` target,
 including logic, media processing, and service integration. XPC process
 isolation tests remain in `LDTXAppXpcTests`.
@@ -31,8 +31,8 @@ under `OutputTestSuite`
 with their serialized execution control. Serialization does not create a
 SystemTests isolation boundary.
 
-All three tier targets are hostless. Xcode Cloud runs the hostless targets through
-the `LDTXApp` scheme and `LDTXTests` plan. UI components are tested by directly
+All three tiers share one hostless target. Xcode Cloud runs the hostless targets
+through the `LDTXApp` scheme. UI components are tested by directly
 constructing their windows in `LDTXAppUIComponentTests`; only XpcTests may use an
 application host. UI component and Corelibs target boundaries are unchanged.
 
@@ -136,8 +136,8 @@ macOS protobuf-extra suites run in LDTXModuleTests with Medium tags.
 
 Corelibs suites under `Packages/LDTXCorelibs/Tests/LDTXCorelibsTests/<area>` belong to SwiftPM's
 `LDTXCorelibsTests`, including deterministic Unit suites and filesystem Integration
-suites. Xcode schemes and test plans reference the package target directly rather
-than defining a second target. These tests are outside the tier rule.
+suites. Xcode schemes reference the package target directly rather than defining
+a second target. These tests are outside the tier rule.
 
 Direct UI component and Document tests remain in `LDTXAppUIComponentTests` with
 its serialized MainActor parent. Application launch, menu, and system-dialog

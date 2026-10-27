@@ -12,11 +12,6 @@ cache-mode: write
 on:
   pull_request:
   workflow_call:
-    inputs:
-      test-plan:
-        type: string
-        description: The test plan to run
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -54,9 +49,6 @@ jobs:
 
     permissions:
       contents: read
-
-    env:
-      LDTX_TEST_PLAN: ${{ inputs.test-plan || 'pr' }}
 
     steps:
       - name: Checkout
@@ -125,7 +117,6 @@ jobs:
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan "$LDTX_TEST_PLAN" \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
@@ -150,16 +141,16 @@ jobs:
       - name: Test without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
+          # Hosted arm64 runners cannot execute real Vision OCR integration tests.
           xcodebuild \
             -skipPackagePluginValidation \
             -project LDTX.xcodeproj \
             -scheme LDTXApp \
-            -testPlan "$LDTX_TEST_PLAN" \
-            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
-            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
+            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
+            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY=- \
             PROVISIONING_PROFILE= \

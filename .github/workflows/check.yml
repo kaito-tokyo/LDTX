@@ -36,7 +36,11 @@ jobs:
       - name: Check with clang-format
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          git ls-files '*.cpp' '*.hpp' | xargs --no-run-if-empty clang-format --dry-run --Werror
+          git ls-files '*.cpp' '*.hpp' \
+            ':!Packages/LDTXCorelibs/Sources/nanopb/**' \
+            ':!Tests/doctest/**' \
+            ':!Tests/doctests/**' \
+            | xargs --no-run-if-empty clang-format --dry-run --Werror
 
   check-swift-format:
     runs-on: ubuntu-26.04
