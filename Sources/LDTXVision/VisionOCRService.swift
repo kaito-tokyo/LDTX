@@ -83,10 +83,12 @@ public struct VisionOCRService: Sendable {
     guard !supportedDevices.isEmpty else { return nil }
 
     for (stage, devices) in supportedDevices {
-      guard let cpu = devices.first(where: { device in
-        if case .cpu = device { return true }
-        return false
-      }) else {
+      guard
+        let cpu = devices.first(where: { device in
+          if case .cpu = device { return true }
+          return false
+        })
+      else {
         return nil
       }
       request.setComputeDevice(cpu, for: stage)

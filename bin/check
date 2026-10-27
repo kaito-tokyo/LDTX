@@ -47,7 +47,10 @@ source_list="$(mktemp)"
 trap 'rm -f "$source_list"' EXIT
 if ! git ls-files -z --cached --others --exclude-standard \
   '*.c' '*.cpp' '*.h' '*.hpp' '*.swift' \
-  ':!Packages/LDTXFontRasterizer/Sources/LDTXFontRasterizer/include/stb_truetype.h' >"$source_list"; then
+  ':!Packages/LDTXFontRasterizer/Sources/LDTXFontRasterizer/include/stb_truetype.h' \
+  ':!Packages/LDTXCorelibs/Sources/nanopb/**' \
+  ':!Tests/doctest/**' \
+  ':!Tests/doctests/**' >"$source_list"; then
   printf '%s\n' 'error: failed to enumerate source files with git ls-files' >&2
   exit 1
 fi
