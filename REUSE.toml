@@ -10,20 +10,20 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 
 [[annotations]]
 path = [
-  ".github/workflows/actions.lock",
+  "**/*.upstream",
   ".devcontainer/devcontainer.json",
+  ".github/workflows/actions.lock",
   ".swift-format",
   ".swift-version",
   ".vscode/launch.json",
   ".vscode/settings.json",
+  "*.xctestplan",
   "compile_flags.txt",
   "LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
   "Package.resolved",
   "Resources/**/*.json",
   "Resources/LDTX/AppIcon.icon/Assets/*.svg",
   "Resources/Shared/About/Credits.rtf",
-  "*.xctestplan",
-  "**/*.upstream",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"
