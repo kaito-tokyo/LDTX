@@ -7,14 +7,10 @@ Feature: Recognize text and classify images
 
   @LUB-1023.1 @Integration
   Scenario: Recognize text using configured languages
-    Environment constraint: GitHub Actions hosted arm64 VMs can fail real OCR
-    with E5RT error 11 and "No available backends on platform [universal] for
- compute units ane". PR and main workflows now include
-    WorkspaceClockOCRIntegrationTestSuite and ManualOCRRecognitionIntegrationTestSuite.
-    Run real recognition on a supported Mac; local plans and Xcode Cloud retain it.
-    Keep these CI exclusions unless backend availability is verified on the runner.
-    A skipped recognition test does not demonstrate successful OCR. Deterministic
-    control, failure, retry, and publication tests remain enabled in GitHub Actions.
+    Environment constraint: Vision may fail to compile an OCR request on the
+    hosted arm64 runner's Neural Engine (E5RT error 11). On failure, the OCR
+    service retries once using CPU compute devices supported by that request.
+    This scenario still requires successful real text recognition.
 
     Given a known text image and an OCR configuration on a supported backend
     When text recognition completes

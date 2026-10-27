@@ -121,11 +121,10 @@ construct their own windows and hosted SwiftUI views.
 ### Real OCR recognition
 
 The complete macOS test suite includes `WorkspaceClockOCRIntegrationTestSuite`
-and `ManualOCRRecognitionIntegrationTestSuite`. Hosted arm64 runners have
-previously failed Vision text recognition with E5RT error 11 and
-`No available backends on platform [universal] for compute units ane`.
-Keep the real recognition suites tagged `.hard` to describe their framework
-requirements.
+and `ManualOCRRecognitionIntegrationTestSuite`. If Vision fails to compile an
+OCR request on the Neural Engine, `VisionOCRService` retries using CPU compute
+devices supported by the request. Keep the real recognition suites tagged
+`.hard` to describe their framework requirements.
 
 Run the manual OCR recognition test locally:
 

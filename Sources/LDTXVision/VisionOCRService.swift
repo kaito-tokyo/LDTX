@@ -37,7 +37,16 @@ public struct VisionOCRService: Sendable {
     try Task.checkCancellation()
     let startedAt = ContinuousClock.now
     let request = makeRequest(configuration: configuration)
-    let observations = try await request.perform(on: image)
+    let observations: [RecognizedTextObservation]
+    do {
+      observations = try await request.perform(on: image)
+    } catch {
+      try Task.checkCancellation()
+      guard let cpuRequest = makeCPURequest(configuration: configuration) else {
+        throw error
+      }
+      observations = try await cpuRequest.perform(on: image)
+    }
     try Task.checkCancellation()
     let output =
       observations
@@ -65,6 +74,24 @@ public struct VisionOCRService: Sendable {
     if let minimumTextHeight = configuration.minimumTextHeight {
       request.minimumTextHeightFraction = minimumTextHeight
     }
+    return request
+  }
+
+  private func makeCPURequest(configuration: VisionOCRConfiguration) -> RecognizeTextRequest? {
+    var request = makeRequest(configuration: configuration)
+    let supportedDevices = request.supportedComputeStageDevices
+    guard !supportedDevices.isEmpty else { return nil }
+
+    for (stage, devices) in supportedDevices {
+      guard let cpu = devices.first(where: { device in
+        if case .cpu = device { return true }
+        return false
+      }) else {
+        return nil
+      }
+      request.setComputeDevice(cpu, for: stage)
+    }
+
     return request
   }
 }
