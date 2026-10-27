@@ -1,3 +1,16 @@
+/*
+ * SPDX-FileCopyrightText: Petteri Aimonen <jpa@kapsi.fi>
+ * SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+ *
+ * SPDX-License-Identifier: Zlib
+ *
+ * Repository: https://github.com/nanopb/nanopb
+ * Commit: 160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f
+ * Path: pb.h
+ *
+ * Modified for Swift interoperability.
+ */
+
 /* Common parts of the nanopb library. Most of these are quite low-level
  * stuff. For the high-level interface, see pb_encode.h and pb_decode.h.
  */
