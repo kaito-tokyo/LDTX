@@ -96,20 +96,6 @@ jobs:
             -resolvePackageDependencies
           git diff --exit-code -- LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
-      - name: Identify Xcode compilation cache
-        id: xcode-compilation-cache
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          echo "version=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Xcode compilation results
-        uses: actions/cache@v6.1.0
-        with:
-          path: .derivedData/CompilationCache.noindex
-          key: xcode-compilation-${{ steps.xcode-compilation-cache.outputs.version }}-${{ runner.arch }}-v1-${{ github.sha }}
-          restore-keys: |
-            xcode-compilation-${{ steps.xcode-compilation-cache.outputs.version }}-${{ runner.arch }}-v1-
-
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
@@ -128,7 +114,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER= \
             CODE_SIGN_ENTITLEMENTS= \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            COMPILATION_CACHE_ENABLE_CACHING=NO \
             SWIFT_ENABLE_PREFIX_MAPPING=YES \
             SWIFT_ENABLE_PROJECT_PREFIX_MAPPING=YES \
             CLANG_ENABLE_PREFIX_MAPPING=YES \
