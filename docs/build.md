@@ -115,9 +115,9 @@ xcodebuild \
   build-for-testing
 ```
 
-XCUI automation belongs only in `LDTXAppUITests`. Unit-test bundles run without
-a host application, except XpcTests, which may use an application host to
-exercise its embedded XPC service.
+Unit-test bundles run without a host application, except XpcTests, which may use
+an application host to exercise its embedded XPC service. UI component tests
+construct their own windows and hosted SwiftUI views.
 
 ### Real OCR on hosted runners
 

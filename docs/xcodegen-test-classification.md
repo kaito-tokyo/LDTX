@@ -32,8 +32,9 @@ with their serialized execution control. Serialization does not create a
 SystemTests isolation boundary.
 
 All three tier targets are hostless. Xcode Cloud runs the hostless targets through
-the `LDTXApp` scheme and `LDTXTests` plan. Only `LDTXAppUITests` uses XCUI,
-and only XpcTests may use an application host. UI component and Corelibs target boundaries are unchanged.
+the `LDTXApp` scheme and `LDTXTests` plan. UI components are tested by directly
+constructing their windows in `LDTXAppUIComponentTests`; only XpcTests may use an
+application host. UI component and Corelibs target boundaries are unchanged.
 
 ## Tier suite inventory
 
@@ -139,8 +140,8 @@ suites. Xcode schemes and test plans reference the package target directly rathe
 than defining a second target. These tests are outside the tier rule.
 
 Direct UI component and Document tests remain in `LDTXAppUIComponentTests` with
-its serialized MainActor parent. Application UI automation remains in
-`LDTXAppUITests`; XPC integration remains in `LDTXAppXpcTests` with its host.
+its serialized MainActor parent. Application launch, menu, and system-dialog
+automation is not included; XPC integration remains in `LDTXAppXpcTests` with its host.
 
 | Target | Suite | Source |
 | --- | --- | --- |
