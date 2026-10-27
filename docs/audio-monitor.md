@@ -105,8 +105,8 @@ ctest --test-dir /tmp/ldtx-audio-engine-cmake --output-on-failure
 ```
 
 The CMake option enables Thread Sanitizer.
-The `Easy` and `Medium` plans of `LDTXModuleTests` cover Swift integration. AppKit window
-behavior is covered by hostless `LDTXAppUIComponentTests`, which directly constructs
+The complete `LDTXApp` test run covers Swift integration and hostless AppKit window
+behavior through `LDTXAppUIComponentTests`, which directly constructs
 windows and hosted SwiftUI views without automating application menus.
 Physical unplug/replug, long-duration A/V synchronization and acoustic latency
 remain hardware measurements; queue depth and peak display are not latency measurements.

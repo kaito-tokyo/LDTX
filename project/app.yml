@@ -268,5 +268,11 @@ schemes:
         ldtx: [test]
     test:
       config: Debug
+      targets:
+        - LDTXUtilsTests
+        - LDTXOutputTests
+        - LDTXAppUIComponentTests
+        - LDTXModuleTests
+        - LDTXAppXpcTests
     archive:
       config: Distribution

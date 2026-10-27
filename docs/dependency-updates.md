@@ -46,7 +46,7 @@ project.pbxproj is intentionally untracked. New app packages require a deliberat
 Dependabot coverage policy. Confirm hosted Dependabot behavior after this
 configuration reaches main.
 
-CI runs Linux Corelibs and the Xcode pr plan, including CLI and macOS
+CI runs Linux Corelibs and the complete Xcode app test scheme, including CLI and macOS
 protobuf-extra tests. After Xcode resolution, CI rejects changes to the tracked
 Xcode lock, including originHash; commit the resolver-produced lock before
 retrying CI. nanopb changes also require checking configuration macros, codec
