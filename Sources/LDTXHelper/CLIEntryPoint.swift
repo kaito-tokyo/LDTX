@@ -2,45 +2,33 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import ArgumentParser
+import Darwin
+import Foundation
 import LDTXAppHelper
 import LDTXUtils
 
 @main
-struct LDTXHelperCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
-    commandName: "ldtx",
-    abstract:
-      "Inspect, verify, and remux LDTX recording packages, or control the LDTX application.",
-    subcommands: LdtxCLI.fileSubcommands + [
-      AppAutomationCommand.self,
-      AppAutomationMCPCommand.self,
-    ]
-  )
-
-  mutating func run() async throws {}
-}
-
-private struct AppAutomationCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
-    commandName: "app",
-    abstract: "Control the LDTX application.")
-
-  mutating func run() async throws {
+struct LDTXHelperCommand {
+  static func main() async {
+    let arguments = Array(CommandLine.arguments.dropFirst())
     do {
-      try EmptyAppAutomationService().execute(operation: "app")
+      if arguments.isEmpty || arguments.contains("--help") || arguments.contains("-h") {
+        print("Usage: ldtx <workspace|record|app|mcp> …")
+        return
+      }
+      switch arguments[0] {
+      case "app":
+        guard arguments.count == 1 else { throw CLIValidationError("app takes no arguments.") }
+        try EmptyAppAutomationService().execute(operation: "app")
+      case "mcp":
+        guard arguments.count == 1 else { throw CLIValidationError("mcp takes no arguments.") }
+        try await AppAutomationMCPServer().run()
+      default:
+        try await LdtxCLI.run(arguments: arguments)
+      }
     } catch {
-      throw ValidationError(error.localizedDescription)
+      FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
+      exit(EXIT_FAILURE)
     }
-  }
-}
-
-private struct AppAutomationMCPCommand: AsyncParsableCommand {
-  static let configuration = CommandConfiguration(
-    commandName: "mcp",
-    abstract: "Run the App Automation MCP server.")
-
-  mutating func run() async throws {
-    try await AppAutomationMCPServer().run()
   }
 }

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@preconcurrency import AppAuth
 import Foundation
 import LDTXYouTube
 
@@ -54,7 +53,7 @@ public struct YouTubeAuthorizationService {
 
   private let authorizationStore: YouTubeAuthorizationStore
   private let oauthClientStore: OAuthClientConfigurationStore
-  private let authorizationPresenter = AppAuthAuthorizationPresenter()
+  private let authorizationPresenter = LoopbackOAuthAuthorizationPresenter()
 
   public init(
     authorizationStore: YouTubeAuthorizationStore? = nil,
@@ -114,27 +113,26 @@ public struct YouTubeAuthorizationService {
       @escaping @MainActor @Sendable (Result<AuthorizationResult, any Error>) -> Void
   ) {
     authorizationPresenter.authorize(
-      requestBuilder: { redirectURI in
-        try makeAuthorizationRequest(
+      requestBuilder: { redirectURI, state, challenge in
+        try makeAuthorizationURL(
           configuration: configuration,
-          scopes: [YouTubeLiveScope.manageLiveStreaming],
           redirectURI: redirectURI,
-          additionalParameters: ["access_type": "offline", "prompt": "consent"]
-        )
+          state: state,
+          codeChallenge: challenge)
       },
       completionHandler: { result in
         switch result {
         case .failure(let error):
           completionHandler(.failure(error))
-        case .success(let authState):
-          do {
-            try authorizationStore.save(authState, clientID: configuration.clientID)
-          } catch {
-            completionHandler(.failure(error))
-            return
-          }
-          freshAccessToken(for: authState, configuration: configuration) { result in
-            completionHandler(result.map { AuthorizationResult(accessToken: $0) })
+        case .success(let grant):
+          Task { @MainActor in
+            do {
+              let state = try await exchangeAuthorizationCode(grant, configuration: configuration)
+              try authorizationStore.save(state, clientID: configuration.clientID)
+              completionHandler(.success(AuthorizationResult(accessToken: state.accessToken)))
+            } catch {
+              completionHandler(.failure(error))
+            }
           }
         }
       }
@@ -160,7 +158,7 @@ public struct YouTubeAuthorizationService {
     completionHandler:
       @escaping @MainActor @Sendable (Result<AuthorizationRestoreResult, any Error>) -> Void
   ) {
-    let authState: OIDAuthState
+    let authState: YouTubeAuthorizationState
     do {
       guard let storedAuthState = try authorizationStore.load(clientID: configuration.clientID)
       else {
@@ -172,8 +170,13 @@ public struct YouTubeAuthorizationService {
       completionHandler(.failure(error))
       return
     }
-    freshAccessToken(for: authState, configuration: configuration) { result in
-      completionHandler(result.map { .authorized(accessToken: $0) })
+    Task { @MainActor in
+      do {
+        let token = try await freshAccessToken(for: authState, configuration: configuration)
+        completionHandler(.success(.authorized(accessToken: token)))
+      } catch {
+        completionHandler(.failure(error))
+      }
     }
   }
 
@@ -191,7 +194,7 @@ public struct YouTubeAuthorizationService {
     configuration: GoogleOAuthClientConfiguration,
     completionHandler: @escaping @MainActor @Sendable (Result<String, any Error>) -> Void
   ) {
-    let authState: OIDAuthState
+    let authState: YouTubeAuthorizationState
     do {
       guard let storedAuthState = try authorizationStore.load(clientID: configuration.clientID)
       else {
@@ -203,64 +206,154 @@ public struct YouTubeAuthorizationService {
       completionHandler(.failure(error))
       return
     }
-    freshAccessToken(
-      for: authState,
-      configuration: configuration,
-      completionHandler: completionHandler
-    )
+    Task { @MainActor in
+      do {
+        completionHandler(
+          .success(try await freshAccessToken(for: authState, configuration: configuration)))
+      } catch {
+        completionHandler(.failure(error))
+      }
+    }
   }
 
-  private func makeAuthorizationRequest(
+  private func makeAuthorizationURL(
     configuration: GoogleOAuthClientConfiguration,
-    scopes: [String],
     redirectURI: URL,
-    additionalParameters: [String: String]
-  ) throws -> OIDAuthorizationRequest {
-    let serviceConfiguration = OIDServiceConfiguration(
-      authorizationEndpoint: configuration.authURI,
-      tokenEndpoint: configuration.tokenURI
-    )
-    return OIDAuthorizationRequest(
-      configuration: serviceConfiguration,
-      clientId: configuration.clientID,
-      clientSecret: configuration.clientSecret,
-      scopes: scopes,
-      redirectURL: redirectURI,
-      responseType: OIDResponseTypeCode,
-      additionalParameters: additionalParameters
-    )
+    state: String,
+    codeChallenge: String
+  ) throws -> URL {
+    guard configuration.authURI.scheme?.lowercased() == "https",
+      var components = URLComponents(url: configuration.authURI, resolvingAgainstBaseURL: false)
+    else {
+      throw YouTubeAuthorizationServiceError.invalidAuthorizationEndpoint
+    }
+    var items = components.queryItems ?? []
+    items.append(contentsOf: [
+      URLQueryItem(name: "client_id", value: configuration.clientID),
+      URLQueryItem(name: "redirect_uri", value: redirectURI.absoluteString),
+      URLQueryItem(name: "response_type", value: "code"),
+      URLQueryItem(name: "scope", value: YouTubeLiveScope.manageLiveStreaming),
+      URLQueryItem(name: "state", value: state),
+      URLQueryItem(name: "code_challenge", value: codeChallenge),
+      URLQueryItem(name: "code_challenge_method", value: "S256"),
+      URLQueryItem(name: "access_type", value: "offline"),
+      URLQueryItem(name: "prompt", value: "consent"),
+    ])
+    components.queryItems = items
+    guard let url = components.url else {
+      throw YouTubeAuthorizationServiceError.invalidAuthorizationEndpoint
+    }
+    return url
+  }
+
+  private func exchangeAuthorizationCode(
+    _ grant: LoopbackOAuthAuthorizationPresenter.AuthorizationGrant,
+    configuration: GoogleOAuthClientConfiguration
+  ) async throws -> YouTubeAuthorizationState {
+    var parameters = [
+      "client_id": configuration.clientID,
+      "code": grant.code,
+      "code_verifier": grant.codeVerifier,
+      "grant_type": "authorization_code",
+      "redirect_uri": grant.redirectURI.absoluteString,
+    ]
+    if let secret = configuration.clientSecret { parameters["client_secret"] = secret }
+    let response = try await requestToken(parameters, configuration: configuration)
+    guard let refreshToken = response.refreshToken else {
+      throw YouTubeAuthorizationServiceError.authorizationDidNotReturnRefreshToken
+    }
+    return YouTubeAuthorizationState(
+      accessToken: response.accessToken,
+      refreshToken: refreshToken,
+      expirationDate: Date().addingTimeInterval(response.expiresIn))
   }
 
   private func freshAccessToken(
-    for authState: OIDAuthState,
-    configuration: GoogleOAuthClientConfiguration,
-    completionHandler: @escaping @MainActor @Sendable (Result<String, any Error>) -> Void
-  ) {
-    authState.performAction { accessToken, _, error in
-      DispatchQueue.main.async {
-        MainActor.assumeIsolated {
-          guard let accessToken else {
-            completionHandler(
-              .failure(
-                error ?? YouTubeAuthorizationServiceError.missingAuthorization
-              ))
-            return
-          }
-          do {
-            try authorizationStore.save(authState, clientID: configuration.clientID)
-            completionHandler(.success(accessToken))
-          } catch {
-            completionHandler(.failure(error))
-          }
-        }
-      }
+    for authState: YouTubeAuthorizationState,
+    configuration: GoogleOAuthClientConfiguration
+  ) async throws -> String {
+    if authState.expirationDate > Date().addingTimeInterval(60) { return authState.accessToken }
+    guard let refreshToken = authState.refreshToken else {
+      throw YouTubeAuthorizationServiceError.missingAuthorization
     }
+    var parameters = [
+      "client_id": configuration.clientID,
+      "grant_type": "refresh_token",
+      "refresh_token": refreshToken,
+    ]
+    if let secret = configuration.clientSecret { parameters["client_secret"] = secret }
+    let response = try await requestToken(parameters, configuration: configuration)
+    var refreshedState = authState
+    refreshedState.accessToken = response.accessToken
+    refreshedState.expirationDate = Date().addingTimeInterval(response.expiresIn)
+    if let newRefreshToken = response.refreshToken { refreshedState.refreshToken = newRefreshToken }
+    try authorizationStore.save(refreshedState, clientID: configuration.clientID)
+    return refreshedState.accessToken
+  }
+
+  private func requestToken(
+    _ parameters: [String: String], configuration: GoogleOAuthClientConfiguration
+  ) async throws -> OAuthTokenResponse {
+    guard configuration.tokenURI.scheme?.lowercased() == "https" else {
+      throw YouTubeAuthorizationServiceError.invalidTokenEndpoint
+    }
+    let body = encodeOAuthForm(parameters)
+    var request = URLRequest(url: configuration.tokenURI)
+    request.httpMethod = "POST"
+    request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.httpBody = body
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode)
+    else {
+      throw YouTubeAuthorizationServiceError.tokenRequestFailed
+    }
+    do {
+      return try JSONDecoder().decode(OAuthTokenResponse.self, from: data)
+    } catch {
+      throw YouTubeAuthorizationServiceError.invalidTokenResponse
+    }
+  }
+}
+
+func encodeOAuthForm(_ parameters: [String: String]) -> Data {
+  func encode(_ value: String) -> String {
+    value.utf8.map { byte in
+      switch byte {
+      case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2A, 0x2D, 0x2E, 0x5F:
+        String(UnicodeScalar(byte))
+      case 0x20:
+        "+"
+      default:
+        String(format: "%%%02X", byte)
+      }
+    }.joined()
+  }
+  let form = parameters.sorted { $0.key < $1.key }
+    .map { "\(encode($0.key))=\(encode($0.value))" }.joined(separator: "&")
+  return Data(form.utf8)
+}
+
+private struct OAuthTokenResponse: Decodable {
+  var accessToken: String
+  var expiresIn: TimeInterval
+  var refreshToken: String?
+
+  enum CodingKeys: String, CodingKey {
+    case accessToken = "access_token"
+    case expiresIn = "expires_in"
+    case refreshToken = "refresh_token"
   }
 }
 
 public enum YouTubeAuthorizationServiceError: Error, LocalizedError {
   case missingAuthorization
   case missingOAuthConfiguration
+  case invalidAuthorizationEndpoint
+  case invalidTokenEndpoint
+  case invalidTokenResponse
+  case tokenRequestFailed
+  case authorizationDidNotReturnRefreshToken
 
   public var errorDescription: String? {
     switch self {
@@ -268,6 +361,16 @@ public enum YouTubeAuthorizationServiceError: Error, LocalizedError {
       "Authorize YouTube before creating a stream."
     case .missingOAuthConfiguration:
       "Import a YouTube OAuth client before authorizing."
+    case .invalidAuthorizationEndpoint:
+      "The OAuth authorization endpoint must be a valid HTTPS URL."
+    case .invalidTokenEndpoint:
+      "The OAuth token endpoint must be a valid HTTPS URL."
+    case .invalidTokenResponse:
+      "The OAuth token endpoint returned an invalid response."
+    case .tokenRequestFailed:
+      "The OAuth token request failed."
+    case .authorizationDidNotReturnRefreshToken:
+      "Google did not return a refresh token. Authorize YouTube again."
     }
   }
 }

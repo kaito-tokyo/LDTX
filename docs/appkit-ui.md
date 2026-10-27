@@ -598,7 +598,7 @@ AppKit error presentation.
 Debug and Release builds check
 `~/Library/Application Support/<application bundle identifier>/.YouTubeAuth`
 once at application startup. If the file exists, Settings and Workspace use it
-for both the OAuth client and AppAuth authorization state. Otherwise they use
+for both the OAuth client and authorization state. Otherwise they use
 Keychain. Distribution builds compile out file storage and always use Keychain.
 Changing the file's presence requires restarting the application. Invalid or
 removed files produce errors rather than falling back to Keychain.
@@ -610,9 +610,11 @@ launching LDTX. Set the directory permissions to `0700` and file permissions to
 Desktop OAuth client JSON through the existing Account controls and authorize
 normally. No storage-selection UI is added. The file uses a JSON envelope with
 base64 `oauthClientJSON` and an `authorizations` dictionary keyed by client ID;
-authorization values are base64 secure archives of AppAuth state. Writes are
-atomic and set file permissions to `0600`. This development file contains
-credentials, including refresh tokens, and is not encrypted by this mechanism.
+authorization values are base64 JSON token state. Existing AppAuth secure
+archives are treated as unauthenticated, so users authorize YouTube once after
+upgrading. Writes are atomic and set file permissions to `0600`. This
+development file contains credentials, including refresh tokens, and is not
+encrypted by this mechanism.
 
 ## Create ML Image Classification Inspector
 

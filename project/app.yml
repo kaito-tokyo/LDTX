@@ -215,13 +215,6 @@ targets:
       - package: LDTXFontRasterizer
         product: LDTXFontRasterizer
         embed: true
-      - package: AppAuth-iOS
-        product: AppAuth
-        embed: false
-      - package: swift-argument-parser
-        product: ArgumentParser
-        # Xcode embeds and signs its synthesized package-product framework.
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX

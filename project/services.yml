@@ -44,8 +44,6 @@ targets:
     sources:
       - Sources/LDTXHelper
     dependencies:
-      - package: swift-argument-parser
-        product: ArgumentParser
       - target: LDTXUtils
         embed: false
       - target: LDTXAppHelper
