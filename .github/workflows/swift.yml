@@ -69,29 +69,6 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: xcodegen generate
 
-      - name: Cache Xcode Swift package dependencies
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            .derivedData/SourcePackages/artifacts
-            .derivedData/SourcePackages/checkouts
-            .derivedData/SourcePackages/repositories
-            .derivedData/SourcePackages/workspace-state.json
-          key: xcode-27-spm-${{ hashFiles('LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: |
-            xcode-27-spm-
-
-      - name: Resolve external Swift packages
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTXApp \
-            -derivedDataPath .derivedData \
-            -resolvePackageDependencies
-          git diff --exit-code -- LDTX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
