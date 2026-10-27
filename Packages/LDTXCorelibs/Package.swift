@@ -14,37 +14,27 @@ let package = Package(
       targets: ["LDTXCorelibs"]
     )
   ],
-  dependencies: [
-    .package(path: "../../Vendors/nanopb")
-  ],
+  dependencies: [],
   targets: [
     .target(
-      name: "LDTXNanopbGenerated",
-      dependencies: [
-        .product(name: "nanopb", package: "nanopb")
-      ],
-      path: "Sources/LDTXNanopbGenerated",
+      name: "nanopb",
+      path: "Sources/nanopb",
       publicHeadersPath: "include",
-      cSettings: [
-        .define("PB_FIELD_32BIT", to: "1"),
-        .define("PB_NO_PACKED_STRUCTS", to: "1"),
-        .define("PB_ENABLE_MALLOC", to: "1"),
-      ]
+      cSettings: [.headerSearchPath("include")]
+    ),
+    .target(
+      name: "LDTXNanopbGenerated",
+      dependencies: ["nanopb"],
+      path: "Sources/LDTXNanopbGenerated",
+      publicHeadersPath: "include"
     ),
     .target(
       name: "LDTXMessages",
       dependencies: [
         "LDTXNanopbGenerated",
-        .product(name: "nanopb", package: "nanopb"),
+        "nanopb",
       ],
-      path: "Sources/LDTXMessages",
-      swiftSettings: [
-        .unsafeFlags([
-          "-Xcc", "-DPB_FIELD_32BIT=1",
-          "-Xcc", "-DPB_NO_PACKED_STRUCTS=1",
-          "-Xcc", "-DPB_ENABLE_MALLOC=1",
-        ])
-      ]
+      path: "Sources/LDTXMessages"
     ),
     .target(
       name: "LDTXCorelibs",

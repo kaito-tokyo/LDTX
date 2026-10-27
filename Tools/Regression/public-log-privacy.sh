@@ -11,7 +11,7 @@ trap 'rm -rf "$probe_directory"' EXIT HUP INT TERM
 generated_headers=$repository/Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/include
 cat > "$probe_directory/nanopb.modulemap" <<EOF
 module nanopb {
-  umbrella "$repository/Vendors/nanopb/spm_headers"
+  umbrella "$repository/Packages/LDTXCorelibs/Sources/nanopb/include"
   export *
 }
 EOF
@@ -19,8 +19,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
   -module-cache-path "$probe_directory/cache" -F "$products" -F "$products/PackageFrameworks" -I "$products" \
   -Xcc -fmodule-map-file="$generated_headers/module.modulemap" \
   -Xcc -fmodule-map-file="$probe_directory/nanopb.modulemap" \
-  -Xcc -I"$repository/Vendors/nanopb/spm_headers" \
-  -Xcc -DPB_FIELD_32BIT=1 -Xcc -DPB_NO_PACKED_STRUCTS=1 -Xcc -DPB_ENABLE_MALLOC=1 \
+  -Xcc -I"$repository/Packages/LDTXCorelibs/Sources/nanopb/include" \
   -framework LDTXDash -framework LDTXCorelibs -framework LDTXProgramRuntime \
   -Xlinker -rpath -Xlinker "$products" \
   -Xlinker -rpath -Xlinker "$products/PackageFrameworks" \

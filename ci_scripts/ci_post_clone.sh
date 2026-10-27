@@ -13,6 +13,5 @@ export HOMEBREW_NO_INSTALL_CLEANUP=1
 
 cd ..
 
-git submodule update --init Vendors/nanopb
 brew install xcodegen
 xcodegen generate
