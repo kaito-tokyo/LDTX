@@ -120,10 +120,11 @@ construct their own windows and hosted SwiftUI views.
 
 ### Real OCR recognition
 
-The complete macOS test suite includes `WorkspaceClockOCRIntegrationTestSuite`
-and `ManualOCRRecognitionIntegrationTestSuite`. If Vision fails to compile an
-OCR request on the Neural Engine, `VisionOCRService` retries using supported CPU
-compute devices and then legacy Vision revision 2 on CPU. Keep the real recognition suites tagged
+The real-recognition suites `WorkspaceClockOCRIntegrationTestSuite` and
+`ManualOCRRecognitionIntegrationTestSuite` remain enabled for local testing and
+Xcode Cloud. GitHub Actions skips only these two suites because its hosted arm64
+runner cannot execute Vision OCR; deterministic OCR configuration and service
+integration tests continue to run there. Keep the real-recognition suites tagged
 `.hard` to describe their framework requirements.
 
 Run the manual OCR recognition test locally:

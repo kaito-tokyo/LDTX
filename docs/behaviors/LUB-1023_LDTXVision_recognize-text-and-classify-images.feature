@@ -7,10 +7,10 @@ Feature: Recognize text and classify images
 
   @LUB-1023.1 @Integration
   Scenario: Recognize text using configured languages
-    Environment constraint: Vision may fail to compile an OCR request on the
-    hosted arm64 runner's Neural Engine (E5RT error 11). On failure, the OCR
-    service retries with supported CPU compute devices, then with legacy Vision
-    revision 2 on CPU. This scenario still requires real text recognition.
+    Environment constraint: GitHub Actions skips this scenario's real OCR
+    integration suites because hosted arm64 runners cannot execute Vision OCR.
+    The local and Xcode Cloud suites keep real recognition enabled. Skipping in
+    GitHub Actions does not count as a successful recognition run.
 
     Given a known text image and an OCR configuration on a supported backend
     When text recognition completes
