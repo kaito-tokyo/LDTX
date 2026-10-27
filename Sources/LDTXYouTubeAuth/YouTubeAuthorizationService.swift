@@ -297,13 +297,7 @@ public struct YouTubeAuthorizationService {
     guard configuration.tokenURI.scheme?.lowercased() == "https" else {
       throw YouTubeAuthorizationServiceError.invalidTokenEndpoint
     }
-    var components = URLComponents()
-    components.queryItems = parameters.keys.sorted().map {
-      URLQueryItem(name: $0, value: parameters[$0])
-    }
-    guard let body = components.percentEncodedQuery?.data(using: .utf8) else {
-      throw YouTubeAuthorizationServiceError.invalidTokenResponse
-    }
+    let body = encodeOAuthForm(parameters)
     var request = URLRequest(url: configuration.tokenURI)
     request.httpMethod = "POST"
     request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -320,6 +314,24 @@ public struct YouTubeAuthorizationService {
       throw YouTubeAuthorizationServiceError.invalidTokenResponse
     }
   }
+}
+
+func encodeOAuthForm(_ parameters: [String: String]) -> Data {
+  func encode(_ value: String) -> String {
+    value.utf8.map { byte in
+      switch byte {
+      case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x2A, 0x2D, 0x2E, 0x5F:
+        String(UnicodeScalar(byte))
+      case 0x20:
+        "+"
+      default:
+        String(format: "%%%02X", byte)
+      }
+    }.joined()
+  }
+  let form = parameters.sorted { $0.key < $1.key }
+    .map { "\(encode($0.key))=\(encode($0.value))" }.joined(separator: "&")
+  return Data(form.utf8)
 }
 
 private struct OAuthTokenResponse: Decodable {

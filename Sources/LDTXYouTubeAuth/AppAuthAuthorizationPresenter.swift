@@ -17,6 +17,7 @@ final class LoopbackOAuthAuthorizationPresenter {
   }
 
   private var listener: NWListener?
+  private var sessionID: UUID?
   private var authorizationState: String?
   private var codeVerifier: String?
   private var redirectURI: URL?
@@ -49,6 +50,8 @@ final class LoopbackOAuthAuthorizationPresenter {
       parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
       parameters.acceptLocalOnly = true
       let listener = try NWListener(using: parameters, on: .any)
+      let sessionID = UUID()
+      self.sessionID = sessionID
       self.authorizationState = state
       self.codeVerifier = verifier
       self.requestBuilder = requestBuilder
@@ -56,19 +59,25 @@ final class LoopbackOAuthAuthorizationPresenter {
       self.listener = listener
       listener.stateUpdateHandler = { [weak self] state in
         DispatchQueue.main.async { [weak self] in
-          guard let self else { return }
+          guard let self, self.sessionID == sessionID else { return }
           MainActor.assumeIsolated { self.listenerDidUpdate(state) }
         }
       }
       listener.newConnectionHandler = { [weak self] connection in
         DispatchQueue.main.async { [weak self] in
-          guard let self else { return }
-          MainActor.assumeIsolated { self.receiveCallback(on: connection) }
+          guard let self, self.sessionID == sessionID else {
+            connection.cancel()
+            return
+          }
+          MainActor.assumeIsolated {
+            connection.start(queue: .main)
+            self.receiveCallback(on: connection, sessionID: sessionID, headers: Data())
+          }
         }
       }
       listener.start(queue: .main)
       DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
-        guard let self, self.completionHandler != nil else { return }
+        guard let self, self.sessionID == sessionID else { return }
         self.finish(.failure(LoopbackOAuthAuthorizationError.authorizationTimedOut))
       }
     } catch {
@@ -115,17 +124,32 @@ final class LoopbackOAuthAuthorizationPresenter {
     }
   }
 
-  private func receiveCallback(on connection: NWConnection) {
-    connection.start(queue: .main)
-    connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) {
-      [weak self] data, _, _, error in
+  private func receiveCallback(on connection: NWConnection, sessionID: UUID, headers: Data) {
+    let remaining = OAuthCallbackHeaders.maximumSize - headers.count
+    connection.receive(minimumIncompleteLength: 1, maximumLength: remaining) {
+      [weak self] data, _, isComplete, error in
       DispatchQueue.main.async { [weak self] in
-        guard let self else {
+        guard let self, self.sessionID == sessionID else {
           connection.cancel()
           return
         }
         MainActor.assumeIsolated {
-          guard error == nil, let data, let request = String(data: data, encoding: .utf8),
+          var buffer = OAuthCallbackHeaders(data: headers)
+          guard error == nil, let data, buffer.append(data) else {
+            self.sendResponse(
+              on: connection, status: 400, message: "Invalid authorization response.")
+            return
+          }
+          guard buffer.isComplete else {
+            if isComplete || buffer.data.count == OAuthCallbackHeaders.maximumSize {
+              self.sendResponse(
+                on: connection, status: 400, message: "Invalid authorization response.")
+            } else {
+              self.receiveCallback(on: connection, sessionID: sessionID, headers: buffer.data)
+            }
+            return
+          }
+          guard let request = String(data: buffer.data, encoding: .utf8),
             let outcome = self.parseCallback(request)
           else {
             self.sendResponse(
@@ -203,6 +227,7 @@ final class LoopbackOAuthAuthorizationPresenter {
   }
 
   private func finish(_ result: Result<AuthorizationGrant, any Error>) {
+    sessionID = nil
     listener?.cancel()
     listener = nil
     authorizationState = nil
@@ -236,6 +261,21 @@ final class LoopbackOAuthAuthorizationPresenter {
     guard left.count == right.count else { return false }
     return zip(left, right).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
   }
+}
+
+struct OAuthCallbackHeaders {
+  static let maximumSize = 16_384
+  private(set) var data: Data
+
+  init(data: Data = Data()) { self.data = data }
+
+  mutating func append(_ chunk: Data) -> Bool {
+    guard chunk.count <= Self.maximumSize - data.count else { return false }
+    data.append(chunk)
+    return true
+  }
+
+  var isComplete: Bool { data.range(of: Data("\r\n\r\n".utf8)) != nil }
 }
 
 enum LoopbackOAuthAuthorizationError: Error, LocalizedError {
