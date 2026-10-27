@@ -6,3 +6,9 @@ BasedOnStyle: LLVM
 Standard: c++20
 ColumnLimit: 120
 InsertNewlineAtEOF: true
+---
+Language: ObjC
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 120
+ObjCBlockIndentWidth: 2

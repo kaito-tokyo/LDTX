@@ -8,14 +8,6 @@ targets:
     platform: macOS
     sources:
       - Sources/Extensions/QuickLookPreview
-    dependencies:
-      - target: LDTXRecording
-        embed: true
-        codeSign: true
-      - package: Corelibs
-        product: LDTXCorelibs
-        embed: true
-        codeSign: true
     info:
       path: Sources/Extensions/QuickLookPreview/Info.plist
       properties:
@@ -29,7 +21,7 @@ targets:
               - tokyo.kaito.ldtx.record
               - tokyo.kaito.ldtx.recording
           NSExtensionPointIdentifier: com.apple.quicklook.preview
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewProvider
+          NSExtensionPrincipalClass: LDTXQuickLookPreviewProvider
     entitlements:
       path: Sources/Extensions/QuickLookPreview/LDTXQuickLookPreview.entitlements
       properties:
@@ -47,14 +39,6 @@ targets:
     platform: macOS
     sources:
       - Sources/Extensions/QuickLookThumbnail
-    dependencies:
-      - target: LDTXRecording
-        embed: true
-        codeSign: true
-      - package: Corelibs
-        product: LDTXCorelibs
-        embed: true
-        codeSign: true
     info:
       path: Sources/Extensions/QuickLookThumbnail/Info.plist
       properties:
@@ -68,7 +52,7 @@ targets:
               - tokyo.kaito.ldtx.record
               - tokyo.kaito.ldtx.recording
           NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider
+          NSExtensionPrincipalClass: LDTXThumbnailProvider
     entitlements:
       path: Sources/Extensions/QuickLookThumbnail/LDTXQuickLookThumbnail.entitlements
       properties:
