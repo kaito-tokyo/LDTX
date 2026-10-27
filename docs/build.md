@@ -47,10 +47,10 @@ Workspace UI's presentation contracts.
 
 XcodeGen references the local package's dynamic `LDTXCorelibs` product, and all
 Swift consumers use `import LDTXCorelibs`. One dynamic product provides a single
-implementation across the application's framework graph. The official nanopb
-package and generated C target are internal imports of `LDTXMessages`. Keep its
-C importer macros aligned with the C targets. AVFoundation operations remain in
-LDTXRecording outside Corelibs.
+implementation across the application's framework graph. The vendored nanopb
+target and generated C target are internal imports of `LDTXMessages`. The
+vendored `pb.h` defines the shared nanopb configuration macros. AVFoundation
+operations remain in LDTXRecording outside Corelibs.
 
 On Linux, files that only use Foundation's Swift value APIs import
 FoundationEssentials. Files using compatibility APIs such as JSONSerialization,
@@ -65,13 +65,12 @@ reference that package target directly; XcodeGen does not create another test
 bundle or source group.
 
 ```sh
-git submodule update --init Vendors/nanopb
 swift build --package-path Packages/LDTXCorelibs
 swift test --package-path Packages/LDTXCorelibs
 ```
 
-GitHub Codespaces uses `.devcontainer/devcontainer.json`, which initializes the
-nanopb submodule and resolves this package. Python and protoc are needed only
+GitHub Codespaces uses `.devcontainer/devcontainer.json` to resolve this package.
+Python and protoc are needed only
 when regenerating message sources.
 For Linux verification with the CI image:
 
@@ -79,9 +78,8 @@ For Linux verification with the CI image:
 docker run --rm \
   --mount "type=bind,source=$PWD,target=/workspace,readonly" \
   swift:6.4.0-trixie bash -euo pipefail -c '
-    mkdir -p /tmp/ldtx/Packages /tmp/ldtx/Vendors
+    mkdir -p /tmp/ldtx/Packages
     cp -R /workspace/Packages/LDTXCorelibs /tmp/ldtx/Packages/LDTXCorelibs
-    cp -R /workspace/Vendors/nanopb /tmp/ldtx/Vendors/nanopb
     swift test --package-path /tmp/ldtx/Packages/LDTXCorelibs --scratch-path /tmp/corelibs-build \
       --disable-index-store -debug-info-format none --jobs "$(nproc)"
   '
@@ -155,16 +153,16 @@ the commands below.
 | `Resources/LDTX/MediaPipeSelfieSegmenter.mlpackage` | `Tools/MediaPipeLandscapeCoreML/MediaPipeSelfieSegmenter.py`              |
 
 The Workspace v4 schema is split across `Protos/workspace_v4_*.proto`.
-The official `.pb.c` files supply the descriptor definitions and compile directly
+The nanopb `.pb.c` files supply the descriptor definitions and compile directly
 in `LDTXNanopbGenerated`.
 All schemas under `Protos` use Edition 2024. Run protoc 36.2 externally to create
 a FileDescriptorSet, then use the Python generator in
 [the generate-nanopb-protos skill](../.agents/skills/generate-nanopb-protos/SKILL.md) to generate
-Swift models and adapters. Generate C headers and sources separately with the official
-nanopb generator and `Protos/*.options`, following the skill's commands.
+Swift models and adapters. Generate C headers and sources separately with the
+vendored nanopb generator and `Protos/*.options`, following the skill's commands.
 The Swift generator reads descriptors using Python protobuf and never invokes
-protoc or nanopb. The app uses
-the official nanopb SwiftPM package at runtime; no generator runs during normal builds. Singular
+protoc or nanopb. The app uses the vendored nanopb runtime; no generator runs
+during normal builds. Singular
 fields use the edition default of explicit presence; do not set file-level
 `IMPLICIT` presence.
 The `uses_24_hour_time` field retains its existing name with a field-level
@@ -174,7 +172,6 @@ legacy naming-style override.
 documented at `docs/protos/workspace.html`.
 
 ```sh
-git submodule update --init Vendors/nanopb
 mkdir -p /tmp/ldtx-proto-input
 protoc -I Protos --include_imports --include_source_info \
   --descriptor_set_out=/tmp/ldtx-proto-input/schemas.pb Protos/*.proto

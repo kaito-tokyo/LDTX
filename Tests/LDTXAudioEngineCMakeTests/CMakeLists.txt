@@ -14,7 +14,7 @@ add_executable(ldtx-audio-engine-cmake-tests
   AudioMixEngineTests.cpp
 )
 target_include_directories(ldtx-audio-engine-cmake-tests PRIVATE
-  ../../Vendors/doctest
+  ../../Tests
   ../../Sources/LDTXAudioEngine/include
   ../../Sources/LDTXAudioEngine
 )

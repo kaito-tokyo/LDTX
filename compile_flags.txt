@@ -1,3 +1,3 @@
--IVendors/nanopb
+-IPackages/LDTXCorelibs/Sources/nanopb/include
 -ISources/LDTXAudioEngine/include
 -ISources/LDTXAudioEngine

@@ -1,0 +1,6 @@
+Repository: https://github.com/nanopb/nanopb
+Commit: 160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f
+Path: generator/nanopb_generator.py, generator/proto/__init__.py, generator/proto/_utils.py, generator/proto/nanopb.proto
+License: https://github.com/nanopb/nanopb/blob/nanopb-0.4.9.2/LICENSE.txt
+Authors: Petteri Aimonen
+Modifications: Copied into Tools/nanopb/generator to preserve reproducible C code generation without a Git submodule.

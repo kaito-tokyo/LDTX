@@ -6,24 +6,26 @@ SPDX-License-Identifier: Apache-2.0
 
 # Dependency updates
 
-Dependabot proposes weekly updates for GitHub Actions, Git submodules,
-and the app's AppAuth and ArgumentParser dependencies. Review each proposal and
+Dependabot proposes weekly updates for GitHub Actions and the app's AppAuth and
+ArgumentParser dependencies. Review each proposal and
 validate the affected build graphs before merging.
 
 ## Swift and XcodeGen
 
-`Vendors/nanopb` pins the nanopb runtime and generator as a Git submodule.
-`Packages/LDTXCorelibs/Package.swift` references its official local SwiftPM package
-and owns the adapter targets' C/Swift configuration macros.
+The nanopb runtime is copied into `Packages/LDTXCorelibs/Sources/nanopb`; its
+upstream revision and license are recorded beside the sources. The C generator
+and its support files are copied under `Tools/nanopb/generator`, with a matching
+upstream sidecar. `Packages/LDTXCorelibs/Package.swift` owns the runtime target
+and the adapter targets' C/Swift configuration macros.
 `project/corelibs.yml` references the Corelibs local package. `project.yml` owns AppAuth and
-ArgumentParser declarations. There is no root Package.swift. Dependabot's
-Git submodule scope updates nanopb; the separate
+ArgumentParser declarations. There is no root Package.swift. The
 `/LDTX.xcodeproj` scope proposes AppAuth and ArgumentParser lock updates.
 
 For an Xcode lock proposal, copy the proposed version to the corresponding
 `exactVersion` in project.yml before regenerating or resolving the project.
 Otherwise Xcode's resolver will restore the old manifest pin. For a nanopb
-update, use the same pinned checkout for the runtime and official C generator.
+update, refresh the runtime and generator copies from the same upstream commit
+and update both sidecars.
 The Python generator's protobuf runtime and Jinja2 are pinned in the PEP 723 inline metadata
 of `.agents/skills/generate-nanopb-protos/scripts/generate-nanopb-headers.py`. pipx with the pip backend manages
 its isolated environment;
@@ -37,7 +39,7 @@ xcodebuild -project LDTX.xcodeproj -scheme LDTXApp \
 ```
 
 Review the manifests and resolver-produced locks together. nanopb's revision is
-recorded by the Git submodule rather than a SwiftPM lock. The generated
+recorded in the source sidecars rather than a SwiftPM lock. The generated
 project.pbxproj is intentionally untracked. New app packages require a deliberate
 Dependabot coverage policy. Confirm hosted Dependabot behavior after this
 configuration reaches main.
@@ -77,7 +79,7 @@ to refresh a single dependency.
 GitHub Actions continues to use `gh actions-lock`: after an action proposal,
 regenerate and verify `.github/workflows/actions.lock` with a compatible tool
 version. This change does not modify action refs or their lock entries.
-Vendored doctest (a Git submodule), create-dmg, stb, bundled fonts/model assets,
+Vendored doctest (single-header copy; see `Tests/doctest/doctest.h.upstream`), create-dmg, stb, bundled fonts/model assets,
 Hugging Face model revisions, Homebrew tools, Xcode/Swift toolchains, and CI
 container/runner versions remain deliberate manual updates. Their licenses,
 upstream compatibility and relevant build/test checks must be reviewed.

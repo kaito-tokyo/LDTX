@@ -8,12 +8,12 @@ description: Regenerate or change LDTX's nanopb C headers, C sources, and Swift 
 ---
 
 `protoc` 36.2 or higher, `pipx`, and Swift 6.4 with `swift format` must be installed.
-Swift output is formatted using the repository's `.swift-format` before writing or checking it. `Vendors/nanopb` submodule must be populated.
+Swift output is formatted using the repository's `.swift-format` before writing or checking it.
 
 ## Generating pb.h and pb.c files
 
 ```sh
-pipx run --spec 'protobuf==7.36.2' python Vendors/nanopb/generator/nanopb_generator.py -I Protos --error-on-unmatched -D Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/ Protos/*.proto
+pipx run --spec 'protobuf==7.36.2' python Tools/nanopb/generator/nanopb_generator.py -I Protos --error-on-unmatched -D Packages/LDTXCorelibs/Sources/LDTXNanopbGenerated/generated/ Protos/*.proto
 ```
 
 ## pb.swift

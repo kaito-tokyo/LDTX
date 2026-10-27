@@ -11,7 +11,6 @@ cd "$(git rev-parse --show-toplevel)"
 path=${1#./}
 path=${path%/}
 case "$path" in
-Vendors/nanopb) baseurl=https://github.com/nanopb/nanopb/archive/refs/tags ;;
 Vendors/doctest) baseurl=https://github.com/doctest/doctest/archive/refs/tags ;;
 *)
   echo "Unsupported path: $path" >&2

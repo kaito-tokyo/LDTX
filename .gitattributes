@@ -9,3 +9,7 @@
 
 # SwiftProtobuf outputs are checked in to keep build clients off the plugin path.
 **/*.pb.swift linguist-generated=true
+
+# Preserve upstream nanopb source and license text verbatim.
+Packages/LDTXCorelibs/Sources/nanopb/** whitespace=-blank-at-eol,-blank-at-eof
+Tools/nanopb/** whitespace=-blank-at-eol,-blank-at-eof
