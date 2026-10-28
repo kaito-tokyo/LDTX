@@ -15,16 +15,15 @@ Debug skips framework module verification. Release and Distribution retain it;
 use `ENABLE_MODULE_VERIFIER=YES` to enable it explicitly for a Debug build.
 
 Debug enables compiler caching and path normalization, including generated
-module maps. CI applies these settings to package targets and preserves
-`.derivedData/CompilationCache.noindex` between runs. A clean build can reuse
-this cache; the first build still compiles uncached inputs. Release and
-Distribution keep their existing cache settings.
+module maps. CI currently disables compiler caching for its clean build.
+Release and Distribution keep their existing cache settings.
 Use `COMPILATION_CACHE_ENABLE_CACHING=NO` to build without compiler-result reuse.
 
 The CI build-for-testing step uses `ci_scripts/production-swift-batching.xcconfig`
 to limit Debug production Swift targets and package library dependencies to four
-compiler batches. Test bundles retain their existing compiler flags and batch
-selection. Local builds, Release, and Distribution keep their defaults. CI logs
+compiler batches. The UI component test target uses 16 batches; other test
+bundles retain their existing compiler flags and batch selection. Local builds,
+Release, and Distribution keep their defaults. CI logs
 include Xcode's build timing summary; its parallel task totals are not wall-clock
 build times.
 
