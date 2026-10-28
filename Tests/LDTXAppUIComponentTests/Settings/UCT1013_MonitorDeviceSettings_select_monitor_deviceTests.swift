@@ -14,8 +14,8 @@ extension AppUIComponentTestSuite {
   struct UCT1013MonitorDeviceSettingsIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }
 
-    @Test("LUB-1035: UCT-1013.1: Disappearing candidates do not change assignment")
-    func preservesAssignmentAndClearsUnavailableDraft() throws {
+    @Test("LUB-1035: Selection and candidate loss")
+    func appliesGlobalAssignmentWithoutEditingWorkspace() async throws {
       let suite = "MonitorSettings-\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
@@ -29,16 +29,8 @@ extension AppUIComponentTestSuite {
       model.select("saved")
       #expect(model.currentName == "Unavailable: saved")
       #expect(defaults.string(forKey: WorkspaceAudioEngine.outputDevicePreferenceKey) == "saved")
-    }
-
-    @Test("LUB-1035: UCT-1013.2: Selection immediately persists globally")
-    func appliesGlobalAssignmentWithoutEditingWorkspace() async throws {
-      let suite = "MonitorSettings-\(UUID())"
-      let defaults = try #require(UserDefaults(suiteName: suite))
-      defer { defaults.removePersistentDomain(forName: suite) }
-      let devices = [MonitorOutputDevice(id: "new", name: "New Device")]
-      let model = MonitorDeviceSettingsModel(
-        defaults: defaults, observesChanges: false, deviceProvider: { devices })
+      devices = [MonitorOutputDevice(id: "new", name: "New Device")]
+      model.select("")
       let firstDefaults = try #require(MonitorReadingDefaults(suiteName: suite))
       let secondDefaults = try #require(MonitorReadingDefaults(suiteName: suite))
       let firstEngine = WorkspaceAudioEngine(defaults: firstDefaults)

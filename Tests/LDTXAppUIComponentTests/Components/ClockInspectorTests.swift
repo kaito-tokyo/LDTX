@@ -119,6 +119,12 @@ extension AppUIComponentTestSuite {
             == Double(text))
       }
       let editor = try #require(field.currentEditor() as? NSTextView)
+      editor.insertText(
+        "65", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+      #expect(editor.string == "65")
+      #expect(outlines(in: document.workspace)[0].thickness?.double == 3.5)
+      editor.insertText(
+        "3.5", replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
       let snapshot = try await document.snapshot(
         contentType: WorkspaceDocument.writableContentTypes[0])
       let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -186,30 +192,8 @@ extension AppUIComponentTestSuite {
 
     }
 
-    struct OutlineWidthInput: Sendable, Codable {
-      let saved: Int32
-      let input: String
-      let expected: Double
-    }
-
-    @Test(
-      "LUB-1048: Outline width input preserves invalid drafts and commits supported values",
-      arguments: [
-        OutlineWidthInput(saved: 1, input: "3", expected: 3),
-        OutlineWidthInput(saved: 3, input: "3.", expected: 3),
-        OutlineWidthInput(saved: 1, input: "3.5", expected: 3.5),
-        OutlineWidthInput(saved: 1, input: "0", expected: 0),
-        OutlineWidthInput(saved: 1, input: "64", expected: 64),
-        OutlineWidthInput(saved: 1, input: "65", expected: 1),
-        OutlineWidthInput(saved: 1, input: "100", expected: 1),
-        OutlineWidthInput(saved: 1, input: "-1", expected: 1),
-        OutlineWidthInput(saved: 1, input: "1/0", expected: 1),
-        OutlineWidthInput(saved: 1, input: "2147483648", expected: 1),
-        OutlineWidthInput(saved: 1, input: "", expected: 1),
-        OutlineWidthInput(saved: 100, input: "65", expected: 100),
-        OutlineWidthInput(saved: 100, input: "64", expected: 64),
-      ])
-    func outlineWidthInput(_ data: OutlineWidthInput) async throws {
+    @Test("LUB-1048: Legacy width preserves invalid drafts and accepts supported values")
+    func outlineWidthInput() async throws {
       let document = WorkspaceDocument(definition: .init(), preferences: .init())
       document.editWorkspace(undoManager: nil) {
         $0.definition.videoComponents = [WorkspaceResourceFactory.makeClock(id: 11, name: "Clock")]
@@ -218,7 +202,7 @@ extension AppUIComponentTestSuite {
           return
         }
         clock.outlines = [
-          .with { $0.thickness = .with { $0.set(num: data.saved, den: 1) } }
+          .with { $0.thickness = .with { $0.set(num: 100, den: 1) } }
         ]
         $0.definition.videoComponents[0].videoComponent = .clock(clock)
       }
@@ -239,27 +223,27 @@ extension AppUIComponentTestSuite {
       await settleWorkspaceToolbar(window)
       #expect(
         outlines(in: document.workspace)[0].thickness?.num
-          == data.saved)
+          == 100)
       #expect(!undo.canUndo)
       func fields(_ view: NSView) -> [NSTextField] {
         (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
       }
       let field = try #require(
-        fields(hosting).first { $0.isEditable && $0.stringValue == String(data.saved) })
+        fields(hosting).first { $0.isEditable && $0.stringValue == "100" })
       #expect(window.makeFirstResponder(field))
       let editor = try #require(field.currentEditor() as? NSTextView)
-      undo.beginUndoGrouping()
-      editor.insertText(
-        data.input, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
-      undo.endUndoGrouping()
-      await settleWorkspaceToolbar(window)
-      #expect(editor.string == data.input)
-      #expect(
-        outlines(in: document.workspace)[0].thickness?.double
-          == data.expected)
-      let snapshot = try await document.snapshot(
-        contentType: WorkspaceDocument.writableContentTypes[0])
-      #expect(snapshot == document.workspace)
+      for (input, expected) in [("65", 100.0), ("64", 64.0)] {
+        undo.beginUndoGrouping()
+        editor.insertText(
+          input, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        undo.endUndoGrouping()
+        await settleWorkspaceToolbar(window)
+        #expect(editor.string == input)
+        #expect(outlines(in: document.workspace)[0].thickness?.double == expected)
+        let snapshot = try await document.snapshot(
+          contentType: WorkspaceDocument.writableContentTypes[0])
+        #expect(snapshot == document.workspace)
+      }
     }
 
     struct OutlineMembership: Sendable, Codable {

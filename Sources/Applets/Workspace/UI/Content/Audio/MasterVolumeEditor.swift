@@ -98,6 +98,15 @@ struct MasterVolumeEditor: View {
   }
 }
 
+enum AudioDecibelInput {
+  static func parse(_ text: String) -> Ldtx_Workspace_V4_Rational32? {
+    guard let parsed = try? RationalParseStrategy().parse(text),
+      (-80...20).contains(parsed.double)
+    else { return nil }
+    return try? Rational32DecibelEncoding.encode(parsed.double)
+  }
+}
+
 struct AudioDecibelField: View {
   @Binding var value: Ldtx_Workspace_V4_Rational32
   @State private var draft = ""
@@ -111,11 +120,7 @@ struct AudioDecibelField: View {
         get: { draft },
         set: { text in
           draft = text
-          guard let parsed = try? RationalParseStrategy().parse(text),
-            (-80...20).contains(parsed.double),
-            let encoded = try? Rational32DecibelEncoding.encode(
-              parsed.double)
-          else {
+          guard let encoded = AudioDecibelInput.parse(text) else {
             hasInvalidDraft = true
             return
           }

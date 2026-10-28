@@ -263,6 +263,14 @@ struct ClockInspector: View {
 
 }
 
+enum ClockOutlineWidthInput {
+  static func parse(_ text: String) -> Ldtx_Workspace_V4_Rational32? {
+    guard let value = try? RationalParseStrategy().parse(text), (0...64).contains(value.double)
+    else { return nil }
+    return value
+  }
+}
+
 /// The renderer caps outlines at 64 pixels. Preserve older saved values until edited.
 private struct ClockOutlineWidthField: View {
   @Binding var value: Ldtx_Workspace_V4_Rational32
@@ -278,9 +286,7 @@ private struct ClockOutlineWidthField: View {
           get: { draft },
           set: { text in
             draft = text
-            guard let parsed = try? RationalParseStrategy().parse(text),
-              (0...64).contains(parsed.double)
-            else {
+            guard let parsed = ClockOutlineWidthInput.parse(text) else {
               hasInvalidDraft = true
               return
             }

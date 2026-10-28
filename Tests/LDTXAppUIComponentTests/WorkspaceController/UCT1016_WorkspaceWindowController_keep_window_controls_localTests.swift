@@ -370,9 +370,9 @@ extension AppUIComponentTestSuite {
       let title: String
     }
 
-    @Test(
-      "LUB-1066: UCT-1016.8: Output state determines toolbar availability",
-      arguments: [
+    @Test("LUB-1066: UCT-1016.8: Output state determines toolbar availability")
+    func outputControlAvailability() async throws {
+      let states = [
         OutputControls(
           state: .idle, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
         OutputControls(
@@ -387,10 +387,8 @@ extension AppUIComponentTestSuite {
           state: .stopping, stopEnabled: false, toggleEnabled: false, title: "Start Output"),
         OutputControls(
           state: .failed, stopEnabled: false, toggleEnabled: true, title: "Start Output"),
-      ])
-    func outputControlAvailability(_ data: OutputControls) async throws {
+      ]
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
-      state.recordingState = data.state.value
       let window = makeWorkspaceTestWindow(stateService: state, dispatcher: ToolbarDispatcher())
       defer { window.close() }
       await settleWorkspaceToolbar(window)
@@ -398,9 +396,13 @@ extension AppUIComponentTestSuite {
       let stop = try #require(items.first { $0.itemIdentifier.rawValue == "workspace.stopOutput" })
       let toggle = try #require(
         items.first { $0.itemIdentifier.rawValue == "workspace.startPauseOutput" })
-      #expect(window.validateToolbarItem(stop) == data.stopEnabled)
-      #expect(window.validateToolbarItem(toggle) == data.toggleEnabled)
-      #expect(toggle.menuFormRepresentation?.title == data.title)
+      for data in states {
+        state.recordingState = data.state.value
+        await settleWorkspaceToolbar(window)
+        #expect(window.validateToolbarItem(stop) == data.stopEnabled)
+        #expect(window.validateToolbarItem(toggle) == data.toggleEnabled)
+        #expect(toggle.menuFormRepresentation?.title == data.title)
+      }
     }
 
     struct OutputAction: Sendable, Codable {
@@ -409,17 +411,15 @@ extension AppUIComponentTestSuite {
       let expected: [String]
     }
 
-    @Test(
-      "LUB-1066: UCT-1016.8: Toolbar actions reach only their owning runtime",
-      arguments: [
+    @Test("LUB-1066: UCT-1016.8: Toolbar actions reach only their owning runtime")
+    func outputAction() async throws {
+      let actions = [
         OutputAction(state: .idle, item: "workspace.startPauseOutput", expected: ["start"]),
         OutputAction(state: .recording, item: "workspace.startPauseOutput", expected: ["pause"]),
         OutputAction(state: .paused, item: "workspace.stopOutput", expected: ["stop"]),
         OutputAction(state: .pausing, item: "workspace.startPauseOutput", expected: []),
-      ])
-    func outputAction(_ data: OutputAction) async throws {
+      ]
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
-      state.recordingState = data.state.value
       let dispatcher = ToolbarDispatcher()
       let other = ToolbarDispatcher()
       let first = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
@@ -429,12 +429,18 @@ extension AppUIComponentTestSuite {
         second.close()
       }
       await settleWorkspaceToolbar(first)
-      let item = try #require(
-        first.toolbar?.items.first { $0.itemIdentifier.rawValue == data.item })
-      try performWorkspaceToolbarAction(item)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == data.expected)
-      #expect(other.actions.isEmpty)
+      var expected: [String] = []
+      for data in actions {
+        state.recordingState = data.state.value
+        await settleWorkspaceToolbar(first)
+        let item = try #require(
+          first.toolbar?.items.first { $0.itemIdentifier.rawValue == data.item })
+        try performWorkspaceToolbarAction(item)
+        await drainWorkspaceTestTasks()
+        expected.append(contentsOf: data.expected)
+        #expect(dispatcher.actions == expected)
+        #expect(other.actions.isEmpty)
+      }
     }
 
     @Test("LUB-1066: UCT-1016.8: Toolbar start failure remains observable")
@@ -457,17 +463,14 @@ extension AppUIComponentTestSuite {
       let localRecording: Bool
     }
 
-    @Test(
-      "LUB-1046: UCT-1016.9: Screenshot action is independent of output mode",
-      arguments: [
+    @Test("LUB-1046: UCT-1016.9: Screenshot action is independent of output mode")
+    func screenshotToolbarAction() async throws {
+      let states = [
         ScreenshotState(outputActive: false, localRecording: false),
         ScreenshotState(outputActive: true, localRecording: false),
         ScreenshotState(outputActive: true, localRecording: true),
-      ])
-    func screenshotToolbarAction(_ data: ScreenshotState) async throws {
+      ]
       let state = WorkspaceDocument(definition: .init(), preferences: .init())
-      state.isOutputActive = data.outputActive
-      state.isLocalRecording = data.localRecording
       let dispatcher = ToolbarDispatcher()
       let window = makeWorkspaceTestWindow(stateService: state, dispatcher: dispatcher)
       defer { window.close() }
@@ -475,10 +478,15 @@ extension AppUIComponentTestSuite {
       let item = try #require(
         window.toolbar?.items.first { $0.itemIdentifier.rawValue == "workspace.captureScreenshots" }
       )
-      #expect(item.isEnabled)
-      try performWorkspaceToolbarAction(item)
-      await drainWorkspaceTestTasks()
-      #expect(dispatcher.actions == ["screenshot"])
+      for (index, data) in states.enumerated() {
+        state.isOutputActive = data.outputActive
+        state.isLocalRecording = data.localRecording
+        await settleWorkspaceToolbar(window)
+        #expect(item.isEnabled)
+        try performWorkspaceToolbarAction(item)
+        await drainWorkspaceTestTasks()
+        #expect(dispatcher.actions == Array(repeating: "screenshot", count: index + 1))
+      }
     }
 
     @Test("LUB-1052: UCT-1016.10: Program selection updates only the owning Window runtimes")

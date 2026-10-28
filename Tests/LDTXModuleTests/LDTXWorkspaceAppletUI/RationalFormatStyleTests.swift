@@ -31,6 +31,28 @@ struct RationalFormatStyleUnitTestSuite {
       #expect(throws: RationalInputError.self) { try RationalParseStrategy().parse(input) }
     }
   }
+
+  @Test("LUB-1048: Clock outline width accepts supported values and rejects invalid drafts")
+  func clockOutlineWidthInputs() throws {
+    for (input, expected) in [("3", 3.0), ("3.", 3.0), ("3.5", 3.5), ("0", 0.0), ("64", 64.0)] {
+      #expect(try #require(ClockOutlineWidthInput.parse(input)).double == expected)
+    }
+    for input in ["65", "100", "-1", "1/0", "2147483648", ""] {
+      #expect(ClockOutlineWidthInput.parse(input) == nil)
+    }
+  }
+
+  @Test("LUB-1048: Audio decibel input validates bounds and rounds to tenths")
+  func audioDecibelInputs() throws {
+    for (input, expected) in [("-12.04", -120), ("-80", -800), ("20", 200)] {
+      let value = try #require(AudioDecibelInput.parse(input))
+      #expect(value.num == Int32(expected))
+      #expect(value.den == 10)
+    }
+    for input in ["-", "100", "-81", "20.1", "inf"] {
+      #expect(AudioDecibelInput.parse(input) == nil)
+    }
+  }
   @Test("LUB-1048: Continuous sliders use explicit precision")
   func continuousSlidersUseExplicitPrecision() throws {
     var value = Ldtx_Workspace_V4_Rational32()

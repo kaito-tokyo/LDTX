@@ -75,22 +75,6 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == pending)
     }
 
-    @Test("LUB-1031: First edit uses the supplied manager without connection setup")
-    func firstEditUsesTheSuppliedManagerWithoutConnectionSetup() {
-      let document = WorkspaceDocument()
-      let undo = UndoManager()
-      undo.groupsByEvent = false
-      let original = document.workspace
-      undo.beginUndoGrouping()
-      document.editWorkspace(undoManager: undo) { $0.definition.displayName = "First input" }
-      undo.endUndoGrouping()
-      undo.undo()
-      #expect(document.workspace == original)
-      #expect(undo.canRedo)
-      undo.redo()
-      #expect(document.workspace.definition.displayName == "First input")
-    }
-
     @Test("LUB-1031: Reverse registration uses the manager executing undo")
     func reverseRegistrationUsesTheManagerExecutingUndo() {
       let document = WorkspaceDocument()
@@ -115,15 +99,21 @@ extension AppUIComponentTestSuite {
       #expect(document.workspace == original)
     }
 
-    @Test("LUB-1031: No op preserves redo and new edit invalidates it")
+    @Test("LUB-1031: First edit undo, redo, no op, and new edit history")
     func noOpPreservesRedoAndNewEditInvalidatesIt() {
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
+      let original = document.workspace
 
       undo.beginUndoGrouping()
       document.editWorkspace(undoManager: undo) { $0.definition.displayName = "First" }
       undo.endUndoGrouping()
+      undo.undo()
+      #expect(document.workspace == original)
+      #expect(undo.canRedo)
+      undo.redo()
+      #expect(document.workspace.definition.displayName == "First")
       undo.undo()
       #expect(undo.canRedo)
       document.editWorkspace(undoManager: undo) {
