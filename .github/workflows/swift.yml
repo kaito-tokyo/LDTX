@@ -97,62 +97,54 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
-      - name: Test non-UI targets without building
-        id: non_ui_tests
-        background: true
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          # Hosted arm64 runners cannot execute real Vision OCR integration tests.
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTXApp \
-            -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData \
-            -skip-testing:LDTXAppUIComponentTests \
-            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
-            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_ENTITLEMENTS= \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
-            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
+      - parallel:
+          - name: Test non-UI targets without building
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              # Hosted arm64 runners cannot execute real Vision OCR integration tests.
+              xcodebuild \
+                -skipPackagePluginValidation \
+                -project LDTX.xcodeproj \
+                -scheme LDTXApp \
+                -configuration Debug \
+                -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData \
+                -skip-testing:LDTXAppUIComponentTests \
+                -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
+                -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
+                CODE_SIGN_STYLE=Manual \
+                CODE_SIGN_IDENTITY=- \
+                PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= \
+                CODE_SIGN_ENTITLEMENTS= \
+                COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
 
 
-      - name: Test UI shard 1
-        id: ui_shard_1
-        background: true
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
-            -configuration Debug -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
-            -testPlan UIShard1 \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-1.xcresult" \
-            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-1.log" | xcbeautify --renderer github-actions
+          - name: Test UI shard 1
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+                -configuration Debug -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+                -testPlan UIShard1 \
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-1.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-1.log" | xcbeautify --renderer github-actions
 
-      - name: Test UI shard 2
-        id: ui_shard_2
-        background: true
-        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: |
-          xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
-            -configuration Debug -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
-            -testPlan UIShard2 \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" \
-            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-2.log" | xcbeautify --renderer github-actions
-
-      - name: Wait for tests
-        wait: [non_ui_tests, ui_shard_1, ui_shard_2]
+          - name: Test UI shard 2
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+                -configuration Debug -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+                -testPlan UIShard2 \
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-2.log" | xcbeautify --renderer github-actions
 
       - name: Verify UI shard results
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
