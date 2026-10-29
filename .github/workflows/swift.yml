@@ -69,7 +69,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           xcodegen generate
-          python3 ci_scripts/generate-test-plans.py --check
+          python3 .agents/skills/ldtx-test-plan-gen/scripts/generate-test-plans.py --check
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
