@@ -97,8 +97,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
-      - name: Run tests in parallel
-        parallel:
+      - parallel:
           - name: Test non-UI targets without building
             shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
             run: |
