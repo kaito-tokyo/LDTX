@@ -97,11 +97,11 @@ plans from the XcodeGen project and commit them:
 
 ```sh
 xcodegen generate
-python3 .agents/skills/ldtx-test-plan-gen/scripts/generate-test-plans.py
+python3 .agents/skills/ldtx-generate-xctestplan/scripts/generate-test-plans.py
 ```
 
 The target names and shard plan settings are defined in
-`.agents/skills/ldtx-test-plan-gen/scripts/generate-test-plans.py`; UI suites declare their shard in the test
+`.agents/skills/ldtx-generate-xctestplan/scripts/generate-test-plans.py`; UI suites declare their shard in the test
 sources. Run the script with `--check` to verify the plans without modifying them.
 
 Select the shared `LDTXApp` scheme for the Xcode Cloud test workflow, using

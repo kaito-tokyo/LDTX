@@ -98,7 +98,7 @@ def main():
         if stale:
             for path in stale:
                 print(f"Test plan is missing or out of date: {path}", file=sys.stderr)
-            print("Run: python3 .agents/skills/ldtx-test-plan-gen/scripts/generate-test-plans.py", file=sys.stderr)
+            print("Run: python3 .agents/skills/ldtx-generate-xctestplan/scripts/generate-test-plans.py", file=sys.stderr)
             return 1
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
         print(f"Cannot generate test plans: {error}", file=sys.stderr)

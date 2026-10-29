@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-name: ldtx-test-plan-gen
+name: ldtx-generate-xctestplan
 description: Generate or verify LDTX's Xcode test plans after changes to test targets or shard settings.
 ---
 
@@ -12,7 +12,7 @@ test plans:
 
 ```sh
 xcodegen generate
-python3 .agents/skills/ldtx-test-plan-gen/scripts/generate-test-plans.py
+python3 .agents/skills/ldtx-generate-xctestplan/scripts/generate-test-plans.py
 ```
 
 The script reads target identifiers from the generated project. Its `PLANS`
