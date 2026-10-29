@@ -92,6 +92,18 @@ separately on Linux.
 
 ## Xcode Cloud tests
 
+After changing the LDTXApp test target list, regenerate the checked-in test
+plans from the XcodeGen project and commit them:
+
+```sh
+xcodegen generate
+python3 ci_scripts/generate-test-plans.py
+```
+
+The target names and shard plan settings are defined in
+`ci_scripts/generate-test-plans.py`; UI suites declare their shard in the test
+sources. Run the script with `--check` to verify the plans without modifying them.
+
 Select the shared `LDTXApp` scheme for the Xcode Cloud test workflow, using
 `Debug`. It runs the complete test suite.
 The macOS-only `LDTXOutputTests` scheme runs output configuration, media delivery,
