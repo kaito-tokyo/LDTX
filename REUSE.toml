@@ -23,6 +23,7 @@ path = [
   "Resources/**/*.json",
   "Resources/LDTX/AppIcon.icon/Assets/*.svg",
   "Resources/Shared/About/Credits.rtf",
+  "Tests/*.xctestplan",
 ]
 SPDX-FileCopyrightText = "2026 Kaito Udagawa <umireon@kaito.tokyo>"
 SPDX-License-Identifier = "Apache-2.0"
