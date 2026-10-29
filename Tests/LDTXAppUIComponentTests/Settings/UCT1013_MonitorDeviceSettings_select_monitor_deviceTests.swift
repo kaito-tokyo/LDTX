@@ -8,7 +8,7 @@ import AppKit
 import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1013: Select monitor device", .serialized)
   @MainActor
   struct UCT1013MonitorDeviceSettingsIntegrationTestSuite {

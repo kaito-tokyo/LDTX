@@ -7,7 +7,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("Workspace Vision Binding")
   @MainActor
   struct WorkspaceStateVisionBindingUnitTestSuite {

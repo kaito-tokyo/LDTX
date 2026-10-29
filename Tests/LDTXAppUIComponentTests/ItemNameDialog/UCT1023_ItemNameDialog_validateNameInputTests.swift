@@ -5,7 +5,7 @@
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1023: Name input validation")
   @MainActor
   struct UCT1023ItemNameDialogUnitTestSuite {

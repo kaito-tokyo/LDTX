@@ -8,7 +8,7 @@ import LDTXCorelibs
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1024: Manage Programs", .serialized)
   @MainActor
   struct UCT1024WorkspaceProgramsInspectorIntegrationTestSuite {

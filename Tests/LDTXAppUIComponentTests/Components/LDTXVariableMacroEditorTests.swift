@@ -11,7 +11,7 @@ import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @MainActor @Suite(.serialized)
   struct LDTXVariableMacroEditorIntegrationTestSuite {
     let first = LDTXVariableReference(id: "11", sel: "text")

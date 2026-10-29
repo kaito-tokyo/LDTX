@@ -7,7 +7,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1007: SwiftUI selected Program", .serialized) @MainActor
   struct UCT1007VideoLayersEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }

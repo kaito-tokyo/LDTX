@@ -11,7 +11,7 @@ import LDTXWorkspaceAppletModel
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1027: Create ML Image Classifier UI", .serialized)
   @MainActor
   struct UCT1027LdtxSceneDetectorVisionIntegrationTestSuite {

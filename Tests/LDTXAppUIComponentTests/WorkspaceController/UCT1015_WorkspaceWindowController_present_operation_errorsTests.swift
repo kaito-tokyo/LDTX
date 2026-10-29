@@ -9,7 +9,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1015: present-operation-errors", .serialized)
   @MainActor
   struct UCT1015WorkspaceAppletCoordinatorIntegrationTestSuite {

@@ -10,7 +10,7 @@ import LDTXRecording
 import Testing
 import UniformTypeIdentifiers
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1021: URL Document reading", .serialized)
   @MainActor
   struct UCT1021RecordPlayerDocumentIntegrationTestSuite {

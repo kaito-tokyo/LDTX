@@ -8,7 +8,7 @@ import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1010: change-canvas-membership", .serialized)
   @MainActor
   struct UCT1010VideoComponentProgramLayersIntegrationTestSuite {

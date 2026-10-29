@@ -7,7 +7,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite @MainActor
   struct WorkspaceActionIntegrationTestSuite {
     @Test(.timeLimit(.minutes(1)))

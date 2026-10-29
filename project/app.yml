@@ -261,11 +261,10 @@ schemes:
         ldtx: [test]
     test:
       config: Debug
-      targets:
-        - LDTXUtilsTests
-        - LDTXOutputTests
-        - LDTXAppUIComponentTests
-        - LDTXModuleTests
-        - LDTXAppXpcTests
+      testPlans:
+        - path: Tests/AllTests.xctestplan
+          defaultPlan: true
+        - path: Tests/UIShard1.xctestplan
+        - path: Tests/UIShard2.xctestplan
     archive:
       config: Distribution

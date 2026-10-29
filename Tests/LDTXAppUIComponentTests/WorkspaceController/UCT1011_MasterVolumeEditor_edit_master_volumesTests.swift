@@ -9,7 +9,7 @@ import LDTXProgramRuntime
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1011: SwiftUI master volumes", .serialized) @MainActor
   struct UCT1011MasterVolumeEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }

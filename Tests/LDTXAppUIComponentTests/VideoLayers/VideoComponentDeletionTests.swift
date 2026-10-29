@@ -6,7 +6,7 @@ import LDTXWorkspaceAppletModel
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite @MainActor
   struct VideoComponentDeletionIntegrationTestSuite {
     @Test("LUB-1048: Deletion clears references across programs and preserves other content")

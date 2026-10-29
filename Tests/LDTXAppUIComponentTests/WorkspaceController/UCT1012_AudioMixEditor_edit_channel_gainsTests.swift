@@ -9,7 +9,7 @@ import LDTXProgramRuntime
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1012: SwiftUI channel gains", .serialized) @MainActor
   struct UCT1012AudioMixEditorIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }

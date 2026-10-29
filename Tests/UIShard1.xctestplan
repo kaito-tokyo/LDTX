@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "id": "FEA43111-E2AE-4D60-B02F-7C7FD12E7591",
+      "name": "Default",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": false,
+    "environmentVariableEntries": [
+      {
+        "key": "LDTX_UI_TEST_SHARD",
+        "value": "1",
+        "isEnabled": true
+      }
+    ]
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:LDTX.xcodeproj",
+        "identifier": "232F5D19ADE07649B5F9404D",
+        "name": "LDTXAppUIComponentTests"
+      }
+    }
+  ],
+  "version": 1
+}

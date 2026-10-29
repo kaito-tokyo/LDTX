@@ -7,7 +7,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1009: SwiftUI layer reordering", .serialized) @MainActor
   struct UCT1009VideoLayersTableViewIntegrationTestSuite {
     struct LayerMove: Sendable, Codable {

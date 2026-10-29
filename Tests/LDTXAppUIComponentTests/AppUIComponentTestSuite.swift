@@ -13,6 +13,11 @@ import Testing
 struct AppUIComponentTestSuite {
   init() { _ = UIComponentTestEnvironment.documentController }
 
+  @Suite(.enabled(if: ProcessInfo.processInfo.environment["LDTX_UI_TEST_SHARD"] != "2"))
+  struct Shard1 {}
+
+  @Suite(.enabled(if: ProcessInfo.processInfo.environment["LDTX_UI_TEST_SHARD"] != "1"))
+  struct Shard2 {}
 }
 
 @MainActor

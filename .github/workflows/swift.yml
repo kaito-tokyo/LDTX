@@ -67,7 +67,9 @@ jobs:
 
       - name: Generate Xcode project
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
-        run: xcodegen generate
+        run: |
+          xcodegen generate
+          python3 .agents/skills/ldtx-generate-xctestplan/scripts/generate-test-plans.py --check
 
       - name: Build for testing
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -97,27 +99,71 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
-      - name: Test without building
+      - parallel:
+          - name: Test non-UI targets without building
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              # Hosted arm64 runners cannot execute real Vision OCR integration tests.
+              xcodebuild \
+                -skipPackagePluginValidation \
+                -project LDTX.xcodeproj \
+                -scheme LDTXApp \
+                -configuration Debug \
+                -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData \
+                -skip-testing:LDTXAppUIComponentTests \
+                -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
+                -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
+                CODE_SIGN_STYLE=Manual \
+                CODE_SIGN_IDENTITY=- \
+                PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= \
+                CODE_SIGN_ENTITLEMENTS= \
+                COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
+
+
+          - name: Test UI shard 1
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+                -configuration Debug -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+                -testPlan UIShard1 \
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-1.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-1.log" | xcbeautify --renderer github-actions
+
+          - name: Test UI shard 2
+            shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+            run: |
+              xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+                -configuration Debug -destination 'platform=macOS,arch=arm64' \
+                -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+                -testPlan UIShard2 \
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+                PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+                -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" \
+                test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-2.log" | xcbeautify --renderer github-actions
+
+      - name: Verify UI shard results
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
-          # Hosted arm64 runners cannot execute real Vision OCR integration tests.
-          xcodebuild \
-            -skipPackagePluginValidation \
-            -project LDTX.xcodeproj \
-            -scheme LDTXApp \
-            -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath .derivedData \
-            -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
-            -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY=- \
-            PROVISIONING_PROFILE= \
-            PROVISIONING_PROFILE_SPECIFIER= \
-            CODE_SIGN_ENTITLEMENTS= \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
-            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
+          xcrun xcresulttool get test-results summary --format json \
+            --path "$RUNNER_TEMP/xcodebuild-ui-shard-1.xcresult" > "$RUNNER_TEMP/ui-shard-1-summary.json"
+          xcrun xcresulttool get test-results summary --format json \
+            --path "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" > "$RUNNER_TEMP/ui-shard-2-summary.json"
+          jq -s -e '
+            .[0] as $a | .[1] as $b |
+            $a.passedTests > 0 and $b.passedTests > 0 and
+            $a.failedTests == 0 and $b.failedTests == 0 and
+            $a.totalTestCount == $b.totalTestCount and
+            $a.passedTests == $b.skippedTests and
+            $b.passedTests == $a.skippedTests and
+            ($a.passedTests + $b.passedTests) == $a.totalTestCount
+          ' "$RUNNER_TEMP/ui-shard-1-summary.json" "$RUNNER_TEMP/ui-shard-2-summary.json"
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -140,6 +186,12 @@ jobs:
           path: |
             ${{ runner.temp }}/xcodebuild-build.log
             ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/xcodebuild-ui-shard-1.log
+            ${{ runner.temp }}/xcodebuild-ui-shard-2.log
             ${{ runner.temp }}/xcodebuild-build.xcresult
             ${{ runner.temp }}/xcodebuild-test.xcresult
+            ${{ runner.temp }}/xcodebuild-ui-shard-1.xcresult
+            ${{ runner.temp }}/xcodebuild-ui-shard-2.xcresult
+            ${{ runner.temp }}/ui-shard-1-summary.json
+            ${{ runner.temp }}/ui-shard-2-summary.json
           if-no-files-found: warn

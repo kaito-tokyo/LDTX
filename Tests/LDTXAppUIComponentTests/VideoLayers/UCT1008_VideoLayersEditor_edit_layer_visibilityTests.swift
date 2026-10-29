@@ -7,7 +7,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1008: SwiftUI visibility", .serialized) @MainActor
   struct UCT1008VideoLayersEditorIntegrationTestSuite {
     @Test("LUB-1048: Hide edits remain live during output") func hideEditsRemainLiveDuringOutput()

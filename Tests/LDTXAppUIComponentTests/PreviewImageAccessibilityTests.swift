@@ -5,7 +5,7 @@ import AppKit
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite struct PreviewImageAccessibilityUnitTestSuite {
     @Test("LUB-1058: Identity and selection actions") @MainActor func identityAndSelectionActions()
       throws
