@@ -97,7 +97,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-build.xcresult" \
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
-      - name: Test without building
+      - name: Test non-UI targets without building
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           # Hosted arm64 runners cannot execute real Vision OCR integration tests.
@@ -108,6 +108,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath .derivedData \
+            -skip-testing:LDTXAppUIComponentTests \
             -skip-testing:LDTXModuleTests/WorkspaceClockOCRIntegrationTestSuite \
             -skip-testing:LDTXModuleTests/ManualOCRRecognitionIntegrationTestSuite \
             CODE_SIGN_STYLE=Manual \
@@ -118,6 +119,69 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-test.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcbeautify --renderer github-actions
+
+      - name: Enumerate UI test shards
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project LDTX.xcodeproj \
+            -scheme LDTXApp \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath .derivedData \
+            -only-testing:LDTXAppUIComponentTests \
+            -enumerate-tests \
+            -test-enumeration-style hierarchical \
+            -test-enumeration-format json \
+            -test-enumeration-output-path "$RUNNER_TEMP/ui-tests.json" \
+            test-without-building
+          jq -e '
+            (.errors | length == 0) and
+            ([.values[].children[] | select(.kind == "target" and .name == "LDTXAppUIComponentTests") | .children[]] |
+              length == 1 and .[0].name == "AppUIComponentTestSuite" and
+              (.[0].children | length >= 2 and all(.[]; .kind == "suite" and (.name | test("^[A-Za-z_][A-Za-z_0-9]*$"))) and
+                (map(.name) | length == (unique | length))))
+          ' "$RUNNER_TEMP/ui-tests.json" > /dev/null
+          jq -r '
+            .values[].children[] | select(.kind == "target" and .name == "LDTXAppUIComponentTests") |
+            .children[] | select(.name == "AppUIComponentTestSuite") | .children[].name
+          ' "$RUNNER_TEMP/ui-tests.json" | LC_ALL=C sort | awk -v dir="$RUNNER_TEMP" '
+            { print "LDTXAppUIComponentTests/AppUIComponentTestSuite/" $0 > (dir "/ui-shard-" (1 + (NR + 1) % 2) ".txt") }
+          '
+          test -s "$RUNNER_TEMP/ui-shard-1.txt"
+          test -s "$RUNNER_TEMP/ui-shard-2.txt"
+
+      - name: Test UI shard 1
+        id: ui_shard_1
+        background: true
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+            -configuration Debug -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+            -only-testing "@$RUNNER_TEMP/ui-shard-1.txt" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+            -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-1.xcresult" \
+            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-1.log" | xcbeautify --renderer github-actions
+
+      - name: Test UI shard 2
+        id: ui_shard_2
+        background: true
+        shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
+        run: |
+          xcodebuild -skipPackagePluginValidation -project LDTX.xcodeproj -scheme LDTXApp \
+            -configuration Debug -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath .derivedData -parallel-testing-enabled YES -parallel-testing-worker-count 1 \
+            -only-testing "@$RUNNER_TEMP/ui-shard-2.txt" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE= \
+            PROVISIONING_PROFILE_SPECIFIER= CODE_SIGN_ENTITLEMENTS= COMPILER_INDEX_STORE_ENABLE=NO \
+            -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" \
+            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-2.log" | xcbeautify --renderer github-actions
+
+      - name: Wait for UI test shards
+        wait: [ui_shard_1, ui_shard_2]
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
@@ -140,6 +204,13 @@ jobs:
           path: |
             ${{ runner.temp }}/xcodebuild-build.log
             ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/xcodebuild-ui-shard-1.log
+            ${{ runner.temp }}/xcodebuild-ui-shard-2.log
             ${{ runner.temp }}/xcodebuild-build.xcresult
             ${{ runner.temp }}/xcodebuild-test.xcresult
+            ${{ runner.temp }}/xcodebuild-ui-shard-1.xcresult
+            ${{ runner.temp }}/xcodebuild-ui-shard-2.xcresult
+            ${{ runner.temp }}/ui-tests.json
+            ${{ runner.temp }}/ui-shard-1.txt
+            ${{ runner.temp }}/ui-shard-2.txt
           if-no-files-found: warn
