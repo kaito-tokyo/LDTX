@@ -489,9 +489,9 @@ order without changing topology. Regression coverage includes reversed value
 projection order, a disconnected logical route sharing the input, and native
 gain updates with repeated IDs and mismatched configurations.
 
-The two reported golden_gate failures also reproduced locally. UCT-1016.8 still
+The two reported golden_gate failures also reproduced locally. The output-control test still
 expected Stop to be disabled during starting, contrary to the confirmed FIFO
-Stop contract. Its expectation now enables Stop. UCT-1016.12 attempted shutdown
+Stop contract. Its expectation now enables Stop. The Dock badge test attempted shutdown
 while its synthetic output status was active; Close correctly refused it and
 kept the Workspace registered. The test now verifies that refusal, then projects
 Stop completion before closing each Workspace. No production Close restriction

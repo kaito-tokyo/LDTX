@@ -50,7 +50,7 @@ function renderTable(rows, parent) {
 }
 
 function renderBlock(block, parent, level) {
-  const caseTag = block.tags?.find((tag) => /^@UCT-\d+(?:\.\d+)?$/.test(tag.name));
+  const caseTag = block.tags?.find((tag) => /^@LUB-\d+(?:\.\d+)?$/.test(tag.name));
   if (caseTag) parent.id = caseTag.name.slice(1);
   if (block.tags?.length) {
     const tags = element("p");

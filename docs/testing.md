@@ -186,9 +186,8 @@ suite in the `LDTXApp` scheme. Corelibs tests run separately on Linux. The hostl
 covers SwiftUI bindings and directly constructed AppKit components, Documents,
 Windows, and Sheets under a serialized MainActor parent suite. Its shared
 Document Controller resolves both Workspace and Recording document types.
-Its behavior definitions live in [`scenarios/`](scenarios/README.md): each
-`UCT-1000` through `UCT-1023` Feature has one test file and child suite, and
-each numbered Scenario has one test with the same ID in its display name.
+Its behavior definitions live in [`behaviors/`](behaviors/README.md), alongside
+the contracts for the other test targets.
 Shared setup and probes live in the test target's `Support` directory.
 Tests that would launch the application solely to inspect menus or operating
 system dialogs are not included; directly constructed windows and views belong

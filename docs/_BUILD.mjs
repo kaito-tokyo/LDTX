@@ -123,7 +123,7 @@ switch (command) {
         { recursive: true },
       );
     }
-    for (const collection of ["scenarios", "behaviors"]) {
+    for (const collection of ["behaviors"]) {
       buildFeatures(collection, path.join(distributionDirectory, collection));
     }
     break;

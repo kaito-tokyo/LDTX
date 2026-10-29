@@ -63,3 +63,23 @@ Feature: validate resource additions
       | recording | false   |
       | pausing   | false   |
       | stopping  | false   |
+
+  @LUB-1050.6 @UIComponent
+  Scenario: Rename a Program using a valid unique resource name
+    Given a Workspace containing Programs and other named resources
+    When a Program is renamed
+    Then valid names are trimmed and accepted
+    And empty, duplicate, missing, or output-locked edits leave the model unchanged
+
+  @LUB-1050.7 @UIComponent
+  Scenario: Delete the requested Program and its preferences
+    Given a Workspace containing two Programs and their preferences
+    When deletion of one Program is confirmed
+    Then that Program and its canvas preferences are removed while the other remains
+    And output or a missing Program prevents deletion without editing the document
+
+  @LUB-1050.8 @UIComponent
+  Scenario: Require a live document for Sidebar additions
+    Given a Sidebar without a live Workspace document
+    When adding an audio device, Video Component, or Vision is requested
+    Then addition fails without changing the definition, selection, or device assignments

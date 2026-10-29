@@ -14,7 +14,7 @@ SPDX-License-Identifier: Apache-2.0
 - [`docs/class-model.md`](docs/class-model.md): Stable lifecycle and ownership concepts.
 - [`docs/task-queues.md`](docs/task-queues.md): Task-queue ownership, lifecycle, and module boundaries.
 - [`docs/font-assets.md`](docs/font-assets.md): Bundled font provenance, licensing, and build integration.
-- [`docs/scenarios/`](docs/scenarios/): Assisted UI verification scenarios.
+- [`docs/behaviors/`](docs/behaviors/): Behavior contracts and test guidance.
 
 ## Developer Certificate of Origin (DCO) and Commit Signing
 
