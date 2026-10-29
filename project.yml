@@ -7,6 +7,9 @@ name: LDTX
 fileGroups:
   - .agents
   - Protos
+  - Tests/AllTests.xctestplan
+  - Tests/UIShard1.xctestplan
+  - Tests/UIShard2.xctestplan
 
 configs:
   Debug: debug
