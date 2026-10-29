@@ -98,6 +98,8 @@ jobs:
             build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log" | xcbeautify --renderer github-actions
 
       - name: Test non-UI targets without building
+        id: non_ui_tests
+        background: true
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
         run: |
           # Hosted arm64 runners cannot execute real Vision OCR integration tests.
@@ -180,8 +182,8 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/xcodebuild-ui-shard-2.xcresult" \
             test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild-ui-shard-2.log" | xcbeautify --renderer github-actions
 
-      - name: Wait for UI test shards
-        wait: [ui_shard_1, ui_shard_2]
+      - name: Wait for tests
+        wait: [non_ui_tests, ui_shard_1, ui_shard_2]
 
       - name: Run AudioEngine CMake tests with Thread Sanitizer
         shell: bash --noprofile --norc -euo pipefail -O nullglob {0}
