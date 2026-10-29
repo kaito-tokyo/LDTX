@@ -34,3 +34,53 @@ Feature: edit and persist recording markers
     Given a recording package with valid or malformed marker data
     When the document opens or moves to another location
     Then valid package content remains available and failures retain their details without silently repairing invalid markers
+
+  @LUB-1056.6 @UIComponent
+  Scenario: Stop playback when its document is released
+    Given a recording document with a retained playback model
+    When the document is released
+    Then playback stops even if the model remains referenced
+
+  @LUB-1056.7 @UIComponent
+  Scenario: Preserve the original marker filename for a canonical collision
+    Given a recording with a marker whose timestamp has an equivalent canonical representation
+    When the marker is replaced and saved
+    Then its existing filename is reused for the replacement
+
+  @LUB-1056.8 @UIComponent
+  Scenario: Retain a failed marker deletion for Undo
+    Given a saved marker whose file cannot be deleted
+    When the marker is removed and saving fails
+    Then the deletion remains pending and Undo can restore the marker in memory
+
+  @LUB-1056.9 @UIComponent
+  Scenario: Protect unreadable markers while allowing playback
+    Given a recording containing an unreadable optional marker
+    When the document opens and a marker edit is saved
+    Then the player remains available and the unreadable marker is not overwritten
+    And the failed save retains the pending edit
+
+  @LUB-1056.10 @UIComponent
+  Scenario: Load playback from the current recording location
+    Given a recording document whose package has moved
+    When its reader applies a snapshot from the new location and playback starts
+    Then playback loads the recording from the new location
+
+  @LUB-1056.11 @UIComponent
+  Scenario: Ignore an asset load completed after playback stops
+    Given a recording player waiting for an asset to load
+    When playback stops before loading completes
+    Then the pending load is cancelled and its late result cannot restart playback
+
+  @LUB-1056.12 @UIComponent
+  Scenario: Preserve pending markers when a reread fails
+    Given an open recording with pending marker edits
+    When a new reader snapshot reports an unreadable marker
+    Then applying that snapshot fails and the pending marker edits remain available
+
+  @LUB-1056.13 @UIComponent
+  Scenario: Show the markers of the owning recording
+    Given playback views associated with different recording documents
+    When markers are edited or a reader snapshot is applied to one document
+    Then views of that document show its current markers
+    And views of other recording documents remain unchanged

@@ -1,0 +1,295 @@
+// SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+// SPDX-License-Identifier: Apache-2.0
+
+import AppKit
+import LDTXCorelibs
+import LDTXDeviceRegistry
+import LDTXProgramRuntime
+import LDTXTaskQueue
+@testable import LDTXWorkspaceAppletController
+import LDTXWorkspaceAppletModel
+@testable import LDTXWorkspaceAppletUI
+import LDTXYouTubeRTMPS
+import MetalKit
+import Observation
+import SwiftUI
+import Testing
+
+extension AppUIComponentTestSuite.Shard1 {
+  @Suite("preserve-preview-and-divider-state", .serialized)
+  @MainActor
+  struct WorkspaceContentPaneIntegrationTestSuite {
+    @Test("LUB-1049: Hosting and toolbar release their controller")
+    func hostingAndToolbarReleaseTheirController() async {
+      weak var released: WorkspaceDocument?
+      autoreleasepool {
+        let window = makeWorkspaceTestWindow()
+        released = window.stateService
+        window.close()
+        window.contentViewController = nil
+      }
+      for _ in 0..<50 {
+        if released == nil { break }
+        try? await Task.sleep(for: .milliseconds(10))
+      }
+      #expect(released == nil)
+    }
+    @Test("LUB-1049: Unrepresented document releases its resource registration")
+    func unrepresentedDocumentReleasesItsResourceRegistration() {
+      var released: [UUID] = []
+      var document: WorkspaceDocument? = WorkspaceDocument {
+        released.append($0)
+      }
+      let id = document!.runtimeID
+      #expect(id != WorkspaceDocument().runtimeID)
+      #expect(released.isEmpty)
+      document = nil
+      #expect(released == [id])
+    }
+
+    @Test("LUB-1049: Injected resources stay registered until shutdown and release once")
+    func injectedResourcesStayRegisteredUntilShutdownAndReleaseOnce() async {
+      let resources = WorkspaceRuntimeFixture()
+      var released: [UUID] = []
+      let document = WorkspaceDocument()
+      let controller = WorkspaceAppletCoordinator(
+        document: document, appletData: WorkspaceAppletData(),
+        landscapeRuntime: resources.landscape, portraitRuntime: resources.portrait,
+        metalView: resources.metalView, captureSessionCoordinator: resources.capture,
+        onShutdown: {
+          #expect(resources.metalView.isPaused)
+          #expect(resources.metalView.delegate == nil)
+          #expect(resources.metalView.superview == nil)
+          released.append(document.runtimeID)
+        })
+      let view = controller.pairedPreview.metalView
+      #expect(view === resources.metalView)
+      #expect(controller.windowRuntime.landscapeRuntime === resources.landscape)
+      #expect(controller.windowRuntime.portraitRuntime === resources.portrait)
+      #expect(controller.windowRuntime.captureSessionCoordinator === resources.capture)
+      #expect(view.delegate === controller.previewRenderer)
+      #expect(released.isEmpty)
+      await controller.shutdown()
+      #expect(view.isPaused)
+      #expect(view.delegate == nil)
+      #expect(view.superview == nil)
+      #expect(released == [document.runtimeID])
+      await controller.shutdown()
+      #expect(released == [document.runtimeID])
+    }
+
+    @Test("LUB-1049: Coordinator keeps document alive through cleanup")
+    func coordinatorKeepsDocumentAliveThroughCleanup() async {
+      var documentReleased = false
+      var runtimeReleased = false
+      var document: WorkspaceDocument? = WorkspaceDocument { _ in documentReleased = true }
+      let resources = WorkspaceRuntimeFixture()
+      var coordinator: WorkspaceAppletCoordinator? = WorkspaceAppletCoordinator(
+        document: document!, landscapeRuntime: resources.landscape,
+        portraitRuntime: resources.portrait, metalView: resources.metalView,
+        captureSessionCoordinator: resources.capture,
+        onShutdown: { runtimeReleased = true })
+      weak var retained = document
+      document = nil
+      #expect(retained != nil)
+      #expect(!documentReleased)
+      #expect(!runtimeReleased)
+      await coordinator?.shutdown()
+      #expect(runtimeReleased)
+      coordinator = nil
+      for _ in 0..<100 where retained != nil { await Task.yield() }
+      #expect(retained == nil)
+      #expect(documentReleased)
+    }
+
+    private static var controller: NSDocumentController {
+      UIComponentTestEnvironment.documentController
+    }
+    init() { _ = Self.controller }
+
+    @Test("LUB-1058: SwiftUI preview keeps its Metal surface through layout and tab changes")
+    func previewIdentityAndCanvasSelection() async throws {
+      let first = makeWorkspaceTestWindow()
+      let second = makeWorkspaceTestWindow()
+      defer {
+        first.close()
+        second.close()
+      }
+      first.orderFront(nil)
+      await settleWorkspaceToolbar(first)
+      let pane = first.contentPane
+      let preview = pane.pairedPreview
+      let metal = preview.metalView
+      let delegate = metal.delegate
+      #expect(metal.superview != nil)
+      #expect(metal.bounds.width > 0)
+      #expect(preview !== second.contentPane.pairedPreview)
+      pane.layout.selectedEditor = .portrait
+      #expect(second.contentPane.layout.selectedEditor == .audio)
+      #expect(first.stateService.selectedAudioMix == .landscape)
+      let regions = ProgramPairPreviewRegions(
+        drawable: metal.convertToBacking(metal.bounds).size,
+        landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16))
+      preview.selectCanvas(
+        at: metal.convertFromBacking(
+          CGPoint(x: regions.portrait.midX, y: regions.portrait.midY)))
+      #expect(first.stateService.selectedAudioMix == .portrait)
+      preview.selectCanvas(
+        at: metal.convertFromBacking(
+          CGPoint(x: regions.landscape.midX, y: regions.landscape.midY)))
+      #expect(first.stateService.selectedAudioMix == .landscape)
+      for editor: WorkspaceContentLayout.Editor in [.audio, .landscape, .portrait] {
+        pane.layout.selectedEditor = editor
+        await settleWorkspaceToolbar(first)
+        #expect(pane.pairedPreview.metalView === metal)
+        #expect(metal.delegate === delegate)
+      }
+      for height: CGFloat in [100, 360, 200] {
+        pane.layout.resizePreview(to: height)
+        first.setContentSize(.init(width: 1100, height: 800))
+        await settleWorkspaceToolbar(first)
+        #expect(pane.pairedPreview.metalView === metal)
+        #expect(metal.delegate === delegate)
+        #expect(metal.bounds.height > 0)
+      }
+      preview.stop()
+      #expect(metal.delegate == nil && metal.isPaused)
+    }
+
+    @Test("LUB-1049: SwiftUI editors scroll when the lower pane shrinks")
+    func editorsScrollWhenLowerPaneShrinks() async throws {
+      let window = makeWorkspaceTestWindow()
+      defer { window.close() }
+      window.orderFront(nil)
+      window.contentPane.layout.resizePreview(to: 600)
+      await settleWorkspaceToolbar(window)
+      let all = workspaceDescendants(window.contentView!)
+      let scrolls = all.compactMap { $0 as? NSScrollView }
+      #expect(
+        scrolls.contains {
+          ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
+        })
+      let scroll = try #require(
+        scrolls.first {
+          ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height
+        })
+      let document = try #require(scroll.documentView)
+      scroll.contentView.scroll(
+        to: .init(
+          x: 0, y: max(0, document.frame.height - scroll.contentView.bounds.height)))
+      scroll.reflectScrolledClipView(scroll.contentView)
+      await settleWorkspaceToolbar(window)
+      #expect(scroll.contentView.bounds.origin.y > 0)
+    }
+
+    @Test("LUB-1058: Preview height follows late snapshot adoption and persists by external ID")
+    func previewHeightFollowsLateSnapshotAdoption() async throws {
+      let transientID = UUID().uuidString.lowercased()
+      let savedID = UUID().uuidString.lowercased()
+      let transientKey = "WorkspaceContentPane.\(transientID).previewHeight"
+      let savedKey = "WorkspaceContentPane.\(savedID).previewHeight"
+      defer {
+        UserDefaults.standard.removeObject(forKey: transientKey)
+        UserDefaults.standard.removeObject(forKey: savedKey)
+      }
+      UserDefaults.standard.set(360.0, forKey: savedKey)
+      let state = WorkspaceDocument(definition: .init(), preferences: .init())
+      let window = makeWorkspaceTestWindow(stateService: state, externalID: transientID)
+      defer { window.close() }
+      window.orderFront(nil)
+      await settleWorkspaceToolbar(window)
+      let layout = window.contentPane.layout
+      let metal = window.contentPane.pairedPreview.metalView
+      layout.resizePreview(to: 300)
+      var snapshot = state.editingWorkspace
+      snapshot.definitionExternalID = savedID
+      state.replaceEditingWorkspace(snapshot, undoManager: nil)
+      await settleWorkspaceToolbar(window)
+      #expect(layout.previewHeight == 360)
+      #expect(window.contentPane.pairedPreview.metalView === metal)
+      layout.resizePreview(to: 340)
+      #expect(UserDefaults.standard.double(forKey: savedKey) == 340)
+      #expect(UserDefaults.standard.double(forKey: transientKey) == 300)
+      let reopened = WorkspaceContentLayout()
+      reopened.restore(externalID: savedID)
+      #expect(reopened.previewHeight == 340)
+      state.replaceEditingWorkspace(snapshot, undoManager: nil)
+      await settleWorkspaceToolbar(window)
+      #expect(layout.previewHeight == 340)
+    }
+
+    @Test("LUB-1058: Legacy AppKit divider height migrates once and never overrides a new value")
+    func migratesLegacyPreviewHeight() {
+      let id = UUID().uuidString.lowercased()
+      let legacyKey = "NSSplitView Subview Frames WorkspaceContentPane.\(id)"
+      let key = "WorkspaceContentPane.\(id).previewHeight"
+      defer {
+        UserDefaults.standard.removeObject(forKey: legacyKey)
+        UserDefaults.standard.removeObject(forKey: key)
+      }
+      UserDefaults.standard.set(
+        [
+          "0.000000, 0.000000, 480.000000, 360.000000, NO, NO",
+          "0.000000, 361.000000, 480.000000, 339.000000, NO, NO",
+        ], forKey: legacyKey)
+      let layout = WorkspaceContentLayout()
+      layout.restore(externalID: id)
+      #expect(layout.previewHeight == 360)
+      #expect(UserDefaults.standard.double(forKey: key) == 360)
+      layout.resizePreview(to: 320)
+      let reopened = WorkspaceContentLayout()
+      reopened.restore(externalID: id)
+      #expect(reopened.previewHeight == 320)
+      UserDefaults.standard.removeObject(forKey: key)
+      UserDefaults.standard.set(["invalid"], forKey: legacyKey)
+      let invalid = WorkspaceContentLayout()
+      invalid.restore(externalID: id)
+      #expect(invalid.previewHeight == 280)
+    }
+
+    @Test("LUB-1049: A new Workspace preserves its initial content size")
+    func newWorkspacePreservesInitialContentSize() async throws {
+      _ = NSApplication.shared
+      let frameKey = "NSWindow Frame WorkspaceV4.AppKit.v1"
+      let savedFrame = UserDefaults.standard.object(forKey: frameKey)
+      UserDefaults.standard.removeObject(forKey: frameKey)
+      defer {
+        if let savedFrame {
+          UserDefaults.standard.set(savedFrame, forKey: frameKey)
+        } else {
+          UserDefaults.standard.removeObject(forKey: frameKey)
+        }
+      }
+      let document = WorkspaceDocument()
+      document.makeWindowControllers()
+      let window = try #require(document.windowControllers.first?.window)
+      let contentSize = window.contentRect(forFrameRect: window.frame).size
+      let visibleFrame = try #require(window.screen).visibleFrame
+      let availableSize = window.contentRect(forFrameRect: visibleFrame).size
+      #expect(contentSize.width >= min(1062, availableSize.width))
+      #expect(contentSize.height >= min(700, availableSize.height))
+      await document.shutdown()
+      document.close()
+    }
+    @Test("LUB-1049: Output status preserves failure information")
+    func storesOutputStatusForWorkspaceUI() {
+      let stateService = WorkspaceDocument(definition: .init(), preferences: .init())
+
+      stateService.isOutputActive = true
+      stateService.isLocalRecording = true
+      stateService.outputFailureMessage = nil
+
+      #expect(stateService.isOutputActive)
+      #expect(stateService.isLocalRecording)
+      #expect(stateService.outputFailureMessage == nil)
+
+      stateService.isOutputActive = false
+      stateService.isLocalRecording = false
+      stateService.outputFailureMessage = "Output failed."
+
+      #expect(!stateService.isOutputActive)
+      #expect(!stateService.isLocalRecording)
+      #expect(stateService.outputFailureMessage == "Output failed.")
+    }
+  }
+}

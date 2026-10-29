@@ -208,3 +208,67 @@ Feature: edit resources by stable identity
       | true         | false  | true    |
       | false        | true   | true    |
       | false        | false  | false   |
+
+  @LUB-1048.15 @UIComponent
+  Scenario: Discard a layer draft when the selected Program changes
+    Given a layer editor with an unconfirmed draft
+    When the selected Program changes
+    Then the previous draft is discarded and stale callbacks cannot edit the old layer
+
+  @LUB-1048.16 @UIComponent
+  Scenario: Preserve layer drafts while reordering
+    Given a layer editor with an unconfirmed draft
+    When existing layers are reordered
+    Then their membership is unchanged and retained layers keep their drafts
+
+  @LUB-1048.17 @UIComponent
+  Scenario: Update visible layer names without losing drafts
+    Given a layer editor containing an unconfirmed draft
+    When the referenced component name or layer visibility changes
+    Then the displayed layer reflects the current definition and the draft is preserved
+
+  @LUB-1048.18 @UIComponent
+  Scenario: Restrict layer membership while output is active
+    Given an active output with existing Program layers
+    When a membership change or reorder is requested
+    Then membership changes are rejected and existing layers can still be reordered
+
+  @LUB-1048.19 @UIComponent
+  Scenario: Show placement controls for positionable components
+    Given a Program canvas containing a VFX Source, Clock, Dynamic Text, and solid fill
+    When its layer editor is displayed
+    Then the VFX Source, Clock, and Dynamic Text expose placement controls
+    And the full-canvas solid fill does not
+
+  @LUB-1048.20 @UIComponent
+  Scenario: Edit an audio channel gain without a Program selection
+    Given an audio input and no selected Program
+    When its channel gain is changed
+    Then the valid gain is stored in tenths of a decibel without changing canvas selection
+    And non-finite gains or gains for missing inputs leave preferences unchanged
+
+  @LUB-1048.21 @UIComponent
+  Scenario: Keep monitor volume local to the Workspace
+    Given a Workspace with local monitor settings
+    When a monitor volume is edited
+    Then a finite value is rounded to tenths of a decibel in local state
+    And a non-finite value leaves it unchanged without editing the Workspace content
+
+  @LUB-1048.22 @UIComponent
+  Scenario: Ignore edits from a removed layer row
+    Given a layer row retained after its layer is removed
+    When that row requests a transform or visibility edit
+    Then Workspace preferences remain unchanged even if a layer with the same ID is later added
+
+  @LUB-1048.23 @UIComponent
+  Scenario: Release a layer editor when a row remains referenced
+    Given a retained layer row and its owning editor
+    When the editor owner is released
+    Then the editor and unretained rows are released
+    And callbacks on the retained row remain safe
+
+  @LUB-1048.24 @UIComponent
+  Scenario: Preserve unrelated live preferences when editing a layer transform
+    Given a layer editor and current Program preferences containing volume and visibility changes
+    When a layer transform is edited
+    Then the transform is updated without replacing the current volume or visibility preferences

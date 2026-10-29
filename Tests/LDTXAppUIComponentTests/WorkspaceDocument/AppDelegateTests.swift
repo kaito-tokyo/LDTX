@@ -10,7 +10,7 @@ import Testing
 extension AppUIComponentTestSuite.Shard2 {
   @MainActor @Suite
   struct WorkspaceNotificationDelegateUnitTestSuite {
-    @Test("LUB-1037: Notification attaches landscape copy and preserves saved files")
+    @Test("LUB-1073: Notification attaches landscape copy and preserves saved files")
     func notificationAttachesLandscapeCopyAndPreservesSavedFiles() async throws {
       let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -49,7 +49,7 @@ extension AppUIComponentTestSuite.Shard2 {
       }.value
     }
 
-    @Test("LUB-1037: Notification callbacks are exposed to objective c")
+    @Test("LUB-1073: Notification callbacks are exposed to objective c")
     func notificationCallbacksAreExposedToObjectiveC() {
       // Optional delegate methods must match the SDK to be exposed to Objective-C.
       #expect(

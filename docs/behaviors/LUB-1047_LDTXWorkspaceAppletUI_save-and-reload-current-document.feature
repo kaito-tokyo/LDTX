@@ -37,4 +37,31 @@ Feature: save and reload current document
   Scenario: Create an editable unsaved document
     Given a request for a new Workspace
     When the document is created before choosing a destination
-    Then editing is available while output remains unavailable until a successful save
+    Then it has a unique external identity and editing is available
+    And output remains unavailable until a successful save
+
+  @LUB-1047.5 @UIComponent
+  Scenario: Resolve unsaved Workspace changes when closing
+    Given an open Workspace with unsaved changes
+    When the user cancels or discards the close confirmation
+    Then cancellation retains the open Workspace and its edits
+    And discarding closes it after shutdown without saving the pending changes
+
+  @LUB-1047.6 @UIComponent
+  Scenario: Retain edits made after a save snapshot
+    Given a background save has captured a Workspace snapshot
+    When the Workspace is edited before that snapshot is written
+    Then the saved package contains the snapshot and later edits remain pending
+
+  @LUB-1047.7 @UIComponent
+  Scenario: Restrict Revert during output
+    Given a Workspace document that is open and editable
+    When output becomes active
+    Then Revert and browsing document versions are unavailable until output ends
+
+  @LUB-1047.8 @UIComponent
+  Scenario: Adopt a changed Workspace document location
+    Given an open Workspace with location-specific local state
+    When its document acquires a different URL
+    Then the coordinator copies its local state to the new location
+    And subsequent persistence operations use the new document URL

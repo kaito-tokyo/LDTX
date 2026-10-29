@@ -23,3 +23,9 @@ Feature: LDTXCorelibs validate and persist workspaces
     When the bundle is read
     Then its files are not rewritten and the unknown data remains available
 
+  @LUB-1002.4 @Unit
+  Scenario: Collect independent validation issues
+    Given a Workspace containing invalid Clock geometry and colors
+    When the Workspace is validated
+    Then each issue is reported with its field path and owning entity
+

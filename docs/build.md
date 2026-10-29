@@ -197,10 +197,10 @@ node docs/_BUILD.mjs protos
 node docs/_BUILD.mjs dist
 ```
 
-Write English Gherkin cases in `docs/scenarios/` following the
-[naming and tagging rules](scenarios/README.md).
-The build emits a stable `docs/dist/scenarios/UCT-1000/index.html` URL
-independently of the component and description in the filename.
+Write English Gherkin cases in `docs/behaviors/` following the
+[naming and tagging rules](behaviors/README.md).
+The build emits a stable `docs/dist/behaviors/LUB-1000/index.html` URL
+independently of the module and description in the filename.
 
 The HTML embeds escaped source in a `<pre>` inside `<gherkin-scenario>`.
 The Custom Element parses the source in the browser using the fixed

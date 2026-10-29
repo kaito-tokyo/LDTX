@@ -34,3 +34,9 @@ Feature: deliver preview frames and accessibility
     Given a represented paired preview
     When selection or its parent view changes
     Then the same preview remains addressable and selection actions target the requested canvas
+
+  @LUB-1058.6 @UIComponent
+  Scenario: Restore preview height by Workspace identity
+    Given a Workspace with a saved preview height
+    When its content is reopened or its saved identity is adopted
+    Then the preview height for that Workspace identity is restored
