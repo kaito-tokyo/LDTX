@@ -14,7 +14,7 @@ import LDTXWorkspaceAppletUI
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("Workspace DocumentGroup persistence", .serialized)
   @MainActor
   struct WorkspaceDocumentIntegrationTestSuite {

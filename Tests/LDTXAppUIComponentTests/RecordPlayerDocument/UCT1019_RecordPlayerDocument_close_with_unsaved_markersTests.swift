@@ -8,7 +8,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1019: SwiftUI recording lifetime", .serialized)
   @MainActor
   struct UCT1019RecordPlayerDocumentIntegrationTestSuite {

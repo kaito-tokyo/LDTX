@@ -24,7 +24,7 @@ private struct ProbeView: View {
   }
 }
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1022: inject-document-explicitly", .serialized)
   @MainActor
   struct UCT1022DocumentReferenceIntegrationTestSuite {

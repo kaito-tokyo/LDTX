@@ -6,7 +6,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1029: Typed integer input", .serialized)
   @MainActor
   struct UCT1029IntegerFieldUnitTestSuite {

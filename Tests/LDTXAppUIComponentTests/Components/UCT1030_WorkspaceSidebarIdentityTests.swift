@@ -5,7 +5,7 @@ import LDTXCorelibs
 @testable import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1030: Sidebar row identity", .serialized)
   @MainActor
   struct UCT1030WorkspaceSidebarIdentityUnitTestSuite {

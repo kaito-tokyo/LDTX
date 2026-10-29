@@ -15,7 +15,7 @@ import Observation
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1017: preserve-preview-and-divider-state", .serialized)
   @MainActor
   struct UCT1017WorkspaceContentPaneIntegrationTestSuite {

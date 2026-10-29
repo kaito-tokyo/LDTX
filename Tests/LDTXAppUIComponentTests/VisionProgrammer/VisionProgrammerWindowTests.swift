@@ -6,7 +6,7 @@ import LDTXVisionProgrammerApplet
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite struct VisionProgrammerWindowTests {
     @Test(
       "LUB-1073: Vision Programmer lays out in a directly hosted window",

@@ -7,7 +7,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @MainActor
   @Suite(.serialized)
   struct ManualOCRInspectorIntegrationTestSuite {

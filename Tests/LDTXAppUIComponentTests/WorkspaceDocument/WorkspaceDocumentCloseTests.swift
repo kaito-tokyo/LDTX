@@ -8,7 +8,7 @@ import LDTXWorkspaceAppletUI
 import Synchronization
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("Workspace asynchronous close", .serialized)
   @MainActor
   struct WorkspaceDocumentCloseIntegrationTestSuite {

@@ -6,7 +6,7 @@ import AppKit
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1028: Rational32TextField", .serialized)
   @MainActor
   struct UCT1028Rational32TextFieldUnitTestSuite {

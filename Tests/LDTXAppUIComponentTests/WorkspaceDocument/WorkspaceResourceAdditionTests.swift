@@ -7,7 +7,7 @@ import LDTXWorkspaceAppletModel
 import LDTXYouTubeRTMPS
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite
   @MainActor
   struct WorkspaceResourceAdditionUnitTestSuite {

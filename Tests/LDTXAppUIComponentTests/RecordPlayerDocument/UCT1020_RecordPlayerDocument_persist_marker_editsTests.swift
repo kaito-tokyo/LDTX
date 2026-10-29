@@ -9,7 +9,7 @@ import LDTXCorelibs
 import LDTXRecording
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("UCT-1020: URL Document marker persistence", .serialized)
   @MainActor
   struct UCT1020RecordPlayerDocumentIntegrationTestSuite {

@@ -6,7 +6,7 @@ import LDTXCorelibs
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite @MainActor
   struct WorkspacePresentationContractsIntegrationTestSuite {
     init() { _ = UIComponentTestEnvironment.documentController }

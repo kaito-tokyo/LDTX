@@ -7,7 +7,7 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @MainActor @Suite
   struct WorkspaceNotificationDelegateUnitTestSuite {
     @Test("LUB-1037: Notification attaches landscape copy and preserves saved files")
@@ -196,7 +196,7 @@ extension AppUIComponentTestSuite {
   }
 }
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @MainActor
   @Suite("Document activities before standard termination", .serialized)
   struct WorkspaceDocumentTerminationIntegrationTestSuite {

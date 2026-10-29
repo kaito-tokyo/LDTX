@@ -10,7 +10,7 @@ import SwiftUI
 import Synchronization
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("Workspace synchronous document editing", .serialized)
   @MainActor
   struct WorkspaceDocumentEditingUnitTestSuite {
@@ -313,7 +313,7 @@ extension AppUIComponentTestSuite {
   }
 }
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("Workspace snapshot writing without a represented editor", .serialized)
   @MainActor
   struct WorkspaceDocumentWritingIntegrationTestSuite {

@@ -11,7 +11,7 @@ enum FillKind: String, CaseIterable, Sendable, Codable {
   case solid, linearGradient, radialGradient, conicGradient
 }
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1031: Fill Inspector identity", .serialized)
   @MainActor
   struct UCT1031FillInspectorIdentityIntegrationTestSuite {
@@ -89,7 +89,7 @@ extension AppUIComponentTestSuite {
   }
 }
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("Fill Inspector document bindings", .serialized)
   @MainActor
   struct FillInspectorBindingIntegrationTestSuite {

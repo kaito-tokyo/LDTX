@@ -9,7 +9,7 @@ import Observation
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard1 {
   @Suite("Variable Store Inspector", .serialized)
   @MainActor
   struct LDTXVariableStoreInspectorIntegrationTestSuite {

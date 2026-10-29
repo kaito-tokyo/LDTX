@@ -16,7 +16,7 @@ import Security
 import SwiftUI
 import Testing
 
-extension AppUIComponentTestSuite {
+extension AppUIComponentTestSuite.Shard2 {
   @Suite("UCT-1016: keep-window-controls-local", .serialized)
   @MainActor
   struct UCT1016WorkspaceAppletCoordinatorIntegrationTestSuite {
