@@ -11,6 +11,7 @@ SPDX-License-Identifier = "LicenseRef-Not-Copyrightable"
 [[annotations]]
 path = [
   "**/*.upstream",
+  ".claude/settings.json",
   ".devcontainer/devcontainer.json",
   ".github/workflows/actions.lock",
   ".swift-format",

@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift build *)",
+      "Bash(swift test *)",
+      "Bash(xcodebuild -list *)",
+      "Bash(xcodebuild -resolvePackageDependencies *)",
+      "Bash(xcodebuild -showBuildSettings *)",
+      "Bash(xcodebuild -showComponent *)",
+      "Bash(xcodebuild -showdestinations *)",
+      "Bash(xcodebuild -showsdks)",
+      "Bash(xcodebuild -showTestPlans *)",
+      "Bash(xcodebuild -version)",
+      "Bash(xcodebuild analyze *)",
+      "Bash(xcodebuild build *)",
+      "Bash(xcodebuild build-for-testing *)",
+      "Bash(xcodebuild clean *)",
+      "Bash(xcodebuild test *)",
+      "Bash(xcodebuild test-without-building *)"
+    ],
+    "ask": [
+      "Bash(log show *)",
+      "Bash(log stream *)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": [
+      "log show *",
+      "log stream *",
+      "swift build *",
+      "swift test *",
+      "xcodebuild -list *",
+      "xcodebuild -resolvePackageDependencies *",
+      "xcodebuild -showBuildSettings *",
+      "xcodebuild -showdestinations *",
+      "xcodebuild -showTestPlans *",
+      "xcodebuild analyze *",
+      "xcodebuild build *",
+      "xcodebuild build-for-testing *",
+      "xcodebuild test *",
+      "xcodebuild test-without-building *"
+    ]
+  }
+}

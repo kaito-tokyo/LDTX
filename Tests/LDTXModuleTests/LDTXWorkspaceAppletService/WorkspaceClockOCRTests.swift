@@ -41,8 +41,12 @@ struct WorkspaceClockOCRIntegrationTestSuite {
       try await Task.sleep(for: .milliseconds(50))
     }
     let frame = try #require(current)
+    // Full-frame text detection misses the small top-left clock for some digit combinations.
+    let image = CIImage(cvPixelBuffer: frame.pixelBuffer)
+    let clockRegion = CGRect(
+      x: image.extent.minX, y: image.extent.maxY - 100, width: 400, height: 100)
     let output = try await VisionOCRService().recognizeText(
-      in: CIImage(cvPixelBuffer: frame.pixelBuffer),
+      in: image.cropped(to: clockRegion),
       configuration: .init(
         recognitionLanguages: ["en-US"], usesLanguageCorrection: false))
     #expect(output.elapsedSeconds >= 0)
