@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
-#include "AudioPrimitives.hpp"
-#include "AudioTimeline.hpp"
-#include "PCMStorage.hpp"
+#include "ReceiverPipeline.hpp"
 #include <string>
 #include <thread>
 namespace ldtx::audio {

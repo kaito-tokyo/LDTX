@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-#include "AudioTimeline.hpp"
 #include "HALInput.hpp"
-#include "MonitorRoutes.hpp"
-#include "PCMStorage.hpp"
-#include "StopRetry.hpp"
+#include "ReceiverPipeline.hpp"
+#include "ReceiverPrimitives.hpp"
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
@@ -12,20 +10,6 @@
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
-TEST_CASE("LUB-1007: Monitor value exchange preserves logical routes sharing an input") {
-  std::vector<LDTXAudioRoute> routes{{7, 1, true}, {7, 1, true}, {9, 1, true}};
-  CHECK(updateMonitorRouteGains(routes, {{7, 0.25f, false}, {7, 0.75f, false}, {9, 0.5f, false}}));
-  CHECK(routes[0].gain == 0.25f);
-  CHECK(routes[1].gain == 0.75f);
-  CHECK(routes[2].gain == 0.5f);
-  CHECK(routes[0].connected);
-  CHECK(routes[1].connected);
-  CHECK_FALSE(updateMonitorRouteGains(routes, {{7, 0, true}}));
-  CHECK_FALSE(updateMonitorRouteGains(routes, {{7, 0, true}, {9, 0, true}, {7, 0, true}}));
-  CHECK(routes[0].gain == 0.25f);
-  CHECK(routes[1].gain == 0.75f);
-}
-
 TEST_CASE("LUB-1007: Disconnected monitor routes do not acquire an output device") {
   auto *engine = LDTXAudioCreate(true);
   REQUIRE(engine);

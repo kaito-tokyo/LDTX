@@ -1,22 +1,62 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
-#include "AlignedStorage.hpp"
-#include "StopRetry.hpp"
+#include <cassert>
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
 #include <CoreMedia/CoreMedia.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <mach/mach_time.h>
 #include <limits>
 #include <os/log.h>
+#include <new>
 #include <stdexcept>
 #include <thread>
 namespace ldtx::audio {
+inline constexpr size_t kAudioBufferAlignment = 16;
+inline constexpr uint32_t kAudioMaxFramesPerBlock = 65536;
+
+inline size_t alignedSize(size_t size) {
+  return (size + kAudioBufferAlignment - 1) & ~(kAudioBufferAlignment - 1);
+}
+
+class AlignedStorage {
+  void *data_ = nullptr;
+  size_t size_ = 0;
+
+public:
+  explicit AlignedStorage(size_t size) : size_(alignedSize(size)) {
+    if (size_ == 0)
+      return;
+    if (posix_memalign(&data_, kAudioBufferAlignment, size_) != 0)
+      throw std::bad_alloc();
+    assert(reinterpret_cast<uintptr_t>(data_) % kAudioBufferAlignment == 0);
+  }
+
+  ~AlignedStorage() { free(data_); }
+
+  AlignedStorage(const AlignedStorage &) = delete;
+  AlignedStorage &operator=(const AlignedStorage &) = delete;
+
+  std::byte *bytes() { return static_cast<std::byte *>(data_); }
+  const std::byte *bytes() const { return static_cast<const std::byte *>(data_); }
+  size_t size() const { return size_; }
+};
+
+template <class Stop, class BeforeRetry> auto retryStop(Stop stop, BeforeRetry beforeRetry) {
+  auto status = stop();
+  for (unsigned retry = 0; status != 0 && retry < 3; ++retry) {
+    beforeRetry();
+    status = stop();
+  }
+  return status;
+}
+
 struct StatusError : std::runtime_error {
   OSStatus status;
   explicit StatusError(OSStatus s) : std::runtime_error("Core Audio operation failed"), status(s) {}

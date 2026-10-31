@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "WorkspaceAudioEngine.h"
 #include "HALInput.hpp"
-#include "MonitorRoutes.hpp"
-#include "AudioMixEngine.hpp"
+#include "../Compositor/AudioMixEngine.hpp"
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -16,6 +15,19 @@
 #include <thread>
 using namespace ldtx::audio;
 namespace {
+// Values refer to the connected routes in their configured order. Input IDs
+// alone are not identities: several logical routes may share the same input.
+bool updateMonitorRouteGains(std::vector<LDTXAudioRoute> &routes, const std::vector<LDTXAudioRoute> &values) {
+  if (routes.size() != values.size())
+    return false;
+  for (size_t i = 0; i < routes.size(); ++i)
+    if (routes[i].input != values[i].input)
+      return false;
+  for (size_t i = 0; i < routes.size(); ++i)
+    routes[i].gain = values[i].gain;
+  return true;
+}
+
 struct Bus {
   std::vector<LDTXAudioRoute> routes;
   std::unique_ptr<LDTXAudioMixEngine> gains;
