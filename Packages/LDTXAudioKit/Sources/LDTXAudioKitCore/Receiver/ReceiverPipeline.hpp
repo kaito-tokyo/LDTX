@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
-#include "ReceiverPrimitives.hpp"
+
 #include <atomic>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <vector>
+
+#include "ReceiverPrimitives.hpp"
+
 namespace ldtx::audio {
 struct Descriptor {
   uint64_t index = 0, generation = 0;

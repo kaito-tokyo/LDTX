@@ -1,9 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
-#include "ReceiverPipeline.hpp"
+
 #include <string>
 #include <thread>
+
+#include "ReceiverPipeline.hpp"
+
 namespace ldtx::audio {
 class HALInput {
   std::unique_ptr<Unit> unit;

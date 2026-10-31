@@ -1,13 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
-#include <AudioToolbox/AudioToolbox.h>
-#include <CoreMedia/CoreMedia.h>
+
 #include <stdbool.h>
 #include <stdint.h>
+
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreMedia/CoreMedia.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 typedef struct LDTXWorkspaceAudioEngine LDTXWorkspaceAudioEngine;
 typedef uint64_t LDTXAudioID;
 typedef void (*LDTXAudioSampleHandler)(void *, CMSampleBufferRef);
@@ -60,6 +66,7 @@ void LDTXAudioStop(LDTXWorkspaceAudioEngine *, LDTXAudioCompletion, void *);
 // Deterministic test seam. SubmitPCM has one producer per input and never waits.
 bool LDTXAudioSubmitPCM(LDTXWorkspaceAudioEngine *, LDTXAudioID, const AudioBufferList *, const AudioTimeStamp *);
 void LDTXAudioAdvance(LDTXWorkspaceAudioEngine *, uint64_t nowNanoseconds);
+
 #ifdef __cplusplus
 }
 #endif

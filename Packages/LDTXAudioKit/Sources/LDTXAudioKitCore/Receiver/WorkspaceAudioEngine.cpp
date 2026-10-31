@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
-#include "WorkspaceAudioEngine.h"
-#include "HALInput.hpp"
-#include "../Compositor/AudioMixEngine.hpp"
+
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -10,9 +9,14 @@
 #include <iterator>
 #include <map>
 #include <mutex>
-#include <os/log.h>
 #include <set>
 #include <thread>
+
+#include <os/log.h>
+#include "WorkspaceAudioEngine.h"
+#include "HALInput.hpp"
+#include "../Compositor/AudioMixEngine.hpp"
+
 using namespace ldtx::audio;
 namespace {
 // Values refer to the connected routes in their configured order. Input IDs

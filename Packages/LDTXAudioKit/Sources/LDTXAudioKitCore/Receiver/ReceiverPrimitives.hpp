@@ -1,22 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
+
 #include <cassert>
-#include <AudioToolbox/AudioToolbox.h>
-#include <CoreAudio/CoreAudio.h>
-#include <CoreMedia/CoreMedia.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
-#include <mach/mach_time.h>
 #include <limits>
-#include <os/log.h>
 #include <new>
 #include <stdexcept>
 #include <thread>
+
+#include <mach/mach_time.h>
+#include <os/log.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <CoreAudio/CoreAudio.h>
+#include <CoreMedia/CoreMedia.h>
+
 namespace ldtx::audio {
 inline constexpr size_t kAudioBufferAlignment = 16;
 inline constexpr uint32_t kAudioMaxFramesPerBlock = 65536;
