@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-#include "Internal/AudioTimeline.hpp"
-#include "Internal/HALInput.hpp"
-#include "Internal/MonitorRoutes.hpp"
-#include "Internal/PCMStorage.hpp"
-#include "Internal/StopRetry.hpp"
+#include "AudioTimeline.hpp"
+#include "HALInput.hpp"
+#include "MonitorRoutes.hpp"
+#include "PCMStorage.hpp"
+#include "StopRetry.hpp"
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"

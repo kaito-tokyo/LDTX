@@ -23,7 +23,8 @@ let package = Package(
       publicHeadersPath: "include",
       cxxSettings: [
         .headerSearchPath("include"),
-        .headerSearchPath("Compositor/Internal"),
+        .headerSearchPath("Compositor"),
+        .headerSearchPath("Receiver"),
         .unsafeFlags(["-std=c++20"])
       ],
       linkerSettings: [
