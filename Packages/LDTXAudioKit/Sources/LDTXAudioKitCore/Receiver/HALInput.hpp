@@ -35,7 +35,7 @@ class HALInput {
 
 public:
   std::string uid;
-  uint32_t kind, quantum = 512, maximum = 65536, channels;
+  uint32_t kind, quantum = 512, maximum = kAudioMaxFramesPerBlock, channels;
   double rate;
   AudioDeviceID device = 0;
   std::unique_ptr<PCMStorage> storage;
@@ -60,17 +60,18 @@ public:
       rate = f.mSampleRate;
       channels = f.mChannelsPerFrame;
       quantum = deviceFrames(device);
+      maximum = deviceMaximumFrames(device);
       if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
         throw StatusError(kAudioUnitErr_FormatNotSupported);
+      if (maximum < quantum || maximum > kAudioMaxFramesPerBlock)
+        throw StatusError(kAudioUnitErr_TooManyFramesToProcess);
       auto format = pcmFormat(rate, channels);
       unit->set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, format);
-      unit->set(kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, std::max(4096u, quantum));
     }
     if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
       throw StatusError(kAudioUnitErr_FormatNotSupported);
     // Reserve five seconds of descriptors at the acquisition quantum, with
     // enough payload capacity for the negotiated maximum render size.
-    maximum = std::max(quantum, 4096u);
     storage = std::make_unique<PCMStorage>(maximum, channels, rate, quantum, generation);
     normalizer = std::make_unique<Normalizer>(rate, channels);
     if (unit) {

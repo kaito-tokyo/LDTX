@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
+#include "AlignedStorage.hpp"
 #include "StopRetry.hpp"
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
@@ -11,10 +12,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <mach/mach_time.h>
+#include <limits>
 #include <os/log.h>
 #include <stdexcept>
 #include <thread>
-#include <vector>
 namespace ldtx::audio {
 struct StatusError : std::runtime_error {
   OSStatus status;
@@ -130,22 +131,42 @@ inline uint32_t deviceFrames(AudioDeviceID id) {
   check(AudioObjectGetPropertyData(id, &a, 0, nullptr, &n, &v));
   return v;
 }
+inline uint32_t deviceMaximumFrames(AudioDeviceID id) {
+  AudioObjectPropertyAddress rangeAddress{kAudioDevicePropertyBufferFrameSizeRange,
+                                          kAudioObjectPropertyScopeGlobal,
+                                          kAudioObjectPropertyElementMain};
+  AudioValueRange range{};
+  UInt32 size = sizeof(range);
+  auto status = AudioObjectGetPropertyData(id, &rangeAddress, 0, nullptr, &size, &range);
+  if (!status && std::isfinite(range.mMaximum) && range.mMaximum >= 1 &&
+      range.mMaximum <= std::numeric_limits<uint32_t>::max())
+    return uint32_t(std::ceil(range.mMaximum));
+  return deviceFrames(id);
+}
 class BufferList {
-  std::vector<uint64_t> storage;
-  std::vector<std::vector<float>> planes;
+  const uint32_t channels_;
+  const uint32_t maximumFrames_;
+  AlignedStorage storage_;
+  AlignedStorage samples_;
 
 public:
   BufferList(uint32_t channels, uint32_t frames)
-      : storage((offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer) + 7) / 8),
-        planes(channels, std::vector<float>(frames)) {
+      : channels_(channels), maximumFrames_(frames),
+        storage_(alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer))),
+        samples_(size_t(channels) * frames * sizeof(float)) {
+    assert(channels_ > 0);
+    assert(maximumFrames_ <= kAudioMaxFramesPerBlock);
     reset(frames);
   }
-  AudioBufferList *get() { return reinterpret_cast<AudioBufferList *>(storage.data()); }
+  AudioBufferList *get() { return reinterpret_cast<AudioBufferList *>(storage_.bytes()); }
   void reset(uint32_t frames) {
+    assert(frames <= maximumFrames_);
     auto *b = get();
-    b->mNumberBuffers = uint32_t(planes.size());
-    for (size_t c = 0; c < planes.size(); ++c)
-      b->mBuffers[c] = {1, frames * UInt32(sizeof(float)), planes[c].data()};
+    b->mNumberBuffers = channels_;
+    auto *samples = reinterpret_cast<float *>(samples_.bytes());
+    assert(reinterpret_cast<uintptr_t>(samples) % kAudioBufferAlignment == 0);
+    for (uint32_t c = 0; c < channels_; ++c)
+      b->mBuffers[c] = {1, frames * UInt32(sizeof(float)), samples + size_t(c) * maximumFrames_};
   }
 };
 // Output worker only. The returned sample owns a copy independent of capture storage.

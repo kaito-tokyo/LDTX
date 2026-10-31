@@ -8,6 +8,7 @@
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
+#include <cstdint>
 #include <iostream>
 #include <thread>
 using namespace ldtx::audio;
@@ -115,12 +116,17 @@ struct Samples {
 TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
   PCMStorage ring(4, 1, 1); // Three slots.
   BufferList buffer(1, 4);
+  CHECK(reinterpret_cast<uintptr_t>(buffer.get()) % kAudioBufferAlignment == 0);
+  BufferList stereo(2, 4);
+  for (UInt32 c = 0; c < stereo.get()->mNumberBuffers; ++c)
+    CHECK(reinterpret_cast<uintptr_t>(stereo.get()->mBuffers[c].mData) % kAudioBufferAlignment == 0);
   auto *b = buffer.get();
   std::fill_n(static_cast<float *>(b->mBuffers[0].mData), 4, 0.25f);
   auto t = timestamp(1000000000);
   CHECK(ring.write(b, t));
   Descriptor first;
   CHECK(ring.outputQueue.pop(first));
+  CHECK(reinterpret_cast<uintptr_t>(ring.plane(first, 0)) % kAudioBufferAlignment == 0);
   Descriptor raw;
   CHECK(ring.rawQueue.pop(raw));
   ring.releaseRaw(raw);
@@ -151,6 +157,14 @@ TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
     CHECK(full.write(b, t));
   CHECK(!full.write(b, t));
   CHECK(full.dropped == 4);
+}
+
+TEST_CASE("LUB-1007: Fixed PCM capacity rejects oversized blocks") {
+  PCMStorage storage(kAudioMaxFramesPerBlock, 1, 1);
+  BufferList oversized(1, kAudioMaxFramesPerBlock);
+  oversized.get()->mBuffers[0].mDataByteSize = (kAudioMaxFramesPerBlock + 1) * sizeof(float);
+  CHECK_FALSE(storage.write(oversized.get(), timestamp(1000000000)));
+  CHECK(storage.dropped == kAudioMaxFramesPerBlock + 1);
 }
 TEST_CASE("LUB-1007: Preserve complete PCM frames during concurrent writes and reads") {
   PCMStorage ring(16, 1, 64);

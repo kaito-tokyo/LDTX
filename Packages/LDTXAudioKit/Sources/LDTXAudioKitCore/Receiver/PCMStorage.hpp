@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
+#include "AlignedStorage.hpp"
 #include <AudioToolbox/AudioToolbox.h>
 #include <algorithm>
 #include <atomic>
@@ -46,10 +47,11 @@ class PCMStorage {
   static constexpr uint64_t outputHold = 1, monitorHold = 2, writing = 4, rawHold = 8;
   struct Slot {
     std::atomic<uint64_t> state{0};
-    std::vector<float> pcm;
   };
   std::unique_ptr<Slot[]> slots;
   uint32_t slotCount, maxFrames, channels;
+  size_t planeStride, slotStride;
+  AlignedStorage pcm;
   uint64_t nextIndex = 0, formatGeneration;
   static_assert(std::atomic<uint64_t>::is_always_lock_free);
 
@@ -58,11 +60,14 @@ public:
   std::atomic<uint64_t> received{0}, dropped{0};
   PCMStorage(uint32_t frames, uint32_t planes, double rate, uint32_t quantum = 0, uint64_t inputGeneration = 1)
       : slots(new Slot[std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))]),
-        slotCount(std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))), maxFrames(frames),
-        channels(planes), formatGeneration(inputGeneration), outputQueue(slotCount), rawQueue(slotCount),
-        monitorQueue(slotCount) {
-    for (uint32_t i = 0; i < slotCount; ++i)
-      slots[i].pcm.resize(size_t(frames) * planes);
+        slotCount(std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))),
+        maxFrames(frames), channels(planes),
+        planeStride(alignedSize(size_t(maxFrames) * sizeof(float))), slotStride(planeStride * channels),
+        pcm(size_t(slotCount) * slotStride), formatGeneration(inputGeneration), outputQueue(slotCount),
+        rawQueue(slotCount), monitorQueue(slotCount) {
+    assert(frames <= maxFrames);
+    assert(channels > 0);
+    assert(reinterpret_cast<uintptr_t>(pcm.bytes()) % kAudioBufferAlignment == 0);
   }
   bool write(const AudioBufferList *input, const AudioTimeStamp &time) {
     if (!input || input->mNumberBuffers != channels)
@@ -84,8 +89,10 @@ public:
       dropped += frames;
       return false;
     }
+    auto *destination = pcm.bytes() + size_t(i) * slotStride;
+    assert(reinterpret_cast<uintptr_t>(destination) % kAudioBufferAlignment == 0);
     for (uint32_t c = 0; c < channels; ++c)
-      memcpy(slot.pcm.data() + size_t(c) * maxFrames, input->mBuffers[c].mData, frames * sizeof(float));
+      memcpy(destination + size_t(c) * planeStride, input->mBuffers[c].mData, frames * sizeof(float));
     slot.state.store(generation | outputHold | rawHold, std::memory_order_release);
     Descriptor d{index, generation, i, frames, formatGeneration, time};
     if (!outputQueue.push(d)) {
@@ -110,6 +117,10 @@ public:
   void releaseMonitor(const Descriptor &d) { slots[d.slot].state.fetch_and(~monitorHold, std::memory_order_release); }
   void releaseRaw(const Descriptor &d) { slots[d.slot].state.fetch_and(~rawHold, std::memory_order_release); }
   void releaseOutput(const Descriptor &d) { slots[d.slot].state.fetch_and(~outputHold, std::memory_order_release); }
-  const float *plane(const Descriptor &d, uint32_t c) const { return slots[d.slot].pcm.data() + size_t(c) * maxFrames; }
+  const float *plane(const Descriptor &d, uint32_t c) const {
+    auto *address = pcm.bytes() + size_t(d.slot) * slotStride + size_t(c) * planeStride;
+    assert(reinterpret_cast<uintptr_t>(address) % kAudioBufferAlignment == 0);
+    return reinterpret_cast<const float *>(address);
+  }
 };
 } // namespace ldtx::audio
