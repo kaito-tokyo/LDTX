@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
-#include "ReceiverPrimitives.hpp"
 #include "LDTXAudioReceiver.h"
 
 #include <array>
@@ -10,6 +11,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "ReceiverPrimitives.hpp"
+
 
 namespace ldtx::audio {
 
