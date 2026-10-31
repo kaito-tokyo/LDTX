@@ -125,7 +125,9 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
     guard let formatDescription = sampleBuffer.formatDescription else {
       throw AudioSampleBufferNormalizerError.missingFormatDescription
     }
-    let inputFormat = AVAudioFormat(cmAudioFormatDescription: formatDescription)
+    guard let inputFormat = AVAudioFormat(formatDescription: formatDescription) else {
+      throw AudioSampleBufferNormalizerError.unsupportedInputFormat
+    }
     guard
       let inputDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?
         .pointee

@@ -28,6 +28,8 @@ options:
 packages:
   LDTXFontRasterizer:
     path: Packages/LDTXFontRasterizer
+  LDTXAudioKit:
+    path: Packages/LDTXAudioKit
 settings:
   base:
     SWIFT_VERSION: "6.0"
