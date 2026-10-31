@@ -13,11 +13,12 @@ let package = Package(
       name: "LDTXAudioKit",
       type: .dynamic,
       targets: ["LDTXAudioKit"]
-    )
+    ),
+    .executable(name: "ldtx-track-record", targets: ["LDTXCmdTrackRecord"])
   ],
   targets: [
     .target(
-      name: "LDTXAudioKit",
+      name: "LDTXAudioKitCore",
       path: "Sources/LDTXAudioKit",
       publicHeadersPath: "include",
       cxxSettings: [
@@ -32,9 +33,26 @@ let package = Package(
         .linkedFramework("CoreFoundation")
       ]
     ),
+    .target(
+      name: "LDTXAudioKit",
+      dependencies: ["LDTXAudioKitCore"],
+      path: "Sources/LDTXAudioKitSwift",
+      linkerSettings: [
+        .linkedFramework("AVFoundation"),
+        .linkedFramework("AudioToolbox"),
+        .linkedFramework("CoreAudio"),
+        .linkedFramework("CoreMedia"),
+        .linkedFramework("Foundation")
+      ]
+    ),
+    .executableTarget(
+      name: "LDTXCmdTrackRecord",
+      dependencies: ["LDTXAudioKit"],
+      path: "Sources/LDTXCmdTrackRecord"
+    ),
     .testTarget(
       name: "LDTXAudioKitTests",
-      dependencies: ["LDTXAudioKit"],
+      dependencies: ["LDTXAudioKit", "LDTXAudioKitCore"],
       path: "Tests/LDTXAudioKitTests"
     )
   ]
