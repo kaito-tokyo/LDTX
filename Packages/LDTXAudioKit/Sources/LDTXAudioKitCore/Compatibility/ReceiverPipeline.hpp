@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "ReceiverPrimitives.hpp"
+#include "../Receiver/ReceiverPrimitives.hpp"
 
 namespace ldtx::audio {
 struct Descriptor {

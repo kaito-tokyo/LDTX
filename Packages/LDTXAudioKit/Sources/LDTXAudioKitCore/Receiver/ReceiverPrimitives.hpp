@@ -35,6 +35,8 @@ class AlignedStorage {
   size_t size_ = 0;
 
 public:
+  AlignedStorage() = default;
+
   explicit AlignedStorage(size_t size) : size_(alignedSize(size)) {
     if (size_ == 0)
       return;
@@ -47,6 +49,21 @@ public:
 
   AlignedStorage(const AlignedStorage &) = delete;
   AlignedStorage &operator=(const AlignedStorage &) = delete;
+
+  AlignedStorage(AlignedStorage &&other) noexcept : data_(other.data_), size_(other.size_) {
+    other.data_ = nullptr;
+    other.size_ = 0;
+  }
+  AlignedStorage &operator=(AlignedStorage &&other) noexcept {
+    if (this != &other) {
+      free(data_);
+      data_ = other.data_;
+      size_ = other.size_;
+      other.data_ = nullptr;
+      other.size_ = 0;
+    }
+    return *this;
+  }
 
   std::byte *bytes() { return static_cast<std::byte *>(data_); }
   const std::byte *bytes() const { return static_cast<const std::byte *>(data_); }
