@@ -43,14 +43,25 @@ Agentic reviews SHOULD NOT duplicate DCO sign-off checks performed by the DCO Gi
 
 When creating a commit, follow these rules:
 
+- Every commit MUST be cryptographic signed and have a DCO sign-off.
 - Write the commit title in the imperative mood and keep it within 50 characters whenever possible.
 - Do not add prefixes such as `feat:`, `fix:`, or `chore:` to the title.
 - Insert a blank line between the title and body.
 - Describe the changes in the body using complete sentences.
 - Use a separate paragraph for each logical unit of change, with a blank line between paragraphs.
-- If the user has explicitly authorized a DCO sign-off, use the `git commit -s` option.
-- If the user has explicitly authorized cryptographic signing, sign the commit using the configured Git signing method.
 - Before committing, verify that the message accurately describes only the staged changes.
+
+Example:
+
+```
+Add LDTXAudioKit package and update MP4 audio APIs
+
+Add the LDTXAudioKit Swift package, which wraps the existing workspace audio engine behind a C API with LDTXAudioKit-prefixed symbols. It includes placeholder README files for the Compositor and TrackRecorder modules, a version smoke test, and a project.yml entry.
+
+Update LDTXMP4 to use the failable AVAudioFormat(formatDescription:) initializer and throw errors on invalid formats. PCMAudioSegmentedMP4Writer now appends AAC samples through AVAssetWriterInput.SampleBufferReceiver with appendImmediately and finishes via the receiver, instead of polling isReadyForMoreMediaData.
+
+Signed-off-by: Kaito Udagawa <umireon@kaito.tokyo>
+```
 
 ## RULE: GitHub Pull Request Body
 
