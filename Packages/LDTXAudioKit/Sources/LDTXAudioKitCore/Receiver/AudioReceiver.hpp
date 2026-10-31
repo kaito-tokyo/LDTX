@@ -12,7 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "ReceiverPrimitives.hpp"
+#include "AudioBufferStorage.hpp"
+#include "AudioDevice.hpp"
 
 
 namespace ldtx::audio {
@@ -36,8 +37,8 @@ class AudioReceiver {
   double rate = 0;
   size_t planeStride = 0;
   size_t slotStride = 0;
-  AlignedStorage pcm;
-  AlignedStorage lists;
+  std::unique_ptr<void, void (*)(void *)> pcm{nullptr, &std::free};
+  std::unique_ptr<void, void (*)(void *)> lists{nullptr, &std::free};
   std::array<Slot, slotCount> slots;
   std::vector<Subscriber> subscribers;
   std::atomic<bool> accepting{false};

@@ -32,9 +32,9 @@ AudioReceiver::AudioReceiver(const char *inputUID) : uid(inputUID ? inputUID : "
 
   planeStride = alignedSize(size_t(maximumFrames) * sizeof(float));
   slotStride = planeStride * channels;
-  pcm = AlignedStorage(size_t(slotCount) * slotStride);
+  pcm = allocateAligned(size_t(slotCount) * slotStride);
   const auto listBytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  lists = AlignedStorage(size_t(slotCount) * listBytes);
+  lists = allocateAligned(size_t(slotCount) * listBytes);
   for (uint32_t slot = 0; slot < slotCount; ++slot) {
     auto *list = slotList(slot);
     list->mNumberBuffers = channels;
@@ -141,15 +141,17 @@ bool AudioReceiver::publish(const AudioTimeStamp &time) {
 
 AudioBufferList *AudioReceiver::slotList(uint32_t index) {
   auto bytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  return reinterpret_cast<AudioBufferList *>(lists.bytes() + size_t(index) * bytes);
+  return reinterpret_cast<AudioBufferList *>(static_cast<std::byte *>(lists.get()) + size_t(index) * bytes);
 }
 
 const AudioBufferList *AudioReceiver::slotList(uint32_t index) const {
   auto bytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  return reinterpret_cast<const AudioBufferList *>(lists.bytes() + size_t(index) * bytes);
+  return reinterpret_cast<const AudioBufferList *>(static_cast<const std::byte *>(lists.get()) + size_t(index) * bytes);
 }
 
-std::byte *AudioReceiver::slotBytes(uint32_t index) { return pcm.bytes() + size_t(index) * slotStride; }
+std::byte *AudioReceiver::slotBytes(uint32_t index) {
+  return static_cast<std::byte *>(pcm.get()) + size_t(index) * slotStride;
+}
 
 bool AudioReceiver::isCurrent(const LDTXAudioReceiverBlock &block) const {
   return block.slot < slotCount && slots[block.slot].generation.load(std::memory_order_acquire) == block.generation &&

@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "../Receiver/ReceiverPrimitives.hpp"
+#include "LegacyAudioPrimitives.hpp"
 
 namespace ldtx::audio {
 struct Descriptor {
@@ -53,7 +53,7 @@ class PCMStorage {
   std::unique_ptr<Slot[]> slots;
   uint32_t slotCount, maxFrames, channels;
   size_t planeStride, slotStride;
-  AlignedStorage pcm;
+  std::unique_ptr<void, void (*)(void *)> pcm;
   uint64_t nextIndex = 0, formatGeneration;
   static_assert(std::atomic<uint64_t>::is_always_lock_free);
 
@@ -65,11 +65,11 @@ public:
         slotCount(std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))),
         maxFrames(frames), channels(planes),
         planeStride(alignedSize(size_t(maxFrames) * sizeof(float))), slotStride(planeStride * channels),
-        pcm(size_t(slotCount) * slotStride), formatGeneration(inputGeneration), outputQueue(slotCount),
+        pcm(allocateAligned(size_t(slotCount) * slotStride)), formatGeneration(inputGeneration), outputQueue(slotCount),
         rawQueue(slotCount), monitorQueue(slotCount) {
     assert(frames <= kAudioMaxFramesPerBlock);
     assert(channels > 0);
-    assert(reinterpret_cast<uintptr_t>(pcm.bytes()) % kAudioBufferAlignment == 0);
+    assert(reinterpret_cast<uintptr_t>(pcm.get()) % kAudioBufferAlignment == 0);
   }
   bool write(const AudioBufferList *input, const AudioTimeStamp &time) {
     if (!input || input->mNumberBuffers != channels)
@@ -91,7 +91,7 @@ public:
       dropped += frames;
       return false;
     }
-    auto *destination = pcm.bytes() + size_t(i) * slotStride;
+    auto *destination = static_cast<std::byte *>(pcm.get()) + size_t(i) * slotStride;
     assert(reinterpret_cast<uintptr_t>(destination) % kAudioBufferAlignment == 0);
     for (uint32_t c = 0; c < channels; ++c)
       memcpy(destination + size_t(c) * planeStride, input->mBuffers[c].mData, frames * sizeof(float));
@@ -119,7 +119,7 @@ public:
   void releaseRaw(const Descriptor &d) { slots[d.slot].state.fetch_and(~rawHold, std::memory_order_release); }
   void releaseOutput(const Descriptor &d) { slots[d.slot].state.fetch_and(~outputHold, std::memory_order_release); }
   const float *plane(const Descriptor &d, uint32_t c) const {
-    auto *address = pcm.bytes() + size_t(d.slot) * slotStride + size_t(c) * planeStride;
+    auto *address = static_cast<std::byte *>(pcm.get()) + size_t(d.slot) * slotStride + size_t(c) * planeStride;
     assert(reinterpret_cast<uintptr_t>(address) % kAudioBufferAlignment == 0);
     return reinterpret_cast<const float *>(address);
   }

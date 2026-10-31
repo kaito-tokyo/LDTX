@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HALInput.hpp"
 #include "ReceiverPipeline.hpp"
-#include "ReceiverPrimitives.hpp"
+#include "AudioBufferStorage.hpp"
+#include "LegacyAudioPrimitives.hpp"
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"

@@ -337,8 +337,8 @@ struct LDTXWorkspaceAudioEngine {
                                              kAudioObjectPropertyElementMain};
           UInt32 bytes = 0;
           check(AudioObjectGetPropertyDataSize(device, &streams, 0, nullptr, &bytes));
-          AlignedStorage memory(bytes);
-          auto *list = reinterpret_cast<AudioBufferList *>(memory.bytes());
+          auto memory = allocateAligned(bytes);
+          auto *list = reinterpret_cast<AudioBufferList *>(memory.get());
           check(AudioObjectGetPropertyData(device, &streams, 0, nullptr, &bytes, list));
           uint32_t channels = 0;
           for (UInt32 c = 0; c < list->mNumberBuffers; ++c)
