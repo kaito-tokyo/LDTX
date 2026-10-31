@@ -17,17 +17,14 @@
 
 #include "AudioBufferStorage.hpp"
 
-namespace ldtx::audio {
-
-struct StatusError : std::runtime_error {
+struct LDTXAudioStatusError : std::runtime_error {
   OSStatus status;
-  explicit StatusError(OSStatus s) : std::runtime_error("Core Audio operation failed"), status(s) {}
+  explicit LDTXAudioStatusError(OSStatus s) : std::runtime_error("Core Audio operation failed"), status(s) {}
 };
 inline void check(OSStatus s) {
   if (s)
-    throw StatusError(s);
+    throw LDTXAudioStatusError(s);
 }
-
 inline AudioStreamBasicDescription pcmFormat(double rate, uint32_t channels, bool planar = true) {
   AudioStreamBasicDescription f{};
   f.mSampleRate = rate;
@@ -39,7 +36,6 @@ inline AudioStreamBasicDescription pcmFormat(double rate, uint32_t channels, boo
   f.mBitsPerChannel = 32;
   return f;
 }
-
 template <class Stop, class BeforeRetry> auto retryStop(Stop stop, BeforeRetry beforeRetry) {
   auto status = stop();
   for (unsigned retry = 0; status != 0 && retry < 3; ++retry) {
@@ -49,25 +45,25 @@ template <class Stop, class BeforeRetry> auto retryStop(Stop stop, BeforeRetry b
   return status;
 }
 
-struct Unit {
+struct LDTXAudioUnit {
   AudioUnit value = nullptr;
   bool requiresStop = false;
-  Unit(OSType type, OSType subtype) {
+  LDTXAudioUnit(OSType type, OSType subtype) {
     AudioComponentDescription d{type, subtype, kAudioUnitManufacturer_Apple, 0, 0};
     auto component = AudioComponentFindNext(nullptr, &d);
     if (!component)
-      throw StatusError(kAudio_ParamError);
+      throw LDTXAudioStatusError(kAudio_ParamError);
     check(AudioComponentInstanceNew(component, &value));
   }
-  ~Unit() {
+  ~LDTXAudioUnit() {
     if (value) {
       stop();
       AudioUnitUninitialize(value);
       AudioComponentInstanceDispose(value);
     }
   }
-  Unit(const Unit &) = delete;
-  Unit &operator=(const Unit &) = delete;
+  LDTXAudioUnit(const LDTXAudioUnit &) = delete;
+  LDTXAudioUnit &operator=(const LDTXAudioUnit &) = delete;
   template <class T> void set(AudioUnitPropertyID p, AudioUnitScope s, AudioUnitElement e, const T &v) {
     check(AudioUnitSetProperty(value, p, s, e, &v, sizeof(v)));
   }
@@ -77,7 +73,7 @@ struct Unit {
     check(AudioUnitGetProperty(value, p, s, e, &v, &n));
     return v;
   }
-  void connect(Unit &destination, uint32_t bus = 0) {
+  void connect(LDTXAudioUnit &destination, uint32_t bus = 0) {
     AudioUnitConnection c{value, 0, bus};
     destination.set(kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, bus, c);
   }
@@ -112,7 +108,7 @@ inline AudioDeviceID deviceForUID(const char *uid) {
     CFRelease(s);
   check(status);
   if (id == kAudioObjectUnknown)
-    throw StatusError(kAudioHardwareBadDeviceError);
+    throw LDTXAudioStatusError(kAudioHardwareBadDeviceError);
   return id;
 }
 
@@ -136,5 +132,3 @@ inline uint32_t deviceMaximumFrames(AudioDeviceID id) {
     return uint32_t(std::ceil(range.mMaximum));
   return deviceFrames(id);
 }
-
-} // namespace ldtx::audio

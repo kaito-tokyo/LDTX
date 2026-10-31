@@ -1,211 +1,215 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
-//
 // SPDX-License-Identifier: Apache-2.0
 
-#include "AudioReceiver.hpp"
+#include "AudioBufferStorage.hpp"
+#include "AudioDevice.hpp"
+#include "LDTXAudioReceiver.h"
 
-#include <algorithm>
+#include <array>
+#include <atomic>
 #include <cassert>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
-namespace ldtx::audio {
 namespace {
-constexpr uint32_t kStopped = 0;
-constexpr uint32_t kRunning = 1;
-constexpr uint32_t kStopping = 2;
+constexpr uint32_t kStopped = 0, kRunning = 1, kStopping = 2;
+constexpr uint32_t kLDTXAudioReceiverSlotCount = 3;
+struct LDTXAudioReceiverSlotState {
+  std::atomic<int64_t> remainingReads{0};
+  std::atomic<uint64_t> generation{0};
+};
+struct LDTXAudioReceiverSubscriberState {
+  LDTXAudioReceiverSubscriber handler = nullptr;
+  void *context = nullptr;
+};
+} // namespace
+
+struct LDTXAudioReceiver {
+  explicit LDTXAudioReceiver(const char *inputUID);
+  ~LDTXAudioReceiver() noexcept;
+
+  std::string uid;
+  std::unique_ptr<LDTXAudioUnit> unit;
+  std::unique_ptr<LDTXAudioBufferList> capture;
+  uint32_t channels = 0, maximumFrames = 0;
+  double rate = 0;
+  size_t planeStride = 0, slotStride = 0;
+  std::unique_ptr<void, void (*)(void *)> pcm{nullptr, &std::free};
+  std::unique_ptr<void, void (*)(void *)> lists{nullptr, &std::free};
+  std::array<LDTXAudioReceiverSlotState, kLDTXAudioReceiverSlotCount> slots;
+  std::vector<LDTXAudioReceiverSubscriberState> subscribers;
+  std::atomic<bool> accepting{false};
+  std::atomic<uint32_t> inFlight{0}, state{kStopped}, nextSlot{0};
+  std::atomic<uint64_t> received{0}, dropped{0};
+};
+
+namespace {
+AudioBufferList *LDTXAudioReceiverSlotList(LDTXAudioReceiver *r, uint32_t i) {
+  auto n = alignedSize(offsetof(AudioBufferList, mBuffers) + r->channels * sizeof(AudioBuffer));
+  return reinterpret_cast<AudioBufferList *>(static_cast<std::byte *>(r->lists.get()) + size_t(i) * n);
 }
-
-AudioReceiver::AudioReceiver(const char *inputUID) : uid(inputUID ? inputUID : "") {
-  auto device = deviceForUID(uid.c_str());
-  unit = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
-  unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(1));
-  unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(0));
-  unit->set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
-
-  auto format = unit->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1);
-  rate = format.mSampleRate;
-  channels = format.mChannelsPerFrame;
-  maximumFrames = deviceMaximumFrames(device);
-  if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64 || maximumFrames == 0 ||
-      maximumFrames > kAudioMaxFramesPerBlock)
-    throw StatusError(kAudioUnitErr_FormatNotSupported);
-
-  planeStride = alignedSize(size_t(maximumFrames) * sizeof(float));
-  slotStride = planeStride * channels;
-  pcm = allocateAligned(size_t(slotCount) * slotStride);
-  const auto listBytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  lists = allocateAligned(size_t(slotCount) * listBytes);
-  for (uint32_t slot = 0; slot < slotCount; ++slot) {
-    auto *list = slotList(slot);
-    list->mNumberBuffers = channels;
-    for (uint32_t channel = 0; channel < channels; ++channel)
-      list->mBuffers[channel] = {1, 0, slotBytes(slot) + size_t(channel) * planeStride};
+std::byte *LDTXAudioReceiverSlotBytes(LDTXAudioReceiver *r, uint32_t i) {
+  return static_cast<std::byte *>(r->pcm.get()) + size_t(i) * r->slotStride;
+}
+bool LDTXAudioReceiverIsCurrent(const LDTXAudioReceiver *r, const struct LDTXAudioReceiverBlock &b) {
+  return b.slot < kLDTXAudioReceiverSlotCount &&
+         r->slots[b.slot].generation.load(std::memory_order_acquire) == b.generation &&
+         r->slots[b.slot].remainingReads.load(std::memory_order_acquire) > 0;
+}
+bool LDTXAudioReceiverPublish(LDTXAudioReceiver *r, const AudioTimeStamp &time) {
+  auto count = int64_t(r->subscribers.size());
+  auto start = r->nextSlot.fetch_add(1, std::memory_order_relaxed) % kLDTXAudioReceiverSlotCount;
+  for (uint32_t off = 0; off < kLDTXAudioReceiverSlotCount; ++off) {
+    auto i = (start + off) % kLDTXAudioReceiverSlotCount;
+    int64_t expected = 0;
+    if (!r->slots[i].remainingReads.compare_exchange_strong(expected, -1, std::memory_order_acq_rel))
+      continue;
+    auto *dst = LDTXAudioReceiverSlotBytes(r, i);
+    for (uint32_t c = 0; c < r->channels; ++c)
+      memcpy(dst + size_t(c) * r->planeStride, r->capture->get()->mBuffers[c].mData,
+             r->capture->get()->mBuffers[c].mDataByteSize);
+    auto gen = r->slots[i].generation.fetch_add(1, std::memory_order_relaxed) + 1;
+    r->slots[i].remainingReads.store(count, std::memory_order_release);
+    struct LDTXAudioReceiverBlock b{
+        gen, i, uint32_t(r->capture->get()->mBuffers[0].mDataByteSize / sizeof(float)), r->channels, r->rate, time};
+    for (const auto &s : r->subscribers)
+      s.handler(s.context, r, &b);
+    r->received.fetch_add(b.frames, std::memory_order_relaxed);
+    return true;
   }
-  capture = std::make_unique<BufferList>(channels, maximumFrames);
+  return false;
+}
+OSStatus LDTXAudioReceiverReceiveInput(LDTXAudioReceiver *r, AudioUnitRenderActionFlags *flags,
+                                       const AudioTimeStamp *time, UInt32 frames) {
+  if (!r->accepting.load(std::memory_order_acquire))
+    return noErr;
+  if (!time || frames == 0 || frames > r->maximumFrames)
+    return kAudioUnitErr_TooManyFramesToProcess;
+  r->capture->reset(frames);
+  auto status = AudioUnitRender(r->unit->value, flags, time, 1, frames, r->capture->get());
+  if (!status && !LDTXAudioReceiverPublish(r, *time))
+    r->dropped.fetch_add(frames, std::memory_order_relaxed);
+  return status;
+}
+OSStatus LDTXAudioReceiverInputCallback(void *ctx, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time,
+                                        UInt32, UInt32 frames, AudioBufferList *) {
+  auto *r = static_cast<struct LDTXAudioReceiver *>(ctx);
+  r->inFlight.fetch_add(1, std::memory_order_acq_rel);
+  auto status = LDTXAudioReceiverReceiveInput(r, flags, time, frames);
+  r->inFlight.fetch_sub(1, std::memory_order_release);
+  return status;
 }
 
-AudioReceiver::~AudioReceiver() {
-  stop();
-  unit.reset();
-}
+} // namespace
 
-bool AudioReceiver::addSubscriber(LDTXAudioReceiverSubscriber handler, void *context) {
-  if (!handler || state.load(std::memory_order_acquire) != kStopped)
-    return false;
-  subscribers.push_back({handler, context});
-  return true;
-}
-
-bool AudioReceiver::start() {
-  if (subscribers.empty() || state.load(std::memory_order_acquire) != kStopped)
-    return false;
-  AURenderCallbackStruct callback{receive, this};
-  unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
-  unit->initialize();
-  accepting.store(true, std::memory_order_release);
-  state.store(kRunning, std::memory_order_release);
-  try {
-    unit->start();
-  } catch (...) {
-    stop();
-    throw;
+LDTXAudioReceiver::LDTXAudioReceiver(const char *inputUID) {
+  auto *r = this;
+  r->uid = inputUID ? inputUID : "";
+  auto device = deviceForUID(r->uid.c_str());
+  r->unit = std::make_unique<LDTXAudioUnit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
+  r->unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(1));
+  r->unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(0));
+  r->unit->set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
+  auto format = r->unit->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1);
+  r->rate = format.mSampleRate;
+  r->channels = format.mChannelsPerFrame;
+  r->maximumFrames = deviceMaximumFrames(device);
+  if (!std::isfinite(r->rate) || r->rate <= 0 || r->channels == 0 || r->channels > 64 || r->maximumFrames == 0 ||
+      r->maximumFrames > kAudioMaxFramesPerBlock)
+    throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
+  r->planeStride = alignedSize(size_t(r->maximumFrames) * sizeof(float));
+  r->slotStride = r->planeStride * r->channels;
+  r->pcm = allocateAligned(size_t(kLDTXAudioReceiverSlotCount) * r->slotStride);
+  auto listBytes = alignedSize(offsetof(AudioBufferList, mBuffers) + r->channels * sizeof(AudioBuffer));
+  r->lists = allocateAligned(size_t(kLDTXAudioReceiverSlotCount) * listBytes);
+  for (uint32_t i = 0; i < kLDTXAudioReceiverSlotCount; ++i) {
+    auto *list = LDTXAudioReceiverSlotList(r, i);
+    list->mNumberBuffers = r->channels;
+    for (uint32_t c = 0; c < r->channels; ++c)
+      list->mBuffers[c] = {1, 0, LDTXAudioReceiverSlotBytes(r, i) + size_t(c) * r->planeStride};
   }
-  return true;
+  r->capture = std::make_unique<LDTXAudioBufferList>(r->channels, r->maximumFrames);
+  return;
 }
 
-void AudioReceiver::stop() {
-  auto old = state.exchange(kStopping, std::memory_order_acq_rel);
+void LDTXAudioReceiverStop(LDTXAudioReceiver *r) {
+  auto old = r->state.exchange(kStopping, std::memory_order_acq_rel);
   if (old == kStopped)
     return;
-  accepting.store(false, std::memory_order_release);
-  unit->stop();
-  while (inFlight.load(std::memory_order_acquire) != 0)
+  r->accepting.store(false, std::memory_order_release);
+  r->unit->stop();
+  while (r->inFlight.load(std::memory_order_acquire) != 0)
     std::this_thread::yield();
   for (;;) {
     bool drained = true;
-    for (const auto &slot : slots)
-      if (slot.remainingReads.load(std::memory_order_acquire) != 0)
+    for (const auto &s : r->slots)
+      if (s.remainingReads.load(std::memory_order_acquire) != 0)
         drained = false;
     if (drained)
       break;
     std::this_thread::yield();
   }
-  state.store(kStopped, std::memory_order_release);
+  r->state.store(kStopped, std::memory_order_release);
 }
 
-OSStatus AudioReceiver::receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time,
-                                UInt32, UInt32 frames, AudioBufferList *) {
-  auto &receiver = *static_cast<AudioReceiver *>(context);
-  receiver.inFlight.fetch_add(1, std::memory_order_acq_rel);
-  auto status = receiver.receiveInput(flags, time, frames);
-  receiver.inFlight.fetch_sub(1, std::memory_order_release);
-  return status;
-}
+LDTXAudioReceiver::~LDTXAudioReceiver() noexcept { LDTXAudioReceiverStop(this); }
 
-OSStatus AudioReceiver::receiveInput(AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32 frames) {
-  if (!accepting.load(std::memory_order_acquire))
-    return noErr;
-  if (!time || frames == 0 || frames > maximumFrames)
-    return kAudioUnitErr_TooManyFramesToProcess;
-  capture->reset(frames);
-  auto status = AudioUnitRender(unit->value, flags, time, 1, frames, capture->get());
-  if (!status && !publish(*time))
-    dropped.fetch_add(frames, std::memory_order_relaxed);
-  return status;
-}
+// MARK: - C API
 
-bool AudioReceiver::publish(const AudioTimeStamp &time) {
-  const auto count = int64_t(subscribers.size());
-  auto start = nextSlot.fetch_add(1, std::memory_order_relaxed) % slotCount;
-  for (uint32_t offset = 0; offset < slotCount; ++offset) {
-    auto index = (start + offset) % slotCount;
-    int64_t expected = 0;
-    if (!slots[index].remainingReads.compare_exchange_strong(expected, -1, std::memory_order_acq_rel))
-      continue;
-    auto *destination = slotBytes(index);
-    for (uint32_t channel = 0; channel < channels; ++channel)
-      memcpy(destination + size_t(channel) * planeStride, capture->get()->mBuffers[channel].mData,
-             capture->get()->mBuffers[channel].mDataByteSize);
-    auto generation = slots[index].generation.fetch_add(1, std::memory_order_relaxed) + 1;
-    slots[index].remainingReads.store(count, std::memory_order_release);
-    LDTXAudioReceiverBlock block{generation, index,
-                                 static_cast<uint32_t>(capture->get()->mBuffers[0].mDataByteSize / sizeof(float)),
-                                 channels, rate, time};
-    for (const auto &subscriber : subscribers)
-      subscriber.handler(subscriber.context, reinterpret_cast<LDTXAudioReceiver *>(this), &block);
-    received.fetch_add(block.frames, std::memory_order_relaxed);
-    return true;
-  }
-  return false;
-}
-
-AudioBufferList *AudioReceiver::slotList(uint32_t index) {
-  auto bytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  return reinterpret_cast<AudioBufferList *>(static_cast<std::byte *>(lists.get()) + size_t(index) * bytes);
-}
-
-const AudioBufferList *AudioReceiver::slotList(uint32_t index) const {
-  auto bytes = alignedSize(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer));
-  return reinterpret_cast<const AudioBufferList *>(static_cast<const std::byte *>(lists.get()) + size_t(index) * bytes);
-}
-
-std::byte *AudioReceiver::slotBytes(uint32_t index) {
-  return static_cast<std::byte *>(pcm.get()) + size_t(index) * slotStride;
-}
-
-bool AudioReceiver::isCurrent(const LDTXAudioReceiverBlock &block) const {
-  return block.slot < slotCount && slots[block.slot].generation.load(std::memory_order_acquire) == block.generation &&
-         slots[block.slot].remainingReads.load(std::memory_order_acquire) > 0;
-}
-
-const AudioBufferList *AudioReceiver::getBuffer(const LDTXAudioReceiverBlock &block) {
-  if (!isCurrent(block))
-    return nullptr;
-  auto *list = slotList(block.slot);
-  for (uint32_t channel = 0; channel < channels; ++channel)
-    list->mBuffers[channel].mDataByteSize = block.frames * sizeof(float);
-  return list;
-}
-
-void AudioReceiver::releaseBlock(const LDTXAudioReceiverBlock &block) {
-  assert(isCurrent(block));
-  auto previous = slots[block.slot].remainingReads.fetch_sub(1, std::memory_order_release);
-  assert(previous > 0);
-}
-
-} // namespace ldtx::audio
-
-extern "C" {
-LDTXAudioReceiver *LDTXAudioReceiverCreate(const char *inputUID) {
+struct LDTXAudioReceiver *LDTXAudioReceiverCreate(const char *inputUID) {
   try {
-    return reinterpret_cast<LDTXAudioReceiver *>(new ldtx::audio::AudioReceiver(inputUID));
+    return new LDTXAudioReceiver(inputUID);
   } catch (...) {
     return nullptr;
   }
 }
-void LDTXAudioReceiverDestroy(LDTXAudioReceiver *receiver) {
-  delete reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver);
+
+void LDTXAudioReceiverDestroy(LDTXAudioReceiver *p) { delete p; }
+
+bool LDTXAudioReceiverAddSubscriber(LDTXAudioReceiver *r, LDTXAudioReceiverSubscriber h, void *ctx) {
+  if (!h || r->state.load(std::memory_order_acquire) != kStopped)
+    return false;
+  r->subscribers.push_back({h, ctx});
+  return true;
 }
-bool LDTXAudioReceiverAddSubscriber(LDTXAudioReceiver *receiver, LDTXAudioReceiverSubscriber handler, void *context) {
-  return reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver)->addSubscriber(handler, context);
+bool LDTXAudioReceiverStart(LDTXAudioReceiver *r) {
+  if (r->subscribers.empty() || r->state.load(std::memory_order_acquire) != kStopped)
+    return false;
+  AURenderCallbackStruct callback{LDTXAudioReceiverInputCallback, r};
+  r->unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
+  r->unit->initialize();
+  r->accepting.store(true, std::memory_order_release);
+  r->state.store(kRunning, std::memory_order_release);
+  try {
+    r->unit->start();
+  } catch (...) {
+    LDTXAudioReceiverStop(r);
+    throw;
+  }
+  return true;
 }
-bool LDTXAudioReceiverStart(LDTXAudioReceiver *receiver) {
-  return reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver)->start();
+const AudioBufferList *LDTXAudioReceiverGetBuffer(LDTXAudioReceiver *r, const struct LDTXAudioReceiverBlock *b) {
+  if (!b || !LDTXAudioReceiverIsCurrent(r, *b))
+    return nullptr;
+  auto *list = LDTXAudioReceiverSlotList(r, b->slot);
+  for (uint32_t c = 0; c < r->channels; ++c)
+    list->mBuffers[c].mDataByteSize = b->frames * sizeof(float);
+  return list;
 }
-void LDTXAudioReceiverStop(LDTXAudioReceiver *receiver) {
-  reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver)->stop();
+void LDTXAudioReceiverReleaseBlock(LDTXAudioReceiver *r, const struct LDTXAudioReceiverBlock *b) {
+  if (!b)
+    return;
+  assert(LDTXAudioReceiverIsCurrent(r, *b));
+  auto previous = r->slots[b->slot].remainingReads.fetch_sub(1, std::memory_order_release);
+  assert(previous > 0);
 }
-const AudioBufferList *LDTXAudioReceiverGetBuffer(LDTXAudioReceiver *receiver, const LDTXAudioReceiverBlock *block) {
-  return block ? reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver)->getBuffer(*block) : nullptr;
+uint64_t LDTXAudioReceiverReceivedFrames(const LDTXAudioReceiver *r) {
+  return r->received.load(std::memory_order_relaxed);
 }
-void LDTXAudioReceiverReleaseBlock(LDTXAudioReceiver *receiver, const LDTXAudioReceiverBlock *block) {
-  if (block)
-    reinterpret_cast<ldtx::audio::AudioReceiver *>(receiver)->releaseBlock(*block);
-}
-uint64_t LDTXAudioReceiverReceivedFrames(const LDTXAudioReceiver *receiver) {
-  return reinterpret_cast<const ldtx::audio::AudioReceiver *>(receiver)->receivedFrames();
-}
-uint64_t LDTXAudioReceiverDroppedFrames(const LDTXAudioReceiver *receiver) {
-  return reinterpret_cast<const ldtx::audio::AudioReceiver *>(receiver)->droppedFrames();
-}
+
+uint64_t LDTXAudioReceiverDroppedFrames(const LDTXAudioReceiver *r) {
+  return r->dropped.load(std::memory_order_relaxed);
 }

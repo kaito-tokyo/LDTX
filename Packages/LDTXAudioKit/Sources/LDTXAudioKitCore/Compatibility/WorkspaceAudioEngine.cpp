@@ -17,7 +17,6 @@
 #include "HALInput.hpp"
 #include "../Compositor/AudioMixEngine.hpp"
 
-using namespace ldtx::audio;
 namespace {
 // Values refer to the connected routes in their configured order. Input IDs
 // alone are not identities: several logical routes may share the same input.
@@ -126,8 +125,8 @@ struct MonitorGraph {
   // Consumer units are disposed before their source callback contexts.
   std::vector<std::unique_ptr<MonitorReader>> readers;
   std::vector<LDTXAudioID> order;
-  std::vector<std::unique_ptr<Unit>> converters;
-  std::unique_ptr<Unit> mixer, output;
+  std::vector<std::unique_ptr<LDTXAudioUnit>> converters;
+  std::unique_ptr<LDTXAudioUnit> mixer, output;
   uint32_t frames = 0;
   OSStatus stop() {
     auto status = output ? output->stop() : noErr;
@@ -304,7 +303,7 @@ struct LDTXWorkspaceAudioEngine {
       report(r.uid, 0);
       os_log_with_type(logger, OS_LOG_TYPE_DEFAULT, "LDTX AUHAL input started generation=%llu frames=%u", r.generation,
                        r.input->quantum);
-    } catch (const StatusError &e) {
+    } catch (const LDTXAudioStatusError &e) {
       r.input.reset();
       report(r.uid, e.status);
     } catch (...) {
@@ -415,7 +414,7 @@ struct LDTXWorkspaceAudioEngine {
         return;
       }
       auto device = monitorDeviceForUID(outputUID.c_str());
-      graph->output = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
+      graph->output = std::make_unique<LDTXAudioUnit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
       auto &out = *graph->output;
       out.set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(0));
       out.set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(1));
@@ -434,10 +433,10 @@ struct LDTXWorkspaceAudioEngine {
       auto hw = out.get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0);
       auto format = pcmFormat(hw.mSampleRate, std::min(2u, hw.mChannelsPerFrame));
       if (format.mSampleRate <= 0 || !format.mChannelsPerFrame)
-        throw StatusError(kAudioUnitErr_FormatNotSupported);
+        throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
       out.set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, format);
       out.set(kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, UInt32(4096));
-      graph->mixer = std::make_unique<Unit>(kAudioUnitType_Mixer, kAudioUnitSubType_MultiChannelMixer);
+      graph->mixer = std::make_unique<LDTXAudioUnit>(kAudioUnitType_Mixer, kAudioUnitSubType_MultiChannelMixer);
       auto &mixer = *graph->mixer;
       mixer.set(kAudioUnitProperty_ElementCount, kAudioUnitScope_Input, 0, UInt32(used.size()));
       mixer.set(kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, UInt32(4096));
@@ -445,7 +444,7 @@ struct LDTXWorkspaceAudioEngine {
       for (auto id : used) {
         auto &input = *inputs.at(id).input;
         auto reader = std::make_unique<MonitorReader>(input);
-        auto converter = std::make_unique<Unit>(kAudioUnitType_FormatConverter, kAudioUnitSubType_AUConverter);
+        auto converter = std::make_unique<LDTXAudioUnit>(kAudioUnitType_FormatConverter, kAudioUnitSubType_AUConverter);
         converter->set(kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, UInt32(4096));
         converter->set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0,
                        pcmFormat(input.rate, input.channels));
@@ -468,7 +467,7 @@ struct LDTXWorkspaceAudioEngine {
       monitor->output->start();
       report("Monitor", 0);
       os_log_with_type(logger, OS_LOG_TYPE_DEFAULT, "LDTX AUHAL monitor outputFrames=%u", monitor->frames);
-    } catch (const StatusError &e) {
+    } catch (const LDTXAudioStatusError &e) {
       monitor.reset();
       report("Monitor", e.status);
     } catch (...) {
@@ -577,7 +576,7 @@ struct LDTXWorkspaceAudioEngine {
             input.normalizedEnd = placement + int64_t(normalized.size() / 2);
             input.previousSourceEnd = ns + uint64_t(d.frames * 1e9 / input.rate);
 
-          } catch (const StatusError &e) {
+          } catch (const LDTXAudioStatusError &e) {
             report(input.uid, e.status);
           }
         }
@@ -597,7 +596,7 @@ struct LDTXWorkspaceAudioEngine {
           auto ns = input.generatedStart + input.generatedFrames * 1000000000 / 48000;
           if (ns > now)
             break;
-          BufferList data(2, 1024);
+          LDTXAudioBufferList data(2, 1024);
           for (uint32_t f = 0; f < 1024; ++f) {
             double t = double(input.generatedFrames + f) / 48000;
             float value = r.kind == 1

@@ -13,8 +13,6 @@
 
 #include <AudioToolbox/AudioToolbox.h>
 
-namespace ldtx::audio {
-
 inline constexpr size_t kAudioBufferAlignment = 16;
 inline constexpr uint32_t kAudioMaxFramesPerBlock = 65536;
 
@@ -31,14 +29,14 @@ inline std::unique_ptr<void, void (*)(void *)> allocateAligned(size_t size) {
   return {raw, &std::free};
 }
 
-class BufferList {
+class LDTXAudioBufferList {
   const uint32_t channels_;
   const uint32_t maximumFrames_;
   std::unique_ptr<void, void (*)(void *)> storage_;
   std::unique_ptr<void, void (*)(void *)> samples_;
 
 public:
-  BufferList(uint32_t channels, uint32_t frames)
+  LDTXAudioBufferList(uint32_t channels, uint32_t frames)
       : channels_(channels), maximumFrames_(frames),
         storage_(allocateAligned(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer))),
         samples_(allocateAligned(size_t(channels) * frames * sizeof(float))) {
@@ -57,5 +55,3 @@ public:
       b->mBuffers[c] = {1, frames * UInt32(sizeof(float)), samples + size_t(c) * maximumFrames_};
   }
 };
-
-} // namespace ldtx::audio

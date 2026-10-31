@@ -9,8 +9,6 @@
 
 #include "../Receiver/AudioDevice.hpp"
 
-namespace ldtx::audio {
-
 inline uint64_t hostNanos(uint64_t ticks) {
   static const mach_timebase_info_data_t scale = [] {
     mach_timebase_info_data_t t;
@@ -30,10 +28,9 @@ inline AudioDeviceID monitorDeviceForUID(const char *uid) {
   UInt32 size = sizeof(device);
   check(AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &device));
   if (device == kAudioObjectUnknown)
-    throw StatusError(kAudioHardwareBadDeviceError);
+    throw LDTXAudioStatusError(kAudioHardwareBadDeviceError);
   return device;
 }
-
 inline CMSampleBufferRef makeSample(const float *samples, uint32_t frames, double rate, uint32_t channels, CMTime pts) {
   auto f = pcmFormat(rate, channels, false);
   CMAudioFormatDescriptionRef desc = nullptr;
@@ -53,5 +50,3 @@ inline CMSampleBufferRef makeSample(const float *samples, uint32_t frames, doubl
   CFRelease(desc);
   return s ? nullptr : result;
 }
-
-} // namespace ldtx::audio

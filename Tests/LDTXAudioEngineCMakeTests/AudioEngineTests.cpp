@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <iostream>
 #include <thread>
-using namespace ldtx::audio;
 TEST_CASE("LUB-1007: Disconnected monitor routes do not acquire an output device") {
   auto *engine = LDTXAudioCreate(true);
   REQUIRE(engine);
@@ -100,9 +99,9 @@ struct Samples {
 };
 TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
   PCMStorage ring(4, 1, 1); // Three slots.
-  BufferList buffer(1, 4);
+  LDTXAudioBufferList buffer(1, 4);
   CHECK(reinterpret_cast<uintptr_t>(buffer.get()) % kAudioBufferAlignment == 0);
-  BufferList stereo(2, 4);
+  LDTXAudioBufferList stereo(2, 4);
   for (UInt32 c = 0; c < stereo.get()->mNumberBuffers; ++c)
     CHECK(reinterpret_cast<uintptr_t>(stereo.get()->mBuffers[c].mData) % kAudioBufferAlignment == 0);
   auto *b = buffer.get();
@@ -146,7 +145,7 @@ TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
 
 TEST_CASE("LUB-1007: Fixed PCM capacity rejects oversized blocks") {
   PCMStorage storage(kAudioMaxFramesPerBlock, 1, 1);
-  BufferList oversized(1, kAudioMaxFramesPerBlock);
+  LDTXAudioBufferList oversized(1, kAudioMaxFramesPerBlock);
   oversized.get()->mBuffers[0].mDataByteSize = (kAudioMaxFramesPerBlock + 1) * sizeof(float);
   CHECK_FALSE(storage.write(oversized.get(), timestamp(1000000000)));
   CHECK(storage.dropped == kAudioMaxFramesPerBlock + 1);
@@ -155,7 +154,7 @@ TEST_CASE("LUB-1007: Preserve complete PCM frames during concurrent writes and r
   PCMStorage ring(16, 1, 64);
   std::atomic<bool> done{false};
   std::thread writer([&] {
-    BufferList b(1, 16);
+    LDTXAudioBufferList b(1, 16);
     for (int i = 0; i < 50000; ++i) {
       std::fill_n(static_cast<float *>(b.get()->mBuffers[0].mData), 16, float(i));
       ring.write(b.get(), timestamp(i));
@@ -251,7 +250,7 @@ TEST_CASE("LUB-1007: Mix logical routes with independent gains and publish timed
   LDTXAudioSubscribe(e, a, true, Samples::receive, &raw);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList buffer(1, 1024);
+  LDTXAudioBufferList buffer(1, 1024);
   auto *pcm = static_cast<float *>(buffer.get()->mBuffers[0].mData);
   auto t = timestamp(start);
   std::fill_n(pcm, 1024, 0.125f);
@@ -339,7 +338,7 @@ TEST_CASE("LUB-1007: Keep retained raw audio samples valid after input callbacks
         }
       },
       &retained);
-  BufferList buffer(1, 1024);
+  LDTXAudioBufferList buffer(1, 1024);
   for (uint64_t n = 0; n < 500; ++n) {
     std::fill_n(static_cast<float *>(buffer.get()->mBuffers[0].mData), 1024, float(n));
     auto ns = 1000000000 + n * 1024 * 1000000000 / 48000;
@@ -402,7 +401,7 @@ TEST_CASE("LUB-1007: Keep audio consumers independent under backlog") {
   LDTXAudioSubscribe(e, bus, false, Samples::receive, &mixed);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList block(1, 1024);
+  LDTXAudioBufferList block(1, 1024);
   std::fill_n(static_cast<float *>(block.get()->mBuffers[0].mData), 1024, 0.25f);
   for (unsigned n = 0; n < 100; ++n) {
     auto t = timestamp(start + n * 1024ull * 1000000000 / 48000);
@@ -430,7 +429,7 @@ TEST_CASE("LUB-1007: Keep unaffected inputs running when one input fails") {
   LDTXAudioSubscribe(e, bad, true, Samples::receive, &raw);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList data(1, 1024);
+  LDTXAudioBufferList data(1, 1024);
   std::fill_n(static_cast<float *>(data.get()->mBuffers[0].mData), 1024, 0.25f);
   AudioTimeStamp invalid{};
   CHECK(LDTXAudioSubmitPCM(e, bad, data.get(), &invalid));
@@ -445,7 +444,7 @@ TEST_CASE("LUB-1007: Keep unaffected inputs running when one input fails") {
   CHECK(bad == LDTXAudioAddInput(e, "fault", 3, 44100, 2));
   CHECK(LDTXAudioGetStatistics(e, bad).generation == 2);
   CHECK(LDTXAudioGetStatistics(e, good).generation == goodGeneration);
-  BufferList stereo(2, 512);
+  LDTXAudioBufferList stereo(2, 512);
   for (unsigned c = 0; c < 2; ++c)
     std::fill_n(static_cast<float *>(stereo.get()->mBuffers[c].mData), 512, 0.125f);
   t = timestamp(start + 300000000);
@@ -529,7 +528,7 @@ TEST_CASE("LUB-1007: Allow safe engine reconstruction from completion callbacks"
 TEST_CASE("LUB-1007: Continue monitoring while an output subscriber stalls") {
   HALInput input("monitor-test", 3, 48000, 1, false);
   MonitorReader monitor(input);
-  BufferList source(1, 512), destination(1, 128);
+  LDTXAudioBufferList source(1, 512), destination(1, 128);
   auto pcm = static_cast<float *>(source.get()->mBuffers[0].mData);
   // Deliberately leave every raw/mix hold outstanding. Monitor still renders.
   for (unsigned n = 0; n < 500; ++n) {

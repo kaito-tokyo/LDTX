@@ -9,10 +9,9 @@
 
 #include "ReceiverPipeline.hpp"
 
-namespace ldtx::audio {
 class HALInput {
-  std::unique_ptr<Unit> unit;
-  std::unique_ptr<BufferList> capture;
+  std::unique_ptr<LDTXAudioUnit> unit;
+  std::unique_ptr<LDTXAudioBufferList> capture;
   std::atomic<uint32_t> inFlight{0};
   std::atomic<bool> accepting{true};
   static OSStatus receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32,
@@ -55,7 +54,7 @@ public:
       : uid(std::move(name)), kind(k), channels(c), rate(r), generation(gen) {
     if (kind == 0 && hardware) {
       device = deviceForUID(uid.c_str());
-      unit = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
+      unit = std::make_unique<LDTXAudioUnit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
       unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(1));
       unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(0));
       unit->set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
@@ -65,20 +64,20 @@ public:
       quantum = deviceFrames(device);
       maximum = deviceMaximumFrames(device);
       if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
-        throw StatusError(kAudioUnitErr_FormatNotSupported);
+        throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
       if (maximum < quantum || maximum > kAudioMaxFramesPerBlock)
-        throw StatusError(kAudioUnitErr_TooManyFramesToProcess);
+        throw LDTXAudioStatusError(kAudioUnitErr_TooManyFramesToProcess);
       auto format = pcmFormat(rate, channels);
       unit->set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, format);
     }
     if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
-      throw StatusError(kAudioUnitErr_FormatNotSupported);
+      throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
     // Reserve five seconds of descriptors at the acquisition quantum, with
     // enough payload capacity for the negotiated maximum render size.
     storage = std::make_unique<PCMStorage>(maximum, channels, rate, quantum, generation);
     normalizer = std::make_unique<Normalizer>(rate, channels);
     if (unit) {
-      capture = std::make_unique<BufferList>(channels, maximum);
+      capture = std::make_unique<LDTXAudioBufferList>(channels, maximum);
       AURenderCallbackStruct callback{receive, this};
       unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
       unit->initialize();
@@ -111,7 +110,7 @@ class MonitorReader {
   Descriptor current{};
   uint32_t offset = 0;
   bool held = false;
-  BufferList scratch;
+  LDTXAudioBufferList scratch;
   std::atomic<uint32_t> inFlight{0};
 
 public:
@@ -185,4 +184,3 @@ public:
     return noErr;
   }
 };
-} // namespace ldtx::audio

@@ -12,7 +12,6 @@
 
 #include "LegacyAudioPrimitives.hpp"
 
-namespace ldtx::audio {
 struct Descriptor {
   uint64_t index = 0, generation = 0;
   uint32_t slot = 0, frames = 0;
@@ -248,9 +247,8 @@ public:
     Feed input{stereo.data(), frames, 2};
     auto status = AudioConverterFillComplexBuffer(converter, feed, &input, &count, &b, nullptr);
     if (status != noErr && status != -1)
-      throw StatusError(status);
+      throw LDTXAudioStatusError(status);
     out.resize(size_t(count) * 2);
     return out;
   }
 };
-} // namespace ldtx::audio
