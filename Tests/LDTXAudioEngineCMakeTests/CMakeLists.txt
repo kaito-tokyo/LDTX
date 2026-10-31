@@ -8,16 +8,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 enable_testing()
 
 add_executable(ldtx-audio-engine-cmake-tests
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKit/Compositor/AudioMixEngine.cpp
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKit/Receiver/WorkspaceAudioEngine.cpp
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor/AudioMixEngine.cpp
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver/WorkspaceAudioEngine.cpp
   AudioEngineTests.cpp
   AudioMixEngineTests.cpp
 )
 target_include_directories(ldtx-audio-engine-cmake-tests PRIVATE
   ../../Tests
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKit/include
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKit/Receiver
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKit/Compositor/Internal
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/include
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor/Internal
 )
 target_link_libraries(ldtx-audio-engine-cmake-tests PRIVATE
   "-framework AudioToolbox"

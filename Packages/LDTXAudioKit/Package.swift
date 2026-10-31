@@ -19,7 +19,7 @@ let package = Package(
   targets: [
     .target(
       name: "LDTXAudioKitCore",
-      path: "Sources/LDTXAudioKit",
+      path: "Sources/LDTXAudioKitCore",
       publicHeadersPath: "include",
       cxxSettings: [
         .headerSearchPath("include"),
@@ -36,7 +36,8 @@ let package = Package(
     .target(
       name: "LDTXAudioKit",
       dependencies: ["LDTXAudioKitCore"],
-      path: "Sources/LDTXAudioKitSwift",
+      path: "Sources/LDTXAudioKit",
+      exclude: ["TrackRecorder/README.md"],
       linkerSettings: [
         .linkedFramework("AVFoundation"),
         .linkedFramework("AudioToolbox"),
