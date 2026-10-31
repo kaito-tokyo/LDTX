@@ -53,8 +53,13 @@ let package = Package(
       path: "Sources/LDTXCmdTrackRecord"
     ),
     .testTarget(
+      name: "LDTXAudioKitCoreTests",
+      dependencies: ["LDTXAudioKitCore"],
+      path: "Tests/LDTXAudioKitCoreTests"
+    ),
+    .testTarget(
       name: "LDTXAudioKitTests",
-      dependencies: ["LDTXAudioKit", "LDTXAudioKitCore"],
+      dependencies: ["LDTXAudioKit"],
       path: "Tests/LDTXAudioKitTests"
     )
   ]

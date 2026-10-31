@@ -4,10 +4,10 @@
 #import <XCTest/XCTest.h>
 #import <WorkspaceAudioEngine.h>
 
-@interface LDTXAudioKitTests : XCTestCase
+@interface LDTXAudioKitCoreTests : XCTestCase
 @end
 
-@implementation LDTXAudioKitTests
+@implementation LDTXAudioKitCoreTests
 
 - (void)testAudioEngineCanBeCreatedWithoutHardware {
   LDTXWorkspaceAudioEngine *engine = LDTXAudioCreate(false);
