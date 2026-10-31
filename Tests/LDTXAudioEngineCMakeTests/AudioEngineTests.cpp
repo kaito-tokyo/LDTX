@@ -5,7 +5,7 @@
 #include "Internal/MonitorRoutes.hpp"
 #include "Internal/PCMStorage.hpp"
 #include "Internal/StopRetry.hpp"
-#include "LDTXAudioEngine/WorkspaceAudioEngine.h"
+#include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 #include <iostream>

@@ -3,7 +3,7 @@
 
 import CoreMedia
 import Foundation
-import LDTXAudioEngine
+import LDTXAudioKit
 import LDTXCorelibs
 @testable import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel

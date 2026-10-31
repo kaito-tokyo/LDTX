@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "LDTXAudioEngine/AudioMixEngine.hpp"
+#include "AudioMixEngine.hpp"
 
 #include <algorithm>
 #include <atomic>

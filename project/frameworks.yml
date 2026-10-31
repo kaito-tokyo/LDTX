@@ -63,36 +63,6 @@ targets:
         DEFINES_MODULE: YES
         SKIP_INSTALL: YES
         OTHER_SWIFT_FLAGS: "$(inherited) -parse-as-library"
-  LDTXAudioEngine:
-    type: framework
-    platform: macOS
-    sources:
-      - path: Sources/LDTXAudioEngine
-        excludes:
-          - include
-          - Internal
-      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine.h
-        group: Public Headers/LDTXAudioEngine
-        buildPhase: headers
-        headerVisibility: public
-      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/WorkspaceAudioEngine.h
-        group: Public Headers/LDTXAudioEngine
-        buildPhase: headers
-        headerVisibility: public
-      - path: Sources/LDTXAudioEngine/include/LDTXAudioEngine/AudioMixEngine.hpp
-        group: Public Headers/LDTXAudioEngine
-        buildPhase: headers
-        headerVisibility: public
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAudioEngine
-        PRODUCT_MODULE_NAME: LDTXAudioEngine
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
-        MODULE_VERIFIER_SUPPORTED_LANGUAGES: objective-c++
-        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Sources/LDTXAudioEngine/include $(SRCROOT)/Sources/LDTXAudioEngine/include/LDTXAudioEngine"
-        MODULEMAP_FILE: Sources/LDTXAudioEngine/include/module.modulemap
-        OTHER_LDFLAGS: "$(inherited) -framework AudioToolbox -framework CoreAudio -framework CoreFoundation -framework CoreMedia"
   LDTXBackgroundSegmentation:
     type: framework
     platform: macOS
@@ -335,7 +305,8 @@ targets:
     dependencies:
       - target: LDTXWorkspaceAppletInterface
       - target: LDTXRichText
-      - target: LDTXAudioEngine
+      - package: LDTXAudioKit
+        product: LDTXAudioKit
       - target: LDTXCapture
       - target: LDTXDash
       - target: LDTXInternalProtocols

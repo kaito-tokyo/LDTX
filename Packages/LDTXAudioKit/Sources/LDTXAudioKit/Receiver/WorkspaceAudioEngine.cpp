@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-#include "LDTXAudioEngine/WorkspaceAudioEngine.h"
+#include "WorkspaceAudioEngine.h"
 #include "Internal/HALInput.hpp"
 #include "Internal/MonitorRoutes.hpp"
-#include "LDTXAudioEngine/AudioMixEngine.hpp"
+#include "AudioMixEngine.hpp"
 #include <condition_variable>
 #include <deque>
 #include <functional>

@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #import <XCTest/XCTest.h>
-#import <LDTXAudioKit/LDTXAudioKit.h>
+#import <WorkspaceAudioEngine.h>
 
 @interface LDTXAudioKitTests : XCTestCase
 @end
 
 @implementation LDTXAudioKitTests
 
-- (void)testVersionIsAvailable {
-  XCTAssertNotEqual(LDTXAudioKitVersion(), NULL);
+- (void)testAudioEngineCanBeCreatedWithoutHardware {
+  LDTXWorkspaceAudioEngine *engine = LDTXAudioCreate(false);
+  XCTAssertNotEqual(engine, NULL);
+  LDTXAudioDestroy(engine);
 }
 
 @end

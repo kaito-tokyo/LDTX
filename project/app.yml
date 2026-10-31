@@ -154,8 +154,6 @@ targets:
         link: false
         codeSign: true
         embed: true
-      - target: LDTXAudioEngine
-        embed: true
       - target: LDTXBackgroundSegmentation
         embed: true
       - target: LDTXCapture

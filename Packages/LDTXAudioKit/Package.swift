@@ -22,7 +22,8 @@ let package = Package(
       publicHeadersPath: "include",
       cxxSettings: [
         .headerSearchPath("include"),
-        .unsafeFlags(["-std=c++20", "-I../Sources/LDTXAudioEngine/include"])
+        .headerSearchPath("Compositor/Internal"),
+        .unsafeFlags(["-std=c++20"])
       ],
       linkerSettings: [
         .linkedFramework("AudioToolbox"),
