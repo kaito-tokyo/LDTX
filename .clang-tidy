@@ -5,6 +5,7 @@
 Checks: >
   bugprone-*,
   clang-analyzer-*,
+  cppcoreguidelines-*,
   performance-*,
   modernize-*,
   portability-*,

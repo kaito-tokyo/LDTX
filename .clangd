@@ -3,7 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 If:
-  PathMatch: (Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests)/.*
+  PathMatch: ^Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/.*$
 CompileFlags:
   Add:
+    - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/include
+    - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver
+    - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility
+    - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor
+
+---
+
+If:
+  PathMatch: ^Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/.*\.(cc|cpp|cxx|hh|hpp|hxx)$
+CompileFlags:
+  Add:
+    - -std=c++20
+
+---
+
+If:
+  PathMatch: ^Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/.*\.h$
+CompileFlags:
+  Remove:
     - -std=c++20

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Guidelines for std::unique_ptr</title>
+</head>
+<body>
+<h1>Guidelines for std::unique_ptr</h1>
+
+<h2>Example declarations</h2>
+<ul>
+<li><code><pre>std::unique_ptr&lt;void, void (*)(void *)&gt; buffer{std::malloc(size), &std::free};</pre></code></li>
+<li><code><pre>
+struct CIRReleaser {
+	void operator()(ComponentInstanceRecord *p) const noexcept {
+		if (p != nullptr) {
+			AudioComponentInstanceDispose(p);
+		}
+	}
+};
+
+AudioComponentInstance pAudioUnit = nullptr;
+if (const OSStatus status = AudioComponentInstanceNew(component, &pAudioUnit); status != noErr) {
+	if (pAudioUnit != nullptr) {
+		AudioComponentInstanceDispose(pAudioUnit);
+	}
+	return nullptr;
+} else if (pAudioUnit == nullptr) {
+	return nullptr;
+}
+std::unique_ptr&lt;ComponentInstanceRecord, CIRReleaser&gt; audioUnit{pAudioUnit};</pre></code></li>
+</ul>
+</body>
+</html>
