@@ -1,3 +1,5 @@
+-IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/include
 -IPackages/LDTXCorelibs/Sources/nanopb/include
--ISources/LDTXAudioEngine/include
 -ISources/LDTXAudioEngine
+-ISources/LDTXAudioEngine/include
+-std=c++20

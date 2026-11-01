@@ -13,34 +13,23 @@
 extern "C" {
 #endif
 
+const static long kLDTXAudioReceiverStopped = 0;
+const static long kLDTXAudioReceiverRunning = 1;
+const static long kLDTXAudioReceiverStopping = 2;
+
 struct LDTXAudioReceiver;
 
-struct LDTXAudioReceiverBlock {
-  uint64_t generation;
-  uint32_t slot;
-  uint32_t frames;
-  uint32_t channels;
-  double sampleRate;
-  AudioTimeStamp timestamp;
-} LDTXAudioReceiverBlock;
+typedef void (*LDTXAudioReceiverAvailabilityCallback)(void *__nonnull priv, uint32_t slot, uint64_t token);
 
-typedef void (*LDTXAudioReceiverSubscriber)(void *, struct LDTXAudioReceiver *, const struct LDTXAudioReceiverBlock *);
+struct LDTXAudioReceiver *__nullable LDTXAudioReceiverCreate(AudioDeviceID deviceID);
+void LDTXAudioReceiverDestroy(struct LDTXAudioReceiver *__nonnull p);
 
-// The subscriber callback runs on the AUHAL realtime context. It must return
-// within the audio deadline and must not allocate, block, perform I/O, launch
-// work, or call back into the receiver. Contract violations are undefined.
-struct LDTXAudioReceiver *LDTXAudioReceiverCreate(const char *inputUID);
-void LDTXAudioReceiverDestroy(struct LDTXAudioReceiver *p);
+bool LDTXAudioReceiverAddAvailabilityCallback(struct LDTXAudioReceiver *__nonnull p,
+                                               LDTXAudioReceiverAvailabilityCallback __nonnull callback,
+                                               void *__nonnull priv);
 
-bool LDTXAudioReceiverAddSubscriber(struct LDTXAudioReceiver *, LDTXAudioReceiverSubscriber, void *);
-
-bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *);
-void LDTXAudioReceiverStop(struct LDTXAudioReceiver *);
-
-// The returned list is valid only while the block's read obligation is held.
-// A subscriber must call Release exactly once after reading the block.
-const AudioBufferList *LDTXAudioReceiverGetBuffer(struct LDTXAudioReceiver *, const struct LDTXAudioReceiverBlock *);
-void LDTXAudioReceiverReleaseBlock(struct LDTXAudioReceiver *, const struct LDTXAudioReceiverBlock *);
+bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *__nonnull);
+void LDTXAudioReceiverStop(struct LDTXAudioReceiver *__nonnull);
 
 uint64_t LDTXAudioReceiverReceivedFrames(const struct LDTXAudioReceiver *);
 uint64_t LDTXAudioReceiverDroppedFrames(const struct LDTXAudioReceiver *);
