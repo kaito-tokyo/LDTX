@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "AudioBufferStorage.hpp"
-#include "AudioDevice.hpp"
 #include "LDTXAudioReceiver.h"
 
 #include <array>
@@ -24,6 +22,9 @@
 #include <gsl/util>
 
 #include <os/log.h>
+
+#include "AudioBufferStorage.hpp"
+#include "AudioDevice.hpp"
 
 namespace {
 

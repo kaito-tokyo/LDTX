@@ -1,4 +1,5 @@
 -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/include
+-IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/ms-gsl/include
 -IPackages/LDTXCorelibs/Sources/nanopb/include
 -ISources/LDTXAudioEngine
 -ISources/LDTXAudioEngine/include

@@ -10,6 +10,7 @@ CompileFlags:
     - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver
     - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility
     - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor
+    - -IPackages/LDTXAudioKit/Sources/LDTXAudioKitCore/ms-gsl/include
 
 ---
 
