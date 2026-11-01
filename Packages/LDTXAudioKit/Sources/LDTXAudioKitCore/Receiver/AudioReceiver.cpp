@@ -35,28 +35,43 @@ struct CIRReleaser {
   }
 };
 
+struct OwnedAudioBufferList {
+  explicit OwnedAudioBufferList(std::uint32_t mNumberBuffers) {
+    const std::size_t size = offsetof(AudioBufferList, mBuffers) + sizeof(AudioBuffer) * mNumberBuffers;
+
+    if (void *p = std::malloc(size); p != nullptr) {
+      std::memset(p, 0, size);
+      v = static_cast<AudioBufferList *>(p);
+      v->mNumberBuffers = mNumberBuffers;
+    } else {
+      throw std::bad_alloc();
+    }
+  }
+
+  ~OwnedAudioBufferList() noexcept {
+    if (v != nullptr) {
+      std::free(v);
+    }
+  }
+
+  OwnedAudioBufferList(const OwnedAudioBufferList &) = delete;
+  auto operator=(const OwnedAudioBufferList &) -> OwnedAudioBufferList & = delete;
+  OwnedAudioBufferList(OwnedAudioBufferList &&) noexcept = delete;
+  auto operator=(OwnedAudioBufferList &&) noexcept -> OwnedAudioBufferList & = delete;
+
+  auto get() const noexcept -> AudioBufferList * { return v; }
+
+private:
+  AudioBufferList *v{nullptr};
+  
+  static_assert(std::is_standard_layout_v<AudioBufferList>);
+};
+
 struct LDTXAudioReceiverSlotState {
   AudioBufferList *list = nullptr;
   std::byte *bytes = nullptr;
   std::atomic<int64_t> remainingReads{0};
   std::atomic<uint64_t> token{0};
-};
-
-// This lockable counter registers active input callbacks rather than excluding
-// other owners. lock() acquires one callback activity right and unlock() gives
-// it back. Multiple concurrent owners are intentional; the counter does not
-// protect PCM data or serialize callbacks.
-struct LDTXAudioReceiverConcurrentInput {
-  LDTXAudioReceiverConcurrentInput() noexcept { assert(active.is_lock_free()); }
-
-  void lock() noexcept { active.fetch_add(1, std::memory_order_acq_rel); }
-
-  void unlock() noexcept { active.fetch_sub(1, std::memory_order_release); }
-
-  auto count() const noexcept -> uint32_t { return active.load(std::memory_order_acquire); }
-
-private:
-  std::atomic<uint32_t> active{0};
 };
 
 } // namespace
@@ -99,7 +114,7 @@ struct LDTXAudioReceiver {
   std::atomic<uint64_t> dropped{0};
 
   auto handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, unsigned int,
-                      unsigned int inNumberFrames, AudioBufferList *) -> OSStatus;
+                      unsigned int inNumberFrames) -> OSStatus;
 };
 
 auto LDTXAudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
