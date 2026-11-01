@@ -25,6 +25,7 @@ let package = Package(
         .headerSearchPath("include"),
         .headerSearchPath("Compositor"),
         .headerSearchPath("Receiver"),
+        .headerSearchPath("ms-gsl/include"),
         .unsafeFlags(["-std=c++20"])
       ],
       linkerSettings: [

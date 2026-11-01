@@ -16,5 +16,8 @@ Checks: >
   -portability-avoid-pragma-once
 
 WarningsAsErrors: ''
-HeaderFilterRegex: '(^|/)(Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests|Packages/LDTXAudioKit/Sources/LDTXAudioKitCore)/.*'
+HeaderFilterRegex: '(^|/)(Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests|Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/(Compatibility|Compositor|Receiver|include))/.*'
+ExcludeHeaderFilterRegex: '(^|/)ms-gsl/.*'
+CheckOptions:
+  cppcoreguidelines-pro-bounds-constant-array-index.GslHeader: 'gsl/util'
 FormatStyle: file

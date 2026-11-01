@@ -20,6 +20,7 @@ target_include_directories(ldtx-audio-engine-cmake-tests PRIVATE
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/ms-gsl/include
 )
 target_link_libraries(ldtx-audio-engine-cmake-tests PRIVATE
   "-framework AudioToolbox"
