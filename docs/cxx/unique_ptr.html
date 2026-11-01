@@ -30,5 +30,8 @@ if (const OSStatus status = AudioComponentInstanceNew(component, &pAudioUnit); s
 }
 std::unique_ptr&lt;ComponentInstanceRecord, CIRReleaser&gt; audioUnit{pAudioUnit};</pre></code></li>
 </ul>
+
+<h2>Some data structures MUST NOT be managed by std::unique_ptr</h2>
+<p>AudioBufferList must not be managed by std::unique_ptr because its memory layout is hacky and requires C-style allocation and alignment.</p>
 </body>
 </html>

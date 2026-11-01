@@ -22,14 +22,14 @@ struct LDTXAudioReceiver;
 typedef void (*LDTXAudioReceiverAvailabilityCallback)(void *__nonnull priv, uint32_t slot, uint64_t token);
 
 struct LDTXAudioReceiver *__nullable LDTXAudioReceiverCreate(AudioDeviceID deviceID);
-void LDTXAudioReceiverDestroy(struct LDTXAudioReceiver *__nonnull p);
+void LDTXAudioReceiverDestroy(struct LDTXAudioReceiver *__nonnull ctx);
 
-bool LDTXAudioReceiverAddAvailabilityCallback(struct LDTXAudioReceiver *__nonnull p,
+bool LDTXAudioReceiverAddAvailabilityCallback(struct LDTXAudioReceiver *__nonnull ctx,
                                                LDTXAudioReceiverAvailabilityCallback __nonnull callback,
                                                void *__nonnull priv);
 
-bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *__nonnull);
-void LDTXAudioReceiverStop(struct LDTXAudioReceiver *__nonnull);
+bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *__nonnull ctx);
+void LDTXAudioReceiverStop(struct LDTXAudioReceiver *__nonnull ctx);
 
 uint64_t LDTXAudioReceiverReceivedFrames(const struct LDTXAudioReceiver *);
 uint64_t LDTXAudioReceiverDroppedFrames(const struct LDTXAudioReceiver *);

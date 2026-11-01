@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -33,9 +34,9 @@ auto logger() -> os_log_t {
 }
 
 struct CIRReleaser {
-  void operator()(ComponentInstanceRecord *p) const noexcept {
-    if (p != nullptr) {
-      AudioComponentInstanceDispose(p);
+  void operator()(ComponentInstanceRecord *record) const noexcept {
+    if (record != nullptr) {
+      AudioComponentInstanceDispose(record);
     }
   }
 };
@@ -58,37 +59,52 @@ void validateFormat(const AudioStreamBasicDescription &format, uint32_t maximumF
 }
 
 struct OwnedAudioBufferList {
-  OwnedAudioBufferList(uint32_t bufferCount, uint32_t channelsPerBuffer, uint32_t bytesPerBuffer)
-      : metadata_(nullptr, &std::free) {
-    if (bufferCount == 0 || channelsPerBuffer == 0 || bytesPerBuffer == 0) {
-      throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
+  OwnedAudioBufferList(std::uint32_t bufferCount, std::uint32_t channelsPerBuffer, std::uint32_t bytesPerBuffer) {
+    if (bufferCount == 0) {
+      os_log_error(logger(), "bufferCount is zero");
+      throw std::invalid_argument("bufferCount is zero");
+    }
+    if (channelsPerBuffer == 0) {
+      os_log_error(logger(), "channelsPerBuffer is zero");
+      throw std::invalid_argument("channelsPerBuffer is zero");
+    }
+    if (bytesPerBuffer == 0) {
+      os_log_error(logger(), "bytesPerBuffer is zero");
+      throw std::invalid_argument("bytesPerBuffer is zero");
     }
 
-    const size_t size = offsetof(AudioBufferList, mBuffers) + sizeof(AudioBuffer) * size_t(bufferCount);
-    void *metadata = nullptr;
-    if (posix_memalign(&metadata, kAudioBufferAlignment, alignedSize(size)) != 0)
-      throw std::bad_alloc();
-    metadata_.reset(metadata);
-
-    auto *list = get();
-    std::memset(list, 0, alignedSize(size));
-    list->mNumberBuffers = bufferCount;
+    {
+      const std::size_t size = offsetof(AudioBufferList, mBuffers) + (sizeof(AudioBuffer) * size_t(bufferCount));
+      void *pABL = nullptr;
+      if (posix_memalign(&pABL, kAudioBufferAlignment, size) != 0) {
+        throw std::bad_alloc();
+      }
+      std::memset(pABL, 0, size);
+      abl_ = static_cast<AudioBufferList *>(pABL);
+    }
 
     buffers_.reserve(bufferCount);
-    for (uint32_t index = 0; index < bufferCount; ++index) {
-      buffers_.emplace_back(nullptr, &std::free);
-      void *samples = nullptr;
-      if (posix_memalign(&samples, kAudioBufferAlignment, bytesPerBuffer) != 0)
+    for (std::size_t i = 0; i < bufferCount; i += 1) {
+      void *pBuffer = nullptr;
+      if (posix_memalign(&pBuffer, kAudioBufferAlignment, bytesPerBuffer) != 0) {
         throw std::bad_alloc();
-      buffers_.back().reset(samples);
-      std::memset(samples, 0, bytesPerBuffer);
+      }
+      std::memset(pBuffer, 0, bytesPerBuffer);
+      buffers_.emplace_back(pBuffer, &std::free);
 
-      list->mBuffers[index] = {
-          channelsPerBuffer,
-          bytesPerBuffer,
-          buffers_.back().get(),
-      };
+      // Index-based access based on C struct hack
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+      AudioBuffer &buffer = abl_->mBuffers[i];
+      buffer.mNumberChannels = channelsPerBuffer;
+      buffer.mDataByteSize = bytesPerBuffer;
+      buffer.mData = buffers_[i].get();
     }
+  }
+
+  ~OwnedAudioBufferList() noexcept {
+    // C-style ownership destruction
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
+    std::free(abl_);
   }
 
   OwnedAudioBufferList(const AudioStreamBasicDescription &format, uint32_t maximumFrames)
@@ -102,15 +118,10 @@ struct OwnedAudioBufferList {
   OwnedAudioBufferList(OwnedAudioBufferList &&) noexcept = delete;
   auto operator=(OwnedAudioBufferList &&) noexcept -> OwnedAudioBufferList & = delete;
 
-  auto get() const noexcept -> AudioBufferList * { return static_cast<AudioBufferList *>(metadata_.get()); }
-
-  void setByteSize(uint32_t bytesPerBuffer) noexcept {
-    for (uint32_t index = 0; index < get()->mNumberBuffers; ++index)
-      get()->mBuffers[index].mDataByteSize = bytesPerBuffer;
-  }
+  [[nodiscard]] auto get() const noexcept -> AudioBufferList * { return abl_; }
 
 private:
-  std::unique_ptr<void, void (*)(void *)> metadata_{nullptr, &std::free};
+  AudioBufferList *abl_ = nullptr;
   std::vector<std::unique_ptr<void, void (*)(void *)>> buffers_;
 
   static_assert(std::is_standard_layout_v<AudioBufferList>);
@@ -134,8 +145,13 @@ struct LDTXAudioReceiverSlot {
 
 struct LDTXAudioReceiver {
   LDTXAudioReceiver(std::unique_ptr<ComponentInstanceRecord, CIRReleaser> audioUnit, AudioStreamBasicDescription format,
-                    uint32_t maximumFramesPerSlice);
+                    uint32_t maximumFrames_);
   ~LDTXAudioReceiver() noexcept;
+
+  LDTXAudioReceiver(const LDTXAudioReceiver &) = delete;
+  auto operator=(const LDTXAudioReceiver &) -> LDTXAudioReceiver & = delete;
+  LDTXAudioReceiver(LDTXAudioReceiver &&) noexcept = delete;
+  auto operator=(LDTXAudioReceiver &&) noexcept -> LDTXAudioReceiver & = delete;
 
   auto handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
                       unsigned int inBusNumber, unsigned int inNumberFrames) -> OSStatus;
@@ -200,8 +216,8 @@ void uninitializeUnit(LDTXAudioReceiver *receiver) {
 } // namespace
 
 LDTXAudioReceiver::LDTXAudioReceiver(std::unique_ptr<ComponentInstanceRecord, CIRReleaser> audioUnit_,
-                                     AudioStreamBasicDescription format_, uint32_t maximumFramesPerSlice)
-    : audioUnit(std::move(audioUnit_)), format(format_), maximumFrames(maximumFramesPerSlice) {
+                                     AudioStreamBasicDescription format_, uint32_t maximumFrames_)
+    : audioUnit(std::move(audioUnit_)), format(format_), maximumFrames(maximumFrames_) {
   validateFormat(format, maximumFrames);
   for (auto &slot : slots)
     slot.emplace(format, maximumFrames);
@@ -217,6 +233,7 @@ LDTXAudioReceiver::LDTXAudioReceiver(std::unique_ptr<ComponentInstanceRecord, CI
 auto LDTXAudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
                                        unsigned int inBusNumber, unsigned int inNumberFrames) -> OSStatus {
   struct ActiveWriterLock {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::atomic_long &value;
     void lock() noexcept { value.fetch_add(1, std::memory_order_relaxed); }
     void unlock() noexcept { value.fetch_sub(1, std::memory_order_relaxed); }
@@ -304,7 +321,7 @@ LDTXAudioReceiver::~LDTXAudioReceiver() noexcept {
 
 // MARK: - Public C API
 
-auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> struct LDTXAudioReceiver *__nullable {
+auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiver *__nullable {
   if (deviceID == kAudioObjectUnknown) {
     return nullptr;
   }
@@ -319,51 +336,53 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> struct LDTXAudioReceiver
     return nullptr;
   }
 
-  AudioComponentInstance rawUnit = nullptr;
-  if (const OSStatus status = AudioComponentInstanceNew(component, &rawUnit); status != noErr) {
-    if (rawUnit != nullptr) {
-      AudioComponentInstanceDispose(rawUnit);
+  AudioComponentInstance pAudioUnit = nullptr;
+  if (const OSStatus status = AudioComponentInstanceNew(component, &pAudioUnit); status != noErr) {
+    if (pAudioUnit != nullptr) {
+      AudioComponentInstanceDispose(pAudioUnit);
     }
     return nullptr;
-  } else if (rawUnit == nullptr) {
+  } else if (pAudioUnit == nullptr) {
     return nullptr;
   }
+  std::unique_ptr<ComponentInstanceRecord, CIRReleaser> audioUnit{pAudioUnit};
 
-  std::unique_ptr<ComponentInstanceRecord, CIRReleaser> unit{rawUnit};
-  UInt32 enableInput = 1;
-  if (AudioUnitSetProperty(unit.get(), kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &enableInput,
+  std::uint32_t enableInput = 1;
+  if (AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &enableInput,
                            sizeof(enableInput)) != noErr) {
     return nullptr;
   }
 
-  UInt32 disableOutput = 0;
-  if (AudioUnitSetProperty(unit.get(), kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, &disableOutput,
-                           sizeof(disableOutput)) != noErr) {
+  std::uint32_t disableOutput = 0;
+  if (AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0,
+                           &disableOutput, sizeof(disableOutput)) != noErr) {
     return nullptr;
   }
 
-  if (AudioUnitSetProperty(unit.get(), kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &deviceID,
-                           sizeof(deviceID)) != noErr) {
+  if (AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                           &deviceID, sizeof(deviceID)) != noErr) {
     return nullptr;
   }
 
   AudioStreamBasicDescription format{};
-  UInt32 formatSize = sizeof(format);
-  if (AudioUnitGetProperty(unit.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &format,
+  std::uint32_t formatSize = sizeof(format);
+  if (AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &format,
                            &formatSize) != noErr) {
     return nullptr;
   }
 
-  UInt32 maximumFrames = 0;
-  UInt32 maximumFramesSize = sizeof(maximumFrames);
-  if (AudioUnitGetProperty(unit.get(), kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
+  std::uint32_t maximumFrames = 0;
+  std::uint32_t maximumFramesSize = sizeof(maximumFrames);
+  if (AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0,
                            &maximumFrames, &maximumFramesSize) != noErr) {
     return nullptr;
   }
 
   try {
     validateFormat(format, maximumFrames);
-    return new LDTXAudioReceiver(std::move(unit), format, maximumFrames);
+    // C-style ownership transfer
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    return new LDTXAudioReceiver(std::move(audioUnit), format, maximumFrames);
   } catch (...) {
     return nullptr;
   }
@@ -371,6 +390,8 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> struct LDTXAudioReceiver
 
 void LDTXAudioReceiverDestroy(LDTXAudioReceiver *__nonnull receiver) {
   if (receiver != nullptr) {
+    // C-style ownership destruction
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete receiver;
   }
 }
