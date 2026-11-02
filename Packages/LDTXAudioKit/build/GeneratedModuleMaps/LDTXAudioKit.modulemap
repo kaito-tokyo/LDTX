@@ -1,0 +1,4 @@
+module LDTXAudioKit {
+header "LDTXAudioKit-Swift.h"
+export *
+}

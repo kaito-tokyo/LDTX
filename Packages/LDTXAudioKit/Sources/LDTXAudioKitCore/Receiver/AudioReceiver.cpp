@@ -29,8 +29,13 @@
 namespace {
 
 constexpr uint32_t kLDTXAudioReceiverSlotCount = 4;
+constexpr std::int64_t kLDTXAudioReceiverSlotFree = 0;
+constexpr std::int64_t kLDTXAudioReceiverSlotWriter = -1;
 static_assert(kLDTXAudioReceiverSlotCount != 0 &&
               (kLDTXAudioReceiverSlotCount & (kLDTXAudioReceiverSlotCount - 1)) == 0);
+static_assert(std::atomic_long::is_always_lock_free);
+static_assert(std::atomic<std::int64_t>::is_always_lock_free);
+static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
 
 auto logger() -> os_log_t {
   static os_log_t singleton = os_log_create("tokyo.kaito.ldtx", "LDTXAudioKitCore.AudioReceiver");
@@ -121,10 +126,16 @@ struct OwnedAudioBufferListSlot {
   AudioBufferList *abl = nullptr;
 
   // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-  std::atomic<std::int64_t> remainingReads{0};
+  // -1 is writer-owned, 0 is reusable, and a positive value is the number
+  // of subscriber leases that still protect this slot.
+  std::atomic<std::int64_t> remainingReads{kLDTXAudioReceiverSlotFree};
 
   // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
-  std::atomic<std::uint64_t> token{0};
+  // remainingReads release/acquire operations publish and protect token.
+  std::uint64_t token = 0;
+
+  // remainingReads release/acquire operations publish and protect timestamp.
+  AudioTimeStamp timestamp{};
 
 private:
   std::vector<std::unique_ptr<void, void (*)(void *)>> buffers_;
@@ -151,7 +162,6 @@ struct LDTXAudioReceiver {
 
   std::atomic_long runningState{kLDTXAudioReceiverStopped};
   std::atomic_long numActiveWriters{0};
-  std::atomic_bool accepting{false};
 
   std::unique_ptr<ComponentInstanceRecord, CIRReleaser> audioUnit_;
   uint32_t maximumFrames_;
@@ -231,45 +241,52 @@ auto LDTXAudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::atomic_long &value;
     void lock() noexcept { value.fetch_add(1, std::memory_order_relaxed); }
-    void unlock() noexcept { value.fetch_sub(1, std::memory_order_relaxed); }
+    void unlock() noexcept { value.fetch_sub(1, std::memory_order_release); }
   } activeWriterLock(numActiveWriters);
   std::lock_guard inputLock(activeWriterLock);
 
-  if (!accepting.load(std::memory_order_acquire)) {
+  if (runningState.load(std::memory_order_acquire) != kLDTXAudioReceiverRunning) {
     return noErr;
   }
   if (inNumberFrames > maximumFrames_) {
     return kAudioUnitErr_TooManyFramesToProcess;
   }
 
-  const auto slotIndex = nextSlot.fetch_add(1, std::memory_order_relaxed) & (kLDTXAudioReceiverSlotCount - 1);
-  auto &slot = gsl::at(slots, gsl::narrow_cast<gsl::index>(slotIndex));
-  std::int64_t expected = 0;
-  if (!slot.remainingReads.compare_exchange_strong(expected, -1, std::memory_order_acq_rel)) {
-    dropped.fetch_add(inNumberFrames, std::memory_order_relaxed);
+  const auto firstSlot = nextSlot.fetch_add(1, std::memory_order_relaxed) & (kLDTXAudioReceiverSlotCount - 1);
+  for (uint32_t offset = 0; offset < kLDTXAudioReceiverSlotCount; ++offset) {
+    const auto slotIndex = (firstSlot + offset) & (kLDTXAudioReceiverSlotCount - 1);
+    auto &slot = gsl::at(slots, gsl::narrow_cast<gsl::index>(slotIndex));
+    std::int64_t expected = kLDTXAudioReceiverSlotFree;
+    if (!slot.remainingReads.compare_exchange_strong(expected, kLDTXAudioReceiverSlotWriter,
+                                                      std::memory_order_acq_rel)) {
+      continue;
+    }
+
+    const uint32_t bytes = static_cast<uint32_t>(uint64_t(slot.maximumDataByteSize) * inNumberFrames / maximumFrames_);
+    for (uint32_t index = 0; index < slot.abl->mNumberBuffers; ++index) {
+      // mBuffers is the runtime-sized tail of the AudioBufferList ABI layout.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+      slot.abl->mBuffers[index].mDataByteSize = bytes;
+    }
+    if (const OSStatus status =
+            AudioUnitRender(audioUnit_.get(), ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, slot.abl);
+        status != noErr) {
+      slot.remainingReads.store(kLDTXAudioReceiverSlotFree, std::memory_order_release);
+      return status;
+    }
+
+    slot.timestamp = *inTimeStamp;
+    const uint64_t token = ++slot.token;
+    slot.remainingReads.store(int64_t(callbackCount), std::memory_order_release);
+    for (size_t index = 0; index < callbackCount; ++index) {
+      const auto [callback, priv] = availabilityCallbacks[index];
+      callback(priv, slotIndex, token);
+    }
+    received.fetch_add(inNumberFrames, std::memory_order_relaxed);
     return noErr;
   }
 
-  const uint32_t bytes = static_cast<uint32_t>(uint64_t(slot.maximumDataByteSize) * inNumberFrames / maximumFrames_);
-  for (uint32_t index = 0; index < slot.abl->mNumberBuffers; ++index) {
-    // mBuffers is the runtime-sized tail of the AudioBufferList ABI layout.
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-    slot.abl->mBuffers[index].mDataByteSize = bytes;
-  }
-  if (const OSStatus status =
-          AudioUnitRender(audioUnit_.get(), ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, slot.abl);
-      status != noErr) {
-    slot.remainingReads.store(0, std::memory_order_release);
-    return status;
-  }
-
-  const uint64_t token = slot.token.fetch_add(1, std::memory_order_relaxed) + 1;
-  slot.remainingReads.store(int64_t(callbackCount), std::memory_order_release);
-  for (size_t index = 0; index < callbackCount; ++index) {
-    const auto [callback, priv] = availabilityCallbacks[index];
-    callback(priv, slotIndex, token);
-  }
-  received.fetch_add(inNumberFrames, std::memory_order_relaxed);
+  dropped.fetch_add(inNumberFrames, std::memory_order_relaxed);
   return noErr;
 }
 
@@ -279,7 +296,6 @@ void LDTXAudioReceiverStop(LDTXAudioReceiver *receiver) {
     return;
   }
 
-  receiver->accepting.store(false, std::memory_order_release);
   stopUnit(receiver);
   while (receiver->numActiveWriters.load(std::memory_order_acquire) != 0)
     std::this_thread::yield();
@@ -287,7 +303,7 @@ void LDTXAudioReceiverStop(LDTXAudioReceiver *receiver) {
   for (;;) {
     bool drained = true;
     for (const auto &slot : receiver->slots) {
-      if (slot.remainingReads.load(std::memory_order_acquire) != 0) {
+      if (slot.remainingReads.load(std::memory_order_acquire) != kLDTXAudioReceiverSlotFree) {
         drained = false;
         break;
       }
@@ -361,6 +377,24 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiver *__nul
     return nullptr;
   }
 
+  AudioStreamBasicDescription deviceFormat{};
+  std::uint32_t deviceFormatSize = sizeof(deviceFormat);
+  if (const OSStatus status = AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat,
+                                                    kAudioUnitScope_Input, 1, &deviceFormat, &deviceFormatSize);
+      status != noErr) {
+    os_log_error(logger(), "AudioUnitGetProperty(StreamFormat, Input, 1) failed: %{public}d", status);
+    return nullptr;
+  }
+
+  const AudioStreamBasicDescription clientFormat =
+      pcmFormat(deviceFormat.mSampleRate, deviceFormat.mChannelsPerFrame);
+  if (const OSStatus status = AudioUnitSetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat,
+                                                    kAudioUnitScope_Output, 1, &clientFormat, sizeof(clientFormat));
+      status != noErr) {
+    os_log_error(logger(), "AudioUnitSetProperty(StreamFormat, Output, 1) failed: %{public}d", status);
+    return nullptr;
+  }
+
   AudioStreamBasicDescription format{};
   std::uint32_t formatSize = sizeof(format);
   if (const OSStatus status = AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat,
@@ -418,6 +452,46 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiver *__nonnull ctx,
   return true;
 }
 
+auto LDTXAudioReceiverBorrowBuffer(LDTXAudioReceiver *__nonnull ctx, uint32_t slotIndex, uint64_t token,
+                                   AudioTimeStamp *__nonnull timestamp)
+    -> const AudioBufferList *__nullable {
+  if (ctx == nullptr || timestamp == nullptr || slotIndex >= kLDTXAudioReceiverSlotCount) {
+    return nullptr;
+  }
+
+  auto &slot = gsl::at(ctx->slots, gsl::narrow_cast<gsl::index>(slotIndex));
+  if (slot.remainingReads.load(std::memory_order_acquire) <= kLDTXAudioReceiverSlotFree) {
+    return nullptr;
+  }
+  if (slot.token != token) {
+    return nullptr;
+  }
+  *timestamp = slot.timestamp;
+  return slot.abl;
+}
+
+void LDTXAudioReceiverReleaseBuffer(LDTXAudioReceiver *__nonnull ctx, uint32_t slotIndex, uint64_t token) {
+  assert(ctx != nullptr);
+  assert(slotIndex < kLDTXAudioReceiverSlotCount);
+
+  auto &slot = gsl::at(ctx->slots, gsl::narrow_cast<gsl::index>(slotIndex));
+  assert(slot.remainingReads.load(std::memory_order_acquire) > kLDTXAudioReceiverSlotFree);
+  assert(slot.token == token);
+  slot.remainingReads.fetch_sub(1, std::memory_order_release);
+}
+
+auto LDTXAudioReceiverGetFormat(LDTXAudioReceiver *__nonnull ctx,
+                                AudioStreamBasicDescription *__nonnull format) -> bool {
+  if (ctx == nullptr || format == nullptr) {
+    return false;
+  }
+  std::uint32_t size = sizeof(*format);
+  return AudioUnitGetProperty(
+             ctx->audioUnit_.get(), kAudioUnitProperty_StreamFormat,
+             kAudioUnitScope_Output, 1, format, &size) == noErr
+    && size == sizeof(*format);
+}
+
 auto LDTXAudioReceiverStart(LDTXAudioReceiver *__nonnull ctx) -> bool {
   if (ctx == nullptr || ctx->availabilityCallbacks.empty() ||
       ctx->runningState.load(std::memory_order_acquire) != kLDTXAudioReceiverStopped) {
@@ -428,7 +502,6 @@ auto LDTXAudioReceiverStart(LDTXAudioReceiver *__nonnull ctx) -> bool {
   check(AudioUnitInitialize(ctx->audioUnit_.get()));
   ctx->initialized = true;
   ctx->requiresStop = true;
-  ctx->accepting.store(true, std::memory_order_release);
   ctx->runningState.store(kLDTXAudioReceiverRunning, std::memory_order_release);
   try {
     check(AudioOutputUnitStart(ctx->audioUnit_.get()));

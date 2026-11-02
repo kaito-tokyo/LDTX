@@ -4,12 +4,51 @@
 #include "ReceiverPipeline.hpp"
 #include "AudioBufferStorage.hpp"
 #include "LegacyAudioPrimitives.hpp"
+#include "LDTXAudioReceiver.h"
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <thread>
+
+namespace {
+
+auto defaultInputDevice() -> AudioDeviceID {
+  AudioObjectPropertyAddress address{kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  AudioDeviceID deviceID = kAudioObjectUnknown;
+  UInt32 size = sizeof(deviceID);
+  if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) != noErr) {
+    return kAudioObjectUnknown;
+  }
+  return deviceID;
+}
+
+struct ReceiverLeaseTestState {
+  struct LDTXAudioReceiver *receiver = nullptr;
+  std::atomic<uint64_t> callbacks{0};
+  std::atomic_bool invalidBuffer{false};
+};
+
+void receiveAvailability(void *priv, uint32_t slot, uint64_t token) {
+  auto &state = *static_cast<ReceiverLeaseTestState *>(priv);
+  AudioTimeStamp timestamp{};
+  if (LDTXAudioReceiverBorrowBuffer(state.receiver, slot, token - 1, &timestamp) != nullptr) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+  }
+  const AudioBufferList *buffer = LDTXAudioReceiverBorrowBuffer(state.receiver, slot, token, &timestamp);
+  if (buffer == nullptr || buffer->mNumberBuffers == 0) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+  }
+  state.callbacks.fetch_add(1, std::memory_order_relaxed);
+  LDTXAudioReceiverReleaseBuffer(state.receiver, slot, token);
+}
+
+} // namespace
+
 TEST_CASE("LUB-1007: Disconnected monitor routes do not acquire an output device") {
   auto *engine = LDTXAudioCreate(true);
   REQUIRE(engine);
@@ -67,6 +106,33 @@ TEST_CASE("LUB-1007: Resolve system default monitor output only when hardware te
   CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames == 0);
   LDTXAudioDestroy(engine);
 }
+
+TEST_CASE("LUB-1007: Reuse Receiver slots after subscriber release") {
+  if (std::getenv("LDTX_TEST_RECEIVER_HARDWARE") == nullptr) {
+    return;
+  }
+
+  const AudioDeviceID deviceID = defaultInputDevice();
+  REQUIRE(deviceID != kAudioObjectUnknown);
+  auto *receiver = LDTXAudioReceiverCreate(deviceID);
+  REQUIRE(receiver != nullptr);
+
+  ReceiverLeaseTestState state{.receiver = receiver};
+  REQUIRE(LDTXAudioReceiverAddAvailabilityCallback(receiver, receiveAvailability, &state));
+  REQUIRE(LDTXAudioReceiverAddAvailabilityCallback(receiver, receiveAvailability, &state));
+  REQUIRE(LDTXAudioReceiverStart(receiver));
+
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (state.callbacks.load(std::memory_order_acquire) < 8 && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  LDTXAudioReceiverStop(receiver);
+  CHECK_FALSE(state.invalidBuffer.load(std::memory_order_acquire));
+  CHECK(state.callbacks.load(std::memory_order_acquire) >= 8);
+  LDTXAudioReceiverDestroy(receiver);
+}
+
 TEST_CASE("LUB-1007: Bound stop retries and report the final failure") {
   for (unsigned failures = 0; failures <= 4; ++failures) {
     unsigned attempts = 0, waits = 0;

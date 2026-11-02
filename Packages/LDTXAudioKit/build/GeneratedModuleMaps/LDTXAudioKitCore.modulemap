@@ -1,0 +1,4 @@
+module LDTXAudioKitCore {
+umbrella "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/include"
+export *
+}

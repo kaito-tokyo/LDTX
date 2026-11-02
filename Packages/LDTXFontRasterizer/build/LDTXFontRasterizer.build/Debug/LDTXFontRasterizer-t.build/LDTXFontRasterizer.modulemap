@@ -1,0 +1,4 @@
+module LDTXFontRasterizer {
+umbrella header "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXFontRasterizer/Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h"
+export *
+}

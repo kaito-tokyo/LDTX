@@ -1,0 +1,179 @@
+{
+  "" : {
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/LDTXMessages-primary.dia",
+    "emit-module-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/LDTXMessages-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/LDTXMessages-primary-emit-module.dia",
+    "pch" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/LDTXMessages-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/LDTXMessages-primary.swiftdeps"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/envelope.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/envelope.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/envelope.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_definition.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_definition.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_input_device.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_output_settings.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_preferences.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_preferences.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_types.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_vfx.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vfx.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_video_component.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/generated/workspace_v4_vision.pb.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.pb~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/workspace_v4_input_device.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_input_device~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/workspace_v4_output_settings.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_output_settings~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/workspace_v4_types.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_types~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/workspace_v4_video_component.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_video_component~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Messages/workspace_v4_vision.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/workspace_v4_vision~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Nanopb/NanopbConversion.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbConversion~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/LDTXMessages/Nanopb/NanopbMessage.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.dia",
+    "index-unit-output-path" : "/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/build/LDTXCorelibs.build/Debug/LDTXMessages-t.build/Objects-normal/arm64/NanopbMessage~partial.swiftmodule"
+  }
+}

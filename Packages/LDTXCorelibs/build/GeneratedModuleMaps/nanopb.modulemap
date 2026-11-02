@@ -1,0 +1,4 @@
+module nanopb {
+umbrella "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXCorelibs/Sources/nanopb/include"
+export *
+}

@@ -26,7 +26,13 @@ let package = Package(
       name: "LDTXNanopbGenerated",
       dependencies: ["nanopb"],
       path: "Sources/LDTXNanopbGenerated",
-      publicHeadersPath: "include"
+      publicHeadersPath: "include",
+      cSettings: [
+        // The generated C headers include nanopb's public headers as <pb.h>.
+        // SwiftPM forwards target dependencies for normal package builds, but
+        // Xcode's package integration also needs this direct C include path.
+        .headerSearchPath("../nanopb/include")
+      ]
     ),
     .target(
       name: "LDTXMessages",

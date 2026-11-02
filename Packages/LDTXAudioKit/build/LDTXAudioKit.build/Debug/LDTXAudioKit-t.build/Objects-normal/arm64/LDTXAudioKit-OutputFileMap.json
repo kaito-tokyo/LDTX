@@ -1,0 +1,149 @@
+{
+  "" : {
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/LDTXAudioKit-primary.dia",
+    "emit-module-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/LDTXAudioKit-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/LDTXAudioKit-primary-emit-module.dia",
+    "pch" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/LDTXAudioKit-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/LDTXAudioKit-primary.swiftdeps"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/Exports.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/Exports~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/Receiver/AudioEngine.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioEngine~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/AudioTrackRecorder.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/AudioTrackRecorder~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceAACAudioEncoder.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAACAudioEncoder~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceAVAssetWriterLifecycleGate.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterLifecycleGate~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceAVAssetWriterSegmentDelegate.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAVAssetWriterSegmentDelegate~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceAudioSampleBufferNormalizer.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceAudioSampleBufferNormalizer~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceHLSPlaylist.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceHLSPlaylist~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceMP4TimingBox.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceMP4TimingBox~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceRecordingAudioClock.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioClock~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceRecordingAudioFragmentClock.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingAudioFragmentClock~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceRecordingPCMClock.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceRecordingPCMClock~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceSegmentedMP4Segment.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Segment~partial.swiftmodule"
+  },
+  "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/Sources/LDTXAudioKit/TrackRecorder/InputDeviceSegmentedMP4Writer.swift" : {
+    "const-values" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.swiftconstvalues",
+    "dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.d",
+    "diagnostics" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.dia",
+    "index-unit-output-path" : "/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.o",
+    "llvm-bc" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.bc",
+    "object" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.o",
+    "swift-dependencies" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer.swiftdeps",
+    "swiftmodule" : "/Users/umireon/.codex/worktrees/c90c/LDTX/Packages/LDTXAudioKit/build/LDTXAudioKit.build/Debug/LDTXAudioKit-t.build/Objects-normal/arm64/InputDeviceSegmentedMP4Writer~partial.swiftmodule"
+  }
+}

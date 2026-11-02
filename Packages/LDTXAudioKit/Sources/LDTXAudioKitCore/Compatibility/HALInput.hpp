@@ -7,11 +7,21 @@
 #include <string>
 #include <thread>
 
+#include "LDTXAudioReceiver.h"
 #include "ReceiverPipeline.hpp"
 
 class HALInput {
+  struct ReceiverReleaser {
+    void operator()(LDTXAudioReceiver *receiver) const noexcept {
+      if (receiver != nullptr) {
+        LDTXAudioReceiverDestroy(receiver);
+      }
+    }
+  };
+
   std::unique_ptr<LDTXAudioUnit> unit;
   std::unique_ptr<LDTXAudioBufferList> capture;
+  std::unique_ptr<LDTXAudioReceiver, ReceiverReleaser> receiver{nullptr};
   std::atomic<uint32_t> inFlight{0};
   std::atomic<bool> accepting{true};
   static OSStatus receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32,
@@ -35,6 +45,18 @@ class HALInput {
     return status;
   }
 
+  static void receiveFromReceiver(void *context, uint32_t slot, uint64_t token) {
+    auto &self = *static_cast<HALInput *>(context);
+    AudioTimeStamp time{};
+    const AudioBufferList *buffer = LDTXAudioReceiverBorrowBuffer(self.receiver.get(), slot, token, &time);
+    if (buffer != nullptr) {
+      if (!self.storage->write(buffer, time)) {
+        self.errors.fetch_add(1, std::memory_order_relaxed);
+      }
+      LDTXAudioReceiverReleaseBuffer(self.receiver.get(), slot, token);
+    }
+  }
+
 public:
   std::string uid;
   uint32_t kind, quantum = 512, maximum = kAudioMaxFramesPerBlock, channels;
@@ -54,11 +76,15 @@ public:
       : uid(std::move(name)), kind(k), channels(c), rate(r), generation(gen) {
     if (kind == 0 && hardware) {
       device = deviceForUID(uid.c_str());
-      unit = std::make_unique<LDTXAudioUnit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
-      unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(1));
-      unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(0));
-      unit->set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
-      auto f = unit->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1);
+      receiver.reset(LDTXAudioReceiverCreate(device));
+      if (receiver == nullptr) {
+        throw LDTXAudioStatusError(kAudioHardwareBadDeviceError);
+      }
+      AudioStreamBasicDescription f{};
+      if (!LDTXAudioReceiverGetFormat(receiver.get(), &f)) {
+        receiver.reset();
+        throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
+      }
       rate = f.mSampleRate;
       channels = f.mChannelsPerFrame;
       quantum = deviceFrames(device);
@@ -67,8 +93,6 @@ public:
         throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
       if (maximum < quantum || maximum > kAudioMaxFramesPerBlock)
         throw LDTXAudioStatusError(kAudioUnitErr_TooManyFramesToProcess);
-      auto format = pcmFormat(rate, channels);
-      unit->set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, format);
     }
     if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
       throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
@@ -76,7 +100,13 @@ public:
     // enough payload capacity for the negotiated maximum render size.
     storage = std::make_unique<PCMStorage>(maximum, channels, rate, quantum, generation);
     normalizer = std::make_unique<Normalizer>(rate, channels);
-    if (unit) {
+    if (receiver != nullptr) {
+      if (!LDTXAudioReceiverAddAvailabilityCallback(receiver.get(), receiveFromReceiver, this) ||
+          !LDTXAudioReceiverStart(receiver.get())) {
+        receiver.reset();
+        throw LDTXAudioStatusError(kAudioUnitErr_CannotDoInCurrentContext);
+      }
+    } else if (unit) {
       capture = std::make_unique<LDTXAudioBufferList>(channels, maximum);
       AURenderCallbackStruct callback{receive, this};
       unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
@@ -93,6 +123,10 @@ public:
   }
   OSStatus stop() {
     accepting.store(false, std::memory_order_release);
+    if (receiver != nullptr) {
+      LDTXAudioReceiverStop(receiver.get());
+      return noErr;
+    }
     auto status = unit ? unit->stop() : noErr;
     if (status)
       return status;
@@ -102,6 +136,7 @@ public:
   }
   ~HALInput() {
     stop();
+    receiver.reset();
     unit.reset();
   }
 };
