@@ -35,17 +35,24 @@ struct ReceiverLeaseTestState {
 
 void receiveAvailability(void *priv, uint32_t slot, uint64_t token) {
   auto &state = *static_cast<ReceiverLeaseTestState *>(priv);
-  AudioTimeStamp timestamp{};
-  if (LDTXAudioReceiverBorrowBuffer(state.receiver, slot, token - 1, &timestamp) != nullptr) {
+  if (LDTXAudioReceiverAcquireBuffer(state.receiver, slot, token - 1)) {
     state.invalidBuffer.store(true, std::memory_order_relaxed);
+    LDTXAudioReceiverReleaseBuffer(state.receiver, slot, token - 1);
   }
-  const AudioBufferList *buffer = LDTXAudioReceiverBorrowBuffer(state.receiver, slot, token, &timestamp);
-  if (buffer == nullptr || buffer->mNumberBuffers == 0) {
+  if (!LDTXAudioReceiverAcquireBuffer(state.receiver, slot, token)) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+    return;
+  }
+  const AudioBufferList *buffer = LDTXAudioReceiverGetBufferData(state.receiver, slot, token);
+  const AudioTimeStamp *timestamp = LDTXAudioReceiverGetBufferTimeStamp(state.receiver, slot, token);
+  if (buffer == nullptr || buffer->mNumberBuffers == 0 || timestamp == nullptr) {
     state.invalidBuffer.store(true, std::memory_order_relaxed);
   }
   state.callbacks.fetch_add(1, std::memory_order_relaxed);
   LDTXAudioReceiverReleaseBuffer(state.receiver, slot, token);
 }
+
+void stopReceiver(void *priv) { static_cast<std::atomic_bool *>(priv)->store(true, std::memory_order_release); }
 
 } // namespace
 
@@ -127,7 +134,11 @@ TEST_CASE("LUB-1007: Reuse Receiver slots after subscriber release") {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
-  LDTXAudioReceiverStop(receiver);
+  std::atomic_bool stopped{false};
+  LDTXAudioReceiverStop(receiver, stopReceiver, &stopped);
+  while (!stopped.load(std::memory_order_acquire)) {
+    std::this_thread::yield();
+  }
   CHECK_FALSE(state.invalidBuffer.load(std::memory_order_acquire));
   CHECK(state.callbacks.load(std::memory_order_acquire) >= 8);
   LDTXAudioReceiverDestroy(receiver);

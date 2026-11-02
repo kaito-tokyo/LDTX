@@ -5,6 +5,8 @@
 #pragma once
 
 #include <string>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 #include "LDTXAudioReceiver.h"
@@ -22,6 +24,9 @@ class HALInput {
   std::unique_ptr<LDTXAudioUnit> unit;
   std::unique_ptr<LDTXAudioBufferList> capture;
   std::unique_ptr<LDTXAudioReceiver, ReceiverReleaser> receiver{nullptr};
+  std::mutex receiverStopMutex;
+  std::condition_variable receiverStopCondition;
+  bool receiverStopCompleted = false;
   std::atomic<uint32_t> inFlight{0};
   std::atomic<bool> accepting{true};
   static OSStatus receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32,
@@ -47,14 +52,25 @@ class HALInput {
 
   static void receiveFromReceiver(void *context, uint32_t slot, uint64_t token) {
     auto &self = *static_cast<HALInput *>(context);
-    AudioTimeStamp time{};
-    const AudioBufferList *buffer = LDTXAudioReceiverBorrowBuffer(self.receiver.get(), slot, token, &time);
-    if (buffer != nullptr) {
-      if (!self.storage->write(buffer, time)) {
-        self.errors.fetch_add(1, std::memory_order_relaxed);
-      }
-      LDTXAudioReceiverReleaseBuffer(self.receiver.get(), slot, token);
+    if (!LDTXAudioReceiverAcquireBuffer(self.receiver.get(), slot, token)) {
+      return;
     }
+    const AudioBufferList *buffer = LDTXAudioReceiverGetBufferData(self.receiver.get(), slot, token);
+    const AudioTimeStamp *timestamp = LDTXAudioReceiverGetBufferTimeStamp(self.receiver.get(), slot, token);
+    if (buffer != nullptr && timestamp != nullptr && !self.storage->write(buffer, *timestamp)) {
+      self.errors.fetch_add(1, std::memory_order_relaxed);
+    }
+    LDTXAudioReceiverReleaseBuffer(self.receiver.get(), slot, token);
+  }
+
+  static void receiverStopped(void *context) {
+    auto &self = *static_cast<HALInput *>(context);
+    self.receiver.reset();
+    {
+      std::lock_guard lock(self.receiverStopMutex);
+      self.receiverStopCompleted = true;
+    }
+    self.receiverStopCondition.notify_one();
   }
 
 public:
@@ -80,11 +96,7 @@ public:
       if (receiver == nullptr) {
         throw LDTXAudioStatusError(kAudioHardwareBadDeviceError);
       }
-      AudioStreamBasicDescription f{};
-      if (!LDTXAudioReceiverGetFormat(receiver.get(), &f)) {
-        receiver.reset();
-        throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
-      }
+      const AudioStreamBasicDescription f = LDTXAudioReceiverGetFormat(receiver.get());
       rate = f.mSampleRate;
       channels = f.mChannelsPerFrame;
       quantum = deviceFrames(device);
@@ -124,7 +136,13 @@ public:
   OSStatus stop() {
     accepting.store(false, std::memory_order_release);
     if (receiver != nullptr) {
-      LDTXAudioReceiverStop(receiver.get());
+      {
+        std::lock_guard lock(receiverStopMutex);
+        receiverStopCompleted = false;
+      }
+      LDTXAudioReceiverStop(receiver.get(), receiverStopped, this);
+      std::unique_lock lock(receiverStopMutex);
+      receiverStopCondition.wait(lock, [this] { return receiverStopCompleted; });
       return noErr;
     }
     auto status = unit ? unit->stop() : noErr;
@@ -136,7 +154,6 @@ public:
   }
   ~HALInput() {
     stop();
-    receiver.reset();
     unit.reset();
   }
 };

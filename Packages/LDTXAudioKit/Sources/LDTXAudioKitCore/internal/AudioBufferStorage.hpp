@@ -14,7 +14,6 @@
 #include <AudioToolbox/AudioToolbox.h>
 
 inline constexpr size_t kAudioBufferAlignment = 16;
-inline constexpr uint32_t kAudioMaxFramesPerBlock = 65536;
 
 inline size_t alignedSize(size_t size) {
   return (size + kAudioBufferAlignment - 1) & ~(kAudioBufferAlignment - 1);
@@ -41,7 +40,6 @@ public:
         storage_(allocateAligned(offsetof(AudioBufferList, mBuffers) + channels * sizeof(AudioBuffer))),
         samples_(allocateAligned(size_t(channels) * frames * sizeof(float))) {
     assert(channels_ > 0);
-    assert(maximumFrames_ <= kAudioMaxFramesPerBlock);
     reset(frames);
   }
   AudioBufferList *get() { return static_cast<AudioBufferList *>(storage_.get()); }

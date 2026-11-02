@@ -7,7 +7,7 @@
 #include <mach/mach_time.h>
 #include <CoreMedia/CoreMedia.h>
 
-#include "../Receiver/AudioDevice.hpp"
+#include "../internal/AudioDevice.hpp"
 
 inline uint64_t hostNanos(uint64_t ticks) {
   static const mach_timebase_info_data_t scale = [] {

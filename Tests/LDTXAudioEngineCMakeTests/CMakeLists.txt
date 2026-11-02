@@ -10,14 +10,16 @@ enable_testing()
 add_executable(ldtx-audio-engine-cmake-tests
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor/AudioMixEngine.cpp
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility/WorkspaceAudioEngine.cpp
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver/AudioReceiver.cpp
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/AudioReceiver/AudioReceiver.cpp
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/AudioReceiver/LDTXAudioReceiver.cpp
   AudioEngineTests.cpp
   AudioMixEngineTests.cpp
 )
 target_include_directories(ldtx-audio-engine-cmake-tests PRIVATE
   ../../Tests
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/include
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Receiver
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/AudioReceiver
+  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/internal
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/ms-gsl/include
