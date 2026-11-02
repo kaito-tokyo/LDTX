@@ -21,7 +21,7 @@
 extern "C" {
 #endif
 
-struct LDTXAudioReceiver;
+typedef void *LDTXAudioReceiverRef;
 
 /*! @callback LDTXAudioReceiverAvailabilityCallback
  @abstract Reports that a newly rendered buffer is available.
@@ -50,7 +50,7 @@ typedef void (*LDTXAudioReceiverStopCallback)(void *__nullable priv);
  @param deviceID The Core Audio device to receive from.
  @result A new receiver, or NULL if creation fails.
  */
-struct LDTXAudioReceiver *__nullable LDTXAudioReceiverCreate(AudioDeviceID deviceID);
+LDTXAudioReceiverRef __nullable LDTXAudioReceiverCreate(AudioDeviceID deviceID);
 
 /*! @function LDTXAudioReceiverDestroy
  @abstract Destroys a receiver.
@@ -58,14 +58,14 @@ struct LDTXAudioReceiver *__nullable LDTXAudioReceiverCreate(AudioDeviceID devic
  leases before releasing Audio Unit resources.
  @param ctx The receiver owned by the caller.
  */
-void LDTXAudioReceiverDestroy(struct LDTXAudioReceiver *__nonnull ctx);
+void LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverGetFormat
  @abstract Returns the configured client stream format.
  @param ctx The receiver whose format is requested.
  @result The configured AudioStreamBasicDescription, returned by value.
  */
-AudioStreamBasicDescription LDTXAudioReceiverGetFormat(struct LDTXAudioReceiver *__nonnull ctx);
+AudioStreamBasicDescription LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverAddAvailabilityCallback
  @abstract Adds a callback for newly available buffers.
@@ -76,9 +76,9 @@ AudioStreamBasicDescription LDTXAudioReceiverGetFormat(struct LDTXAudioReceiver 
  @param priv The non-NULL private context passed to the callback.
  @result true if the callback was added; otherwise false.
  */
-bool LDTXAudioReceiverAddAvailabilityCallback(struct LDTXAudioReceiver *__nonnull ctx,
+bool LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull refCon,
                                               LDTXAudioReceiverAvailabilityCallback __nonnull callback,
-                                              void *__nonnull priv);
+                                              void *__nullable priv);
 
 /*! @function LDTXAudioReceiverStart
  @abstract Starts the receiver synchronously.
@@ -86,7 +86,7 @@ bool LDTXAudioReceiverAddAvailabilityCallback(struct LDTXAudioReceiver *__nonnul
  @param ctx The stopped receiver to start.
  @result true if the receiver is running; otherwise false.
  */
-bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *__nonnull ctx);
+bool LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverStop
  @abstract Requests an asynchronous stop.
@@ -100,7 +100,7 @@ bool LDTXAudioReceiverStart(struct LDTXAudioReceiver *__nonnull ctx);
  @param callback The optional completion callback.
  @param priv The optional private context passed to callback.
  */
-void LDTXAudioReceiverStop(struct LDTXAudioReceiver *__nonnull ctx, LDTXAudioReceiverStopCallback __nullable callback,
+void LDTXAudioReceiverStop(LDTXAudioReceiverRef __nonnull refCon, LDTXAudioReceiverStopCallback __nullable callback,
                            void *__nullable priv);
 
 /*! @function LDTXAudioReceiverAcquireBuffer
@@ -113,7 +113,7 @@ void LDTXAudioReceiverStop(struct LDTXAudioReceiver *__nonnull ctx, LDTXAudioRec
  @param token The generation token supplied by the availability callback.
  @result true if a read lease was acquired; otherwise false.
  */
-bool LDTXAudioReceiverAcquireBuffer(struct LDTXAudioReceiver *__nonnull ctx, uint32_t slot, uint64_t token);
+bool LDTXAudioReceiverAcquireBuffer(LDTXAudioReceiverRef __nonnull refCon, uint32_t slot, uint64_t token);
 
 /*! @function LDTXAudioReceiverGetBufferData
  @abstract Returns the receiver-owned buffer for an active read lease.
@@ -125,7 +125,7 @@ bool LDTXAudioReceiverAcquireBuffer(struct LDTXAudioReceiver *__nonnull ctx, uin
  @param token The generation token used to acquire the lease.
  @result A const AudioBufferList borrow, or NULL if the lease is invalid.
  */
-const AudioBufferList *__nullable LDTXAudioReceiverGetBufferData(struct LDTXAudioReceiver *__nonnull ctx, uint32_t slot,
+const AudioBufferList *__nullable LDTXAudioReceiverGetBufferData(LDTXAudioReceiverRef __nonnull refCon, uint32_t slot,
                                                                  uint64_t token);
 
 /*! @function LDTXAudioReceiverGetBufferTimeStamp
@@ -138,7 +138,7 @@ const AudioBufferList *__nullable LDTXAudioReceiverGetBufferData(struct LDTXAudi
  @param token The generation token used to acquire the lease.
  @result A const AudioTimeStamp borrow, or NULL if the lease is invalid.
  */
-const AudioTimeStamp *__nullable LDTXAudioReceiverGetBufferTimeStamp(struct LDTXAudioReceiver *__nonnull ctx,
+const AudioTimeStamp *__nullable LDTXAudioReceiverGetBufferTimeStamp(LDTXAudioReceiverRef __nonnull refCon,
                                                                      uint32_t slot, uint64_t token);
 
 /*! @function LDTXAudioReceiverReleaseBuffer
@@ -149,7 +149,7 @@ const AudioTimeStamp *__nullable LDTXAudioReceiverGetBufferTimeStamp(struct LDTX
  @param slot The leased buffer slot.
  @param token The generation token used to acquire the lease.
  */
-void LDTXAudioReceiverReleaseBuffer(struct LDTXAudioReceiver *__nonnull ctx, uint32_t slot, uint64_t token);
+void LDTXAudioReceiverReleaseBuffer(LDTXAudioReceiverRef __nonnull refCon, uint32_t slot, uint64_t token);
 
 #ifdef __cplusplus
 }
