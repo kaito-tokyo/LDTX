@@ -73,7 +73,7 @@ OSStatus inputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags
 
 auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __nullable {
   if (deviceID == kAudioObjectUnknown) {
-    os_log_error(logger(), "deviceID is unknown");
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] deviceID is unknown");
     return nullptr;
   }
 
@@ -84,19 +84,19 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   };
   AudioComponent component = AudioComponentFindNext(nullptr, &description);
   if (component == nullptr) {
-    os_log_error(logger(), "HALOutput was not found");
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] HALOutput was not found");
     return nullptr;
   }
 
   AudioComponentInstance pAudioUnit = nullptr;
   if (const OSStatus status = AudioComponentInstanceNew(component, &pAudioUnit); status != noErr) {
-    os_log_error(logger(), "AudioComponentInstanceNew failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] AudioComponentInstanceNew failed: %{public}d", status);
     if (pAudioUnit != nullptr) {
       AudioComponentInstanceDispose(pAudioUnit);
     }
     return nullptr;
   } else if (pAudioUnit == nullptr) {
-    os_log_error(logger(), "AudioComponentInstanceNew returned null");
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] AudioComponentInstanceNew returned null");
     return nullptr;
   }
   std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit{pAudioUnit};
@@ -105,7 +105,7 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   if (const OSStatus status = AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_EnableIO,
                                                    kAudioUnitScope_Input, 1, &enableInput, sizeof(enableInput));
       status != noErr) {
-    os_log_error(logger(), "AudioUnitSetProperty(EnableIO, Input, 1) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Setting EnableIO on Input bus 1 failed: %{public}d", status);
     return nullptr;
   }
 
@@ -113,14 +113,14 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   if (const OSStatus status = AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_EnableIO,
                                                    kAudioUnitScope_Output, 0, &disableOutput, sizeof(disableOutput));
       status != noErr) {
-    os_log_error(logger(), "AudioUnitSetProperty(EnableIO, Output, 0) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Setting EnableIO on Output bus 0 failed: %{public}d", status);
     return nullptr;
   }
 
   if (const OSStatus status = AudioUnitSetProperty(audioUnit.get(), kAudioOutputUnitProperty_CurrentDevice,
                                                    kAudioUnitScope_Global, 0, &deviceID, sizeof(deviceID));
       status != noErr) {
-    os_log_error(logger(), "AudioUnitSetProperty(CurrentDevice) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Setting CurrentDevice on Global scope failed: %{public}d", status);
     return nullptr;
   }
 
@@ -129,7 +129,7 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   if (const OSStatus status = AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat,
                                                    kAudioUnitScope_Input, 1, &deviceFormat, &deviceFormatSize);
       status != noErr) {
-    os_log_error(logger(), "AudioUnitGetProperty(StreamFormat, Input, 1) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Getting StreamFormat on Input bus 1 failed: %{public}d", status);
     return nullptr;
   }
 
@@ -146,7 +146,7 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   if (const OSStatus status = AudioUnitSetProperty(audioUnit.get(), kAudioUnitProperty_StreamFormat,
                                                    kAudioUnitScope_Output, 1, &outputFormat, sizeof(outputFormat));
       status != noErr) {
-    os_log_error(logger(), "AudioUnitSetProperty(StreamFormat, Output, 1) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Setting StreamFormat on Output bus 1 failed: %{public}d", status);
     return nullptr;
   }
 
@@ -155,21 +155,20 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   if (const OSStatus status = AudioUnitGetProperty(audioUnit.get(), kAudioUnitProperty_MaximumFramesPerSlice,
                                                    kAudioUnitScope_Global, 0, &maximumFrames, &maximumFramesSize);
       status != noErr) {
-    os_log_error(logger(), "AudioUnitGetProperty(MaximumFramesPerSlice, Global, 0) failed: %{public}d", status);
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Getting MaximumFramesPerSlice on Global scope failed: %{public}d", status);
     return nullptr;
   }
 
   std::weak_ptr<AudioReceiver> *refCon = nullptr;
-
   try {
     refCon = audioReceiver(std::make_unique<AudioReceiver>(std::move(audioUnit), &outputFormat, maximumFrames));
   } catch (...) {
-    os_log_error(logger(), "Failed to create AudioReceiver");
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Failed to create AudioReceiver");
     return nullptr;
   }
 
   if (refCon == nullptr) {
-    os_log_error(logger(), "refCon is null");
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] AudioReceiver factory returned null");
     return nullptr;
   }
 
@@ -178,11 +177,14 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
     if (const OSStatus status = AudioUnitSetProperty(ctx->audioUnit(), kAudioOutputUnitProperty_SetInputCallback,
                                                      kAudioUnitScope_Global, 0, &callback, sizeof(callback));
         status != noErr) {
-
-      os_log_error(logger(), "AudioUnitSetProperty(SetInputCallback, Global, 0) failed: %{public}d", status);
+      os_log_error(logger(), "[LDTXAudioReceiverCreate] Setting InputCallback on Global scope failed: %{public}d", status);
       audioReceiver(*refCon);
       return nullptr;
     }
+  } else {
+    os_log_error(logger(), "[LDTXAudioReceiverCreate] Failed to obtain AudioReceiver context");
+    audioReceiver(*refCon);
+    return nullptr;
   }
 
   return refCon;
