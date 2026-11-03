@@ -8,6 +8,9 @@
 
 namespace LDTXAudioKit::AudioReceiverDetail {
 
-auto logger() -> os_log_t;
+inline auto logger() -> os_log_t {
+  static os_log_t singleton = os_log_create("tokyo.kaito.ldtx", "audiokit.audio-receiver");
+  return singleton;
+}
 
 } // namespace LDTXAudioKit::AudioReceiverDetail

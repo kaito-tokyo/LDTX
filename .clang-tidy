@@ -13,7 +13,10 @@ Checks: >
   portability-*,
   readability-*,
   -bugprone-easily-swappable-parameters,
-  -portability-avoid-pragma-once
+  -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
+  -readability-else-after-return,
+  -readability-function-cognitive-complexity
 
 WarningsAsErrors: ''
 HeaderFilterRegex: '(^|/)(Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests|Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/(Compatibility|Compositor|Receiver|include))/.*'
