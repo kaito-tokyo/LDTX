@@ -12,7 +12,7 @@
 
 using namespace LDTXAudioKit::AudioReceiverDetail;
 
-namespace {
+namespace LDTXAudioKit::AudioReceiverDetail {
 
 std::weak_ptr<AudioReceiver> *
 audioReceiver(std::variant<std::unique_ptr<AudioReceiver>, std::weak_ptr<AudioReceiver>> handle) {
@@ -20,51 +20,53 @@ audioReceiver(std::variant<std::unique_ptr<AudioReceiver>, std::weak_ptr<AudioRe
   static std::forward_list<std::weak_ptr<AudioReceiver>> handles;
   static std::vector<std::shared_ptr<AudioReceiver>> owners;
 
+  std::shared_ptr<AudioReceiver> dying{nullptr};
+
   if (auto *toCreate = std::get_if<std::unique_ptr<AudioReceiver>>(&handle)) {
     std::lock_guard lock(mutex);
     owners.emplace_back(std::move(*toCreate));
     try {
       handles.emplace_front(owners.back());
     } catch (...) {
-      owners.back().reset();
+      dying.swap(owners.back());
       throw;
     }
 
     return &handles.front();
-  }
-
-  if (auto *toDelete = std::get_if<std::weak_ptr<AudioReceiver>>(&handle)) {
-    std::shared_ptr<AudioReceiver> dying;
-    {
-      std::lock_guard lock(mutex);
-      for (std::shared_ptr<AudioReceiver> &owner : owners) {
-        if (!owner.owner_before(*toDelete) && !toDelete->owner_before(owner)) {
-          dying = std::move(owner);
-          break;
-        }
+  } else if (auto *toDelete = std::get_if<std::weak_ptr<AudioReceiver>>(&handle)) {
+    std::lock_guard lock(mutex);
+    for (std::shared_ptr<AudioReceiver> &owner : owners) {
+      if (!owner.owner_before(*toDelete) && !toDelete->owner_before(owner)) {
+        dying.swap(owner);
+        break;
       }
+    }
+    
+    if (!dying) {
+      os_log_info(logger(), "[AudioReceiver factory] Nothing will be destroyed");
     }
 
     return nullptr;
+  } else {
+    os_log_fault(logger(), "[AudioReceiver factory] Broken variant");
+    return nullptr;
   }
-
-  return nullptr;
 }
 
 OSStatus inputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
                        unsigned int inBusNumber, unsigned int inNumberFrames, AudioBufferList *ioData) {
   if (inRefCon == nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiver received input callback with null refCon");
+    os_log_error(logger(), "[input callback] inRefCon is null");
     return kAudioUnitErr_InvalidParameter;
   } else if (ioData != nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiver received input callback with non-null ioData");
+    os_log_error(logger(), "[input callback] ioData is not null");
     return kAudioUnitErr_InvalidParameter;
   }
 
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(inRefCon)->lock(); ctx) {
     return ctx->handleHalInput(ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames);
   } else {
-    os_log_error(logger(), "LDTXAudioReceiver received input callback with expired receiver");
+    os_log_error(logger(), "[input callback] Failed to obtain AudioReceiver context");
     return kAudioUnitErr_InvalidParameter;
   }
 }
