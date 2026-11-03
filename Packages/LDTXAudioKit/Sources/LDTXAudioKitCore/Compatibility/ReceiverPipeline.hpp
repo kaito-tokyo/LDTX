@@ -12,6 +12,8 @@
 
 #include "LegacyAudioPrimitives.hpp"
 
+constexpr uint32_t kAudioMaxFramesPerBlock = 65536;
+
 struct Descriptor {
   uint64_t index = 0, generation = 0;
   uint32_t slot = 0, frames = 0;

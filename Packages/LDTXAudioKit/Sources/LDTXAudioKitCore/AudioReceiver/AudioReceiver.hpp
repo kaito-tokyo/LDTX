@@ -36,8 +36,7 @@ struct AudioReceiver {
   constexpr static long kStopping = 2;
 
   AudioReceiver(std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit,
-                const AudioStreamBasicDescription *__nonnull format, uint32_t maximumFrames,
-                void *__nonnull refCon);
+                const AudioStreamBasicDescription *__nonnull format, uint32_t maximumFrames);
   ~AudioReceiver() noexcept;
 
   AudioReceiver(const AudioReceiver &) = delete;

@@ -175,8 +175,7 @@ auto makeABL(const AudioStreamBasicDescription *__nonnull format, std::uint32_t 
 } // namespace
 
 AudioReceiver::AudioReceiver(std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit,
-                                     const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames,
-                                     void *__nonnull refCon)
+                                     const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames)
 : slots{makeABL(format, maximumFrames), makeABL(format, maximumFrames), makeABL(format, maximumFrames),
   makeABL(format, maximumFrames)},
 audioUnit_(std::move(audioUnit)), controlQueue_([]() -> decltype(controlQueue_) {

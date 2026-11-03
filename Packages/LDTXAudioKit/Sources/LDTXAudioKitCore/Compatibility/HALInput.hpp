@@ -14,7 +14,7 @@
 
 class HALInput {
   struct ReceiverReleaser {
-    void operator()(LDTXAudioReceiver *receiver) const noexcept {
+    void operator()(LDTXAudioReceiverRef receiver) const noexcept {
       if (receiver != nullptr) {
         LDTXAudioReceiverDestroy(receiver);
       }
@@ -23,7 +23,7 @@ class HALInput {
 
   std::unique_ptr<LDTXAudioUnit> unit;
   std::unique_ptr<LDTXAudioBufferList> capture;
-  std::unique_ptr<LDTXAudioReceiver, ReceiverReleaser> receiver{nullptr};
+  std::unique_ptr<void, ReceiverReleaser> receiver{nullptr};
   std::mutex receiverStopMutex;
   std::condition_variable receiverStopCondition;
   bool receiverStopCompleted = false;
@@ -75,7 +75,7 @@ class HALInput {
 
 public:
   std::string uid;
-  uint32_t kind, quantum = 512, maximum = kAudioMaxFramesPerBlock, channels;
+  uint32_t kind, quantum = 512, maximum = 65536, channels;
   double rate;
   AudioDeviceID device = 0;
   std::unique_ptr<PCMStorage> storage;
@@ -103,7 +103,7 @@ public:
       maximum = deviceMaximumFrames(device);
       if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
         throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
-      if (maximum < quantum || maximum > kAudioMaxFramesPerBlock)
+      if (maximum < quantum || maximum > 65536)
         throw LDTXAudioStatusError(kAudioUnitErr_TooManyFramesToProcess);
     }
     if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
