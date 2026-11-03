@@ -26,10 +26,6 @@ namespace LDTXAudioKit::AudioReceiverDetail {
 
 namespace {
 
-void startAudioUnit(void *context) {
-  static_cast<AudioReceiver *>(context)->startOnControlQueue();
-}
-
 void finishStop(void *context) {
   static_cast<AudioReceiver *>(context)->finishStopOnControlQueue();
 }
@@ -58,29 +54,6 @@ void AudioReceiver::uninitializeUnit() {
     os_log_fault(logger(), "AudioUnitUninitialize failed: %d", int(status));
   }
   initialized = false;
-}
-
-void AudioReceiver::startOnControlQueue() {
-  startStatus = AudioUnitInitialize(audioUnit_.get());
-  if (startStatus != noErr) {
-    return;
-  }
-  initialized = true;
-  requiresStop = true;
-  runningState.store(AudioReceiver::kRunning, std::memory_order_release);
-  startStatus = AudioOutputUnitStart(audioUnit_.get());
-  if (startStatus == noErr) {
-    return;
-  }
-  runningState.store(AudioReceiver::kStopping, std::memory_order_release);
-  stopUnit();
-  uninitializeUnit();
-  runningState.store(AudioReceiver::kStopped, std::memory_order_release);
-}
-
-auto AudioReceiver::start() -> OSStatus {
-  dispatch_sync_f(controlQueue_.get(), this, startAudioUnit);
-  return startStatus;
 }
 
 void AudioReceiver::finishStopOnControlQueue() {

@@ -4,6 +4,7 @@
 
 #include "AudioReceiver.hpp"
 
+#include <cstdlib>
 #include <forward_list>
 #include <variant>
 #include <vector>
@@ -200,14 +201,14 @@ void LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon) {
 
 auto LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __nonnull refCon) -> AudioStreamBasicDescription {
   if (refCon == nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiverGetFormat received null refCon");
+    os_log_error(logger(), "[LDTXAudioReceiverGetFormat] refCon is null");
     return {};
   }
 
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
     return ctx->format_;
   } else {
-    os_log_error(logger(), "LDTXAudioReceiverGetFormat received null audio receiver");
+    os_log_error(logger(), "[LDTXAudioReceiverGetFormat] Failed to obtain AudioReceiver context");
     return {};
   }
 }
@@ -216,16 +217,16 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
                                               LDTXAudioReceiverAvailabilityCallback __nonnull callback,
                                               void *__nullable priv) -> bool {
   if (refCon == nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback received null refCon");
+    os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] refCon is null");
     return false;
   } else if (callback == nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback received null callback");
+    os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] callback is null");
     return false;
   }
 
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
     if (ctx->runningState.load(std::memory_order_acquire) != AudioReceiver::kStopped) {
-      os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback requires a stopped receiver");
+      os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] AudioReceiver is not stopped");
       return false;
     }
 
@@ -236,7 +237,7 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
       return false;
     }
   } else {
-    os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback received null audio receiver");
+    os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] Failed to obtain AudioReceiver context");
     return false;
   }
 }
@@ -258,9 +259,45 @@ auto LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon) -> bool {
     }
 
     ctx->callbackCount = ctx->availabilityCallbacks.size();
-    const OSStatus status = ctx->start();
-    if (status != noErr) {
-      os_log_error(logger(), "LDTXAudioReceiverStart failed: %{public}d", status);
+    struct StartContext {
+      AudioReceiver &receiver;
+      OSStatus status = noErr;
+    } startContext{*ctx};
+    dispatch_sync_f(ctx->controlQueue_.get(), &startContext, [](void *rawContext) {
+      auto &startContext = *static_cast<StartContext *>(rawContext);
+      auto &receiver = startContext.receiver;
+
+      startContext.status = AudioUnitInitialize(receiver.audioUnit_.get());
+      if (startContext.status != noErr) {
+        return;
+      }
+
+      receiver.initialized = true;
+      receiver.requiresStop = true;
+      receiver.runningState.store(AudioReceiver::kRunning, std::memory_order_release);
+      startContext.status = AudioOutputUnitStart(receiver.audioUnit_.get());
+      if (startContext.status == noErr) {
+        return;
+      }
+
+      receiver.runningState.store(AudioReceiver::kStopping, std::memory_order_release);
+      const OSStatus stopStatus = AudioOutputUnitStop(receiver.audioUnit_.get());
+      if (stopStatus != noErr) {
+        os_log_fault(logger(), "AudioOutputUnitStop failed: %d", int(stopStatus));
+        std::abort();
+      }
+      receiver.requiresStop = false;
+
+      const OSStatus uninitializeStatus = AudioUnitUninitialize(receiver.audioUnit_.get());
+      if (uninitializeStatus != noErr) {
+        os_log_fault(logger(), "AudioUnitUninitialize failed: %d", int(uninitializeStatus));
+      }
+      receiver.initialized = false;
+      receiver.runningState.store(AudioReceiver::kStopped, std::memory_order_release);
+    });
+    if (startContext.status != noErr) {
+      os_log_error(logger(), "[LDTXAudioReceiverStart] AudioUnit initialization or start failed: %{public}d",
+                   startContext.status);
       return false;
     }
     return true;

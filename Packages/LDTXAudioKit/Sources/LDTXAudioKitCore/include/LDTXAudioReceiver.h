@@ -28,11 +28,11 @@ typedef void *LDTXAudioReceiverRef;
  @discussion
  The slot and token identify one published buffer generation. The callback must
  acquire a read lease before accessing the buffer and release it exactly once.
- @param priv The private context supplied when the callback was registered.
+ @param priv The optional private context supplied when the callback was registered.
  @param slot The slot containing the published buffer.
  @param token The generation token for the published slot.
  */
-typedef void (*LDTXAudioReceiverAvailabilityCallback)(void *__nonnull priv, uint32_t slot, uint64_t token);
+typedef void (*LDTXAudioReceiverAvailabilityCallback)(void *__nullable priv, uint32_t slot, uint64_t token);
 
 /*! @callback LDTXAudioReceiverStopCallback
  @abstract Reports that an asynchronous stop has completed.
@@ -73,7 +73,7 @@ AudioStreamBasicDescription LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __no
  callback and private context remain registered until receiver destruction.
  @param ctx The receiver to configure.
  @param callback The callback to invoke when a buffer is published.
- @param priv The non-NULL private context passed to the callback.
+ @param priv The optional private context passed to the callback.
  @result true if the callback was added; otherwise false.
  */
 bool LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull refCon,

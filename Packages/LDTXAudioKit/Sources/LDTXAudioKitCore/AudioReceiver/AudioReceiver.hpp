@@ -44,11 +44,9 @@ struct AudioReceiver {
   AudioReceiver(AudioReceiver &&) noexcept = delete;
   auto operator=(AudioReceiver &&) noexcept -> AudioReceiver & = delete;
 
-  auto start() -> OSStatus;
   void stop(LDTXAudioReceiverStopCallback __nullable callback, void *__nullable priv);
   void stopUnit();
   void uninitializeUnit();
-  void startOnControlQueue();
   void finishStopOnControlQueue();
   
   auto audioUnit() -> ComponentInstanceRecord *__nullable { return audioUnit_.get(); }
@@ -79,7 +77,6 @@ struct AudioReceiver {
   size_t callbackCount = 0;
   bool initialized = false;
   bool requiresStop = false;
-  OSStatus startStatus = noErr;
   std::atomic<std::uint32_t> nextSlot{0};
 
   static_assert(std::atomic_long::is_always_lock_free);
