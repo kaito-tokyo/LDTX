@@ -46,14 +46,14 @@ void AudioReceiver::stopUnit() {
 }
 
 void AudioReceiver::uninitializeUnit() {
-  if (!initialized) {
+  if ((runningState.load(std::memory_order_acquire) & kInitialized) == 0) {
     return;
   }
   const OSStatus status = AudioUnitUninitialize(audioUnit_.get());
   if (status != noErr) {
     os_log_fault(logger(), "AudioUnitUninitialize failed: %d", int(status));
   }
-  initialized = false;
+  runningState.store(0, std::memory_order_release);
 }
 
 void AudioReceiver::finishStopOnControlQueue() {
@@ -74,12 +74,10 @@ void AudioReceiver::finishStopOnControlQueue() {
     });
   }
 
-  uninitializeUnit();
-
   std::vector<std::pair<LDTXAudioReceiverStopCallback, void *>> callbacks;
   {
     std::lock_guard lock(lifecycleMutex);
-    runningState.store(AudioReceiver::kStopped, std::memory_order_release);
+    runningState.store(AudioReceiver::kInitialized, std::memory_order_release);
     callbacks.swap(stopCallbacks);
   }
   lifecycleCondition.notify_all();
@@ -97,14 +95,15 @@ void AudioReceiver::stop(LDTXAudioReceiverStopCallback callback, void *priv) {
   {
     std::lock_guard lock(lifecycleMutex);
     const long state = runningState.load(std::memory_order_acquire);
-    if (state == AudioReceiver::kStopped) {
+    if ((state & (AudioReceiver::kRunning | AudioReceiver::kStopping)) == 0) {
       notifyImmediately = callback != nullptr;
     } else {
       if (callback != nullptr) {
         stopCallbacks.emplace_back(callback, priv);
       }
-      if (state == AudioReceiver::kRunning) {
-        runningState.store(AudioReceiver::kStopping, std::memory_order_release);
+      if ((state & AudioReceiver::kRunning) != 0) {
+        runningState.store((state & ~AudioReceiver::kRunning) | AudioReceiver::kStopping,
+                           std::memory_order_release);
         startStopping = true;
       }
     }
@@ -176,7 +175,7 @@ auto AudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, co
   } activeWriterLock(numActiveWriters, *this);
   std::lock_guard inputLock(activeWriterLock);
 
-  if (runningState.load(std::memory_order_acquire) != AudioReceiver::kRunning) {
+  if ((runningState.load(std::memory_order_acquire) & AudioReceiver::kRunning) == 0) {
     return noErr;
   }
   if (inNumberFrames > maximumFrames_) {
@@ -241,6 +240,7 @@ AudioReceiver::~AudioReceiver() noexcept {
   stop(completeStopWaiter, &waiter);
   std::unique_lock lock(waiter.mutex);
   waiter.condition.wait(lock, [&waiter] { return waiter.completed; });
+  uninitializeUnit();
 }
 
 } // namespace LDTXAudioKit::AudioReceiverDetail

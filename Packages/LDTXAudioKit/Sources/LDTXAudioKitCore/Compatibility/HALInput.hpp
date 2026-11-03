@@ -114,6 +114,7 @@ public:
     normalizer = std::make_unique<Normalizer>(rate, channels);
     if (receiver != nullptr) {
       if (!LDTXAudioReceiverAddAvailabilityCallback(receiver.get(), receiveFromReceiver, this) ||
+          !LDTXAudioReceiverInitialize(receiver.get()) ||
           !LDTXAudioReceiverStart(receiver.get())) {
         receiver.reset();
         throw LDTXAudioStatusError(kAudioUnitErr_CannotDoInCurrentContext);

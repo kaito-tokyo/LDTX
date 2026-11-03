@@ -80,9 +80,21 @@ bool LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
                                               LDTXAudioReceiverAvailabilityCallback __nonnull callback,
                                               void *__nullable priv);
 
+/*! @function LDTXAudioReceiverInitialize
+ @abstract Initializes the receiver's Audio Unit.
+ @discussion Initializes the Audio Unit on the calling thread. The receiver
+ must be stopped and not already initialized. Initialization remains in effect
+ across Stop so the receiver may be started again without reinitializing. The
+ caller must serialize Initialize with other receiver lifecycle calls.
+ @param ctx The stopped receiver to initialize.
+ @result true if initialization succeeded; otherwise false.
+ */
+bool LDTXAudioReceiverInitialize(LDTXAudioReceiverRef __nonnull refCon);
+
 /*! @function LDTXAudioReceiverStart
  @abstract Starts the receiver synchronously.
- @discussion Returns only after the Audio Unit has started successfully.
+ @discussion Requires a previously initialized receiver. Returns only after
+ the Audio Unit has started successfully.
  @param ctx The stopped receiver to start.
  @result true if the receiver is running; otherwise false.
  */
@@ -90,8 +102,9 @@ bool LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverStop
  @abstract Requests an asynchronous stop.
- @discussion Stops and uninitializes the Audio Unit, rejects new callback
- writes, and waits for active writers and read leases to drain. A non-NULL
+ @discussion Stops the Audio Unit, rejects new callback writes, and waits for
+ active writers and read leases to drain. Initialization remains in effect
+ until receiver destruction. A non-NULL
  callback is invoked exactly once after completion. It normally runs on the
  control queue; an already-stopped receiver invokes it on the calling thread.
  A non-NULL priv is ignored when callback is NULL. Repeated stop requests do
