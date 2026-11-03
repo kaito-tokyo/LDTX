@@ -51,6 +51,8 @@ struct AudioReceiver {
   void uninitializeUnit();
   void startOnControlQueue();
   void finishStopOnControlQueue();
+  
+  auto audioUnit() -> ComponentInstanceRecord *__nullable { return audioUnit_.get(); }
 
   auto handleHalInput(AudioUnitRenderActionFlags *__nullable ioActionFlags, const AudioTimeStamp *__nullable inTimeStamp,
                       unsigned int inBusNumber, unsigned int inNumberFrames) -> OSStatus;

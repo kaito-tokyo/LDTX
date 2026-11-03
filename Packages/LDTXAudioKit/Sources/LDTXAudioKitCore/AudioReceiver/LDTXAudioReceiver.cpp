@@ -4,12 +4,35 @@
 
 #include "AudioReceiver.hpp"
 
+#include <forward_list>
+
 #include "logger.hpp"
 
 using namespace LDTXAudioKit::AudioReceiverDetail;
 
+namespace {
+
+OSStatus inputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
+                       unsigned int inBusNumber, unsigned int inNumberFrames, AudioBufferList *ioData) {
+  if (ioData != nullptr || inTimeStamp == nullptr || inNumberFrames == 0) {
+    return kAudioUnitErr_InvalidParameter;
+  }
+  if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(inRefCon)->lock(); ctx) {
+    return ctx->handleHalInput(ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames);
+  }
+
+  os_log_error(logger(), "LDTXAudioReceiver received input callback without receiver");
+  return kAudioUnitErr_InvalidParameter;
+}
+
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __nullable {
+  static std::mutex mutex;
+  static std::forward_list<std::weak_ptr<AudioReceiver>> weakRefCons;
+  static std::forward_list<std::shared_ptr<AudioReceiver>> owners;
+  
   if (deviceID == kAudioObjectUnknown) {
     os_log_error(logger(), "deviceID is unknown");
     return nullptr;
@@ -97,33 +120,58 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
     return nullptr;
   }
 
+  std::unique_ptr<AudioReceiver> ctx;
   try {
-    auto *refCon = new std::shared_ptr<AudioReceiver>();
-    try {
-      *refCon = std::make_shared<AudioReceiver>(std::move(audioUnit), &outputFormat, maximumFrames, refCon);
-    } catch (...) {
-      delete refCon;
-      throw;
-    }
-    return refCon;
+    ctx = std::make_unique<AudioReceiver>(std::move(audioUnit), &outputFormat, maximumFrames);
   } catch (...) {
     return nullptr;
   }
+  
+  std::shared_ptr<AudioReceiver> *refCon;
+  std::weak_ptr<AudioReceiver> *weakRefCon;
+  {
+    std::lock_guard guard(mutex);
+
+    try {
+      owners.emplace_front(std::move(ctx));
+      refCon = &owners.front();
+    } catch (...) {
+      return nullptr;
+    }
+
+    try {
+      weakRefCons.emplace_front(owners.front());
+      weakRefCon = &weakRefCons.front();
+    } catch (...) {
+      refCon->reset();
+      return nullptr;
+    }
+  }
+  
+  AURenderCallbackStruct callback{inputCallback, weakRefCon};
+  if (const OSStatus status = AudioUnitSetProperty(refCon->get()->audioUnit(), kAudioOutputUnitProperty_SetInputCallback,
+                                                   kAudioUnitScope_Global, 0, &callback, sizeof(callback));
+      status != noErr) {
+    refCon->reset();
+    return nullptr;
+  }
+
+  return refCon;
 }
 
 void LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon) {
   if (refCon != nullptr) {
-    delete static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
+    static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->reset();
   }
 }
 
-auto LDTXAudioReceiverGetFormat(const LDTXAudioReceiverRef __nonnull refCon) -> AudioStreamBasicDescription {
+auto LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __nonnull refCon) -> AudioStreamBasicDescription {
   if (refCon == nullptr) {
     os_log_error(logger(), "LDTXAudioReceiverGetFormat received null refCon");
     return {};
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
-  if (ctx == nullptr) {
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
+  if (!ctx) {
     os_log_error(logger(), "LDTXAudioReceiverGetFormat received null audio receiver");
     return {};
   }
@@ -145,8 +193,8 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
     os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback received null priv");
     return false;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
-  if (ctx == nullptr) {
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
+  if (!ctx) {
     os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback received null audio receiver");
     return false;
   }
@@ -154,8 +202,13 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
     os_log_error(logger(), "LDTXAudioReceiverAddAvailabilityCallback requires a stopped receiver");
     return false;
   }
-  ctx->availabilityCallbacks.emplace_back(callback, priv);
-  return true;
+  
+  try {
+    ctx->availabilityCallbacks.emplace_back(callback, priv);
+    return true;
+  } catch (...) {
+    return false;
+  }
 }
 
 auto LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon) -> bool {
@@ -163,7 +216,7 @@ auto LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon) -> bool {
     os_log_error(logger(), "LDTXAudioReceiverStart received null receiver");
     return false;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   if (ctx->availabilityCallbacks.empty()) {
     os_log_error(logger(), "LDTXAudioReceiverStart requires an availability callback");
     return false;
@@ -187,7 +240,7 @@ void LDTXAudioReceiverStop(LDTXAudioReceiverRef __nonnull refCon, LDTXAudioRecei
     os_log_error(logger(), "LDTXAudioReceiverStop received null receiver");
     return;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   ctx->stop(callback, priv);
 }
 
@@ -196,7 +249,7 @@ auto LDTXAudioReceiverAcquireBuffer(LDTXAudioReceiverRef __nonnull refCon, uint3
     os_log_error(logger(), "LDTXAudioReceiverAcquireBuffer received null receiver");
     return false;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   if (slotIndex >= AudioReceiver::kSlotCount) {
     os_log_error(logger(), "LDTXAudioReceiverAcquireBuffer received invalid slot: %u", slotIndex);
     return false;
@@ -223,7 +276,7 @@ auto LDTXAudioReceiverGetBufferData(LDTXAudioReceiverRef __nonnull refCon, uint3
     os_log_error(logger(), "LDTXAudioReceiverGetBufferData received null receiver");
     return nullptr;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   if (slotIndex >= AudioReceiver::kSlotCount) {
     os_log_error(logger(), "LDTXAudioReceiverGetBufferData received invalid slot: %u", slotIndex);
     return nullptr;
@@ -244,7 +297,7 @@ auto LDTXAudioReceiverGetBufferTimeStamp(LDTXAudioReceiverRef __nonnull refCon, 
     os_log_error(logger(), "LDTXAudioReceiverGetBufferTimeStamp received null receiver");
     return nullptr;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   if (slotIndex >= AudioReceiver::kSlotCount) {
     os_log_error(logger(), "LDTXAudioReceiverGetBufferTimeStamp received invalid slot: %u", slotIndex);
     return nullptr;
@@ -264,7 +317,7 @@ void LDTXAudioReceiverReleaseBuffer(LDTXAudioReceiverRef __nonnull refCon, uint3
     os_log_error(logger(), "LDTXAudioReceiverReleaseBuffer received null receiver");
     return;
   }
-  auto *ctx = static_cast<std::shared_ptr<AudioReceiver> *>(refCon)->get();
+  auto ctx = *static_cast<std::shared_ptr<AudioReceiver> *>(refCon);
   if (slotIndex >= AudioReceiver::kSlotCount) {
     os_log_error(logger(), "LDTXAudioReceiverReleaseBuffer received invalid slot: %u", slotIndex);
     return;

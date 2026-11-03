@@ -26,20 +26,6 @@ namespace LDTXAudioKit::AudioReceiverDetail {
 
 namespace {
 
-OSStatus inputCallback(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
-                       unsigned int inBusNumber, unsigned int inNumberFrames, AudioBufferList *ioData) {
-  if (ioData != nullptr || inTimeStamp == nullptr || inNumberFrames == 0) {
-    return kAudioUnitErr_InvalidParameter;
-  }
-  auto *receiver = static_cast<std::shared_ptr<AudioReceiver> *>(inRefCon)->get();
-  if (receiver != nullptr) {
-    return receiver->handleHalInput(ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames);
-  }
-
-  os_log_error(logger(), "LDTXLDTXAudioReceiver received input callback without receiver");
-  return kAudioUnitErr_InvalidParameter;
-}
-
 void startAudioUnit(void *context) {
   static_cast<AudioReceiver *>(context)->startOnControlQueue();
 }
@@ -202,12 +188,6 @@ audioUnit_(std::move(audioUnit)), controlQueue_([]() -> decltype(controlQueue_) 
   return std::unique_ptr<dispatch_queue_s, DQReleaser>(queue);
 }()),
 maximumFrames_(maximumFrames), format_(*format) {
-  AURenderCallbackStruct callback{inputCallback, refCon};
-  if (const OSStatus status = AudioUnitSetProperty(audioUnit_.get(), kAudioOutputUnitProperty_SetInputCallback,
-                                                   kAudioUnitScope_Global, 0, &callback, sizeof(callback));
-      status != noErr) {
-    throw std::runtime_error("SetInputCallback failed");
-  }
 }
 
 auto AudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
