@@ -10,6 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 - [RULE: Commit Messages](#rule-commit-messages)
 - [RULE: GitHub Pull Request Body](#rule-github-pull-request-body)
 - [RULE: GitHub Issue Creation](#rule-github-issue-creation)
+- [RULE: Wiki Document Search](#rule-wiki-document-search)
 - [PRJ: Design Principles](#prj-design-principles)
 - [PRJ: Logging](#prj-logging)
 
@@ -78,6 +79,10 @@ When an agent creates an issue:
 - It MUST be written in English.
 - Its title MUST begin with exactly one of these prefixes: `[BUG]`, `[FEATURE]`, `[TASK]`, or `[CRASH REPORT]`.
 - The agent MUST NOT add labels.
+
+## RULE: Wiki Document Search
+
+We use our private Confluence wiki for documentation. When searching the Confluence wiki, agents MUST use CQL-based search (for example, the Atlassian `searchConfluence` tool with a CQL query) instead of other search methods such as full-text or Rovo search. This rule applies to Confluence only; Jira searches use JQL.
 
 ## PRJ: Design Principles
 
