@@ -5,8 +5,6 @@
 #pragma once
 
 #include <string>
-#include <condition_variable>
-#include <mutex>
 #include <thread>
 
 #include "LDTXAudioReceiver.h"
@@ -24,9 +22,6 @@ class HALInput {
   std::unique_ptr<LDTXAudioUnit> unit;
   std::unique_ptr<LDTXAudioBufferList> capture;
   std::unique_ptr<void, ReceiverReleaser> receiver{nullptr};
-  std::mutex receiverStopMutex;
-  std::condition_variable receiverStopCondition;
-  bool receiverStopCompleted = false;
   std::atomic<uint32_t> inFlight{0};
   std::atomic<bool> accepting{true};
   static OSStatus receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32,
@@ -61,16 +56,6 @@ class HALInput {
       self.errors.fetch_add(1, std::memory_order_relaxed);
     }
     LDTXAudioReceiverReleaseBuffer(self.receiver.get(), slot, token);
-  }
-
-  static void receiverStopped(void *context) {
-    auto &self = *static_cast<HALInput *>(context);
-    self.receiver.reset();
-    {
-      std::lock_guard lock(self.receiverStopMutex);
-      self.receiverStopCompleted = true;
-    }
-    self.receiverStopCondition.notify_one();
   }
 
 public:
@@ -113,11 +98,13 @@ public:
     storage = std::make_unique<PCMStorage>(maximum, channels, rate, quantum, generation);
     normalizer = std::make_unique<Normalizer>(rate, channels);
     if (receiver != nullptr) {
-      if (!LDTXAudioReceiverAddAvailabilityCallback(receiver.get(), receiveFromReceiver, this) ||
-          !LDTXAudioReceiverInitialize(receiver.get()) ||
-          !LDTXAudioReceiverStart(receiver.get())) {
+      if (!LDTXAudioReceiverAddAvailabilityCallback(receiver.get(), receiveFromReceiver, this)) {
         receiver.reset();
         throw LDTXAudioStatusError(kAudioUnitErr_CannotDoInCurrentContext);
+      }
+      if (const OSStatus status = LDTXAudioReceiverRun(receiver.get()); status != noErr) {
+        receiver.reset();
+        throw LDTXAudioStatusError(status);
       }
     } else if (unit) {
       capture = std::make_unique<LDTXAudioBufferList>(channels, maximum);
@@ -137,13 +124,10 @@ public:
   OSStatus stop() {
     accepting.store(false, std::memory_order_release);
     if (receiver != nullptr) {
-      {
-        std::lock_guard lock(receiverStopMutex);
-        receiverStopCompleted = false;
+      if (const OSStatus status = LDTXAudioReceiverDestroy(receiver.get()); status != noErr) {
+        return status;
       }
-      LDTXAudioReceiverStop(receiver.get(), receiverStopped, this);
-      std::unique_lock lock(receiverStopMutex);
-      receiverStopCondition.wait(lock, [this] { return receiverStopCompleted; });
+      receiver.release();
       return noErr;
     }
     auto status = unit ? unit->stop() : noErr;

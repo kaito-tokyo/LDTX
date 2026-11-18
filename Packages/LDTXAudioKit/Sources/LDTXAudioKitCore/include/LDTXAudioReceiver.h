@@ -12,9 +12,9 @@
 /*! @header
  @abstract Receives Float32 non-interleaved audio from a HAL output unit.
  @discussion
- The receiver lifecycle is Create, AddAvailabilityCallback, Start,
- Acquire/Get/Release, Stop, and Destroy. Buffer data and timestamps are
- receiver-owned borrows protected by read leases and generation tokens.
+ The receiver lifecycle is Create, AddAvailabilityCallback, Run, Acquire/Get/Release,
+ and Destroy. Buffer data and timestamps are receiver-owned borrows protected
+ by read leases and generation tokens.
  */
 
 #ifdef __cplusplus
@@ -34,31 +34,13 @@ typedef void *LDTXAudioReceiverRef;
  */
 typedef void (*LDTXAudioReceiverAvailabilityCallback)(void *__nullable priv, uint32_t slot, uint64_t token);
 
-/*! @callback LDTXAudioReceiverStopCallback
- @abstract Reports that an asynchronous stop has completed.
- @discussion
- The callback receives no receiver pointer. An owner may destroy the receiver
- from this callback. It normally runs on the control queue; an already-stopped
- receiver invokes it immediately on the calling thread.
- @param priv The optional private context supplied to LDTXAudioReceiverStop.
- */
-typedef void (*LDTXAudioReceiverStopCallback)(void *__nullable priv);
-
 /*! @function LDTXAudioReceiverCreate
- @abstract Creates a stopped receiver for an audio device.
+ @abstract Creates a receiver for an audio device.
  @discussion Ownership of a successful result is transferred to the caller.
  @param deviceID The Core Audio device to receive from.
  @result A new receiver, or NULL if creation fails.
  */
 LDTXAudioReceiverRef __nullable LDTXAudioReceiverCreate(AudioDeviceID deviceID);
-
-/*! @function LDTXAudioReceiverDestroy
- @abstract Destroys a receiver.
- @discussion Completes pending stop work and waits for active writers and read
- leases before releasing Audio Unit resources.
- @param ctx The receiver owned by the caller.
- */
-void LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverGetFormat
  @abstract Returns the configured client stream format.
@@ -69,7 +51,7 @@ AudioStreamBasicDescription LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __no
 
 /*! @function LDTXAudioReceiverAddAvailabilityCallback
  @abstract Adds a callback for newly available buffers.
- @discussion Callbacks may be added only while the receiver is stopped. The
+ @discussion Callbacks may be added only before Run. The
  callback and private context remain registered until receiver destruction.
  @param ctx The receiver to configure.
  @param callback The callback to invoke when a buffer is published.
@@ -80,41 +62,15 @@ bool LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
                                               LDTXAudioReceiverAvailabilityCallback __nonnull callback,
                                               void *__nullable priv);
 
-/*! @function LDTXAudioReceiverInitialize
- @abstract Initializes the receiver's Audio Unit.
- @discussion Initializes the Audio Unit on the calling thread. The receiver
- must be stopped and not already initialized. Initialization remains in effect
- across Stop so the receiver may be started again without reinitializing. The
- caller must serialize Initialize with other receiver lifecycle calls.
- @param ctx The stopped receiver to initialize.
- @result true if initialization succeeded; otherwise false.
+/*! @function LDTXAudioReceiverRun
+ @abstract Initializes and starts the receiver synchronously.
+ @discussion Availability callbacks must be registered first. A Run attempt is
+ one-shot; after it fails, Destroy is the only lifecycle operation allowed.
+ Returns only after the Audio Unit has started successfully.
+ @param refCon The receiver to run.
+ @result noErr on success, or the Audio Unit error that prevented startup.
  */
-bool LDTXAudioReceiverInitialize(LDTXAudioReceiverRef __nonnull refCon);
-
-/*! @function LDTXAudioReceiverStart
- @abstract Starts the receiver synchronously.
- @discussion Requires a previously initialized receiver. Returns only after
- the Audio Unit has started successfully.
- @param ctx The stopped receiver to start.
- @result true if the receiver is running; otherwise false.
- */
-bool LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon);
-
-/*! @function LDTXAudioReceiverStop
- @abstract Requests an asynchronous stop.
- @discussion Stops the Audio Unit, rejects new callback writes, and waits for
- active writers and read leases to drain. Initialization remains in effect
- until receiver destruction. A non-NULL
- callback is invoked exactly once after completion. It normally runs on the
- control queue; an already-stopped receiver invokes it on the calling thread.
- A non-NULL priv is ignored when callback is NULL. Repeated stop requests do
- not repeat Audio Unit shutdown.
- @param ctx The receiver to stop.
- @param callback The optional completion callback.
- @param priv The optional private context passed to callback.
- */
-void LDTXAudioReceiverStop(LDTXAudioReceiverRef __nonnull refCon, LDTXAudioReceiverStopCallback __nullable callback,
-                           void *__nullable priv);
+OSStatus LDTXAudioReceiverRun(LDTXAudioReceiverRef __nonnull refCon);
 
 /*! @function LDTXAudioReceiverAcquireBuffer
  @abstract Acquires one read lease for a published buffer.
@@ -163,6 +119,20 @@ const AudioTimeStamp *__nullable LDTXAudioReceiverGetBufferTimeStamp(LDTXAudioRe
  @param token The generation token used to acquire the lease.
  */
 void LDTXAudioReceiverReleaseBuffer(LDTXAudioReceiverRef __nonnull refCon, uint32_t slot, uint64_t token);
+
+/*! @function LDTXAudioReceiverDestroy
+ @abstract Destroys a receiver.
+ @discussion Stops the Audio Unit and waits for active input callbacks. Returns
+ an error if read leases remain; in that case the receiver remains valid and
+ stopped so the leases can be released before retrying Destroy. On success the
+ receiver is consumed. After success the handle and its borrows must not be used.
+ The caller must serialize Destroy with other API calls and must not call it
+ from an availability callback.
+ @param refCon The receiver owned by the caller.
+ @result noErr if destroyed; otherwise an Audio Unit error or
+ kAudioUnitErr_CannotDoInCurrentContext if read leases remain.
+ */
+OSStatus LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon);
 
 #ifdef __cplusplus
 }

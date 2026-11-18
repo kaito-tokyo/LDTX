@@ -10,7 +10,6 @@ enable_testing()
 add_executable(ldtx-audio-engine-cmake-tests
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compositor/AudioMixEngine.cpp
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/Compatibility/WorkspaceAudioEngine.cpp
-  ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/AudioReceiver/AudioReceiver.cpp
   ../../Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/AudioReceiver/LDTXAudioReceiver.cpp
   AudioEngineTests.cpp
   AudioMixEngineTests.cpp

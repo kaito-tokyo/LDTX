@@ -2,18 +2,242 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "AudioReceiver.hpp"
-
-#include <cstdlib>
+#include <array>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <forward_list>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <utility>
 #include <variant>
 #include <vector>
 
+#include <gsl/pointers>
+#include <gsl/util>
+
+#include <os/log.h>
+
+#include "ACIReleaser.hpp"
+#include "LDTXAudioReceiver.h"
+#include "OwnedAudioBufferList.hpp"
 #include "logger.hpp"
 
 using namespace LDTXAudioKit::AudioReceiverDetail;
 
 namespace LDTXAudioKit::AudioReceiverDetail {
+
+enum class AudioReceiverState : std::uint8_t {
+  kCreated,
+  kRunning,
+  kDestroying,
+  kStopped,
+  kRunFailed,
+  kDestroyed,
+};
+
+struct AudioReceiver {
+  using ACIReleaser = LDTXAudioKit::AudioReceiverDetail::ACIReleaser;
+  using OwnedAudioBufferList = LDTXAudioKit::AudioReceiverDetail::OwnedAudioBufferList;
+
+  constexpr static std::size_t kSlotCount = 4;
+  constexpr static std::int64_t kSlotFree = 0;
+  constexpr static std::int64_t kSlotWriter = -1;
+
+  AudioReceiver(std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit,
+                const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames);
+  ~AudioReceiver() noexcept;
+
+  AudioReceiver(const AudioReceiver &) = delete;
+  auto operator=(const AudioReceiver &) -> AudioReceiver & = delete;
+  AudioReceiver(AudioReceiver &&) noexcept = delete;
+  auto operator=(AudioReceiver &&) noexcept -> AudioReceiver & = delete;
+
+  auto run() -> OSStatus;
+  void waitForActiveWriters() noexcept;
+
+  auto audioUnit() -> ComponentInstanceRecord *__nullable { return audioUnit_.get(); }
+
+  auto handleHalInput(AudioUnitRenderActionFlags *__nullable ioActionFlags,
+                      const AudioTimeStamp *__nullable inTimeStamp, unsigned int inBusNumber,
+                      unsigned int inNumberFrames) -> OSStatus;
+
+  std::array<OwnedAudioBufferList, kSlotCount> slots;
+  std::array<std::atomic<std::int64_t>, kSlotCount> remainingReads{};
+  std::array<std::uint64_t, kSlotCount> tokens{};
+  std::array<AudioTimeStamp, kSlotCount> timestamps{};
+
+  std::atomic<AudioReceiverState> state{AudioReceiverState::kCreated};
+  std::atomic_long numActiveWriters{0};
+  std::mutex lifecycleMutex;
+
+  std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit_;
+  std::uint32_t maximumFrames_;
+  AudioStreamBasicDescription format_{};
+  std::vector<std::pair<LDTXAudioReceiverAvailabilityCallback, void *>> availabilityCallbacks;
+  bool requiresStop = false;
+  bool initialized = false;
+  std::atomic<std::uint32_t> nextSlot{0};
+
+  static_assert(std::atomic_long::is_always_lock_free);
+  static_assert(std::atomic<AudioReceiverState>::is_always_lock_free);
+  static_assert(std::atomic<std::int64_t>::is_always_lock_free);
+  static_assert(std::atomic<std::uint32_t>::is_always_lock_free);
+};
+
+void AudioReceiver::waitForActiveWriters() noexcept {
+  long activeWriters = numActiveWriters.load(std::memory_order_acquire);
+  while (activeWriters != 0) {
+    numActiveWriters.wait(activeWriters, std::memory_order_acquire);
+    activeWriters = numActiveWriters.load(std::memory_order_acquire);
+  }
+}
+
+auto AudioReceiver::run() -> OSStatus {
+  std::lock_guard lock(lifecycleMutex);
+  if (state.load(std::memory_order_acquire) != AudioReceiverState::kCreated) {
+    return kAudioUnitErr_CannotDoInCurrentContext;
+  }
+
+  state.store(AudioReceiverState::kRunFailed, std::memory_order_release);
+  if (availabilityCallbacks.empty()) {
+    return kAudioUnitErr_InvalidParameter;
+  }
+
+  if (const OSStatus status = AudioUnitInitialize(audioUnit_.get()); status != noErr) {
+    return status;
+  }
+  initialized = true;
+  requiresStop = true;
+  state.store(AudioReceiverState::kRunning, std::memory_order_release);
+
+  if (const OSStatus status = AudioOutputUnitStart(audioUnit_.get()); status == noErr) {
+    return noErr;
+  } else {
+    state.store(AudioReceiverState::kDestroying, std::memory_order_release);
+    if (const OSStatus stopStatus = AudioOutputUnitStop(audioUnit_.get()); stopStatus == noErr) {
+      requiresStop = false;
+      waitForActiveWriters();
+      state.store(AudioReceiverState::kRunFailed, std::memory_order_release);
+      return status;
+    } else {
+      os_log_error(logger(), "[AudioReceiver::run] AudioOutputUnitStart failed: %{public}d", status);
+      os_log_error(logger(), "[AudioReceiver::run] AudioOutputUnitStop rollback failed: %{public}d", stopStatus);
+      waitForActiveWriters();
+      state.store(AudioReceiverState::kRunFailed, std::memory_order_release);
+      return stopStatus;
+    }
+  }
+}
+
+namespace {
+
+auto makeABL(const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames) -> OwnedAudioBufferList {
+  if (format == nullptr) {
+    os_log_error(logger(), "format is null");
+    throw std::invalid_argument("format is null");
+  }
+  if (maximumFrames == 0) {
+    os_log_error(logger(), "maximumFrames is zero");
+    throw std::invalid_argument("maximumFrames is zero");
+  }
+  if (format->mBytesPerFrame == 0) {
+    os_log_error(logger(), "mBytesPerFrame is zero");
+    throw std::invalid_argument("mBytesPerFrame is zero");
+  }
+  if (maximumFrames > std::numeric_limits<std::uint32_t>::max() / format->mBytesPerFrame) {
+    os_log_error(logger(), "bytesPerBuffer overflows");
+    throw std::invalid_argument("bytesPerBuffer overflows");
+  }
+
+  const bool nonInterleaved = (format->mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0;
+  const std::uint32_t bufferCount = nonInterleaved ? format->mChannelsPerFrame : 1;
+  const std::uint32_t channelsPerBuffer = nonInterleaved ? 1 : format->mChannelsPerFrame;
+  const std::uint32_t bytesPerBuffer = format->mBytesPerFrame * maximumFrames;
+
+  return {bufferCount, channelsPerBuffer, bytesPerBuffer};
+}
+
+} // namespace
+
+AudioReceiver::AudioReceiver(std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit,
+                             const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames)
+: slots{makeABL(format, maximumFrames), makeABL(format, maximumFrames), makeABL(format, maximumFrames),
+        makeABL(format, maximumFrames)},
+  audioUnit_(std::move(audioUnit)), maximumFrames_(maximumFrames), format_(*format) {}
+
+auto AudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
+                                   unsigned int inBusNumber, unsigned int inNumberFrames) -> OSStatus {
+  if (state.load(std::memory_order_acquire) != AudioReceiverState::kRunning) {
+    return noErr;
+  }
+
+  struct ActiveWriterLock {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+    std::atomic_long &value;
+    void lock() noexcept { value.fetch_add(1, std::memory_order_relaxed); }
+    void unlock() noexcept {
+      if (value.fetch_sub(1, std::memory_order_release) == 1) {
+        value.notify_all();
+      }
+    }
+  } activeWriterLock(numActiveWriters);
+  std::lock_guard inputLock(activeWriterLock);
+
+  // Destroy may transition the state after the first check but before this callback is counted.
+  if (state.load(std::memory_order_acquire) != AudioReceiverState::kRunning) {
+    return noErr;
+  }
+  if (inTimeStamp == nullptr) {
+    return kAudioUnitErr_InvalidParameter;
+  }
+  if (inNumberFrames > maximumFrames_) {
+    return kAudioUnitErr_TooManyFramesToProcess;
+  }
+
+  const auto firstSlot = nextSlot.fetch_add(1, std::memory_order_relaxed) & (kSlotCount - 1);
+  for (std::uint32_t offset = 0; offset < kSlotCount; ++offset) {
+    const auto slotIndex = (firstSlot + offset) & (kSlotCount - 1);
+    auto &slot = gsl::at(slots, gsl::narrow_cast<gsl::index>(slotIndex));
+    auto &remainingReads = gsl::at(this->remainingReads, gsl::narrow_cast<gsl::index>(slotIndex));
+    std::int64_t expected = kSlotFree;
+    if (!remainingReads.compare_exchange_strong(expected, kSlotWriter, std::memory_order_acq_rel)) {
+      continue;
+    }
+
+    const std::uint32_t bytes = static_cast<std::uint32_t>(
+        std::uint64_t(slot.bytesPerBuffer()) * inNumberFrames / maximumFrames_);
+    for (std::uint32_t index = 0; index < slot.get()->mNumberBuffers; ++index) {
+      // mBuffers is the runtime-sized tail of the AudioBufferList ABI layout.
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+      slot.get()->mBuffers[index].mDataByteSize = bytes;
+    }
+    if (const OSStatus status =
+            AudioUnitRender(audioUnit_.get(), ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, slot.get());
+        status != noErr) {
+      remainingReads.store(kSlotFree, std::memory_order_release);
+      return status;
+    }
+
+    auto &timestamp = gsl::at(timestamps, gsl::narrow_cast<gsl::index>(slotIndex));
+    auto &token = gsl::at(tokens, gsl::narrow_cast<gsl::index>(slotIndex));
+    timestamp = *inTimeStamp;
+    token += 1;
+    remainingReads.store(static_cast<std::int64_t>(availabilityCallbacks.size()), std::memory_order_release);
+    for (std::size_t index = 0; index < availabilityCallbacks.size(); ++index) {
+      const auto [callback, priv] = availabilityCallbacks[index];
+      callback(priv, slotIndex, token);
+      remainingReads.fetch_sub(1, std::memory_order_release);
+    }
+    return noErr;
+  }
+
+  return noErr;
+}
+
+AudioReceiver::~AudioReceiver() noexcept = default;
 
 std::weak_ptr<AudioReceiver> *
 audioReceiver(std::variant<std::unique_ptr<AudioReceiver>, std::weak_ptr<AudioReceiver>> handle) {
@@ -196,12 +420,6 @@ auto LDTXAudioReceiverCreate(AudioDeviceID deviceID) -> LDTXAudioReceiverRef __n
   return refCon;
 }
 
-void LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon) {
-  if (refCon != nullptr) {
-    audioReceiver(*static_cast<std::weak_ptr<AudioReceiver> *>(refCon));
-  }
-}
-
 auto LDTXAudioReceiverGetFormat(LDTXAudioReceiverRef __nonnull refCon) -> AudioStreamBasicDescription {
   if (refCon == nullptr) {
     os_log_error(logger(), "[LDTXAudioReceiverGetFormat] refCon is null");
@@ -228,8 +446,9 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
   }
 
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
-    if ((ctx->runningState.load(std::memory_order_acquire) & AudioReceiver::kActivityMask) != 0) {
-      os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] AudioReceiver is not stopped");
+    std::lock_guard lock(ctx->lifecycleMutex);
+    if (ctx->state.load(std::memory_order_acquire) != AudioReceiverState::kCreated) {
+      os_log_error(logger(), "[LDTXAudioReceiverAddAvailabilityCallback] AudioReceiver has already run");
       return false;
     }
 
@@ -245,112 +464,21 @@ auto LDTXAudioReceiverAddAvailabilityCallback(LDTXAudioReceiverRef __nonnull ref
   }
 }
 
-auto LDTXAudioReceiverInitialize(LDTXAudioReceiverRef __nonnull refCon) -> bool {
+auto LDTXAudioReceiverRun(LDTXAudioReceiverRef __nonnull refCon) -> OSStatus {
   if (refCon == nullptr) {
-    os_log_error(logger(), "[LDTXAudioReceiverInitialize] refCon is null");
-    return false;
+    os_log_error(logger(), "[LDTXAudioReceiverRun] refCon is null");
+    return kAudioUnitErr_InvalidParameter;
   }
 
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
-    if (ctx->runningState.load(std::memory_order_acquire) != AudioReceiver::kUninitialized) {
-      os_log_error(logger(), "[LDTXAudioReceiverInitialize] AudioReceiver is not ready to run");
-      return false;
+    const OSStatus status = ctx->run();
+    if (status != noErr) {
+      os_log_error(logger(), "[LDTXAudioReceiverRun] Run failed: %{public}d", status);
     }
-
-    if (const OSStatus status = AudioUnitInitialize(ctx->audioUnit_.get()); status == noErr) {
-      ctx->runningState.store(AudioReceiver::kReadyToRun, std::memory_order_release);
-      return true;
-    } else {
-      os_log_error(logger(), "[LDTXAudioReceiverInitialize] AudioUnit initialization failed: %{public}d", status);
-      return false;
-    }
+    return status;
   } else {
-    os_log_error(logger(), "[LDTXAudioReceiverInitialize] Failed to obtain AudioReceiver context");
-    return false;
-  }
-}
-
-auto LDTXAudioReceiverStart(LDTXAudioReceiverRef __nonnull refCon) -> bool {
-  if (refCon == nullptr) {
-    os_log_error(logger(), "[LDTXAudioReceiverStart] refCon is null");
-    return false;
-  }
-
-  if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
-    const auto runningState = ctx->runningState.load(std::memory_order_acquire);
-    const bool isInitialized = (runningState & AudioReceiver::kInitialized) != 0;
-    const bool isRunning = (runningState & AudioReceiver::kRunning) != 0;
-    const bool isStopping = (runningState & AudioReceiver::kStopping) != 0;
-
-    if (ctx->availabilityCallbacks.empty()) {
-      os_log_error(logger(), "[LDTXAudioReceiverStart] No availability callback is added");
-      return false;
-    } else if (runningState & AudioReceiver::kInitialized) == 0) {
-        os_log_error(logger(), "[LDTXAudioReceiverStart] AudioReceiver is not initialized");
-        return false;
-      }
-    else if (runningState & AudioReceiver::kActivityMask) != 0) {
-        os_log_error(logger(), "[LDTXAudioReceiverStart] AudioReceiver is not stopped");
-        return false;
-      }
-
-    ctx->callbackCount = ctx->availabilityCallbacks.size();
-
-    struct StartContext {
-      AudioReceiver &receiver;
-      OSStatus status = noErr;
-    } startContext{*ctx};
-
-    dispatch_sync_f(ctx->controlQueue_.get(), &startContext, [](void *rawContext) {
-      auto &startContext = *static_cast<StartContext *>(rawContext);
-      auto &receiver = startContext.receiver;
-
-      const long state = receiver.runningState.load(std::memory_order_acquire);
-      if ((state & AudioReceiver::kInitialized) == 0) {
-        startContext.status = kAudioUnitErr_Uninitialized;
-        return;
-      } else if ((state & AudioReceiver::kActivityMask) != 0) {
-        startContext.status = kAudioUnitErr_CannotDoInCurrentContext;
-        return;
-      }
-
-      receiver.requiresStop = true;
-      receiver.runningState.store(AudioReceiver::kInitialized | AudioReceiver::kRunning, std::memory_order_release);
-      startContext.status = AudioOutputUnitStart(receiver.audioUnit_.get());
-      if (startContext.status != noErr) {
-        receiver.runningState.store(AudioReceiver::kInitialized | AudioReceiver::kStopping, std::memory_order_release);
-        const OSStatus stopStatus = AudioOutputUnitStop(receiver.audioUnit_.get());
-        if (stopStatus != noErr) {
-          os_log_fault(logger(), "AudioOutputUnitStop failed: %d", int(stopStatus));
-          std::abort();
-        }
-        receiver.requiresStop = false;
-        receiver.runningState.store(AudioReceiver::kInitialized, std::memory_order_release);
-      }
-    });
-
-    if (startContext.status != noErr) {
-      os_log_error(logger(), "[LDTXAudioReceiverStart] AudioOutputUnitStart failed: %{public}d", startContext.status);
-      return false;
-    }
-
-    return true;
-  } else {
-    os_log_error(logger(), "[LDTXAudioReceiverStart]  Failed to obtain AudioReceiver context");
-    return false;
-  }
-}
-
-void LDTXAudioReceiverStop(LDTXAudioReceiverRef __nonnull refCon, LDTXAudioReceiverStopCallback callback, void *priv) {
-  if (refCon == nullptr) {
-    os_log_error(logger(), "LDTXAudioReceiverStop received null receiver");
-    return;
-  }
-
-  if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
-    ctx->stop(callback, priv);
-  } else {
-    os_log_error(logger(), "LDTXAudioReceiverStop received destroyed receiver");
+    os_log_error(logger(), "[LDTXAudioReceiverRun] Failed to obtain AudioReceiver context");
+    return kAudioUnitErr_InvalidParameter;
   }
 }
 
@@ -363,6 +491,11 @@ auto LDTXAudioReceiverAcquireBuffer(LDTXAudioReceiverRef __nonnull refCon, uint3
   if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
     if (slotIndex >= AudioReceiver::kSlotCount) {
       os_log_error(logger(), "LDTXAudioReceiverAcquireBuffer received invalid slot: %u", slotIndex);
+      return false;
+    }
+
+    const auto state = ctx->state.load(std::memory_order_acquire);
+    if (state != AudioReceiverState::kRunning && state != AudioReceiverState::kDestroying) {
       return false;
     }
 
@@ -458,9 +591,69 @@ void LDTXAudioReceiverReleaseBuffer(LDTXAudioReceiverRef __nonnull refCon, uint3
       return;
     }
     remainingReads.fetch_sub(1, std::memory_order_release);
-    ctx->lifecycleCondition.notify_all();
   } else {
     os_log_error(logger(), "LDTXAudioReceiverReleaseBuffer received destroyed receiver");
     return;
+  }
+}
+
+auto LDTXAudioReceiverDestroy(LDTXAudioReceiverRef __nonnull refCon) -> OSStatus {
+  if (refCon == nullptr) {
+    os_log_error(logger(), "[LDTXAudioReceiverDestroy] refCon is null");
+    return kAudioUnitErr_InvalidParameter;
+  }
+
+  if (auto ctx = static_cast<std::weak_ptr<AudioReceiver> *>(refCon)->lock(); ctx) {
+    std::lock_guard lock(ctx->lifecycleMutex);
+    if (ctx->state.load(std::memory_order_acquire) == AudioReceiverState::kDestroyed) {
+      os_log_error(logger(), "[LDTXAudioReceiverDestroy] AudioReceiver is already destroyed");
+      return kAudioUnitErr_InvalidParameter;
+    }
+
+    ctx->state.store(AudioReceiverState::kDestroying, std::memory_order_release);
+    if (ctx->requiresStop) {
+      if (const OSStatus status = AudioOutputUnitStop(ctx->audioUnit_.get()); status != noErr) {
+        long activeWriters = ctx->numActiveWriters.load(std::memory_order_acquire);
+        while (activeWriters != 0) {
+          ctx->numActiveWriters.wait(activeWriters, std::memory_order_acquire);
+          activeWriters = ctx->numActiveWriters.load(std::memory_order_acquire);
+        }
+        os_log_error(logger(), "[LDTXAudioReceiverDestroy] AudioOutputUnitStop failed: %{public}d", status);
+        return status;
+      }
+      ctx->requiresStop = false;
+    }
+
+    long activeWriters = ctx->numActiveWriters.load(std::memory_order_acquire);
+    while (activeWriters != 0) {
+      ctx->numActiveWriters.wait(activeWriters, std::memory_order_acquire);
+      activeWriters = ctx->numActiveWriters.load(std::memory_order_acquire);
+    }
+
+    for (const auto &slotReads : ctx->remainingReads) {
+      if (slotReads.load(std::memory_order_acquire) != AudioReceiver::kSlotFree) {
+        ctx->state.store(AudioReceiverState::kStopped, std::memory_order_release);
+        os_log_error(logger(), "[LDTXAudioReceiverDestroy] Read leases remain");
+        return kAudioUnitErr_CannotDoInCurrentContext;
+      }
+    }
+
+    if (ctx->initialized) {
+      if (const OSStatus status = AudioUnitUninitialize(ctx->audioUnit_.get()); status != noErr) {
+        ctx->state.store(AudioReceiverState::kStopped, std::memory_order_release);
+        os_log_error(logger(), "[LDTXAudioReceiverDestroy] AudioUnitUninitialize failed: %{public}d", status);
+        return status;
+      }
+      ctx->initialized = false;
+    }
+
+    ctx->state.store(AudioReceiverState::kDestroyed, std::memory_order_release);
+
+    // Keep ctx alive until its owning shared_ptr has been removed from the factory.
+    audioReceiver(*static_cast<std::weak_ptr<AudioReceiver> *>(refCon));
+    return noErr;
+  } else {
+    os_log_error(logger(), "[LDTXAudioReceiverDestroy] Failed to obtain AudioReceiver context");
+    return kAudioUnitErr_InvalidParameter;
   }
 }
