@@ -57,7 +57,9 @@ public final class AACAudioEncoder: @unchecked Sendable {
     inputFormatDescription: CMAudioFormatDescription,
     bitRate: Int = 128_000
   ) throws {
-    let inputFormat = AVAudioFormat(cmAudioFormatDescription: inputFormatDescription)
+    guard let inputFormat = AVAudioFormat(formatDescription: inputFormatDescription) else {
+      throw AACAudioEncoderError.invalidFormat
+    }
     guard inputFormat.sampleRate > 0,
       inputFormat.channelCount > 0,
       bitRate > 0,

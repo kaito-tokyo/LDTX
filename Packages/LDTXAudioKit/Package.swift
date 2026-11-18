@@ -13,7 +13,8 @@ let package = Package(
       name: "LDTXAudioKit",
       type: .dynamic,
       targets: ["LDTXAudioKit"]
-    )
+    ),
+    .executable(name: "ldtx-track-record", targets: ["LDTXCmdTrackRecord"])
   ],
   targets: [
     .target(
@@ -45,6 +46,11 @@ let package = Package(
         .linkedFramework("CoreMedia"),
         .linkedFramework("Foundation")
       ]
+    ),
+    .executableTarget(
+      name: "LDTXCmdTrackRecord",
+      dependencies: ["LDTXAudioKit"],
+      path: "Sources/LDTXCmdTrackRecord"
     ),
     .testTarget(
       name: "LDTXAudioKitCoreTests",

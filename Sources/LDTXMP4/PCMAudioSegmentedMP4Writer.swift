@@ -12,6 +12,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
 
   private let assetWriter: AVAssetWriter
   private let audioInput: AVAssetWriterInput
+  private let audioReceiver: AVAssetWriterInput.SampleBufferReceiver
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.PCMAudioSegmentedMP4Writer")
   private let onSegment: SegmentHandler
   private let onFailure: @Sendable (any Error) -> Void
@@ -77,7 +78,10 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       outputSettings: nil,
       sourceFormatHint: aacEncoder.outputFormatDescription
     )
-    audioInput.expectsMediaDataInRealTime = true
+    guard assetWriter.canAdd(audioInput) else {
+      throw PCMAudioSegmentedMP4WriterError.cannotAddInput
+    }
+    audioReceiver = assetWriter.inputReceiver(for: audioInput)
     super.init()
     assetWriter.delegate = AVAssetWriterSegmentDelegate.shared
     AVAssetWriterSegmentDelegate.shared.register(assetWriter) { [weak self] data, type, report in
@@ -85,10 +89,6 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       self.assetWriter(
         self.assetWriter, didOutputSegmentData: data, segmentType: type, segmentReport: report)
     }
-    guard assetWriter.canAdd(audioInput) else {
-      throw PCMAudioSegmentedMP4WriterError.cannotAddInput
-    }
-    assetWriter.add(audioInput)
   }
 
   public func append(_ sampleBuffer: CMSampleBuffer) {
@@ -194,14 +194,19 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
 
   private func drain() {
     guard assetWriter.status == .writing else { return }
-    while audioInput.isReadyForMoreMediaData {
+    while true {
       if !pendingAAC.isEmpty {
-        guard audioInput.append(pendingAAC.removeFirst()) else {
-          fail(
-            assetWriter.error
-              ?? PCMAudioSegmentedMP4WriterError.writerFailed("append AAC failed"))
+        let sample = pendingAAC[0]
+        do {
+          let readySample = CMReadySampleBuffer(unsafeBuffer: sample)
+          guard try audioReceiver.appendImmediately(readySample) else {
+            return
+          }
+        } catch {
+          fail(error)
           return
         }
+        pendingAAC.removeFirst()
         continue
       }
       if pending.isEmpty {
@@ -266,7 +271,9 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
   private func makeSilence(
     format: CMAudioFormatDescription, at time: CMTime, frames: Int
   ) throws -> CMSampleBuffer {
-    let audioFormat = AVAudioFormat(cmAudioFormatDescription: format)
+    guard let audioFormat = AVAudioFormat(formatDescription: format) else {
+      throw PCMAudioSegmentedMP4WriterError.invalidConfiguration
+    }
     guard
       let buffer = AVAudioPCMBuffer(
         pcmFormat: audioFormat, frameCapacity: AVAudioFrameCount(frames))
@@ -350,7 +357,7 @@ public final class PCMAudioSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, 
       return
     }
     self.finishHandler = nil
-    audioInput.markAsFinished()
+    audioReceiver.finish()
     AVAssetWriterLifecycleGate.finish(
       { [self] in
         await self.assetWriter.finishWriting()
