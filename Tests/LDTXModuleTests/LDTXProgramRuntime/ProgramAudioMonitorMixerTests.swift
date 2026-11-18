@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import CoreMedia
 import Foundation
-import LDTXAudioEngine
+import LDTXAudioKit
 @testable import LDTXProgramRuntime
 import Testing
 

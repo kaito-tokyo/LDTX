@@ -906,7 +906,7 @@ extension OutputTestSuite.AVAssetWriterLifecycleIntegrationTestSuite {
       await withCheckedContinuation { continuation in
         pipeline.finish { continuation.resume() }
       }
-      recorder.finish()
+      try recorder.finish()
 
       let media = try Data(
         contentsOf: directory.appendingPathComponent("InputDevices/Desk%20Microphone.mp4")

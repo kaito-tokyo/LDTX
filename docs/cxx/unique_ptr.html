@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Guidelines for std::unique_ptr</title>
+</head>
+<body>
+<h1>Guidelines for std::unique_ptr</h1>
+
+<h2>Example declarations</h2>
+<ul>
+<li><code><pre>std::unique_ptr&lt;void, void (*)(void *)&gt; buffer{std::malloc(size), &std::free};</pre></code></li>
+<li><code><pre>
+struct CIRReleaser {
+	void operator()(ComponentInstanceRecord *p) const noexcept {
+		if (p != nullptr) {
+			AudioComponentInstanceDispose(p);
+		}
+	}
+};
+
+AudioComponentInstance pAudioUnit = nullptr;
+if (const OSStatus status = AudioComponentInstanceNew(component, &pAudioUnit); status != noErr) {
+	if (pAudioUnit != nullptr) {
+		AudioComponentInstanceDispose(pAudioUnit);
+	}
+	return nullptr;
+} else if (pAudioUnit == nullptr) {
+	return nullptr;
+}
+std::unique_ptr&lt;ComponentInstanceRecord, CIRReleaser&gt; audioUnit{pAudioUnit};</pre></code></li>
+</ul>
+
+<h2>Some data structures MUST NOT be managed by std::unique_ptr</h2>
+<p>AudioBufferList must not be managed by std::unique_ptr because its memory layout is hacky and requires C-style allocation and alignment.</p>
+</body>
+</html>

@@ -5,11 +5,22 @@
 Checks: >
   bugprone-*,
   clang-analyzer-*,
-  performance-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  darwin-*,
   modernize-*,
+  performance-*,
   portability-*,
-  -portability-avoid-pragma-once
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -modernize-use-trailing-return-type,
+  -portability-avoid-pragma-once,
+  -readability-else-after-return,
+  -readability-function-cognitive-complexity
 
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*'
+HeaderFilterRegex: '(^|/)(Sources/LDTXAudioEngine|Tests/LDTXAudioEngineCMakeTests|Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/(Compatibility|Compositor|Receiver|include))/.*'
+ExcludeHeaderFilterRegex: '(^|/)ms-gsl/.*'
+CheckOptions:
+  cppcoreguidelines-pro-bounds-constant-array-index.GslHeader: 'gsl/util'
 FormatStyle: file

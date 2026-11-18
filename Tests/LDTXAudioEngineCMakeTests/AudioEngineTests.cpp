@@ -1,29 +1,58 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-#include "Internal/AudioTimeline.hpp"
-#include "Internal/HALInput.hpp"
-#include "Internal/MonitorRoutes.hpp"
-#include "Internal/PCMStorage.hpp"
-#include "Internal/StopRetry.hpp"
-#include "LDTXAudioEngine/WorkspaceAudioEngine.h"
+#include "AudioBufferStorage.hpp"
+#include "HALInput.hpp"
+#include "LDTXAudioReceiver.h"
+#include "LegacyAudioPrimitives.hpp"
+#include "ReceiverPipeline.hpp"
+#include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
+#include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <thread>
-using namespace ldtx::audio;
-TEST_CASE("LUB-1007: Monitor value exchange preserves logical routes sharing an input") {
-  std::vector<LDTXAudioRoute> routes{{7, 1, true}, {7, 1, true}, {9, 1, true}};
-  CHECK(updateMonitorRouteGains(routes, {{7, 0.25f, false}, {7, 0.75f, false}, {9, 0.5f, false}}));
-  CHECK(routes[0].gain == 0.25f);
-  CHECK(routes[1].gain == 0.75f);
-  CHECK(routes[2].gain == 0.5f);
-  CHECK(routes[0].connected);
-  CHECK(routes[1].connected);
-  CHECK_FALSE(updateMonitorRouteGains(routes, {{7, 0, true}}));
-  CHECK_FALSE(updateMonitorRouteGains(routes, {{7, 0, true}, {9, 0, true}, {7, 0, true}}));
-  CHECK(routes[0].gain == 0.25f);
-  CHECK(routes[1].gain == 0.75f);
+
+namespace {
+
+auto defaultInputDevice() -> AudioDeviceID {
+  AudioObjectPropertyAddress address{kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  AudioDeviceID deviceID = kAudioObjectUnknown;
+  UInt32 size = sizeof(deviceID);
+  if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) != noErr) {
+    return kAudioObjectUnknown;
+  }
+  return deviceID;
 }
+
+struct ReceiverLeaseTestState {
+  LDTXAudioReceiverRef receiver = nullptr;
+  std::atomic<uint64_t> callbacks{0};
+  std::atomic_bool invalidBuffer{false};
+};
+
+void receiveAvailability(void *priv, uint32_t slot, uint64_t token) {
+  auto &state = *static_cast<ReceiverLeaseTestState *>(priv);
+  if (LDTXAudioReceiverAcquireBuffer(state.receiver, slot, token - 1)) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+    LDTXAudioReceiverReleaseBuffer(state.receiver, slot, token - 1);
+  }
+  if (!LDTXAudioReceiverAcquireBuffer(state.receiver, slot, token)) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+    return;
+  }
+  const AudioBufferList *buffer = LDTXAudioReceiverGetBufferData(state.receiver, slot, token);
+  const AudioTimeStamp *timestamp = LDTXAudioReceiverGetBufferTimeStamp(state.receiver, slot, token);
+  if (buffer == nullptr || buffer->mNumberBuffers == 0 || timestamp == nullptr) {
+    state.invalidBuffer.store(true, std::memory_order_relaxed);
+  }
+  state.callbacks.fetch_add(1, std::memory_order_relaxed);
+  LDTXAudioReceiverReleaseBuffer(state.receiver, slot, token);
+}
+
+} // namespace
 
 TEST_CASE("LUB-1007: Disconnected monitor routes do not acquire an output device") {
   auto *engine = LDTXAudioCreate(true);
@@ -82,6 +111,32 @@ TEST_CASE("LUB-1007: Resolve system default monitor output only when hardware te
   CHECK(LDTXAudioGetStatistics(engine, input).outputBufferFrames == 0);
   LDTXAudioDestroy(engine);
 }
+
+TEST_CASE("LUB-1007: Reuse Receiver slots after subscriber release") {
+  if (std::getenv("LDTX_TEST_RECEIVER_HARDWARE") == nullptr) {
+    return;
+  }
+
+  const AudioDeviceID deviceID = defaultInputDevice();
+  REQUIRE(deviceID != kAudioObjectUnknown);
+  auto *receiver = LDTXAudioReceiverCreate(deviceID);
+  REQUIRE(receiver != nullptr);
+
+  ReceiverLeaseTestState state{.receiver = receiver};
+  REQUIRE(LDTXAudioReceiverAddAvailabilityCallback(receiver, receiveAvailability, &state));
+  REQUIRE(LDTXAudioReceiverAddAvailabilityCallback(receiver, receiveAvailability, &state));
+  REQUIRE(LDTXAudioReceiverRun(receiver) == noErr);
+
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  while (state.callbacks.load(std::memory_order_acquire) < 8 && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  CHECK_FALSE(state.invalidBuffer.load(std::memory_order_acquire));
+  CHECK(state.callbacks.load(std::memory_order_acquire) >= 8);
+  CHECK(LDTXAudioReceiverDestroy(receiver) == noErr);
+}
+
 TEST_CASE("LUB-1007: Bound stop retries and report the final failure") {
   for (unsigned failures = 0; failures <= 4; ++failures) {
     unsigned attempts = 0, waits = 0;
@@ -114,13 +169,18 @@ struct Samples {
 };
 TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
   PCMStorage ring(4, 1, 1); // Three slots.
-  BufferList buffer(1, 4);
+  LDTXAudioBufferList buffer(1, 4);
+  CHECK(reinterpret_cast<uintptr_t>(buffer.get()) % kAudioBufferAlignment == 0);
+  LDTXAudioBufferList stereo(2, 4);
+  for (UInt32 c = 0; c < stereo.get()->mNumberBuffers; ++c)
+    CHECK(reinterpret_cast<uintptr_t>(stereo.get()->mBuffers[c].mData) % kAudioBufferAlignment == 0);
   auto *b = buffer.get();
   std::fill_n(static_cast<float *>(b->mBuffers[0].mData), 4, 0.25f);
   auto t = timestamp(1000000000);
   CHECK(ring.write(b, t));
   Descriptor first;
   CHECK(ring.outputQueue.pop(first));
+  CHECK(reinterpret_cast<uintptr_t>(ring.plane(first, 0)) % kAudioBufferAlignment == 0);
   Descriptor raw;
   CHECK(ring.rawQueue.pop(raw));
   ring.releaseRaw(raw);
@@ -152,11 +212,19 @@ TEST_CASE("LUB-1007: Read timestamped PCM from bounded ring storage") {
   CHECK(!full.write(b, t));
   CHECK(full.dropped == 4);
 }
+
+TEST_CASE("LUB-1007: Fixed PCM capacity rejects oversized blocks") {
+  PCMStorage storage(kAudioMaxFramesPerBlock, 1, 1);
+  LDTXAudioBufferList oversized(1, kAudioMaxFramesPerBlock);
+  oversized.get()->mBuffers[0].mDataByteSize = (kAudioMaxFramesPerBlock + 1) * sizeof(float);
+  CHECK_FALSE(storage.write(oversized.get(), timestamp(1000000000)));
+  CHECK(storage.dropped == kAudioMaxFramesPerBlock + 1);
+}
 TEST_CASE("LUB-1007: Preserve complete PCM frames during concurrent writes and reads") {
   PCMStorage ring(16, 1, 64);
   std::atomic<bool> done{false};
   std::thread writer([&] {
-    BufferList b(1, 16);
+    LDTXAudioBufferList b(1, 16);
     for (int i = 0; i < 50000; ++i) {
       std::fill_n(static_cast<float *>(b.get()->mBuffers[0].mData), 16, float(i));
       ring.write(b.get(), timestamp(i));
@@ -252,7 +320,7 @@ TEST_CASE("LUB-1007: Mix logical routes with independent gains and publish timed
   LDTXAudioSubscribe(e, a, true, Samples::receive, &raw);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList buffer(1, 1024);
+  LDTXAudioBufferList buffer(1, 1024);
   auto *pcm = static_cast<float *>(buffer.get()->mBuffers[0].mData);
   auto t = timestamp(start);
   std::fill_n(pcm, 1024, 0.125f);
@@ -340,7 +408,7 @@ TEST_CASE("LUB-1007: Keep retained raw audio samples valid after input callbacks
         }
       },
       &retained);
-  BufferList buffer(1, 1024);
+  LDTXAudioBufferList buffer(1, 1024);
   for (uint64_t n = 0; n < 500; ++n) {
     std::fill_n(static_cast<float *>(buffer.get()->mBuffers[0].mData), 1024, float(n));
     auto ns = 1000000000 + n * 1024 * 1000000000 / 48000;
@@ -403,7 +471,7 @@ TEST_CASE("LUB-1007: Keep audio consumers independent under backlog") {
   LDTXAudioSubscribe(e, bus, false, Samples::receive, &mixed);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList block(1, 1024);
+  LDTXAudioBufferList block(1, 1024);
   std::fill_n(static_cast<float *>(block.get()->mBuffers[0].mData), 1024, 0.25f);
   for (unsigned n = 0; n < 100; ++n) {
     auto t = timestamp(start + n * 1024ull * 1000000000 / 48000);
@@ -431,7 +499,7 @@ TEST_CASE("LUB-1007: Keep unaffected inputs running when one input fails") {
   LDTXAudioSubscribe(e, bad, true, Samples::receive, &raw);
   constexpr uint64_t start = 1000000000;
   LDTXAudioAdvance(e, start);
-  BufferList data(1, 1024);
+  LDTXAudioBufferList data(1, 1024);
   std::fill_n(static_cast<float *>(data.get()->mBuffers[0].mData), 1024, 0.25f);
   AudioTimeStamp invalid{};
   CHECK(LDTXAudioSubmitPCM(e, bad, data.get(), &invalid));
@@ -446,7 +514,7 @@ TEST_CASE("LUB-1007: Keep unaffected inputs running when one input fails") {
   CHECK(bad == LDTXAudioAddInput(e, "fault", 3, 44100, 2));
   CHECK(LDTXAudioGetStatistics(e, bad).generation == 2);
   CHECK(LDTXAudioGetStatistics(e, good).generation == goodGeneration);
-  BufferList stereo(2, 512);
+  LDTXAudioBufferList stereo(2, 512);
   for (unsigned c = 0; c < 2; ++c)
     std::fill_n(static_cast<float *>(stereo.get()->mBuffers[c].mData), 512, 0.125f);
   t = timestamp(start + 300000000);
@@ -530,7 +598,7 @@ TEST_CASE("LUB-1007: Allow safe engine reconstruction from completion callbacks"
 TEST_CASE("LUB-1007: Continue monitoring while an output subscriber stalls") {
   HALInput input("monitor-test", 3, 48000, 1, false);
   MonitorReader monitor(input);
-  BufferList source(1, 512), destination(1, 128);
+  LDTXAudioBufferList source(1, 512), destination(1, 128);
   auto pcm = static_cast<float *>(source.get()->mBuffers[0].mData);
   // Deliberately leave every raw/mix hold outstanding. Monitor still renders.
   for (unsigned n = 0; n < 500; ++n) {

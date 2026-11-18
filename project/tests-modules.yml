@@ -11,7 +11,8 @@ targets:
       - Tests/Support/TestTags.swift
     dependencies:
       - target: LDTXWorkspaceAppletInterface
-      - target: LDTXAudioEngine
+      - package: LDTXAudioKit
+        product: LDTXAudioKit
       - target: LDTXBackgroundSegmentation
       - target: LDTXCapture
       - target: LDTXDash

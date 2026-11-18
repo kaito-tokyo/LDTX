@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-#include "LDTXAudioEngine/AudioMixEngine.hpp"
+#include "AudioMixEngine.hpp"
 #include "doctest/doctest.h"
 #include <vector>
 
