@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
-#include "HALInput.hpp"
-#include "ReceiverPipeline.hpp"
 #include "AudioBufferStorage.hpp"
-#include "LegacyAudioPrimitives.hpp"
+#include "HALInput.hpp"
 #include "LDTXAudioReceiver.h"
+#include "LegacyAudioPrimitives.hpp"
+#include "ReceiverPipeline.hpp"
 #include "WorkspaceAudioEngine.h"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"

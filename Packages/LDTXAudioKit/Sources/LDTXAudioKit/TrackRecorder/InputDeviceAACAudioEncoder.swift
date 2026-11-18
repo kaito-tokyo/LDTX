@@ -34,7 +34,8 @@ public enum InputDeviceAACAudioEncoderError: Error, LocalizedError {
 ///
 /// Instances are stateful and must be called from one serial executor.
 public final class InputDeviceAACAudioEncoder: @unchecked Sendable {
-  private static let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "InputDeviceAACAudioEncoder")
+  private static let logger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "InputDeviceAACAudioEncoder")
   private static let presentationTimeToleranceFrames = 2.0
 
   public let outputFormatDescription: CMAudioFormatDescription
@@ -407,4 +408,3 @@ private final class AACInputProvider: @unchecked Sendable {
     return nil
   }
 }
-

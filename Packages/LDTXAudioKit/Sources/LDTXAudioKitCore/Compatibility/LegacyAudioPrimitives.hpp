@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <mach/mach_time.h>
 #include <CoreMedia/CoreMedia.h>
+#include <mach/mach_time.h>
 
 #include "../internal/AudioDevice.hpp"
 

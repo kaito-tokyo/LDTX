@@ -24,16 +24,20 @@ struct InputDeviceRecordingAudioFragmentClock {
     for track in try InputDeviceMP4TimingBox.parse(movie.payload)
     where track.type == InputDeviceMP4TimingBox.fourCC("trak") {
       let children = try InputDeviceMP4TimingBox.parse(track.payload)
-      guard let media = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("mdia") }),
+      guard
+        let media = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("mdia") }),
         let header = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("tkhd") })
       else { continue }
       let mediaChildren = try InputDeviceMP4TimingBox.parse(media.payload)
-      if let handler = mediaChildren.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("hdlr") }),
+      if let handler = mediaChildren.first(where: {
+        $0.type == InputDeviceMP4TimingBox.fourCC("hdlr")
+      }),
         try InputDeviceMP4TimingBox.read(handler.payload, at: 8, bytes: 4)
           == UInt64(InputDeviceMP4TimingBox.fourCC("soun"))
       {
         return UInt32(
-          try InputDeviceMP4TimingBox.read(header.payload, at: header.payload.first == 1 ? 20 : 12, bytes: 4))
+          try InputDeviceMP4TimingBox.read(
+            header.payload, at: header.payload.first == 1 ? 20 : 12, bytes: 4))
       }
     }
     throw InputDeviceMP4TimingBoxError.malformed()
@@ -117,7 +121,8 @@ struct InputDeviceRecordingAudioFragmentClock {
     var result: Int64 = 1
     for track in movieBoxes where track.type == InputDeviceMP4TimingBox.fourCC("trak") {
       let children = try InputDeviceMP4TimingBox.parse(track.payload)
-      guard let header = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("tkhd") }),
+      guard
+        let header = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("tkhd") }),
         let media = children.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("mdia") })
       else { throw InputDeviceMP4TimingBoxError.malformed() }
       let headerPayload = header.payload
@@ -184,7 +189,8 @@ struct InputDeviceRecordingAudioFragmentClock {
     try rescaleUnsigned(
       in: &payload, offset: durationOffset, bytes: durationBytes,
       from: oldTimescale, to: newTimescale)
-    try InputDeviceMP4TimingBox.write(UInt64(newTimescale), to: &payload, at: timescaleOffset, bytes: 4)
+    try InputDeviceMP4TimingBox.write(
+      UInt64(newTimescale), to: &payload, at: timescaleOffset, bytes: 4)
   }
 
   private func rewriteTrackHeaderDuration(
@@ -272,7 +278,9 @@ struct InputDeviceRecordingAudioFragmentClock {
     }
     let oldSize = try boxes[index].encoded().count
     var children = try InputDeviceMP4TimingBox.parse(boxes[index].payload)
-    let allTracks = children.indices.filter { children[$0].type == InputDeviceMP4TimingBox.fourCC("traf") }
+    let allTracks = children.indices.filter {
+      children[$0].type == InputDeviceMP4TimingBox.fourCC("traf")
+    }
     let tracks = try allTracks.filter { index in
       guard let trackID else { return true }
       guard
@@ -290,7 +298,9 @@ struct InputDeviceRecordingAudioFragmentClock {
     }
     var fields = try InputDeviceMP4TimingBox.parse(children[track].payload)
     guard let header = fields.first(where: { $0.type == InputDeviceMP4TimingBox.fourCC("tfhd") }),
-      let decodeIndex = fields.firstIndex(where: { $0.type == InputDeviceMP4TimingBox.fourCC("tfdt") })
+      let decodeIndex = fields.firstIndex(where: {
+        $0.type == InputDeviceMP4TimingBox.fourCC("tfdt")
+      })
     else { throw InputDeviceMP4TimingBoxError.malformed() }
     let headerFlags = try InputDeviceMP4TimingBox.read(header.payload, at: 0, bytes: 4) & 0xffffff
     guard headerFlags & 0x20000 != 0, headerFlags & 1 == 0 else {
@@ -308,7 +318,8 @@ struct InputDeviceRecordingAudioFragmentClock {
     decode[0] = 1
     try InputDeviceMP4TimingBox.write(try mapped(tick), to: &decode, at: 4, bytes: 8)
     fields[decodeIndex].payload = decode
-    for fieldIndex in fields.indices where fields[fieldIndex].type == InputDeviceMP4TimingBox.fourCC("trun") {
+    for fieldIndex in fields.indices
+    where fields[fieldIndex].type == InputDeviceMP4TimingBox.fourCC("trun") {
       let input = fields[fieldIndex].payload
       let flags = try InputDeviceMP4TimingBox.read(input, at: 0, bytes: 4)
       guard flags & 0x800 == 0, flags & 1 != 0 else {
@@ -356,11 +367,14 @@ struct InputDeviceRecordingAudioFragmentClock {
       var adjustedFields = try InputDeviceMP4TimingBox.parse(children[childIndex].payload)
       for fieldIndex in adjustedFields.indices
       where adjustedFields[fieldIndex].type == InputDeviceMP4TimingBox.fourCC("trun") {
-        guard try InputDeviceMP4TimingBox.read(adjustedFields[fieldIndex].payload, at: 0, bytes: 4) & 1 != 0
+        guard
+          try InputDeviceMP4TimingBox.read(adjustedFields[fieldIndex].payload, at: 0, bytes: 4) & 1
+            != 0
         else {
           throw InputDeviceMP4TimingBoxError.malformed()
         }
-        let offset = try InputDeviceMP4TimingBox.read(adjustedFields[fieldIndex].payload, at: 8, bytes: 4)
+        let offset = try InputDeviceMP4TimingBox.read(
+          adjustedFields[fieldIndex].payload, at: 8, bytes: 4)
         let adjusted = Int64(Int32(bitPattern: UInt32(offset))) + Int64(delta)
         guard adjusted >= 0, adjusted <= Int64(Int32.max) else {
           throw InputDeviceMP4TimingBoxError.integerOverflow
@@ -381,8 +395,9 @@ struct InputDeviceRecordingAudioFragmentClock {
     let result = CMTimeConvertScale(
       try map(CMTime(value: Int64(tick), timescale: sourceTimescale)),
       timescale: destinationTimescale, method: .roundHalfAwayFromZero)
-    guard result.isNumeric, result.value >= 0 else { throw InputDeviceMP4TimingBoxError.malformed() }
+    guard result.isNumeric, result.value >= 0 else {
+      throw InputDeviceMP4TimingBoxError.malformed()
+    }
     return UInt64(result.value)
   }
 }
-

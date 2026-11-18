@@ -5,8 +5,8 @@
 @preconcurrency import AVFoundation
 import CoreMedia
 import Foundation
-import LDTXCorelibs
 import LDTXAudioKit
+import LDTXCorelibs
 import LDTXMP4
 import LDTXRecording
 import OSLog
@@ -546,7 +546,9 @@ struct AudioSideStreamWriterCallbacks: Sendable {
   let onSegment: @Sendable (SegmentedMP4Segment) -> Void
 }
 
-private final class InputDeviceSegmentedMP4WriterAdapter: AudioSideStreamWriting, @unchecked Sendable {
+private final class InputDeviceSegmentedMP4WriterAdapter: AudioSideStreamWriting,
+  @unchecked Sendable
+{
   private let writer: InputDeviceSegmentedMP4Writer
 
   init(

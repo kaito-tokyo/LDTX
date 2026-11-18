@@ -96,7 +96,9 @@ public final class InputDeviceHLSPlaylist: @unchecked Sendable {
     }
   }
 
-  public func snapshot() -> (initialization: InputDeviceHLSByteRange?, segments: [InputDeviceHLSSegment], isFinished: Bool) {
+  public func snapshot() -> (
+    initialization: InputDeviceHLSByteRange?, segments: [InputDeviceHLSSegment], isFinished: Bool
+  ) {
     lock.withLock { (initialization, segments, isFinished) }
   }
 
@@ -178,10 +180,13 @@ public final class InputDeviceHLSPlaylist: @unchecked Sendable {
     lines.append("#EXT-X-PLAYLIST-TYPE:\(isFinished ? "VOD" : "EVENT")")
     if let initialization {
       lines.append(
-        "#EXT-X-MAP:URI=\"\(mediaFileName)\",BYTERANGE=\"\(initialization.length)@\(initialization.offset)\"")
+        "#EXT-X-MAP:URI=\"\(mediaFileName)\",BYTERANGE=\"\(initialization.length)@\(initialization.offset)\""
+      )
     }
     for segment in segments {
-      lines.append("#EXTINF:\(String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), segment.duration)),")
+      lines.append(
+        "#EXTINF:\(String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), segment.duration)),"
+      )
       lines.append("#EXT-X-BYTERANGE:\(segment.byteRange.length)@\(segment.byteRange.offset)")
       lines.append(mediaFileName)
     }

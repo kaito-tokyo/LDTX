@@ -14,7 +14,7 @@ let package = Package(
       type: .dynamic,
       targets: ["LDTXAudioKit"]
     ),
-    .executable(name: "ldtx-track-record", targets: ["LDTXCmdTrackRecord"])
+    .executable(name: "ldtx-track-record", targets: ["LDTXCmdTrackRecord"]),
   ],
   targets: [
     .target(
@@ -26,13 +26,13 @@ let package = Package(
         .headerSearchPath("Compositor"),
         .headerSearchPath("Receiver"),
         .headerSearchPath("ms-gsl/include"),
-        .unsafeFlags(["-std=c++20"])
+        .unsafeFlags(["-std=c++20"]),
       ],
       linkerSettings: [
         .linkedFramework("AudioToolbox"),
         .linkedFramework("CoreAudio"),
         .linkedFramework("CoreMedia"),
-        .linkedFramework("CoreFoundation")
+        .linkedFramework("CoreFoundation"),
       ]
     ),
     .target(
@@ -44,7 +44,7 @@ let package = Package(
         .linkedFramework("AudioToolbox"),
         .linkedFramework("CoreAudio"),
         .linkedFramework("CoreMedia"),
-        .linkedFramework("Foundation")
+        .linkedFramework("Foundation"),
       ]
     ),
     .executableTarget(
@@ -61,6 +61,6 @@ let package = Package(
       name: "LDTXAudioKitTests",
       dependencies: ["LDTXAudioKit"],
       path: "Tests/LDTXAudioKitTests"
-    )
+    ),
   ]
 )

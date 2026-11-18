@@ -6,7 +6,8 @@
 import CoreMedia
 import Foundation
 
-public final class InputDeviceSegmentedMP4Writer: NSObject, AVAssetWriterDelegate, @unchecked Sendable
+public final class InputDeviceSegmentedMP4Writer: NSObject, AVAssetWriterDelegate,
+  @unchecked Sendable
 {
   public typealias SegmentHandler = @Sendable (InputDeviceSegmentedMP4Segment) -> Void
 
@@ -84,7 +85,8 @@ public final class InputDeviceSegmentedMP4Writer: NSObject, AVAssetWriterDelegat
     audioReceiver = assetWriter.inputReceiver(for: audioInput)
     super.init()
     assetWriter.delegate = InputDeviceAVAssetWriterSegmentDelegate.shared
-    InputDeviceAVAssetWriterSegmentDelegate.shared.register(assetWriter) { [weak self] data, type, report in
+    InputDeviceAVAssetWriterSegmentDelegate.shared.register(assetWriter) {
+      [weak self] data, type, report in
       guard let self else { return }
       self.assetWriter(
         self.assetWriter, didOutputSegmentData: data, segmentType: type, segmentReport: report)
@@ -168,7 +170,8 @@ public final class InputDeviceSegmentedMP4Writer: NSObject, AVAssetWriterDelegat
         switch segmentType {
         case .initialization:
           onSegment(
-            try recordingClock.retime(InputDeviceSegmentedMP4Segment(kind: .initialization, data: segmentData))
+            try recordingClock.retime(
+              InputDeviceSegmentedMP4Segment(kind: .initialization, data: segmentData))
           )
         case .separable:
           let number = nextSegmentNumber
@@ -427,4 +430,3 @@ public enum InputDeviceSegmentedMP4WriterError: Error, LocalizedError {
 private struct InputDeviceSendablePCMSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
 }
-

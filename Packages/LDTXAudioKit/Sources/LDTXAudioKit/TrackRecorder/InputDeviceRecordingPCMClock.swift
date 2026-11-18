@@ -79,4 +79,3 @@ final class InputDeviceRecordingPCMClock {
     lastMappedAnchor = 0
   }
 }
-

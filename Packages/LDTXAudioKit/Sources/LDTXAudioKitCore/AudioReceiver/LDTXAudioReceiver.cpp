@@ -164,9 +164,9 @@ auto makeABL(const AudioStreamBasicDescription *__nonnull format, std::uint32_t 
 
 AudioReceiver::AudioReceiver(std::unique_ptr<ComponentInstanceRecord, ACIReleaser> audioUnit,
                              const AudioStreamBasicDescription *__nonnull format, std::uint32_t maximumFrames)
-: slots{makeABL(format, maximumFrames), makeABL(format, maximumFrames), makeABL(format, maximumFrames),
-        makeABL(format, maximumFrames)},
-  audioUnit_(std::move(audioUnit)), maximumFrames_(maximumFrames), format_(*format) {}
+    : slots{makeABL(format, maximumFrames), makeABL(format, maximumFrames), makeABL(format, maximumFrames),
+            makeABL(format, maximumFrames)},
+      audioUnit_(std::move(audioUnit)), maximumFrames_(maximumFrames), format_(*format) {}
 
 auto AudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
                                    unsigned int inBusNumber, unsigned int inNumberFrames) -> OSStatus {
@@ -207,8 +207,8 @@ auto AudioReceiver::handleHalInput(AudioUnitRenderActionFlags *ioActionFlags, co
       continue;
     }
 
-    const std::uint32_t bytes = static_cast<std::uint32_t>(
-        std::uint64_t(slot.bytesPerBuffer()) * inNumberFrames / maximumFrames_);
+    const std::uint32_t bytes =
+        static_cast<std::uint32_t>(std::uint64_t(slot.bytesPerBuffer()) * inNumberFrames / maximumFrames_);
     for (std::uint32_t index = 0; index < slot.get()->mNumberBuffers; ++index) {
       // mBuffers is the runtime-sized tail of the AudioBufferList ABI layout.
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)

@@ -91,4 +91,3 @@ struct InputDeviceMP4TimingBox: Equatable {
     }
   }
 }
-

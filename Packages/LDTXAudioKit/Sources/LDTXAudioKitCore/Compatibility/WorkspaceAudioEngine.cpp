@@ -12,10 +12,10 @@
 #include <set>
 #include <thread>
 
-#include <os/log.h>
-#include "WorkspaceAudioEngine.h"
-#include "HALInput.hpp"
 #include "../Compositor/AudioMixEngine.hpp"
+#include "HALInput.hpp"
+#include "WorkspaceAudioEngine.h"
+#include <os/log.h>
 
 namespace {
 // Values refer to the connected routes in their configured order. Input IDs

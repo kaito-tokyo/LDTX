@@ -11,7 +11,9 @@ import Foundation
 /// notifications asynchronously. Keeping the weakly referenced delegate alive
 /// independently of an individual writer prevents deferred CoreMedia
 /// notifications from targeting a deallocated writer owner.
-final class InputDeviceAVAssetWriterSegmentDelegate: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
+final class InputDeviceAVAssetWriterSegmentDelegate: NSObject, AVAssetWriterDelegate,
+  @unchecked Sendable
+{
   typealias Handler = @Sendable (Data, AVAssetSegmentType, AVAssetSegmentReport?) -> Void
 
   static let shared = InputDeviceAVAssetWriterSegmentDelegate()
@@ -37,4 +39,3 @@ final class InputDeviceAVAssetWriterSegmentDelegate: NSObject, AVAssetWriterDele
     handler?(segmentData, segmentType, segmentReport)
   }
 }
-

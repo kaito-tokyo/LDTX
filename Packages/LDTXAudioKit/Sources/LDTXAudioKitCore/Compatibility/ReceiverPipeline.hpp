@@ -63,11 +63,10 @@ public:
   std::atomic<uint64_t> received{0}, dropped{0};
   PCMStorage(uint32_t frames, uint32_t planes, double rate, uint32_t quantum = 0, uint64_t inputGeneration = 1)
       : slots(new Slot[std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))]),
-        slotCount(std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))),
-        maxFrames(frames), channels(planes),
-        planeStride(alignedSize(size_t(maxFrames) * sizeof(float))), slotStride(planeStride * channels),
-        pcm(allocateAligned(size_t(slotCount) * slotStride)), formatGeneration(inputGeneration), outputQueue(slotCount),
-        rawQueue(slotCount), monitorQueue(slotCount) {
+        slotCount(std::max(3u, uint32_t(std::ceil(rate * 5 / (quantum ? quantum : frames))))), maxFrames(frames),
+        channels(planes), planeStride(alignedSize(size_t(maxFrames) * sizeof(float))),
+        slotStride(planeStride * channels), pcm(allocateAligned(size_t(slotCount) * slotStride)),
+        formatGeneration(inputGeneration), outputQueue(slotCount), rawQueue(slotCount), monitorQueue(slotCount) {
     assert(frames <= kAudioMaxFramesPerBlock);
     assert(channels > 0);
     assert(reinterpret_cast<uintptr_t>(pcm.get()) % kAudioBufferAlignment == 0);

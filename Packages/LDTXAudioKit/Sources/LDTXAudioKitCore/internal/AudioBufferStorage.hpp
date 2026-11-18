@@ -15,9 +15,7 @@
 
 inline constexpr size_t kAudioBufferAlignment = 16;
 
-inline size_t alignedSize(size_t size) {
-  return (size + kAudioBufferAlignment - 1) & ~(kAudioBufferAlignment - 1);
-}
+inline size_t alignedSize(size_t size) { return (size + kAudioBufferAlignment - 1) & ~(kAudioBufferAlignment - 1); }
 
 inline std::unique_ptr<void, void (*)(void *)> allocateAligned(size_t size) {
   void *raw = nullptr;

@@ -20,7 +20,9 @@ public final class InputDeviceRecordingAudioClock {
     try pcm.converterSample(sample)
   }
 
-  public func retime(_ segment: InputDeviceSegmentedMP4Segment) throws -> InputDeviceSegmentedMP4Segment {
+  public func retime(_ segment: InputDeviceSegmentedMP4Segment) throws
+    -> InputDeviceSegmentedMP4Segment
+  {
     var result = segment
     if case .initialization = segment.kind {
       trackID = try InputDeviceRecordingAudioFragmentClock.audioTrackID(in: segment.data)
@@ -58,4 +60,3 @@ public final class InputDeviceRecordingAudioClock {
     return result
   }
 }
-

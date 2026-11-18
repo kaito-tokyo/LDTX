@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
 // SPDX-License-Identifier: Apache-2.0
 
-import XCTest
 @testable import LDTXAudioKit
+import XCTest
 
 final class LDTXAudioKitTests: XCTestCase {
   func testAudioEngineCanBeCreatedWithoutHardware() {
@@ -33,7 +33,8 @@ final class LDTXAudioKitTests: XCTestCase {
 
     let snapshot = try InputDeviceHLSPlaylist.read(from: playlistURL)
     XCTAssertEqual(snapshot.initialization, .init(offset: 0, length: 128))
-    XCTAssertEqual(snapshot.segments, [.init(byteRange: .init(offset: 128, length: 256), duration: 2)])
+    XCTAssertEqual(
+      snapshot.segments, [.init(byteRange: .init(offset: 128, length: 256), duration: 2)])
     XCTAssertTrue(snapshot.isVOD)
   }
 }

@@ -35,4 +35,3 @@ public struct InputDeviceSegmentedMP4Segment: Equatable, Sendable {
     self.earliestPresentationTimeSeconds = earliestPresentationTimeSeconds
   }
 }
-

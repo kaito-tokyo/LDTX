@@ -33,9 +33,14 @@ private func parse(_ arguments: [String]) throws -> Options? {
   var index = 0
   while index < arguments.count {
     let argument = arguments[index]
-    if argument == "--help" || argument == "-h" { usage(); return nil }
+    if argument == "--help" || argument == "-h" {
+      usage()
+      return nil
+    }
     if argument == "--json" {
-      guard values.insert(argument).inserted else { throw CommandError.invalidArguments("Duplicate option: \(argument)") }
+      guard values.insert(argument).inserted else {
+        throw CommandError.invalidArguments("Duplicate option: \(argument)")
+      }
       result.json = true
       index += 1
       continue
@@ -52,7 +57,9 @@ private func parse(_ arguments: [String]) throws -> Options? {
       }
       value = arguments[index]
     }
-    guard values.insert(key).inserted else { throw CommandError.invalidArguments("Duplicate option: \(key)") }
+    guard values.insert(key).inserted else {
+      throw CommandError.invalidArguments("Duplicate option: \(key)")
+    }
     switch key {
     case "--duration": result.duration = Double(value)
     case "--output": result.output = value
@@ -75,7 +82,9 @@ struct LDTXCmdTrackRecord {
   static func main() async {
     do {
       guard let options = try parse(Array(CommandLine.arguments.dropFirst())) else { return }
-      guard let duration = options.duration, let output = options.output else { throw CommandError.invalidArguments("Missing options") }
+      guard let duration = options.duration, let output = options.output else {
+        throw CommandError.invalidArguments("Missing options")
+      }
       guard let uid = options.inputUID ?? AudioEngine.defaultInputUID() else {
         Foundation.exit(3)
       }
@@ -88,7 +97,7 @@ struct LDTXCmdTrackRecord {
         let object: [String: Any] = [
           "inputUID": result.inputUID, "sampleRate": result.sampleRate,
           "channels": result.channels, "receivedFrames": result.receivedFrames,
-          "output": result.outputURL.path, "status": "ok"
+          "output": result.outputURL.path, "status": "ok",
         ]
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         print(String(decoding: data, as: UTF8.self))

@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import CoreMedia
 import CoreAudio
+import CoreMedia
 import Foundation
 
 public final class AudioEngine: @unchecked Sendable {
@@ -37,7 +37,9 @@ public final class AudioEngine: @unchecked Sendable {
     LDTXAudioDestroy(native)
   }
 
-  public func addInput(uid: String, sampleRate: Double = 48_000, channels: UInt32 = 2) -> LDTXAudioID {
+  public func addInput(uid: String, sampleRate: Double = 48_000, channels: UInt32 = 2)
+    -> LDTXAudioID
+  {
     uid.withCString { LDTXAudioAddInput(native, $0, 0, sampleRate, channels) }
   }
 
@@ -52,8 +54,9 @@ public final class AudioEngine: @unchecked Sendable {
       mScope: kAudioObjectPropertyScopeGlobal,
       mElement: kAudioObjectPropertyElementMain)
     var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    guard AudioObjectGetPropertyData(
-      AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr,
+    guard
+      AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr,
       device != kAudioObjectUnknown
     else { return nil }
     var uid: Unmanaged<CFString>?
@@ -71,11 +74,13 @@ public final class AudioEngine: @unchecked Sendable {
   ) -> Subscription {
     let box = CallbackBox(handler)
     let unmanaged = Unmanaged.passRetained(box)
-    let token = LDTXAudioSubscribe(native, input, true, { context, sample in
-      guard let context, let sample else { return }
-      let box = Unmanaged<CallbackBox>.fromOpaque(context).takeUnretainedValue()
-      box.handler(sample)
-    }, unmanaged.toOpaque())
+    let token = LDTXAudioSubscribe(
+      native, input, true,
+      { context, sample in
+        guard let context, let sample else { return }
+        let box = Unmanaged<CallbackBox>.fromOpaque(context).takeUnretainedValue()
+        box.handler(sample)
+      }, unmanaged.toOpaque())
     lock.lock()
     subscriptions[token] = unmanaged
     lock.unlock()
@@ -95,10 +100,12 @@ public final class AudioEngine: @unchecked Sendable {
 
   public func stop() {
     let semaphore = DispatchSemaphore(value: 0)
-    LDTXAudioStop(native, { context in
-      guard let context else { return }
-      Unmanaged<DispatchSemaphore>.fromOpaque(context).takeUnretainedValue().signal()
-    }, Unmanaged.passUnretained(semaphore).toOpaque())
+    LDTXAudioStop(
+      native,
+      { context in
+        guard let context else { return }
+        Unmanaged<DispatchSemaphore>.fromOpaque(context).takeUnretainedValue().signal()
+      }, Unmanaged.passUnretained(semaphore).toOpaque())
     semaphore.wait()
   }
 

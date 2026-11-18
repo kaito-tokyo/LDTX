@@ -11,9 +11,9 @@
 #include <stdexcept>
 #include <thread>
 
-#include <os/log.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreAudio/CoreAudio.h>
+#include <os/log.h>
 
 #include "AudioBufferStorage.hpp"
 
@@ -121,8 +121,7 @@ inline uint32_t deviceFrames(AudioDeviceID id) {
 }
 
 inline uint32_t deviceMaximumFrames(AudioDeviceID id) {
-  AudioObjectPropertyAddress rangeAddress{kAudioDevicePropertyBufferFrameSizeRange,
-                                          kAudioObjectPropertyScopeGlobal,
+  AudioObjectPropertyAddress rangeAddress{kAudioDevicePropertyBufferFrameSizeRange, kAudioObjectPropertyScopeGlobal,
                                           kAudioObjectPropertyElementMain};
   AudioValueRange range{};
   UInt32 size = sizeof(range);

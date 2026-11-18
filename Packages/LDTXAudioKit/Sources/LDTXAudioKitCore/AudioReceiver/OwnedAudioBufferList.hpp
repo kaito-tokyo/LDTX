@@ -24,10 +24,10 @@ namespace LDTXAudioKit::AudioReceiverDetail {
 
 struct OwnedAudioBufferList {
   constexpr static std::size_t kAudioBufferAlignment = 16;
-  
+
   OwnedAudioBufferList(std::uint32_t bufferCount, std::uint32_t channelsPerBuffer, std::uint32_t bytesPerBuffer)
-  : size_{offsetof(AudioBufferList, mBuffers) + (sizeof(AudioBuffer) * size_t(bufferCount))},
-  bytesPerBuffer_{bytesPerBuffer} {
+      : size_{offsetof(AudioBufferList, mBuffers) + (sizeof(AudioBuffer) * size_t(bufferCount))},
+        bytesPerBuffer_{bytesPerBuffer} {
     if (bufferCount == 0) {
       os_log_error(logger(), "bufferCount is zero");
       throw std::invalid_argument("bufferCount is zero");
@@ -40,7 +40,7 @@ struct OwnedAudioBufferList {
       os_log_error(logger(), "bytesPerBuffer is zero");
       throw std::invalid_argument("bytesPerBuffer is zero");
     }
-    
+
     {
       // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
       gsl::owner<void *> pAbl = std::malloc(size_);
@@ -51,7 +51,7 @@ struct OwnedAudioBufferList {
       abl_ = static_cast<gsl::owner<AudioBufferList *>>(pAbl);
       abl_->mNumberBuffers = bufferCount;
     }
-    
+
     try {
       dataBuffers_.reserve(bufferCount);
       for (std::size_t i = 0; i < bufferCount; i += 1) {
@@ -62,7 +62,7 @@ struct OwnedAudioBufferList {
         std::memset(pDataBuffer, 0, bytesPerBuffer_);
         std::unique_ptr<void, void (*)(void *)> dataBuffer{pDataBuffer, &std::free};
         dataBuffers_.emplace_back(std::move(dataBuffer));
-        
+
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
         auto &buffer = abl_->mBuffers[i];
         buffer.mNumberChannels = channelsPerBuffer;
@@ -75,36 +75,36 @@ struct OwnedAudioBufferList {
       throw;
     }
   }
-  
+
   ~OwnedAudioBufferList() {
     // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
     std::free(abl_);
   }
-  
+
   OwnedAudioBufferList(const OwnedAudioBufferList &) = delete;
   auto operator=(const OwnedAudioBufferList &) -> OwnedAudioBufferList & = delete;
   OwnedAudioBufferList(OwnedAudioBufferList &&) noexcept = delete;
   auto operator=(OwnedAudioBufferList &&) noexcept -> OwnedAudioBufferList & = delete;
-  
+
   [[nodiscard]] auto bytesPerBuffer() const -> std::uint32_t { return bytesPerBuffer_; }
   [[nodiscard]] auto size() const -> std::size_t { return size_; }
-  
+
   [[nodiscard]] auto get() -> AudioBufferList * {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     return abl_;
   }
-  
+
   [[nodiscard]] auto get() const -> const AudioBufferList * {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     return abl_;
   }
-  
+
 private:
   const std::size_t size_;
   gsl::owner<AudioBufferList *> abl_;
   const std::uint32_t bytesPerBuffer_;
   std::vector<std::unique_ptr<void, void (*)(void *)>> dataBuffers_;
-  
+
   static_assert(std::is_standard_layout_v<AudioBufferList>);
 };
 

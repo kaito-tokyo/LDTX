@@ -87,7 +87,8 @@ public final class AudioTrackRecorder: @unchecked Sendable {
   public func finish() async throws -> AudioTrackRecordResult {
     subscription?.cancel()
     subscription = nil
-    let state = queue.sync { () -> (AVAssetWriter?, AVAssetWriterInput.SampleBufferReceiver?, Error?) in
+    let state = queue.sync {
+      () -> (AVAssetWriter?, AVAssetWriterInput.SampleBufferReceiver?, Error?) in
       (writer, receiver, failed)
     }
     guard state.2 == nil, let writer = state.0, let receiver = state.1 else {
@@ -114,7 +115,7 @@ public final class AudioTrackRecorder: @unchecked Sendable {
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: sampleRate,
         AVNumberOfChannelsKey: channels,
-        AVEncoderBitRateKey: 128_000
+        AVEncoderBitRateKey: 128_000,
       ])
     guard writer.canAdd(input) else { throw AudioTrackRecorderError.invalidConfiguration }
     let receiver = writer.inputReceiver(for: input)

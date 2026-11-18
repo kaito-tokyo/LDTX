@@ -310,7 +310,8 @@ public final class InputDeviceAudioSampleBufferNormalizer: @unchecked Sendable {
       formatDescriptionOut: &formatDescription
     )
     guard formatStatus == noErr, let formatDescription else {
-      throw InputDeviceAudioSampleBufferNormalizerError.audioFormatDescriptionCreationFailed(formatStatus)
+      throw InputDeviceAudioSampleBufferNormalizerError.audioFormatDescriptionCreationFailed(
+        formatStatus)
     }
     return formatDescription
   }
@@ -355,4 +356,3 @@ public final class InputDeviceAudioSampleBufferNormalizer: @unchecked Sendable {
     }
   }
 }
-
