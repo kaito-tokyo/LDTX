@@ -365,8 +365,10 @@ final class HLSByteRangeTrackRecorder: @unchecked Sendable {
         durationSeconds: segment.duration,
         earliestPresentationTimeSeconds: earliestPresentationTimeSeconds)
     }
-    let presentationStartSeconds = lock.withLock { self.presentationStartSeconds }
-    let timelineOffset = presentationStartSeconds ?? 0
+    // Match snapshot(): without a noted presentation start, keep the writer's own timeline.
+    let timelineOffset = lock.withLock {
+      presentationStartSeconds ?? self.segments.first?.earliestPresentationTimeSeconds ?? 0
+    }
     return MP4TrackSnapshot(
       mediaFileName: mediaFileName,
       initialization: MP4ByteRange(
