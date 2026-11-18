@@ -1,15 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Kaito Udagawa <umireon@kaito.tokyo>
+//
 // SPDX-License-Identifier: Apache-2.0
+
 #pragma once
-#include "AudioPrimitives.hpp"
-#include "AudioTimeline.hpp"
-#include "PCMStorage.hpp"
+
 #include <string>
 #include <thread>
-namespace ldtx::audio {
+
+#include "LDTXAudioReceiver.h"
+#include "ReceiverPipeline.hpp"
+
 class HALInput {
-  std::unique_ptr<Unit> unit;
-  std::unique_ptr<BufferList> capture;
+  struct ReceiverReleaser {
+    void operator()(LDTXAudioReceiverRef receiver) const noexcept {
+      if (receiver != nullptr) {
+        LDTXAudioReceiverDestroy(receiver);
+      }
+    }
+  };
+
+  std::unique_ptr<LDTXAudioUnit> unit;
+  std::unique_ptr<LDTXAudioBufferList> capture;
+  std::unique_ptr<void, ReceiverReleaser> receiver{nullptr};
   std::atomic<uint32_t> inFlight{0};
   std::atomic<bool> accepting{true};
   static OSStatus receive(void *context, AudioUnitRenderActionFlags *flags, const AudioTimeStamp *time, UInt32,
@@ -33,6 +45,19 @@ class HALInput {
     return status;
   }
 
+  static void receiveFromReceiver(void *context, uint32_t slot, uint64_t token) {
+    auto &self = *static_cast<HALInput *>(context);
+    if (!LDTXAudioReceiverAcquireBuffer(self.receiver.get(), slot, token)) {
+      return;
+    }
+    const AudioBufferList *buffer = LDTXAudioReceiverGetBufferData(self.receiver.get(), slot, token);
+    const AudioTimeStamp *timestamp = LDTXAudioReceiverGetBufferTimeStamp(self.receiver.get(), slot, token);
+    if (buffer != nullptr && timestamp != nullptr && !self.storage->write(buffer, *timestamp)) {
+      self.errors.fetch_add(1, std::memory_order_relaxed);
+    }
+    LDTXAudioReceiverReleaseBuffer(self.receiver.get(), slot, token);
+  }
+
 public:
   std::string uid;
   uint32_t kind, quantum = 512, maximum = 65536, channels;
@@ -52,29 +77,37 @@ public:
       : uid(std::move(name)), kind(k), channels(c), rate(r), generation(gen) {
     if (kind == 0 && hardware) {
       device = deviceForUID(uid.c_str());
-      unit = std::make_unique<Unit>(kAudioUnitType_Output, kAudioUnitSubType_HALOutput);
-      unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, UInt32(1));
-      unit->set(kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, UInt32(0));
-      unit->set(kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, device);
-      auto f = unit->get<AudioStreamBasicDescription>(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1);
+      receiver.reset(LDTXAudioReceiverCreate(device));
+      if (receiver == nullptr) {
+        throw LDTXAudioStatusError(kAudioHardwareBadDeviceError);
+      }
+      const AudioStreamBasicDescription f = LDTXAudioReceiverGetFormat(receiver.get());
       rate = f.mSampleRate;
       channels = f.mChannelsPerFrame;
       quantum = deviceFrames(device);
+      maximum = deviceMaximumFrames(device);
       if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
-        throw StatusError(kAudioUnitErr_FormatNotSupported);
-      auto format = pcmFormat(rate, channels);
-      unit->set(kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, format);
-      unit->set(kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, std::max(4096u, quantum));
+        throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
+      if (maximum < quantum || maximum > 65536)
+        throw LDTXAudioStatusError(kAudioUnitErr_TooManyFramesToProcess);
     }
     if (!std::isfinite(rate) || rate <= 0 || channels == 0 || channels > 64)
-      throw StatusError(kAudioUnitErr_FormatNotSupported);
+      throw LDTXAudioStatusError(kAudioUnitErr_FormatNotSupported);
     // Reserve five seconds of descriptors at the acquisition quantum, with
     // enough payload capacity for the negotiated maximum render size.
-    maximum = std::max(quantum, 4096u);
     storage = std::make_unique<PCMStorage>(maximum, channels, rate, quantum, generation);
     normalizer = std::make_unique<Normalizer>(rate, channels);
-    if (unit) {
-      capture = std::make_unique<BufferList>(channels, maximum);
+    if (receiver != nullptr) {
+      if (!LDTXAudioReceiverAddAvailabilityCallback(receiver.get(), receiveFromReceiver, this)) {
+        receiver.reset();
+        throw LDTXAudioStatusError(kAudioUnitErr_CannotDoInCurrentContext);
+      }
+      if (const OSStatus status = LDTXAudioReceiverRun(receiver.get()); status != noErr) {
+        receiver.reset();
+        throw LDTXAudioStatusError(status);
+      }
+    } else if (unit) {
+      capture = std::make_unique<LDTXAudioBufferList>(channels, maximum);
       AURenderCallbackStruct callback{receive, this};
       unit->set(kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0, callback);
       unit->initialize();
@@ -90,6 +123,13 @@ public:
   }
   OSStatus stop() {
     accepting.store(false, std::memory_order_release);
+    if (receiver != nullptr) {
+      if (const OSStatus status = LDTXAudioReceiverDestroy(receiver.get()); status != noErr) {
+        return status;
+      }
+      receiver.release();
+      return noErr;
+    }
     auto status = unit ? unit->stop() : noErr;
     if (status)
       return status;
@@ -107,7 +147,7 @@ class MonitorReader {
   Descriptor current{};
   uint32_t offset = 0;
   bool held = false;
-  BufferList scratch;
+  LDTXAudioBufferList scratch;
   std::atomic<uint32_t> inFlight{0};
 
 public:
@@ -181,4 +221,3 @@ public:
     return noErr;
   }
 };
-} // namespace ldtx::audio
