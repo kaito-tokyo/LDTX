@@ -24,3 +24,8 @@ tab_width = 8
 
 [*.md]
 trim_trailing_whitespace = false
+
+[docs/cxx/*.html]
+indent_style = tab
+indent_size = tab
+tab_width = 8
