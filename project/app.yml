@@ -213,6 +213,9 @@ targets:
       - package: LDTXFontRasterizer
         product: LDTXFontRasterizer
         embed: true
+      - package: LDTXAudioKit
+        product: LDTXAudioKit
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX
