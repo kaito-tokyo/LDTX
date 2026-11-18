@@ -745,7 +745,10 @@ final class ActiveProgramRenderer: @unchecked Sendable {
     let ptsDecision = videoPTSSelector.select(
       masterCameraID: configuration.videoPTSMasterCameraID,
       masterCaptureSessionID: masterFrame?.captureSessionID,
-      masterPresentationTime: masterFrame?.sourcePresentationTime
+      masterPresentationTime: masterFrame?.sourcePresentationTime,
+      frameDuration: configuration.frameRate > 0
+        ? CMTime(value: 1, timescale: CMTimeScale(clamping: configuration.frameRate))
+        : nil
     )
     let presentationTime: CMTime? =
       switch ptsDecision {
