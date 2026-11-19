@@ -230,11 +230,22 @@ struct LDTXWorkspaceAudioEngine {
       }
     }
   }
-  void report(const std::string &source, OSStatus status) {
+  // Fixed engine phases, such as "Monitor", are diagnostics and may be logged publicly.
+  void reportPhase(const char *phase, OSStatus status) {
     if (status)
-      os_log_error(logger, "Audio engine %{public}s failed: Core Audio error %d", source.c_str(), int(status));
+      os_log_error(logger, "Audio engine %{public}s failed: Core Audio error %d", phase, int(status));
+    notifyError(phase, status);
+  }
+  // Device UIDs can contain serial numbers, so they are logged only as a private hash.
+  void reportDevice(const std::string &uid, OSStatus status) {
+    if (status)
+      os_log_error(logger, "Audio engine input %{private, mask.hash}s failed: Core Audio error %d", uid.c_str(),
+                   int(status));
+    notifyError(uid.c_str(), status);
+  }
+  void notifyError(const char *source, OSStatus status) {
     if (errorHandler)
-      errorHandler(errorContext, source.c_str(), status);
+      errorHandler(errorContext, source, status);
   }
   static OSStatus changed(AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *context) {
     static_cast<LDTXWorkspaceAudioEngine *>(context)->hardwareChanged.store(true, std::memory_order_release);
@@ -279,7 +290,7 @@ struct LDTXWorkspaceAudioEngine {
       return true;
     auto status = monitor->stop();
     if (status) {
-      report("Monitor", status);
+      reportPhase("Monitor", status);
       return false;
     }
     monitor.reset();
@@ -290,7 +301,7 @@ struct LDTXWorkspaceAudioEngine {
       return true;
     auto status = record.input->stop();
     if (status) {
-      report(record.uid, status);
+      reportDevice(record.uid, status);
       return false;
     }
     record.input.reset();
@@ -300,15 +311,15 @@ struct LDTXWorkspaceAudioEngine {
     try {
       r.input = std::make_unique<HALInput>(r.uid, r.kind, r.rate, r.channels, hardware, r.generation + 1);
       r.input->generation = ++r.generation;
-      report(r.uid, 0);
+      reportDevice(r.uid, 0);
       os_log_with_type(logger, OS_LOG_TYPE_DEFAULT, "LDTX AUHAL input started generation=%llu frames=%u", r.generation,
                        r.input->quantum);
     } catch (const LDTXAudioStatusError &e) {
       r.input.reset();
-      report(r.uid, e.status);
+      reportDevice(r.uid, e.status);
     } catch (...) {
       r.input.reset();
-      report(r.uid, memFullErr);
+      reportDevice(r.uid, memFullErr);
     }
   }
   void refreshHardware() {
@@ -400,7 +411,7 @@ struct LDTXWorkspaceAudioEngine {
     if (!stopMonitor())
       return;
     if (!hardware || monitorRoutes.empty()) {
-      report("Monitor", 0);
+      reportPhase("Monitor", 0);
       return;
     }
     try {
@@ -410,7 +421,7 @@ struct LDTXWorkspaceAudioEngine {
         if (inputs.count(route.input) && inputs.at(route.input).input)
           used.insert(route.input);
       if (used.empty()) {
-        report("Monitor", 0);
+        reportPhase("Monitor", 0);
         return;
       }
       auto device = monitorDeviceForUID(outputUID.c_str());
@@ -465,19 +476,19 @@ struct LDTXWorkspaceAudioEngine {
       monitor = std::move(graph);
       applyMonitorGains();
       monitor->output->start();
-      report("Monitor", 0);
+      reportPhase("Monitor", 0);
       os_log_with_type(logger, OS_LOG_TYPE_DEFAULT, "LDTX AUHAL monitor outputFrames=%u", monitor->frames);
     } catch (const LDTXAudioStatusError &e) {
       monitor.reset();
-      report("Monitor", e.status);
+      reportPhase("Monitor", e.status);
     } catch (...) {
       monitor.reset();
-      report("Monitor", memFullErr);
+      reportPhase("Monitor", memFullErr);
     }
   }
   void publish(LDTXAudioID id, bool raw, CMSampleBufferRef sample) {
     if (!sample) {
-      report("SampleBuffer", memFullErr);
+      reportPhase("SampleBuffer", memFullErr);
       return;
     }
     std::shared_ptr<opaqueCMSampleBuffer> owned(sample, [](CMSampleBufferRef value) { CFRelease(value); });
@@ -577,7 +588,7 @@ struct LDTXWorkspaceAudioEngine {
             input.previousSourceEnd = ns + uint64_t(d.frames * 1e9 / input.rate);
 
           } catch (const LDTXAudioStatusError &e) {
-            report(input.uid, e.status);
+            reportDevice(input.uid, e.status);
           }
         }
       }
@@ -760,7 +771,7 @@ void LDTXAudioRemoveInput(LDTXWorkspaceAudioEngine *e, LDTXAudioID id) {
         e->delivery.restart();
         return;
       }
-      e->report(it->second.uid, 0);
+      e->reportDevice(it->second.uid, 0);
     }
     e->rebuildMonitor();
     e->rebuildWatches();
