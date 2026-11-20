@@ -6,6 +6,7 @@ import LDTXAudioKit
 import LDTXCapture
 import LDTXCorelibs
 import OSLog
+import Synchronization
 import os
 
 /// Workspace-owned adapter. All PCM processing and hardware lifetime is native.
@@ -311,9 +312,11 @@ final class AudioEngineSubscription: @unchecked Sendable {
 }
 
 /// Raw subscriber adapter used by recording clients.
-final class NativeAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendable {
+final class NativeAudioCapture: ProgramAudioCaptureStreaming, Sendable {
   private let engine: WorkspaceAudioEngine
-  private var subscription: AudioEngineSubscription?
+  /// `WorkspaceCaptureSessionCoordinator.stopAndReset` can call `stop` while
+  /// `startAudioCapture` is still running on another thread, so the slot is locked.
+  private let subscription = Mutex<AudioEngineSubscription?>(nil)
   init(engine: WorkspaceAudioEngine) { self.engine = engine }
   func startAudioCapture(
     audioDeviceID: String?,
@@ -326,12 +329,16 @@ final class NativeAudioCapture: ProgramAudioCaptureStreaming, @unchecked Sendabl
       return
     }
     let id = engine.input(uid: audioDeviceID)
-    subscription = engine.subscribe(source: id, raw: true, handler: handler)
+    let started = engine.subscribe(source: id, raw: true, handler: handler)
+    // Any replaced subscription is returned and released after the lock is dropped.
+    _ = subscription.withLock { current in
+      defer { current = started }
+      return current
+    }
     completionHandler(.success(()))
   }
   func stop(completionHandler: @escaping @Sendable () -> Void) {
-    subscription?.cancel()
-    subscription = nil
+    subscription.withLock { $0.take() }?.cancel()
     completionHandler()
   }
 }
