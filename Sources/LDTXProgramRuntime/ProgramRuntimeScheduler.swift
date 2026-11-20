@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import Synchronization
 
 public protocol ProgramRuntimeScheduling: Sendable {
   var nowNanoseconds: UInt64 { get }
@@ -24,16 +25,15 @@ public struct SystemProgramRuntimeScheduler: ProgramRuntimeScheduling {
 }
 
 /// A deterministic scheduler whose time advances only when directed by a test.
-public final class ManualProgramRuntimeScheduler: ProgramRuntimeScheduling, @unchecked Sendable {
-  private let lock = NSLock()
-  private var currentTimeNanoseconds: UInt64
+public final class ManualProgramRuntimeScheduler: ProgramRuntimeScheduling, Sendable {
+  private let currentTimeNanoseconds: Mutex<UInt64>
 
   public init(nowNanoseconds: UInt64 = 0) {
-    currentTimeNanoseconds = nowNanoseconds
+    currentTimeNanoseconds = Mutex(nowNanoseconds)
   }
 
   public var nowNanoseconds: UInt64 {
-    lock.withLock { currentTimeNanoseconds }
+    currentTimeNanoseconds.withLock { $0 }
   }
 
   public var uptimeSeconds: TimeInterval {
@@ -45,11 +45,11 @@ public final class ManualProgramRuntimeScheduler: ProgramRuntimeScheduling, @unc
   }
 
   public func advance(toNanoseconds newTimeNanoseconds: UInt64) {
-    lock.withLock {
-      guard newTimeNanoseconds >= currentTimeNanoseconds else {
+    currentTimeNanoseconds.withLock {
+      guard newTimeNanoseconds >= $0 else {
         return
       }
-      currentTimeNanoseconds = newTimeNanoseconds
+      $0 = newTimeNanoseconds
     }
   }
 }

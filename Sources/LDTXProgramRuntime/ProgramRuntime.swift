@@ -11,6 +11,7 @@ import LDTXProgramRendering
 import LDTXVideoComposition
 import LDTXVideoRendering
 import OSLog
+import Synchronization
 import os
 
 #if canImport(Metal)
@@ -43,24 +44,25 @@ public enum ProgramFrameDeliveryPolicy: Sendable {
   case latestFrame
 }
 
-public final class ProgramFrameSubscription: @unchecked Sendable {
+public final class ProgramFrameSubscription: Sendable {
+  private struct WeakRuntime {
+    weak var value: ProgramRuntime?
+  }
+
   fileprivate let id: UUID
   fileprivate let mailbox: ProgramFrameMailbox
-  private let cancellationLock = NSLock()
-  private weak var runtime: ProgramRuntime?
+  private let runtime: Mutex<WeakRuntime>
 
   init(id: UUID, mailbox: ProgramFrameMailbox, runtime: ProgramRuntime) {
     self.id = id
     self.mailbox = mailbox
-    self.runtime = runtime
+    self.runtime = Mutex(WeakRuntime(value: runtime))
   }
 
+  /// Detaches from the runtime at most once; removal runs outside the lock.
   public func cancel() {
     mailbox.close()
-    let runtime = cancellationLock.withLock { () -> ProgramRuntime? in
-      defer { self.runtime = nil }
-      return self.runtime
-    }
+    let runtime = self.runtime.withLock { $0.value.take() }
     runtime?.removeFrameSubscription(self)
   }
 

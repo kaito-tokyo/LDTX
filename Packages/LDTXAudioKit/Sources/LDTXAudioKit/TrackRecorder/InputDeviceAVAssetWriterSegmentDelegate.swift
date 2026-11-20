@@ -4,6 +4,7 @@
 
 @preconcurrency import AVFoundation
 import Foundation
+import Synchronization
 
 /// Process-lifetime delegate for segmented asset writers.
 ///
@@ -12,21 +13,20 @@ import Foundation
 /// independently of an individual writer prevents deferred CoreMedia
 /// notifications from targeting a deallocated writer owner.
 final class InputDeviceAVAssetWriterSegmentDelegate: NSObject, AVAssetWriterDelegate,
-  @unchecked Sendable
+  Sendable
 {
   typealias Handler = @Sendable (Data, AVAssetSegmentType, AVAssetSegmentReport?) -> Void
 
   static let shared = InputDeviceAVAssetWriterSegmentDelegate()
 
-  private let lock = NSLock()
-  private var handlers: [ObjectIdentifier: Handler] = [:]
+  private let handlers = Mutex<[ObjectIdentifier: Handler]>([:])
 
   func register(_ writer: AVAssetWriter, handler: @escaping Handler) {
-    lock.withLock { handlers[ObjectIdentifier(writer)] = handler }
+    handlers.withLock { $0[ObjectIdentifier(writer)] = handler }
   }
 
   func unregister(_ writer: AVAssetWriter) {
-    _ = lock.withLock { handlers.removeValue(forKey: ObjectIdentifier(writer)) }
+    _ = handlers.withLock { $0.removeValue(forKey: ObjectIdentifier(writer)) }
   }
 
   func assetWriter(
@@ -35,7 +35,7 @@ final class InputDeviceAVAssetWriterSegmentDelegate: NSObject, AVAssetWriterDele
     segmentType: AVAssetSegmentType,
     segmentReport: AVAssetSegmentReport?
   ) {
-    let handler = lock.withLock { handlers[ObjectIdentifier(writer)] }
+    let handler = handlers.withLock { $0[ObjectIdentifier(writer)] }
     handler?(segmentData, segmentType, segmentReport)
   }
 }
