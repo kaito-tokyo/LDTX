@@ -1343,60 +1343,65 @@ private final class RecordMediaDrainRace: Sendable {
   }
 }
 
-private final class AudioFenceWaiter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<Bool, Never>?
-  private var result: Bool?
+private final class AudioFenceWaiter: Sendable {
+  private struct State {
+    var continuation: CheckedContinuation<Bool, Never>?
+    var result: Bool?
+  }
 
-  var isFinished: Bool { lock.withLock { result != nil } }
+  private let state = Mutex(State())
+
+  var isFinished: Bool { state.withLock { $0.result != nil } }
 
   func install(_ continuation: CheckedContinuation<Bool, Never>) {
-    let result = lock.withLock { () -> Bool? in
-      if let result { return result }
-      self.continuation = continuation
+    let result = state.withLock { state -> Bool? in
+      if let result = state.result { return result }
+      state.continuation = continuation
       return nil
     }
     if let result { continuation.resume(returning: result) }
   }
 
+  /// Records the first result and resumes the waiter outside the lock.
   func finish(returning result: Bool) {
-    let continuation = lock.withLock {
-      () -> CheckedContinuation<Bool, Never>? in
-      guard self.result == nil else { return nil }
-      self.result = result
-      let continuation = self.continuation
-      self.continuation = nil
-      return continuation
+    let continuation = state.withLock { state -> CheckedContinuation<Bool, Never>? in
+      guard state.result == nil else { return nil }
+      state.result = result
+      return state.continuation.take()
     }
     continuation?.resume(returning: result)
   }
 }
 
-final class WorkspaceRecordCutBarrier: @unchecked Sendable {
-  private let lock = NSLock()
-  private var remainingArrivalCount: Int
-  private var waiters: [DispatchSemaphore] = []
-  private var isCancelled = false
+final class WorkspaceRecordCutBarrier: Sendable {
+  private struct State {
+    var remainingArrivalCount: Int
+    var waiters: [DispatchSemaphore] = []
+    var isCancelled = false
+  }
+
+  private let state: Mutex<State>
   private let action: @Sendable () -> Void
 
   init(arrivalCount: Int, action: @escaping @Sendable () -> Void) {
     precondition(arrivalCount > 0)
-    remainingArrivalCount = arrivalCount
+    state = Mutex(State(remainingArrivalCount: arrivalCount))
     self.action = action
   }
 
+  /// The last arrival runs `action` while holding the lock, so no arrival or
+  /// cancellation can interleave with it; waiters are signalled outside the lock.
   func arriveAndWait() {
-    let result = lock.withLock { () -> (DispatchSemaphore?, [DispatchSemaphore]) in
-      guard !isCancelled else { return (nil, []) }
-      remainingArrivalCount -= 1
-      if remainingArrivalCount == 0 {
+    let result = state.withLock { state -> (DispatchSemaphore?, [DispatchSemaphore]) in
+      guard !state.isCancelled else { return (nil, []) }
+      state.remainingArrivalCount -= 1
+      if state.remainingArrivalCount == 0 {
         action()
-        let waiters = self.waiters
-        self.waiters.removeAll()
-        return (nil, waiters)
+        defer { state.waiters = [] }
+        return (nil, state.waiters)
       }
       let waiter = DispatchSemaphore(value: 0)
-      waiters.append(waiter)
+      state.waiters.append(waiter)
       return (waiter, [])
     }
     for waiter in result.1 { waiter.signal() }
@@ -1404,11 +1409,10 @@ final class WorkspaceRecordCutBarrier: @unchecked Sendable {
   }
 
   func cancel() {
-    let waiters = lock.withLock {
-      isCancelled = true
-      let waiters = self.waiters
-      self.waiters.removeAll()
-      return waiters
+    let waiters = state.withLock {
+      $0.isCancelled = true
+      defer { $0.waiters = [] }
+      return $0.waiters
     }
     for waiter in waiters { waiter.signal() }
   }
@@ -1418,33 +1422,33 @@ private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
 }
 
-final class RecordFinalizationRace: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>?
-  private var timeoutTask: Task<Void, Never>?
-
-  init(continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>) {
-    self.continuation = continuation
+final class RecordFinalizationRace: Sendable {
+  private struct State {
+    var continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>?
+    var timeoutTask: Task<Void, Never>?
   }
 
-  var isFinished: Bool { lock.withLock { continuation == nil } }
+  private let state: Mutex<State>
+
+  init(continuation: CheckedContinuation<SessionRecordFinalizationResult, Never>) {
+    state = Mutex(State(continuation: continuation))
+  }
+
+  var isFinished: Bool { state.withLock { $0.continuation == nil } }
 
   func installTimeoutTask(_ task: Task<Void, Never>) {
-    let shouldCancel = lock.withLock {
-      guard continuation != nil else { return true }
-      timeoutTask = task
+    let shouldCancel = state.withLock {
+      guard $0.continuation != nil else { return true }
+      $0.timeoutTask = task
       return false
     }
     if shouldCancel { task.cancel() }
   }
 
+  /// Cancels the timeout and resumes the continuation at most once, outside the lock.
   func finish(_ result: SessionRecordFinalizationResult) {
-    let (continuation, timeoutTask) = lock.withLock {
-      let continuation = self.continuation
-      self.continuation = nil
-      let timeoutTask = self.timeoutTask
-      self.timeoutTask = nil
-      return (continuation, timeoutTask)
+    let (continuation, timeoutTask) = state.withLock {
+      ($0.continuation.take(), $0.timeoutTask.take())
     }
     timeoutTask?.cancel()
     continuation?.resume(returning: result)

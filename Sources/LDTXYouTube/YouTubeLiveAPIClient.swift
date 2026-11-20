@@ -5,6 +5,7 @@
 import Foundation
 import LDTXDash
 import LDTXYouTubeRTMPS
+import Synchronization
 
 public enum YouTubeLiveAPIError: Error, Equatable, LocalizedError {
   case invalidURL
@@ -356,13 +357,16 @@ public struct YouTubeLiveAPIClient: Sendable {
   }
 }
 
-private final class DualRTMPSResultCollector: @unchecked Sendable {
+private final class DualRTMPSResultCollector: Sendable {
   typealias StreamResult = Result<YouTubeLiveStream?, any Error>
 
-  private let lock = NSLock()
-  private var landscape: StreamResult?
-  private var portrait: StreamResult?
-  private var didComplete = false
+  private struct State {
+    var landscape: StreamResult?
+    var portrait: StreamResult?
+    var didComplete = false
+  }
+
+  private let state = Mutex(State())
   private let completion: @Sendable (StreamResult, StreamResult) -> Void
 
   init(completion: @escaping @Sendable (StreamResult, StreamResult) -> Void) {
@@ -378,15 +382,15 @@ private final class DualRTMPSResultCollector: @unchecked Sendable {
   }
 
   private func set(_ result: StreamResult, isLandscape: Bool) {
-    let ready: (StreamResult, StreamResult)? = lock.withLock {
-      if isLandscape { landscape = result } else { portrait = result }
-      guard !didComplete else { return nil }
+    let ready: (StreamResult, StreamResult)? = state.withLock { state in
+      if isLandscape { state.landscape = result } else { state.portrait = result }
+      guard !state.didComplete else { return nil }
       if case .failure = result {
-        didComplete = true
+        state.didComplete = true
         return (result, result)
       }
-      guard let landscape, let portrait else { return nil }
-      didComplete = true
+      guard let landscape = state.landscape, let portrait = state.portrait else { return nil }
+      state.didComplete = true
       return (landscape, portrait)
     }
     if let ready { completion(ready.0, ready.1) }

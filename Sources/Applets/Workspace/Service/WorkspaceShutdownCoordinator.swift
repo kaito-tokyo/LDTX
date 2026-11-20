@@ -4,6 +4,7 @@
 
 import Foundation
 import LDTXTaskQueue
+import Synchronization
 import os
 
 /// Owns the one-way transition from a live Workspace to a fully stopped one.
@@ -217,19 +218,22 @@ final class WorkspaceShutdownCoordinator: Sendable {
 
 }
 
-private final class WorkspaceVerificationRace: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<Bool?, Never>?
-  private var tasks: [Task<Void, Never>] = []
+private final class WorkspaceVerificationRace: Sendable {
+  private struct State {
+    var continuation: CheckedContinuation<Bool?, Never>?
+    var tasks: [Task<Void, Never>] = []
+  }
+
+  private let state: Mutex<State>
 
   init(continuation: CheckedContinuation<Bool?, Never>) {
-    self.continuation = continuation
+    state = Mutex(State(continuation: continuation))
   }
 
   func installTasks(_ tasks: [Task<Void, Never>]) {
-    let shouldCancel = lock.withLock {
-      guard continuation != nil else { return true }
-      self.tasks = tasks
+    let shouldCancel = state.withLock {
+      guard $0.continuation != nil else { return true }
+      $0.tasks = tasks
       return false
     }
     if shouldCancel {
@@ -237,13 +241,11 @@ private final class WorkspaceVerificationRace: @unchecked Sendable {
     }
   }
 
+  /// Cancels the tasks and resumes the continuation at most once, outside the lock.
   func finish(_ result: Bool?) {
-    let (continuation, tasks) = lock.withLock {
-      let continuation = self.continuation
-      self.continuation = nil
-      let tasks = self.tasks
-      self.tasks = []
-      return (continuation, tasks)
+    let (continuation, tasks) = state.withLock {
+      defer { $0.tasks = [] }
+      return ($0.continuation.take(), $0.tasks)
     }
     for task in tasks { task.cancel() }
     continuation?.resume(returning: result)
