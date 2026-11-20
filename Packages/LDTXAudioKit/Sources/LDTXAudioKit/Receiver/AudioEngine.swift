@@ -7,7 +7,7 @@ import CoreMedia
 import Foundation
 
 public final class AudioEngine: @unchecked Sendable {
-  public final class Subscription: @unchecked Sendable {
+  public final class Subscription: Sendable {
     fileprivate let engine: AudioEngine
     fileprivate let token: LDTXAudioID
     fileprivate init(engine: AudioEngine, token: LDTXAudioID) {
@@ -109,7 +109,7 @@ public final class AudioEngine: @unchecked Sendable {
     semaphore.wait()
   }
 
-  private final class CallbackBox: @unchecked Sendable {
+  private final class CallbackBox: Sendable {
     let handler: @Sendable (CMSampleBuffer) -> Void
     init(_ handler: @escaping @Sendable (CMSampleBuffer) -> Void) { self.handler = handler }
   }

@@ -6,6 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXCorelibs
 import LDTXMP4
+import Synchronization
 
 public enum ProgramOutputEncodingConfiguration {
   public static func make(
@@ -44,7 +45,7 @@ private struct ProgramOutputSendableSampleBuffer: @unchecked Sendable {
   let value: CMSampleBuffer
 }
 
-private enum ProgramOutputMediaEvent: @unchecked Sendable {
+private enum ProgramOutputMediaEvent: Sendable {
   case mainVideo(ProgramOutputSendableSampleBuffer)
   case mainAudioMix(ProgramOutputSendableSampleBuffer)
   case control(@Sendable () -> Void)
@@ -194,28 +195,24 @@ public final class ProgramOutputMediaHub: @unchecked Sendable {
     private enum EnqueueOutcome: Equatable { case accepted, closed, overflow }
   }
 
-  private final class DrainRace: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation:
-      CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?
+  private final class DrainRace: Sendable {
+    private let continuation:
+      Mutex<CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?>
 
     init(
       continuation: CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>
     ) {
-      self.continuation = continuation
+      self.continuation = Mutex(continuation)
     }
 
+    /// Resumes the continuation at most once, outside the lock.
     func finish(_ result: Result<Void, ProgramOutputMediaChannelError>) {
-      let continuation = lock.withLock {
-        let continuation = self.continuation
-        self.continuation = nil
-        return continuation
-      }
+      let continuation = self.continuation.withLock { $0.take() }
       continuation?.resume(returning: result)
     }
   }
 
-  private struct Handlers: @unchecked Sendable {
+  private struct Handlers: Sendable {
     var video: @Sendable (CMSampleBuffer) -> Void
     var audioMix: @Sendable (CMSampleBuffer) -> Void
     var outputWillStop: @Sendable () -> Void

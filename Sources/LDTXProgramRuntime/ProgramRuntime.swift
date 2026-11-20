@@ -74,7 +74,7 @@ public final class ProgramFrameSubscription: @unchecked Sendable {
   }
 }
 
-final class ProgramFrameDeliveryExecutor: @unchecked Sendable {
+final class ProgramFrameDeliveryExecutor: Sendable {
   let queue: DispatchQueue
 
   init(label: String = "tokyo.kaito.ldtx.ProgramRuntime.frame-consumer") {

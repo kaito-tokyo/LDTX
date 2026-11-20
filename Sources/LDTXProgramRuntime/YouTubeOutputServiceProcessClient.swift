@@ -6,6 +6,7 @@ import Foundation
 import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
 import OSLog
+import Synchronization
 
 @MainActor
 public final class YouTubeOutputServiceProcessClient {
@@ -89,7 +90,7 @@ public final class YouTubeOutputServiceProcessClient {
 }
 
 final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable {
-  private struct ResourceTask: @unchecked Sendable {
+  private struct ResourceTask: Sendable {
     let execute: @Sendable () -> Void
   }
 
@@ -682,19 +683,16 @@ protocol YouTubeOutputXPCConnection: AnyObject {
 
 extension NSXPCConnection: YouTubeOutputXPCConnection {}
 
-private final class YouTubeOutputFinishGate: @unchecked Sendable {
-  private let lock = NSLock()
-  private var completionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
+private final class YouTubeOutputFinishGate: Sendable {
+  private let completionHandler: Mutex<(@Sendable (Result<Void, any Error>) -> Void)?>
 
   init(_ completionHandler: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-    self.completionHandler = completionHandler
+    self.completionHandler = Mutex(completionHandler)
   }
 
+  /// Calls the handler at most once, outside the lock.
   func complete(_ result: Result<Void, any Error>) {
-    let handler = lock.withLock {
-      defer { completionHandler = nil }
-      return completionHandler
-    }
+    let handler = completionHandler.withLock { $0.take() }
     handler?(result)
   }
 }

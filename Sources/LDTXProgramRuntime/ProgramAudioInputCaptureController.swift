@@ -6,6 +6,7 @@ import CoreMedia
 import Foundation
 import LDTXCapture
 import LDTXCorelibs
+import Synchronization
 
 protocol ProgramAudioCaptureStreaming: AnyObject, Sendable {
   func startAudioCapture(
@@ -185,20 +186,16 @@ public final class ProgramAudioInputCaptureController: @unchecked Sendable {
   }
 }
 
-private final class ProgramAudioRestartCompletion: @unchecked Sendable {
-  private let lock = NSLock()
-  private var handler: (@Sendable (Result<Void, any Error>) -> Void)?
+private final class ProgramAudioRestartCompletion: Sendable {
+  private let handler: Mutex<(@Sendable (Result<Void, any Error>) -> Void)?>
 
   init(handler: @escaping @Sendable (Result<Void, any Error>) -> Void) {
-    self.handler = handler
+    self.handler = Mutex(handler)
   }
 
+  /// Calls the handler at most once, outside the lock.
   func finish(_ result: Result<Void, any Error>) {
-    let handler = lock.withLock {
-      let handler = self.handler
-      self.handler = nil
-      return handler
-    }
+    let handler = self.handler.withLock { $0.take() }
     handler?(result)
   }
 }

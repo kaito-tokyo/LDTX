@@ -177,7 +177,7 @@ extension CompositeProgramDefinition {
 /// The value stored here is the runtime configuration projected from the Workspace
 /// definition. Consumers borrow or copy it only while holding the OS allocated
 /// unfair lock; they do not maintain independent preview/output mailboxes.
-public final class ProgramRuntimeState: @unchecked Sendable {
+public final class ProgramRuntimeState: Sendable {
   private struct Storage: Sendable, ProgramRevisioned {
     /// Retains a stable revision before the first Program is installed.
     var opaqueRevisionID = OpaqueRevisionIDs.initial()
@@ -251,7 +251,7 @@ extension ProgramRuntimeConfiguration {
 /// Destination updates are deliberately kept out of `ProgramRuntimeState`:
 /// they alter only compositor placement and must not make the input
 /// preprocessing pipeline reconsider its camera, crop, or removal setup.
-public final class ProgramDestinationState: @unchecked Sendable {
+public final class ProgramDestinationState: Sendable {
   private struct ClockDestination: Equatable, Sendable {
     var x: Float
     var y: Float
@@ -348,7 +348,7 @@ public final class ProgramDestinationState: @unchecked Sendable {
 /// The value and its revision live under the same OS-allocated lock so render
 /// queues can read a coherent Preferences value without copying it into each
 /// Runtime when the Workspace changes it.
-public final class ProgramPreferencesState: @unchecked Sendable {
+public final class ProgramPreferencesState: Sendable {
   private struct Storage: Sendable, ProgramRevisioned {
     var opaqueRevisionID = OpaqueRevisionIDs.initial()
     var preferences = ProgramPreferences()

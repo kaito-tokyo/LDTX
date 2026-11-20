@@ -7,7 +7,7 @@ import CoreVideo
 import Foundation
 import os
 
-public final class VisionFrameSnapshot: @unchecked Sendable {
+public final class VisionFrameSnapshot: Sendable {
   public var pixelBuffer: CVPixelBuffer { box.value }
   public var image: CIImage { CIImage(cvPixelBuffer: pixelBuffer) }
 
@@ -30,7 +30,7 @@ private final class VisionPixelBufferBox: @unchecked Sendable {
 }
 
 /// A single-slot, resolution-preserving copier for OCR input.
-public final class VisionOCRFrameCopier: @unchecked Sendable {
+public final class VisionOCRFrameCopier: Sendable {
   private let isAvailable = OSAllocatedUnfairLock(initialState: true)
   private let context = CIContext(options: [.cacheIntermediates: false])
   private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!

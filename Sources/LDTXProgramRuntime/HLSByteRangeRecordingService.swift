@@ -549,7 +549,7 @@ struct AudioSideStreamWriterCallbacks: Sendable {
 }
 
 private final class InputDeviceSegmentedMP4WriterAdapter: AudioSideStreamWriting,
-  @unchecked Sendable
+  Sendable
 {
   private let writer: InputDeviceSegmentedMP4Writer
 

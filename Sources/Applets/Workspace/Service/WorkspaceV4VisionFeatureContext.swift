@@ -47,7 +47,7 @@ public struct WorkspaceV4VisionFeatureContext {
   }
 }
 
-public struct WorkspaceVisionAnalysisFrame: @unchecked Sendable {
+public struct WorkspaceVisionAnalysisFrame: Sendable {
   public let image: CIImage
   public init(image: CIImage) { self.image = image }
 }

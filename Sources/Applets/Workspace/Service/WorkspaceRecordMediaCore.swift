@@ -6,6 +6,7 @@ import AudioToolbox
 import CoreMedia
 import Foundation
 import LDTXProgramRuntime
+import Synchronization
 
 protocol SessionRecordServicing: AnyObject, Sendable {
   var packageDirectory: URL { get }
@@ -55,7 +56,7 @@ extension SessionRecordServicing {
 extension SessionRecordService: SessionRecordServicing {}
 
 final class WorkspaceRecordMediaCore: @unchecked Sendable {
-  struct InputAudioCallback: @unchecked Sendable {
+  struct InputAudioCallback: Sendable {
     fileprivate let service: any SessionRecordServicing
   }
 
@@ -113,7 +114,7 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     var didRequestCommit = false
   }
 
-  private struct CommittedAudioBoundary: @unchecked Sendable {
+  private struct CommittedAudioBoundary: Sendable {
     let previous: any SessionRecordServicing
     let replacement: any SessionRecordServicing
     let landscapeStart: CMTime?
@@ -1325,23 +1326,19 @@ private enum WorkspaceRecordMediaCoreError: Error {
   case mainAudioFormatMissing
 }
 
-private final class RecordMediaDrainRace: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation:
-    CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?
+private final class RecordMediaDrainRace: Sendable {
+  private let continuation:
+    Mutex<CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>?>
 
   init(
     continuation: CheckedContinuation<Result<Void, ProgramOutputMediaChannelError>, Never>
   ) {
-    self.continuation = continuation
+    self.continuation = Mutex(continuation)
   }
 
+  /// Resumes the continuation at most once, outside the lock.
   func finish(_ result: Result<Void, ProgramOutputMediaChannelError>) {
-    let continuation = lock.withLock {
-      let continuation = self.continuation
-      self.continuation = nil
-      return continuation
-    }
+    let continuation = self.continuation.withLock { $0.take() }
     continuation?.resume(returning: result)
   }
 }
