@@ -8,7 +8,7 @@ import Metal
 import QuartzCore
 
 /// A completed preview render. Storage is immutable and independent of the drawable's lifetime.
-public struct PreviewAccessibilityImage: @unchecked Sendable {
+public struct PreviewAccessibilityImage: Sendable {
   public let image: CGImage
 
   public init(image: CGImage) { self.image = image }

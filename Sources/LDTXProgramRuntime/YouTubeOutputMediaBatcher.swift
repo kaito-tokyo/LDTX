@@ -84,7 +84,7 @@ final class YouTubeOutputMediaBatcher: @unchecked Sendable {
     }
   }
 
-  private struct ResourceTask: @unchecked Sendable {
+  private struct ResourceTask: Sendable {
     let execute: @Sendable () -> Void
   }
 

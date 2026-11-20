@@ -153,7 +153,7 @@ public struct RecordingRemuxer: Sendable {
 
 }
 
-private struct RemuxTrackSource: @unchecked Sendable {
+private struct RemuxTrackSource: Sendable {
   var asset: AVAsset
   var track: AVAssetTrack
   var mediaType: AVMediaType

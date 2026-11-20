@@ -5,6 +5,7 @@
 import Foundation
 import LDTXCorelibs
 import Network
+import Synchronization
 
 protocol RTMPTransport: Sendable {
   func connect(host: String, port: UInt16) async throws
@@ -77,12 +78,11 @@ actor NetworkRTMPTransport: RTMPTransport {
   }
 }
 
-private final class ContinuationGate: @unchecked Sendable {
-  private let lock = NSLock()
-  private var continuation: CheckedContinuation<Void, any Error>?
+private final class ContinuationGate: Sendable {
+  private let continuation: Mutex<CheckedContinuation<Void, any Error>?>
 
   init(_ continuation: CheckedContinuation<Void, any Error>) {
-    self.continuation = continuation
+    self.continuation = Mutex(continuation)
   }
 
   func resume(returning value: Void) {
@@ -93,11 +93,8 @@ private final class ContinuationGate: @unchecked Sendable {
     take()?.resume(throwing: error)
   }
 
+  /// Takes the continuation at most once; callers resume it outside the lock.
   private func take() -> CheckedContinuation<Void, any Error>? {
-    lock.lock()
-    defer { lock.unlock() }
-    let value = continuation
-    continuation = nil
-    return value
+    continuation.withLock { $0.take() }
   }
 }

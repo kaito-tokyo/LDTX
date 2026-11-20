@@ -12,7 +12,7 @@ import OSLog
 private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-service")
 
 private final class YouTubeOutputServiceProcess: @unchecked Sendable {
-  private struct ResourceTask: @unchecked Sendable {
+  private struct ResourceTask: Sendable {
     let execute: @Sendable () -> Void
   }
 

@@ -3,20 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import Synchronization
 
 public struct TaskQueueStopped: Error, Equatable, Sendable {
   public init() {}
 }
 
 /// A read-only, one-shot cooperative stop signal passed into every queued task.
-public final class StopToken: @unchecked Sendable {
+public final class StopToken: Sendable {
   public static let neverStopped = StopToken()
 
-  private let lock = NSLock()
-  private var stopRequested = false
+  private let stopRequested = Mutex(false)
 
   public var isStopRequested: Bool {
-    lock.withLock { stopRequested }
+    stopRequested.withLock { $0 }
   }
 
   public func check() throws {
@@ -24,7 +24,7 @@ public final class StopToken: @unchecked Sendable {
   }
 
   func requestStop() {
-    lock.withLock { stopRequested = true }
+    stopRequested.withLock { $0 = true }
   }
 }
 
@@ -182,20 +182,16 @@ public final class EventTaskQueue: @unchecked Sendable {
   }
 }
 
-final class OneShotCompletion: @unchecked Sendable {
-  private let lock = NSLock()
-  private var body: (@Sendable () -> Void)?
+final class OneShotCompletion: Sendable {
+  private let body: Mutex<(@Sendable () -> Void)?>
 
   init(_ body: @escaping @Sendable () -> Void) {
-    self.body = body
+    self.body = Mutex(body)
   }
 
+  /// Runs the body at most once, outside the lock.
   func callAsFunction() {
-    let body = lock.withLock {
-      let body = self.body
-      self.body = nil
-      return body
-    }
+    let body = self.body.withLock { $0.take() }
     body?()
   }
 }

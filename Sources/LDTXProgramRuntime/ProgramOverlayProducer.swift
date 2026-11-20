@@ -7,7 +7,7 @@ import Metal
 import OSLog
 
 /// Owns overlay generation independently of frame rendering and its consumers.
-public final class ProgramOverlayProducer: @unchecked Sendable {
+public final class ProgramOverlayProducer: Sendable {
   public let textures = ProgramOverlayTextureStore()
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.overlay-producer", qos: .userInitiated)
   private final class State: @unchecked Sendable {

@@ -119,7 +119,7 @@ public struct SessionRecordAudioTrack: Sendable, Equatable {
   }
 }
 
-public enum SessionRecordFinalizationResult: @unchecked Sendable {
+public enum SessionRecordFinalizationResult: Sendable {
   case finalized
   case preservedIncomplete
   case failed(any Error)

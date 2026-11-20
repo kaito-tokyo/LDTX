@@ -994,7 +994,7 @@ public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
 
 }
 
-private struct WorkspaceAudioSubscriber: @unchecked Sendable {
+private struct WorkspaceAudioSubscriber: Sendable {
   var failureHandler: @Sendable (CaptureSessionRuntimeFailure) -> Void
   var sampleHandler: @Sendable (CMSampleBuffer) -> Void
 }

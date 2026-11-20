@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import Synchronization
 
 public struct BackgroundTaskKey: Hashable, Sendable {
   public let rawValue: String
@@ -119,18 +120,14 @@ public final class BackgroundTaskQueue: @unchecked Sendable {
   }
 }
 
-private final class BackgroundOneShotCompletion: @unchecked Sendable {
-  private let lock = NSLock()
-  private var body: (@Sendable () -> Void)?
+private final class BackgroundOneShotCompletion: Sendable {
+  private let body: Mutex<(@Sendable () -> Void)?>
 
-  init(_ body: @escaping @Sendable () -> Void) { self.body = body }
+  init(_ body: @escaping @Sendable () -> Void) { self.body = Mutex(body) }
 
+  /// Runs the body at most once, outside the lock.
   func callAsFunction() {
-    let body = lock.withLock {
-      let body = self.body
-      self.body = nil
-      return body
-    }
+    let body = self.body.withLock { $0.take() }
     body?()
   }
 }

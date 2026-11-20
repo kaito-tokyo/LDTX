@@ -35,7 +35,7 @@ protocol CameraCaptureSessionManaging: Sendable {
 
 extension CaptureSessionManager: CameraCaptureSessionManaging {}
 
-public final class CameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
+public final class CameraCaptureService: CameraCaptureStreaming, Sendable {
   public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
   public typealias ConfigurationHandler = @Sendable (String) -> Void
   public typealias FailureHandler = @Sendable (CaptureSessionRuntimeFailure) -> Void

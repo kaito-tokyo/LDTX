@@ -33,14 +33,14 @@ public final class ProgramOutputSharedH264Service: @unchecked Sendable {
   public static let defaultSlotCount = 8
   public static let defaultSlotSize = 16 * 1_024 * 1_024
 
-  struct StoredBatch: @unchecked Sendable {
+  struct StoredBatch: Sendable {
     var slices: [YouTubeOutputSharedMemorySlice]
     fileprivate let lease: Lease
 
     func release() { lease.release() }
   }
 
-  fileprivate final class Lease: @unchecked Sendable {
+  fileprivate final class Lease: Sendable {
     private let releaseBody: @Sendable () -> Void
 
     init(release: @escaping @Sendable () -> Void) { releaseBody = release }
@@ -50,7 +50,7 @@ public final class ProgramOutputSharedH264Service: @unchecked Sendable {
     deinit { releaseBody() }
   }
 
-  private enum ResourceTask: @unchecked Sendable {
+  private enum ResourceTask: Sendable {
     case store([Data], CheckedContinuation<Result<StoredBatch, Error>, Never>)
     case release(slot: Int, generation: UInt64)
   }
