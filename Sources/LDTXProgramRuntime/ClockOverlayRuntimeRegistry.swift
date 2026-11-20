@@ -10,6 +10,9 @@ import Metal
 import OSLog
 
 /// Confined to its producer queue; never synchronized from the frame-render loop.
+// @unchecked Sendable: `entriesByStepName` and `textureStore` are touched only on the
+// `ProgramOverlayProducer` serial queue that owns this registry (its sole user), `draining` is a
+// thread-safe `DispatchGroup`, and the other members are immutable `let`s.
 final class ClockOverlayRuntimeRegistry: @unchecked Sendable {
   private struct Entry {
     var runtime: ClockOverlayRuntime

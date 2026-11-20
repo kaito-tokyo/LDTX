@@ -5,6 +5,8 @@
 import Foundation
 
 /// Keeps asynchronous camera mutations in submission order, including permission waits.
+// @unchecked Sendable: `pending` and `running` are read and written only on the serial `queue`;
+// `enqueue` and each operation's completion closure hop onto `queue` before touching them.
 final class CaptureOperationQueue: @unchecked Sendable {
   typealias Operation = @Sendable (@escaping @Sendable () -> Void) -> Void
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureOperationQueue")

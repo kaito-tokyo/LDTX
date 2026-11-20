@@ -381,6 +381,9 @@ public final class ProgramPreferencesState: Sendable {
   }
 }
 
+// @unchecked Sendable: `lock` guards all mutable state except `framePacer`, which is touched only
+// on `renderQueue`, and the standalone renderer is used only on `renderQueue`; the other members
+// are immutable `let`s.
 public final class ProgramPreviewController: ObservableObject, @unchecked Sendable {
   private enum Backend {
     case runtime(ProgramRuntime)

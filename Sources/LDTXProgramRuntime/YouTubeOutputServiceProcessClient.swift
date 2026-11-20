@@ -89,6 +89,9 @@ public final class YouTubeOutputServiceProcessClient {
   }
 }
 
+// @unchecked Sendable: All mutable state is read and written only inside tasks posted to
+// `resourceQueue` through `post`, which runs them one at a time; the XPC, timer and reply callbacks
+// only hop onto it with `post`.
 final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable {
   private struct ResourceTask: Sendable {
     let execute: @Sendable () -> Void
@@ -697,6 +700,8 @@ private final class YouTubeOutputFinishGate: Sendable {
   }
 }
 
+// @unchecked Sendable: `value` is an immutable `let`, and `DispatchWorkItem.cancel()` is safe to
+// call from any thread.
 private final class SendableDispatchWorkItem: @unchecked Sendable {
   let value: DispatchWorkItem
   init(block: @escaping @Sendable () -> Void) { value = DispatchWorkItem(block: block) }
@@ -752,6 +757,8 @@ private final class YouTubeOutputClientCallback: NSObject, LDTXYouTubeOutputServ
   }
 }
 
+// @unchecked Sendable: `handler` is an immutable XPC reply block, and each reply is sent at most
+// once from the connection's `resourceQueue` or the XPC callback that created it.
 private final class YouTubeOutputDataReply: @unchecked Sendable {
   private let handler: (Data) -> Void
   init(_ handler: @escaping (Data) -> Void) { self.handler = handler }

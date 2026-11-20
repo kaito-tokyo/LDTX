@@ -18,6 +18,9 @@ import os
   import Metal
 #endif
 
+// @unchecked Sendable: A frame is a value that is copied between threads and never mutated in
+// place, and its `CVPixelBuffer` is not modified after the frame is published; consumers only
+// read it.
 public struct ProgramFrame: @unchecked Sendable {
   public let frameID: UInt64
   public let pixelBuffer: CVPixelBuffer
@@ -84,6 +87,8 @@ final class ProgramFrameDeliveryExecutor: Sendable {
   }
 }
 
+// @unchecked Sendable: `state` is read and written only inside `lock`, and the non-Sendable
+// `handler` closure is invoked only on the serial `executor.queue`.
 final class ProgramFrameMailbox: @unchecked Sendable {
   private struct State {
     var isOpen = true
@@ -214,6 +219,9 @@ final class ProgramFrameMailbox: @unchecked Sendable {
   }
 #endif
 
+// @unchecked Sendable: `lock` guards all mutable state except `framePacer`, which is touched only
+// on `renderQueue`, and `renderer` is used only on `renderQueue`; the other members are immutable
+// `let`s.
 public final class ProgramRuntime: @unchecked Sendable {
   public typealias FrameHandler = (ProgramFrame) -> Void
   private let lock = NSLock()
@@ -504,6 +512,10 @@ func compositeApplyingVideoLayerVisibility(
 }
 
 /// Mutable rendering state confined to the owning runtime's render queue.
+// @unchecked Sendable: All mutable state is confined to one serial render queue: the owner
+// (`ProgramRuntime`, `ProgramPreviewController` or `VideoComponentFrameRenderer`) calls
+// `beginSession`, `render` and `endSession` only on its own queue; `programPreferencesState` is a
+// synchronized state object.
 final class ActiveProgramRenderer: @unchecked Sendable {
   private let programPreferencesState: ProgramPreferencesState
   private var activeSessionID: Int?

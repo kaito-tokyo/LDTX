@@ -6,6 +6,11 @@
 import CoreMedia
 import Foundation
 
+// @unchecked Sendable: Every mutable member (`pending`, `pendingAAC`, `nextSegmentNumber`,
+// `didStartSession`, `isFinishing`, `storedFailure`, `finishHandler` and the non-thread-safe
+// `pcmNormalizer`, `aacEncoder` and `recordingClock`) and the `AVAssetWriter` are used only on the
+// serial `queue`: `append`, `finish`, `cancel(with:)` and the segment delegate callback hop onto it
+// with `queue.async` (or `queue.sync`), and all other members are `let`s set in `init`.
 public final class InputDeviceSegmentedMP4Writer: NSObject, AVAssetWriterDelegate,
   @unchecked Sendable
 {
@@ -427,6 +432,8 @@ public enum InputDeviceSegmentedMP4WriterError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: The PCM `CMSampleBuffer` is handed once from `append(_:)` to `queue`, where
+// it is only read (normalized into a new buffer); callers do not mutate it after handing it over.
 private struct InputDeviceSendablePCMSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
 }

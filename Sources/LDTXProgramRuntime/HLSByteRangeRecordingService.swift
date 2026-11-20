@@ -68,6 +68,9 @@ struct HLSByteRangeRecordingPackageConfiguration: Sendable {
   }
 }
 
+// @unchecked Sendable: The mutable `configuration` is read and written only inside
+// `configurationLock`; every other member is an immutable `let` and the track recorders are
+// themselves lock-protected.
 final class HLSByteRangeRecordingPackage: @unchecked Sendable {
   static let fragmentedMainMediaFileName = "main.fragmented.mp4"
   static let landscapeMediaFileName = "landscape.fragmented.mp4"
@@ -212,6 +215,9 @@ struct MP4TrackSnapshot: Equatable, Sendable {
   var audioPresentationStartNanoseconds: Int64?
 }
 
+// @unchecked Sendable: All mutable state (byte offsets, segments, presentation starts,
+// `isFinished`, `storedFailure`) and every use of `playlist` and the media file happen only inside
+// `lock`; the other members are immutable `let`s.
 final class HLSByteRangeTrackRecorder: @unchecked Sendable {
   private let mediaURL: URL
   private let mediaFileName: String
@@ -591,6 +597,9 @@ private final class InputDeviceSegmentedMP4WriterAdapter: AudioSideStreamWriting
   }
 }
 
+// @unchecked Sendable: `writer`, `receivedSample`, `state` and `finishHandlers` are read and
+// written only on the serial `queue`, and the other members are immutable `let`s whose types are
+// themselves thread-safe.
 final class AudioSideStreamRecorder: @unchecked Sendable {
   typealias WriterFactory =
     @Sendable (
@@ -743,6 +752,8 @@ final class AudioSideStreamRecorder: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: The `CMSampleBuffer` is never mutated after it is created and is handed once
+// from the capture path to the recorder `queue`, where it is only read.
 private struct SendableAudioSideStreamSample: @unchecked Sendable {
   let value: CMSampleBuffer
 }
@@ -761,6 +772,9 @@ enum HLSByteRangeRecordingPackageError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: All mutable state (`write`, `isFinishing`, `storedFailure`,
+// `failureReported`, `isFinished`) is read and written only inside `lock`; segment writes and
+// failure reports run serially on `queue` and never while `lock` is held.
 final class AudioSideStreamSegmentPipeline: @unchecked Sendable {
   typealias Write = @Sendable (SegmentedMP4Segment) throws -> Void
 

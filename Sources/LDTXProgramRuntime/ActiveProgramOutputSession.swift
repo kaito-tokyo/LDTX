@@ -455,6 +455,8 @@ public final class ActiveProgramOutputSession {
   }
 }
 
+// @unchecked Sendable: All mutable state (`activeRuntime`, `pendingPreviousRuntime`,
+// `pendingRuntime`) is read and written only inside `lock`.
 private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
   struct PreviousRuntime {
     let runtime: ProgramRuntime
@@ -525,6 +527,9 @@ private final class ProgramOutputRuntimeFrameGate: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: All mutable state (`timeline`, `heldFrame`, `lastVideoPixelBuffer`,
+// `holdCount`) is read and written only inside `stateLock`, and the pixel buffers it holds are
+// never modified after being published; the remaining members are immutable `let`s.
 private final class ProgramOutputVideoFrameSink: @unchecked Sendable {
   private let encoder: H264VideoEncoder
   private let audioMixer: any ProgramMainAudioMixing

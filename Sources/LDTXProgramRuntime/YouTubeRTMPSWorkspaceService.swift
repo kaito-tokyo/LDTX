@@ -37,9 +37,14 @@ public enum YouTubeRTMPSWorkspaceServiceError: Error, LocalizedError, Equatable 
 /// Converts and serially delivers the configured Workspace Canvas outputs to
 /// YouTube RTMPS. The service starts only after receiving H.264 and PCM
 /// formats for every configured Canvas.
+// @unchecked Sendable: The mutable state (`tail`, `acceptsMedia`, `queuedMediaCount`) is read and
+// written only inside `lock`, and all other stored properties are immutable; media processing
+// happens in the `Core` actor.
 public final class YouTubeRTMPSWorkspaceService: @unchecked Sendable {
   public typealias FailureHandler = @Sendable (any Error) -> Void
 
+  // @unchecked Sendable: The `CMSampleBuffer` is only read, and is handed once to the `Core` actor
+  // through a queued task chained on `tail`.
   private struct SendableSampleBuffer: @unchecked Sendable {
     let value: CMSampleBuffer
   }

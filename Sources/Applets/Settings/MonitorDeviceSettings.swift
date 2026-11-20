@@ -78,6 +78,9 @@ final class MonitorDeviceSettingsModel {
   }
 }
 
+// @unchecked Sendable: Every property is assigned in `init` and afterwards used only by `deinit`,
+// which unregisters the listener; the HAL listener runs on `queue` and only calls the `@Sendable`
+// `onChange` closure.
 private final class MonitorDeviceObservation: @unchecked Sendable {
   private var address = AudioObjectPropertyAddress(
     mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal,

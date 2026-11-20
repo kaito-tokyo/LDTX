@@ -20,6 +20,9 @@ protocol ProgramAudioCaptureStreaming: AnyObject, Sendable {
 
 /// Owns only Workspace capture subscriptions; Hardware ownership stays
 /// in `WorkspaceCaptureSessionCoordinator`.
+// @unchecked Sendable: `subscriptions`, `generation` and `restartCompletion` are read and written
+// only inside `lock`, and callbacks re-check `generation` under `lock` before acting; the
+// coordinator is an immutable `let`.
 public final class ProgramAudioInputCaptureController: @unchecked Sendable {
   public typealias SampleHandler =
     @Sendable (

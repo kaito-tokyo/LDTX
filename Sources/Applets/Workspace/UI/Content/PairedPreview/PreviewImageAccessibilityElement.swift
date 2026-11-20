@@ -5,6 +5,9 @@ import AppKit
 import LDTXWorkspaceAppletInterface
 
 // Legacy AX callbacks are serviced synchronously on AppKit's main thread.
+// @unchecked Sendable: The value never actually crosses threads: AppKit invokes the legacy AX
+// callbacks synchronously on the main thread, and the wrapper only carries it into and out of
+// `MainActor.assumeIsolated`.
 private struct AXCallbackValue: @unchecked Sendable { let value: Any? }
 
 /// The string-based AXImageData contract is implemented by WebKit, but is not declared

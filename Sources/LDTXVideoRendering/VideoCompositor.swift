@@ -75,6 +75,11 @@ public enum VideoCompositorError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: Every Metal and CoreVideo member is an immutable `let`; the only mutable
+// state, `outputTextureCache` and `outputTextureCacheOrder`, is touched only by the
+// `render(_:into:)` and `renderCommands(_:into:)` overloads, which must not run concurrently on one
+// instance (the sole production caller, ProgramRuntime, uses `renderCommands(_:)`, which bypasses
+// that cache).
 public final class VideoCompositor: @unchecked Sendable {
   private enum SourceRange: UInt32 {
     case video = 1

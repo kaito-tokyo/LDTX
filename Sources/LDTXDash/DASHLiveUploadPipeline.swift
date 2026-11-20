@@ -41,6 +41,10 @@ public enum DASHLiveUploadPipelineError: Error, Equatable, LocalizedError {
   }
 }
 
+// @unchecked Sendable: All mutable state (`baseManifestConfiguration`, `uploadedManifest`,
+// `latestInitializationSegment`, `segmentTimeline`, `pendingUploads`, `isUploading`) is read and
+// written only on the serial `queue`: public entry points use `queue.async` and every upload
+// completion hops back onto it.
 public final class DASHLiveUploadPipeline: @unchecked Sendable {
   private struct PendingUpload: Sendable {
     var segment: SegmentedMP4Segment

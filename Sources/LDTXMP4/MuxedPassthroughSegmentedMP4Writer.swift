@@ -34,6 +34,11 @@ public enum MuxedPassthroughSegmentedMP4WriterError: Error, LocalizedError {
 }
 
 /// Muxes pre-encoded H.264 and AAC into fragmented MP4 without rewriting boxes.
+// @unchecked Sendable: Every mutable member (`pending`, `nextSegmentNumber`, `segmentStartTime`,
+// `latestVideoTime`, `latestAudioTime`, `hasAppendedSample`, `isFinishing`, `storedFailure`,
+// `finishHandler`) and the `AVAssetWriter` are used only on the serial `queue`:
+// `append(video:audio:)`, `finish` and the segment delegate callback hop onto it with `queue.async`
+// (or `queue.sync`), and all other members are `let`s set in `init`.
 public final class MuxedPassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDelegate,
   @unchecked Sendable
 {
@@ -405,6 +410,9 @@ struct MuxedPassthroughSegmentTiming: Equatable, Sendable {
   var durationSeconds: Double
 }
 
+// @unchecked Sendable: The compressed `CMSampleBuffer` arrays are handed once from
+// `append(video:audio:)` to `queue`, where they are only read; callers do not mutate them after
+// handing them over.
 private struct SendableMuxedSamples: @unchecked Sendable {
   var video: [CMSampleBuffer]
   var audio: [CMSampleBuffer]

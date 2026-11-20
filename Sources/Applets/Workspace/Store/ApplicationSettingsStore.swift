@@ -6,6 +6,8 @@ import Foundation
 import LDTXWorkspaceAppletModel
 
 /// Persists application-wide, non-secret Settings in UserDefaults.
+// @unchecked Sendable: The only stored property is an immutable `UserDefaults`, which is safe to
+// use from multiple threads, and the struct holds no other state.
 public struct ApplicationSettingsStore: @unchecked Sendable {
   public static let applicationOutputPreferencesKey =
     "tokyo.kaito.ldtx.application-output-preferences.v2"

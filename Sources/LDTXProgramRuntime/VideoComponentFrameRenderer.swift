@@ -6,6 +6,8 @@ import LDTXInternalProtocols
 
 /// On-demand rendering using the same component pipeline as Program output.
 /// Renderer state is confined to this serial queue, independently of preview consumers.
+// @unchecked Sendable: `renderers` and every `ActiveProgramRenderer` in it are created, used and
+// ended only on the serial `queue`; every other stored property is an immutable `let`.
 public final class VideoComponentFrameRenderer: @unchecked Sendable {
   private let queue = DispatchQueue(
     label: "tokyo.kaito.ldtx.component-analysis", qos: .userInitiated)

@@ -59,6 +59,8 @@ public enum InputDeviceHLSPlaylistError: Error, LocalizedError {
 /// The playlist is valid as an EVENT playlist while recording. `finish()` makes
 /// it a VOD playlist and appends `EXT-X-ENDLIST` after all segment bytes have
 /// been committed to the media resource.
+// @unchecked Sendable: All mutable state (`initialization`, `segments`, `isFinished`) and every
+// write of the playlist file happen only inside `lock.withLock`; the other members are immutable.
 public final class InputDeviceHLSPlaylist: @unchecked Sendable {
   private let lock = NSLock()
   private let playlistURL: URL

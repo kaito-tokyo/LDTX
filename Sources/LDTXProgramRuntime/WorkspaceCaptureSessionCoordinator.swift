@@ -9,6 +9,9 @@ import LDTXCapture
 import LDTXCorelibs
 import OSLog
 
+// @unchecked Sendable: All mutable state, including the capture and audio-capture registries, the
+// counters and the stop handlers, is read and written only while holding the recursive `stateLock`,
+// and the capture objects it owns are never exposed outside it.
 public final class WorkspaceCaptureSessionCoordinator: @unchecked Sendable {
   public let audioEngine: WorkspaceAudioEngine
 
@@ -999,6 +1002,8 @@ private struct WorkspaceAudioSubscriber: Sendable {
   var sampleHandler: @Sendable (CMSampleBuffer) -> Void
 }
 
+// @unchecked Sendable: `deviceID` and `service` are immutable, and every mutable property is
+// accessed only while holding the owning `WorkspaceCaptureSessionCoordinator.stateLock`.
 private final class WorkspaceAudioCapture: @unchecked Sendable {
   typealias StartCompletion = @Sendable (Result<Void, any Error>) -> Void
 
@@ -1020,6 +1025,8 @@ private final class WorkspaceAudioCapture: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: The struct is immutable, and the `CVPixelBuffer` is a captured frame that
+// consumers only read (locking it read-only and copying) and never mutate.
 public struct WorkspaceVisionFrame: @unchecked Sendable {
   public let pixelBuffer: CVPixelBuffer
   public let presentationTime: CMTime
@@ -1032,6 +1039,9 @@ public struct WorkspaceVisionFrame: @unchecked Sendable {
 
 /// Mutable capture state. Access is serialized by its owning coordinator's
 /// `stateLock`; the instance is never exposed outside that owner.
+// @unchecked Sendable: Every mutable property is accessed only while holding the owning
+// coordinator's `stateLock`; `request` is assigned only in `init`, and `captureService` is an
+// immutable `let`.
 private final class WorkspaceCaptureSessionCapture: @unchecked Sendable {
   var request: WorkspaceCaptureSessionRequest
   let captureService: any CameraCaptureStreaming
@@ -1073,6 +1083,8 @@ struct WorkspaceCaptureSessionRequest: Hashable, Sendable {
   }
 }
 
+// @unchecked Sendable: The struct is immutable, and the `CVPixelBuffer` is a captured frame that
+// consumers only read (locking it read-only and copying) and never mutate.
 public struct CapturedVideoFrame: @unchecked Sendable {
   public let pixelBuffer: CVPixelBuffer
   public let sourcePresentationTime: CMTime

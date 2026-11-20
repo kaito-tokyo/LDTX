@@ -153,11 +153,18 @@ struct SessionRecordPendingVideoWindow {
 ///
 /// Capture sessions and subscriptions are owned outside this service. The
 /// service is deliberately cheap to replace at a Session Record Cut boundary.
+// @unchecked Sendable: Media-path state (`package`, the recording pipelines, the pending windows,
+// `sideRecordersByTrackID`, `timelineNormalizer`, `videoCodecString`) is touched only on
+// `mediaQueue`, and the lifecycle flags other threads read (`state`, `acceptedFirstVideo`,
+// `recordingClockOrigin`, the stop options) are guarded by `stateLock`. `stopHandlers` and
+// `finalizationResult` are touched only from `@MainActor` methods.
 public final class SessionRecordService: @unchecked Sendable {
   private struct PendingFirstVideo {
     let sampleBuffer: CMSampleBuffer
     let audioFormatDescription: CMAudioFormatDescription?
   }
+  // @unchecked Sendable: The `CMSampleBuffer` is only read, and is handed synchronously to a
+  // `mediaQueue.sync` block that finishes before the caller returns.
   private struct SendableSampleBuffer: @unchecked Sendable {
     let value: CMSampleBuffer
   }
@@ -939,6 +946,8 @@ final class SessionRecordPendingAudioWindow {
   }
 }
 
+// @unchecked Sendable: All mutable state is read and written only while holding `lock`, including
+// the `output` callbacks that drain pending samples.
 final class SessionRecordInputWindow: @unchecked Sendable {
   private struct PendingSample {
     var sampleBuffer: CMSampleBuffer

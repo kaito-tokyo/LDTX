@@ -32,6 +32,9 @@ public enum YouTubeOutputServiceProcessProbe {
   }
 }
 
+// @unchecked Sendable: Every property is an immutable `let` (`NSXPCConnection` is thread-safe)
+// except `isComplete`, which is read and written only inside `lock`, so `completionHandler` runs at
+// most once whichever XPC callback arrives first.
 private final class YouTubeOutputServiceProcessProbeOperation: NSObject, @unchecked Sendable {
   private let connection = NSXPCConnection(
     serviceName: LDTXYouTubeOutputServiceProcessInterfaces.serviceName)

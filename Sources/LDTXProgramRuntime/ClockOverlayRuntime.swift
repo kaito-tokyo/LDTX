@@ -72,6 +72,9 @@ enum ClockOverlayTextureError: Error, Equatable {
 ///
 /// Color is always RGB565. Per-pixel alpha is represented separately and is
 /// allocated only when the component needs it.
+// @unchecked Sendable: Both stored properties are immutable `let`s, and the Metal textures are
+// written only by the renderer before the `ClockOverlayTexture` is published; afterwards they are
+// only sampled.
 final class ClockOverlayTexture: @unchecked Sendable {
   let colorTexture: MTLTexture
   let alphaTexture: MTLTexture?
@@ -132,6 +135,9 @@ protocol ClockOverlayRendering: Sendable {
 /// previous texture and successful request intact, so the next notification or
 /// configuration update retries it. Dynamic Text failures schedule a one-second
 /// retry instead of polling at the canvas frame rate.
+// @unchecked Sendable: All mutable state lives in `state` and is read and written only inside
+// `lock`; the other members are immutable `let`s, and rendering runs on `rendererQueue` without
+// holding `lock`.
 final class ClockOverlayRuntime: @unchecked Sendable {
   typealias OverlayDidChange = @Sendable (ClockOverlayTexture) -> Void
 

@@ -5,6 +5,8 @@ import Foundation
 import LDTXVideoComposition
 
 /// The compositor reads immutable completed textures. Only the independent producer publishes.
+// @unchecked Sendable: `entries` is read and written only inside `lock`, and the published
+// `ClockOverlayTexture` values are immutable once stored.
 public final class ProgramOverlayTextureStore: @unchecked Sendable {
   private struct Entry {
     var generation: UUID

@@ -38,6 +38,9 @@ public enum OutputCanvasResourceManagerError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: `pixelBufferPools` is read and written only while holding `lock` (pool
+// creation runs outside it and the first pool stored wins); `CVPixelBufferPool` itself is
+// thread-safe and the other members are immutable.
 public final class OutputCanvasResourceManager: @unchecked Sendable {
   public struct PixelBufferRequest: Hashable, Sendable {
     public var width: Int

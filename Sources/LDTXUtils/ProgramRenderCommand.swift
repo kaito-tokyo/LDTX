@@ -14,6 +14,9 @@ struct CapturedPixelBuffer {
 
 /// Serializes conversion and publishes owned, immutable buffers. The pool cannot
 /// reuse a buffer while a consumer or GPU command still retains it.
+// @unchecked Sendable: All mutable state, including the non-thread-safe `normalizer`, is read and
+// written only while holding `condition`; the published `CVPixelBuffer`s are owned copies that are
+// never mutated after publication.
 final class ProgramRenderCameraFrameStore: @unchecked Sendable {
   private let condition = NSCondition()
   private let normalizer: CapturedInputNormalizer

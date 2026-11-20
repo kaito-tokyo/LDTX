@@ -24,6 +24,9 @@ public final class VisionFrameSnapshot: Sendable {
   deinit { releaseBuffer(box) }
 }
 
+// @unchecked Sendable: The box holds a single immutable `let`; the `CVPixelBuffer` is fully
+// rendered before the snapshot is published, and `VisionOCRFrameCopier` does not reuse the slot
+// until the snapshot is released.
 private final class VisionPixelBufferBox: @unchecked Sendable {
   let value: CVPixelBuffer
   init(_ value: CVPixelBuffer) { self.value = value }

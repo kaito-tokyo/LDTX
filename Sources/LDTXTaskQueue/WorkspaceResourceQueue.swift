@@ -17,6 +17,9 @@ public struct WorkspaceResourceKey: Hashable, Sendable {
 /// Resource preparation never blocks Workspace or Session startup. Shutdown
 /// rejects new work, drains every accepted operation without interruption, and
 /// then runs registered cleanup operations exactly once.
+// @unchecked Sendable: All mutable state (`state`, `pending`, `runningKey`, the key sets, cleanup
+// entries and `finishWaiters`) is read and written only on the serial `controlQueue`; operations
+// run in tasks that hop back onto `controlQueue` when done.
 public final class WorkspaceResourceQueue: @unchecked Sendable {
   public typealias Operation = @Sendable () async -> Void
 

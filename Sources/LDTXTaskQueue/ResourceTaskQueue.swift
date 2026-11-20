@@ -9,6 +9,9 @@ import Foundation
 /// The generic `Task` is the resource's command vocabulary. Callers may only
 /// submit values from that vocabulary; the executor and its private scheduling
 /// queue are implementation details of the resource owner.
+// @unchecked Sendable: All mutable state (`state`, `pending`, `isRunning`, `finishWaiters`) is read
+// and written only on the serial `controlQueue`, and commands are `Sendable`; the executor runs in
+// a task that hops back onto `controlQueue` when done.
 public final class ResourceTaskQueue<Task: Sendable>: @unchecked Sendable {
   public typealias Executor =
     @Sendable (_ task: Task, _ stopToken: StopToken) async -> Void

@@ -26,6 +26,9 @@ public enum SessionTaskSubmission: Equatable, Sendable {
 /// `finish` permanently closes submissions, completes work accepted before the
 /// call, then executes the injected Finalize task exactly once. The queue does
 /// not know what the tasks or Finalize operation do.
+// @unchecked Sendable: All mutable state (`state`, `pending`, `runningID`, `runningKey`,
+// `finishHandlers`) is read and written only on the serial `controlQueue`; tasks run on
+// `executionQueue` and report back by hopping onto `controlQueue`.
 public final class SessionTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
   public typealias Task = @Sendable (_ stopToken: StopToken) -> Void

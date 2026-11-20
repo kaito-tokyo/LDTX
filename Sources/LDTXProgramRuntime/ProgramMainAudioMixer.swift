@@ -19,6 +19,10 @@ protocol ProgramMainAudioMixing: AnyObject, Sendable {
 }
 
 /// Output owns subscriptions and its video boundary, never physical input.
+// @unchecked Sendable: `subscription` and `handlers` are read and written only inside `lock`
+// (engine callbacks read `handlers` from other threads), while `mappings` and `bus` are touched
+// only by `start`, `updateGains` and `stop`, which their sole caller, the `@MainActor`
+// `ActiveProgramOutputSession`, invokes serially.
 final class ProgramMainAudioMixer: ProgramMainAudioMixing, @unchecked Sendable {
   private let engine: WorkspaceAudioEngine
   private let owner = UUID()

@@ -33,6 +33,10 @@ public enum InputDeviceAACAudioEncoderError: Error, LocalizedError {
 /// Converts timestamped PCM sample buffers into timestamped raw AAC access units.
 ///
 /// Instances are stateful and must be called from one serial executor.
+// @unchecked Sendable: The encoder holds no lock; every mutable member (`nextPresentationTime`,
+// `initialSamples`, `deferredSample`, `isFinished` and the other `var`s) and the stateful
+// `converter` are used only by `encode(_:)` and `finish()`, which callers must drive from one
+// serial executor at a time, as the doc comment above requires.
 public final class InputDeviceAACAudioEncoder: @unchecked Sendable {
   private static let logger = Logger(
     subsystem: "tokyo.kaito.ldtx", category: "InputDeviceAACAudioEncoder")
@@ -389,6 +393,9 @@ public final class InputDeviceAACAudioEncoder: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: Each instance is created inside one `convert` call and read only by the
+// synchronous `AVAudioConverter` input block during that call, so `buffer` is never accessed from
+// two threads.
 private final class AACInputProvider: @unchecked Sendable {
   private var buffer: AVAudioPCMBuffer?
   private let endOfStream: Bool

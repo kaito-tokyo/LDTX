@@ -23,6 +23,9 @@ enum SharedH264MemoryReaderError: Error, LocalizedError {
 }
 
 /// Read-only view of Workspace-owned H.264 storage for one XPC session.
+// @unchecked Sendable: `address` maps a read-only region that is never remapped or written, and
+// `generations` is mutated only by `read(_:)`, which is called only from the session's serial
+// resource queue in `YouTubeOutputServiceProcess`.
 final class SharedH264MemoryReader: @unchecked Sendable {
   private let address: UnsafeRawPointer
   private let byteCount: Int

@@ -199,6 +199,9 @@ public final class ProgramPairPreviewRenderer: NSObject, ProgramPreviewAccessibi
 }
 
 /// Pixel-aligned equal-height regions with a transparent four-pixel gap.
+// @unchecked Sendable: The lease only retains `frames` and `textures` until the command buffer's
+// completed handler releases it; `textures` is appended to only on the render thread before the
+// command is committed and is never read afterwards.
 private final class ProgramPairFrameLease: @unchecked Sendable {
   let frames: [ProgramFrame?]
   var textures: [CVMetalTexture] = []

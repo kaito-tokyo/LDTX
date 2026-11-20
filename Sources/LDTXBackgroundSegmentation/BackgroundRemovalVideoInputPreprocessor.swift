@@ -7,6 +7,9 @@ import Foundation
 import LDTXInternalProtocols
 import Metal
 
+// @unchecked Sendable: `modelState` is read and written only inside `stateLock` (the background
+// model load writes it); all other mutable state is used only by `process`, which is driven by the
+// owning program runtime's render queue one frame at a time.
 public final class BackgroundRemovalVideoInputPreprocessor:
   BackgroundRemovalPreprocessing, @unchecked Sendable
 {
