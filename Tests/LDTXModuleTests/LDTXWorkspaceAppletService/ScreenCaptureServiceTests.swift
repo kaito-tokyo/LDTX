@@ -43,7 +43,7 @@ struct ScreenCaptureServiceIntegrationTestSuite {
 
 @MainActor
 @Suite(.tags(.medium)) struct ScreenCaptureBackgroundIntegrationTestSuite {
-  @Test("LUB-1046: Snapshot survives source mutation and writes in order")
+  @Test("LUB-1046: Snapshot survives source mutation and writes in order", .timeLimit(.minutes(1)))
   func snapshotSurvivesSourceMutationAndWritesInOrder() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
@@ -71,8 +71,11 @@ struct ScreenCaptureServiceIntegrationTestSuite {
     CVPixelBufferLockBaseAddress(snapshot.pixelBuffer, .readOnly)
     #expect(CVPixelBufferGetBaseAddress(snapshot.pixelBuffer)?.load(as: UInt8.self) == 0)
     CVPixelBufferUnlockBaseAddress(snapshot.pixelBuffer, .readOnly)
+    // Hold the capture queue until the assertions below run. A timed wait let the queue
+    // resume on slow runners before the main actor checked it; the deferred signal
+    // releases it on every exit path, and the time limit bounds a hang.
     let release = DispatchSemaphore(value: 0)
-    queue.async { _ = release.wait(timeout: .now() + 10) }
+    queue.async { release.wait() }
     defer { release.signal() }
     var started = false
     var completed = false
