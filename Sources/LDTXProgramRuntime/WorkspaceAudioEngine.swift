@@ -9,6 +9,11 @@ import OSLog
 import os
 
 /// Workspace-owned adapter. All PCM processing and hardware lifetime is native.
+// @unchecked Sendable: The mutable Swift state (`inputs`, `busOwners`, `monitorRoutes`,
+// `monitorMaster`, `observedMonitorDeviceID`, `monitorDeviceChangeHandler`) is accessed only inside
+// `lock`, and `native` is an immutable handle that is destroyed in `deinit`. Native calls made
+// outside `lock` (`hasActivePhysicalInput`, `peak`, subscribe) are safe because the C API
+// serializes every operation except SubmitPCM on the engine worker (WorkspaceAudioEngine.h).
 public final class WorkspaceAudioEngine: @unchecked Sendable {
   public static let outputDevicePreferenceKey = "tokyo.kaito.ldtx.monitor-output-device-uid"
   public static let statusDidChange = Notification.Name("LDTXAudioEngine.statusDidChange")
@@ -261,6 +266,10 @@ public final class WorkspaceAudioEngine: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: Every stored property is an immutable `let`; the native subscribe,
+// source-switch and unsubscribe calls serialize on the engine worker (WorkspaceAudioEngine.h),
+// and the retained `Handler` behind `context` is released only in `deinit` after `cancel()` has
+// fenced the native callbacks.
 final class AudioEngineSubscription: @unchecked Sendable {
   private let engine: WorkspaceAudioEngine
   private let context: UnsafeMutableRawPointer

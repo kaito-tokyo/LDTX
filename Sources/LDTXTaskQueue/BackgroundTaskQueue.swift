@@ -23,6 +23,9 @@ public enum BackgroundTaskSubmission: Equatable, Sendable {
 /// At most one task per key may be running or pending. `stop()` rejects new
 /// submissions, discards pending work, and cooperatively cancels the running
 /// task without draining the queue.
+// @unchecked Sendable: All mutable state (`state`, `pending`, `running`, `stopHandlers`) is read
+// and written only on the serial `controlQueue`; tasks run on `executionQueue` and report back by
+// hopping onto `controlQueue`.
 public final class BackgroundTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
   public typealias Task = @Sendable (_ stopToken: StopToken) -> Void

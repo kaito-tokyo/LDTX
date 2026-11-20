@@ -4,6 +4,8 @@
 
 import Foundation
 
+// @unchecked Sendable: All configuration is set in `init` and never mutated afterwards, so
+// concurrent formatting only reads a fixed configuration.
 class NullableIntegerFormatter<Value: FixedWidthInteger>: NumberFormatter, @unchecked Sendable {
   override init() {
     super.init()

@@ -5,6 +5,8 @@
 import CoreMedia
 import Foundation
 
+// @unchecked Sendable: All mutable state (`origin`, `isFinished`, `latestEndTime`) is read and
+// written only inside `lock`.
 final class RecordingTimelineNormalizer: @unchecked Sendable {
   typealias Output = @Sendable (CMSampleBuffer) -> Void
 

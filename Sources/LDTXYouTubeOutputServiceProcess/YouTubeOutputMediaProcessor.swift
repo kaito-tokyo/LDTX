@@ -8,6 +8,9 @@ import Foundation
 import LDTXMP4
 import LDTXYouTubeOutputProtocol
 
+// @unchecked Sendable: Every mutable member is used only by `append(_:)` and `finish(completion:)`,
+// which `YouTubeOutputServiceProcess` calls only from its serial resource queue; callbacks from the
+// writer's own queue touch only the immutable `onSegment`.
 final class YouTubeOutputMediaProcessor: @unchecked Sendable {
   typealias SegmentHandler = @Sendable (Result<SegmentedMP4Segment, any Error>) -> Void
 

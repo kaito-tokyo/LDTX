@@ -492,6 +492,8 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
 
 }
 
+// @unchecked Sendable: `lock` guards both `reply` and `completion`; `send(_:)` takes and clears
+// them under the lock so each closure is called at most once, and calls them outside it.
 private final class XPCReply: @unchecked Sendable {
   private let lock = NSLock()
   private var reply: ((Data) -> Void)?
@@ -526,6 +528,9 @@ private final class XPCReply: @unchecked Sendable {
 
 /// Foundation's XPC objects predate Sendable. Access to the wrapped reference
 /// is confined to the ServiceProcess serial queue.
+// @unchecked Sendable: The weak connection is set once in `init` and read only by the single
+// `bootstrap` command running on the session's serial resource queue, so access is never
+// concurrent.
 private final class XPCConnectionReference: @unchecked Sendable {
   weak var value: NSXPCConnection?
 
@@ -556,6 +561,9 @@ private final class YouTubeOutputListenerDelegate: NSObject, NSXPCListenerDelega
 }
 
 /// Keeps the caller connection associated with its isolated ServiceProcess session.
+// @unchecked Sendable: `session` is an immutable reference to a session that is itself confined to
+// its own queues, and the weak `connection` is assigned only in `init`, so XPC may invoke these
+// methods from any thread.
 private final class YouTubeOutputConnection: NSObject, LDTXYouTubeOutputServiceProcessXPC,
   @unchecked Sendable
 {

@@ -546,6 +546,8 @@ public final class YouTubeOutputWorkspaceService {
 /// Thread-safe boundary between the Workspace media channel and the
 /// MainActor-isolated YouTube lifecycle. The Hub provides FIFO execution; this
 /// core only fences access to the currently active batcher.
+// @unchecked Sendable: `state` is read and written only inside `lock`, and the batcher it returns
+// is invoked outside the lock.
 private final class YouTubeOutputMediaCore: @unchecked Sendable {
   private struct State {
     var batcher: YouTubeOutputMediaBatcher?

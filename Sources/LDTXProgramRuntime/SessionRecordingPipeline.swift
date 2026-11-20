@@ -10,6 +10,8 @@ import LDTXRecording
 import OSLog
 
 /// Writes the H.264 Main Program and AAC Main Mix into one fragmented MP4.
+// @unchecked Sendable: All mutable state, including the writer, the audio encoder and the buffered
+// `CMSampleBuffer`s, is read and written only while holding `lock`.
 final class SessionRecordingPipeline: @unchecked Sendable {
   private static let maximumPendingVideoDuration = CMTime(seconds: 30, preferredTimescale: 600)
   private static let maximumPendingVideoSampleCount = 3_600
@@ -258,6 +260,9 @@ final class SessionRecordingPipeline: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: `value` is assigned once, under the pipeline's `lock` in
+// `createWriterIfPossibleLocked`, before the writer receives any sample, and is only read
+// afterwards.
 private final class WeakSessionRecordingPipeline: @unchecked Sendable {
   weak var value: SessionRecordingPipeline?
 }

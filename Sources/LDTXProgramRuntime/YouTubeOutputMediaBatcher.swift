@@ -7,11 +7,16 @@ import Foundation
 import LDTXTaskQueue
 import LDTXYouTubeOutputProtocol
 
+// @unchecked Sendable: The mutable state (`backlog`, `lastVideoFormat`, `scheduledFlush`,
+// `isSending`, `isFinished`, the failure and drain bookkeeping) is touched only inside tasks run
+// serially by `resourceQueue`; `submissionPostLock` and `submissionGate` only order and bound what
+// gets posted to it.
 final class YouTubeOutputMediaBatcher: @unchecked Sendable {
   private enum SubmissionError: Error {
     case backlogLimitExceeded
   }
 
+  // @unchecked Sendable: All mutable state is read and written only inside `lock`.
   private final class SubmissionGate: @unchecked Sendable {
     enum Admission {
       case admitted, closed

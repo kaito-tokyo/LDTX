@@ -27,6 +27,8 @@ public enum DASHLocalFilePipelineError: Error, Equatable, LocalizedError {
   }
 }
 
+// @unchecked Sendable: `wroteInitialization` and `segmentTimeline` are read and written only inside
+// `lock.withLock` in `write(_:)`, and every other member is an immutable `let`.
 public final class DASHLocalFilePipeline: @unchecked Sendable {
   private let directory: URL
   private let manifestFileName: String

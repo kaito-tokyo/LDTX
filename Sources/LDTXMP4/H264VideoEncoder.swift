@@ -83,6 +83,9 @@ public enum H264VideoEncoderError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: `compressionSession`, `forceNextKeyFrame` and `isFinished` are read and
+// written only on the serial `queue` (or in `init`/`deinit`, which have exclusive access); the
+// VideoToolbox output callback touches only the immutable `outputHandler`.
 public final class H264VideoEncoder: @unchecked Sendable {
   public typealias OutputHandler = @Sendable (Result<CMSampleBuffer, any Error>) -> Void
 
@@ -458,6 +461,9 @@ public final class H264VideoEncoder: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: The `CVPixelBuffer` is a finished frame handed once from
+// `encode(pixelBuffer:presentationTime:duration:)` to `queue`, where it is only read by
+// VideoToolbox; callers do not write to it after submitting it.
 private struct SendablePixelBuffer: @unchecked Sendable {
   var value: CVPixelBuffer
 }

@@ -10,6 +10,9 @@ import LDTXProgramRuntime
 import LDTXWorkspaceAppletModel
 import UniformTypeIdentifiers
 
+// @unchecked Sendable: The only mutable state, `pixelBufferPools`, is read and written solely by
+// `@MainActor` methods (`snapshot`, `pixelBufferPool(for:)`); all other properties are immutable,
+// and `enqueueCapture` runs each `captureSet` on the serial `captureQueue`.
 public final class ScreenCaptureService: @unchecked Sendable {
   private struct PixelBufferDescriptor: Hashable {
     let width: Int
@@ -362,6 +365,8 @@ public final class ScreenCaptureService: @unchecked Sendable {
   }
 }
 
+// @unchecked Sendable: All members are immutable `let`s, and the `CVPixelBuffer` is a private copy
+// made by `ScreenCaptureService.snapshot` that nothing writes to after creation.
 public struct ScreenCaptureSource: @unchecked Sendable {
   public let name: String
   public let pixelBuffer: CVPixelBuffer

@@ -6,6 +6,8 @@ import CoreAudio
 import CoreMedia
 import Foundation
 
+// @unchecked Sendable: `native` is a `let` handle to the C++ engine, whose C API serializes every
+// call onto its own worker, and `subscriptions` is read and written only while holding `lock`.
 public final class AudioEngine: @unchecked Sendable {
   public final class Subscription: Sendable {
     fileprivate let engine: AudioEngine

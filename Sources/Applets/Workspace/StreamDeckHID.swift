@@ -12,6 +12,9 @@ import os
 
 /// IOKit objects, callback buffer, image encoding and transfers are confined to
 /// one worker thread. Only the bounded latest-frame mailbox crosses threads.
+// @unchecked Sendable: Every property except `mailbox` is touched only by the single worker thread
+// started in `start()` (see the doc comment); `mailbox` is a `Mutex`, and `stop()` waits on
+// `completion` until the worker has exited.
 final class StreamDeckHID: @unchecked Sendable {
   private struct Mailbox {
     var generation: UInt64 = 0

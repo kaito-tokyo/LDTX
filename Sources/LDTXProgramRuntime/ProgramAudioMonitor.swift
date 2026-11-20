@@ -4,6 +4,9 @@ import Foundation
 import LDTXCorelibs
 
 /// Preview adapter; Workspace owns the native engine independently of panes.
+// @unchecked Sendable: `engine` is an immutable `let`, and `mappings` is written by `restart` and
+// read by `updateGains` only from `WorkspaceAudioCoordinator`, which runs each restart after the
+// previous one finished, so these accesses never overlap.
 public final class ProgramAudioMonitor: @unchecked Sendable {
   private let engine: WorkspaceAudioEngine
   private var mappings: [String: String] = [:]

@@ -55,6 +55,10 @@ extension SessionRecordServicing {
 
 extension SessionRecordService: SessionRecordServicing {}
 
+// @unchecked Sendable: Media state (`boundary`, `activeService`, `replacementPreparation`, the
+// pending cut audio and the callbacks) is read and written only on the serial `queue`; state that
+// other threads also touch is guarded by its own lock (`submissionLock`, `preparationLock`,
+// `inputCallbackLock`, `mainAudioFormatLock`, `portraitAudioFormatLock`).
 final class WorkspaceRecordMediaCore: @unchecked Sendable {
   struct InputAudioCallback: Sendable {
     fileprivate let service: any SessionRecordServicing
@@ -91,6 +95,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
       }
     }
   }
+  // @unchecked Sendable: The `CMSampleBuffer` payloads are immutable after capture; a `Sample` is
+  // created once, then owned by `queue` (in `boundary` or `pendingCutAudio`) until it is delivered
+  // to the writer, and nobody mutates the buffer.
   private enum Sample: @unchecked Sendable {
     case video(CMSampleBuffer)
     case portraitVideo(CMSampleBuffer)
@@ -99,6 +106,9 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
     case inputAudio(CMSampleBuffer, trackID: String)
   }
 
+  // @unchecked Sendable: A `Boundary` is a value owned by `queue`; the copy handed to the
+  // replacement-preparation queue is only read, and its `CMSampleBuffer` and format description
+  // members are never mutated.
   private struct Boundary: @unchecked Sendable {
     let id: UUID
     let operationID: UUID
@@ -156,6 +166,10 @@ final class WorkspaceRecordMediaCore: @unchecked Sendable {
   private let preparationLock = NSLock()
   private var admittedPreparation: ReplacementPreparation?
 
+  // @unchecked Sendable: `finished` is read and written only while holding `lock`, while `timeout`
+  // is not guarded by `lock` and is read and written only on the record media `queue` (set in
+  // `enqueueCommit`, cancelled in `rollbackBoundary`); `replacement` and `completion` are
+  // immutable.
   private final class ReplacementPreparation: @unchecked Sendable {
     let lock = NSLock()
     private var finished = false
@@ -1418,6 +1432,9 @@ final class WorkspaceRecordCutBarrier: Sendable {
   }
 }
 
+// @unchecked Sendable: It carries one `CMSampleBuffer` from a capture callback to the record media
+// `queue` exactly once; the sender does not mutate the buffer after the hand-off and only the
+// closure on `queue` reads it.
 private struct WorkspaceSendableSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
 }

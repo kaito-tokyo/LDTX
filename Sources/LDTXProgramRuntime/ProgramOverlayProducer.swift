@@ -10,6 +10,9 @@ import OSLog
 public final class ProgramOverlayProducer: Sendable {
   public let textures = ProgramOverlayTextureStore()
   private let queue = DispatchQueue(label: "tokyo.kaito.ldtx.overlay-producer", qos: .userInitiated)
+  // @unchecked Sendable: Every property is read and written only inside closures run on the
+  // producer's serial `queue` (`update`, `stop` and `deinit`), except `factory`, which is an
+  // immutable `let`.
   private final class State: @unchecked Sendable {
     var registry: ClockOverlayRuntimeRegistry?
     var failedConfiguration: InitializationConfiguration?

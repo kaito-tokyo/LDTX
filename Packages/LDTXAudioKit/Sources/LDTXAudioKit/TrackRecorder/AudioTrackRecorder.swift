@@ -145,6 +145,8 @@ public final class AudioTrackRecorder: @unchecked Sendable {
     }
   }
 
+  // @unchecked Sendable: The `CMSampleBuffer` is handed once from the engine callback to `queue`,
+  // where it is only read by the asset writer input; the engine does not mutate it after delivery.
   private struct SendableSampleBuffer: @unchecked Sendable {
     let value: CMSampleBuffer
   }

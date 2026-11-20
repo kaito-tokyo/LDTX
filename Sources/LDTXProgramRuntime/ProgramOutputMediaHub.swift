@@ -41,6 +41,8 @@ public enum ProgramOutputMediaChannelError: Error, Equatable, Sendable {
   case drainTimedOut
 }
 
+// @unchecked Sendable: The `CMSampleBuffer` is never mutated after creation; the same buffer is
+// handed to every channel queue, where it is only read.
 private struct ProgramOutputSendableSampleBuffer: @unchecked Sendable {
   let value: CMSampleBuffer
 }
@@ -55,11 +57,15 @@ private enum ProgramOutputMediaEvent: Sendable {
 /// The Workspace-owned connection point between an Output Session and output
 /// services. Each subscription has an independent serial media channel, so a
 /// slow service cannot block the publisher or another service.
+// @unchecked Sendable: `channelsByID` and `drainingChannelsByID` are read and written only inside
+// `lock`, and the other members are immutable `let`s; each `Channel` is itself synchronized.
 public final class ProgramOutputMediaHub: @unchecked Sendable {
   public struct Subscription: Hashable, Sendable {
     fileprivate let id: UUID
   }
 
+  // @unchecked Sendable: `state` and `drainTask` are read and written only inside `lock`, handlers
+  // run only on the channel's serial `queue`, and the other members are immutable `let`s.
   private final class Channel: @unchecked Sendable {
     private struct State {
       var isOpen = true

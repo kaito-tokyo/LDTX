@@ -39,6 +39,9 @@ public enum AudioSampleBufferNormalizerError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: All mutable state (`converter`, `inputFormatKey`, `inputBufferFormatKey`,
+// `inputBuffer`, `outputBuffer`) is read and written only while holding `lock`, which every public
+// entry point takes.
 public final class AudioSampleBufferNormalizer: @unchecked Sendable {
   public static let sampleRate = 48_000
   public static let channelCount = 2
@@ -337,6 +340,9 @@ public final class AudioSampleBufferNormalizer: @unchecked Sendable {
     }
   }
 
+  // @unchecked Sendable: Each instance is created under `lock` for one conversion and read only by
+  // the synchronous `AVAudioConverter` input block during that call, so `inputBuffer` is never
+  // accessed from two threads.
   private final class SingleInputProvider: @unchecked Sendable {
     private var inputBuffer: AVAudioPCMBuffer?
 

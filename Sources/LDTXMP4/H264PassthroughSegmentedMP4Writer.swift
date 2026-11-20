@@ -42,6 +42,11 @@ enum H264PassthroughPendingSampleLimit {
   }
 }
 
+// @unchecked Sendable: Every mutable member (`videoInput`, `pending`, `nextSegmentNumber`,
+// `isFinishing`, `isDrainScheduled`, `storedFailure`, `finishHandler`) and the `AVAssetWriter` are
+// used only on the serial `queue`: `append`, `appendFirst`, `finish` and the segment delegate
+// callback hop onto it with `queue.async` (or `queue.sync`), and all other members are `let`s set
+// in `init`.
 public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDelegate,
   @unchecked Sendable
 {
@@ -320,6 +325,8 @@ public final class H264PassthroughSegmentedMP4Writer: NSObject, AVAssetWriterDel
 
 }
 
+// @unchecked Sendable: The compressed `CMSampleBuffer` is handed once from `append`/`appendFirst`
+// to `queue`, where it is only read; callers do not mutate it after handing it over.
 private struct SendableCompressedSampleBuffer: @unchecked Sendable {
   var value: CMSampleBuffer
 }

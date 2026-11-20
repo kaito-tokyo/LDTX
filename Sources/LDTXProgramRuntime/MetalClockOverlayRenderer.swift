@@ -52,6 +52,9 @@ enum MetalClockOverlayRendererError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: Every stored property is an immutable `let` and the Metal device, command
+// queue, atlas texture and pipeline state are only read after `init`; each render creates its own
+// command buffer and textures.
 final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendable {
   private struct GlyphMetric {
     var atlasRect: SIMD4<Float>

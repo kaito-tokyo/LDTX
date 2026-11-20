@@ -10,6 +10,9 @@ import Foundation
 /// Unlike ``SyntheticCaptureService``, this source owns no timer. Tests decide
 /// exactly when each sample arrives and may choose presentation timestamps that
 /// differ from the delivery order.
+// @unchecked Sendable: Every mutable property is read and written only inside `lock`; handlers and
+// scheduled `CMSampleBuffer`s are copied out and invoked outside the lock, and this class never
+// mutates the buffers.
 public final class ManualCameraCaptureService: CameraCaptureStreaming, @unchecked Sendable {
   public struct Request: Equatable, Sendable {
     public var cameraID: String

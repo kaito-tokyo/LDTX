@@ -30,6 +30,9 @@ public final class StopToken: Sendable {
 
 /// A thin FIFO event queue. Stopping is cooperative: the running task owns
 /// its shutdown and must eventually invoke its bound completion closure.
+// @unchecked Sendable: All mutable state (`state`, `pending`, `runningID`,
+// `discardCallbacksInFlight`, `stopHandlers`) is read and written only on the serial
+// `controlQueue`; tasks run on `executionQueue` and report back by hopping onto `controlQueue`.
 public final class EventTaskQueue: @unchecked Sendable {
   public typealias Completion = @Sendable () -> Void
   public typealias Task = @Sendable (_ stopToken: StopToken) -> Void

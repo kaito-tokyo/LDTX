@@ -136,6 +136,10 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
   }
 }
 
+// @unchecked Sendable: `session`, `notificationObservers` and `activeDeviceIDs` are used only on
+// `sessionQueue`; `outputsByID`, `sampleHandler` and `failureHandler` only on `sampleQueue`, the
+// delegate queue, with off-queue access going through `sampleQueue.sync`;
+// `startupCompletionHandler` only inside `startupLock`.
 public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate,
   @unchecked Sendable
 {

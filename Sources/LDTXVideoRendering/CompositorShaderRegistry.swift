@@ -7,6 +7,10 @@ import LDTXVideoComposition
 import Metal
 import simd
 
+// @unchecked Sendable: `device` and `library` are immutable Metal objects, and the pipeline cache
+// (`inputNv12DevicePipelinesBySpecialization`, `inputNv12DevicePipelineUseCounter`) is read and
+// written only while holding `lock`; pipeline compilation runs outside the lock and the first
+// result stored wins.
 final class CompositorShaderRegistry: @unchecked Sendable {
   enum InputNv12DeviceSourceRange: UInt32 {
     case video = 1

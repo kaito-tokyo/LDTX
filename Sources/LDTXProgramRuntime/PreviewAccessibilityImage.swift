@@ -76,9 +76,14 @@ public struct PreviewAccessibilityImage: Sendable {
 }
 
 /// Keeps one preview drawable alive; GPU readback and conversion run only for AXImageData requests.
+// @unchecked Sendable: `source` and `generation` are read and written only inside `lock`, and the
+// GPU readback in `readImage` runs only on the serial `queue`.
 public final class PreviewAccessibilityImageStore: PreviewAccessibilityImageReading,
   @unchecked Sendable
 {
+  // @unchecked Sendable: The Metal texture, command queue and drawable are immutable references
+  // published only after the render was committed, and this struct only ever reads them (blit
+  // readback) while the retained drawable keeps the texture from being recycled.
   private struct Source: @unchecked Sendable {
     let texture: MTLTexture
     let commandQueue: MTLCommandQueue

@@ -368,6 +368,9 @@ public struct RecordingPackage: Equatable, Sendable {
   }
 }
 
+// @unchecked Sendable: Each instance is local to `rejectSymbolicLinks`, written only by the
+// enumerator error handler that `FileManager` invokes synchronously on the calling thread during
+// iteration, and read after the loop on that same thread.
 private final class RecordingPackageEnumerationFailure: @unchecked Sendable {
   var path: String?
 }

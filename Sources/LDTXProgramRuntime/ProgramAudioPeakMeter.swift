@@ -4,6 +4,8 @@ import Foundation
 import LDTXCorelibs
 import LDTXWorkspaceAppletInterface
 
+// @unchecked Sendable: All mutable state is read and written only inside `lock`, a recursive lock
+// so that `configure()` can be reached from locked entry points; `owners` is an immutable `let`.
 public final class ProgramAudioPeakMeter: ProgramAudioPeakMeterPresenting, @unchecked Sendable {
   public typealias Master = WorkspaceAudioMaster
   private let lock = NSRecursiveLock()
