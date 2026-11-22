@@ -19,13 +19,16 @@ struct WorkspaceRecordCutBarrierUnitTestSuite {
       actionCount.withLock { $0 += 1 }
     }
 
-    DispatchQueue.concurrentPerform(iterations: arrivalCount) { _ in
+    let arrivals = Self.detachArrivals(arrivalCount) {
       barrier.arriveAndWait()
       if actionCount.withLock({ $0 }) == 1 {
         returnsAfterAction.withLock { $0 += 1 }
       }
     }
 
+    let completed = arrivals.wait(timeout: .now() + 10) == .success
+    if !completed { barrier.cancel() }
+    #expect(completed)
     #expect(actionCount.withLock { $0 } == 1)
     #expect(returnsAfterAction.withLock { $0 } == arrivalCount)
   }
@@ -36,17 +39,30 @@ struct WorkspaceRecordCutBarrierUnitTestSuite {
     let barrier = WorkspaceRecordCutBarrier(arrivalCount: 3) {
       actionCount.withLock { $0 += 1 }
     }
-    let group = DispatchGroup()
-    for _ in 0..<2 {
-      DispatchQueue.global().async(group: group) { barrier.arriveAndWait() }
-    }
+    let arrivals = Self.detachArrivals(2) { barrier.arriveAndWait() }
 
     // Cancel whether or not the waiters have arrived yet; both orders must release them.
     barrier.cancel()
-    #expect(group.wait(timeout: .now() + 10) == .success)
+    #expect(arrivals.wait(timeout: .now() + 10) == .success)
     barrier.arriveAndWait()
 
     #expect(actionCount.withLock { $0 } == 0)
+  }
+
+  /// Runs each blocking arrival on its own thread. Blocking Dispatch worker threads instead would
+  /// starve the shared pool on hosts with few cores, stalling this and concurrently running tests.
+  private static func detachArrivals(
+    _ count: Int, _ arrival: @escaping @Sendable () -> Void
+  ) -> DispatchGroup {
+    let group = DispatchGroup()
+    for _ in 0..<count {
+      group.enter()
+      Thread.detachNewThread {
+        arrival()
+        group.leave()
+      }
+    }
+    return group
   }
 }
 
