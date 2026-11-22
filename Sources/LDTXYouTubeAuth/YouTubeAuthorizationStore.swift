@@ -32,6 +32,7 @@ public struct YouTubeAuthorizationStore {
   public static let defaultService = "tokyo.kaito.ldtx.youtube-auth"
 
   private let service: String
+  private let keychainOperations: YouTubeKeychainItem.Operations
   #if !LDTX_DISTRIBUTION
     private var file: YouTubeAuthFile?
 
@@ -42,7 +43,12 @@ public struct YouTubeAuthorizationStore {
   #endif
 
   public init(service: String = Self.defaultService) {
+    self.init(service: service, keychainOperations: .system)
+  }
+
+  init(service: String, keychainOperations: YouTubeKeychainItem.Operations) {
     self.service = service
+    self.keychainOperations = keychainOperations
   }
 
   func load(clientID: String) throws -> YouTubeAuthorizationState? {
@@ -102,55 +108,26 @@ public struct YouTubeAuthorizationStore {
   }
 
   private func loadFromKeychain(clientID: String) throws -> Data? {
-    var query = keychainQuery(clientID: clientID)
-    query[kSecMatchLimit as String] = kSecMatchLimitOne
-    query[kSecReturnData as String] = true
-
-    var item: CFTypeRef?
-    let status = SecItemCopyMatching(query as CFDictionary, &item)
-    if status == errSecItemNotFound {
-      return nil
-    }
-    guard status == errSecSuccess else {
-      throw YouTubeAuthorizationStoreError.keychainFailure(status)
-    }
-    return item as? Data
+    try withKeychainFailure { try keychainItem(clientID: clientID).load() }
   }
 
   private func saveToKeychain(_ data: Data, clientID: String) throws {
-    let query = keychainQuery(clientID: clientID)
-    let attributes = [kSecValueData as String: data]
-    let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-
-    if updateStatus == errSecSuccess {
-      return
-    }
-    guard updateStatus == errSecItemNotFound else {
-      throw YouTubeAuthorizationStoreError.keychainFailure(updateStatus)
-    }
-
-    var item = query
-    item[kSecValueData as String] = data
-    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-    let addStatus = SecItemAdd(item as CFDictionary, nil)
-    guard addStatus == errSecSuccess else {
-      throw YouTubeAuthorizationStoreError.keychainFailure(addStatus)
-    }
+    try withKeychainFailure { try keychainItem(clientID: clientID).save(data) }
   }
 
   private func deleteFromKeychain(clientID: String) throws {
-    let status = SecItemDelete(keychainQuery(clientID: clientID) as CFDictionary)
-    guard status == errSecSuccess || status == errSecItemNotFound else {
-      throw YouTubeAuthorizationStoreError.keychainFailure(status)
-    }
+    try withKeychainFailure { try keychainItem(clientID: clientID).delete() }
   }
 
-  private func keychainQuery(clientID: String) -> [String: Any] {
-    [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: service,
-      kSecAttrAccount as String: clientID,
-    ]
+  private func keychainItem(clientID: String) -> YouTubeKeychainItem {
+    YouTubeKeychainItem(service: service, account: clientID, operations: keychainOperations)
+  }
+
+  private func withKeychainFailure<T>(_ body: () throws -> T) throws -> T {
+    do {
+      return try body()
+    } catch let error as YouTubeKeychainItem.StatusError {
+      throw YouTubeAuthorizationStoreError.keychainFailure(error.status)
+    }
   }
 }

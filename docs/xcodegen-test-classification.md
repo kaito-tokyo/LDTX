@@ -103,7 +103,7 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Corelibs | `RecordingPackageIntegrationTestSuite` | `Packages/LDTXCorelibs/Tests/LDTXCorelibsTests/RecordBundleFormat/RecordingPackageTests.swift` |
 | Medium | `VisionFramePoolUnitTestSuite` | `Tests/LDTXModuleTests/LDTXVision/VisionFramePoolTests.swift` |
 | Medium | `YouTubeAuthFileIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthFileTests.swift` |
-| Medium | `YouTubeAuthorizationServiceIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
+| Easy | `YouTubeAuthorizationServiceIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/YouTubeAuthorizationServiceKeychainTests.swift` |
 | Output | `YouTubeOutputVideoFrameHoldUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeOutputProtocol/YouTubeOutputVideoFrameHoldTests.swift` |
 | Hard | `WorkspaceWindowRuntimeIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/WorkspaceWindowRuntimeTests.swift` |
 | Hard | `BackgroundRemovalInferenceGateIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXBackgroundSegmentation/BackgroundRemovalInferenceGateTests.swift` |
