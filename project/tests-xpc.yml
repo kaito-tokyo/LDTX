@@ -11,6 +11,7 @@ targets:
       - target: LDTXRichText
       - target: LDTXApp
       - target: LDTXWorkspaceAppletService
+      - target: LDTXYouTubeAuth
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppXpcTests

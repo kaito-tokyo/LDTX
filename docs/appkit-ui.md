@@ -603,6 +603,16 @@ Keychain. Distribution builds compile out file storage and always use Keychain.
 Changing the file's presence requires restarting the application. Invalid or
 removed files produce errors rather than falling back to Keychain.
 
+Keychain storage uses the data-protection keychain in the application's default
+access group, with items readable only after the first unlock on the same Mac.
+Every save applies that accessibility to new and existing items. Versions before
+this policy stored both items in the legacy file-based keychain; those items are
+not migrated. When the data-protection item is missing or deleted, the legacy
+item is deleted too, so users load the OAuth client and authorize again once.
+The data-protection keychain requires the `keychain-access-groups` entitlement,
+so builds signed without entitlements, such as ad-hoc CI builds, report a
+Keychain failure instead of storing credentials.
+
 To enable local file storage, create the application's Application Support
 directory and an empty `.YouTubeAuth` file (or one containing `{}`) before
 launching LDTX. Set the directory permissions to `0700` and file permissions to
