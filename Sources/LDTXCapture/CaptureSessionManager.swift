@@ -224,9 +224,11 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    guard let managedOutput = outputsByID[ObjectIdentifier(output)] else {
+    let outputID = ObjectIdentifier(output)
+    guard let managedOutput = outputsByID[outputID] else {
       return
     }
+    let callbackStart = Self.hostTimeNanoseconds()
     sampleHandler?(
       CapturedSample(
         sourceKey: managedOutput.sourceKey,
@@ -234,6 +236,16 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         kind: managedOutput.kind,
         sampleBuffer: sampleBuffer
       ))
+    let callbackEnd = Self.hostTimeNanoseconds()
+    let report = outputsByID[outputID]?.deliveryStats.recordDelivered(
+      presentationNanoseconds: Self.nanoseconds(
+        of: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)),
+      callbackStartNanoseconds: callbackStart,
+      callbackEndNanoseconds: callbackEnd
+    )
+    if let report {
+      Self.logDeliveryReport(report, for: managedOutput)
+    }
   }
 
   public func captureOutput(
@@ -241,6 +253,17 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     didDrop sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    let outputID = ObjectIdentifier(output)
+    guard let managedOutput = outputsByID[outputID] else {
+      return
+    }
+    let report = outputsByID[outputID]?.deliveryStats.recordDropped(
+      reason: Self.dropReason(of: sampleBuffer),
+      nowNanoseconds: Self.hostTimeNanoseconds()
+    )
+    if let report {
+      Self.logDeliveryReport(report, for: managedOutput)
+    }
   }
 
   private func configureAndStart(
@@ -276,6 +299,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     self.session = session
     observeRuntimeFailures(for: session, deviceIDs: Set(request.videoInputs.map(\.deviceID)))
     session.startRunning()
+    Self.logActiveVideoConfigurations(request.videoInputs)
     sampleQueue.sync { self.sampleHandler = handler }
     Self.logger.notice(
       "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .private(mask: .hash)), isRunning=\(session.isRunning, privacy: .public)"
@@ -286,7 +310,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     _ requests: [CaptureSessionVideoRequest],
     in session: AVCaptureSession
   ) throws {
-    for request in requests {
+    for (inputIndex, request) in requests.enumerated() {
       if let allowedVideoDeviceIDs, !allowedVideoDeviceIDs.contains(request.deviceID) {
         throw CaptureSessionManagerError.videoDeviceNotAllowed(request.deviceID)
       }
@@ -320,6 +344,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         input: input,
         mediaType: .video,
         output: output,
+        inputIndex: inputIndex,
         sourceKey: request.sourceKey,
         deviceID: request.deviceID,
         kind: .video,
@@ -332,6 +357,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     input: AVCaptureDeviceInput,
     mediaType: AVMediaType,
     output: AVCaptureOutput,
+    inputIndex: Int,
     sourceKey: String,
     deviceID: String,
     kind: CameraCaptureSampleKind,
@@ -347,6 +373,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     session.addConnection(connection)
     sampleQueue.sync {
       outputsByID[ObjectIdentifier(output)] = ManagedOutput(
+        inputIndex: inputIndex,
         sourceKey: sourceKey,
         deviceID: deviceID,
         kind: kind
@@ -619,9 +646,64 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   }
 
   private struct ManagedOutput {
+    var inputIndex: Int
     var sourceKey: String
     var deviceID: String
     var kind: CameraCaptureSampleKind
+    var deliveryStats = CaptureFrameDeliveryStats()
+  }
+
+  private static func hostTimeNanoseconds() -> UInt64 {
+    UInt64(clamping: nanoseconds(of: CMClockGetTime(CMClockGetHostTimeClock())) ?? 0)
+  }
+
+  private static func nanoseconds(of time: CMTime) -> Int64? {
+    guard time.isValid, time.isNumeric else { return nil }
+    return CMTimeConvertScale(time, timescale: 1_000_000_000, method: .roundHalfAwayFromZero)
+      .value
+  }
+
+  private static func dropReason(of sampleBuffer: CMSampleBuffer) -> CaptureFrameDropReason {
+    let reason = CMGetAttachment(
+      sampleBuffer,
+      key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
+      attachmentModeOut: nil
+    ) as? String
+    if reason == kCMSampleBufferDroppedFrameReason_FrameWasLate as String {
+      return .frameWasLate
+    }
+    if reason == kCMSampleBufferDroppedFrameReason_OutOfBuffers as String {
+      return .outOfBuffers
+    }
+    if reason == kCMSampleBufferDroppedFrameReason_Discontinuity as String {
+      return .discontinuity
+    }
+    return .other
+  }
+
+  private static func logDeliveryReport(
+    _ report: CaptureFrameDeliveryReport,
+    for output: ManagedOutput
+  ) {
+    logger.notice(
+      "Capture frame delivery input=\(output.inputIndex, privacy: .public) device=\(output.deviceID, privacy: .private(mask: .hash)) windowMs=\(milliseconds(report.windowNanoseconds), privacy: .public) delivered=\(report.deliveredCount, privacy: .public) dropped=\(report.droppedCount, privacy: .public) droppedLate=\(report.droppedLateCount, privacy: .public) droppedOutOfBuffers=\(report.droppedOutOfBuffersCount, privacy: .public) droppedDiscontinuity=\(report.droppedDiscontinuityCount, privacy: .public) droppedOther=\(report.droppedOtherCount, privacy: .public) intervalMeanMs=\(milliseconds(report.meanIntervalNanoseconds), privacy: .public) intervalMinMs=\(milliseconds(report.minIntervalNanoseconds), privacy: .public) intervalMaxMs=\(milliseconds(report.maxIntervalNanoseconds), privacy: .public) longIntervals=\(report.longIntervalCount, privacy: .public) maxLatencyMs=\(milliseconds(report.maxDeliveryLatencyNanoseconds), privacy: .public) maxHandlerMs=\(milliseconds(report.maxHandlerNanoseconds), privacy: .public)"
+    )
+  }
+
+  private static func milliseconds(_ nanoseconds: UInt64) -> String {
+    String(format: "%.3f", Double(nanoseconds) / 1_000_000)
+  }
+
+  private static func logActiveVideoConfigurations(_ requests: [CaptureSessionVideoRequest]) {
+    let devices = allVideoDevices()
+    for (inputIndex, request) in requests.enumerated() {
+      guard let device = devices.first(where: { $0.uniqueID == request.deviceID }) else {
+        continue
+      }
+      logger.notice(
+        "Capture video input active configuration input=\(inputIndex, privacy: .public) device=\(request.deviceID, privacy: .private(mask: .hash)) requestedFPS=\(request.frameRate, privacy: .public) active=\(activeVideoConfigurationSummary(for: device), privacy: .public)"
+      )
+    }
   }
 
 }
