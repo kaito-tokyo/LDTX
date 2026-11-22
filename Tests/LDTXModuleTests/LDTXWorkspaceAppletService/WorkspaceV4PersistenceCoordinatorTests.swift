@@ -248,23 +248,9 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    var keychainData: Data?
-    let keychain = WorkspaceAppletKeychainClient(
-      copyMatching: { _, result in
-        guard let keychainData else { return errSecItemNotFound }
-        result?.pointee = keychainData as CFTypeRef
-        return errSecSuccess
-      },
-      update: { _, attributes in
-        guard keychainData != nil else { return errSecItemNotFound }
-        keychainData = (attributes as NSDictionary)[kSecValueData as String] as? Data
-        return errSecSuccess
-      },
-      add: { attributes, _ in
-        keychainData = (attributes as NSDictionary)[kSecValueData as String] as? Data
-        return keychainData == nil ? errSecParam : errSecSuccess
-      })
-    let appletData = WorkspaceAppletData(userDefaults: defaults, keychainClient: keychain)
+    let keychain = FakeDataProtectionKeychain()
+    let appletData = WorkspaceAppletData(
+      userDefaults: defaults, streamKeyKeychainOperations: keychain.operations)
     let configurations = [
       YouTubeRTMPSStreamKeyConfiguration(
         id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
@@ -282,15 +268,9 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    var addCount = 0
-    let keychain = WorkspaceAppletKeychainClient(
-      copyMatching: { _, _ in errSecItemNotFound },
-      update: { _, _ in errSecItemNotFound },
-      add: { _, _ in
-        addCount += 1
-        return errSecSuccess
-      })
-    let appletData = WorkspaceAppletData(userDefaults: defaults, keychainClient: keychain)
+    let keychain = FakeDataProtectionKeychain()
+    let appletData = WorkspaceAppletData(
+      userDefaults: defaults, streamKeyKeychainOperations: keychain.operations)
     let configurations = ["one", "two"].map { id in
       YouTubeRTMPSStreamKeyConfiguration(
         id: id, name: id, streamURL: "rtmps://a.rtmp.youtube.com/live2", streamKey: "same-key")
@@ -299,7 +279,82 @@ struct WorkspaceV4PersistenceCoordinatorIntegrationTestSuite {
     #expect(throws: YouTubeStreamKeyConfigurationError.saveFailed) {
       try appletData.saveYouTubeStreamKeyConfigurations(configurations)
     }
-    #expect(addCount == 0)
+    #expect(keychain.items.isEmpty)
+  }
+
+  @Test("Stores stream key configurations in the data-protection keychain")
+  func storesStreamKeyConfigurationsInTheDataProtectionKeychain() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let keychain = FakeDataProtectionKeychain()
+    let key = FakeDataProtectionKeychain.Key(
+      dataProtection: true, service: WorkspaceAppletData.streamKeyKeychainService,
+      account: WorkspaceAppletData.streamKeyKeychainAccount)
+    keychain.seed(key, .init(data: Data("[]".utf8), accessibility: nil))
+    let appletData = WorkspaceAppletData(
+      userDefaults: defaults, streamKeyKeychainOperations: keychain.operations)
+    let configurations = [
+      YouTubeRTMPSStreamKeyConfiguration(
+        id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+        streamKey: "example-key")
+    ]
+
+    try appletData.saveYouTubeStreamKeyConfigurations(configurations)
+
+    #expect(Array(keychain.items.keys) == [key])
+    #expect(
+      keychain.items[key]?.accessibility == DataProtectionKeychainItem.accessibility as String)
+  }
+
+  @Test("Deletes a legacy stream key collection instead of migrating it")
+  func deletesALegacyStreamKeyCollectionInsteadOfMigratingIt() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let keychain = FakeDataProtectionKeychain()
+    let configurations = [
+      YouTubeRTMPSStreamKeyConfiguration(
+        id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+        streamKey: "legacy-key")
+    ]
+    keychain.seed(
+      .init(
+        dataProtection: false, service: WorkspaceAppletData.streamKeyKeychainService,
+        account: WorkspaceAppletData.streamKeyKeychainAccount),
+      .init(data: try JSONEncoder().encode(configurations), accessibility: nil))
+    let appletData = WorkspaceAppletData(
+      userDefaults: defaults, streamKeyKeychainOperations: keychain.operations)
+
+    #expect(try appletData.loadYouTubeStreamKeyConfigurations().isEmpty)
+    #expect(appletData.youtubeStreamKeyConfigurations.isEmpty)
+    #expect(keychain.items.isEmpty)
+  }
+
+  @Test("Maps stream key Keychain failures without exposing key material")
+  func mapsStreamKeyKeychainFailures() throws {
+    let suiteName = "WorkspaceV4PersistenceCoordinatorTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let keychain = FakeDataProtectionKeychain()
+    let appletData = WorkspaceAppletData(
+      userDefaults: defaults, streamKeyKeychainOperations: keychain.operations)
+    let configurations = [
+      YouTubeRTMPSStreamKeyConfiguration(
+        id: "landscape", name: "Landscape", streamURL: "rtmps://a.rtmp.youtube.com/live2",
+        streamKey: "secret-key")
+    ]
+
+    keychain.fail("copyMatching", with: errSecMissingEntitlement)
+    #expect(throws: YouTubeStreamKeyConfigurationError.loadFailed) {
+      try appletData.loadYouTubeStreamKeyConfigurations()
+    }
+    keychain.fail("update", with: errSecMissingEntitlement)
+    let error = #expect(throws: YouTubeStreamKeyConfigurationError.saveFailed) {
+      try appletData.saveYouTubeStreamKeyConfigurations(configurations)
+    }
+    #expect(error?.localizedDescription.contains("secret-key") == false)
+    #expect(appletData.youtubeStreamKeyConfigurations.isEmpty)
   }
 
   private final class WorkspaceBox {

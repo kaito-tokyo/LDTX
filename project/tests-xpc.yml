@@ -11,7 +11,10 @@ targets:
       - target: LDTXRichText
       - target: LDTXApp
       - target: LDTXWorkspaceAppletService
+      - target: LDTXWorkspaceAppletUI
       - target: LDTXYouTubeAuth
+      - package: Corelibs
+        product: LDTXCorelibs
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppXpcTests

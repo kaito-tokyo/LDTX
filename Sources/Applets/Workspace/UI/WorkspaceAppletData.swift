@@ -6,7 +6,6 @@ import Foundation
 import LDTXCorelibs
 import LDTXWorkspaceAppletModel
 import Observation
-import Security
 
 /// Persists app-local state for Workspace packages.
 @MainActor
@@ -107,29 +106,27 @@ public final class WorkspaceAppletData {
   }
 
   private let userDefaults: UserDefaults
-  private let keychainClient: WorkspaceAppletKeychainClient
+  private let streamKeyKeychainItem: DataProtectionKeychainItem
   private(set) var statesByWorkspacePath: [String: WorkspaceLocalState]
   public private(set) var youtubeStreamKeyConfigurations: [YouTubeRTMPSStreamKeyConfiguration] = []
 
-  public init(userDefaults: UserDefaults = .standard) {
-    self.userDefaults = userDefaults
-    self.keychainClient = .system
-    if let data = userDefaults.data(forKey: Self.persistenceKey),
-      let store = try? Self.decodeLocalStateStore(from: data)
-    {
-      statesByWorkspacePath = store
-    } else {
-      statesByWorkspacePath = [:]
-    }
-    loadOutputData()
-    loadAssignments()
-    userDefaults.removeObject(forKey: Self.legacyPersistenceKey)
-    userDefaults.removeObject(forKey: Self.legacyAudioDeviceIdentifierVersionKey)
+  public convenience init(userDefaults: UserDefaults = .standard) {
+    self.init(userDefaults: userDefaults, streamKeyKeychainOperations: .system)
   }
 
-  init(userDefaults: UserDefaults, keychainClient: WorkspaceAppletKeychainClient) {
+  convenience init(
+    userDefaults: UserDefaults, streamKeyKeychainOperations: DataProtectionKeychainItem.Operations
+  ) {
+    self.init(
+      userDefaults: userDefaults,
+      streamKeyKeychainItem: DataProtectionKeychainItem(
+        service: Self.streamKeyKeychainService, account: Self.streamKeyKeychainAccount,
+        operations: streamKeyKeychainOperations))
+  }
+
+  init(userDefaults: UserDefaults, streamKeyKeychainItem: DataProtectionKeychainItem) {
     self.userDefaults = userDefaults
-    self.keychainClient = keychainClient
+    self.streamKeyKeychainItem = streamKeyKeychainItem
     if let data = userDefaults.data(forKey: Self.persistenceKey),
       let store = try? Self.decodeLocalStateStore(from: data)
     {
@@ -191,17 +188,15 @@ public final class WorkspaceAppletData {
   public func loadYouTubeStreamKeyConfigurations() throws
     -> [YouTubeRTMPSStreamKeyConfiguration]
   {
-    var query = Self.keychainQuery
-    query[kSecReturnData as String] = true
-    query[kSecMatchLimit as String] = kSecMatchLimitOne
-    var item: CFTypeRef?
-    let status = keychainClient.copyMatching(query as CFDictionary, &item)
-    if status == errSecItemNotFound {
+    let loadedData: Data?
+    do {
+      loadedData = try streamKeyKeychainItem.load()
+    } catch {
+      throw YouTubeStreamKeyConfigurationError.loadFailed
+    }
+    guard let data = loadedData else {
       youtubeStreamKeyConfigurations = []
       return []
-    }
-    guard status == errSecSuccess, let data = item as? Data else {
-      throw YouTubeStreamKeyConfigurationError.loadFailed
     }
     do {
       let configurations = try JSONDecoder().decode(
@@ -226,32 +221,19 @@ public final class WorkspaceAppletData {
     guard Set(streamKeys).count == streamKeys.count else {
       throw YouTubeStreamKeyConfigurationError.saveFailed
     }
-    let data = try JSONEncoder().encode(configurations)
-    let status = keychainClient.update(
-      Self.keychainQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-    if status == errSecSuccess {
-      youtubeStreamKeyConfigurations = configurations
-      return
-    }
-    guard status == errSecItemNotFound else {
-      throw YouTubeStreamKeyConfigurationError.saveFailed
-    }
-    var item = Self.keychainQuery
-    item[kSecValueData as String] = data
-    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-    guard keychainClient.add(item as CFDictionary, nil) == errSecSuccess else {
+    do {
+      try streamKeyKeychainItem.save(JSONEncoder().encode(configurations))
+    } catch {
       throw YouTubeStreamKeyConfigurationError.saveFailed
     }
     youtubeStreamKeyConfigurations = configurations
   }
 
-  private static var keychainQuery: [String: Any] {
-    [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: "tokyo.kaito.ldtx.youtube-stream-keys",
-      kSecAttrAccount as String: "configurations",
-    ]
-  }
+  /// The Keychain item holding the encoded stream-key collection. It lives in the data-protection
+  /// keychain; a collection that earlier versions left in the legacy keychain is deleted rather
+  /// than migrated, so users enter their stream keys again once.
+  static let streamKeyKeychainService = "tokyo.kaito.ldtx.youtube-stream-keys"
+  static let streamKeyKeychainAccount = "configurations"
 
   private static func encodeLocalStateStore(
     _ statesByWorkspacePath: [String: WorkspaceLocalState]
@@ -266,18 +248,6 @@ public final class WorkspaceAppletData {
   {
     try PropertyListDecoder().decode([String: WorkspaceLocalState].self, from: data)
   }
-}
-
-@MainActor
-struct WorkspaceAppletKeychainClient {
-  var copyMatching: (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-  var update: (CFDictionary, CFDictionary) -> OSStatus
-  var add: (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-
-  static let system = WorkspaceAppletKeychainClient(
-    copyMatching: SecItemCopyMatching,
-    update: SecItemUpdate,
-    add: SecItemAdd)
 }
 
 public enum YouTubeStreamKeyConfigurationError: Error, LocalizedError {

@@ -27,9 +27,9 @@ extension AppUIComponentTestSuite.Shard2 {
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(
         userDefaults: defaults,
-        keychainClient: .init(
-          copyMatching: { _, _ in errSecItemNotFound }, update: { _, _ in errSecSuccess },
-          add: { _, _ in errSecSuccess }))
+        streamKeyKeychainOperations: .init(
+          copyMatching: { _, _ in errSecItemNotFound }, add: { _, _ in errSecSuccess },
+          update: { _, _ in errSecItemNotFound }, delete: { _ in errSecItemNotFound }))
       var assignment: String? = "restored"
       var draft: String?
       let assigned = Binding<String?>(get: { assignment }, set: { assignment = $0 })

@@ -2,23 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-@testable import LDTXYouTubeAuth
+import LDTXCorelibs
 import Security
 import XCTest
 
 /// Exercises the real data-protection keychain from inside the signed `LDTX.app` host, whose
 /// `keychain-access-groups` entitlement the hostless tests lack. Builds signed without
 /// entitlements, such as ad-hoc CI builds, skip these tests.
-final class YouTubeKeychainItemHostedTests: XCTestCase {
-  private var item: YouTubeKeychainItem!
+final class DataProtectionKeychainItemHostedTests: XCTestCase {
+  private var item: DataProtectionKeychainItem!
 
   override func setUpWithError() throws {
-    item = YouTubeKeychainItem(
+    item = DataProtectionKeychainItem(
       service: "tokyo.kaito.ldtx.tests.keychain.\(UUID().uuidString)", account: "account",
       operations: .system)
     do {
       try item.delete()
-    } catch let error as YouTubeKeychainItem.StatusError {
+    } catch let error as DataProtectionKeychainItem.StatusError {
       // errSecMissingEntitlement is expected when the host is signed without entitlements.
       item = nil
       throw XCTSkip(
@@ -41,7 +41,7 @@ final class YouTubeKeychainItemHostedTests: XCTestCase {
     let attributes = try storedAttributes()
     XCTAssertEqual(
       attributes[kSecAttrAccessible as String] as? String,
-      YouTubeKeychainItem.accessibility as String)
+      DataProtectionKeychainItem.accessibility as String)
     let accessGroup = try XCTUnwrap(attributes[kSecAttrAccessGroup as String] as? String)
     XCTAssertTrue(
       accessGroup.hasSuffix(".tokyo.kaito.ldtx.LDTX"),

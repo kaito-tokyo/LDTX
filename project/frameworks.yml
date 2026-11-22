@@ -281,6 +281,8 @@ targets:
     sources:
       - Sources/LDTXYouTubeAuth
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXYouTube
     settings:
       base:

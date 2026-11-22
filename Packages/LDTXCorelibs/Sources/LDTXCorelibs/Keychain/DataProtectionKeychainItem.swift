@@ -5,40 +5,64 @@
 import Foundation
 import Security
 
-/// One generic-password item of the YouTube authentication stores.
+/// One generic-password item in the data-protection keychain.
 ///
 /// Items live in the data-protection keychain, in the app's default access group (the first
 /// `keychain-access-groups` entitlement), and are readable only after the first unlock on this
 /// device. Both new and existing items receive that accessibility on every save.
 ///
-/// Earlier versions wrote these items to the legacy file-based keychain, where the accessibility
-/// attribute has no effect. Those items are not migrated. When the data-protection item is missing
-/// or deleted, the legacy item with the same service and account is deleted as well, so the user
-/// loads the OAuth client and authorizes again instead of leaving refresh tokens behind.
-struct YouTubeKeychainItem {
-  struct StatusError: Error, Equatable {
-    var status: OSStatus
+/// Earlier versions of LDTX wrote credentials to the legacy file-based keychain, where the
+/// accessibility attribute has no effect. Those items are not migrated. When the data-protection
+/// item is missing or deleted, the legacy item with the same service and account is deleted as
+/// well, so the user enters the credential again instead of leaving it behind.
+public struct DataProtectionKeychainItem: Sendable {
+  public struct StatusError: Error, Equatable {
+    public var status: OSStatus
+
+    public init(status: OSStatus) {
+      self.status = status
+    }
   }
 
   /// The Security calls used by the item, replaceable in tests that run without entitlements.
-  struct Operations: Sendable {
-    var copyMatching: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-    var add: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
-    var update: @Sendable (CFDictionary, CFDictionary) -> OSStatus
-    var delete: @Sendable (CFDictionary) -> OSStatus
+  public struct Operations: Sendable {
+    public var copyMatching: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    public var add: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    public var update: @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    public var delete: @Sendable (CFDictionary) -> OSStatus
 
-    static let system = Operations(
+    public init(
+      copyMatching:
+        @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) ->
+        OSStatus,
+      add: @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus,
+      update: @escaping @Sendable (CFDictionary, CFDictionary) -> OSStatus,
+      delete: @escaping @Sendable (CFDictionary) -> OSStatus
+    ) {
+      self.copyMatching = copyMatching
+      self.add = add
+      self.update = update
+      self.delete = delete
+    }
+
+    public static let system = Operations(
       copyMatching: SecItemCopyMatching, add: SecItemAdd, update: SecItemUpdate,
       delete: SecItemDelete)
   }
 
-  static var accessibility: CFString { kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly }
+  public static var accessibility: CFString { kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly }
 
-  let service: String
-  let account: String
-  let operations: Operations
+  public let service: String
+  public let account: String
+  public let operations: Operations
 
-  func load() throws -> Data? {
+  public init(service: String, account: String, operations: Operations = .system) {
+    self.service = service
+    self.account = account
+    self.operations = operations
+  }
+
+  public func load() throws -> Data? {
     var query = query(dataProtection: true)
     query[kSecMatchLimit as String] = kSecMatchLimitOne
     query[kSecReturnData as String] = true
@@ -53,7 +77,7 @@ struct YouTubeKeychainItem {
     return item as? Data
   }
 
-  func save(_ data: Data) throws {
+  public func save(_ data: Data) throws {
     let query = query(dataProtection: true)
     let attributes: [String: Any] = [
       kSecValueData as String: data,
@@ -68,7 +92,7 @@ struct YouTubeKeychainItem {
     guard addStatus == errSecSuccess else { throw StatusError(status: addStatus) }
   }
 
-  func delete() throws {
+  public func delete() throws {
     let status = operations.delete(query(dataProtection: true) as CFDictionary)
     deleteLegacyItem()
     guard status == errSecSuccess || status == errSecItemNotFound else {

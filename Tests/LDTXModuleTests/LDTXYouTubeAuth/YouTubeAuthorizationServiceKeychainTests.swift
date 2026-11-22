@@ -11,7 +11,7 @@ struct YouTubeAuthorizationServiceIntegrationTestSuite {
   @Test("LUB-1018: Keychain only authorization reports missing o auth configuration") @MainActor
   func keychainOnlyAuthorizationReportsMissingOAuthConfiguration() async throws {
     // Hostless tests have no Keychain entitlement, so the data-protection keychain is faked.
-    let keychain = FakeYouTubeKeychain()
+    let keychain = FakeDataProtectionKeychain()
     let oauthStore = OAuthClientConfigurationStore(
       service: "tokyo.kaito.ldtx.tests.oauth-client", account: "oauth-client",
       keychainOperations: keychain.operations)

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 import Security
 
 public enum OAuthClientConfigurationStoreError: Error, Equatable, LocalizedError {
@@ -23,7 +24,7 @@ public struct OAuthClientConfigurationStore {
   public static let defaultService = "tokyo.kaito.ldtx.oauth-client"
   public static let defaultAccount = "google-oauth-client-json"
 
-  private let keychainItem: YouTubeKeychainItem
+  private let keychainItem: DataProtectionKeychainItem
   #if !LDTX_DISTRIBUTION
     private var file: YouTubeAuthFile?
 
@@ -40,8 +41,9 @@ public struct OAuthClientConfigurationStore {
     self.init(service: service, account: account, keychainOperations: .system)
   }
 
-  init(service: String, account: String, keychainOperations: YouTubeKeychainItem.Operations) {
-    keychainItem = YouTubeKeychainItem(
+  init(service: String, account: String, keychainOperations: DataProtectionKeychainItem.Operations)
+  {
+    keychainItem = DataProtectionKeychainItem(
       service: service, account: account, operations: keychainOperations)
   }
 
@@ -102,7 +104,7 @@ public struct OAuthClientConfigurationStore {
   private func withKeychainFailure<T>(_ body: () throws -> T) throws -> T {
     do {
       return try body()
-    } catch let error as YouTubeKeychainItem.StatusError {
+    } catch let error as DataProtectionKeychainItem.StatusError {
       throw OAuthClientConfigurationStoreError.keychainFailure(error.status)
     }
   }
