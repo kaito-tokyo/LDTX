@@ -29,6 +29,9 @@ enum ProgramOutputSharedH264MemoryError: Error, Equatable, LocalizedError {
 /// Workspace-owned storage for encoded H.264 payloads consumed by an XPC
 /// Service Process. The App is the only writer. A Service Process receives a
 /// duplicated descriptor and maps it read-only for one Output Session.
+// @unchecked Sendable: `occupied` and `generations` are read and written only by `execute`, which
+// `taskQueue` runs one task at a time; `taskQueue` itself is created in `init`, and the mapped
+// slots are written only on that queue.
 public final class ProgramOutputSharedH264Service: @unchecked Sendable {
   public static let defaultSlotCount = 8
   public static let defaultSlotSize = 16 * 1_024 * 1_024
@@ -64,6 +67,8 @@ public final class ProgramOutputSharedH264Service: @unchecked Sendable {
   private let byteCount: Int
   private var occupied: [Bool]
   private var generations: [UInt64]
+  /// Lazy only so the handler can capture `self`; `init` forces it before `self` escapes, so no
+  /// other thread ever runs the lazy initializer.
   private lazy var taskQueue = ResourceTaskQueue<ResourceTask>(
     label: "tokyo.kaito.ldtx.shared-h264-resource"
   ) { [weak self] task, _ in
@@ -107,6 +112,7 @@ public final class ProgramOutputSharedH264Service: @unchecked Sendable {
       throw ProgramOutputSharedH264MemoryError.cannotMap(code)
     }
     address = mapping
+    _ = taskQueue
   }
 
   deinit {

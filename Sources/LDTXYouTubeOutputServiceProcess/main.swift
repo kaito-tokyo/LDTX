@@ -11,6 +11,9 @@ import OSLog
 
 private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-service")
 
+// @unchecked Sendable: The session state is read and written only inside tasks posted to
+// `resourceQueue`, which runs them one at a time; `commandQueue` only orders XPC commands and hops
+// onto it with `post`. Both queues are immutable `let`s.
 private final class YouTubeOutputServiceProcess: @unchecked Sendable {
   private struct ResourceTask: Sendable {
     let execute: @Sendable () -> Void
@@ -18,12 +21,12 @@ private final class YouTubeOutputServiceProcess: @unchecked Sendable {
 
   private weak var connection: NSXPCConnection?
   private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-service.timers")
-  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
+  private let resourceQueue = ResourceTaskQueue<ResourceTask>(
     label: "tokyo.kaito.ldtx.youtube-output-service.resources"
   ) { task, _ in
     task.execute()
   }
-  private lazy var commandQueue = SessionTaskQueue(
+  private let commandQueue = SessionTaskQueue(
     label: "tokyo.kaito.ldtx.youtube-output-service.commands")
   private var context: YouTubeOutputContext?
   private var pipeline: DASHLiveUploadPipeline?
