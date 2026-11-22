@@ -48,6 +48,18 @@ health checks are available for imported configurations until their connection
 fields are edited; local configuration IDs are never sent as YouTube LiveStream
 IDs.
 
+The collection is one generic-password item in the data-protection keychain, in
+the application's default access group, readable only after the first unlock on
+the same Mac. Every save applies that accessibility to new and existing items.
+Versions before this policy stored the collection in the legacy file-based
+keychain, where the accessibility attribute has no effect. That item is not
+migrated: when the data-protection item is missing, the legacy item is deleted,
+so users enter their stream keys again once. The data-protection keychain
+requires the `keychain-access-groups` entitlement, so builds signed without
+entitlements, such as ad-hoc CI builds, report a Keychain failure instead of
+saving stream keys. The YouTube authorization stores follow the same policy; see
+`docs/appkit-ui.md`.
+
 The Backup Server URL is stored and validated together with the primary URL and
 key. Publishing currently uses the primary URL only; automatic failover or
 simultaneous publishing to the backup server is not implemented.

@@ -251,10 +251,11 @@ private struct RecordingFolderPicker: View {
     static func makeAppletData() -> WorkspaceAppletData {
       WorkspaceAppletData(
         userDefaults: UserDefaults(suiteName: "WorkspaceOutputInspectorPreview.\(UUID())")!,
-        keychainClient: WorkspaceAppletKeychainClient(
+        streamKeyKeychainOperations: DataProtectionKeychainItem.Operations(
           copyMatching: { _, _ in errSecItemNotFound },
-          update: { _, _ in errSecSuccess },
-          add: { _, _ in errSecSuccess }))
+          add: { _, _ in errSecSuccess },
+          update: { _, _ in errSecItemNotFound },
+          delete: { _ in errSecItemNotFound }))
     }
   }
 

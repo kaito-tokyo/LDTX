@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 import Security
 
 struct YouTubeAuthorizationState: Codable, Equatable, Sendable {
@@ -32,7 +33,7 @@ public struct YouTubeAuthorizationStore {
   public static let defaultService = "tokyo.kaito.ldtx.youtube-auth"
 
   private let service: String
-  private let keychainOperations: YouTubeKeychainItem.Operations
+  private let keychainOperations: DataProtectionKeychainItem.Operations
   #if !LDTX_DISTRIBUTION
     private var file: YouTubeAuthFile?
 
@@ -46,7 +47,7 @@ public struct YouTubeAuthorizationStore {
     self.init(service: service, keychainOperations: .system)
   }
 
-  init(service: String, keychainOperations: YouTubeKeychainItem.Operations) {
+  init(service: String, keychainOperations: DataProtectionKeychainItem.Operations) {
     self.service = service
     self.keychainOperations = keychainOperations
   }
@@ -119,14 +120,14 @@ public struct YouTubeAuthorizationStore {
     try withKeychainFailure { try keychainItem(clientID: clientID).delete() }
   }
 
-  private func keychainItem(clientID: String) -> YouTubeKeychainItem {
-    YouTubeKeychainItem(service: service, account: clientID, operations: keychainOperations)
+  private func keychainItem(clientID: String) -> DataProtectionKeychainItem {
+    DataProtectionKeychainItem(service: service, account: clientID, operations: keychainOperations)
   }
 
   private func withKeychainFailure<T>(_ body: () throws -> T) throws -> T {
     do {
       return try body()
-    } catch let error as YouTubeKeychainItem.StatusError {
+    } catch let error as DataProtectionKeychainItem.StatusError {
       throw YouTubeAuthorizationStoreError.keychainFailure(error.status)
     }
   }
