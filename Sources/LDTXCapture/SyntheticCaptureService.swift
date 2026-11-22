@@ -8,6 +8,8 @@ import CoreVideo
 import Darwin
 import Foundation
 
+// @unchecked Sendable: `timer` and `frameIndex` are read and written only on `queue`; `start` and
+// `stop` reach them through `queue.sync`, and the timer fires on `queue`.
 public final class SyntheticCaptureService: @unchecked Sendable {
   public typealias SampleHandler = @Sendable (CMSampleBuffer, CameraCaptureSampleKind) -> Void
 
@@ -23,10 +25,6 @@ public final class SyntheticCaptureService: @unchecked Sendable {
     frameRate: Int,
     handler: @escaping SampleHandler
   ) throws {
-    stop()
-
-    frameIndex = 0
-
     let timer = DispatchSource.makeTimerSource(queue: queue)
     timer.schedule(
       deadline: .now(),
@@ -41,8 +39,12 @@ public final class SyntheticCaptureService: @unchecked Sendable {
         handler: handler
       )
     }
-    self.timer = timer
-    timer.resume()
+    queue.sync {
+      self.timer?.cancel()
+      frameIndex = 0
+      self.timer = timer
+      timer.resume()
+    }
   }
 
   public func stop() {

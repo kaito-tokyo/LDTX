@@ -111,7 +111,7 @@ final class YouTubeOutputServiceProcessConnection: NSObject, @unchecked Sendable
 
   private let logger = Logger(subsystem: "tokyo.kaito.ldtx", category: "output-xpc-client")
   private let timerQueue = DispatchQueue(label: "tokyo.kaito.ldtx.youtube-output-xpc-timers")
-  private lazy var resourceQueue = ResourceTaskQueue<ResourceTask>(
+  private let resourceQueue = ResourceTaskQueue<ResourceTask>(
     label: "tokyo.kaito.ldtx.youtube-output-xpc-resource"
   ) { task, _ in
     task.execute()

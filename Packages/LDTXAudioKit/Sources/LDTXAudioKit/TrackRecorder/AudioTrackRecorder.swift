@@ -34,6 +34,9 @@ public enum AudioTrackRecorderError: Error, LocalizedError {
   }
 }
 
+// @unchecked Sendable: Every mutable property below is read and written only on `queue`;
+// `record` and `finish` reach them through `queue.sync`, and engine callbacks through
+// `queue.async`.
 public final class AudioTrackRecorder: @unchecked Sendable {
   private let engine: AudioEngine
   private let inputUID: String
@@ -75,18 +78,23 @@ public final class AudioTrackRecorder: @unchecked Sendable {
     guard engine.hasActiveInput(uid: inputUID) else {
       throw AudioTrackRecorderError.writerStartFailed("Input device is not active")
     }
-    try prepareWriter()
-    startedAt = .now
-    subscription = engine.subscribe(input: input) { [weak self] sample in
+    let (writer, receiver) = try prepareWriter()
+    queue.sync {
+      self.writer = writer
+      self.receiver = receiver
+      startedAt = .now
+    }
+    let started = engine.subscribe(input: input) { [weak self] sample in
       self?.append(sample)
     }
+    queue.sync { subscription = started }
     try await Task.sleep(for: duration)
     return try await finish()
   }
 
   public func finish() async throws -> AudioTrackRecordResult {
-    subscription?.cancel()
-    subscription = nil
+    queue.sync { subscription.take() }?.cancel()
+    // Appends queued before the cancel run before this sync, so the result counts them.
     let state = queue.sync {
       () -> (AVAssetWriter?, AVAssetWriterInput.SampleBufferReceiver?, Error?) in
       (writer, receiver, failed)
@@ -100,12 +108,14 @@ public final class AudioTrackRecorder: @unchecked Sendable {
       throw AudioTrackRecorderError.writerFinishFailed(
         writer.error?.localizedDescription ?? "unknown writer error")
     }
-    let result = makeResult()
+    let result = queue.sync { makeResult() }
     engine.stop()
     return result
   }
 
-  private func prepareWriter() throws {
+  private func prepareWriter() throws -> (
+    AVAssetWriter, AVAssetWriterInput.SampleBufferReceiver
+  ) {
     try FileManager.default.createDirectory(
       at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     let writer = try AVAssetWriter(outputURL: outputURL, fileType: .m4a)
@@ -125,8 +135,7 @@ public final class AudioTrackRecorder: @unchecked Sendable {
         writer.error?.localizedDescription ?? "unknown writer error")
     }
     writer.startSession(atSourceTime: .zero)
-    self.writer = writer
-    self.receiver = receiver
+    return (writer, receiver)
   }
 
   private func append(_ sample: CMSampleBuffer) {
