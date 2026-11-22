@@ -136,9 +136,10 @@ public enum CaptureSessionManagerError: Error, Equatable, LocalizedError {
   }
 }
 
-// @unchecked Sendable: `session`, `notificationObservers` and `activeDeviceIDs` are used only on
-// `sessionQueue`; `outputsByID`, `sampleHandler` and `failureHandler` only on `sampleQueue`, the
-// delegate queue, with off-queue access going through `sampleQueue.sync`;
+// @unchecked Sendable: `session`, `notificationObservers`, `activeDeviceIDs` and
+// `activeVideoRequests` are used only on `sessionQueue`; `outputsByID`, `sampleHandler` and
+// `failureHandler` only on `sampleQueue`, the delegate queue, with off-queue access going through
+// `sampleQueue.sync`;
 // `startupCompletionHandler` only inside `startupLock`.
 public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate,
   @unchecked Sendable
@@ -167,6 +168,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private var startupCompletionHandler: (@Sendable (Result<Void, any Error>) -> Void)?
   private var notificationObservers: [NSObjectProtocol] = []
   private var activeDeviceIDs: Set<String> = []
+  private var activeVideoRequests: [CaptureSessionVideoRequest] = []
 
   public init(allowedVideoDeviceIDs: Set<String>? = nil) {
     self.allowedVideoDeviceIDs = allowedVideoDeviceIDs
@@ -224,9 +226,11 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    guard let managedOutput = outputsByID[ObjectIdentifier(output)] else {
+    let outputID = ObjectIdentifier(output)
+    guard let managedOutput = outputsByID[outputID] else {
       return
     }
+    let callbackStart = Self.hostTimeNanoseconds()
     sampleHandler?(
       CapturedSample(
         sourceKey: managedOutput.sourceKey,
@@ -234,6 +238,16 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         kind: managedOutput.kind,
         sampleBuffer: sampleBuffer
       ))
+    let callbackEnd = Self.hostTimeNanoseconds()
+    let report = outputsByID[outputID]?.deliveryStats.recordDelivered(
+      presentationNanoseconds: Self.nanoseconds(
+        of: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)),
+      callbackStartNanoseconds: callbackStart,
+      callbackEndNanoseconds: callbackEnd
+    )
+    if let report {
+      Self.logDeliveryReport(report, for: managedOutput)
+    }
   }
 
   public func captureOutput(
@@ -241,6 +255,17 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     didDrop sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    let outputID = ObjectIdentifier(output)
+    guard let managedOutput = outputsByID[outputID] else {
+      return
+    }
+    let report = outputsByID[outputID]?.deliveryStats.recordDropped(
+      reason: Self.dropReason(of: sampleBuffer),
+      nowNanoseconds: Self.hostTimeNanoseconds()
+    )
+    if let report {
+      Self.logDeliveryReport(report, for: managedOutput)
+    }
   }
 
   private func configureAndStart(
@@ -275,7 +300,9 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     session.commitConfiguration()
     self.session = session
     observeRuntimeFailures(for: session, deviceIDs: Set(request.videoInputs.map(\.deviceID)))
+    activeVideoRequests = request.videoInputs
     session.startRunning()
+    Self.applyRequestedFrameRates(request.videoInputs)
     sampleQueue.sync { self.sampleHandler = handler }
     Self.logger.notice(
       "Capture session started: videoInputs=\(request.videoInputs.count, privacy: .public), videoDevices=\(Self.describeVideoInputs(request.videoInputs), privacy: .private(mask: .hash)), isRunning=\(session.isRunning, privacy: .public)"
@@ -286,7 +313,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     _ requests: [CaptureSessionVideoRequest],
     in session: AVCaptureSession
   ) throws {
-    for request in requests {
+    for (inputIndex, request) in requests.enumerated() {
       if let allowedVideoDeviceIDs, !allowedVideoDeviceIDs.contains(request.deviceID) {
         throw CaptureSessionManagerError.videoDeviceNotAllowed(request.deviceID)
       }
@@ -320,6 +347,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
         input: input,
         mediaType: .video,
         output: output,
+        inputIndex: inputIndex,
         sourceKey: request.sourceKey,
         deviceID: request.deviceID,
         kind: .video,
@@ -332,6 +360,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     input: AVCaptureDeviceInput,
     mediaType: AVMediaType,
     output: AVCaptureOutput,
+    inputIndex: Int,
     sourceKey: String,
     deviceID: String,
     kind: CameraCaptureSampleKind,
@@ -347,6 +376,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     session.addConnection(connection)
     sampleQueue.sync {
       outputsByID[ObjectIdentifier(output)] = ManagedOutput(
+        inputIndex: inputIndex,
         sourceKey: sourceKey,
         deviceID: deviceID,
         kind: kind
@@ -368,6 +398,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     clearSampleDeliveryState()
     resumeStartup(throwing: CancellationError())
     session = nil
+    activeVideoRequests = []
   }
 
   private func observeRuntimeFailures(for session: AVCaptureSession, deviceIDs: Set<String>) {
@@ -396,6 +427,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
               "Capture media services were reset; restarting the current session"
             )
             session.startRunning()
+            Self.applyRequestedFrameRates(self.activeVideoRequests)
           case .report:
             self.reportRuntimeFailure(.sessionRuntimeError(code: code))
           }
@@ -430,6 +462,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
           guard let self, self.session === session, !session.isRunning else { return }
           Self.logger.notice("Capture session interruption ended; resuming capture")
           session.startRunning()
+          Self.applyRequestedFrameRates(self.activeVideoRequests)
         }
       },
     ]
@@ -593,7 +626,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
       }
       .joined(separator: ",")
     return
-      "\(Int(activeDimensions.width))x\(Int(activeDimensions.height)), pixelFormat=\(fourCC(activePixelFormat)), frameRates=[\(activeRanges)], activeMinFPS=\(frameRateDescription(for: device.activeVideoMinFrameDuration)), activeMaxFPS=\(frameRateDescription(for: device.activeVideoMaxFrameDuration))"
+      "\(Int(activeDimensions.width))x\(Int(activeDimensions.height)), pixelFormat=\(fourCC(activePixelFormat)), frameRates=[\(activeRanges)], activeMaxFPS=\(frameRateDescription(for: device.activeVideoMinFrameDuration)), activeMinFPS=\(frameRateDescription(for: device.activeVideoMaxFrameDuration))"
   }
 
   private static func frameRateDescription(for duration: CMTime) -> String {
@@ -619,9 +652,132 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   }
 
   private struct ManagedOutput {
+    var inputIndex: Int
     var sourceKey: String
     var deviceID: String
     var kind: CameraCaptureSampleKind
+    var deliveryStats = CaptureFrameDeliveryStats()
+  }
+
+  private static func hostTimeNanoseconds() -> UInt64 {
+    UInt64(clamping: nanoseconds(of: CMClockGetTime(CMClockGetHostTimeClock())) ?? 0)
+  }
+
+  private static func nanoseconds(of time: CMTime) -> Int64? {
+    guard time.isValid, time.isNumeric else { return nil }
+    return CMTimeConvertScale(time, timescale: 1_000_000_000, method: .roundHalfAwayFromZero)
+      .value
+  }
+
+  private static func dropReason(of sampleBuffer: CMSampleBuffer) -> CaptureFrameDropReason {
+    let reason =
+      CMGetAttachment(
+        sampleBuffer,
+        key: kCMSampleBufferAttachmentKey_DroppedFrameReason,
+        attachmentModeOut: nil
+      ) as? String
+    if reason == kCMSampleBufferDroppedFrameReason_FrameWasLate as String {
+      return .frameWasLate
+    }
+    if reason == kCMSampleBufferDroppedFrameReason_OutOfBuffers as String {
+      return .outOfBuffers
+    }
+    if reason == kCMSampleBufferDroppedFrameReason_Discontinuity as String {
+      return .discontinuity
+    }
+    return .other
+  }
+
+  private static func logDeliveryReport(
+    _ report: CaptureFrameDeliveryReport,
+    for output: ManagedOutput
+  ) {
+    logger.notice(
+      "Capture frame delivery input=\(output.inputIndex, privacy: .public) device=\(output.deviceID, privacy: .private(mask: .hash)) windowMs=\(milliseconds(report.windowNanoseconds), privacy: .public) delivered=\(report.deliveredCount, privacy: .public) dropped=\(report.droppedCount, privacy: .public) droppedLate=\(report.droppedLateCount, privacy: .public) droppedOutOfBuffers=\(report.droppedOutOfBuffersCount, privacy: .public) droppedDiscontinuity=\(report.droppedDiscontinuityCount, privacy: .public) droppedOther=\(report.droppedOtherCount, privacy: .public) intervalMeanMs=\(milliseconds(report.meanIntervalNanoseconds), privacy: .public) intervalMinMs=\(milliseconds(report.minIntervalNanoseconds), privacy: .public) intervalMaxMs=\(milliseconds(report.maxIntervalNanoseconds), privacy: .public) longIntervals=\(report.longIntervalCount, privacy: .public) maxLatencyMs=\(milliseconds(report.maxDeliveryLatencyNanoseconds), privacy: .public) maxHandlerMs=\(milliseconds(report.maxHandlerNanoseconds), privacy: .public)"
+    )
+  }
+
+  private static func milliseconds(_ nanoseconds: UInt64) -> String {
+    String(format: "%.3f", Double(nanoseconds) / 1_000_000)
+  }
+
+  /// Applies each request's frame rate to its device after the session preset has chosen
+  /// the active format, then logs the resulting configuration.
+  ///
+  /// The `.hd1920x1080` preset selects the format but leaves the frame duration at the device
+  /// default, which can be lower than requested. Applying it again after every
+  /// `startRunning()` keeps the rate when the session restarts.
+  private static func applyRequestedFrameRates(_ requests: [CaptureSessionVideoRequest]) {
+    let devices = allVideoDevices()
+    for (inputIndex, request) in requests.enumerated() {
+      guard let device = devices.first(where: { $0.uniqueID == request.deviceID }) else {
+        continue
+      }
+      applyRequestedFrameRate(request.frameRate, to: device, inputIndex: inputIndex)
+      logger.notice(
+        "Capture video input active configuration input=\(inputIndex, privacy: .public) device=\(request.deviceID, privacy: .private(mask: .hash)) requestedFPS=\(request.frameRate, privacy: .public) active=\(activeVideoConfigurationSummary(for: device), privacy: .public)"
+      )
+    }
+  }
+
+  private static func applyRequestedFrameRate(
+    _ requestedFrameRate: Int,
+    to device: AVCaptureDevice,
+    inputIndex: Int
+  ) {
+    let ranges = device.activeFormat.videoSupportedFrameRateRanges
+    let selection = CaptureFrameRateSelection.select(
+      requestedFrameRate: requestedFrameRate,
+      supportedRanges: ranges.map {
+        CaptureFrameRateRange(minFrameRate: $0.minFrameRate, maxFrameRate: $0.maxFrameRate)
+      }
+    )
+    let frameDuration: CMTime
+    switch selection {
+    case .requested(let frameRate):
+      frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+    case .rangeMaximum(let index):
+      frameDuration = ranges[index].minFrameDuration
+    case .rangeMinimum(let index):
+      frameDuration = ranges[index].maxFrameDuration
+    case .unavailable:
+      logger.error(
+        "Capture frame rate not applied input=\(inputIndex, privacy: .public) requestedFPS=\(requestedFrameRate, privacy: .public) reason=no-supported-range"
+      )
+      return
+    }
+    if abs(1 / frameDuration.seconds - Double(requestedFrameRate))
+      > CaptureFrameRateSelection.tolerance
+    {
+      logger.notice(
+        "Capture frame rate unsupported input=\(inputIndex, privacy: .public) requestedFPS=\(requestedFrameRate, privacy: .public) appliedFPS=\(frameRateDescription(for: frameDuration), privacy: .public)"
+      )
+    }
+    // AVFoundation raises an Objective-C exception, which Swift cannot catch, for a
+    // duration outside every supported range. Check with exact rational comparison first.
+    guard
+      ranges.contains(where: {
+        CMTimeCompare(frameDuration, $0.minFrameDuration) >= 0
+          && CMTimeCompare(frameDuration, $0.maxFrameDuration) <= 0
+      })
+    else {
+      logger.error(
+        "Capture frame rate not applied input=\(inputIndex, privacy: .public) requestedFPS=\(requestedFrameRate, privacy: .public) reason=duration-outside-supported-ranges"
+      )
+      return
+    }
+    do {
+      try AVCaptureDeviceConfigurationGate.withLock {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        device.activeVideoMinFrameDuration = frameDuration
+        device.activeVideoMaxFrameDuration = frameDuration
+      }
+    } catch {
+      logger.error(
+        "Capture frame rate not applied input=\(inputIndex, privacy: .public) requestedFPS=\(requestedFrameRate, privacy: .public) code=\((error as NSError).code, privacy: .public) error=\(String(describing: error), privacy: .private)"
+      )
+    }
   }
 
 }
