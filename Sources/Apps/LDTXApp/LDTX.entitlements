@@ -21,8 +21,6 @@ SPDX-License-Identifier: Apache-2.0
 	<true/>
 	<key>com.apple.security.assets.movies.read-write</key>
 	<true/>
-	<key>com.apple.security.assets.pictures.read-write</key>
-	<true/>
 	<key>com.apple.developer.background-tasks.continued-processing.inference</key>
 	<true/>
 	<key>keychain-access-groups</key>

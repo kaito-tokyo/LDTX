@@ -26,7 +26,7 @@ extension OutputTestSuite {
       #expect(expected.screenshotsDirectory.path == "/tmp/pictures")
       #expect(
         ApplicationOutputPreferences().screenshotsDirectory
-          == URL.picturesDirectory.resolvingSymlinksInPath())
+          == URL.moviesDirectory.resolvingSymlinksInPath())
       #expect(ApplicationOutputPreferences().defaultOutputDirectory == nil)
       let data = try #require(
         defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey))

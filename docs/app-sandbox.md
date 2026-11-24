@@ -35,8 +35,7 @@ remains enabled independently of the sandbox.
 | `com.apple.security.device.camera`, `com.apple.security.device.audio-input` | Capture input devices. |
 | `com.apple.security.files.user-selected.read-write` | Opening and saving Workspace and recording documents, importing models and OAuth clients, and choosing output folders. |
 | `com.apple.security.files.bookmarks.app-scope` | Restoring chosen output folders after relaunch. |
-| `com.apple.security.assets.movies.read-write` | The default recording folder, `~/Movies`. |
-| `com.apple.security.assets.pictures.read-write` | The default screenshots folder, `~/Pictures`. |
+| `com.apple.security.assets.movies.read-write` | The default recording and screenshots folder, `~/Movies`. |
 
 Keychain access groups, iCloud Documents, and the continued-processing
 inference entitlement were already compatible with the sandbox. Stream keys use
@@ -54,9 +53,10 @@ recordings and screenshots write to it at arbitrary times; each bookmark starts
 access at most once per process. Changing a Workspace's recording folder path
 discards its bookmark.
 
-The default folders come from `URL.moviesDirectory` and `URL.picturesDirectory`.
-Inside the sandbox these name links in the container, so they are resolved to
-the user's real folders before being displayed or revealed in Finder.
+Recordings and screenshots both default to `URL.moviesDirectory`, so the app
+needs only the Movies assets entitlement; screenshots previously defaulted to
+`~/Pictures`. Inside the sandbox the URL names a link in the container, so it is
+resolved to the user's real folder before being displayed or revealed in Finder.
 
 ## Other executables
 
@@ -69,8 +69,9 @@ the user's real folders before being displayed or revealed in Finder.
 
 - Folders chosen before the sandbox have a path but no bookmark. The sandboxed
   app cannot write to them, so output reports the folder as not writable until
-  the user chooses it again. The default `~/Movies` and `~/Pictures` folders keep
-  working.
+  the user chooses it again. Folders under `~/Movies` keep working without a
+  bookmark. Folders under `~/Pictures` are no longer covered by an entitlement
+  and must be chosen again.
 - Application Support, caches, and temporary files move into the container. The
   development-only `.YouTubeAuth` file is not migrated; authorize again.
 - Whether macOS migrates the existing UserDefaults domain into the container on

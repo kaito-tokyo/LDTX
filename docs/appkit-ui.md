@@ -440,7 +440,7 @@ Toolbar items are declared with SwiftUI ToolbarContent and project the current
 Workspace state. SwiftUI installs the toolbar on the document window.
 
 SettingsRootView's Output tab configures the application-wide screenshots folder,
-defaulting to ~/Pictures. Captures save there regardless of recording state and
+defaulting to ~/Movies. Captures save there regardless of recording state and
 also save identical images in the active local recording's Screenshots folder.
 The toolbar folder action opens the global folder; the result counts images,
 not duplicate copies. Recording and screenshots folder settings are independent.

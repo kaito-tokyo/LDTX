@@ -49,11 +49,11 @@ public struct SettingsView<AccountContent: View>: View {
             }
           }
           Section("Screenshots Folder") {
-            LabeledContent("Folder", value: outputPreferences.screenshotsFolderPath ?? "~/Pictures")
+            LabeledContent("Folder", value: outputPreferences.screenshotsFolderPath ?? "~/Movies")
             HStack {
               Button("Choose Folder…", action: chooseScreenshotsFolder)
               if outputPreferences.screenshotsFolderPath != nil {
-                Button("Use ~/Pictures") {
+                Button("Use ~/Movies") {
                   var preferences = outputPreferences
                   preferences.setScreenshotsFolder(nil)
                   saveOutputPreferences(preferences)

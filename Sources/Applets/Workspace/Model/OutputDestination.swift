@@ -98,7 +98,7 @@ public struct ApplicationOutputPreferences: Codable, Equatable, Sendable {
     defaultOutputFolderBookmark = url.flatMap(SecurityScopedFolder.bookmark(for:))
   }
 
-  /// Selects the screenshots folder, or restores the standard Pictures folder for nil.
+  /// Selects the screenshots folder, or restores the standard Movies folder for nil.
   public mutating func setScreenshotsFolder(_ url: URL?) {
     screenshotsFolderPath = url?.standardizedFileURL.path
     screenshotsFolderBookmark = url.flatMap(SecurityScopedFolder.bookmark(for:))
@@ -111,16 +111,12 @@ public struct ApplicationOutputPreferences: Codable, Equatable, Sendable {
 
   public var screenshotsDirectory: URL {
     SecurityScopedFolder.url(path: screenshotsFolderPath, bookmark: screenshotsFolderBookmark)
-      ?? Self.standardPicturesDirectory
+      ?? Self.standardMoviesDirectory
   }
 
-  /// The user's Pictures folder. Under the App Sandbox `URL.picturesDirectory` names the
-  /// container's link to it, so the link is resolved to keep Finder and displayed paths real.
-  public static var standardPicturesDirectory: URL {
-    URL.picturesDirectory.resolvingSymlinksInPath()
-  }
-
-  /// The user's Movies folder, resolved the same way as ``standardPicturesDirectory``.
+  /// The user's Movies folder, the default for both recordings and screenshots so the App
+  /// Sandbox needs only one assets entitlement. Under the sandbox `URL.moviesDirectory` names
+  /// the container's link to it, so the link is resolved to keep Finder and displayed paths real.
   public static var standardMoviesDirectory: URL {
     URL.moviesDirectory.resolvingSymlinksInPath()
   }
