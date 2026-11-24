@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
-  LDTXAppXpcTests:
+  LDTXAppHostedTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - Tests/LDTXAppXpcTests
+      - Tests/LDTXAppHostedTests
     dependencies:
       - target: LDTXRichText
       - target: LDTXApp
@@ -17,7 +17,7 @@ targets:
         product: LDTXCorelibs
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppXpcTests
+        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXAppHostedTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "6.0"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LDTX.app/Contents/MacOS/LDTX"
@@ -25,11 +25,11 @@ targets:
         SWIFT_INCLUDE_PATHS: "$(inherited) $(PROJECT_TEMP_DIR)/$(CONFIGURATION)/LDTX.build/Objects-normal/$(CURRENT_ARCH)"
 
 schemes:
-  LDTXAppXpcTests:
+  LDTXAppHostedTests:
     build:
       targets:
-        LDTXAppXpcTests: all
+        LDTXAppHostedTests: all
     test:
       config: Debug
       targets:
-        - LDTXAppXpcTests
+        - LDTXAppHostedTests

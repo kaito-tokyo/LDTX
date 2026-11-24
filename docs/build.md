@@ -126,7 +126,7 @@ xcodebuild \
   build-for-testing
 ```
 
-Unit-test bundles run without a host application, except XpcTests, which use
+Unit-test bundles run without a host application, except `LDTXAppHostedTests`, which use
 the signed application host for tests that need its entitlements. UI component tests
 construct their own windows and hosted SwiftUI views.
 
