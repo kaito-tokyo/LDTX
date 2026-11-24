@@ -77,6 +77,16 @@ the user's real folders before being displayed or revealed in Finder.
   the first sandboxed launch must be confirmed on a signed build. If it does
   not, Settings, Stream Deck assignments, and Workspace-local state reset once.
 
+## Known issues
+
+- When no Workspace is restored at launch, macOS shows the Open panel. In the
+  sandbox that panel runs in a separate system process. If LDTX launches
+  without becoming the active app, for example through `open` from a process
+  that keeps focus, the panel does not respond to clicks. It responds when LDTX
+  is active at launch, and an unsandboxed build's panel responds in both cases.
+  Launching from the Dock, Finder, or Spotlight activates the app. LDTX itself
+  does not open this panel.
+
 ## Validation
 
 Source changes cannot prove the policy. On a signed build, inspect the effective
@@ -90,4 +100,5 @@ entitlements with `codesign -d --entitlements - LDTX.app` and confirm:
 - RTMPS streaming, DASH upload, and YouTube OAuth authorization;
 - Stream Deck input;
 - Vision model import and OAuth client import; and
-- notification attachments and Show in Finder for saved files.
+- notification attachments and Show in Finder for saved files; and
+- the launch-time Open panel when LDTX launches without becoming active.
