@@ -40,7 +40,6 @@ targets:
       - target: LDTXWorkspaceAppletUI
       - target: LDTXYouTube
       - target: LDTXYouTubeAuth
-      - target: LDTXYouTubeOutputProtocol
       - target: LDTXYouTubeRTMPS
     settings:
       base:

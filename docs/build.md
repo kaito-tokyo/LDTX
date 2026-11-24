@@ -126,8 +126,8 @@ xcodebuild \
   build-for-testing
 ```
 
-Unit-test bundles run without a host application, except XpcTests, which may use
-an application host to exercise its embedded XPC service. UI component tests
+Unit-test bundles run without a host application, except XpcTests, which use
+the signed application host for tests that need its entitlements. UI component tests
 construct their own windows and hosted SwiftUI views.
 
 ### Real OCR recognition
@@ -221,10 +221,6 @@ preserve embedded NULs; copying into Swift rejects invalid UTF-8. No field
 callbacks or preliminary wire-type scan are used. Map output is ordered
 by key. The Swift Clang importer uses the same three configuration macros as the
 upstream nanopb package.
-
-YouTube output IPC uses Codable models encoded as binary PropertyLists. It has
-no protobuf schema or Corelibs dependency; protocol version 9 identifies this
-wire format. Update both app and embedded XPC service together.
 
 **If the MediaPipe Selfie Segmenter model must be updated:**
 

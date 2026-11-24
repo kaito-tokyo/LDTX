@@ -3,41 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 targets:
-  LDTXYouTubeOutputServiceProcess:
-    type: xpc-service
-    platform: macOS
-    sources:
-      - Sources/LDTXYouTubeOutputServiceProcess
-    info:
-      path: Sources/LDTXYouTubeOutputServiceProcess/Info.plist
-      properties:
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        XPCService:
-          ServiceType: Application
-    dependencies:
-      - target: LDTXDash
-        embed: true
-        codeSign: true
-      - target: LDTXMP4
-        embed: true
-        codeSign: true
-      - target: LDTXTaskQueue
-        embed: true
-        codeSign: true
-      - target: LDTXYouTubeOutputProtocol
-        embed: true
-        codeSign: true
-      - package: Corelibs
-        product: LDTXCorelibs
-        embed: true
-        codeSign: true
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
-        PRODUCT_NAME: LDTXYouTubeOutputServiceProcess
-        SKIP_INSTALL: "YES"
-        ENABLE_HARDENED_RUNTIME: "YES"
   LDTXHelper:
     type: tool
     platform: macOS

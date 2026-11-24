@@ -8,7 +8,6 @@ import CoreVideo
 import Foundation
 import LDTXMP4
 @testable import LDTXProgramRuntime
-import LDTXYouTubeOutputProtocol
 import LDTXYouTubeRTMPS
 import Testing
 
@@ -121,43 +120,6 @@ extension OutputTestSuite {
           packets[index].presentationTime.milliseconds
             == timing.presentationTimeStamp.value * 1_000
             / Int64(timing.presentationTimeStamp.timescale))
-      }
-    }
-
-    @Test("LUB-1067: Converts interleaved float32 PCM with timestamp and frame duration")
-    func convertsInterleavedFloat32PCMWithTimestampAndFrameDuration() throws {
-      let values: [Float32] = [0.25, -0.25, 0.5, -0.5]
-      let bytes = values.withUnsafeBytes { Data($0) }
-      let sample = try makePCMSample(data: bytes, frameCount: 2, startFrame: 480)
-
-      let pcm = try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sample)
-
-      #expect(pcm.presentationTime == YouTubeOutputMediaTime(value: 480, timescale: 48_000))
-      #expect(pcm.duration == YouTubeOutputMediaTime(value: 2, timescale: 48_000))
-      #expect(pcm.sampleRate == 48_000)
-      #expect(pcm.channelCount == 2)
-      #expect(pcm.frameCount == 2)
-      #expect(pcm.sampleFormat == .float32Interleaved)
-      #expect(pcm.data == bytes)
-    }
-
-    @Test("LUB-1067: Rejects non interleaved PCM") func rejectsNonInterleavedPCM() throws {
-      var stream = AudioStreamBasicDescription(
-        mSampleRate: 48_000,
-        mFormatID: kAudioFormatLinearPCM,
-        mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked
-          | kAudioFormatFlagIsNonInterleaved,
-        mBytesPerPacket: 4,
-        mFramesPerPacket: 1,
-        mBytesPerFrame: 4,
-        mChannelsPerFrame: 2,
-        mBitsPerChannel: 32,
-        mReserved: 0)
-      let sample = try makeAudioSample(
-        data: Data(repeating: 0, count: 8), frameCount: 2, startFrame: 0, stream: &stream)
-
-      #expect(throws: YouTubeOutputMediaSampleConverterError.unsupportedPCMFormat) {
-        try YouTubeOutputMediaSampleConverter.pcmBuffer(from: sample)
       }
     }
 

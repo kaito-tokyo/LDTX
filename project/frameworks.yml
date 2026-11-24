@@ -149,17 +149,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXMP4
         GENERATE_INFOPLIST_FILE: YES
         DEFINES_MODULE: YES
-  LDTXYouTubeOutputProtocol:
-    type: framework
-    platform: macOS
-    sources:
-      - Sources/LDTXYouTubeOutputProtocol
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXYouTubeOutputProtocol
-        PRODUCT_MODULE_NAME: LDTXYouTubeOutputProtocol
-        GENERATE_INFOPLIST_FILE: YES
-        DEFINES_MODULE: YES
   LDTXVideoComposition:
     type: framework
     platform: macOS
@@ -314,7 +303,6 @@ targets:
       - target: LDTXInternalProtocols
       - target: LDTXMP4
       - target: LDTXYouTubeRTMPS
-      - target: LDTXYouTubeOutputProtocol
       - package: Corelibs
         product: LDTXCorelibs
       - target: LDTXProgramRendering
@@ -411,7 +399,6 @@ targets:
       - target: LDTXTaskQueue
       - target: LDTXVision
       - target: LDTXYouTubeRTMPS
-      - target: LDTXYouTubeOutputProtocol
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tokyo.kaito.ldtx.LDTXWorkspaceAppletService

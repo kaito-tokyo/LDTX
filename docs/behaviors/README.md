@@ -17,8 +17,8 @@ tests. Features describe expectations, not test results.
 - Name files `LUB-1000_LDTXModule_short-description.feature`.
 - Tag each Feature with its ID and primary module: `@LUB-1000 @LDTXModule`.
 - Tag Scenarios consecutively from `@LUB-1000.1`, without gaps or leading zeros.
-- Add one scope tag per Scenario: `@Unit`, `@Integration`, `@UIComponent`, `@UI`,
-  or `@XPC`.
+- Add one scope tag per Scenario: `@Unit`, `@Integration`, `@UIComponent`, or
+  `@UI`.
 - Explicitly name every Swift Testing test with its LUB ID and readable case name
   in `@Test("LUB-1000: Preserve rational representations")`.
 - Describe one observable contract per Scenario using Given, When, and Then.

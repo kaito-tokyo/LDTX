@@ -89,4 +89,4 @@ swift test --package-path Packages/LDTXCorelibs
 
 The LDTXWorkspaceAppletUI scheme can be built without the runtime implementation
 targets. Run UI component tests for document/editing behavior, and the existing
-preview, device discovery, output, CLI and XPC tests for integration behavior.
+preview, device discovery, output, CLI and app-hosted tests for integration behavior.
