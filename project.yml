@@ -78,5 +78,5 @@ include:
     relativePaths: false
   - path: project/tests-ui-components.yml
     relativePaths: false
-  - path: project/tests-xpc.yml
+  - path: project/tests-app-hosted.yml
     relativePaths: false

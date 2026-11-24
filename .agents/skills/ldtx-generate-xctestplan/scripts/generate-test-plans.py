@@ -20,7 +20,7 @@ ALL_TARGETS = (
     "LDTXOutputTests",
     "LDTXAppUIComponentTests",
     "LDTXModuleTests",
-    "LDTXAppXpcTests",
+    "LDTXAppHostedTests",
 )
 UI_TARGET = "LDTXAppUIComponentTests"
 PLANS = (

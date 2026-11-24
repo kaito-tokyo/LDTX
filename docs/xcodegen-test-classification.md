@@ -13,7 +13,7 @@ These tiers are suite tags in the shared `LDTXModuleTests` target. Standard
 test runs execute all tiers; tags remain useful for classification.
 Output-related suites use the macOS-only, hostless `LDTXOutputTests` target,
 including logic, media processing, and service integration. Tests that need
-the signed application host's entitlements remain in `LDTXAppXpcTests`.
+the signed application host's entitlements remain in `LDTXAppHostedTests`.
 
 - Easy contains pure logic, including controlled fake-based interactions and
   serialization that do not execute platform APIs.
@@ -33,7 +33,7 @@ SystemTests isolation boundary.
 
 All three tiers share one hostless target. Xcode Cloud runs the hostless targets
 through the `LDTXApp` scheme. UI components are tested by directly
-constructing their windows in `LDTXAppUIComponentTests`; only XpcTests may use an
+constructing their windows in `LDTXAppUIComponentTests`; only `LDTXAppHostedTests` may use an
 application host. UI component and Corelibs target boundaries are unchanged.
 
 ## Tier suite inventory
@@ -132,7 +132,7 @@ a second target. These tests are outside the tier rule.
 
 Direct UI component and Document tests remain in `LDTXAppUIComponentTests` with
 its serialized MainActor parent. Application launch, menu, and system-dialog
-automation is not included; entitlement-dependent tests remain in `LDTXAppXpcTests` with its host.
+automation is not included; entitlement-dependent tests remain in `LDTXAppHostedTests` with its host.
 
 | Target | Suite | Source |
 | --- | --- | --- |

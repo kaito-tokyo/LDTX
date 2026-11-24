@@ -193,12 +193,12 @@ Tests that would launch the application solely to inspect menus or operating
 system dialogs are not included; directly constructed windows and views belong
 in `LDTXAppUIComponentTests`.
 Tests that need the signed application host's entitlements, such as the
-data-protection keychain tests, remain in the isolated `LDTXAppXpcTests` scheme. Easy, Medium, and Hard tags classify suites but do not
+data-protection keychain tests, remain in the isolated `LDTXAppHostedTests` scheme. Easy, Medium, and Hard tags classify suites but do not
 filter the standard test run.
 The macOS-only, hostless `LDTXOutputTests` target and scheme
 collect output configuration, media delivery, recording/streaming session, and
 output media conversion tests across those framework tiers. The app test scheme
-includes this target; app-hosted tests stay in `LDTXAppXpcTests`. The same
+includes this target; app-hosted tests stay in `LDTXAppHostedTests`. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
 tests. Full-app archive validation is owned by the release workflow and is
 intentionally separate from the GitHub test gate. This repository does not use
@@ -208,7 +208,7 @@ For XcodeGen-managed tests, `AGENTS.md` is the authoritative classification
 policy. Easy covers pure logic, Medium covers macOS APIs such as CoreGraphics,
 CoreAudio, and AudioToolbox, and Hard covers Vision, VideoToolbox, CoreML, Metal,
 and AVFoundation. CI availability does not determine the tier;
-suite names describe Unit or Integration scope. SystemTests and XpcTests are
+suite names describe Unit or Integration scope. SystemTests and `LDTXAppHostedTests` are
 isolated target boundaries for a specific SUT, not aliases for serialized
 Swift Testing suites. SwiftPM- and CMake-managed tests remain under their own
 module policies.
@@ -238,7 +238,7 @@ Debug configuration and macOS 27. Leave signing to
 Xcode Cloud and keep the existing release Archive workflows unchanged.
 `ci_scripts/ci_post_clone.sh` generates the project before the test action.
 HardTests is a hostless unit-test bundle exercising the frameworks listed in
-`AGENTS.md`. It neither uses XCUI nor launches an application host. Only XpcTests
+`AGENTS.md`. It neither uses XCUI nor launches an application host. Only `LDTXAppHostedTests`
 may use `TEST_HOST`.
 The local command for the same test run is:
 

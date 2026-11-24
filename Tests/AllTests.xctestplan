@@ -6,7 +6,9 @@
       "options": {}
     }
   ],
-  "defaultOptions": {"codeCoverage": false},
+  "defaultOptions": {
+    "codeCoverage": false
+  },
   "testTargets": [
     {
       "target": {
@@ -39,8 +41,8 @@
     {
       "target": {
         "containerPath": "container:LDTX.xcodeproj",
-        "identifier": "258A6CFD02CAAFCCAA7DAAF6",
-        "name": "LDTXAppXpcTests"
+        "identifier": "4338D418F9701756ED4F9D0E",
+        "name": "LDTXAppHostedTests"
       }
     }
   ],
