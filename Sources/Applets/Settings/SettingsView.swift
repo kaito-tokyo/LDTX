@@ -7,37 +7,44 @@ import LDTXWorkspaceAppletModel
 import LDTXWorkspaceAppletStore
 import SwiftUI
 
-public struct SettingsView<AccountContent: View>: View {
+public struct SettingsView<AccountContent: View, StreamKeysContent: View>: View {
   private let accountContent: AccountContent
+  private let streamKeysContent: StreamKeysContent
   private let settingsStore: ApplicationSettingsStore
   private let monitorSettings: MonitorDeviceSettingsModel
   @State private var outputPreferences = ApplicationOutputPreferences()
+  @AppStorage(ApplicationSettingsTab.defaultsKey) private var selectedTab =
+    ApplicationSettingsTab.account
 
   public init(
     userDefaults: UserDefaults = .standard,
-    @ViewBuilder accountContent: () -> AccountContent
+    @ViewBuilder accountContent: () -> AccountContent,
+    @ViewBuilder streamKeysContent: () -> StreamKeysContent
   ) {
     self.accountContent = accountContent()
+    self.streamKeysContent = streamKeysContent()
     self.settingsStore = ApplicationSettingsStore(userDefaults: userDefaults)
     self.monitorSettings = MonitorDeviceSettingsModel(defaults: userDefaults)
   }
 
   init(
     monitorSettings: MonitorDeviceSettingsModel,
-    @ViewBuilder accountContent: () -> AccountContent
+    @ViewBuilder accountContent: () -> AccountContent,
+    @ViewBuilder streamKeysContent: () -> StreamKeysContent
   ) {
     self.accountContent = accountContent()
+    self.streamKeysContent = streamKeysContent()
     self.settingsStore = ApplicationSettingsStore(userDefaults: .standard)
     self.monitorSettings = monitorSettings
   }
 
   public var body: some View {
-    TabView {
-      Tab("Account", systemImage: "person.crop.circle") { accountContent }
-      Tab("Audio", systemImage: "speaker.wave.2") {
+    TabView(selection: $selectedTab) {
+      Tab("Account", systemImage: "person.crop.circle", value: .account) { accountContent }
+      Tab("Audio", systemImage: "speaker.wave.2", value: .audio) {
         MonitorDeviceSettingsView(model: monitorSettings)
       }
-      Tab("Output", systemImage: "folder") {
+      Tab("Output", systemImage: "folder", value: .output) {
         Form {
           Section("Default Output Folder") {
             LabeledContent("Folder", value: outputPreferences.defaultOutputFolderPath ?? "~/Movies")
@@ -64,6 +71,7 @@ public struct SettingsView<AccountContent: View>: View {
         }
         .formStyle(.grouped)
       }
+      Tab("Stream Keys", systemImage: "key", value: .streamKeys) { streamKeysContent }
     }
     .frame(width: 560, height: 360)
     .task { outputPreferences = settingsStore.loadApplicationOutputPreferences() }

@@ -27,11 +27,24 @@ proxying, non-AVC video, non-AAC audio, or compatibility with other services.
 The module consumes a typed destination but does not depend on OAuth or the
 YouTube Live API.
 
-Manage Stream Keys manages named configurations. Each configuration contains an
-RTMPS Stream URL, an optional Backup Server URL, and a shared Stream Key. Users
-can enter these fields or import a configuration from YouTube. Save validates
-both URLs and saves the complete collection to the macOS Keychain; Cancel
-leaves the saved collection unchanged. Keys are masked in the editor.
+The Stream Keys tab in Settings manages named configurations. Each
+configuration contains an RTMPS Stream URL, an optional Backup Server URL, and a
+shared Stream Key. Users enter these fields in a sheet for one configuration.
+Save validates both URLs, requires unique names and keys, and saves the complete
+collection to the macOS Keychain; Cancel leaves the saved collection unchanged.
+Keys are masked in the editor.
+
+Import from YouTube lists the LiveStreams of the account authorized in the
+Account tab, using the YouTube Live API's `liveStreams.list` with `mine=true`.
+The list keeps only titles, stream status and whether a complete RTMPS
+destination exists; the stream URL and key are fetched for the chosen LiveStream
+alone. Only `rtmp` LiveStreams with an RTMPS ingestion address can be imported.
+The LiveStream title becomes the name, made unique among saved configurations,
+and the LiveStream ID is kept as the configuration's source. Importing a
+LiveStream again refreshes that configuration's connection fields in place,
+keeping its ID, name and Workspace assignments. When YouTube's RTMPS backup
+address carries a query, such as `?backup=1`, the backup URL validation rejects
+it and the imported configuration has no backup server URL.
 
 The Output pane persists only the ingest mode (`DASH` or `YouTube RTMPS`) in the
 Workspace. For YouTube RTMPS, Default and Vertical select different saved
@@ -43,8 +56,8 @@ Manually configured output does not require OAuth. Importing from YouTube does.
 Configuration credentials must not be written to Workspace files, preferences,
 Unified Logger messages, error descriptions, or state restoration data. The
 Keychain is the only persistent credential store. YouTube owns the association
-between stream keys and events; LDTX does not change that association. API
-health checks are available for imported configurations until their connection
+between stream keys and events; LDTX does not change that association. A
+configuration's optional YouTube LiveStream ID is cleared when its connection
 fields are edited; local configuration IDs are never sent as YouTube LiveStream
 IDs.
 

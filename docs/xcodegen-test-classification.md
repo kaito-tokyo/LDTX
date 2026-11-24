@@ -67,8 +67,10 @@ exercised through the SUT, even when they do not appear as imports in the test.
 | Easy | `ResourceTaskQueueIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXTaskQueue/ResourceTaskQueueTests.swift` |
 | Easy | `WorkspaceResourceQueueIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXTaskQueue/WorkspaceResourceQueueTests.swift` |
 | Easy | `WorkspaceAppletDataPropertyListUnitTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletUI/WorkspaceAppletDataPropertyListTests.swift` |
+| Easy | `YouTubeStreamKeySettingsModelIntegrationTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletUI/YouTubeStreamKeySettingsModelTests.swift` |
 | Easy | `WorkspaceResourcePathComponentCodecUnitTestSuite` | `Tests/LDTXModuleTests/LDTXWorkspaceAppletService/WorkspaceResourcePathComponentCodecTests.swift` |
 | Easy | `YouTubeLiveAPIClientUnitTestSuite` | `Tests/LDTXModuleTests/LDTXYouTube/YouTubeLiveAPIClientTests.swift` |
+| Easy | `YouTubeStreamKeyConfigurationImportUnitTestSuite` | `Tests/LDTXModuleTests/LDTXYouTube/YouTubeStreamKeyConfigurationImportTests.swift` |
 | Easy | `GoogleOAuthClientConfigurationUnitTestSuite` | `Tests/LDTXModuleTests/LDTXYouTubeAuth/GoogleOAuthClientConfigurationTests.swift` |
 | Output | `FLVPacketEncoderUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeRTMPS/FLVPacketEncoderTests.swift` |
 | Output | `RTMPEncodingUnitTestSuite` | `Tests/LDTXOutputTests/YouTubeRTMPS/RTMPEncodingTests.swift` |

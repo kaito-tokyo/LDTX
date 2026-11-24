@@ -412,7 +412,7 @@ and stops the renderer before shutting down the runtimes.
 
 Workspace Sidebar selection starts at `nil` and is not restored by AppKit. Explicit user selection and resource-addition selection remain window-local.
 
-Physical assignments, VFX/OCR inputs, and stream keys show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
+Physical assignments and VFX/OCR inputs show their current value separately from a Change sheet. Each sheet owns an initially unselected draft and applies it only after checking availability and edit permissions. Cancel leaves the model untouched. Stream key assignments in the Output inspector are plain dropdowns bound to the saved assignment; see the UI rules. Unresolved or unavailable references remain visible without rewriting their saved IDs. Fixed enumerations retain their existing controls.
 
 Monitor output selection is application-wide and belongs to SettingsRootView's
 Audio tab. The current device is displayed separately from an initially
@@ -444,6 +444,36 @@ defaulting to ~/Pictures. Captures save there regardless of recording state and
 also save identical images in the active local recording's Screenshots folder.
 The toolbar folder action opens the global folder; the result counts images,
 not duplicate copies. Recording and screenshots folder settings are independent.
+
+YouTube RTMPS stream key configurations are application-wide and belong to
+SettingsRootView's Stream Keys tab. AppDelegate reads them into the shared
+WorkspaceAppletData in `applicationWillFinishLaunching`, before SwiftUI creates
+any Workspace window; a failure is logged and reported again when an inspector
+or the tab reloads. LDTXApp supplies the tab as the Workspace
+Applet's YouTubeStreamKeySettingsView, because the configurations are stored
+through the shared WorkspaceAppletData; the tab and every Output inspector
+observe the same collection, so saved changes reach the inspector pickers
+without reopening the Workspace. Add and Edit open a sheet holding a draft of
+one configuration. Save trims surrounding whitespace, validates the fields,
+rejects duplicate names and keys, rereads the Keychain collection and writes it
+back. A failed save keeps the sheet open and shows the error; a Keychain read
+failure blocks writing instead of replacing configurations that could not be
+read. Delete asks for confirmation and saves immediately. Workspace assignments
+to a deleted configuration remain saved and display as unavailable.
+Import from YouTube opens a sheet listing the authorized account's LiveStreams
+and saves the chosen one immediately. LDTXApp supplies the importer, which owns
+OAuth and the YouTube Live API; the Workspace UI sees only the
+YouTubeStreamKeyImporter contract and holds no access token. Listing or
+retrieval failures stay in the sheet, which suggests authorizing in the Account
+tab.
+
+The Output inspector keeps only each Workspace's Landscape and Portrait stream
+key dropdowns. Each lists None, the saved configurations and, for a saved ID
+without a configuration, a disabled Unavailable item. A choice is applied only
+while output is idle and after rereading the Keychain confirms it still exists.
+Its Edit Stream Keys in Settings button stores the Stream Keys
+tab under `ApplicationSettingsTab.defaultsKey`, which the Settings TabView uses
+as its selection, and then calls SwiftUI's `openSettings`.
 
 ### Video layer editing belongs to Content
 

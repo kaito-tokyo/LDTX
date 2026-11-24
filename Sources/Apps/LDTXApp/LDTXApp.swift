@@ -60,7 +60,9 @@ struct LDTXApp: App {
     }
 
     Settings {
-      SettingsRootView()
+      SettingsRootView {
+        YouTubeStreamKeySettingsView(importer: YouTubeStreamKeyImport.makeImporter())
+      }
     }
     .defaultLaunchBehavior(.suppressed)
 
