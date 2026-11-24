@@ -32,6 +32,16 @@ Implementation, tests, and reviews should follow these rules alongside the
   defined in the Workspace remains a Definition-derived candidate regardless of
   whether its physical device is currently connected. Selection of the physical
   device itself remains subject to the dynamic-resource rule above.
+- YouTube stream key assignments in the Output inspector are also outside the
+  initially unselected rule. Their candidates are the application-wide
+  configurations managed in Settings, read synchronously from the Keychain when
+  the application launches, before any Workspace window exists; they are not
+  discovered asynchronously. Each assignment is a plain dropdown bound directly
+  to the saved assignment, with None to clear it. The dropdown always contains
+  an item tagged with the saved value: a saved ID without a matching
+  configuration appears as a disabled Unavailable item. Because the selection
+  never lacks a matching item, the Picker has no invalid state to resolve, and
+  the saved ID is written only when the user chooses another item.
 
 ## Video Components are deleted from their Inspectors
 
