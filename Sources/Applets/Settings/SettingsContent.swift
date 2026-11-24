@@ -4,13 +4,18 @@
 
 import SwiftUI
 
-struct SettingsContent<Account: SettingsAccountProviding>: View {
+struct SettingsContent<Account: SettingsAccountProviding, StreamKeysContent: View>: View {
   @ObservedObject private var account: Account
   private let monitorSettings: MonitorDeviceSettingsModel
+  private let streamKeysContent: StreamKeysContent
 
-  init(account: Account, monitorSettings: MonitorDeviceSettingsModel) {
+  init(
+    account: Account, monitorSettings: MonitorDeviceSettingsModel,
+    @ViewBuilder streamKeysContent: () -> StreamKeysContent
+  ) {
     self.account = account
     self.monitorSettings = monitorSettings
+    self.streamKeysContent = streamKeysContent()
   }
 
   public var body: some View {
@@ -24,6 +29,8 @@ struct SettingsContent<Account: SettingsAccountProviding>: View {
         authorizeYouTube: account.authorizeYouTube,
         loadOAuthClient: account.loadOAuthClient(from:)
       )
+    } streamKeysContent: {
+      streamKeysContent
     }
   }
 }

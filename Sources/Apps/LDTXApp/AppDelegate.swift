@@ -4,6 +4,7 @@
 import AppKit
 import LDTXWorkspaceAppletController
 import LDTXWorkspaceAppletUI
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -24,6 +25,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     guard !coordinator.stateService.isClosed else { return }
     // Losing focus leaves ownership intact; only another Workspace takes over.
     streamDeckWorkspace = coordinator
+  }
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    loadStreamKeyConfigurations()
+  }
+
+  /// Reads the stream key configurations before any Workspace window is created, so the
+  /// Output inspector's dropdowns render their saved assignments against loaded candidates.
+  /// A failure is logged here and reported again when an inspector or Settings reloads.
+  private func loadStreamKeyConfigurations() {
+    do {
+      _ = try WorkspaceAppletData.shared.loadYouTubeStreamKeyConfigurations()
+    } catch {
+      Logger(subsystem: "tokyo.kaito.ldtx", category: "StreamKeys").error(
+        "Stream key configurations could not be loaded at launch: \(error.localizedDescription, privacy: .public)"
+      )
+    }
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {

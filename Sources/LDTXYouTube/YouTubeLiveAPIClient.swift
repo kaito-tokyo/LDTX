@@ -159,6 +159,32 @@ public struct YouTubeLiveAPIClient: Sendable {
     return destination
   }
 
+  /// Converts a LiveStream with RTMPS ingestion into a stream key configuration that
+  /// remembers the LiveStream it came from. The stream title becomes the name.
+  public static func rtmpsStreamKeyConfiguration(
+    from stream: YouTubeLiveStream?
+  ) throws -> YouTubeRTMPSStreamKeyConfiguration {
+    guard let stream, let id = stream.id else {
+      throw YouTubeDualRTMPSConfigurationError.liveStreamNotFound
+    }
+    _ = try rtmpsDestination(from: stream)
+    guard let info = stream.cdn?.ingestionInfo, let streamURL = info.rtmpsIngestionAddress,
+      let streamKey = info.streamName
+    else { throw YouTubeDualRTMPSConfigurationError.missingDestination }
+    let title = stream.snippet?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    var configuration = YouTubeRTMPSStreamKeyConfiguration(
+      sourceLiveStreamID: id, name: title.isEmpty ? id : title, streamURL: streamURL,
+      backupServerURL: info.rtmpsBackupIngestionAddress ?? "", streamKey: streamKey)
+    if (try? configuration.destination()) == nil {
+      // The backup server is optional; drop one that LDTX cannot use rather than the stream.
+      configuration.backupServerURL = ""
+      guard (try? configuration.destination()) != nil else {
+        throw YouTubeDualRTMPSConfigurationError.missingDestination
+      }
+    }
+    return configuration
+  }
+
   public func listChannels(
     mine: Bool = true,
     completionHandler: @escaping @Sendable (Result<[YouTubeChannel], any Error>) -> Void

@@ -15,14 +15,15 @@ import Observation
 import Security
 import SwiftUI
 import Testing
+import os
 
 extension AppUIComponentTestSuite.Shard2 {
   @Suite("keep-window-controls-local", .serialized)
   @MainActor
   struct WorkspaceWindowControlsIntegrationTestSuite {
-    @Test("LUB-1066: Stream-key candidate loss clears only the editing choice")
-    func streamKeyDraftDoesNotReplaceRestoredAssignment() throws {
-      let suite = "StreamKeyDraft.\(UUID())"
+    @Test("LUB-1066: A missing stream key stays assigned until another choice")
+    func missingStreamKeyStaysAssigned() throws {
+      let suite = "StreamKeyAssignment.\(UUID())"
       let defaults = try #require(UserDefaults(suiteName: suite))
       defer { defaults.removePersistentDomain(forName: suite) }
       let data = WorkspaceAppletData(
@@ -31,25 +32,119 @@ extension AppUIComponentTestSuite.Shard2 {
           copyMatching: { _, _ in errSecItemNotFound }, add: { _, _ in errSecSuccess },
           update: { _, _ in errSecItemNotFound }, delete: { _ in errSecItemNotFound }))
       var assignment: String? = "restored"
-      var draft: String?
       let assigned = Binding<String?>(get: { assignment }, set: { assignment = $0 })
-      let choice = Binding<String?>(get: { draft }, set: { draft = $0 })
       let inspector = WorkspaceOutputInspector(
         outputSettings: .constant(.init()), externalID: UUID(),
         isOutputActive: false, appletData: data, reportError: { _ in })
       _ = inspector.body
-      #expect(draft == nil)
-      #expect(assignment == "restored")
-      draft = "removed"
-      draft = WorkspaceSelectionRules.reconciled(draft, availableIDs: [])
-      #expect(draft == nil)
       #expect(assignment == "restored")
       #expect(throws: WorkspaceSelectionError.self) {
-        try inspector.selectStreamKey("missing", assignment: assigned, draft: choice)
+        try inspector.selectStreamKey("missing", assignment: assigned)
       }
       #expect(assignment == "restored")
-      try inspector.selectStreamKey(nil, assignment: assigned, draft: choice)
+      try inspector.selectStreamKey(nil, assignment: assigned)
       #expect(assignment == nil)
+    }
+
+    @Test("LUB-1066: Hosted stream key dropdowns keep saved assignments while candidates load")
+    func hostedStreamKeyDropdownsKeepAssignments() async throws {
+      let suite = "StreamKeyDropdown.\(UUID())"
+      let defaults = try #require(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let stored = OSAllocatedUnfairLock<Data?>(initialState: nil)
+      let data = WorkspaceAppletData(
+        userDefaults: defaults,
+        streamKeyKeychainOperations: .init(
+          copyMatching: { _, result in
+            guard let data = stored.withLock({ $0 }) else { return errSecItemNotFound }
+            result?.pointee = data as CFData
+            return errSecSuccess
+          },
+          add: { _, _ in errSecSuccess }, update: { _, _ in errSecSuccess },
+          delete: { _ in errSecItemNotFound }))
+      let externalID = UUID()
+      data.landscapeYouTubeLiveStreamIDs[externalID] = "main"
+      data.portraitYouTubeLiveStreamIDs[externalID] = "deleted"
+      var errors: [String] = []
+      var settings = Ldtx_Workspace_V4_WorkspaceOutputSettingsV4()
+      settings.youtubeSettings = .with { $0.ingestMode = .dualRtmps }
+      let hosting = NSHostingView(
+        rootView: WorkspaceOutputInspector(
+          outputSettings: .constant(settings), externalID: externalID, isOutputActive: false,
+          appletData: data, reportError: { errors.append($0.localizedDescription) }
+        )
+        .frame(width: 480, height: 800))
+      let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 480, height: 800),
+        styleMask: .titled, backing: .buffered, defer: false)
+      window.isReleasedWhenClosed = false
+      defer { window.close() }
+      window.contentView = hosting
+      func settle() async {
+        hosting.layoutSubtreeIfNeeded()
+        try? await Task.sleep(for: .milliseconds(100))
+        hosting.layoutSubtreeIfNeeded()
+      }
+      // SwiftUI draws Form pickers itself, so read their values from the accessibility tree.
+      NSApp.accessibilitySetValue(
+        true, forAttribute: NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))
+      func accessibility(_ object: NSObject, _ name: String) -> Any? {
+        let selector = NSSelectorFromString(name)
+        guard object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue()
+      }
+      func popUpTitles(_ root: NSObject) -> [String] {
+        var visited = Set<ObjectIdentifier>()
+        var titles: [String] = []
+        func visit(_ object: NSObject) {
+          guard visited.insert(ObjectIdentifier(object)).inserted else { return }
+          if (accessibility(object, "accessibilityRole") as? String) == "AXPopUpButton",
+            let title = accessibility(object, "accessibilityValue") as? String
+          {
+            titles.append(title)
+          }
+          let children = (accessibility(object, "accessibilityChildren") as? [NSObject]) ?? []
+          children.forEach(visit)
+        }
+        visit(root)
+        return titles
+      }
+
+      // The Keychain is empty: both saved IDs render as Unavailable and stay saved.
+      await settle()
+      #expect(data.youtubeStreamKeyConfigurations.isEmpty)
+      #expect(popUpTitles(hosting).filter { $0 == "Unavailable" }.count == 2)
+      #expect(data.landscapeYouTubeLiveStreamIDs[externalID] == "main")
+      #expect(data.portraitYouTubeLiveStreamIDs[externalID] == "deleted")
+
+      // Settings saves a configuration: the dropdown resolves it without a write.
+      stored.withLock {
+        $0 = try? JSONEncoder().encode([
+          YouTubeRTMPSStreamKeyConfiguration(
+            id: "main", name: "Main Channel", streamURL: "rtmps://a.rtmps.youtube.com/live2",
+            streamKey: "key-1")
+        ])
+      }
+      _ = try data.loadYouTubeStreamKeyConfigurations()
+      await settle()
+      #expect(popUpTitles(hosting).contains("Main Channel"))
+      #expect(popUpTitles(hosting).filter { $0 == "Unavailable" }.count == 1)
+      #expect(data.landscapeYouTubeLiveStreamIDs[externalID] == "main")
+      #expect(data.portraitYouTubeLiveStreamIDs[externalID] == "deleted")
+      #expect(errors.isEmpty)
+    }
+
+    @Test("LUB-1066: Stream keys cannot change during output")
+    func streamKeyIsLockedDuringOutput() throws {
+      var assignment: String? = "restored"
+      let assigned = Binding<String?>(get: { assignment }, set: { assignment = $0 })
+      let inspector = WorkspaceOutputInspector(
+        outputSettings: .constant(.init()), externalID: UUID(),
+        isOutputActive: true, appletData: WorkspaceAppletData(), reportError: { _ in })
+      #expect(throws: WorkspaceSelectionError.self) {
+        try inspector.selectStreamKey(nil, assignment: assigned)
+      }
+      #expect(assignment == "restored")
     }
     private static var controller: NSDocumentController {
       UIComponentTestEnvironment.documentController
