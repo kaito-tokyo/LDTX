@@ -23,7 +23,6 @@ targets:
       - target: LDTXWorkspaceAppletService
       - target: LDTXWorkspaceAppletStore
       - target: LDTXWorkspaceAppletUI
-      - target: LDTXYouTubeOutputProtocol
       - target: LDTXYouTubeRTMPS
     settings:
       base:

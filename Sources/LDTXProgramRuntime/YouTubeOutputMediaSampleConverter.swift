@@ -4,7 +4,6 @@
 
 import CoreMedia
 import Foundation
-import LDTXYouTubeOutputProtocol
 import LDTXYouTubeRTMPS
 
 enum YouTubeOutputMediaSampleConverterError: Error, LocalizedError {
@@ -12,7 +11,6 @@ enum YouTubeOutputMediaSampleConverterError: Error, LocalizedError {
   case unsupportedVideoFormat
   case missingDataBuffer
   case invalidTiming
-  case unsupportedPCMFormat
   case unsupportedAACFormat
 
   var errorDescription: String? {
@@ -21,7 +19,6 @@ enum YouTubeOutputMediaSampleConverterError: Error, LocalizedError {
     case .unsupportedVideoFormat: "The video sample is not H.264/AVCC."
     case .missingDataBuffer: "The media sample has no contiguous data buffer."
     case .invalidTiming: "The media sample timing is invalid."
-    case .unsupportedPCMFormat: "The audio sample is not interleaved Float32 PCM."
     case .unsupportedAACFormat: "The audio sample is not AAC-LC."
     }
   }
@@ -225,37 +222,6 @@ enum YouTubeOutputMediaSampleConverter {
       duration: mediaTime(duration),
       isKeyFrame: isKeyFrame(sampleBuffer),
       avccData: try data(from: sampleBuffer)
-    )
-  }
-
-  static func pcmBuffer(from sampleBuffer: CMSampleBuffer) throws -> YouTubeOutputPCMBuffer {
-    guard let formatDescription = sampleBuffer.formatDescription,
-      let description = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?
-        .pointee
-    else {
-      throw YouTubeOutputMediaSampleConverterError.missingFormatDescription
-    }
-    let requiredFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked
-    guard description.mFormatID == kAudioFormatLinearPCM,
-      description.mBitsPerChannel == 32,
-      description.mFormatFlags & requiredFlags == requiredFlags,
-      description.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0
-    else {
-      throw YouTubeOutputMediaSampleConverterError.unsupportedPCMFormat
-    }
-    let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
-    guard frameCount > 0, sampleBuffer.presentationTimeStamp.isValid else {
-      throw YouTubeOutputMediaSampleConverterError.invalidTiming
-    }
-    let sampleRate = Int32(description.mSampleRate.rounded())
-    return YouTubeOutputPCMBuffer(
-      presentationTime: mediaTime(sampleBuffer.presentationTimeStamp),
-      duration: YouTubeOutputMediaTime(value: Int64(frameCount), timescale: sampleRate),
-      sampleRate: sampleRate,
-      channelCount: Int32(description.mChannelsPerFrame),
-      frameCount: Int32(clamping: frameCount),
-      sampleFormat: .float32Interleaved,
-      data: try data(from: sampleBuffer)
     )
   }
 

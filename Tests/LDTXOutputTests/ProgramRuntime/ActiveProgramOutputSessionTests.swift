@@ -7,7 +7,6 @@ import CoreMedia
 import Foundation
 import LDTXCapture
 import LDTXCorelibs
-import LDTXDash
 import LDTXMP4
 import LDTXProgramRendering
 @testable import LDTXProgramRuntime
@@ -995,49 +994,6 @@ extension OutputTestSuite {
       }
       await fulfillment(of: [stopped], timeout: 1)
       assertFalse(FileManager.default.fileExists(atPath: service.packageDirectory.path))
-    }
-
-    @Test("LUB-1026: You tube service stop before start makes service terminal")
-    func youTubeServiceStopBeforeStartMakesServiceTerminal() async throws {
-      let service = YouTubeOutputWorkspaceService(
-        endpoint: DASHIngestEndpoint(
-          baseURL: try unwrap(URL(string: "https://example.com/live/"))),
-        configuration: ProgramRuntimeConfiguration(
-          composite: CompositeProgramDefinition(),
-          audioChannels: [],
-          canvasWidth: 16,
-          canvasHeight: 16,
-          outputWidth: 16,
-          outputHeight: 16,
-          frameRate: 30,
-          timeSeconds: 0,
-          videoPTSMasterCameraID: nil,
-          cameraIDsByInputKey: [:],
-          cameraInputColorOverrides: [:],
-          backgroundRemovalInputKeys: []),
-        continuityStore: YouTubeOutputWorkspaceStateStore(),
-        boundary: YouTubeOutputServiceProcessClient(),
-        sharedH264Service: try ProgramOutputSharedH264Service(slotCount: 2, slotSize: 1_024),
-        eventHandler: { _ in },
-        failureHandler: { error in fail("Unexpected YouTube failure: \(error)") })
-
-      await withCheckedContinuation { continuation in
-        service.stop { _ in continuation.resume() }
-      }
-
-      let rejected = expectation(description: "YouTube restart rejected")
-      service.start { result in
-        guard case .failure(let error) = result,
-          let serviceError = error as? YouTubeOutputWorkspaceServiceError,
-          case .alreadyStarted = serviceError
-        else {
-          fail("Stopped YouTube service must reject reuse")
-          rejected.fulfill()
-          return
-        }
-        rejected.fulfill()
-      }
-      await fulfillment(of: [rejected], timeout: 1)
     }
 
     private func makeProgramRuntime() -> ProgramRuntime {

@@ -202,6 +202,19 @@ the relevant design or feature documentation instead.
 - Such work should use a serialized background executor when ordering is
   significant.
 
+## Process boundaries contain code and input the app does not control
+
+- Code and input the app controls, such as its own encoders, muxers, and upload
+  pipelines processing media the app produced, run in the application process.
+  A separate process does not reduce the privilege of such code, and its
+  transport, versioning, and lifecycle costs are not justified.
+- A process boundary is reserved for code or input the app does not control,
+  such as user-supplied plugins or models. Such a process must be sandboxed
+  without access to credentials, the network, or files the work does not need.
+  Entitlements that weaken library validation belong only to that process.
+- The application treats every reply from such a process as untrusted input and
+  validates its size, format, and timing.
+
 ## Overlay production is independent of Program frame rendering
 
 - Dynamic Text rasterization rejects more than 8,388,608 pixels before allocating

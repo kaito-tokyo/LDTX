@@ -192,13 +192,13 @@ Shared setup and probes live in the test target's `Support` directory.
 Tests that would launch the application solely to inspect menus or operating
 system dialogs are not included; directly constructed windows and views belong
 in `LDTXAppUIComponentTests`.
-The embedded XPC service process-boundary test remains in the isolated
-`LDTXAppXpcTests` scheme. Easy, Medium, and Hard tags classify suites but do not
+Tests that need the signed application host's entitlements, such as the
+data-protection keychain tests, remain in the isolated `LDTXAppXpcTests` scheme. Easy, Medium, and Hard tags classify suites but do not
 filter the standard test run.
 The macOS-only, hostless `LDTXOutputTests` target and scheme
 collect output configuration, media delivery, recording/streaming session, and
-output protocol tests across those framework tiers. The app test scheme includes
-this target; XPC process isolation stays in `LDTXAppXpcTests`. The same
+output media conversion tests across those framework tiers. The app test scheme
+includes this target; app-hosted tests stay in `LDTXAppXpcTests`. The same
 workflow separately runs the SwiftPM `LDTXUtilsTests` and CMake AudioEngine
 tests. Full-app archive validation is owned by the release workflow and is
 intentionally separate from the GitHub test gate. This repository does not use

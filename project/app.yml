@@ -150,10 +150,6 @@ targets:
       - target: LDTXAppHelper
         embed: true
         codeSign: true
-      - target: LDTXYouTubeOutputServiceProcess
-        link: false
-        codeSign: true
-        embed: true
       - target: LDTXBackgroundSegmentation
         embed: true
       - target: LDTXCapture
@@ -166,7 +162,6 @@ targets:
         embed: true
       - target: LDTXMP4
         embed: true
-      - target: LDTXYouTubeOutputProtocol
         embed: true
       - package: Corelibs
         product: LDTXCorelibs
@@ -223,7 +218,6 @@ targets:
         PRODUCT_MODULE_NAME: LDTXApp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited)"
-        LDTX_YOUTUBE_OUTPUT_SERVICE_PROCESS_XPC_SERVICE_NAME: tokyo.kaito.ldtx.LDTX.YouTubeOutputServiceProcess
         LDTX_DOCUMENT_HANDLER_RANK: Owner
         LDTX_MCP_SERVER_NAME: tokyo.kaito.ldtx.app-automation
         LDTX_MCP_SERVER_EXECUTABLE: LDTXHelper

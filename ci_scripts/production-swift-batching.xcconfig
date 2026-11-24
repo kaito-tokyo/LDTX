@@ -9,5 +9,4 @@ LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_application = -dr
 LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_framework = -driver-batch-count 4
 LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_tool = -driver-batch-count 4
 LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_app_extension = -driver-batch-count 4
-LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_com_apple_product_type_xpc_service = -driver-batch-count 4
 LDTX_PRODUCTION_SWIFT_BATCH_FLAGS_Debug_org_swift_product_type_library_static = -driver-batch-count 4
