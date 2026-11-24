@@ -74,9 +74,10 @@ resolved to the user's real folder before being displayed or revealed in Finder.
   and must be chosen again.
 - Application Support, caches, and temporary files move into the container. The
   development-only `.YouTubeAuth` file is not migrated; authorize again.
-- Whether macOS migrates the existing UserDefaults domain into the container on
-  the first sandboxed launch must be confirmed on a signed build. If it does
-  not, Settings, Stream Deck assignments, and Workspace-local state reset once.
+- UserDefaults move into the container too, and the existing domain is not
+  migrated. Settings, Stream Deck assignments, and Workspace-local state
+  therefore reset once on the first sandboxed launch. Stream keys are stored in
+  the Keychain and are kept.
 
 ## Known issues
 
