@@ -55,7 +55,7 @@ public struct SettingsView<AccountContent: View>: View {
               if outputPreferences.screenshotsFolderPath != nil {
                 Button("Use ~/Pictures") {
                   var preferences = outputPreferences
-                  preferences.screenshotsFolderPath = nil
+                  preferences.setScreenshotsFolder(nil)
                   saveOutputPreferences(preferences)
                 }
               }
@@ -78,13 +78,13 @@ public struct SettingsView<AccountContent: View>: View {
     panel.prompt = "Use Folder"
     guard panel.runModal() == .OK, let url = panel.url else { return }
     var preferences = outputPreferences
-    preferences.defaultOutputFolderPath = url.standardizedFileURL.path
+    preferences.setDefaultOutputFolder(url)
     saveOutputPreferences(preferences)
   }
 
   private func resetDefaultOutputFolder() {
     var preferences = outputPreferences
-    preferences.defaultOutputFolderPath = nil
+    preferences.setDefaultOutputFolder(nil)
     saveOutputPreferences(preferences)
   }
 
@@ -97,7 +97,7 @@ public struct SettingsView<AccountContent: View>: View {
     panel.prompt = "Use Folder"
     guard panel.runModal() == .OK, let url = panel.url else { return }
     var preferences = outputPreferences
-    preferences.screenshotsFolderPath = url.standardizedFileURL.path
+    preferences.setScreenshotsFolder(url)
     saveOutputPreferences(preferences)
   }
 

@@ -1118,14 +1118,8 @@ public final class WorkspaceV4RecordingSession {
   }
 
   private func outputDirectory() -> URL {
-    if let path = localStateProvider().recordingFolderPath, !path.isEmpty {
-      return URL(fileURLWithPath: path, isDirectory: true)
-    }
-    if let path = applicationOutputPreferences.defaultOutputFolderPath,
-      !path.isEmpty
-    {
-      return URL(fileURLWithPath: path, isDirectory: true)
-    }
+    if let url = localStateProvider().recordingFolderURL { return url }
+    if let url = applicationOutputPreferences.defaultOutputDirectory { return url }
     return DefaultLocalOutputService(fileManager: .default).defaultBaseDirectory
   }
 

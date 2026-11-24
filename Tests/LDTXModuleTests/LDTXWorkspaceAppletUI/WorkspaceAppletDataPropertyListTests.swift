@@ -105,6 +105,42 @@ struct WorkspaceAppletDataPropertyListUnitTestSuite {
     #expect(reopened.recordingFolderPaths[otherID] == "/tmp/other-recordings")
   }
 
+  @Test("Selected recording folder persists a bookmark that a path change discards")
+  func selectedRecordingFolderPersistsBookmark() throws {
+    let suiteName = "RecordingFolderBookmarkTest.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "LDTXTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let externalID = UUID()
+    let appletData = WorkspaceAppletData(userDefaults: defaults)
+
+    appletData.setRecordingFolder(folder, for: externalID)
+    let restored = WorkspaceAppletData(userDefaults: defaults)
+    let state = restored.state(for: nil, externalID: externalID)
+
+    #expect(state.recordingFolderPath == folder.standardizedFileURL.path)
+    #expect(state.recordingFolderBookmark != nil)
+    #expect(
+      state.recordingFolderURL?.resolvingSymlinksInPath().path
+        == folder.resolvingSymlinksInPath().path)
+
+    restored.recordingFolderPaths[externalID] = "/tmp/other-recordings"
+    let changed = WorkspaceAppletData(userDefaults: defaults)
+      .state(for: nil, externalID: externalID)
+    #expect(changed.recordingFolderBookmark == nil)
+    #expect(changed.recordingFolderURL?.path == "/tmp/other-recordings")
+
+    restored.setRecordingFolder(nil, for: externalID)
+    let reset = WorkspaceAppletData(userDefaults: defaults)
+      .state(for: nil, externalID: externalID)
+    #expect(reset.recordingFolderPath == nil)
+    #expect(reset.recordingFolderBookmark == nil)
+    #expect(reset.recordingFolderURL == nil)
+  }
+
   @Test("LUB-1057: Migrates output assignments to external ID once")
   func migratesOutputAssignmentsToExternalIDOnce() throws {
     let suiteName = "OutputMigrationTest.\(UUID())"

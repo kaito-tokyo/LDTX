@@ -12,6 +12,8 @@ public enum WorkspacePhysicalDeviceID: Codable, Equatable, Hashable, Sendable {
 
 public struct WorkspaceLocalState: Codable, Equatable, Sendable {
   public var recordingFolderPath: String?
+  /// Security-scoped bookmark for `recordingFolderPath`; see ``SecurityScopedFolder``.
+  public var recordingFolderBookmark: Data?
   public var monitorVolume: Double?
   public var selectedProgramInternalID: Int64?
   public var monitorAudioInputDeviceInternalIDs: Set<Int64>
@@ -21,16 +23,23 @@ public struct WorkspaceLocalState: Codable, Equatable, Sendable {
   public init(
     selectedProgramInternalID: Int64? = nil,
     recordingFolderPath: String? = nil,
+    recordingFolderBookmark: Data? = nil,
     monitorVolume: Double? = nil,
     monitorAudioInputDeviceInternalIDs: Set<Int64> = [],
     landscapeYouTubeLiveStreamID: String? = nil,
     portraitYouTubeLiveStreamID: String? = nil
   ) {
     self.recordingFolderPath = recordingFolderPath
+    self.recordingFolderBookmark = recordingFolderBookmark
     self.monitorVolume = monitorVolume
     self.selectedProgramInternalID = selectedProgramInternalID
     self.monitorAudioInputDeviceInternalIDs = monitorAudioInputDeviceInternalIDs
     self.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamID
     self.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamID
+  }
+
+  /// The Workspace's recording folder, or nil to use the application default.
+  public var recordingFolderURL: URL? {
+    SecurityScopedFolder.url(path: recordingFolderPath, bookmark: recordingFolderBookmark)
   }
 }
