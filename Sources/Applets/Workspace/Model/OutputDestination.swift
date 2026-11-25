@@ -75,17 +75,49 @@ public struct OutputDestination: Codable, Equatable, Sendable {
 public struct ApplicationOutputPreferences: Codable, Equatable, Sendable {
   public var defaultOutputFolderPath: String?
   public var screenshotsFolderPath: String?
+  /// Security-scoped bookmark for `defaultOutputFolderPath`; see ``SecurityScopedFolder``.
+  public var defaultOutputFolderBookmark: Data?
+  /// Security-scoped bookmark for `screenshotsFolderPath`; see ``SecurityScopedFolder``.
+  public var screenshotsFolderBookmark: Data?
 
-  public init(defaultOutputFolderPath: String? = nil, screenshotsFolderPath: String? = nil) {
+  public init(
+    defaultOutputFolderPath: String? = nil,
+    screenshotsFolderPath: String? = nil,
+    defaultOutputFolderBookmark: Data? = nil,
+    screenshotsFolderBookmark: Data? = nil
+  ) {
     self.defaultOutputFolderPath = defaultOutputFolderPath
     self.screenshotsFolderPath = screenshotsFolderPath
+    self.defaultOutputFolderBookmark = defaultOutputFolderBookmark
+    self.screenshotsFolderBookmark = screenshotsFolderBookmark
+  }
+
+  /// Selects the default recording folder, or restores the standard Movies folder for nil.
+  public mutating func setDefaultOutputFolder(_ url: URL?) {
+    defaultOutputFolderPath = url?.standardizedFileURL.path
+    defaultOutputFolderBookmark = url.flatMap(SecurityScopedFolder.bookmark(for:))
+  }
+
+  /// Selects the screenshots folder, or restores the standard Movies folder for nil.
+  public mutating func setScreenshotsFolder(_ url: URL?) {
+    screenshotsFolderPath = url?.standardizedFileURL.path
+    screenshotsFolderBookmark = url.flatMap(SecurityScopedFolder.bookmark(for:))
+  }
+
+  /// The user-selected default recording folder, or nil to use the standard Movies folder.
+  public var defaultOutputDirectory: URL? {
+    SecurityScopedFolder.url(path: defaultOutputFolderPath, bookmark: defaultOutputFolderBookmark)
   }
 
   public var screenshotsDirectory: URL {
-    if let screenshotsFolderPath, !screenshotsFolderPath.isEmpty {
-      return URL(fileURLWithPath: screenshotsFolderPath, isDirectory: true)
-    }
-    return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-      "Pictures", isDirectory: true)
+    SecurityScopedFolder.url(path: screenshotsFolderPath, bookmark: screenshotsFolderBookmark)
+      ?? Self.standardMoviesDirectory
+  }
+
+  /// The user's Movies folder, the default for both recordings and screenshots so the App
+  /// Sandbox needs only one assets entitlement. Under the sandbox `URL.moviesDirectory` names
+  /// the container's link to it, so the link is resolved to keep Finder and displayed paths real.
+  public static var standardMoviesDirectory: URL {
+    URL.moviesDirectory.resolvingSymlinksInPath()
   }
 }

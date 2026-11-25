@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXWorkspaceAppletModel
 
 public protocol LocalOutputService {
   var defaultBaseDirectory: URL { get }
@@ -28,8 +29,7 @@ public struct DefaultLocalOutputService: LocalOutputService {
   }
 
   public var defaultBaseDirectory: URL {
-    FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent("Movies", isDirectory: true)
+    ApplicationOutputPreferences.standardMoviesDirectory
   }
 
   public func makeMP4OutputURL(baseDirectory: URL) -> URL {

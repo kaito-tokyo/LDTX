@@ -27,9 +27,11 @@ struct WorkspaceOutputInspector: View {
       Section("Recording") {
         LabeledContent("Recording Folder") {
           HStack {
-            RecordingFolderPicker(path: $appletData.recordingFolderPaths[externalID])
+            RecordingFolderPicker(path: appletData.recordingFolderPaths[externalID]) { url in
+              appletData.setRecordingFolder(url, for: externalID)
+            }
             Button("Reset") {
-              appletData.recordingFolderPaths[externalID] = nil
+              appletData.setRecordingFolder(nil, for: externalID)
             }
           }
         }
@@ -170,7 +172,8 @@ struct WorkspaceOutputInspector: View {
 }
 
 private struct RecordingFolderPicker: View {
-  @Binding var path: String?
+  let path: String?
+  let select: (URL?) -> Void
   @Environment(\.isEnabled) private var isEnabled
   @Environment(\.workspaceReportError) private var reportError
   @State private var isImporting = false
@@ -185,13 +188,13 @@ private struct RecordingFolderPicker: View {
       }
       .accessibilityLabel("Recording Folder")
       if path != nil {
-        Button("Use Default", systemImage: "xmark.circle") { path = nil }
+        Button("Use Default", systemImage: "xmark.circle") { select(nil) }
           .labelStyle(.iconOnly)
       }
     }
     .fileImporter(isPresented: $isImporting, allowedContentTypes: [.folder]) { result in
       guard isEnabled else { return }
-      do { path = try result.get().standardizedFileURL.path } catch { reportError(error) }
+      do { select(try result.get()) } catch { reportError(error) }
     }
   }
 }

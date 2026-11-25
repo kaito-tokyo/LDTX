@@ -12,7 +12,17 @@ import Observation
 @Observable
 public final class WorkspaceAppletData {
   public var recordingFolderPaths: [UUID: String] = [:] {
-    didSet { persist(recordingFolderPaths, key: "recording-folder-paths") }
+    didSet {
+      persist(recordingFolderPaths, key: "recording-folder-paths")
+      for id in recordingFolderBookmarks.keys where recordingFolderPaths[id] != oldValue[id] {
+        recordingFolderBookmarks[id] = nil
+      }
+    }
+  }
+  /// Security-scoped bookmarks for `recordingFolderPaths`; see ``SecurityScopedFolder``.
+  /// A bookmark is dropped whenever its Workspace's path changes.
+  @ObservationIgnored private var recordingFolderBookmarks: [UUID: Data] = [:] {
+    didSet { persist(recordingFolderBookmarks, key: "recording-folder-bookmarks") }
   }
   public var landscapeYouTubeLiveStreamIDs: [UUID: String] = [:] {
     didSet { persist(landscapeYouTubeLiveStreamIDs, key: "landscape-youtube-live-stream-ids") }
@@ -25,21 +35,28 @@ public final class WorkspaceAppletData {
     "tokyo.kaito.ldtx.workspace.\(key).v1"
   }
 
-  private func persist(_ values: [UUID: String], key: String) {
+  private func persist<Value: Encodable>(_ values: [UUID: Value], key: String) {
     guard let data = try? PropertyListEncoder().encode(values) else { return }
     userDefaults.set(data, forKey: Self.outputDataKey(key))
   }
 
   private func loadOutputData() {
-    func load(_ key: String) -> [UUID: String] {
+    func load<Value: Decodable>(_ key: String) -> [UUID: Value] {
       guard let data = userDefaults.data(forKey: Self.outputDataKey(key)),
-        let values = try? PropertyListDecoder().decode([UUID: String].self, from: data)
+        let values = try? PropertyListDecoder().decode([UUID: Value].self, from: data)
       else { return [:] }
       return values
     }
     recordingFolderPaths = load("recording-folder-paths")
+    recordingFolderBookmarks = load("recording-folder-bookmarks")
     landscapeYouTubeLiveStreamIDs = load("landscape-youtube-live-stream-ids")
     portraitYouTubeLiveStreamIDs = load("portrait-youtube-live-stream-ids")
+  }
+
+  /// Selects a Workspace's recording folder, or restores the application default for nil.
+  public func setRecordingFolder(_ url: URL?, for externalID: UUID) {
+    recordingFolderPaths[externalID] = url?.standardizedFileURL.path
+    recordingFolderBookmarks[externalID] = url.flatMap(SecurityScopedFolder.bookmark(for:))
   }
 
   public func migrateOutputData(from url: URL, externalID: UUID) {
@@ -144,6 +161,7 @@ public final class WorkspaceAppletData {
     var state = workspaceURL.map { self.state(for: $0) } ?? .init()
     if let externalID {
       state.recordingFolderPath = recordingFolderPaths[externalID]
+      state.recordingFolderBookmark = recordingFolderBookmarks[externalID]
       state.landscapeYouTubeLiveStreamID = landscapeYouTubeLiveStreamIDs[externalID]
       state.portraitYouTubeLiveStreamID = portraitYouTubeLiveStreamIDs[externalID]
     }

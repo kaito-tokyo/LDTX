@@ -26,13 +26,59 @@ extension OutputTestSuite {
       #expect(expected.screenshotsDirectory.path == "/tmp/pictures")
       #expect(
         ApplicationOutputPreferences().screenshotsDirectory
-          == FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            "Pictures", isDirectory: true))
+          == URL.moviesDirectory.resolvingSymlinksInPath())
+      #expect(ApplicationOutputPreferences().defaultOutputDirectory == nil)
       let data = try #require(
         defaults.data(forKey: ApplicationSettingsStore.applicationOutputPreferencesKey))
       #expect(data.starts(with: Data("bplist".utf8)))
       #expect(
         try PropertyListDecoder().decode(ApplicationOutputPreferences.self, from: data) == expected)
+    }
+
+    @Test("Selected output folders persist a security-scoped bookmark with their path")
+    func selectedOutputFoldersPersistBookmarks() throws {
+      let suiteName = "LDTXTests.ApplicationSettingsStore.bookmarks.\(UUID().uuidString)"
+      let defaults = try #require(UserDefaults(suiteName: suiteName))
+      defer { defaults.removePersistentDomain(forName: suiteName) }
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "LDTXTests-\(UUID().uuidString)", isDirectory: true)
+      let recordings = root.appendingPathComponent("Recordings", isDirectory: true)
+      let pictures = root.appendingPathComponent("Pictures", isDirectory: true)
+      try FileManager.default.createDirectory(at: recordings, withIntermediateDirectories: true)
+      try FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let store = ApplicationSettingsStore(userDefaults: defaults)
+      var preferences = ApplicationOutputPreferences()
+
+      preferences.setDefaultOutputFolder(recordings)
+      preferences.setScreenshotsFolder(pictures)
+      store.saveApplicationOutputPreferences(preferences)
+      let restored = store.loadApplicationOutputPreferences()
+
+      #expect(restored == preferences)
+      #expect(restored.defaultOutputFolderPath == recordings.standardizedFileURL.path)
+      #expect(restored.defaultOutputFolderBookmark != nil)
+      #expect(restored.screenshotsFolderBookmark != nil)
+      #expect(
+        restored.defaultOutputDirectory?.resolvingSymlinksInPath().path
+          == recordings.resolvingSymlinksInPath().path)
+      #expect(
+        restored.screenshotsDirectory.resolvingSymlinksInPath().path
+          == pictures.resolvingSymlinksInPath().path)
+
+      preferences.setDefaultOutputFolder(nil)
+      preferences.setScreenshotsFolder(nil)
+      #expect(preferences == ApplicationOutputPreferences())
+    }
+
+    @Test("Output folders without a bookmark fall back to their stored path")
+    func outputFoldersWithoutBookmarkUseStoredPath() {
+      let preferences = ApplicationOutputPreferences(
+        defaultOutputFolderPath: "/tmp/recordings", screenshotsFolderPath: "/tmp/pictures",
+        defaultOutputFolderBookmark: Data([0x00]), screenshotsFolderBookmark: nil)
+
+      #expect(preferences.defaultOutputDirectory?.path == "/tmp/recordings")
+      #expect(preferences.screenshotsDirectory.path == "/tmp/pictures")
     }
 
     @Test("LUB-1028: Application settings store ignores old Protobuf values")
