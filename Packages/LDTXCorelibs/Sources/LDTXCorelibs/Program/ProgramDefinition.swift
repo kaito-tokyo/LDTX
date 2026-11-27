@@ -75,6 +75,7 @@ public enum ProgramComponentDefinition: String, CaseIterable, Identifiable, Coda
 }
 
 public struct CompositeProgramDefinition: Codable, Equatable, Sendable {
+  /// Composition steps ordered front to back: the first step is drawn on top.
   public var steps: [CompositeProgramStep]
   public var audioChannels: [ProgramAudioChannel]
 

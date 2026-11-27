@@ -30,7 +30,9 @@ public struct WorkspaceV4RenderGraph: Sendable {
     let canvasHeight = Float(canvas.outputProfile.height)
     var steps: [CompositeProgramStep] = []
     var layerPreferences: [VideoLayerPreference] = []
-    for internalID in layerIDs {
+    // `video_layer_internal_ids` lists layers back to front, while composite
+    // steps list them front to back, so the first ID becomes the last step.
+    for internalID in layerIDs.reversed() {
       guard
         var component = components[internalID]
       else { throw WorkspaceV4RenderGraphError.missingVideoLayer(internalID) }

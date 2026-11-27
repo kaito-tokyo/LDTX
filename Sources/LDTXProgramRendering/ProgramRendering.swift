@@ -79,8 +79,8 @@ extension CompositeProgramDefinition {
     colorRangesByInputKey: [String: CameraInputColorRangeOverride] = [:],
     timeSeconds: Float
   ) -> [any MetalVideoComponent] {
-    // Preserve the protobuf/UI step order and draw from the bottom up:
-    // later steps are emitted first so earlier rows can layer on top.
+    // Composite steps are ordered front to back. Draw from the bottom up:
+    // later steps are emitted first so earlier steps layer on top.
     var components: [any MetalVideoComponent] = []
     components.reserveCapacity(steps.count)
     for step in steps.reversed() {

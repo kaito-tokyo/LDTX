@@ -341,7 +341,8 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
       canvas: try WorkspaceProgramCanvasSnapshot(
         definition: definition, preferences: preferences, programInternalID: 7, target: .landscape))
 
-    #expect(graph.composite.steps.map(\.name) == ["v4-20", "v4-21", "v4-22", "v4-23"])
+    // Preferences list layers back to front; composite steps list them front to back.
+    #expect(graph.composite.steps.map(\.name) == ["v4-23", "v4-22", "v4-21", "v4-20"])
     #expect(
       graph.composite.steps.map { step in
         switch step.component {
@@ -351,7 +352,26 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
         case .fillConicGradient: "conic"
         default: "other"
         }
-      } == ["solid", "linear", "radial", "conic"])
+      } == ["conic", "radial", "linear", "solid"])
   }
 
+  @Test("LUB-1072: Draws the last video layer ID in front")
+  func drawsLastVideoLayerIDInFront() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    definition.programs = [.with { $0.internalID = 7 }]
+    definition.videoComponents = [30, 31].map { id in
+      .with { $0.videoComponent = .solidColorFill(.with { $0.internalID = id }) }
+    }
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[7] = .with { $0.videoLayerInternalIds = [30, 31] }
+
+    let graph = try WorkspaceV4RenderGraph(
+      definition: definition,
+      canvas: try WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences, programInternalID: 7, target: .landscape))
+
+    // The first composite step is drawn on top, so the frontmost ID comes first.
+    #expect(graph.composite.steps.first?.name == "v4-31")
+    #expect(graph.composite.steps.last?.name == "v4-30")
+  }
 }
