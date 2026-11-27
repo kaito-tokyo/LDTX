@@ -16,6 +16,15 @@ extension AppUIComponentTestSuite.Shard2 {
   struct WorkspaceDocumentEditingUnitTestSuite {
     @Test("LUB-1047: Apply is immediate and snapshot preserves later edits")
     func applyIsImmediateAndSnapshotPreservesLaterEdits() async throws {
+      let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let saved = root.appendingPathComponent("Saved/11/Model.mlmodel")
+      let chosen = root.appendingPathComponent("Pending/Model.mlpackage")
+      try FileManager.default.createDirectory(
+        at: saved.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data([1]).write(to: saved)
+      try FileManager.default.createDirectory(at: chosen, withIntermediateDirectories: true)
+      try Data("{}".utf8).write(to: chosen.appendingPathComponent("Manifest.json"))
       let document = WorkspaceDocument()
       let undo = UndoManager()
       undo.groupsByEvent = false
@@ -23,7 +32,7 @@ extension AppUIComponentTestSuite.Shard2 {
       document.visionResults[7] = "Live result"
       var incoming = document.workspace
       incoming.definition.displayName = "Canonical read"
-      incoming.visionModels[11] = URL(fileURLWithPath: "/Saved/11/Model.mlmodel")
+      incoming.visionModels[11] = saved
       try await document.apply(snapshot: incoming, previous: nil)
       #expect(document.workspace == incoming)
       #expect(document.workspaceSnapshot == incoming)
@@ -34,13 +43,21 @@ extension AppUIComponentTestSuite.Shard2 {
       document.editWorkspace(undoManager: undo) {
         $0.definition.displayName = "Local edit after reading"
         $0.outputSettings.recordingEnabled = true
-        $0.visionModels[15] = URL(fileURLWithPath: "/Pending/15/Model.mlpackage")
+        $0.visionModels[15] = chosen
       }
       undo.endUndoGrouping()
       let pending = document.workspace
       let captured = try await document.snapshot(
         contentType: WorkspaceDocument.readableContentTypes[0])
-      #expect(captured == pending)
+      var capturedSources = captured
+      capturedSources.visionModels = pending.visionModels
+      #expect(capturedSources == pending)
+      // The snapshot references copies outside the package, not the chosen files.
+      for (id, source) in pending.visionModels {
+        let copy = try #require(captured.visionModels[id])
+        #expect(copy.path.hasPrefix(document.modelCacheURL.path))
+        #expect(copy.lastPathComponent == source.lastPathComponent)
+      }
       #expect(document.workspace == pending)
       #expect(document.workspaceSnapshot == incoming)
       undo.undo()

@@ -53,8 +53,8 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     }
   }
 
-  @Test("LUB-1002: Preserves resources and envelope identifiers")
-  func preservesResourcesAndEnvelopeIdentifiers() throws {
+  @Test("LUB-1002: Rewrites package metadata and keeps envelope identifiers")
+  func rewritesMetadataAndKeepsEnvelopeIdentifiers() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -81,7 +81,7 @@ struct WorkspaceBundleWriterIntegrationTestSuite {
     try WorkspaceBundleWriterV4().write(changed, to: original)
     let reloaded = try WorkspaceBundleReaderV4(at: original).read()
     let copiedInfo = try decoder.decode(Metadata.self, from: Data(contentsOf: infoURL))
-    #expect(copiedInfo.customMetadata == "Preserved")
+    #expect(copiedInfo.customMetadata == nil)
     #expect(copiedInfo.packageType == "BNDL")
     #expect(copiedInfo.workspaceVersion == 4)
     #expect(copiedInfo.workspaceBundleVersion == "4.0")

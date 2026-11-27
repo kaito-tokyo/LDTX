@@ -423,7 +423,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
       !transactionalCommands.contains(.startOutputSession)
     else { return }
     do {
-      let workspace = try await Self.readPersistedWorkspace(at: url)
+      let workspace = try await Self.readPersistedWorkspace(
+        at: url, modelCacheURL: stateService.modelCacheURL)
       guard !stateService.isOutputActive,
         isCurrent()
       else { return }
@@ -483,8 +484,9 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
   }
 
-  @concurrent private static func readPersistedWorkspace(at url: URL) async throws
-    -> WorkspaceV4Bundle
+  /// Reads the saved package and copies its models out of it, like Document reads.
+  @concurrent private static func readPersistedWorkspace(at url: URL, modelCacheURL: URL)
+    async throws -> WorkspaceV4Bundle
   {
     let coordinator = NSFileCoordinator()
     var coordinationError: NSError?
@@ -494,7 +496,10 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     }
     if let coordinationError { throw coordinationError }
     guard let result else { throw CocoaError(.fileReadUnknown) }
-    return try result.get()
+    var workspace = try result.get()
+    workspace.visionModels = try WorkspaceModelFiles.stage(
+      workspace.visionModels, in: modelCacheURL)
+    return workspace
   }
 
   private var pendingShutdownFailures: [String] = []
@@ -712,7 +717,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         domain: "tokyo.kaito.ldtx.WorkspaceOutput", code: 1,
         userInfo: [NSLocalizedDescriptionKey: "Save the Workspace before starting output."])
     }
-    let disk = try await Self.readPersistedWorkspace(at: url)
+    let disk = try await Self.readPersistedWorkspace(
+      at: url, modelCacheURL: stateService.modelCacheURL)
     let runtime = windowRuntime.workspace
     func matches(_ workspace: WorkspaceV4Bundle) -> Bool {
       workspace.definition == disk.definition && workspace.preferences == disk.preferences

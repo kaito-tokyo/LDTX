@@ -29,3 +29,15 @@ Feature: LDTXCorelibs validate and persist workspaces
     When the Workspace is validated
     Then each issue is reported with its field path and owning entity
 
+
+  @LUB-1002.5 @Integration
+  Scenario: Write a complete package from the Workspace alone
+    Given a Workspace whose models were read from another package
+    When the Workspace is written to a new destination and its sources are removed
+    Then the destination holds the metadata, documents, and models without reading anything else
+
+  @LUB-1002.6 @Unit
+  Scenario: Keep model copies outside the package
+    Given a model chosen for an ID
+    When it is staged into a model cache and the chosen file later changes or disappears
+    Then the first copy for that ID is reused unchanged

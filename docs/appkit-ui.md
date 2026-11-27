@@ -247,12 +247,15 @@ The applet Commands do not replace the standard Close, Save, or related document
 SwiftUI owns window closing, document presentation, and restoration. Playback
 stops when the Document is released; UI disappearance alone does not stop it.
 
-Document captures protobuf documents and model source URLs
-on the main actor and reflects them into Document without validation.
-The DocumentWriter validates the snapshot off the main actor before writing. It copies native
-model files and package directories under their assigned IDs and performs package I/O off the main actor, using DocumentGroup's coordinated
-staging destination without nesting a file coordinator. It preserves unknown
-files and past models. Save failure leaves the current edits intact.
+Document captures protobuf documents on the main actor and copies chosen
+models into its model cache outside the package, so the snapshot does not
+depend on the package being saved or on files that may change later.
+The DocumentWriter validates the snapshot off the main actor before writing. It writes a
+complete package from the snapshot alone, copying native model files and package directories
+under their assigned IDs, and performs package I/O off the main actor at DocumentGroup's
+coordinated destination without nesting a file coordinator or reading that destination. Past
+models are written because the snapshot retains them; files outside the format are not carried
+over. Save failure leaves the current edits intact.
 Snapshots exclude edits made after their capture.
 
 Writing the staging package alone does not update runtime definitions. After

@@ -13,6 +13,15 @@ import UniformTypeIdentifiers
 @Observable
 public final class WorkspaceDocument: WorkspaceDocumentContext {
   public let runtimeID = UUID()
+  /// Copies of this Document's models outside its package, which saving replaces.
+  public nonisolated let modelCacheURL = WorkspaceDocument.makeModelCacheURL()
+
+  /// A new, unused location for model copies outside any Workspace package.
+  public nonisolated static func makeModelCacheURL() -> URL {
+    FileManager.default.temporaryDirectory
+      .appendingPathComponent("LDTXWorkspaceModels", isDirectory: true)
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+  }
   @ObservationIgnored private var onRelease: (@MainActor (UUID) -> Void)?
   private let configuration: URLDocumentConfiguration?
   public private(set) var workspace: WorkspaceV4Bundle
@@ -144,6 +153,7 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
     self.outputFailureMessage = outputFailureMessage
   }
   isolated deinit {
+    try? FileManager.default.removeItem(at: modelCacheURL)
     onRelease?(runtimeID)
   }
 
@@ -155,14 +165,21 @@ extension WorkspaceDocument: ReadableDocument {
   ]
 
   public struct Reader: DocumentReader {
-    public init() {}
+    /// Where read models are copied so the Snapshot does not reference `source`.
+    public let modelCacheURL: URL
+
+    public init(modelCacheURL: URL = WorkspaceDocument.makeModelCacheURL()) {
+      self.modelCacheURL = modelCacheURL
+    }
 
     @concurrent
     public func read(from source: sending URL, progress: consuming Subprogress) async throws
       -> sending Snapshot
     {
-      let workspace = try WorkspaceBundleReaderV4(at: source).read()
+      var workspace = try WorkspaceBundleReaderV4(at: source).read()
       try workspace.definition.validateRichTextDocuments()
+      workspace.visionModels = try WorkspaceModelFiles.stage(
+        workspace.visionModels, in: modelCacheURL)
       return workspace
     }
 
@@ -170,7 +187,7 @@ extension WorkspaceDocument: ReadableDocument {
   }
 
   public nonisolated func reader(configuration: sending ReadConfiguration) -> sending Reader {
-    Reader()
+    Reader(modelCacheURL: modelCacheURL)
   }
 
   public func apply(snapshot: sending Reader.Snapshot, previous: sending Reader.Snapshot?)
@@ -205,7 +222,18 @@ extension WorkspaceDocument: WritableDocument {
     guard Self.writableContentTypes.contains(contentType) else {
       throw CocoaError(.fileWriteUnsupportedScheme)
     }
-    return workspace
+    // The Writer gets only this Snapshot, so its models must not live in the
+    // package being replaced or in a chosen file that may change or disappear.
+    var snapshot = workspace
+    snapshot.visionModels = try await Self.stageModels(
+      workspace.visionModels, in: modelCacheURL)
+    return snapshot
+  }
+
+  @concurrent private nonisolated static func stageModels(
+    _ models: [Int64: URL], in cacheURL: URL
+  ) async throws -> [Int64: URL] {
+    try WorkspaceModelFiles.stage(models, in: cacheURL)
   }
 }
 
