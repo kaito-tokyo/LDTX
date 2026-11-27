@@ -19,3 +19,9 @@ Feature: Project saved settings into runtime values
     Then monitor routes can exist without a selected Program
     And monitor and output master levels retain their own scope
 
+
+  @LUB-1072.3 @Unit
+  Scenario: Keep translations outside the canvas as coordinates
+    Given a VFX Source layer whose saved translation lies left of and below the canvas
+    When its render graph is built
+    Then the layer keeps that translation instead of moving it onto the canvas

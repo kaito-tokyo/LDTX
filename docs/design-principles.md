@@ -288,6 +288,10 @@ the relevant design or feature documentation instead.
   that representation as zero.
 - Transform translation defaults to zero and scale defaults to one through
   their protobuf types. Scale has no sign restriction.
+- Transform translation is a coordinate normalized by the canvas, not a value
+  limited to [0, 1]. Validation and rendering must not clamp it; the compositor
+  clips layers that extend past the canvas. Insets are fractions of the content
+  and remain limited to [0, 1].
 - OCR minimum text height uses its protobuf default of zero. Absence does not
   select Vision's framework default.
 - Decimal editing uses `decimal` and `set(decimal:)`. Float and Double have no

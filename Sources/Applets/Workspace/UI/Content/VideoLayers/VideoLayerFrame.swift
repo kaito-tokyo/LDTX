@@ -46,8 +46,8 @@ struct VideoLayerFrame: Equatable {
       return nil
     }
     guard baseWidth > 0, baseHeight > 0 else { return nil }
-    x = Self.unit(transform.translationX?.double ?? 0)
-    y = Self.unit(transform.translationY?.double ?? 0)
+    x = Self.finite(transform.translationX?.double ?? 0)
+    y = Self.finite(transform.translationY?.double ?? 0)
     width = baseWidth * (transform.scaleX?.double ?? 1)
     height = baseHeight * (transform.scaleY?.double ?? 1)
   }
@@ -57,11 +57,12 @@ struct VideoLayerFrame: Equatable {
     CGRect(x: x, y: y, width: width, height: height).standardized
   }
 
-  /// Moves the origin by the given fractions; the compositor accepts origins in [0, 1].
+  /// Moves the origin by the given fractions. The origin is a coordinate, so it
+  /// may leave the canvas; the compositor clips whatever falls outside.
   func moved(dx: Double, dy: Double) -> Self {
     var frame = self
-    frame.x = Self.unit(x + dx)
-    frame.y = Self.unit(y + dy)
+    frame.x = Self.finite(x + dx)
+    frame.y = Self.finite(y + dy)
     return frame
   }
 
@@ -77,22 +78,12 @@ struct VideoLayerFrame: Equatable {
     let movesTop = corner == .topLeft || corner == .topRight
     let anchorX = movesLeft ? visible.maxX : visible.minX
     let anchorY = movesTop ? visible.maxY : visible.minY
-    // The origin must stay in [0, 1], so limit the size when the corner moves the origin.
-    let originMovesX = (width >= 0) == movesLeft
-    let originMovesY = (height >= 0) == movesTop
-    let maximumWidth = originMovesX ? (movesLeft ? anchorX : 1 - anchorX) : .infinity
-    let maximumHeight = originMovesY ? (movesTop ? anchorY : 1 - anchorY) : .infinity
     var newWidth = max(minimumSize, movesLeft ? anchorX - point.x : point.x - anchorX)
     var newHeight = max(minimumSize, movesTop ? anchorY - point.y : point.y - anchorY)
     if keepsAspectRatio, visible.width > 0, visible.height > 0 {
-      let factor = min(
-        max(newWidth / visible.width, newHeight / visible.height),
-        maximumWidth / visible.width, maximumHeight / visible.height)
+      let factor = max(newWidth / visible.width, newHeight / visible.height)
       newWidth = visible.width * factor
       newHeight = visible.height * factor
-    } else {
-      newWidth = min(newWidth, maximumWidth)
-      newHeight = min(newHeight, maximumHeight)
     }
     let minX = movesLeft ? anchorX - newWidth : anchorX
     let minY = movesTop ? anchorY - newHeight : anchorY
@@ -100,8 +91,8 @@ struct VideoLayerFrame: Equatable {
     // The origin is the left edge for a positive width and the right edge when mirrored.
     frame.width = width < 0 ? -newWidth : newWidth
     frame.height = height < 0 ? -newHeight : newHeight
-    frame.x = Self.unit(width < 0 ? minX + newWidth : minX)
-    frame.y = Self.unit(height < 0 ? minY + newHeight : minY)
+    frame.x = Self.finite(width < 0 ? minX + newWidth : minX)
+    frame.y = Self.finite(height < 0 ? minY + newHeight : minY)
     return frame
   }
 
@@ -122,10 +113,16 @@ struct VideoLayerFrame: Equatable {
     value.isFinite ? min(max(value, 0), 1) : 0
   }
 
+  private static func finite(_ value: Double) -> Double {
+    value.isFinite ? value : 0
+  }
+
   private static func pixels(_ fraction: Double, size: Int) -> Ldtx_Workspace_V4_Rational32 {
     var value = Ldtx_Workspace_V4_Rational32()
     let size = max(size, 1)
-    value.set(num: Int32((fraction * Double(size)).rounded()), den: UInt32(size))
+    // Positions may lie outside the canvas, so keep the pixel count within Int32.
+    let pixels = min(max((fraction * Double(size)).rounded(), Double(Int32.min)), Double(Int32.max))
+    value.set(num: Int32(pixels), den: UInt32(size))
     return value
   }
 

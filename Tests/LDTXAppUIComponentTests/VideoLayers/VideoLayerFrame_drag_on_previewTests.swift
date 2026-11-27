@@ -67,11 +67,13 @@ extension AppUIComponentTestSuite.Shard1 {
       #expect(try frame(.vfxSource(.init()), transform(leftInset: 1)) == nil)
     }
 
-    @Test("LUB-1048: Moving keeps the origin inside the canvas")
-    func movingClampsOrigin() throws {
+    @Test("LUB-1048: Moving lets the origin leave the canvas")
+    func movingLeavesCanvas() throws {
       let start = try #require(frame(.vfxSource(.init()), transform(x: 960, scaleX: 0.5)))
       #expect(start.moved(dx: 0.25, dy: 0.1).rect.origin == CGPoint(x: 0.75, y: 0.1))
-      #expect(start.moved(dx: 2, dy: -1).rect.origin == CGPoint(x: 1, y: 0))
+      #expect(start.moved(dx: 2, dy: -1).rect.origin == CGPoint(x: 2.5, y: -1))
+      let outside = try #require(frame(.vfxSource(.init()), transform(x: -480, y: 1_620)))
+      #expect(outside.rect.origin == CGPoint(x: -0.25, y: 1.5))
     }
 
     @Test("LUB-1048: Corner resizing keeps the opposite corner and the mirroring")
@@ -86,7 +88,7 @@ extension AppUIComponentTestSuite.Shard1 {
       #expect(uniform.rect == CGRect(x: 0.25, y: 0.25, width: 0.75, height: 0.75))
       let fromTopLeft = start.resized(
         corner: .topLeft, to: CGPoint(x: -0.5, y: 0.5), keepsAspectRatio: false)
-      #expect(fromTopLeft.rect.minX == 0)
+      #expect(fromTopLeft.rect.minX == -0.5)
       #expect(fromTopLeft.rect.maxX == 0.75)
       #expect(fromTopLeft.rect.minY == 0.5)
 
@@ -118,7 +120,8 @@ extension AppUIComponentTestSuite.Shard1 {
       #expect(saved.translationY?.num == 540)
       #expect(saved.scaleX?.double == 0.375)
       #expect(saved.scaleY?.double == 0.25)
-      #expect(fixture.editor.rows[2]?.strings == ["480", "540", "0.375", "0.25"])
+      #expect(
+        fixture.editor.rows[2]?.strings == ["480", "540", "0.375", "0.25", "0", "0", "0", "0"])
       undoManager.undo()
       #expect(fixture.editor.preferences.videoLayerTransforms[2] == nil)
 

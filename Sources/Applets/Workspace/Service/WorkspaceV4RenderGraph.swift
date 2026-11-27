@@ -43,10 +43,13 @@ public struct WorkspaceV4RenderGraph: Sendable {
         (transform.bottomInset?.float ?? 0), default: 0)
       let leftInsetRational = Self.unitInterval(
         (transform.leftInset?.float ?? 0), default: 0)
-      let translationXRational = Self.unitInterval(
+      // Translations are Canvas-normalized coordinates, not a bounded range: a
+      // value outside [0, 1] places the origin outside the Canvas and the
+      // compositor clips the part that falls outside.
+      let translationXRational = Self.finite(
         (transform.translationX?.float ?? 0), default: 0
       )
-      let translationYRational = Self.unitInterval(
+      let translationYRational = Self.finite(
         (transform.translationY?.float ?? 0), default: 0
       )
       let scaleX = (transform.scaleX?.float ?? 1)
@@ -273,6 +276,10 @@ public struct WorkspaceV4RenderGraph: Sendable {
   private static func unitInterval(_ value: Float, default defaultValue: Float) -> Float {
     guard value.isFinite else { return defaultValue }
     return min(max(value, 0), 1)
+  }
+
+  private static func finite(_ value: Float, default defaultValue: Float) -> Float {
+    value.isFinite ? value : defaultValue
   }
 
 }

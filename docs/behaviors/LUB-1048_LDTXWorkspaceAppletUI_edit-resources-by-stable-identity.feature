@@ -272,3 +272,29 @@ Feature: edit resources by stable identity
     Given a layer editor and current Program preferences containing volume and visibility changes
     When a layer transform is edited
     Then the transform is updated without replacing the current volume or visibility preferences
+
+  @LUB-1048.25 @UIComponent
+  Scenario: Place layers outside the canvas from the preview
+    Given a selected VFX Source layer outlined on the preview
+    When it is moved or resized from a corner past the canvas edge
+    Then its origin follows the pointer outside the canvas instead of stopping at the edge
+
+  @LUB-1048.26 @UIComponent
+  Scenario Outline: Commit VFX Source crop percentages
+    Given a selected VFX Source layer
+    When crop field <field> receives "<input>"
+    Then its <inset> is <expected>
+
+    Examples:
+      | field  | input | inset        | expected                   |
+      | Top    | 12.5  | top inset    | 0.125                      |
+      | Right  | 0     | right inset  | 0                          |
+      | Bottom | 100   | bottom inset | 1                          |
+      | Left   | 101   | left inset   | unchanged with the draft   |
+      | Left   | -1    | left inset   | unchanged with the draft   |
+
+  @LUB-1048.27 @UIComponent
+  Scenario: Show crop controls only for VFX Sources
+    Given a Program canvas containing a VFX Source, Clock, and Dynamic Text
+    When each layer is selected
+    Then only the VFX Source exposes crop controls

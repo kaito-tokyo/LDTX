@@ -8,12 +8,34 @@ import SwiftUI
 @MainActor @Observable final class VideoLayersTableRowState {
   @ObservationIgnored var onCommit: (UndoManager?) -> Void = { _ in }
   @ObservationIgnored var onSetHidden: (Bool, UndoManager?) -> Void = { _, _ in }
+  /// Field indices in `strings`: position, scale, and then crop percentages.
+  enum Field: Int, CaseIterable {
+    case positionX, positionY, scaleX, scaleY, cropTop, cropRight, cropBottom, cropLeft
+
+    var label: String {
+      switch self {
+      case .positionX: "Pos X"
+      case .positionY: "Pos Y"
+      case .scaleX: "Scale X"
+      case .scaleY: "Scale Y"
+      case .cropTop: "Crop Top"
+      case .cropRight: "Crop Right"
+      case .cropBottom: "Crop Bottom"
+      case .cropLeft: "Crop Left"
+      }
+    }
+  }
+
+  static let identityStrings = ["0", "0", "1", "1", "0", "0", "0", "0"]
+
   var name = ""
   var isHidden = false
   var supportsPlacement = true
-  var strings = ["0", "0", "1", "1"]
+  /// Whether the layer's content can be cropped; only VFX Sources apply insets.
+  var supportsCrop = false
+  var strings = VideoLayersTableRowState.identityStrings
   var transform = Ldtx_Workspace_V4_BasicTransform()
-  @ObservationIgnored private var displayedStrings = ["0", "0", "1", "1"]
+  @ObservationIgnored private var displayedStrings = VideoLayersTableRowState.identityStrings
   var hasLocalTextChanges = false
 
   func edit(_ text: String, at index: Int, undoManager: UndoManager? = nil) {
@@ -34,9 +56,18 @@ import SwiftUI
         transform.scaleX ?? .init()),
       RationalValueFormatStyle<Ldtx_Workspace_V4_Rational32DefaultOne>().format(
         transform.scaleY ?? .init()),
+      cropPercentage(transform.topInset),
+      cropPercentage(transform.rightInset),
+      cropPercentage(transform.bottomInset),
+      cropPercentage(transform.leftInset),
     ]
     displayedStrings = strings
     hasLocalTextChanges = false
+  }
+
+  /// Formats an inset, a fraction of the content size, as a percentage.
+  private func cropPercentage(_ value: Ldtx_Workspace_V4_Rational32?) -> String {
+    RationalFormatStyle(multiplier: 100).format(value ?? .init())
   }
 
   private func pixelPosition(_ value: Ldtx_Workspace_V4_Rational32?, size: Double) -> String {
@@ -74,25 +105,16 @@ struct VideoLayersPlacementEditor: View {
   var body: some View {
     Group {
       if state.supportsPlacement {
-        Grid(alignment: .leading) {
-          ForEach(0..<2) { row in
-            GridRow {
-              ForEach(0..<2) { column in
-                let index = row * 2 + column
-                Text(["Pos X", "Pos Y", "Scale X", "Scale Y"][index]).fixedSize()
-                TextField(
-                  ["Pos X", "Pos Y", "Scale X", "Scale Y"][index],
-                  text: Binding(
-                    get: { state.strings[index] },
-                    set: {
-                      guard state.strings[index] != $0 else { return }
-                      state.edit($0, at: index, undoManager: undoManager)
-                    })
-                )
-                .labelsHidden()
-                .focused($focusedField, equals: index)
-                .frame(minWidth: 60)
-              }
+        VStack(alignment: .leading) {
+          Grid(alignment: .leading) {
+            fieldRow(.positionX, .positionY)
+            fieldRow(.scaleX, .scaleY)
+          }
+          if state.supportsCrop {
+            Text("Crop (%)").foregroundStyle(.secondary)
+            Grid(alignment: .leading) {
+              fieldRow(.cropTop, .cropBottom)
+              fieldRow(.cropLeft, .cropRight)
             }
           }
         }
@@ -111,5 +133,31 @@ struct VideoLayersPlacementEditor: View {
     .onDisappear {
       state.isEditing = false
     }
+  }
+
+  private func fieldRow(
+    _ first: VideoLayersTableRowState.Field, _ second: VideoLayersTableRowState.Field
+  ) -> some View {
+    GridRow {
+      field(first)
+      field(second)
+    }
+  }
+
+  @ViewBuilder private func field(_ field: VideoLayersTableRowState.Field) -> some View {
+    let index = field.rawValue
+    Text(field.label).fixedSize()
+    TextField(
+      field.label,
+      text: Binding(
+        get: { state.strings[index] },
+        set: {
+          guard state.strings[index] != $0 else { return }
+          state.edit($0, at: index, undoManager: undoManager)
+        })
+    )
+    .labelsHidden()
+    .focused($focusedField, equals: index)
+    .frame(minWidth: 60)
   }
 }

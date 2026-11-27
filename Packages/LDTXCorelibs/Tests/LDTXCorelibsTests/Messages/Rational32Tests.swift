@@ -108,11 +108,11 @@ struct Rational32UnitTestSuite {
 
   @Test("LUB-1000: Validates without rounding") func validatesWithoutRounding() {
     var transform = Ldtx_Workspace_V4_BasicTransform()
-    transform.translationX = .with {
+    transform.topInset = .with {
       $0.num = Int32.max
       $0.den = UInt32(Int32.max - 1)
     }
-    #expect((transform.translationX?.double ?? 0) > 1)
+    #expect((transform.topInset?.double ?? 0) > 1)
     #expect(
       performing: {
         try WorkspaceBundleValidatorV4.validateTransform(transform)

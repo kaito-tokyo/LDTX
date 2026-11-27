@@ -148,6 +148,12 @@ final class VideoLayersEditorState {
       case .vfxSource, .clock, .dynamicText: row.supportsPlacement = true
       default: row.supportsPlacement = false
       }
+      // Only VFX Sources apply insets; other kinds ignore them when rendering.
+      if case .vfxSource = component?.videoComponent {
+        row.supportsCrop = true
+      } else {
+        row.supportsCrop = false
+      }
       row.isHidden = preferences.videoLayerHidden[id] ?? false
       if !row.hasLocalTextChanges && !row.isEditing {
         row.display(
@@ -170,7 +176,11 @@ final class VideoLayersEditorState {
           (transform.scaleX?.double ?? 1)
             == (previous.scaleX?.double ?? 1),
           (transform.scaleY?.double ?? 1)
-            == (previous.scaleY?.double ?? 1)
+            == (previous.scaleY?.double ?? 1),
+          (transform.topInset?.double ?? 0) == (previous.topInset?.double ?? 0),
+          (transform.rightInset?.double ?? 0) == (previous.rightInset?.double ?? 0),
+          (transform.bottomInset?.double ?? 0) == (previous.bottomInset?.double ?? 0),
+          (transform.leftInset?.double ?? 0) == (previous.leftInset?.double ?? 0)
         {
           row.hasLocalTextChanges = incomplete
           return
@@ -203,17 +213,24 @@ final class VideoLayersEditorState {
   {
     var hasIncompleteText = false
     let previous = state.transform
-    let fallback = [
-      previous.translationX ?? .init(), previous.translationY ?? .init(),
-      Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleX?.num ?? 1, den: previous.scaleX?.den ?? 1)
-      },
-      Ldtx_Workspace_V4_Rational32.with {
-        $0.set(num: previous.scaleY?.num ?? 1, den: previous.scaleY?.den ?? 1)
-      },
+    let previousInsets = [
+      previous.topInset, previous.rightInset, previous.bottomInset, previous.leftInset,
     ]
+    let fallback =
+      [
+        previous.translationX ?? .init(), previous.translationY ?? .init(),
+        Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: previous.scaleX?.num ?? 1, den: previous.scaleX?.den ?? 1)
+        },
+        Ldtx_Workspace_V4_Rational32.with {
+          $0.set(num: previous.scaleY?.num ?? 1, den: previous.scaleY?.den ?? 1)
+        },
+      ] + previousInsets.map { $0 ?? .init() }
     let values = state.strings.enumerated().map { index, text in
       do {
+        if index >= VideoLayersTableRowState.Field.cropTop.rawValue {
+          return try Self.cropInset(text)
+        }
         if index < 2 {
           let size = UInt32(index == 0 ? canvasWidth : canvasHeight)
           guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -247,7 +264,35 @@ final class VideoLayersEditorState {
     transform.translationY = values[1]
     transform.scaleX = .init(value: values[2])
     transform.scaleY = .init(value: values[3])
+    // Keep an absent inset absent unless its value changed.
+    let insets = (0..<4).map { offset -> Ldtx_Workspace_V4_Rational32? in
+      let value = values[VideoLayersTableRowState.Field.cropTop.rawValue + offset]
+      let current = previousInsets[offset]
+      return value.double == (current?.double ?? 0) ? current : value
+    }
+    transform.topInset = insets[0]
+    transform.rightInset = insets[1]
+    transform.bottomInset = insets[2]
+    transform.leftInset = insets[3]
     return (transform, hasIncompleteText)
+  }
+
+  /// Parses a crop percentage in [0, 100] into an inset, a fraction of the content.
+  private static func cropInset(_ text: String) throws -> Ldtx_Workspace_V4_Rational32 {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.contains("/") else {
+      throw WorkspaceSelectionError(message: "Enter a decimal crop percentage.")
+    }
+    guard
+      let percentage = Decimal(string: trimmed, locale: Locale(identifier: "en_US_POSIX")),
+      (try? RationalParseStrategy().parse(trimmed)) != nil
+    else { throw RationalInputError.invalidNumber }
+    guard percentage >= 0, percentage <= 100 else {
+      throw WorkspaceSelectionError(message: "Enter a crop percentage from 0 to 100.")
+    }
+    var value = Ldtx_Workspace_V4_Rational32()
+    try value.set(decimal: percentage / 100)
+    return value
   }
 
 }
