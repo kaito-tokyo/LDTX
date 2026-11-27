@@ -76,13 +76,14 @@ public struct WorkspaceBundleWriterV4 {
     return externalID
   }
 
-  /// Validates and serializes all documents before changing the destination.
+  /// Writes a complete package from `workspace` alone.
+  ///
+  /// The destination is treated as a new location: it is never read, and
+  /// `Info.plist`, every model in `workspace.visionModels`, and all three
+  /// documents are written to it. Model sources must stay readable for the
+  /// duration of the write and must not be inside the package being replaced.
+  /// Validation and serialization finish before the destination changes.
   public func write(_ workspace: WorkspaceV4Bundle, to destination: URL) throws {
-    var workspace = workspace
-    let embedded = try WorkspaceModelFiles.read(at: destination)
-    for id in workspace.visionModels.keys {
-      if let url = embedded[id] { workspace.visionModels[id] = url }
-    }
     try WorkspaceBundleValidatorV4.validate(workspace)
     let definitionData = try Self.encode(
       definition: workspace.definition,
@@ -93,7 +94,9 @@ public struct WorkspaceBundleWriterV4 {
     let outputSettingsData = try Self.encode(
       outputSettings: workspace.outputSettings,
       externalID: Self.envelopeIdentifier(workspace.outputSettingsExternalID))
-    try Self.preparePackage(at: destination)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    try WorkspaceBundleInfoV4().encodedData().write(
+      to: destination.appendingPathComponent("Info.plist"), options: .atomic)
     try WorkspaceModelFiles.write(workspace.visionModels, to: destination)
     try definitionData.write(
       to: destination.appendingPathComponent("definition.pb"), options: .atomic)

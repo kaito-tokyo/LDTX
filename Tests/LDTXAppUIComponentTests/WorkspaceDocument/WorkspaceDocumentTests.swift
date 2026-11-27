@@ -671,12 +671,12 @@ extension AppUIComponentTestSuite.Shard1 {
       let secondURL = url.appendingPathComponent("VisionModels/\(secondID)/Second.mlmodel")
       #expect(state.visionModels[firstID] == first)
       #expect(state.visionModels[secondID] == second)
-      #expect(
-        document.workspaceSnapshot?.visionModels[firstID]?.resolvingSymlinksInPath()
-          == firstURL.resolvingSymlinksInPath())
-      #expect(
-        document.workspaceSnapshot?.visionModels[secondID]?.resolvingSymlinksInPath()
-          == secondURL.resolvingSymlinksInPath())
+      // The runtime keeps copies outside the package, which later saves replace.
+      for (id, data) in [(firstID, Data([1])), (secondID, Data([2]))] {
+        let copy = try #require(document.workspaceSnapshot?.visionModels[id])
+        #expect(copy.path.hasPrefix(document.modelCacheURL.path))
+        #expect(try Data(contentsOf: copy) == data)
+      }
       let reloaded = try WorkspaceBundleReaderV4(at: url).read()
       #expect(
         reloaded.visionModels[firstID]?.resolvingSymlinksInPath()

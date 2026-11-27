@@ -89,7 +89,34 @@ public enum WorkspaceModelFiles {
     return models
   }
 
-  /// Copies resources without changing their IDs or replacing previously saved models.
+  /// Copies models into `cacheURL` and returns their copies, keyed by the same IDs.
+  ///
+  /// A Document must not keep URLs into its package, which the framework
+  /// replaces while saving. A model ID always names the same model, so an
+  /// existing copy for an ID and basename is reused instead of copied again.
+  public static func stage(_ models: [Int64: URL], in cacheURL: URL) throws -> [Int64: URL] {
+    let manager = FileManager.default
+    var staged: [Int64: URL] = [:]
+    for (id, source) in models {
+      let directory = cacheURL.appendingPathComponent(String(id), isDirectory: true)
+      let target = directory.appendingPathComponent(source.lastPathComponent)
+      if !manager.fileExists(atPath: target.path) {
+        #if os(macOS)
+          let accessed = source.startAccessingSecurityScopedResource()
+          defer { if accessed { source.stopAccessingSecurityScopedResource() } }
+        #endif
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let temporary = directory.appendingPathComponent(UUID().uuidString)
+        defer { try? manager.removeItem(at: temporary) }
+        try manager.copyItem(at: source, to: temporary)
+        try manager.moveItem(at: temporary, to: target)
+      }
+      staged[id] = target
+    }
+    return staged
+  }
+
+  /// Copies every model from its source into `bundleURL`, keeping its ID and basename.
   static func write(_ models: [Int64: URL], to bundleURL: URL) throws {
     guard !models.isEmpty else { return }
     let manager = FileManager.default
@@ -101,8 +128,10 @@ public enum WorkspaceModelFiles {
       try validateDirectory(directory)
       try manager.createDirectory(at: directory, withIntermediateDirectories: true)
       let target = directory.appendingPathComponent(source.lastPathComponent)
-      if manager.fileExists(atPath: target.path) {
-        try validateModel(at: target)
+      // Writing a package onto itself leaves its own models in place.
+      if source.standardizedFileURL.resolvingSymlinksInPath()
+        == target.standardizedFileURL.resolvingSymlinksInPath()
+      {
         continue
       }
       #if os(macOS)
@@ -112,6 +141,7 @@ public enum WorkspaceModelFiles {
       let staged = directory.appendingPathComponent(UUID().uuidString)
       defer { try? manager.removeItem(at: staged) }
       try manager.copyItem(at: source, to: staged)
+      if manager.fileExists(atPath: target.path) { try manager.removeItem(at: target) }
       try manager.moveItem(at: staged, to: target)
     }
   }

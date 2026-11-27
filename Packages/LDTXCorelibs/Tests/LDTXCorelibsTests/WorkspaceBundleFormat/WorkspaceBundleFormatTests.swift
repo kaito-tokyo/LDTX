@@ -384,7 +384,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     #expect(Set(loaded.visionModels.keys) == [9])
     #expect(loaded.visionModels[9]?.resolvingSymlinksInPath() == embedded.resolvingSymlinksInPath())
     try FileManager.default.removeItem(at: source)
-    var edited = workspace
+    var edited = loaded
     edited.definition.displayName = "Edited after removing the source"
     try WorkspaceBundleWriterV4().write(edited, to: bundle)
     #expect(try WorkspaceBundleReaderV4(at: bundle).read().definition == edited.definition)
@@ -419,7 +419,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
     let embedded = try #require(loaded.visionModels[9])
     #expect(embedded.lastPathComponent == name)
     try FileManager.default.removeItem(at: source)
-    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
+    try WorkspaceBundleWriterV4().write(loaded, to: bundle)
     #expect(
       try Data(contentsOf: embedded.appendingPathComponent("Data/model.bin")) == Data([1, 2, 3]))
     let copied = root.appendingPathComponent("Copy.ldtxworkspace")
@@ -430,7 +430,7 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
           "VisionModels/9/\(name)/Data/model.bin")) == Data([1, 2, 3]))
   }
 
-  @Test("LUB-1002: The first supported basename is selected and existing models stay immutable")
+  @Test("LUB-1002: The first supported basename is selected and survives saving onto itself")
   func selectsFirstModelWithinID() throws {
     let root = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
@@ -464,11 +464,55 @@ struct WorkspaceBundleFormatIntegrationTestSuite {
       WorkspaceModelFiles.modelURL(
         for: detector,
         in: loaded.visionModels)?.resolvingSymlinksInPath() == first.resolvingSymlinksInPath())
-    try Data([99]).write(to: source)
-    try WorkspaceBundleWriterV4().write(workspace, to: bundle)
-    #expect(
-      try Data(contentsOf: bundle.appendingPathComponent("VisionModels/9/Z.mlmodel")) == Data([1]))
+    try WorkspaceBundleWriterV4().write(loaded, to: bundle)
     #expect(try Data(contentsOf: first) == Data([2]))
+    #expect(
+      try WorkspaceBundleReaderV4(at: bundle).read().visionModels[9]?.resolvingSymlinksInPath()
+        == first.resolvingSymlinksInPath())
+  }
+
+  @Test("LUB-1002: Writes a complete package that does not depend on its model sources")
+  func writesSelfContainedPackage() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Classifier.mlmodel")
+    try Data([7]).write(to: source)
+    var workspace = makeWorkspace()
+    workspace.visionModels = [9: source]
+    let original = root.appendingPathComponent("Original.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(workspace, to: original)
+    let loaded = try WorkspaceBundleReaderV4(at: original).read()
+    let destination = root.appendingPathComponent("Saved.ldtxworkspace")
+    try WorkspaceBundleWriterV4().write(loaded, to: destination)
+    try FileManager.default.removeItem(at: original)
+    try FileManager.default.removeItem(at: source)
+    #expect(
+      try Set(FileManager.default.contentsOfDirectory(atPath: destination.path))
+        == ["Info.plist", "VisionModels", "definition.pb", "output_settings.pb", "preferences.pb"])
+    let saved = try WorkspaceBundleReaderV4(at: destination).read()
+    #expect(saved.definition == loaded.definition)
+    #expect(saved.preferences == loaded.preferences)
+    #expect(saved.outputSettings == loaded.outputSettings)
+    #expect(try saved.visionModels[9].map { try Data(contentsOf: $0) } == Data([7]))
+  }
+
+  @Test("LUB-1002: Staged models live outside the package and keep their first copy per ID")
+  func stagesModelsOutsideThePackage() throws {
+    let root = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("Classifier.mlmodel")
+    try Data([1]).write(to: source)
+    let cache = root.appendingPathComponent("Cache")
+    let staged = try WorkspaceModelFiles.stage([9: source], in: cache)
+    let copy = try #require(staged[9])
+    #expect(copy.lastPathComponent == "Classifier.mlmodel")
+    #expect(copy.path.hasPrefix(cache.path))
+    #expect(try Data(contentsOf: copy) == Data([1]))
+    try Data([99]).write(to: source)
+    #expect(try WorkspaceModelFiles.stage([9: source], in: cache) == staged)
+    try FileManager.default.removeItem(at: source)
+    #expect(try WorkspaceModelFiles.stage([9: source], in: cache) == staged)
+    #expect(try Data(contentsOf: copy) == Data([1]))
   }
 
   @Test("LUB-1002: Invalid or missing model references fail before changing the destination")

@@ -23,14 +23,20 @@ lexicographic order within each model directory. WorkspaceV4Bundle and StateServ
 hold `visionModels: [Int64: URL]`, including retained historical models.
 
 Choosing a new model allocates its ID immediately and records its source URL.
-Reselecting the same current URL preserves the ID. A Snapshot captures source URLs,
-not a copy of the file bytes. Writer copies native model files or package trees
-before writing protobuf documents, without assigning IDs or modifying references.
-Saving preserves the source URLs in Document and StateService. Reader constructs
-bundle-local URLs when the package is read again. Inference uses the runtime
-copy's bundle-local URL and matches the saved model ID and Vision settings rather
-than requiring the editing source URL to equal the runtime URL.
-Existing models are not rewritten or deleted. Clearing an assignment sets
+Reselecting the same current URL preserves the ID. A Document never keeps URLs
+into its package, because the framework replaces the package while saving:
+its Reader copies every read model into the Document's model cache outside the
+package, and capturing a Snapshot copies chosen models there too.
+`WorkspaceModelFiles.stage` performs these copies; a model ID always names the
+same model, so the first copy for an ID and basename is reused, and later
+changes to or removal of the chosen file do not affect it. A Snapshot therefore
+references only cache copies. Writer copies native model files or package trees
+from the Snapshot before writing protobuf documents, without assigning IDs or
+modifying references. Saving preserves the source URLs in Document and
+StateService. Inference uses the runtime copy's cached URL and matches the saved
+model ID and Vision settings rather than requiring the editing source URL to
+equal the runtime URL. Every model in `visionModels`, including retained
+historical models, is written on each save. Clearing an assignment sets
 `model_internal_id` to zero and retains past resources. Automatic pruning is not
 part of saving.
 
@@ -68,7 +74,9 @@ reported as read errors rather than through a separate existence query.
 WorkspaceV4Bundle writes. Its destination-independent initializer performs no
 filesystem work; `write(_:to:)` validates the bundle and serializes all three
 envelopes before creating metadata, placing models, and writing the documents.
-Existing model revisions and unknown package resources are preserved.
+It writes a complete package from the WorkspaceV4Bundle alone: it never reads
+the destination, always writes `Info.plist`, all models, and all three
+documents, and does not carry over resources that the bundle does not hold.
 WorkspaceDocument defines inline Reader and Writer wrappers that choose their
 async execution behavior and delegate package I/O to Corelibs. WriterV4 has no
 SwiftUI dependency or retroactive DocumentWriter conformance.
@@ -84,8 +92,8 @@ for document identifiers and writes their 16-byte RFC 9562 network byte order
 representation into each protobuf envelope. Its `makeExternalID()` operation creates UUIDv7 values
 for callers that need new document identifiers.
 Individual writes remain available for CLI operations. DocumentWriter delegates
-complete-bundle saves to WriterV4 at the framework-supplied staging destination;
-WriterV4 does not replace the entire package directory.
+complete-bundle saves to WriterV4 at the framework-supplied destination, and the
+framework replaces the package with the result.
 Shared bundle values are defined by
 `LDTXCorelibs/WorkspaceBundleFormat`; read and write operations propagate Foundation and
 Protobuf errors. `WorkspaceLockService` belongs to Workspace runtime
