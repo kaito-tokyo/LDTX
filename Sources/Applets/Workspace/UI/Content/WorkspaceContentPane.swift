@@ -42,7 +42,15 @@ public struct WorkspaceContentPane: View {
       let maximum = max(0, geometry.size.height - 1)
       let height = min(layout.previewHeight, maximum)
       VStack(spacing: 0) {
-        pairedPreview.content.frame(height: height)
+        pairedPreview.content { regions in
+          switch layout.selectedEditor {
+          case .audio: EmptyView()
+          case .landscape:
+            VideoLayerFrameOverlay(editor: landscapeEditor, canvas: regions.landscape)
+          case .portrait: VideoLayerFrameOverlay(editor: portraitEditor, canvas: regions.portrait)
+          }
+        }
+        .frame(height: height)
         WorkspaceDivider("Preview height", axis: .vertical, value: height) {
           layout.resizePreview(to: min(maximum, max(0, $0)))
         }

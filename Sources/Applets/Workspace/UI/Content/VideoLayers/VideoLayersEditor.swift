@@ -27,6 +27,34 @@ final class VideoLayersEditorState {
   var layerIDs: [Int64] { preferences.videoLayerInternalIds }
   /// Layer IDs in the order they are listed: frontmost first.
   var displayedLayerIDs: [Int64] { layerIDs.reversed() }
+  var canvasWidth: Int { target.defaultProfile.width }
+  var canvasHeight: Int { target.defaultProfile.height }
+
+  /// The selected layer's frame, or nil when it cannot be shown on the preview.
+  var selectedFrame: VideoLayerFrame? {
+    guard let selectedLayerID, layerIDs.contains(selectedLayerID) else { return nil }
+    return VideoLayerFrame(
+      component: stateService.workspaceDefinition.videoComponents
+        .first { $0.internalID == selectedLayerID }?.videoComponent,
+      transform: preferences.videoLayerTransforms[selectedLayerID] ?? .init(),
+      canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
+  }
+
+  /// Saves a frame dragged on the preview as the selected layer's transform.
+  func commitSelectedFrame(_ frame: VideoLayerFrame, undoManager: UndoManager? = nil) {
+    guard let programID, let id = selectedLayerID, layerIDs.contains(id) else { return }
+    let previous = preferences.videoLayerTransforms[id] ?? .init()
+    let transform = frame.applied(
+      to: previous, canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+    guard transform != previous else { return }
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+        .videoLayerTransforms[id] = transform
+    }
+    if let row = rows[id], !row.isEditing {
+      row.display(transform, canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
+    }
+  }
 
   private var displayedProgramID: Int64?
   init(
@@ -123,7 +151,8 @@ final class VideoLayersEditorState {
       row.isHidden = preferences.videoLayerHidden[id] ?? false
       if !row.hasLocalTextChanges && !row.isEditing {
         row.display(
-          preferences.videoLayerTransforms[id] ?? .init(), canvasWidth: 1920, canvasHeight: 1080)
+          preferences.videoLayerTransforms[id] ?? .init(),
+          canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
       }
       row.onCommit = { [weak self, weak row] undoManager in
         guard let self, let row, row.hasLocalTextChanges, let program,
@@ -186,7 +215,7 @@ final class VideoLayersEditorState {
     let values = state.strings.enumerated().map { index, text in
       do {
         if index < 2 {
-          let size = UInt32(index == 0 ? 1920 : 1080)
+          let size = UInt32(index == 0 ? canvasWidth : canvasHeight)
           guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
           else {
             throw WorkspaceSelectionError(
@@ -258,7 +287,7 @@ struct VideoLayersEditor: View {
     Section {
       if let id = editor.selectedLayerID, let row = editor.rows[id] {
         // A String identity keeps List from matching this row to the Int64 layer selection.
-        VideoLayersPlacementEditor(state: row, canvasWidth: 1920, canvasHeight: 1080)
+        VideoLayersPlacementEditor(state: row)
           .id("placement-\(id)")
           .selectionDisabled()
       } else {

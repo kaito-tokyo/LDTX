@@ -69,8 +69,6 @@ struct VideoLayersTableRowContent: View {
 struct VideoLayersPlacementEditor: View {
   @Environment(\.undoManager) private var undoManager
   @Bindable var state: VideoLayersTableRowState
-  let canvasWidth: Double
-  let canvasHeight: Double
   @FocusState private var focusedField: Int?
 
   var body: some View {

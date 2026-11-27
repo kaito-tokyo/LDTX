@@ -39,6 +39,14 @@ public final class ProgramCanvasPairedPreview {
   }
 
   var content: some View {
+    content { _ in EmptyView() }
+  }
+
+  /// The preview with `overlay` laid over it at the same size. The overlay receives
+  /// each canvas's rectangle in that space, measured in points.
+  func content<Overlay: View>(
+    @ViewBuilder overlay: @escaping (PointRegions) -> Overlay
+  ) -> some View {
     GeometryReader { geometry in
       let ratio: CGFloat = 16.0 / 9.0 + 9.0 / 16.0
       let height = min(max(0, geometry.size.height - 24), max(0, geometry.size.width - 24) / ratio)
@@ -46,9 +54,34 @@ public final class ProgramCanvasPairedPreview {
         .frame(width: height * ratio, height: height)
         .contentShape(Rectangle())
         .onTapGesture { point in self.selectCanvas(at: point) }
+        .overlay {
+          GeometryReader { overlayGeometry in
+            overlay(self.pointRegions(in: overlayGeometry.size))
+          }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .background(.background)
+  }
+
+  struct PointRegions {
+    let landscape: CGRect
+    let portrait: CGRect
+  }
+
+  /// Returns the canvas rectangles that the renderer uses for a drawable of `size` points.
+  func pointRegions(in size: CGSize) -> PointRegions {
+    let backing = metalView.convertToBacking(NSRect(origin: .zero, size: size)).size
+    let scale = size.width > 0 && backing.width > 0 ? backing.width / size.width : 1
+    let regions = ProgramPairPreviewRegions(
+      drawable: backing,
+      landscapeSize: CGSize(width: 16, height: 9), portraitSize: CGSize(width: 9, height: 16))
+    func points(_ rect: CGRect) -> CGRect {
+      CGRect(
+        x: rect.minX / scale, y: rect.minY / scale,
+        width: rect.width / scale, height: rect.height / scale)
+    }
+    return PointRegions(landscape: points(regions.landscape), portrait: points(regions.portrait))
   }
 
   /// Accepts a point in the drawable's top-left coordinate system, measured in points.
