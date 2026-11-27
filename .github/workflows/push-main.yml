@@ -28,18 +28,12 @@ jobs:
     permissions:
       contents: read
 
-  docs-deploy:
+  docs-build:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     permissions:
       contents: read
-      id-token: write
-      pages: write
 
     steps:
       - name: Checkout
@@ -58,6 +52,20 @@ jobs:
         with:
           path: docs/dist
 
+  docs-deploy:
+    needs: docs-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      id-token: write
+      pages: write
+
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5.0.1
