@@ -181,6 +181,7 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
         do {
           let service = try await loadClassifier(url, noCompile)
           guard !stopped, generation == preparationGeneration else { return }
+          Self.logger.notice("vision model prepared noCompile=\(noCompile, privacy: .public)")
           models[key] = service
           for wrapper in visions {
             guard case .ldtxSceneDetectorVision(let current)? = wrapper.vision,
@@ -191,6 +192,9 @@ public final class WorkspaceV4VisionFeature: WorkspaceV4VisionFeatureProviding {
           }
           self.context?.reportModelPrepared(key.id)
         } catch {
+          Self.logger.error(
+            "vision model preparation failed noCompile=\(noCompile, privacy: .public) current=\(!self.stopped && generation == self.preparationGeneration, privacy: .public) error=\(PublicErrorDiagnostic(error).description, privacy: .public)"
+          )
           guard !stopped, generation == preparationGeneration else { return }
           modelFailures[key] = error
           for wrapper in visions {

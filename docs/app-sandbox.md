@@ -104,3 +104,21 @@ entitlements with `codesign -d --entitlements - LDTX.app` and confirm:
 - Vision model import and OAuth client import; and
 - notification attachments and Show in Finder for saved files; and
 - the launch-time Open panel when LDTX launches without becoming active.
+
+Confirm each step in the unified log as well as on screen. Run `/usr/bin/log`
+outside the agent sandbox:
+
+```sh
+/usr/bin/log show --last 10m --info \
+  --predicate 'subsystem == "tokyo.kaito.ldtx"'
+```
+
+Output start logs `output start`, `output capture access`, `output folder` and
+`output started`, or `output start rejected` with a fixed reason. A failure logs
+`output failure` with its phase, startup step and public error diagnostic, for
+example `startStep=outputFolder` with `domain=NSCocoaErrorDomain code=513` for a
+folder the sandbox cannot write. `output folder write probe failed`,
+`folder bookmark resolution failed`, `RTMPS transport failure`, `RTMPS event`,
+`vision model preparation failed`, the `YouTubeAuthorization` category and
+`show recording in Finder` cover the remaining steps. Paths, URLs, stream keys
+and tokens stay private.

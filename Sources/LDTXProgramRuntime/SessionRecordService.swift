@@ -853,7 +853,7 @@ public final class SessionRecordService: @unchecked Sendable {
       completeStop(.finalized)
     } catch {
       sessionRecordServiceLogger.error(
-        "Record package finalization failed id=\(self.finalizationID, privacy: .public) code=\((error as NSError).code): \(error.localizedDescription, privacy: .private)"
+        "Record package finalization failed id=\(self.finalizationID, privacy: .public) error=\(PublicErrorDiagnostic(error).description, privacy: .public): \(error.localizedDescription, privacy: .private)"
       )
       // The owner may observe finalization before its asynchronous failure task.
       // Keep the same cause at both boundaries, including NSError userInfo.
@@ -868,7 +868,7 @@ public final class SessionRecordService: @unchecked Sendable {
       }
     } catch {
       sessionRecordServiceLogger.error(
-        "Cancelled record package cleanup failed: \((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
+        "Cancelled record package cleanup failed: error=\(PublicErrorDiagnostic(error).description, privacy: .public) domain=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
       )
     }
   }

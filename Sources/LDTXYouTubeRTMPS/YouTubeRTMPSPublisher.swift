@@ -4,6 +4,9 @@
 
 import Foundation
 import LDTXCorelibs
+import OSLog
+
+private let rtmpsLogger = Logger(subsystem: "tokyo.kaito.ldtx", category: "YouTubeRTMPS")
 
 private actor EstablishmentRace {
   private enum Outcome: Equatable { case pending, established, timedOut }
@@ -175,7 +178,8 @@ public actor YouTubeRTMPSPublisher {
         try await send(
           FLVPacketEncoder.metadata(videoFormat: videoFormat, audioFormat: audioFormat))
       } catch {
-        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        let failure = sanitized(error)
+        if failure != .connectionFailed { throw failure }
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
@@ -190,7 +194,8 @@ public actor YouTubeRTMPSPublisher {
       do {
         try await send(header)
       } catch {
-        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        let failure = sanitized(error)
+        if failure != .connectionFailed { throw failure }
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
@@ -205,7 +210,8 @@ public actor YouTubeRTMPSPublisher {
       do {
         try await send(header)
       } catch {
-        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        let failure = sanitized(error)
+        if failure != .connectionFailed { throw failure }
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
@@ -219,7 +225,8 @@ public actor YouTubeRTMPSPublisher {
     do {
       try await send(packet)
     } catch {
-      if sanitized(error) != .connectionFailed { throw sanitized(error) }
+      let failure = sanitized(error)
+      if failure != .connectionFailed { throw failure }
       try await beginReconnect(generation: generation, connection: connection)
       return
     }
@@ -253,7 +260,8 @@ public actor YouTubeRTMPSPublisher {
       do {
         try await send(header)
       } catch {
-        if sanitized(error) != .connectionFailed { throw sanitized(error) }
+        let failure = sanitized(error)
+        if failure != .connectionFailed { throw failure }
         try await beginReconnect(generation: generation, connection: connection)
         return
       }
@@ -271,7 +279,8 @@ public actor YouTubeRTMPSPublisher {
         eventHandler(.firstAudioSampleSent)
       }
     } catch {
-      if sanitized(error) != .connectionFailed { throw sanitized(error) }
+      let failure = sanitized(error)
+      if failure != .connectionFailed { throw failure }
       try await beginReconnect(generation: generation, connection: connection)
     }
   }
@@ -829,8 +838,13 @@ public actor YouTubeRTMPSPublisher {
     if value == .stopped { eventHandler(.stopped) }
   }
 
+  /// Maps transport errors to `connectionFailed`. The original error's public
+  /// diagnostic is logged first because the mapping discards its cause.
   private func sanitized(_ error: any Error) -> YouTubeRTMPSError {
     if let error = error as? YouTubeRTMPSError { return error }
+    rtmpsLogger.error(
+      "RTMPS transport failure error=\(PublicErrorDiagnostic(error).description, privacy: .public)"
+    )
     return .connectionFailed
   }
 }

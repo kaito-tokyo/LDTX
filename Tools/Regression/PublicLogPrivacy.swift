@@ -5,6 +5,7 @@ import Foundation
 import LDTXCorelibs
 import LDTXDash
 import LDTXProgramRuntime
+import LDTXWorkspaceAppletModel
 
 struct PrivateFailureSession: HTTPSession {
   func data(
@@ -51,6 +52,10 @@ struct PrivateFailureSession: HTTPSession {
       precondition((error as NSError).code == 220)
       precondition(error.localizedDescription.contains("ISSUE220_PRIVATE_ERROR"))
     }
+    // Folder bookmark creation logs the system cause with PublicErrorDiagnostic.
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "ISSUE220_PRIVATE_PATH-\(UUID().uuidString)", isDirectory: true)
+    precondition(SecurityScopedFolder.bookmark(for: folder) == nil)
     print("Production log probe passed pid=\(ProcessInfo.processInfo.processIdentifier)")
   }
 }
