@@ -42,7 +42,15 @@ public struct WorkspaceContentPane: View {
       let maximum = max(0, geometry.size.height - 1)
       let height = min(layout.previewHeight, maximum)
       VStack(spacing: 0) {
-        pairedPreview.content.frame(height: height)
+        pairedPreview.content { regions in
+          switch layout.selectedEditor {
+          case .audio: EmptyView()
+          case .landscape:
+            VideoLayerFrameOverlay(editor: landscapeEditor, canvas: regions.landscape)
+          case .portrait: VideoLayerFrameOverlay(editor: portraitEditor, canvas: regions.portrait)
+          }
+        }
+        .frame(height: height)
         WorkspaceDivider("Preview height", axis: .vertical, value: height) {
           layout.resizePreview(to: min(maximum, max(0, $0)))
         }
@@ -65,7 +73,7 @@ public struct WorkspaceContentPane: View {
       }
       .pickerStyle(.segmented)
       .padding(8)
-      List {
+      List(selection: layerSelection) {
         switch layout.selectedEditor {
         case .audio:
           Section {
@@ -84,6 +92,18 @@ public struct WorkspaceContentPane: View {
       }
       .listStyle(.inset)
     }
+  }
+
+  private var layerSelection: Binding<Int64?> {
+    let editor: VideoLayersEditorState? =
+      switch layout.selectedEditor {
+      case .audio: nil
+      case .landscape: landscapeEditor
+      case .portrait: portraitEditor
+      }
+    return Binding(
+      get: { editor?.selectedLayerID },
+      set: { editor?.selectedLayerID = $0 })
   }
 }
 

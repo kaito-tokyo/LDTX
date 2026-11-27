@@ -38,6 +38,50 @@ extension AppUIComponentTestSuite.Shard1 {
           == data.expected)
     }
 
+    struct SelectedLayerMove: Sendable, Codable {
+      let selected: Int64?
+      let move: String
+      let expected: [Int64]
+    }
+
+    @Test(
+      "LUB-1048: Move buttons reorder only the selected layer within bounds",
+      arguments: [
+        SelectedLayerMove(selected: 1, move: "toFront", expected: [2, 3, 1]),
+        SelectedLayerMove(selected: 1, move: "forward", expected: [2, 1, 3]),
+        SelectedLayerMove(selected: 3, move: "backward", expected: [1, 3, 2]),
+        SelectedLayerMove(selected: 3, move: "toBack", expected: [3, 1, 2]),
+        SelectedLayerMove(selected: 2, move: "forward", expected: [1, 3, 2]),
+        SelectedLayerMove(selected: 2, move: "backward", expected: [2, 1, 3]),
+        SelectedLayerMove(selected: 3, move: "toFront", expected: [1, 2, 3]),
+        SelectedLayerMove(selected: 3, move: "forward", expected: [1, 2, 3]),
+        SelectedLayerMove(selected: 1, move: "backward", expected: [1, 2, 3]),
+        SelectedLayerMove(selected: 1, move: "toBack", expected: [1, 2, 3]),
+        SelectedLayerMove(selected: nil, move: "toFront", expected: [1, 2, 3]),
+        SelectedLayerMove(selected: 99, move: "toBack", expected: [1, 2, 3]),
+      ])
+    func selectedLayerMove(_ data: SelectedLayerMove) throws {
+      let fixture = VideoLayersTestFixture()
+      let move = try #require(
+        VideoLayersEditorState.LayerMove.allCases.first { "\($0)" == data.move })
+      fixture.editor.selectedLayerID = data.selected
+      let changes = data.expected != [1, 2, 3]
+      #expect(fixture.editor.canMoveSelectedLayer(move) == changes)
+      fixture.editor.moveSelectedLayer(move)
+      #expect(fixture.editor.layerIDs == data.expected)
+      #expect(fixture.editor.selectedLayerID == data.selected)
+    }
+
+    @Test("LUB-1048: Layers are listed front to back and selection follows membership")
+    func layersListedFrontToBack() {
+      let fixture = VideoLayersTestFixture()
+      #expect(fixture.editor.displayedLayerIDs == [3, 2, 1])
+      fixture.editor.selectedLayerID = 2
+      fixture.update(ids: [1, 3])
+      fixture.editor.synchronizeRows()
+      #expect(fixture.editor.selectedLayerID == nil)
+    }
+
     @Test("LUB-1048: Reordering retains drafts and cannot change membership")
     func reorderingRetainsDraftsAndCannotChangeMembership() throws {
       let fixture = VideoLayersTestFixture()

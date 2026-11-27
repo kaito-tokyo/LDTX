@@ -50,69 +50,66 @@ import SwiftUI
 struct VideoLayersTableRowContent: View {
   @Environment(\.undoManager) private var undoManager
   @Bindable var state: VideoLayersTableRowState
-  let canvasWidth: Double
-  let canvasHeight: Double
-  @State private var isHoveringHandle = false
+
+  var body: some View {
+    HStack {
+      Text(state.name).lineLimit(1)
+      Spacer()
+      Toggle(
+        "Hide",
+        isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0, undoManager) })
+      )
+      .toggleStyle(.checkbox)
+      .fixedSize()
+    }
+    .frame(minHeight: 24)
+  }
+}
+
+struct VideoLayersPlacementEditor: View {
+  @Environment(\.undoManager) private var undoManager
+  @Bindable var state: VideoLayersTableRowState
   @FocusState private var focusedField: Int?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      HStack {
-        Image(systemName: "line.3.horizontal")
-          .foregroundStyle(.secondary)
-          .frame(width: 24, height: 24)
-          .contentShape(Rectangle())
-          .onHover { isHoveringHandle = $0 }
-          .help("Drag to reorder")
-          .accessibilityLabel("Reorder layer")
-        Text(state.name).lineLimit(1)
-        Spacer()
-      }
-      .frame(height: 28)
-      HStack {
-        Toggle(
-          "Hide",
-          isOn: Binding(get: { state.isHidden }, set: { state.onSetHidden($0, undoManager) })
-        )
-        .toggleStyle(.checkbox)
-        .fixedSize()
-        if state.supportsPlacement {
-          Grid(alignment: .leading) {
-            ForEach(0..<2) { row in
-              GridRow {
-                ForEach(0..<2) { column in
-                  let index = row * 2 + column
-                  Text(["Pos X", "Pos Y", "Scale X", "Scale Y"][index]).fixedSize()
-                  TextField(
-                    ["Pos X", "Pos Y", "Scale X", "Scale Y"][index],
-                    text: Binding(
-                      get: { state.strings[index] },
-                      set: {
-                        guard state.strings[index] != $0 else { return }
-                        state.edit($0, at: index, undoManager: undoManager)
-                      })
-                  )
-                  .focused($focusedField, equals: index)
-                  .frame(minWidth: 60)
-                }
+    Group {
+      if state.supportsPlacement {
+        Grid(alignment: .leading) {
+          ForEach(0..<2) { row in
+            GridRow {
+              ForEach(0..<2) { column in
+                let index = row * 2 + column
+                Text(["Pos X", "Pos Y", "Scale X", "Scale Y"][index]).fixedSize()
+                TextField(
+                  ["Pos X", "Pos Y", "Scale X", "Scale Y"][index],
+                  text: Binding(
+                    get: { state.strings[index] },
+                    set: {
+                      guard state.strings[index] != $0 else { return }
+                      state.edit($0, at: index, undoManager: undoManager)
+                    })
+                )
+                .labelsHidden()
+                .focused($focusedField, equals: index)
+                .frame(minWidth: 60)
               }
             }
           }
         }
+        .textFieldStyle(.roundedBorder)
+        .autocorrectionDisabled()
+        .writingToolsBehavior(.disabled)
+      } else {
+        Text("\(state.name) has no placement settings.").foregroundStyle(.secondary)
       }
     }
-    .textFieldStyle(.roundedBorder)
-    .autocorrectionDisabled()
-    .writingToolsBehavior(.disabled)
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 2)
-    .moveDisabled(!isHoveringHandle)
     .onChange(of: focusedField) { _, new in
       state.isEditing = new != nil
     }
     .onDisappear {
       state.isEditing = false
-      isHoveringHandle = false
     }
   }
 }

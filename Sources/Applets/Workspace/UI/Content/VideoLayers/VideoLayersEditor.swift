@@ -13,6 +13,7 @@ final class VideoLayersEditorState {
   let target: WorkspaceCanvasTarget
   private(set) var rows: [Int64: VideoLayersTableRowState] = [:]
   var failure: String?
+  var selectedLayerID: Int64?
 
   var programID: Int64? {
     appletData.selectedProgram(
@@ -22,7 +23,38 @@ final class VideoLayersEditorState {
     programID.flatMap { stateService.workspacePreferences[keyPath: target.preferences][$0] }
       ?? .init()
   }
+  /// Layer IDs in back-to-front compositing order, as stored in the preferences.
   var layerIDs: [Int64] { preferences.videoLayerInternalIds }
+  /// Layer IDs in the order they are listed: frontmost first.
+  var displayedLayerIDs: [Int64] { layerIDs.reversed() }
+  var canvasWidth: Int { target.defaultProfile.width }
+  var canvasHeight: Int { target.defaultProfile.height }
+
+  /// The selected layer's frame, or nil when it cannot be shown on the preview.
+  var selectedFrame: VideoLayerFrame? {
+    guard let selectedLayerID, layerIDs.contains(selectedLayerID) else { return nil }
+    return VideoLayerFrame(
+      component: stateService.workspaceDefinition.videoComponents
+        .first { $0.internalID == selectedLayerID }?.videoComponent,
+      transform: preferences.videoLayerTransforms[selectedLayerID] ?? .init(),
+      canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
+  }
+
+  /// Saves a frame dragged on the preview as the selected layer's transform.
+  func commitSelectedFrame(_ frame: VideoLayerFrame, undoManager: UndoManager? = nil) {
+    guard let programID, let id = selectedLayerID, layerIDs.contains(id) else { return }
+    let previous = preferences.videoLayerTransforms[id] ?? .init()
+    let transform = frame.applied(
+      to: previous, canvasWidth: canvasWidth, canvasHeight: canvasHeight)
+    guard transform != previous else { return }
+    stateService.editWorkspace(undoManager: undoManager) { workspace in
+      workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+        .videoLayerTransforms[id] = transform
+    }
+    if let row = rows[id], !row.isEditing {
+      row.display(transform, canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
+    }
+  }
 
   private var displayedProgramID: Int64?
   init(
@@ -53,6 +85,34 @@ final class VideoLayersEditorState {
     }
   }
 
+  enum LayerMove: CaseIterable {
+    case toFront, forward, backward, toBack
+  }
+
+  func canMoveSelectedLayer(_ move: LayerMove) -> Bool {
+    destination(of: move) != nil
+  }
+
+  func moveSelectedLayer(_ move: LayerMove, undoManager: UndoManager? = nil) {
+    guard let (index, destination) = destination(of: move) else { return }
+    self.move(
+      fromOffsets: IndexSet(integer: index), toOffset: destination, undoManager: undoManager)
+  }
+
+  /// Returns the source index and `Array.move` destination for the selected layer.
+  private func destination(of move: LayerMove) -> (Int, Int)? {
+    guard let selectedLayerID, let index = layerIDs.firstIndex(of: selectedLayerID) else {
+      return nil
+    }
+    let last = layerIDs.count - 1
+    switch move {
+    case .toFront: return index < last ? (index, layerIDs.count) : nil
+    case .forward: return index < last ? (index, index + 2) : nil
+    case .backward: return index > 0 ? (index, index - 1) : nil
+    case .toBack: return index > 0 ? (index, 0) : nil
+    }
+  }
+
   func commitLayerOrder(_ ids: [Int64], programID: Int64, undoManager: UndoManager? = nil) throws {
     guard stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID })
     else { throw WorkspaceSelectionError(message: "The Program is unavailable.") }
@@ -72,9 +132,13 @@ final class VideoLayersEditorState {
     if displayedProgramID != programID {
       rows = [:]
       failure = nil
+      selectedLayerID = nil
       displayedProgramID = programID
     }
     rows = rows.filter { layerIDs.contains($0.key) }
+    if let selectedLayerID, !layerIDs.contains(selectedLayerID) {
+      self.selectedLayerID = nil
+    }
     let program = programID
     for id in layerIDs {
       let row = rows[id] ?? VideoLayersTableRowState()
@@ -87,7 +151,8 @@ final class VideoLayersEditorState {
       row.isHidden = preferences.videoLayerHidden[id] ?? false
       if !row.hasLocalTextChanges && !row.isEditing {
         row.display(
-          preferences.videoLayerTransforms[id] ?? .init(), canvasWidth: 1920, canvasHeight: 1080)
+          preferences.videoLayerTransforms[id] ?? .init(),
+          canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
       }
       row.onCommit = { [weak self, weak row] undoManager in
         guard let self, let row, row.hasLocalTextChanges, let program,
@@ -150,7 +215,7 @@ final class VideoLayersEditorState {
     let values = state.strings.enumerated().map { index, text in
       do {
         if index < 2 {
-          let size = UInt32(index == 0 ? 1920 : 1080)
+          let size = UInt32(index == 0 ? canvasWidth : canvasHeight)
           guard let pixels = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines))
           else {
             throw WorkspaceSelectionError(
@@ -193,14 +258,11 @@ struct VideoLayersEditor: View {
 
   var body: some View {
     Section {
-      ForEach(editor.layerIDs, id: \.self) { id in
+      ForEach(editor.displayedLayerIDs, id: \.self) { id in
         if let row = editor.rows[id] {
-          VideoLayersTableRowContent(
-            state: row, canvasWidth: 1920, canvasHeight: 1080
-          )
+          VideoLayersTableRowContent(state: row).tag(id)
         }
       }
-      .onMove { editor.move(fromOffsets: $0, toOffset: $1, undoManager: undoManager) }
       if let message = editor.failure ?? editor.stateService.outputFailureMessage {
         Text(message).foregroundStyle(.secondary)
       } else if editor.programID == nil {
@@ -209,7 +271,12 @@ struct VideoLayersEditor: View {
         Text("No video layers").foregroundStyle(.secondary)
       }
     } header: {
-      Text("Video Layers")
+      HStack {
+        Text("Video Layers")
+        Text("Front to back").foregroundStyle(.secondary)
+        Spacer()
+        moveButtons
+      }
     }
     .id(editor.programID)
     .onChange(of: editor.programID, initial: true) { _, _ in
@@ -217,6 +284,49 @@ struct VideoLayersEditor: View {
     }
     .onChange(of: editor.preferences) { _, _ in editor.synchronizeRows() }
     .onChange(of: editor.stateService.workspaceDefinition) { _, _ in editor.synchronizeRows() }
+    Section {
+      if let id = editor.selectedLayerID, let row = editor.rows[id] {
+        // A String identity keeps List from matching this row to the Int64 layer selection.
+        VideoLayersPlacementEditor(state: row)
+          .id("placement-\(id)")
+          .selectionDisabled()
+      } else {
+        Text("Select a layer to edit its placement.").foregroundStyle(.secondary)
+          .selectionDisabled()
+      }
+    } header: {
+      Text("Placement")
+    }
   }
 
+  private var moveButtons: some View {
+    ControlGroup {
+      ForEach(VideoLayersEditorState.LayerMove.allCases, id: \.self) { move in
+        Button {
+          editor.moveSelectedLayer(move, undoManager: undoManager)
+        } label: {
+          switch move {
+          case .toFront: Label("Bring to Front", systemImage: "arrow.up.to.line")
+          case .forward: Label("Bring Forward", systemImage: "arrow.up")
+          case .backward: Label("Send Backward", systemImage: "arrow.down")
+          case .toBack: Label("Send to Back", systemImage: "arrow.down.to.line")
+          }
+        }
+        .labelStyle(.iconOnly)
+        .disabled(!editor.canMoveSelectedLayer(move))
+        .help(helpText(move))
+      }
+    }
+    .controlSize(.small)
+    .fixedSize()
+  }
+
+  private func helpText(_ move: VideoLayersEditorState.LayerMove) -> String {
+    switch move {
+    case .toFront: "Bring the selected layer to the front"
+    case .forward: "Bring the selected layer forward one step"
+    case .backward: "Send the selected layer backward one step"
+    case .toBack: "Send the selected layer to the back"
+    }
+  }
 }
