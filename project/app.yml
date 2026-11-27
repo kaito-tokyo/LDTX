@@ -54,6 +54,8 @@ targets:
     sources:
       - Sources/Applets/Settings
     dependencies:
+      - package: Corelibs
+        product: LDTXCorelibs
       - target: LDTXProgramRuntime
       - target: LDTXWorkspaceAppletModel
       - target: LDTXWorkspaceAppletStore

@@ -153,7 +153,9 @@ public enum YouTubeRTMPSPublisherState: Sendable, Equatable {
   case stopped
 }
 
-public enum YouTubeRTMPSError: Error, LocalizedError, Equatable {
+public enum YouTubeRTMPSError: Error, LocalizedError, Equatable,
+  PublicErrorDiagnosticDetailProviding
+{
   case invalidDestination
   case invalidVideoFormat
   case invalidTimestamp
@@ -172,5 +174,10 @@ public enum YouTubeRTMPSError: Error, LocalizedError, Equatable {
     case .queueLimitExceeded: "The YouTube RTMPS media queue exceeded its limit."
     case .notPublishing: "The YouTube RTMPS publisher is not connected."
     }
+  }
+
+  /// The protocol phase passed by the publisher, which is always a fixed command name.
+  public var publicDiagnosticDetail: String? {
+    if case .protocolFailure(let phase) = self { phase } else { nil }
   }
 }

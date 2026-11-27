@@ -339,6 +339,10 @@ or change the configured PTS master.
   error domains as private: they can contain user content, paths or server text.
   Retain numeric error codes and the operation/phase publicly. Error propagation
   and user-visible error details remain intact.
+- Failure sites log `PublicErrorDiagnostic` publicly: the Swift type, enum case,
+  numeric code, allowlisted Apple or LDTX domains and the same summary of
+  underlying errors. It never includes associated values, localized text or other
+  domains, so output, RTMPS, folder access and OAuth failures stay diagnosable.
 - Device/source identifiers requiring correlation use private hash masking;
   persistent document identifiers are not public diagnostic correlation IDs.
 - Validate with distinctive fixture names and error text. Source inspection and

@@ -27,6 +27,8 @@ private enum WorkspaceV4RecordingSessionError: Error, LocalizedError {
   }
 }
 
+private let rtmpsEventLogger = Logger(subsystem: "tokyo.kaito.ldtx", category: "YouTubeRTMPS")
+
 private final class VisionArchiveFailure: Sendable {
   let error = Mutex<(any Error)?>(nil)
 }
@@ -74,8 +76,17 @@ public final class WorkspaceV4RecordingSession {
   @ObservationIgnored private var outputAttemptID = UUID()
   @ObservationIgnored private var hasCompletedOutputCleanup = false
   private var cleanupPriorFailureMessage: String?
+  @ObservationIgnored private var startStep: StartStep?
   private static let logger = Logger(
     subsystem: "tokyo.kaito.ldtx", category: "WorkspaceOutputCleanup")
+  private static let outputLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "WorkspaceOutput")
+
+  /// The startup operation in progress, logged with failures that interrupt it.
+  private enum StartStep: String {
+    case outputFolder, captureAccess, youtubeDestination, recordingPackage, inputAudio
+    case outputSession, youtubePublishing
+  }
   private let screenCaptureService: ScreenCaptureService
   @ObservationIgnored private var pendingScreenshotCount = 0
   @ObservationIgnored private var pendingPackageScreenshotCounts: [URL: Int] = [:]
@@ -117,6 +128,7 @@ public final class WorkspaceV4RecordingSession {
 
   public func startWithResult() async -> Result<Void, NSError> {
     guard state.canStart else {
+      Self.outputLogger.notice("output start rejected reason=outputNotIdle")
       return .failure(
         NSError(
           domain: "WorkspaceOutput", code: 1,
@@ -125,11 +137,13 @@ public final class WorkspaceV4RecordingSession {
     outputFailures = WorkspaceOutputFailures()
     outputAttemptID = UUID()
     hasCompletedOutputCleanup = false
+    startStep = nil
     if isFailed {
       clearSessionReferences()
       state = .idle
     }
     guard let selectedProgramInternalID = selectedProgramInternalID else {
+      logStartRejected("programNotSelected")
       state = .failed("Select a Program before starting recording.")
       return .failure(
         NSError(
@@ -142,6 +156,7 @@ public final class WorkspaceV4RecordingSession {
     let recordsPortrait =
       (output.recordingEnabled == true) && (output.recordingSettings?.recordsPortrait == true)
     guard recordsLandscape || recordsPortrait || (output.youtubeEnabled == true) else {
+      logStartRejected("outputDisabled")
       state = .failed("Enable recording or YouTube streaming in Output settings.")
       return .failure(
         NSError(
@@ -153,6 +168,7 @@ public final class WorkspaceV4RecordingSession {
     guard let landscapeRuntime = windowRuntime.landscapeRuntime,
       let portraitRuntime = windowRuntime.portraitRuntime
     else {
+      logStartRejected("runtimeUnavailable")
       state = .failed("The selected Program runtime is unavailable.")
       return .failure(
         NSError(
@@ -162,6 +178,7 @@ public final class WorkspaceV4RecordingSession {
     guard let landscapeConfiguration = landscapeRuntime.programState.read({ $0 }),
       let portraitConfiguration = portraitRuntime.programState.read({ $0 })
     else {
+      logStartRejected("programNotRendered")
       state = .failed("The selected Program has not been rendered yet.")
       return .failure(
         NSError(
@@ -181,11 +198,16 @@ public final class WorkspaceV4RecordingSession {
       recordsPortrait
       || ((output.youtubeEnabled == true)
         && (output.youtubeSettings?.ingestMode ?? .unspecified).usesPortraitRTMPS)
+    Self.outputLogger.notice(
+      "output start attempt=\(self.outputAttemptID, privacy: .public) recordsLandscape=\(recordsLandscape, privacy: .public) recordsPortrait=\(recordsPortrait, privacy: .public) youtube=\(output.youtubeEnabled == true, privacy: .public) ingestMode=\((output.youtubeSettings?.ingestMode ?? .unspecified).rawValue, privacy: .public) runsLandscape=\(runsLandscape, privacy: .public) runsPortrait=\(runsPortrait, privacy: .public)"
+    )
     do {
       if recordsLandscape || recordsPortrait {
+        startStep = .outputFolder
         try DefaultLocalOutputService(fileManager: .default).validateWritableBaseDirectory(
           baseDirectory)
       }
+      startStep = .captureAccess
       try await requestRequiredCaptureAccess(
         configurations: [
           runsLandscape ? landscapeConfiguration : nil,
@@ -196,6 +218,7 @@ public final class WorkspaceV4RecordingSession {
     } catch {
       sleepInhibitor.stop()
       recordFailure(error, phase: .output)
+      startStep = nil
       let primary = outputFailures.primary ?? (error as NSError)
       state = .failed(primary.localizedDescription)
       return .failure(primary)
@@ -203,11 +226,13 @@ public final class WorkspaceV4RecordingSession {
 
     let youtubeService: YouTubeRTMPSWorkspaceService?
     do {
+      startStep = .youtubeDestination
       youtubeService =
         (output.youtubeEnabled == true) ? try makeYouTubeRTMPSService(for: output) : nil
     } catch {
       sleepInhibitor.stop()
       recordFailure(error, phase: .output)
+      startStep = nil
       let primary = outputFailures.primary ?? (error as NSError)
       state = .failed(primary.localizedDescription)
       return .failure(primary)
@@ -215,6 +240,7 @@ public final class WorkspaceV4RecordingSession {
     let service: SessionRecordService?
     do {
       if recordsLandscape || recordsPortrait {
+        startStep = .recordingPackage
         let tracks = inputAudioTracks
         let makeService = { [weak self] in
           let recordID = SessionRecordService.makeRecordID()
@@ -254,6 +280,7 @@ public final class WorkspaceV4RecordingSession {
     } catch {
       sleepInhibitor.stop()
       recordFailure(error, phase: .output)
+      startStep = nil
       let primary = outputFailures.primary ?? (error as NSError)
       state = .failed(primary.localizedDescription)
       return .failure(primary)
@@ -287,14 +314,19 @@ public final class WorkspaceV4RecordingSession {
 
     do {
       if let service {
+        startStep = .inputAudio
         try await installInputAudioSubscriptions(service: service, tracks: inputAudioTracks)
       }
+      startStep = .outputSession
       try await start(outputSession)
       if let youtubeRTMPSService {
+        startStep = .youtubePublishing
         try await youtubeRTMPSService.waitUntilPublishing()
       }
       guard state == .starting else { return await interruptedStartResult() }
+      startStep = nil
       state = .recording
+      Self.outputLogger.notice("output started attempt=\(self.outputAttemptID, privacy: .public)")
       return .success(())
     } catch {
       await fail(error)
@@ -302,7 +334,17 @@ public final class WorkspaceV4RecordingSession {
     }
   }
 
+  private func logStartRejected(_ reason: String) {
+    Self.outputLogger.notice(
+      "output start rejected attempt=\(self.outputAttemptID, privacy: .public) reason=\(reason, privacy: .public)"
+    )
+  }
+
   private func interruptedStartResult() async -> Result<Void, NSError> {
+    Self.outputLogger.notice(
+      "output start interrupted attempt=\(self.outputAttemptID, privacy: .public) step=\(self.startStep?.rawValue ?? "none", privacy: .public)"
+    )
+    startStep = nil
     _ = await stoppingTask?.value
     if let error = outputFailures.primary { return .failure(error) }
     let message = failureMessage ?? "Output startup did not complete."
@@ -623,6 +665,10 @@ public final class WorkspaceV4RecordingSession {
     clearSessionReferences()
     sleepInhibitor.stop()
     hasCompletedOutputCleanup = true
+    startStep = nil
+    Self.outputLogger.notice(
+      "output finished attempt=\(self.outputAttemptID, privacy: .public) pausing=\(pausing, privacy: .public) failed=\(self.outputFailures.primary != nil || self.cleanupPriorFailureMessage != nil, privacy: .public) secondaryCount=\(self.outputFailures.secondary.count, privacy: .public)"
+    )
     state =
       (outputFailures.primary?.localizedDescription ?? cleanupPriorFailureMessage)
       .map(State.failed) ?? (pausing ? .paused : .idle)
@@ -932,8 +978,9 @@ public final class WorkspaceV4RecordingSession {
 
   private func recordFailure(_ error: any Error, phase: WorkspaceOutputFailures.Phase) {
     outputFailures.record(error, phase: phase)
+    // The diagnostic omits localized text and associated values; see PublicErrorDiagnostic.
     Self.logger.error(
-      "output cleanup failure attempt=\(self.outputAttemptID, privacy: .public) phase=\(phase.rawValue, privacy: .public) domain=\((error as NSError).domain, privacy: .private) code=\((error as NSError).code) secondaryCount=\(self.outputFailures.secondary.count)"
+      "output failure attempt=\(self.outputAttemptID, privacy: .public) phase=\(phase.rawValue, privacy: .public) startStep=\(self.startStep?.rawValue ?? "none", privacy: .public) error=\(PublicErrorDiagnostic(error).description, privacy: .public) secondaryCount=\(self.outputFailures.secondary.count, privacy: .public)"
     )
   }
 
@@ -1110,17 +1157,37 @@ public final class WorkspaceV4RecordingSession {
       output: output, configurations: configurations,
       landscapeStreamID: localStateProvider().landscapeYouTubeLiveStreamID,
       portraitStreamID: localStateProvider().portraitYouTubeLiveStreamID)
+    let attemptID = outputAttemptID
     return YouTubeRTMPSWorkspaceService(
       destinations: destinations,
+      eventHandler: { canvas, event in
+        // Event descriptions contain fixed phases, counts and media dimensions only.
+        rtmpsEventLogger.notice(
+          "RTMPS event attempt=\(attemptID, privacy: .public) canvas=\(canvas.rawValue, privacy: .public) event=\(event.logDescription, privacy: .public)"
+        )
+      },
       failureHandler: { [weak self] error in
         Task { @MainActor in await self?.fail(error) }
       })
   }
 
   private func outputDirectory() -> URL {
-    if let url = localStateProvider().recordingFolderURL { return url }
-    if let url = applicationOutputPreferences.defaultOutputDirectory { return url }
-    return DefaultLocalOutputService(fileManager: .default).defaultBaseDirectory
+    let url: URL
+    let source: String
+    if let assigned = localStateProvider().recordingFolderURL {
+      url = assigned
+      source = "workspace"
+    } else if let preferred = applicationOutputPreferences.defaultOutputDirectory {
+      url = preferred
+      source = "application"
+    } else {
+      url = DefaultLocalOutputService(fileManager: .default).defaultBaseDirectory
+      source = "default"
+    }
+    Self.outputLogger.notice(
+      "output folder attempt=\(self.outputAttemptID, privacy: .public) source=\(source, privacy: .public)"
+    )
+    return url
   }
 
   private var applicationOutputPreferences: ApplicationOutputPreferences {
@@ -1149,18 +1216,20 @@ public final class WorkspaceV4RecordingSession {
           return id
         }
       })
-    if requiresVideoAccess, await requestVideoAccess() == false {
-      throw CameraCaptureServiceError.cameraAccessDenied
-    }
-    if audioInputIDs.contains(where: {
+    let requiresMicrophoneAccess = audioInputIDs.contains(where: {
       if case .coreAudioDevice? = physicalDeviceIDsProvider()[$0] {
         true
       } else {
         false
       }
-    }),
-      await AVAudioApplication.requestRecordPermission() == false
-    {
+    })
+    Self.outputLogger.notice(
+      "output capture access attempt=\(self.outputAttemptID, privacy: .public) camera=\(requiresVideoAccess, privacy: .public) cameraStatus=\(AVCaptureDevice.authorizationStatus(for: .video).rawValue, privacy: .public) microphone=\(requiresMicrophoneAccess, privacy: .public) microphoneStatus=\(AVAudioApplication.shared.recordPermission.rawValue, privacy: .public)"
+    )
+    if requiresVideoAccess, await requestVideoAccess() == false {
+      throw CameraCaptureServiceError.cameraAccessDenied
+    }
+    if requiresMicrophoneAccess, await AVAudioApplication.requestRecordPermission() == false {
       throw WorkspaceV4RecordingSessionError.microphoneAccessDenied
     }
   }

@@ -91,6 +91,9 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   }
 
   func reportError(_ error: Error) {
+    Self.actionLogger.error(
+      "workspace operation error closed=\(self.stateService.isClosed, privacy: .public) error=\(PublicErrorDiagnostic(error).description, privacy: .public)"
+    )
     guard !stateService.isClosed else { return }
     stateService.operationErrors.append(error as NSError)
   }
@@ -806,6 +809,9 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
     _ = await closeWorkspace()
   }
 
+  private static let actionLogger = Logger(
+    subsystem: "tokyo.kaito.ldtx", category: "WorkspaceAction")
+
   private static let shutdownLogger = Logger(
     subsystem: "tokyo.kaito.ldtx", category: "WorkspaceClose")
 
@@ -945,7 +951,11 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         if !isClosing { reportError(error) }
       }
     case .showRecordingInFinder:
-      if let url = latestRecordingBundleURL {
+      let url = latestRecordingBundleURL
+      Self.actionLogger.notice(
+        "show recording in Finder hasRecording=\(url != nil, privacy: .public) exists=\(url.map { FileManager.default.fileExists(atPath: $0.path) } ?? false, privacy: .public)"
+      )
+      if let url {
         NSWorkspace.shared.activateFileViewerSelecting([url])
       }
     }

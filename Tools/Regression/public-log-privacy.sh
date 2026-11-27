@@ -15,12 +15,25 @@ module nanopb {
   export *
 }
 EOF
+# LDTXProgramRuntime's interface imports these package C modules.
+cat > "$probe_directory/runtime-c.modulemap" <<EOF
+module LDTXAudioKitCore {
+  umbrella "$repository/Packages/LDTXAudioKit/Sources/LDTXAudioKitCore/include"
+  export *
+}
+module LDTXFontRasterizer {
+  umbrella header "$repository/Packages/LDTXFontRasterizer/Sources/LDTXFontRasterizer/include/LDTXFontRasterizer.h"
+  export *
+}
+EOF
 xcrun swiftc -swift-version 6 -parse-as-library \
   -module-cache-path "$probe_directory/cache" -F "$products" -F "$products/PackageFrameworks" -I "$products" \
   -Xcc -fmodule-map-file="$generated_headers/module.modulemap" \
   -Xcc -fmodule-map-file="$probe_directory/nanopb.modulemap" \
+  -Xcc -fmodule-map-file="$probe_directory/runtime-c.modulemap" \
   -Xcc -I"$repository/Packages/LDTXCorelibs/Sources/nanopb/include" \
   -framework LDTXDash -framework LDTXCorelibs -framework LDTXProgramRuntime \
+  -framework LDTXWorkspaceAppletModel \
   -Xlinker -rpath -Xlinker "$products" \
   -Xlinker -rpath -Xlinker "$products/PackageFrameworks" \
   "$repository/Tools/Regression/PublicLogPrivacy.swift" -o "$probe_directory/probe"
@@ -42,6 +55,11 @@ assert any(
     "DASH PUT transport failure" in message and "code=220" in message
     for message in messages
 ), "Missing transport error event/code"
+assert any(
+    "folder bookmark creation failed" in message
+    and "domain=NSCocoaErrorDomain code=" in message
+    for message in messages
+), "Missing folder bookmark diagnostic"
 assert not any("ISSUE220_PRIVATE_" in message for message in messages), "Private fixture exposed"
-print("PASS: production events and numeric diagnostics collected; private fixtures absent")
+print("PASS: production events and public error diagnostics collected; private fixtures absent")
 PY

@@ -254,7 +254,7 @@ final class SessionRecordingPipeline: @unchecked Sendable {
     mainTrack.markFailed(error)
     let nsError = error as NSError
     logger.error(
-      "Main recording write failed errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code): \(error.localizedDescription, privacy: .private)"
+      "Main recording write failed error=\(PublicErrorDiagnostic(error).description, privacy: .public) errorDomain=\(nsError.domain, privacy: .private) errorCode=\(nsError.code): \(error.localizedDescription, privacy: .private)"
     )
     failureHandler(error)
   }

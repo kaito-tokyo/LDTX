@@ -4,8 +4,19 @@
 
 import Combine
 import Foundation
+import LDTXCorelibs
 import LDTXYouTube
 import LDTXYouTubeAuth
+import OSLog
+
+private let accountLogger = Logger(subsystem: "tokyo.kaito.ldtx", category: "YouTubeAuthorization")
+
+/// Logs an account operation failure without its localized text or associated values.
+private func logAccountFailure(_ operation: String, _ error: any Error) {
+  accountLogger.error(
+    "\(operation, privacy: .public) failed error=\(PublicErrorDiagnostic(error).description, privacy: .public)"
+  )
+}
 
 @MainActor
 protocol SettingsAccountProviding: ObservableObject {
@@ -144,6 +155,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       do {
         configuration = try authorizationService.restorePersistedOAuthClient()
       } catch {
+        logAccountFailure("OAuth client restore", error)
         guard authorizationRestoreGeneration == generation else { return }
         oauthStatus = "OAuth client restore failed: \(error.localizedDescription)"
         authorizationStatus = "Authorization restore failed: \(error.localizedDescription)"
@@ -174,6 +186,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
           authorizationStatus = status
         }
       } catch {
+        logAccountFailure("authorization restore", error)
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
         else { return }
@@ -198,6 +211,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
         else { return }
         authorizationStatus = status
       } catch {
+        logAccountFailure("authorization", error)
         guard authorizationRestoreGeneration == generation,
           self.configuration == configuration
         else { return }
@@ -217,6 +231,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       authorizationStatus = "Not authorized"
       return true
     } catch {
+      logAccountFailure("OAuth client import scoped=\(scoped)", error)
       oauthStatus = "OAuth client failed: \(error.localizedDescription)"
       return false
     }
@@ -241,6 +256,7 @@ final class SettingsAccountModel: @MainActor SettingsAccountProviding {
       }
       return "\(authorizedStatus), channel \(Self.redactedChannelID(channelID))"
     } catch {
+      logAccountFailure("channel lookup", error)
       return "\(authorizedStatus), channel unavailable: \(error.localizedDescription)"
     }
   }

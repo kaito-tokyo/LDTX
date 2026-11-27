@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import LDTXCorelibs
 import LDTXWorkspaceAppletModel
+import OSLog
+
+private let localOutputLogger = Logger(subsystem: "tokyo.kaito.ldtx", category: "LocalOutput")
 
 public protocol LocalOutputService {
   var defaultBaseDirectory: URL { get }
@@ -52,9 +56,11 @@ public struct DefaultLocalOutputService: LocalOutputService {
 
   public func validateWritableBaseDirectory(_ directory: URL) throws {
     var isDirectory: ObjCBool = false
-    guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory),
-      isDirectory.boolValue
-    else {
+    let exists = fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory)
+    guard exists, isDirectory.boolValue else {
+      localOutputLogger.error(
+        "output folder unavailable exists=\(exists, privacy: .public) isDirectory=\(isDirectory.boolValue, privacy: .public)"
+      )
       throw LocalOutputServiceError.outputDirectoryUnavailable(directory.path)
     }
     let probeURL = directory.appendingPathComponent(
@@ -63,6 +69,10 @@ public struct DefaultLocalOutputService: LocalOutputService {
       try Data().write(to: probeURL, options: .withoutOverwriting)
       try fileManager.removeItem(at: probeURL)
     } catch {
+      // The thrown error keeps only the localized text, so log the cause's codes here.
+      localOutputLogger.error(
+        "output folder write probe failed error=\(PublicErrorDiagnostic(error).description, privacy: .public)"
+      )
       try? fileManager.removeItem(at: probeURL)
       throw LocalOutputServiceError.outputDirectoryNotWritable(
         path: directory.path, underlyingDescription: error.localizedDescription)
