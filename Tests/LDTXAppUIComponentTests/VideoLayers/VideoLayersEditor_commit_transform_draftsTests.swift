@@ -147,10 +147,15 @@ extension AppUIComponentTestSuite.Shard2 {
       let window = hostWorkspaceView(List { root })
       defer { window.close() }
       await settleWorkspaceToolbar(window)
+      #expect(
+        workspaceDescendants(window.contentView!)
+          .compactMap { $0 as? NSTextField }.filter(\.isEditable).isEmpty)
+      fixture.editor.selectedLayerID = 1
+      await settleWorkspaceToolbar(window)
       let fields = workspaceDescendants(window.contentView!)
         .compactMap { $0 as? NSTextField }.filter(\.isEditable)
       #expect(fields.count == 4)
-      let field = try #require(fields.first)
+      let field = try #require(fields.first { $0.placeholderString == "Pos X" })
       try editWorkspaceField(field, text: "960", window: window)
       await settleWorkspaceToolbar(window)
       #expect(

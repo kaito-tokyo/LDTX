@@ -54,3 +54,19 @@ Implementation, tests, and reviews should follow these rules alongside the
   transforms and visibility preferences. Clear a matching PTS master selection.
   These edits participate in the existing Workspace Undo history.
 
+
+## Video Layers are reordered with buttons, not drag and drop
+
+- The Video Layers editor lists layers front to back: the top row is the
+  frontmost layer, which is the last entry of `video_layer_internal_ids`. Show
+  that direction beside the section title.
+- Rows contain only the layer name and its Hide checkbox. Selecting a row shows
+  its placement fields in a separate Placement section, so no row holds text
+  fields.
+- Reorder the selected layer with four buttons in the section header: Bring to
+  Front, Bring Forward, Send Backward, and Send to Back. Disable a button when
+  nothing is selected or the move would not change the order. Each move is one
+  Undo step.
+- Do not offer drag and drop, keyboard shortcuts, or context menus for
+  reordering. The labeled buttons are the single path, and assistive
+  technologies operate them directly.

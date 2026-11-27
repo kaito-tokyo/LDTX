@@ -65,7 +65,7 @@ public struct WorkspaceContentPane: View {
       }
       .pickerStyle(.segmented)
       .padding(8)
-      List {
+      List(selection: layerSelection) {
         switch layout.selectedEditor {
         case .audio:
           Section {
@@ -84,6 +84,18 @@ public struct WorkspaceContentPane: View {
       }
       .listStyle(.inset)
     }
+  }
+
+  private var layerSelection: Binding<Int64?> {
+    let editor: VideoLayersEditorState? =
+      switch layout.selectedEditor {
+      case .audio: nil
+      case .landscape: landscapeEditor
+      case .portrait: portraitEditor
+      }
+    return Binding(
+      get: { editor?.selectedLayerID },
+      set: { editor?.selectedLayerID = $0 })
   }
 }
 
