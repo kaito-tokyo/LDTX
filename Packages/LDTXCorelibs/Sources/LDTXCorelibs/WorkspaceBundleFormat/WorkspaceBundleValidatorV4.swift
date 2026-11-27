@@ -214,9 +214,15 @@ extension WorkspaceBundleValidatorV4 {
     }
 
     mutating func transform(_ value: Ldtx_Workspace_V4_BasicTransform, path: String, id: Int64?) {
+      // Translations are coordinates and may lie outside the Canvas; insets are
+      // fractions of the content and stay within [0, 1].
+      if value.translationX != nil {
+        _ = rational(value.translationX, path: path + ".translation_x", id: id)
+      }
+      if value.translationY != nil {
+        _ = rational(value.translationY, path: path + ".translation_y", id: id)
+      }
       for (field, rationalValue) in [
-        ("translation_x", value.translationX),
-        ("translation_y", value.translationY),
         ("top_inset", value.topInset),
         ("right_inset", value.rightInset),
         ("bottom_inset", value.bottomInset),

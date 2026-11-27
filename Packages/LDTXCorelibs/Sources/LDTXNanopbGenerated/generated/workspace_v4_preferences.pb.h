@@ -82,12 +82,16 @@ typedef struct _ldtx_workspace_v4_ProgramPreferences_VideoLayerHiddenEntry {
 
 /* The basic transform applied to a Video Layer, which is a Video Component. */
 typedef struct _ldtx_workspace_v4_BasicTransform {
-    /* The horizontal translation, normalized by the target Canvas width,
- in [0, 1]. Positive values move the Video Layer rightward. */
+    /* The horizontal translation in a coordinate system normalized by the target
+ Canvas width, where 0 is the left edge and 1 is the right edge. Any finite
+ value is valid; values outside [0, 1] place the origin outside the Canvas.
+ Positive values move the Video Layer rightward. */
     bool has_translation_x;
     ldtx_workspace_v4_Rational32 translation_x;
-    /* The vertical translation, normalized by the target Canvas height,
- in [0, 1]. Positive values move the Video Layer downward. */
+    /* The vertical translation in a coordinate system normalized by the target
+ Canvas height, where 0 is the top edge and 1 is the bottom edge. Any finite
+ value is valid; values outside [0, 1] place the origin outside the Canvas.
+ Positive values move the Video Layer downward. */
     bool has_translation_y;
     ldtx_workspace_v4_Rational32 translation_y;
     /* The horizontal size as a dimensionless multiple of the target Canvas width,

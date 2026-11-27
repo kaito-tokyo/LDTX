@@ -57,15 +57,17 @@ A **Video Layer** adds one **Video Component** to the **Program**'s **Video Trac
 - Removing a **Video Layer** removes that component from the **Program** only; it does not delete the **Video Component**.
 - Renaming or deleting a **Video Component** updates or removes its **Video Layer** references in **Preferences**.
 
-### Coordinates and Scale
+### Coordinates, Scale, and Crop
 
-**Video Layer** positions use a fixed logical coordinate space of **1920 × 1080**. The X and Y values displayed in the editor always use this space; changing a **Program** **Canvas Size** does not change their meaning or rewrite saved positions.
+**Video Layer** positions are stored in a coordinate system normalized by the canvas: X=0 is the left edge and X=1 the right edge, and Y=0 is the top edge and Y=1 the bottom edge. This normalization defines the coordinate system; it does not restrict the value. Any position is valid, including negative values and values beyond 1, which place the layer's origin outside the canvas. The compositor clips whatever falls outside, so a layer can be partly or entirely off the canvas.
 
-X and Y accept only integer logical pixels, with X in 0...1920 and Y in 0...1080. Decimal and fractional pixel input is rejected. Positions are stored as Rational32 values with the pixel count as numerator and an unreduced denominator of 1920 for X or 1080 for Y. Scale fields accept decimal input and store its digits as the numerator with a power-of-ten denominator, without reduction. Fractions and values that exceed Rational32 limits are rejected while preserving the draft. Display may omit trailing zeros.
+The editor shows X and Y in pixels of the canvas being edited: **1920 × 1080** for Landscape and **1080 × 1920** for Portrait. X and Y accept integer pixels, including negative values and values beyond the canvas size. Decimal and fractional pixel input is rejected. Positions are stored as Rational32 values with the pixel count as numerator and an unreduced denominator of the canvas width for X or the canvas height for Y. Scale fields accept decimal input and store its digits as the numerator with a power-of-ten denominator, without reduction. Fractions and values that exceed Rational32 limits are rejected while preserving the draft. Display may omit trailing zeros.
 
-X and Y are logical coordinates, not **Canvas Size** pixels. At runtime, the placement is normalized from the **1920 × 1080** space and mapped to the active canvas. For example, X=960 and Y=540 remain the center position for a **1280 × 720** canvas. This identical coordinate contract applies to every layer type that supports placement, including **VFX Source** and **Clock**.
+Because positions are normalized, the same saved value keeps its relative place if the canvas resolution changes. For example, X=0.5 and Y=0.5 remain the center of the canvas. This coordinate contract applies to every layer type that supports placement, including **VFX Source**, **Clock**, and **Dynamic Text**.
 
-Scale is the only layer sizing control. Width and height are intentionally not independent layer settings. **VFX Source** and **Clock** layers support X, Y, and Scale. Full-canvas components such as fills, gradients, and test patterns do not expose placement controls.
+Scale multiplies the layer's base size; a **VFX Source** at Scale 1 fills the canvas width and height. Width and height are intentionally not independent layer settings. **VFX Source**, **Clock**, and **Dynamic Text** layers support X, Y, and Scale. Full-canvas components such as fills, gradients, and test patterns do not expose placement controls.
+
+**VFX Source** layers can also be cropped. Crop Top, Right, Bottom, and Left are percentages of the source content from 0 to 100, stored as Rational32 fractions of the content in [0, 1]. Cropping removes that part of the image and shrinks the layer by the same fraction; X and Y then place the top-left corner of the cropped image. Other layer kinds ignore crop values and do not show crop controls. Crop, position, and scale are separate per canvas, so Landscape and Portrait can show different parts of the same source.
 
 ## Video Components
 

@@ -350,10 +350,14 @@ p, td { white-space: pre-wrap; }
 
 
 <article><h3 id="ldtx.workspace.v4.BasicTransform"><code>BasicTransform</code></h3><p>The basic transform applied to a Video Layer, which is a Video Component.</p>
-<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>translation_x</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The horizontal translation, normalized by the target Canvas width,
- in [0, 1]. Positive values move the Video Layer rightward.</td></tr>
-<tr><td><code>translation_y</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The vertical translation, normalized by the target Canvas height,
- in [0, 1]. Positive values move the Video Layer downward.</td></tr>
+<table><thead><tr><th>Field</th><th>Number</th><th>Type</th><th>Label</th><th>Default</th><th>Description</th></tr></thead><tbody><tr><td><code>translation_x</code></td><td>1</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The horizontal translation in a coordinate system normalized by the target
+ Canvas width, where 0 is the left edge and 1 is the right edge. Any finite
+ value is valid; values outside [0, 1] place the origin outside the Canvas.
+ Positive values move the Video Layer rightward.</td></tr>
+<tr><td><code>translation_y</code></td><td>2</td><td><a href="#ldtx.workspace.v4.Rational32"><code>Rational32</code></a></td><td></td><td>—</td><td>The vertical translation in a coordinate system normalized by the target
+ Canvas height, where 0 is the top edge and 1 is the bottom edge. Any finite
+ value is valid; values outside [0, 1] place the origin outside the Canvas.
+ Positive values move the Video Layer downward.</td></tr>
 <tr><td><code>scale_x</code></td><td>3</td><td><a href="#ldtx.workspace.v4.Rational32DefaultOne"><code>Rational32DefaultOne</code></a></td><td></td><td>—</td><td>The horizontal size as a dimensionless multiple of the target Canvas width,
  with no range restriction. Zero specifies zero width.</td></tr>
 <tr><td><code>scale_y</code></td><td>4</td><td><a href="#ldtx.workspace.v4.Rational32DefaultOne"><code>Rational32DefaultOne</code></a></td><td></td><td>—</td><td>The vertical size as a dimensionless multiple of the target Canvas height,

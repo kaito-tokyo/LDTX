@@ -65,6 +65,34 @@ struct WorkspaceV4RenderGraphUnitTestSuite {
     #expect(try graph().layerPreferences.first?.destinationScaleX == 0)
   }
 
+  @Test("LUB-1072: Keeps translations outside the canvas as coordinates")
+  func keepsOutOfCanvasTranslations() throws {
+    var definition = Ldtx_Workspace_V4_WorkspaceDefinitionV4()
+    var component = Ldtx_Workspace_V4_VideoComponentWrapper()
+    component.videoComponent = .vfxSource(.with { $0.internalID = 2 })
+    definition.videoComponents = [component]
+    definition.programs = [.with { $0.internalID = 1 }]
+    var preferences = Ldtx_Workspace_V4_WorkspacePreferencesV4()
+    preferences.landscapeProgramPreferences[1, default: .init()].videoLayerInternalIds = [2]
+    preferences.landscapeProgramPreferences[1, default: .init()].videoLayerTransforms[2] = .with {
+      $0.translationX = .with { $0.set(num: -480, den: 1920) }
+      $0.translationY = .with { $0.set(num: 1620, den: 1080) }
+    }
+    let graph = try WorkspaceV4RenderGraph(
+      definition: definition,
+      canvas: WorkspaceProgramCanvasSnapshot(
+        definition: definition, preferences: preferences,
+        programInternalID: 1, target: .landscape))
+    #expect(graph.layerPreferences.first?.destinationX == -0.25)
+    #expect(graph.layerPreferences.first?.destinationY == 1.5)
+    guard case .inputCameraDevice(let input) = graph.composite.steps.first?.component else {
+      Issue.record("Expected a VFX Source step")
+      return
+    }
+    #expect(input.destinationX == -480)
+    #expect(input.destinationY == 1620)
+  }
+
   @Test("LUB-1072: Clock font size is independent of the target canvas", arguments: [false, true])
   func preservesClockDimensions(explicitFontSize: Bool) throws {
     var clock = Ldtx_Workspace_V4_ClockComponent()

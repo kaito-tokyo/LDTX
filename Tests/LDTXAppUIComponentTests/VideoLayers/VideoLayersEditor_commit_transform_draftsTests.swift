@@ -154,12 +154,73 @@ extension AppUIComponentTestSuite.Shard2 {
       await settleWorkspaceToolbar(window)
       let fields = workspaceDescendants(window.contentView!)
         .compactMap { $0 as? NSTextField }.filter(\.isEditable)
-      #expect(fields.count == 4)
+      // A VFX Source shows position, scale, and four crop fields.
+      #expect(fields.count == 8)
       let field = try #require(fields.first { $0.placeholderString == "Pos X" })
       try editWorkspaceField(field, text: "960", window: window)
       await settleWorkspaceToolbar(window)
       #expect(
         fixture.editor.preferences.videoLayerTransforms[1]?.translationX?.double == 0.5)
+    }
+
+    struct CropInput: Sendable, Codable {
+      let field: Int
+      let input: String
+      /// The saved inset, or nil when the preferences stay unchanged.
+      let expected: Double?
+    }
+
+    @Test(
+      "LUB-1048: Crop percentages commit as insets of the content",
+      arguments: [
+        CropInput(field: 4, input: "12.5", expected: 0.125),
+        CropInput(field: 5, input: "0", expected: nil),
+        CropInput(field: 6, input: "100", expected: 1),
+        CropInput(field: 7, input: "101", expected: nil),
+        CropInput(field: 7, input: "-1", expected: nil),
+        CropInput(field: 7, input: "1/3", expected: nil),
+      ])
+    func cropPercentagesCommitAsInsets(_ data: CropInput) throws {
+      let fixture = VideoLayersTestFixture()
+      let row = try #require(fixture.editor.rows[1])
+      #expect(row.supportsCrop)
+      let before = fixture.state.workspacePreferences
+      row.edit(data.input, at: data.field)
+      let saved = fixture.editor.preferences.videoLayerTransforms[1]
+      let insets = [saved?.topInset, saved?.rightInset, saved?.bottomInset, saved?.leftInset]
+      if let expected = data.expected {
+        let inset = try #require(insets[data.field - 4])
+        #expect(inset.double == expected)
+        for offset in 0..<4 where offset != data.field - 4 {
+          #expect(insets[offset] == nil)
+        }
+        #expect(row.strings[data.field] == data.input)
+      } else {
+        #expect(fixture.state.workspacePreferences == before)
+        #expect(row.strings[data.field] == data.input)
+      }
+    }
+
+    @Test("LUB-1048: Only VFX Sources expose crop controls")
+    func onlyVFXSourcesExposeCrop() throws {
+      let fixture = VideoLayersTestFixture()
+      fixture.state.editWorkspace(undoManager: nil) { workspace in
+        workspace.definition.videoComponents[1].videoComponent = .clock(
+          .with {
+            $0.internalID = 2
+            $0.displayName = "Clock"
+          })
+        workspace.definition.videoComponents[2].videoComponent = .dynamicText(
+          .with {
+            $0.internalID = 3
+            $0.displayName = "Text"
+          })
+      }
+      fixture.editor.synchronizeRows()
+      #expect(fixture.editor.rows[1]?.supportsCrop == true)
+      #expect(fixture.editor.rows[2]?.supportsCrop == false)
+      #expect(fixture.editor.rows[3]?.supportsCrop == false)
+      #expect(fixture.editor.rows[2]?.supportsPlacement == true)
     }
   }
 }

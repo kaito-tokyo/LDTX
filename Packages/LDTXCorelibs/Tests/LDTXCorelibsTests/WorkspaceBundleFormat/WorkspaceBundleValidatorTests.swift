@@ -806,7 +806,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
       $0.den = 1
     }
     preferences.landscapeProgramPreferences[2, default: .init()].videoLayerTransforms[3] = .with {
-      $0.translationX = .with {
+      $0.leftInset = .with {
         $0.num = 11
         $0.den = 10
       }
@@ -916,7 +916,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
             $0.num = 11
             $0.den = 10
           }
-        }, false
+        }, true
       ),
       (
         .with {
@@ -924,7 +924,7 @@ struct WorkspaceBundleValidatorV4UnitTestSuite {
             $0.num = -1
             $0.den = 10
           }
-        }, false
+        }, true
       ),
       (
         .with {
