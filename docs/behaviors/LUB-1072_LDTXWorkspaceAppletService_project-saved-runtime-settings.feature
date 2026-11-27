@@ -25,3 +25,9 @@ Feature: Project saved settings into runtime values
     Given a VFX Source layer whose saved translation lies left of and below the canvas
     When its render graph is built
     Then the layer keeps that translation instead of moving it onto the canvas
+
+  @LUB-1072.4 @Unit
+  Scenario: Draw saved video layers from back to front
+    Given a canvas whose saved video layer IDs list a back layer before a front layer
+    When its render graph is built
+    Then the front layer is composited on top of the back layer
