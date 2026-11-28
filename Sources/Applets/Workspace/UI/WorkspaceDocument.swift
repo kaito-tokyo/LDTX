@@ -52,8 +52,11 @@ public final class WorkspaceDocument: WorkspaceDocumentContext {
   public var isInspectorVisible = true
   public var isSidebarVisible = true
 
+  /// The narrowest width at which the Content pane's editors stay usable.
+  public static let minimumContentWidth: CGFloat = 320
+
   public var minimumWindowWidth: CGFloat {
-    480 + (isSidebarVisible ? 201 : 0) + (isInspectorVisible ? 241 : 0)
+    Self.minimumContentWidth + (isSidebarVisible ? 201 : 0) + (isInspectorVisible ? 241 : 0)
   }
 
   public var isClosed = false

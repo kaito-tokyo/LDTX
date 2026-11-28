@@ -272,13 +272,13 @@ handles its normal unsaved-change review; pane visibility does not own runtime
 lifetime. Output uses the last successfully persisted Definition and requires a
 formal document URL.
 
-Workspace requests a 240-point sidebar, a content width of at least 480 points,
+Workspace requests a 240-point sidebar, a content width of at least 320 points,
 and a 320-point inspector. SwiftUI manages pane layout and resizing;
 the inspector width ranges from 240 to 480 points. Toolbar buttons update
 window-local sidebar visibility and the Store's inspector visibility.
 Hiding a side pane preserves its last expanded width. Divider gestures and
 accessibility adjustments update these window-local widths without touching the document.
-The minimum window width includes only visible panes: 480 points for Content,
+The minimum window width includes only visible panes: 320 points for Content,
 201 for Sidebar and its divider, and 241 for Inspector and its divider.
 The Sidebar and Inspector stay mounted at zero visible width while collapsed,
 retaining local editing drafts, scroll state, and task results without accepting interaction.
@@ -487,7 +487,7 @@ VideoLayersEditor has no internal scroll view; the Content pane scrolls all
 editors together.
 Transforms remain in the layer rows. MasterVolumeEditor owns both master volumes
 and monitor volume controls. AudioMixEditor owns one Workspace-wide gain per input, independent Landscape/Portrait
-mute controls, and local monitor controls. It has no canvas selector. Tab selection starts at
+mute controls, and local monitor controls, shown as icon toggle buttons. It has no canvas selector. Tab selection starts at
 Landscape, is window-local, and does not select an audio canvas or Sidebar item.
 
 The Content pane embeds its retained MTKView with a Representable wrapper.

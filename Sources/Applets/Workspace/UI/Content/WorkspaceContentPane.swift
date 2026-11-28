@@ -57,7 +57,7 @@ public struct WorkspaceContentPane: View {
         editors.frame(maxHeight: .infinity)
       }
     }
-    .frame(minWidth: 480, minHeight: 120)
+    .frame(minWidth: WorkspaceDocument.minimumContentWidth, minHeight: 120)
     .onChange(of: stateService.externalID, initial: true) { _, id in
       layout.restore(externalID: id)
     }
@@ -72,6 +72,7 @@ public struct WorkspaceContentPane: View {
         Text("Portrait").tag(WorkspaceContentLayout.Editor.portrait)
       }
       .pickerStyle(.segmented)
+      .labelsHidden()
       .padding(8)
       List(selection: layerSelection) {
         switch layout.selectedEditor {

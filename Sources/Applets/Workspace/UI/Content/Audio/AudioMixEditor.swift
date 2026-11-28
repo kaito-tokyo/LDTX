@@ -23,33 +23,18 @@ struct AudioMixEditor: View {
             HStack {
               Text(name).lineLimit(1)
               Spacer()
-              channelToggle(input, target: .landscape, title: "Landscape")
-              channelToggle(input, target: .portrait, title: "Portrait")
-              Toggle(
-                "Monitor",
-                isOn: Binding(
-                  get: {
-                    stateService.localStateURL.map {
-                      appletData.state(for: $0).monitorAudioInputDeviceInternalIDs.contains(
-                        id)
-                    } ?? false
-                  },
-                  set: { enabled in
-                    guard let url = stateService.localStateURL else { return }
-                    appletData.updateState(for: url) {
-                      if enabled {
-                        $0.monitorAudioInputDeviceInternalIDs.insert(id)
-                      } else {
-                        $0.monitorAudioInputDeviceInternalIDs.remove(id)
-                      }
-                    }
-                    runtimeActions()?.synchronizeAudioMonitor()
-                  })
-              )
+              channelToggle(input, target: .landscape, title: "Landscape", symbol: "rectangle")
+              channelToggle(
+                input, target: .portrait, title: "Portrait", symbol: "rectangle.portrait")
+              let monitored = monitorBinding(id)
+              Toggle(isOn: monitored) {
+                connectionIcon("headphones", isConnected: monitored.wrappedValue)
+              }
               .disabled(stateService.localStateURL == nil || stateService.isOutputActive)
+              .help("Monitor")
               .accessibilityLabel("Monitor " + name)
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(.button)
             AudioChannelControl(
               value: Binding(
                 get: {
@@ -71,31 +56,67 @@ struct AudioMixEditor: View {
   }
 
   private func channelToggle(
-    _ input: Ldtx_Workspace_V4_AudioInputDevice, target: WorkspaceCanvasTarget, title: String
+    _ input: Ldtx_Workspace_V4_AudioInputDevice, target: WorkspaceCanvasTarget, title: String,
+    symbol: String
   ) -> some View {
     let programID = appletData.selectedProgram(
       in: stateService.workspaceDefinition, for: stateService.localStateURL)?.internalID
-    return Toggle(
-      title,
-      isOn: Binding(
-        get: {
-          guard let programID, let id = input.internalID else { return true }
-          return stateService.workspacePreferences[keyPath: target.preferences][programID]?
-            .audioChannelMuted[id] != true
-        },
-        set: { enabled in
-          guard let programID, let id = input.internalID,
-            stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID }
-            )
-          else { return }
-          stateService.editWorkspace(undoManager: undoManager) { workspace in
-            workspace.preferences[keyPath: target.preferences][programID, default: .init()]
-              .audioChannelMuted[id] = !enabled
-          }
-        })
-    )
+    let isOn = Binding(
+      get: {
+        guard let programID, let id = input.internalID else { return true }
+        return stateService.workspacePreferences[keyPath: target.preferences][programID]?
+          .audioChannelMuted[id] != true
+      },
+      set: { enabled in
+        guard let programID, let id = input.internalID,
+          stateService.workspaceDefinition.programs.contains(where: { $0.internalID == programID }
+          )
+        else { return }
+        stateService.editWorkspace(undoManager: undoManager) { workspace in
+          workspace.preferences[keyPath: target.preferences][programID, default: .init()]
+            .audioChannelMuted[id] = !enabled
+        }
+      })
+    return Toggle(isOn: isOn) {
+      connectionIcon(symbol, isConnected: isOn.wrappedValue)
+    }
     .disabled(programID == nil)
+    .help(title)
     .accessibilityLabel(title + " " + (input.displayName ?? ""))
+  }
+
+  private func monitorBinding(_ id: Int64) -> Binding<Bool> {
+    Binding(
+      get: {
+        stateService.localStateURL.map {
+          appletData.state(for: $0).monitorAudioInputDeviceInternalIDs.contains(id)
+        } ?? false
+      },
+      set: { enabled in
+        guard let url = stateService.localStateURL else { return }
+        appletData.updateState(for: url) {
+          if enabled {
+            $0.monitorAudioInputDeviceInternalIDs.insert(id)
+          } else {
+            $0.monitorAudioInputDeviceInternalIDs.remove(id)
+          }
+        }
+        runtimeActions()?.synchronizeAudioMonitor()
+      })
+  }
+
+  /// A route icon that is struck through while the route is disconnected.
+  private func connectionIcon(_ symbol: String, isConnected: Bool) -> some View {
+    Image(systemName: symbol)
+      .frame(width: 20, height: 16)
+      .overlay {
+        Capsule()
+          .frame(width: 22, height: 1.5)
+          .rotationEffect(.degrees(45))
+          .opacity(isConnected ? 0 : 1)
+          .allowsHitTesting(false)
+      }
+      .accessibilityHidden(true)
   }
 
   @discardableResult

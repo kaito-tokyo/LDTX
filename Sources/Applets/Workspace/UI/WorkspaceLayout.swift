@@ -24,7 +24,7 @@ public struct WorkspaceLayout<Sidebar: View, Content: View, Inspector: View>: Vi
     GeometryReader { geometry in
       let dividers =
         (stateService.isSidebarVisible ? 1.0 : 0) + (stateService.isInspectorVisible ? 1 : 0)
-      let available = max(0, geometry.size.width - 480 - dividers)
+      let available = max(0, geometry.size.width - WorkspaceDocument.minimumContentWidth - dividers)
       let inspectorWidth =
         stateService.isInspectorVisible
         ? min(
@@ -42,7 +42,9 @@ public struct WorkspaceLayout<Sidebar: View, Content: View, Inspector: View>: Vi
             self.sidebarWidth = min(max(200, available - inspectorWidth), max(200, $0))
           }
         }
-        content.frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+        content.frame(
+          minWidth: WorkspaceDocument.minimumContentWidth, maxWidth: .infinity, maxHeight: .infinity
+        )
         if stateService.isInspectorVisible {
           WorkspaceDivider(
             "Inspector width", axis: .horizontal, value: inspectorWidth, direction: -1
