@@ -371,6 +371,8 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
         self.updateProgramRuntimes()
         self.updateMixPreferences()
         self.updateAudioMonitorValues()
+        // Master meters read post-gain buses; refresh their gains with every edit.
+        self.updatePeakMeterGains()
       }
     }
 
