@@ -112,6 +112,26 @@ public struct WorkspaceV4RenderGraph: Sendable {
     self.audioPreferences = audioPreferences
   }
 
+  /// The Program Clock for a V4 Clock component, before any layer transform applies.
+  public static func clockComponent(_ clock: Ldtx_Workspace_V4_ClockComponent) -> ClockComponent {
+    ClockComponent(
+      fontSize: (clock.fontSize?.float ?? 48),
+      showsSeconds: (clock.showsSeconds ?? false),
+      uses24HourTime: (clock.uses24HourTime ?? false),
+      foregroundRed: (clock.foregroundExtendedSrgbColor?.red ?? 0),
+      foregroundGreen: (clock.foregroundExtendedSrgbColor?.green ?? 0),
+      foregroundBlue: (clock.foregroundExtendedSrgbColor?.blue ?? 0),
+      foregroundAlpha: (clock.foregroundExtendedSrgbColor?.alpha ?? 0),
+      showsDate: (clock.showsDate ?? false),
+      usesSystemTimeZone: (clock.utcOffsetMinutes == nil),
+      utcOffsetMinutes: clock.utcOffsetMinutes ?? 0,
+      outlines: clock.outlines.map {
+        ClockTextOutline(
+          thickness: ($0.thickness?.float ?? 0),
+          color: colorString($0.extendedSrgbColor))
+      })
+  }
+
   static func componentsByInternalID(
     _ definition: Ldtx_Workspace_V4_WorkspaceDefinitionV4,
     variableStore: [LDTXVariableKey: String]? = nil
@@ -191,26 +211,7 @@ public struct WorkspaceV4RenderGraph: Sendable {
             .inputCameraDevice(InputDeviceComponent(inputDeviceID: "v4-\(id)"))
           )
         case .clock(let clock):
-          return (
-            id,
-            .clock(
-              ClockComponent(
-                fontSize: (clock.fontSize?.float ?? 48),
-                showsSeconds: (clock.showsSeconds ?? false),
-                uses24HourTime: (clock.uses24HourTime ?? false),
-                foregroundRed: (clock.foregroundExtendedSrgbColor?.red ?? 0),
-                foregroundGreen: (clock.foregroundExtendedSrgbColor?.green ?? 0),
-                foregroundBlue: (clock.foregroundExtendedSrgbColor?.blue ?? 0),
-                foregroundAlpha: (clock.foregroundExtendedSrgbColor?.alpha ?? 0),
-                showsDate: (clock.showsDate ?? false),
-                usesSystemTimeZone: (clock.utcOffsetMinutes == nil),
-                utcOffsetMinutes: clock.utcOffsetMinutes ?? 0,
-                outlines: clock.outlines.map {
-                  ClockTextOutline(
-                    thickness: ($0.thickness?.float ?? 0),
-                    color: colorString($0.extendedSrgbColor))
-                }))
-          )
+          return (id, .clock(clockComponent(clock)))
         case .dynamicText(let text):
           var overlay = ClockComponent(
             destinationWidth: (text.width?.float ?? 0),

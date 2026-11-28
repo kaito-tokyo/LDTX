@@ -45,6 +45,7 @@ public final class WorkspaceAppletCoordinator: WorkspaceRuntimeActions {
   private var outputObservationTask: Task<Void, Never>?
 
   let pairedPreview: ProgramCanvasPairedPreview
+  let layerMeasurer: any VideoLayerMeasuring = WorkspaceVideoLayerMeasurer()
   let previewRenderer: ProgramPairPreviewRenderer
   public var outputStateDidChange: (@MainActor () -> Void)?
   public var screenshotsDidSave: (@MainActor ([WorkspaceScreenshot]) -> Void)?

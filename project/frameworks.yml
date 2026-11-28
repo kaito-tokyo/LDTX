@@ -420,6 +420,7 @@ targets:
           - WorkspaceDocumentCloseCoordinator.swift
           - WorkspaceAppletCoordinator.swift
           - WorkspaceAppletCoordinator+ModelInformation.swift
+          - WorkspaceVideoLayerMeasurer.swift
           - Preview
           - WorkspaceStreamDeck.swift
           - StreamDeckHID.swift

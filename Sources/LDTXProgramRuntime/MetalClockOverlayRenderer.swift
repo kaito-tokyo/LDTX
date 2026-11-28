@@ -307,6 +307,23 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
   /// Reserve enough room for every formatted digit, avoiding a size change on each tick.
   /// This uses the same bundled-font atlas metrics as glyph rendering, on the producer queue.
   func naturalClockSize(for component: ClockComponent) -> SIMD2<Float>? {
+    Self.naturalClockSize(for: component, metrics: metrics)
+  }
+
+  /// Glyph metrics of the bundled font, baked once without a Metal device.
+  private static let bundledMetrics: [GlyphMetric]? = {
+    guard let fontURL = NotoSansFontResources.bundledUprightVariableFontURL else { return nil }
+    return try? bakeGlyphs(fontURL: fontURL).metrics
+  }()
+
+  /// The size `naturalClockSize(for:)` gives a renderer that uses the bundled font.
+  static func bundledNaturalClockSize(for component: ClockComponent) -> SIMD2<Float>? {
+    bundledMetrics.flatMap { naturalClockSize(for: component, metrics: $0) }
+  }
+
+  private static func naturalClockSize(
+    for component: ClockComponent, metrics: [GlyphMetric]
+  ) -> SIMD2<Float>? {
     guard let fontSize = component.fontSize, fontSize.isFinite, fontSize > 0 else { return nil }
     func metric(_ character: Character) -> GlyphMetric {
       metrics[Int(character.asciiValue! - UInt8(Self.firstCodePoint))]
@@ -428,6 +445,30 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
     device: MTLDevice,
     fontURL: URL
   ) throws -> (texture: MTLTexture, metrics: [GlyphMetric]) {
+    let (pixels, metrics) = try bakeGlyphs(fontURL: fontURL)
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .r8Unorm,
+      width: atlasWidth,
+      height: atlasHeight,
+      mipmapped: false
+    )
+    descriptor.usage = .shaderRead
+    descriptor.storageMode = .shared
+    guard let texture = device.makeTexture(descriptor: descriptor) else {
+      throw MetalClockOverlayRendererError.textureCreationFailed
+    }
+    pixels.withUnsafeBytes { bytes in
+      texture.replace(
+        region: MTLRegionMake2D(0, 0, atlasWidth, atlasHeight),
+        mipmapLevel: 0,
+        withBytes: bytes.baseAddress!,
+        bytesPerRow: atlasWidth
+      )
+    }
+    return (texture, metrics)
+  }
+
+  private static func bakeGlyphs(fontURL: URL) throws -> (pixels: [UInt8], metrics: [GlyphMetric]) {
     guard let fontData = try? Data(contentsOf: fontURL) else {
       throw MetalClockOverlayRendererError.fontDataUnavailable
     }
@@ -452,26 +493,6 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
       throw MetalClockOverlayRendererError.glyphAtlasCreationFailed
     }
 
-    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-      pixelFormat: .r8Unorm,
-      width: atlasWidth,
-      height: atlasHeight,
-      mipmapped: false
-    )
-    descriptor.usage = .shaderRead
-    descriptor.storageMode = .shared
-    guard let texture = device.makeTexture(descriptor: descriptor) else {
-      throw MetalClockOverlayRendererError.textureCreationFailed
-    }
-    pixels.withUnsafeBytes { bytes in
-      texture.replace(
-        region: MTLRegionMake2D(0, 0, atlasWidth, atlasHeight),
-        mipmapLevel: 0,
-        withBytes: bytes.baseAddress!,
-        bytesPerRow: atlasWidth
-      )
-    }
-
     let atlasSize = SIMD2<Float>(Float(atlasWidth), Float(atlasHeight))
     let metrics = bakedGlyphs.map { glyph in
       let origin = SIMD2<Float>(Float(glyph.x0), Float(glyph.y0))
@@ -488,7 +509,7 @@ final class MetalClockOverlayRenderer: ClockOverlayRendering, @unchecked Sendabl
         advance: glyph.x_advance
       )
     }
-    return (texture, metrics)
+    return (pixels, metrics)
   }
 
   private static func makeShaderLibrary(device: MTLDevice) throws -> MTLLibrary {

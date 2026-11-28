@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import LDTXCorelibs
+import LDTXWorkspaceAppletInterface
 import LDTXWorkspaceAppletModel
 import Observation
 import SwiftUI
@@ -11,6 +12,7 @@ final class VideoLayersEditorState {
   let stateService: WorkspaceDocument
   let appletData: WorkspaceAppletData
   let target: WorkspaceCanvasTarget
+  let layerMeasurer: (any VideoLayerMeasuring)?
   private(set) var rows: [Int64: VideoLayersTableRowState] = [:]
   var failure: String?
   var selectedLayerID: Int64?
@@ -33,11 +35,17 @@ final class VideoLayersEditorState {
   /// The selected layer's frame, or nil when it cannot be shown on the preview.
   var selectedFrame: VideoLayerFrame? {
     guard let selectedLayerID, layerIDs.contains(selectedLayerID) else { return nil }
+    let component = stateService.workspaceDefinition.videoComponents
+      .first { $0.internalID == selectedLayerID }?.videoComponent
+    var clockPixelSize: CGSize?
+    if case .clock(let clock) = component {
+      clockPixelSize = layerMeasurer?.naturalPixelSize(of: clock)
+    }
     return VideoLayerFrame(
-      component: stateService.workspaceDefinition.videoComponents
-        .first { $0.internalID == selectedLayerID }?.videoComponent,
+      component: component,
       transform: preferences.videoLayerTransforms[selectedLayerID] ?? .init(),
-      canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight))
+      canvasWidth: Double(canvasWidth), canvasHeight: Double(canvasHeight),
+      clockPixelSize: clockPixelSize)
   }
 
   /// Saves a frame dragged on the preview as the selected layer's transform.
@@ -59,11 +67,12 @@ final class VideoLayersEditorState {
   private var displayedProgramID: Int64?
   init(
     stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
-    target: WorkspaceCanvasTarget
+    target: WorkspaceCanvasTarget, layerMeasurer: (any VideoLayerMeasuring)? = nil
   ) {
     self.stateService = stateService
     self.appletData = appletData
     self.target = target
+    self.layerMeasurer = layerMeasurer
     synchronizeRows()
   }
 
