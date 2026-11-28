@@ -157,7 +157,7 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   )
 
   private let allowedVideoDeviceIDs: Set<String>?
-  private let sessionQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.session")
+  private let sessionQueue: DispatchQueue
   private let sampleQueue = DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.samples")
   private let startupLock = NSLock()
 
@@ -170,8 +170,15 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
   private var activeDeviceIDs: Set<String> = []
   private var activeVideoRequests: [CaptureSessionVideoRequest] = []
 
-  public init(allowedVideoDeviceIDs: Set<String>? = nil) {
+  public convenience init(allowedVideoDeviceIDs: Set<String>? = nil) {
+    self.init(
+      allowedVideoDeviceIDs: allowedVideoDeviceIDs,
+      sessionQueue: DispatchQueue(label: "tokyo.kaito.ldtx.CaptureSessionManager.session"))
+  }
+
+  init(allowedVideoDeviceIDs: Set<String>?, sessionQueue: DispatchQueue) {
     self.allowedVideoDeviceIDs = allowedVideoDeviceIDs
+    self.sessionQueue = sessionQueue
     super.init()
   }
 
@@ -210,13 +217,15 @@ public final class CaptureSessionManager: NSObject, AVCaptureVideoDataOutputSamp
     }
   }
 
+  /// Stops the physical session before `completionHandler` runs.
+  ///
+  /// The submitted work retains this manager. Callers commonly release their last
+  /// reference right after requesting the stop, and the running `AVCaptureSession`
+  /// is kept alive by its runtime-failure observers until `stopOnSessionQueue`
+  /// removes them, so skipping the stop would leave the camera running.
   public func stop(completionHandler: @escaping @Sendable () -> Void = {}) {
-    sessionQueue.async { [weak self] in
-      guard let self else {
-        completionHandler()
-        return
-      }
-      self.stopOnSessionQueue()
+    sessionQueue.async { [self] in
+      stopOnSessionQueue()
       completionHandler()
     }
   }
