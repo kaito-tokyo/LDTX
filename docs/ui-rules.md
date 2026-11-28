@@ -70,3 +70,18 @@ Implementation, tests, and reviews should follow these rules alongside the
 - Do not offer drag and drop, keyboard shortcuts, or context menus for
   reordering. The labeled buttons are the single path, and assistive
   technologies operate them directly.
+
+## The Content pane keeps a measured minimum width
+
+- `WorkspaceDocument.minimumContentWidth` is the single source of the Content
+  pane's minimum width. The Workspace layout, the Content pane, and the minimum
+  window width all derive from it.
+- The value is the narrowest width at which every Content editor stays usable,
+  not an initial or preferred width. It is 320 points: the selected layer's
+  Placement grid is the widest editor and needs about 308 points, so narrower
+  widths push its fields past the list margin and then clip them.
+- Keep Content editor rows within that width. The Content editor picker hides
+  its label, and Audio Mix routes are icon toggle buttons with help tags and
+  accessibility labels rather than titled checkboxes.
+- When an editor change needs more width, measure it at the narrowest widths
+  before changing the value, and update this rule with the new limiting editor.

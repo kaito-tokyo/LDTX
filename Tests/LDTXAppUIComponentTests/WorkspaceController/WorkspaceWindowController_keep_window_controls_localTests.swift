@@ -425,7 +425,7 @@ extension AppUIComponentTestSuite.Shard2 {
           stateService: state,
           sidebar: Text("Sidebar"), content: Text("Content"), inspector: Text("Inspector")))
       for (sidebar, inspector, expected): (Bool, Bool, CGFloat) in [
-        (true, true, 922), (false, true, 721), (true, false, 681), (false, false, 480),
+        (true, true, 762), (false, true, 561), (true, false, 521), (false, false, 320),
       ] {
         state.isSidebarVisible = sidebar
         state.isInspectorVisible = inspector
