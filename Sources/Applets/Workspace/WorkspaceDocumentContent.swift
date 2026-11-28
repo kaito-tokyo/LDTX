@@ -52,7 +52,8 @@ public struct WorkspaceDocumentContent: View {
       content: WorkspaceContentPane(
         stateService: stateService, appletData: runtime.appletData, peakMeter: runtime.peakMeter,
         reportError: { [weak runtime] in runtime?.reportError($0) },
-        pairedPreview: runtime.pairedPreview, runtimeActions: actions),
+        pairedPreview: runtime.pairedPreview, layerMeasurer: runtime.layerMeasurer,
+        runtimeActions: actions),
       inspector: WorkspaceInspectorContainer(
         deviceRegistry: runtime.deviceRegistry, stateService: stateService,
         appletData: runtime.appletData, document: document,

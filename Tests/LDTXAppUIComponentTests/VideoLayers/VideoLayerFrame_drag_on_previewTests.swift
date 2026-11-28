@@ -63,6 +63,16 @@ extension AppUIComponentTestSuite.Shard1 {
       #expect(abs(portrait.rect.height - 0.125 * 1_080 / 1_920) < 1e-9)
 
       #expect(try frame(.clock(.init()), transform()) == nil)
+      let clock = try #require(
+        VideoLayerFrame(
+          component: .clock(.init()), transform: transform(x: 960, scaleX: 2, scaleY: 0.5),
+          canvasWidth: 1_920, canvasHeight: 1_080,
+          clockPixelSize: CGSize(width: 192, height: 108)))
+      #expect(clock.rect == CGRect(x: 0.5, y: 0, width: 0.2, height: 0.05))
+      #expect(
+        VideoLayerFrame(
+          component: .clock(.init()), transform: try transform(),
+          canvasWidth: 1_920, canvasHeight: 1_080, clockPixelSize: .zero) == nil)
       #expect(try frame(nil, transform()) == nil)
       #expect(try frame(.vfxSource(.init()), transform(leftInset: 1)) == nil)
     }
@@ -98,6 +108,22 @@ extension AppUIComponentTestSuite.Shard1 {
         corner: .topLeft, to: CGPoint(x: 0, y: 0), keepsAspectRatio: false)
       #expect(wider.width < 0)
       #expect(wider.rect == CGRect(x: 0, y: 0, width: 0.75, height: 1))
+    }
+
+    @Test("A Clock moves and scales from its measured size")
+    func clockFrame() throws {
+      let start = try #require(
+        VideoLayerFrame(
+          component: .clock(.init()), transform: transform(),
+          canvasWidth: 1_920, canvasHeight: 1_080,
+          clockPixelSize: CGSize(width: 192, height: 108)))
+      let resized = start.moved(dx: 0.25, dy: 0.5)
+        .resized(corner: .bottomRight, to: CGPoint(x: 0.65, y: 0.6), keepsAspectRatio: false)
+      let saved = resized.applied(to: .init(), canvasWidth: 1_920, canvasHeight: 1_080)
+      #expect(saved.translationX?.num == 480)
+      #expect(saved.translationY?.num == 540)
+      #expect(saved.scaleX?.double == 4)
+      #expect(saved.scaleY?.double == 1)
     }
 
     @Test("LUB-1048: A dragged frame saves rounded values as one Undo step")

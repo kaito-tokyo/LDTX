@@ -84,6 +84,18 @@ extension ClockOverlayRuntimeIntegrationTestSuite {
     #expect(renderer.naturalClockSize(for: component) == plain)
   }
 
+  @Test("Bundled Clock metrics match the renderer without a Metal device")
+  func bundledClockMetricsMatchRenderer() throws {
+    let renderer = try MetalClockOverlayRenderer(device: #require(MTLCreateSystemDefaultDevice()))
+    var component = ClockComponent(fontSize: 48)
+    component.showsDate = true
+    component.outlines = [ClockTextOutline(thickness: 4, color: "black")]
+    let expected = try #require(renderer.naturalClockSize(for: component))
+    #expect(ClockOverlayMetrics.naturalPixelSize(for: component) == expected)
+    component.fontSize = nil
+    #expect(ClockOverlayMetrics.naturalPixelSize(for: component) == nil)
+  }
+
   @Test("LUB-1054: Font sized clock uses native raster before layer scaling on either canvas")
   func fontSizedClockUsesNativeRasterBeforeLayerScalingOnEitherCanvas() throws {
     let device = try #require(MTLCreateSystemDefaultDevice())

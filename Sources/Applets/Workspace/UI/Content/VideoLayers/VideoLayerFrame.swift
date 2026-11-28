@@ -23,11 +23,12 @@ struct VideoLayerFrame: Equatable {
   let baseWidth: Double
   let baseHeight: Double
 
-  /// Returns nil for kinds whose size is only known to the renderer, such as Clock.
+  /// Returns nil for kinds whose size is unknown. A Clock's size is only known to
+  /// the renderer, so it needs `clockPixelSize`, its size at scale 1 in canvas pixels.
   init?(
     component: Ldtx_Workspace_V4_VideoComponentWrapper.VideoComponent?,
     transform: Ldtx_Workspace_V4_BasicTransform,
-    canvasWidth: Double, canvasHeight: Double
+    canvasWidth: Double, canvasHeight: Double, clockPixelSize: CGSize? = nil
   ) {
     guard canvasWidth > 0, canvasHeight > 0 else { return nil }
     switch component {
@@ -42,6 +43,10 @@ struct VideoLayerFrame: Equatable {
       // Dynamic Text sizes are relative to the 1920x1080 Landscape canvas.
       baseWidth = abs(text.width?.double ?? 0) * 1_920 / canvasWidth
       baseHeight = abs(text.height?.double ?? 0) * 1_080 / canvasHeight
+    case .clock:
+      guard let clockPixelSize else { return nil }
+      baseWidth = Double(clockPixelSize.width) / canvasWidth
+      baseHeight = Double(clockPixelSize.height) / canvasHeight
     default:
       return nil
     }

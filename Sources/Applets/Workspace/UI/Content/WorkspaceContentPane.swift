@@ -21,6 +21,7 @@ public struct WorkspaceContentPane: View {
     stateService: WorkspaceDocument, appletData: WorkspaceAppletData,
     peakMeter: any ProgramAudioPeakMeterPresenting, reportError: @escaping (Error) -> Void,
     pairedPreview: ProgramCanvasPairedPreview,
+    layerMeasurer: (any VideoLayerMeasuring)? = nil,
     runtimeActions: @escaping () -> (any WorkspaceRuntimeActions)? = { nil }
   ) {
     self.stateService = stateService
@@ -31,10 +32,12 @@ public struct WorkspaceContentPane: View {
     self.runtimeActions = runtimeActions
     _landscapeEditor = State(
       initialValue: VideoLayersEditorState(
-        stateService: stateService, appletData: appletData, target: .landscape))
+        stateService: stateService, appletData: appletData, target: .landscape,
+        layerMeasurer: layerMeasurer))
     _portraitEditor = State(
       initialValue: VideoLayersEditorState(
-        stateService: stateService, appletData: appletData, target: .portrait))
+        stateService: stateService, appletData: appletData, target: .portrait,
+        layerMeasurer: layerMeasurer))
   }
 
   public var body: some View {
